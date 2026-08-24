@@ -3,10 +3,8 @@
  * @file AwsKmsWrapperTest.cpp
  */
 
-#include <aws/core/VersionConfig.h>
 
 #include <aws/core/Aws.h>
-#include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/utils/base64/Base64.h>
 #include <aws/kms/KMSClient.h>
 #include <aws/kms/model/DecryptRequest.h>
@@ -86,40 +84,29 @@ private:
     bool shouldFailDecryption = false;
 };
 
+struct AwsKmsGlobalFixture
+{
+    AwsKmsGlobalFixture() { Aws::InitAPI(options); }
+    ~AwsKmsGlobalFixture() { Aws::ShutdownAPI(options); }
+    Aws::SDKOptions options;
+};
+
+BOOST_TEST_GLOBAL_FIXTURE(AwsKmsGlobalFixture);
+
 struct AwsKmsWrapperFixture
 {
     AwsKmsWrapperFixture()
     {
-        // Initialize AWS SDK
-        Aws::SDKOptions options;
-        Aws::InitAPI(options);
-
-        // Setup test credentials
-        region = "us-west-2";
-        accessKey = "test-access-key";
-        secretKey = "test-secret-key";
         keyId = "test-key-id";
 
         // Create mock client
         mockKmsClient = std::make_shared<MockKMSClient>();
 
-        // Create wrapper
-        wrapper = std::make_shared<AwsKmsWrapper>(region, accessKey, secretKey, keyId);
-        // Inject mock client
-        wrapper->setKmsClient(mockKmsClient);
+        // Create wrapper with mock client injected directly
+        wrapper = std::make_shared<AwsKmsWrapper>(mockKmsClient, keyId);
     }
 
-    ~AwsKmsWrapperFixture()
-    {
-        // Cleanup AWS SDK
-        Aws::ShutdownAPI(options);
-    }
-
-    std::string region;
-    std::string accessKey;
-    std::string secretKey;
     std::string keyId;
-    Aws::SDKOptions options;
     std::shared_ptr<MockKMSClient> mockKmsClient;
     std::shared_ptr<AwsKmsWrapper> wrapper;
 };

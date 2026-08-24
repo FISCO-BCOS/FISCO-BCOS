@@ -41,7 +41,7 @@ public:
         std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> evmPrecompiled,
         std::shared_ptr<PrecompiledMap> precompiled,
         std::shared_ptr<const std::set<std::string>> staticPrecompiled,
-        const wasm::GasInjector& gasInjector);
+        bcos::IOServicePool::Ptr ioServicePool = nullptr);
 
     virtual ~ExecutiveFactory() = default;
     //    virtual std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
@@ -62,9 +62,8 @@ protected:
     std::shared_ptr<PrecompiledMap> m_precompiled;
     std::shared_ptr<const std::set<std::string>> m_staticPrecompiled;
     const BlockContext& m_blockContext;
-    const wasm::GasInjector& m_gasInjector;
     bool m_isTiKVStorage;
-    bcos::ThreadPool::Ptr m_poolForPromiseWait;
+    bcos::IOServicePool::Ptr m_ioServicePool;
 };
 
 class ShardingTransactionExecutive;
@@ -77,8 +76,7 @@ public:
     ShardingExecutiveFactory(const BlockContext& blockContext,
         std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> evmPrecompiled,
         std::shared_ptr<PrecompiledMap> precompiled,
-        std::shared_ptr<const std::set<std::string>> staticPrecompiled,
-                const wasm::GasInjector& gasInjector);
+        std::shared_ptr<const std::set<std::string>> staticPrecompiled);
     ~ShardingExecutiveFactory() override = default;
 
     std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,

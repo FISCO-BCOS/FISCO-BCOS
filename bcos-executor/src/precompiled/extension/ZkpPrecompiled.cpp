@@ -20,7 +20,6 @@
 #include "ZkpPrecompiled.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <wedpr-crypto/WedprDiscreteLogarithmProof.h>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -66,7 +65,7 @@ std::shared_ptr<PrecompiledExecResult> ZkpPrecompiled::call(
     auto funcSelector = getParamFunc(_callParameters->input());
     auto paramData = _callParameters->params();
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(paramData.size());
 
@@ -109,8 +108,8 @@ std::shared_ptr<PrecompiledExecResult> ZkpPrecompiled::call(
         // no defined function
         PRECOMPILED_LOG(INFO) << LOG_DESC("ZkpPrecompiled: undefined method")
                               << LOG_KV("funcSelector", std::to_string(funcSelector));
-        BOOST_THROW_EXCEPTION(
-            bcos::protocol::PrecompiledError{} << errinfo_comment("ZkpPrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError{}
+                              << errinfo_comment("ZkpPrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
     _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());

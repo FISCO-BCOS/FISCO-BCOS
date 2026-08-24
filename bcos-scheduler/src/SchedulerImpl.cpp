@@ -12,12 +12,11 @@
 #include <bcos-task/Task.h>
 #include <bcos-tool/VersionConverter.h>
 #include <bcos-utilities/Error.h>
-#include <bcos-utilities/ITTAPI.h>
-#include <bcos-utilities/Overloaded.h>
 #include <ittnotify.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <string_view>
@@ -42,11 +41,11 @@ SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
     bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId,
-    size_t keyPageSize)
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, int64_t schedulerTermId, size_t keyPageSize,
+    bcos::IOServicePool::Ptr ioServicePool)
   : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory, txPool,
-        transactionSubmitResultFactory, hashImpl, isAuthCheck, isWasm, false, schedulerTermId,
-        keyPageSize)
+        transactionSubmitResultFactory, hashImpl, isAuthCheck, false, schedulerTermId, keyPageSize,
+        std::move(ioServicePool))
 {}
 
 SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
@@ -55,8 +54,8 @@ SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
     bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
-    int64_t schedulerTermId, size_t keyPageSize)
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isSerialExecute,
+    int64_t schedulerTermId, size_t keyPageSize, bcos::IOServicePool::Ptr ioServicePool)
   : m_executorManager(std::move(executorManager)),
     m_ledger(std::move(ledger)),
     m_storage(std::move(storage)),
@@ -67,11 +66,13 @@ SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
     m_txPool(txPool),
     m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
     m_hashImpl(std::move(hashImpl)),
-    m_isWasm(isWasm),
     m_schedulerTermId(schedulerTermId),
-    m_preExeWorker("preExeScheduler", 2),  // assume that preExe is no slower than exe speed/2
-    m_exeWorker("exeScheduler", 1)
+    m_ioServicePool(std::move(ioServicePool))
 {
+    if (m_ioServicePool)
+    {
+        m_exeStrand = std::make_unique<bcos::Strand>(m_ioServicePool);
+    }
     start();
 
     if (!m_ledgerConfig)
@@ -263,7 +264,7 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
 void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> _callback)
 {
-    m_exeWorker.enqueue(
+    m_exeStrand->post(
         [this, block = std::move(block), verify, callback = std::move(_callback)]() mutable {
             __itt_frame_begin_v3(ITT_DOMAIN_SCHEDULER_EXECUTE, nullptr);
             executeBlockInternal(std::move(block), verify,
@@ -811,8 +812,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
                          << LOG_KV("address", tx->to());
 
     // set attribute before call
-    tx->setAttribute(m_isWasm ? bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC :
-                                bcos::protocol::Transaction::Attribute::EVM_ABI_CODEC);
+    tx->setAttribute(bcos::protocol::Transaction::Attribute::EVM_ABI_CODEC);
     // Create temp block
     auto block = m_blockFactory->createBlock();
     block->blockHeader()->setNumber(blockNumber);
@@ -1002,7 +1002,7 @@ void SchedulerImpl::preExecuteBlock(
 
         setPreparedBlock(blockNumber, timestamp, blockExecutive);
 
-        m_preExeWorker.enqueue(
+        m_ioServicePool->post(
             [this, blockNumber, timestamp, blockExecutive, callback = std::move(callback)]() {
                 try
                 {
@@ -1171,7 +1171,7 @@ void SchedulerImpl::tryExecuteBlock(
 {
     return;  // TODO: Fix blockHash bug here
 
-    m_exeWorker.enqueue([this, number, &parentHash]() {
+    m_exeStrand->post([this, number, &parentHash]() {
         if (!m_isRunning)
         {
             return;
@@ -1186,10 +1186,9 @@ void SchedulerImpl::tryExecuteBlock(
         {
             return;
         }
-        bcos::protocol::ParentInfoList parentInfoList;
-        bcos::protocol::ParentInfo parentInfo{number, std::move(parentHash)};
-        parentInfoList.push_back(parentInfo);
-        block->blockHeader()->setParentInfo(parentInfoList);
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = number, .blockHash = std::move(parentHash)};
+        block->blockHeader()->setParentInfo(parentInfo);
         block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
         auto timestamp = block->blockHeader()->timestamp();

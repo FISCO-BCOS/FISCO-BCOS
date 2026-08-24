@@ -1,4 +1,3 @@
-cmake_minimum_required(VERSION 3.17)
 
 find_package(Boost REQUIRED unit_test_framework)
 find_package(TBB REQUIRED)

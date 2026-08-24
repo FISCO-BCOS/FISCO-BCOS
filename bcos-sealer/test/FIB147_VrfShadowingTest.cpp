@@ -43,6 +43,7 @@
 #include "bcos-sealer/SealerFactory.h"
 #include "bcos-sealer/VRFBasedSealer.h"
 #include "bcos-txpool/TxPoolFactory.h"
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
@@ -74,11 +75,15 @@ struct Fib147SealerFixture
         txpool::TxPoolFactory factory(keyPair->publicKey(), cryptoSuite,
             std::make_shared<protocol::TransactionSubmitResultFactoryImpl>(), blockFactory, nullptr,
             ledger, "", "", 1000, bcos::txpool::DEFAULT_POOL_LIMIT, true);
-        txpool = factory.createTxPool();
+        txpool = factory.createTxPool(*ioServicePool->getIOService(), ioServicePool);
         txpool->init();
     }
 
     ~Fib147SealerFixture() = default;
+    // ioServicePool MUST be declared before txpool to ensure it outlives
+    // Timer objects created by txpool that reference its io_context.
+    bcos::IOServicePool::Ptr ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "fibTest");
     crypto::Hash::Ptr hashImpl;
     txpool::TxPool::Ptr txpool;
     protocol::BlockFactory::Ptr blockFactory;
@@ -98,7 +103,7 @@ BOOST_FIXTURE_TEST_SUITE(FIB147VrfShadowingTest, Fib147SealerFixture)
 BOOST_AUTO_TEST_CASE(curve25519_default_path_returns_success_after_shadow_fix)
 {
     auto factory = std::make_shared<bcos::sealer::SealerFactory>(
-        nodeConfig, blockFactory, txpool, nullptr, keyPair);
+        nodeConfig, blockFactory, txpool, nullptr, keyPair, *ioServicePool->getIOService());
 
     auto sealer = factory->createVRFBasedSealer();
     auto block = fakeAndCheckBlock(cryptoSuite, blockFactory, 0, 0, 10, true, false);

@@ -23,8 +23,8 @@
 #include <bcos-cpp-sdk/event/EventSub.h>
 #include <bcos-cpp-sdk/event/EventSubResponse.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <oneapi/tbb/task_arena.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
@@ -40,7 +40,8 @@ BOOST_FIXTURE_TEST_SUITE(EventSubTest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(test_EventSub_suspendTask)
 {
-    auto es = std::make_shared<bcos::cppsdk::event::EventSub>();
+    boost::asio::io_context ioContext;
+    auto es = std::make_shared<bcos::cppsdk::event::EventSub>(ioContext);
     auto task = std::make_shared<bcos::cppsdk::event::EventSubTask>();
     std::string id = "123";
     task->setId(id);
@@ -63,7 +64,8 @@ BOOST_AUTO_TEST_CASE(test_EventSub_suspendTask)
 
 BOOST_AUTO_TEST_CASE(test_EventSub_addTask)
 {
-    auto es = std::make_shared<bcos::cppsdk::event::EventSub>();
+    boost::asio::io_context ioContext;
+    auto es = std::make_shared<bcos::cppsdk::event::EventSub>(ioContext);
     auto task1 = std::make_shared<bcos::cppsdk::event::EventSubTask>();
     auto task2 = std::make_shared<bcos::cppsdk::event::EventSubTask>();
 
@@ -144,7 +146,8 @@ BOOST_AUTO_TEST_CASE(test_EventSub_addTask)
 
 BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
 {
-    auto es = std::make_shared<bcos::cppsdk::event::EventSub>();
+    boost::asio::io_context ioContext;
+    auto es = std::make_shared<bcos::cppsdk::event::EventSub>(ioContext);
     auto messageFactory = std::make_shared<bcos::boostssl::ws::WsMessageFactory>();
     es->setMessageFactory(messageFactory);
 
@@ -170,11 +173,10 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
     }
 
-    tbb::task_group taskGroup;
-    tbb::task_arena taskArena;
+    auto ioServicePool = std::make_shared<IOServicePool>(2, "evtSubTest");
     {
         // task is running
-        auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(taskArena, taskGroup);
+        auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(ioServicePool);
         task->setSession(session);
 
         std::string resp = "{}";
@@ -190,7 +192,7 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
 
     {
         // task is running
-        auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(taskArena, taskGroup);
+        auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(ioServicePool);
 
         task->setSession(session);
 
@@ -209,6 +211,7 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
         BOOST_CHECK(!es->getTask(id));
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
     }
+
 }
 
 BOOST_AUTO_TEST_SUITE_END()

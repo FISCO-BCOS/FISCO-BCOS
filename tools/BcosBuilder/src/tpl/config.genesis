@@ -22,15 +22,13 @@
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    compatibility_version=3.17.0
+    compatibility_version=3.18.0
 
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
 
 [executor]
-    ; use the wasm virtual machine or not, default use evm
-    is_wasm = false
     ; enable auth_check or not, default disable
     is_auth_check=false
     auth_admin_account=

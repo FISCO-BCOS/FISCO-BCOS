@@ -22,12 +22,12 @@
 #include "../consensus/ConsensusNode.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include "SystemConfigs.h"
+#include "bcos-framework/storage/Serialize.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/Common.h>
 #include <oneapi/tbb/concurrent_unordered_map.h>
-#include <boost/archive/binary_iarchive.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
@@ -63,6 +63,13 @@ constexpr static std::string_view SYSTEM_KEY_BALANCE_PRECOMPILED_SWITCH = magic_
 // notify rotate key for rpbft
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "feature_rpbft_notify_rotate";
 constexpr static std::string_view ENABLE_BALANCE_TRANSFER = magic_enum::enum_name(SystemConfig::balance_transfer);
+// system configuration for ethereum-executor EVM revision (executor_version=2)
+constexpr static std::string_view SYSTEM_KEY_EVMC_REVISION = magic_enum::enum_name(SystemConfig::evmc_revision);
+// system configuration for ethereum-executor excess blob gas (EIP-4844 blob base fee)
+constexpr static std::string_view SYSTEM_KEY_EXCESS_BLOB_GAS = magic_enum::enum_name(SystemConfig::excess_blob_gas);
+// A3: eth-genesis (L2) chains store the FISCO genesis pin here instead of in B0's
+// extraData — B0's extraData carries the genesis artifact bytes and enters the RLP hash.
+constexpr static std::string_view INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA = "eth_genesis_data";
 // clang-format on
 constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";
 constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
@@ -70,7 +77,13 @@ constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
 // system config struct
 using SystemConfigEntry = std::tuple<std::string, bcos::protocol::BlockNumber>;
 
-const unsigned TX_GAS_LIMIT_MIN = 100000;
+// Minimum block gas limit for node-local startup / genesis validation. Lowered to
+// go-ethereum's MinGasLimit (5000) so EEST state tests with small block gas limits
+// (lowGasLimit: 80000) can be built at genesis; the previous 100000 floor rejected valid
+// sub-100k Ethereum blocks. This is node-local only — the consensus-side runtime floor
+// enforced by SystemConfigPrecompiled (bcos::precompiled::TX_GAS_LIMIT_MIN) deliberately
+// stays at 100000 so existing chains are unaffected.
+const unsigned TX_GAS_LIMIT_MIN = 5000;
 const unsigned RPBFT_EPOCH_SEALER_NUM_MIN = 1;
 const unsigned RPBFT_EPOCH_BLOCK_NUM_MIN = 1;
 // get consensus node list type
@@ -100,6 +113,13 @@ constexpr static std::string_view SYS_NUMBER_2_BLOCK_HEADER{"s_number_2_header"}
 constexpr static std::string_view SYS_NUMBER_2_TXS{"s_number_2_txs"};
 constexpr static std::string_view SYS_HASH_2_TX{"s_hash_2_tx"};
 constexpr static std::string_view SYS_HASH_2_RECEIPT{"s_hash_2_receipt"};
+/// Reorg undo journal (S-DRV-6/7 stage 1, one-level tip rollback): key = the decimal
+/// block number of a COMMITTED block, value = ReorgUndoBlob (opstack-executor/ReorgUndo.h)
+/// recording the pre-block value of every state-plane key the block's delta layer touched
+/// plus its tx counters — enough for a reorg sibling at the same height to rebuild the
+/// parent's flat state as its execution base. Rows are overwritten per height (a sibling's
+/// commit replaces the journal with its own) and pruned after a retention window.
+constexpr static std::string_view SYS_REORG_UNDO{"s_reorg_undo"};
 constexpr static std::string_view DAG_TRANSFER{"/tables/dag_transfer"};
 constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer"};
 constexpr static std::string_view SYS_CODE_BINARY{"s_code_binary"};
@@ -178,7 +198,8 @@ inline task::Task<void> readFromStorage(
     {
         if (entry)
         {
-            auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();
+            auto [value, enableNumber] =
+                storage::serialize::decode<ledger::SystemConfigEntry>(entry->get());
             if (blockNumber >= enableNumber)
             {
                 configs.set(key, value, enableNumber);

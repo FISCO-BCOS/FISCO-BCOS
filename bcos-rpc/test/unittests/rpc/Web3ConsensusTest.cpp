@@ -120,8 +120,9 @@ public:
         auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         auto consensus = std::make_shared<StubConsensus>(keyPair->publicKey());
         auto sync = std::make_shared<StubSync>();
+        // NodeService gained a trailing AnyEngineService argument; not exercised here.
         auto svc = std::make_shared<rpc::NodeService>(
-            m_ledger, scheduler, txPool, consensus, sync, m_blockFactory);
+            m_ledger, scheduler, txPool, consensus, sync, m_blockFactory, nullptr);
         rpc = factory->buildLocalRpc(groupInfo, svc);
         rpc->groupManager()->updateGroupInfo(groupInfo);
         web3JsonRpc = rpc->web3JsonRpc();
@@ -132,7 +133,7 @@ public:
     {
         std::promise<bcos::bytes> promise;
         web3JsonRpc->onRPCRequest(
-            request, [&promise](bcos::bytes resp) { promise.set_value(std::move(resp)); });
+            request, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;

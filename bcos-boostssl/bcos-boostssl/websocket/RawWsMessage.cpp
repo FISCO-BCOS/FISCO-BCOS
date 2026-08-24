@@ -21,7 +21,6 @@ using namespace bcos::boostssl::ws;
 
 RawWsMessage::RawWsMessage()
 {
-    m_payload = std::make_shared<bcos::bytes>();
     if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
     {
         WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[NEWOBJ][RawWsMessage]", this);
@@ -60,12 +59,12 @@ void RawWsMessage::setSeq(std::string _seq)
     m_seq = std::move(_seq);
 }
 
-std::shared_ptr<bcos::bytes> RawWsMessage::payload() const
+bcos::bytesConstRef RawWsMessage::payload() const
 {
-    return m_payload;
+    return bcos::ref(m_payload);
 }
 
-void RawWsMessage::setPayload(std::shared_ptr<bcos::bytes> _payload)
+void RawWsMessage::setPayload(bcos::bytes _payload)
 {
     m_payload = std::move(_payload);
 }
@@ -79,13 +78,13 @@ void RawWsMessage::setExt(uint16_t) {}
 
 bool RawWsMessage::encode(bcos::bytes& _buffer)
 {
-    _buffer.insert(_buffer.end(), m_payload->begin(), m_payload->end());
+    _buffer.insert(_buffer.end(), m_payload.begin(), m_payload.end());
     return true;
 }
 
 int64_t RawWsMessage::decode(bytesConstRef _buffer)
 {
-    m_payload = std::make_shared<bcos::bytes>(_buffer.begin(), _buffer.end());
+    m_payload.assign(_buffer.begin(), _buffer.end());
     return static_cast<int64_t>(_buffer.size());
 }
 
@@ -98,7 +97,7 @@ void RawWsMessage::setRespPacket() {}
 
 uint32_t RawWsMessage::length() const
 {
-    return m_payload->size();
+    return m_payload.size();
 }
 
 bcos::boostssl::MessageFace::Ptr RawWsMessageFactory::buildMessage()

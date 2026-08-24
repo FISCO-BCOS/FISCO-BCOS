@@ -8,9 +8,9 @@
 #include "mock/MockLedger.h"
 #include "precompiled/common/VRFInfo.h"
 #include "precompiled/common/WorkingSealerManagerImpl.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/algorithm/is_sorted.hpp>
 
 namespace bcos::test
 {
@@ -65,10 +65,9 @@ BOOST_AUTO_TEST_CASE(testRotate)
         // Should rotate
         storage::Entry notifyRotateEntry;
         ledger::SystemConfigEntry systemConfigEntry{"1", 0};
-        notifyRotateEntry.setObject(systemConfigEntry);
+        notifyRotateEntry.set(bcos::storage::serialize::encode(systemConfigEntry));
         co_await storage2::writeOne(storage,
-            executor_v1::StateKey{
-                ledger::SYS_CONFIG, ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE},
+            executor_v1::StateKey{ledger::SYS_CONFIG, ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE},
             notifyRotateEntry);
 
         // Node list
@@ -90,16 +89,15 @@ BOOST_AUTO_TEST_CASE(testRotate)
         auto storageWrapper =
             std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
                 storage);
-        auto blockHeader = std::make_unique<bcostars::protocol::BlockHeaderImpl>(
-            [m_header = bcostars::BlockHeader()]() mutable { return std::addressof(m_header); });
+        auto blockHeader = std::make_unique<bcostars::protocol::BlockHeaderImpl>();
         bcos::protocol::ParentInfo parentInfo;
-        blockHeader->setParentInfo(::ranges::views::single(parentInfo));
+        blockHeader->setParentInfo(parentInfo);
         blockHeader->calculateHash(*hashImpl);
 
-        auto blockContext = std::make_unique<executor::BlockContext>(storageWrapper, nullptr,
-            executor::GlobalHashImpl::g_hashImpl, *blockHeader, false, false);
-        auto mockExecutive = std::make_shared<executor::TransactionExecutive>(
-            *blockContext, "0x0", 0, 0, wasm::GasInjector{});
+        auto blockContext = std::make_unique<executor::BlockContext>(
+            storageWrapper, nullptr, executor::GlobalHashImpl::g_hashImpl, *blockHeader, false);
+        auto mockExecutive =
+            std::make_shared<executor::TransactionExecutive>(*blockContext, "0x0", 0, 0);
         auto execResult = std::make_shared<precompiled::PrecompiledExecResult>();
         execResult->m_origin = precompiled::covertPublicToHexAddress(node1);
 

@@ -1,12 +1,8 @@
 #include "../../../src/executive/BlockContext.h"
-#include "../../../src/executive/ExecutiveFactory.h"
-#include "../../../src/executive/ExecutiveFlowInterface.h"
 #include "../mock/MockExecutiveFlow.h"
 #include "../mock/MockLedger.h"
-#include "bcos-table/src/StateStorage.h"
-#include <tbb/concurrent_unordered_map.h>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::executor;
 
@@ -28,13 +24,12 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
     LedgerCache::Ptr ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
 
     BlockContext::Ptr blockContext = std::make_shared<bcos::executor::BlockContext>(
-        nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, false, false);
+        nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, false);
 
     h256 blockhash = blockContext->hash();
     EXECUTOR_LOG(DEBUG) << blockhash;
     BOOST_CHECK(blockContext->storage() == nullptr);
     // BOOST_CHECK(blockContext->lastStorage() == nullptr);
-    BOOST_CHECK(!blockContext->isWasm());
     BOOST_CHECK(!blockContext->isAuthCheck());
     // BOOST_CHECK(blockContext->hash() != nullptr);
     BOOST_CHECK_EQUAL(blockContext->number(), 0);

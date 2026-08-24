@@ -22,12 +22,10 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libnetwork/Socket.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
-#include "bcos-utilities/ThreadPool.h"
+#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::test;
@@ -41,17 +39,15 @@ BOOST_FIXTURE_TEST_SUITE(FIB184_SessionResourceCapTest, TestPromptFixture)
 class FakeASIO_FIB184 : public bcos::gateway::ASIOInterface
 {
 public:
-    FakeASIO_FIB184() : m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO_FIB184", 1)) {}
+    // ASIOInterface now owns its IOServicePool and is stopped by ~IOServicePool; the
+    // strandPost / stop virtuals this fake used to override no longer exist.
+    FakeASIO_FIB184()
+      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB184"), "0.0.0.0", 0)
+    {}
     ~FakeASIO_FIB184() noexcept override {}
     void asyncReadSome(
         const std::shared_ptr<SocketFace>&, ba::mutable_buffer, ReadWriteHandler) override
     {}
-    void strandPost(Base_Handler handler) override { m_handler = std::move(handler); }
-    void stop() override { m_threadPool->stop(); }
-
-protected:
-    Base_Handler m_handler;
-    bcos::ThreadPool::Ptr m_threadPool;
 };
 
 class FakeSocket_FIB184 : public SocketFace

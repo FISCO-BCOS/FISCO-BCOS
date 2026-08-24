@@ -21,7 +21,6 @@
 #include "TxPoolInitializer.h"
 #include "Common.h"
 #include <bcos-txpool/TxPoolFactory.h>
-#include <fisco-bcos-tars-service/Common/TarsUtils.h>
 #include <utility>
 
 using namespace bcos;
@@ -31,11 +30,13 @@ using namespace bcos::initializer;
 TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     ProtocolInitializer::Ptr _protocolInitializer,
     bcos::front::FrontServiceInterface::Ptr _frontService,
-    bcos::ledger::LedgerInterface::Ptr _ledger)
+    bcos::ledger::LedgerInterface::Ptr _ledger, boost::asio::io_context& _ioContext,
+    bcos::IOServicePool::Ptr _ioServicePool)
   : m_nodeConfig(std::move(_nodeConfig)),
     m_protocolInitializer(std::move(_protocolInitializer)),
     m_frontService(std::move(_frontService)),
-    m_ledger(std::move(_ledger))
+    m_ledger(std::move(_ledger)),
+    m_ioServicePool(std::move(_ioServicePool))
 {
     auto keyPair = m_protocolInitializer->keyPair();
     auto cryptoSuite = m_protocolInitializer->cryptoSuite();
@@ -45,8 +46,9 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         m_nodeConfig->blockLimit(), m_nodeConfig->txpoolLimit(),
         m_nodeConfig->checkTransactionSignature());
 
-    m_txpool = m_txpoolFactory->createTxPool(m_nodeConfig->notifyWorkerNum(),
-        m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime());
+    auto ioThreadCount = m_nodeConfig->ioThreadCount();
+    m_txpool = m_txpoolFactory->createTxPool(_ioContext, m_ioServicePool, ioThreadCount,
+        ioThreadCount, m_nodeConfig->txsExpirationTime());
     m_txpool->setCheckBlockLimit(m_nodeConfig->checkBlockLimit());
     m_txpool->setPreStoreBackpressureEnabled(m_nodeConfig->preStoreBackpressureEnabled());
     m_txpool->setPreStoreMaxInflight(m_nodeConfig->preStoreMaxInflight());

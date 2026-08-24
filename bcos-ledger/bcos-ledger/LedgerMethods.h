@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ConsensusNode.h"
+#include "Ledger.h"
 #include "bcos-concepts/Serialize.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/signature/key/KeyImpl.h"
@@ -16,10 +17,11 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
-#include "bcos-ledger/LedgerImpl.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
+#include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-task/AwaitableValue.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "generated/bcos-tars-protocol/tars/LedgerConfig.h"
 #include <boost/lexical_cast.hpp>
@@ -44,11 +46,14 @@ inline task::AwaitableValue<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*
 
 task::Task<void> prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
-    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage);
+    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
+    bool writeNonces = true);
 
 task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
-    bool withTransactionsAndReceipts, auto& storage)
+    bool withTransactionsAndReceipts, auto& storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt, bool writeNonces = true)
 {
     static_assert(
         !std::convertible_to<std::remove_const_t<decltype(storage)>, storage::StorageInterface&>,
@@ -68,7 +73,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInter
     }
 
     co_await prewriteBlockToStorage(ledger, std::move(transactions), std::move(block),
-        withTransactionsAndReceipts, std::move(legacyStorage));
+        withTransactionsAndReceipts, std::move(legacyStorage), blockHashOverride, writeNonces);
 }
 
 task::Task<void> tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>, LedgerInterface& ledger,
@@ -81,7 +86,8 @@ task::Task<void> tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>, LedgerI
 // bypassing m_blockStorage so the caller can mergeBack everything atomically.
 task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
     LedgerInterface& ledger, bcos::protocol::ConstTransactionsPtr blockTxs,
-    bcos::protocol::Block::ConstPtr block, auto& storage)
+    bcos::protocol::Block::ConstPtr block, auto& storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt, bool writeNonces = true)
 {
     if (!block)
     {
@@ -92,7 +98,8 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
     // existing prewriteBlock path. withTransactionsAndReceipts=false intentionally
     // skips the tx/receipt writes that would otherwise go to m_blockStorage; we
     // route them through the same `storage` below to keep the commit atomic.
-    co_await prewriteBlock(ledger, blockTxs, block, /*withTransactionsAndReceipts=*/false, storage);
+    co_await prewriteBlock(ledger, blockTxs, block, /*withTransactionsAndReceipts=*/false, storage,
+        blockHashOverride, writeNonces);
 
     auto txSize = std::max(block->transactionsSize(), block->transactionsMetaDataSize());
     if (txSize == 0)
@@ -112,7 +119,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
         auto txHash = blockTxs ? blockTxs->at(i)->hash() : inlineTxs[i]->hash();
 
         storage::Entry receiptEntry;
-        receiptEntry.importFields({std::move(encodedReceipt)});
+        receiptEntry.set(std::move(encodedReceipt));
         co_await storage2::writeOne(storage,
             executor_v1::StateKey{SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(txHash)},
             std::move(receiptEntry));
@@ -143,7 +150,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
         auto txHash = tx->hash();
 
         storage::Entry txEntry;
-        txEntry.importFields({std::move(encodedTx)});
+        txEntry.set(std::move(encodedTx));
         co_await storage2::writeOne(storage,
             executor_v1::StateKey{SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)},
             std::move(txEntry));
@@ -201,7 +208,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
         if (auto entry = co_await storage2::readOne(
                 storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
         {
-            auto field = entry->getField(0);
+            auto field = entry->get();
             auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
                 bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
             block->setBlockHeader(std::move(headerPtr));
@@ -217,7 +224,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
         if (auto txsEntry = co_await storage2::readOne(
                 storage, executor_v1::StateKeyView{SYS_NUMBER_2_TXS, blockNumberStr}))
         {
-            auto txs = txsEntry->getField(0);
+            auto txs = txsEntry->get();
             auto blockWithTxs =
                 blockFactory.createBlock(bcos::bytesConstRef((bcos::byte*)txs.data(), txs.size()));
             auto hashes = blockWithTxs->transactionHashes() | ::ranges::to<std::vector>();
@@ -232,7 +239,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
                     }));
                 for (auto& txEntry : transactions)
                 {
-                    auto field = txEntry->getField(0);
+                    auto field = txEntry->get();
                     auto transaction = blockFactory.transactionFactory()->createTransaction(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false,
                         false);
@@ -249,7 +256,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
                     }));
                 for (auto& receiptEntry : receipts)
                 {
-                    auto field = receiptEntry->getField(0);
+                    auto field = receiptEntry->get();
                     auto receipt = blockFactory.receiptFactory()->createReceipt(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
                     block->appendReceipt(std::move(receipt));
@@ -324,12 +331,21 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     auto gasPrice = sysConfig.getOrDefault(ledger::SystemConfig::tx_gas_price, "0x0");
     ledgerConfig.setGasPrice(std::make_tuple(gasPrice.first, gasPrice.second));
 
+    // Excess blob gas (EIP-4844) — consumed only by the pure-Ethereum EthereumExecutor
+    // (executor_version=2) to derive the blob base fee. Persisted at genesis by
+    // Ledger::buildGenesisBlock from tx.excess_blob_gas; when absent the executor defaults
+    // to an excess of 0 (blob base fee 1).
+    if (auto excessBlobGas = sysConfig.get(ledger::SystemConfig::excess_blob_gas); excessBlobGas)
+    {
+        ledgerConfig.setExcessBlobGas(boost::lexical_cast<uint64_t>(excessBlobGas.value().first));
+    }
+
     // Get block header to retrieve timestamp
     auto blockNumberStr = std::to_string(blockNumber);
     if (auto entry = co_await storage2::readOne(
             storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
     {
-        auto field = entry->getField(0);
+        auto field = entry->get();
         auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
             bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
         ledgerConfig.setTimestamp(headerPtr->timestamp());
@@ -378,14 +394,44 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
-    if (auto executorVersion = sysConfig.get(ledger::SystemConfig::executor_version);
-        executorVersion)
+    int executorVersion = 0;
+    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
     {
-        ledgerConfig.setExecutorVersion(boost::lexical_cast<int>(executorVersion.value().first));
+        executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
+        ledgerConfig.setExecutorVersion(executorVersion);
+    }
+
+    // EVMC revision — consumed only by the pure-Ethereum EthereumExecutor
+    // (executor_version=2); v0/v1 schedulers never read evmcRevision()/evmcRevisionForBlock(),
+    // so a non-v2 chain is left untouched (no implicit default injection, which would be an
+    // unnoticed behavior change if a future v0/v1 path started reading it). For v2, an
+    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock);
+    // the fallback here covers a v2 genesis without one (defensive — NodeConfig::loadExecutorConfig
+    // requires an explicit revision for executor_version=2, so this default only fires on
+    // corrupt/legacy state).
+    //
+    // No per-call logging here: getLedgerConfig sits on the per-block / per-RPC hot path.
+    // The effective revision is parsed and logged once at startup (Initializer), which the
+    // CI pins and where a corrupt value becomes a boot refusal.
+    if (executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        if (auto evmcRevision = sysConfig.get(ledger::SystemConfig::evmc_revision); evmcRevision)
+        {
+            // A corrupt persisted value halts loudly (InvalidEVMCRevisionConfig) instead of
+            // silently running a compile-time default that could differ between binaries.
+            ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
+        }
+        else
+        {
+            ledgerConfig.setEVMCRevision(ledger::EVMC_REVISION_DEFAULT);
+        }
     }
 }
 
 task::Task<Features> tag_invoke(ledger::tag_t<getFeatures> /*unused*/, LedgerInterface& ledger);
+
+task::Task<bool> tag_invoke(ledger::tag_t<getFeature> /*unused*/, LedgerInterface& ledger,
+    ledger::Features::Flag flag, protocol::BlockNumber blockNumber);
 
 task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
     ledger::tag_t<getReceipt>, LedgerInterface& ledger, crypto::HashType const& txHash);
@@ -418,7 +464,7 @@ task::Task<std::optional<crypto::HashType>> tag_invoke(ledger::tag_t<getBlockHas
     if (auto entry = co_await storage2::readOne(
             storage, executor_v1::StateKeyView{SYS_NUMBER_2_HASH, blockNumberString}))
     {
-        auto hashStr = entry->getField(0);
+        auto hashStr = entry->get();
         bcos::crypto::HashType hash(hashStr, bcos::crypto::HashType::FromBinary);
 
         co_return std::make_optional(hash);
@@ -435,7 +481,7 @@ task::Task<std::optional<protocol::BlockNumber>> tag_invoke(
     if (auto entry = co_await storage2::readOne(storage,
             executor_v1::StateKeyView{SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(hash)}))
     {
-        auto blockNumberStr = entry->getField(0);
+        auto blockNumberStr = entry->get();
         auto blockNumber = boost::lexical_cast<protocol::BlockNumber>(blockNumberStr);
 
         co_return std::make_optional(blockNumber);
@@ -452,14 +498,13 @@ task::Task<protocol::BlockNumber> tag_invoke(ledger::tag_t<getCurrentBlockNumber
         bcos::protocol::BlockNumber blockNumber = -1;
         try
         {
-            blockNumber =
-                boost::lexical_cast<bcos::protocol::BlockNumber>(blockNumberEntry->getField(0));
+            blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(blockNumberEntry->get());
         }
         catch (boost::bad_lexical_cast& e)
         {
             // Ignore the exception
             LEDGER_LOG(INFO) << "Cast blockNumber failed, may be empty, set to default value -1"
-                             << LOG_KV("blockNumber str", blockNumberEntry->getField(0));
+                             << LOG_KV("blockNumber str", blockNumberEntry->get());
         }
         LEDGER_LOG(TRACE) << "GetBlockNumber success" << LOG_KV("blockNumber", blockNumber);
         co_return blockNumber;
@@ -478,7 +523,7 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(ledger::tag_t<getNodeList> /
         co_return consensus::ConsensusNodeList{};
     }
 
-    auto ledgerConsensusNodeList = decodeConsensusList(nodeListEntry->getField(0));
+    auto ledgerConsensusNodeList = decodeConsensusList(nodeListEntry->get());
     consensus::ConsensusNodeList nodes =
         ledgerConsensusNodeList | ::ranges::views::transform([](auto const& node) {
             auto nodeIDBin = fromHex(node.nodeID);
@@ -564,7 +609,7 @@ task::Task<std::optional<SystemConfigEntry>> tag_invoke(ledger::tag_t<getSystemC
     if (auto entry =
             co_await storage2::readOne(storage, executor_v1::StateKeyView(SYS_CONFIG, key)))
     {
-        co_return entry->template getObject<SystemConfigEntry>();
+        co_return bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
     }
     co_return {};
 }

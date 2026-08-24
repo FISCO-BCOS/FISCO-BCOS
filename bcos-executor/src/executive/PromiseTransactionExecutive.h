@@ -24,25 +24,36 @@
 #include "CoroutineTransactionExecutive.h"
 #include "SyncStorageWrapper.h"
 #include "TransactionExecutive.h"
+#include "bcos-utilities/IOServicePool.h"
 #include <boost/coroutine2/coroutine.hpp>
+#include <memory>
+#include <thread>
 
 namespace bcos
 {
+
 namespace executor
 {
 class MessagePromiseSwapper
 {
 public:
     using Ptr = std::shared_ptr<MessagePromiseSwapper>;
-    MessagePromiseSwapper(ThreadPool::Ptr pool);
+
+    /// Construct a MessagePromiseSwapper.
+    /// @param _pool  DEPRECATED — no longer used.  The swapper now spawns
+    ///               dedicated fire-and-forget threads on demand (via
+    ///               std::thread::detach) instead of posting work to the
+    ///               shared IOServicePool, to avoid thread-pool exhaustion
+    ///               deadlocks on low-core-count systems (≤ 3 cores) where
+    ///               the DAG wait_for_all and DMC resume paths could
+    ///               otherwise starve the shared pool.
+    MessagePromiseSwapper(IOServicePool::Ptr _pool = nullptr);
+
     void spawnAndCall(std::function<CallParameters::UniquePtr()> spawnCall,
         std::function<void(CallParameters::UniquePtr)> waitAndDo);
 
 private:
-    std::shared_ptr<std::promise<CallParameters::UniquePtr>> m_lastPromise;
     std::shared_ptr<std::promise<CallParameters::UniquePtr>> m_currentPromise;
-
-    ThreadPool::Ptr m_pool;
 };
 
 
@@ -52,9 +63,8 @@ public:
     using Ptr = std::shared_ptr<PromiseTransactionExecutive>;
 
 
-    PromiseTransactionExecutive(ThreadPool::Ptr pool, const BlockContext& blockContext,
-        std::string contractAddress, int64_t contextID, int64_t seq,
-        const wasm::GasInjector& gasInjector);
+    PromiseTransactionExecutive(IOServicePool::Ptr pool, const BlockContext& blockContext,
+        std::string contractAddress, int64_t contextID, int64_t seq);
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;  // start a new
     // coroutine to

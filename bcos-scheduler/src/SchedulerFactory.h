@@ -1,6 +1,6 @@
 #pragma once
-#include <utility>
 #include "SchedulerImpl.h"
+#include <utility>
 
 namespace bcos::scheduler
 {
@@ -15,10 +15,10 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isSerialExecute,
         size_t keyPageSize = 10240);
 
-    scheduler::SchedulerImpl::Ptr build(int64_t schedulerTermId);
+    SchedulerImpl::Ptr build(int64_t schedulerTermId);
 
     void setBlockNumberReceiver(std::function<void(protocol::BlockNumber blockNumber)> callback);
 
@@ -40,7 +40,6 @@ private:
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     bool m_isAuthCheck;
-    bool m_isWasm;
     bool m_isSerialExecute;
     size_t m_keyPageSize;
 

@@ -29,6 +29,5 @@ namespace bcos
 namespace executor
 {
 const evmc_host_interface* getHostInterface();
-const wasm_host_interface* getWasmHostInterface();
 }  // namespace executor
 }  // namespace bcos

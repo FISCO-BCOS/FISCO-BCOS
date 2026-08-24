@@ -20,6 +20,7 @@
 #pragma once
 #include "GatewayNodeManager.h"
 #include "bcos-utilities/Timer.h"
+#include <boost/asio/io_context.hpp>
 namespace bcos
 {
 namespace gateway
@@ -29,7 +30,8 @@ class ProGatewayNodeManager : public GatewayNodeManager
 public:
     using Ptr = std::shared_ptr<ProGatewayNodeManager>;
     ProGatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
-        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface);
+        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface,
+        boost::asio::io_context& _ioContext);
 
     void start() override;
     void stop() override;

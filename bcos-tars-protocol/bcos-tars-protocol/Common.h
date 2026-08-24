@@ -65,11 +65,9 @@ protected:
     SizeType _buf_len;
     std::function<ByteType*(BufferWriter&, size_t)> _reserve;
 
-private:
-    BufferWriter(const BufferWriter&);
-    BufferWriter& operator=(const BufferWriter& buf);
-
 public:
+    BufferWriter(const BufferWriter&) = delete;
+    BufferWriter& operator=(const BufferWriter& buf) = delete;
     BufferWriter() : _buf(NULL), _len(0), _buf_len(0), _reserve({})
     {
 #ifndef GEN_PYTHON_MASK
@@ -111,7 +109,7 @@ public:
         _buf_len = 0;
         _len = 0;
     }
-    void swap(BufferWriter& buf)
+    void swap(BufferWriter& buf) noexcept
     {
         buf._buffer.swap(_buffer);
         std::swap(_buf, buf._buf);
@@ -143,7 +141,7 @@ inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
         nodeInfo->appendServiceInfo((bcos::protocol::ServiceType)it.first, it.second);
     }
     // recover the nodeProtocolVersion
-    auto& protocolInfo = _tarsNodeInfo.protocolInfo;
+    const auto& protocolInfo = _tarsNodeInfo.protocolInfo;
     auto bcosProtocolInfo = std::make_shared<bcos::protocol::ProtocolInfo>(
         (bcos::protocol::ProtocolModuleID)protocolInfo.moduleID,
         (bcos::protocol::ProtocolVersion)protocolInfo.minVersion,
@@ -232,7 +230,7 @@ inline bcostars::GroupInfo toTarsGroupInfo(bcos::group::GroupInfo::Ptr _groupInf
 
 inline bcos::consensus::ConsensusNodeList toConsensusNodeList(
     bcos::crypto::KeyFactory::Ptr _keyFactory, bcos::consensus::Type type,
-    const vector<bcostars::ConsensusNode>& _tarsConsensusNodeList)
+    const std::vector<bcostars::ConsensusNode>& _tarsConsensusNodeList)
 {
     bcos::consensus::ConsensusNodeList consensusNodeList;
     for (auto const& node : _tarsConsensusNodeList)
@@ -276,12 +274,12 @@ inline bcos::ledger::LedgerConfig::Ptr toLedgerConfig(
     return ledgerConfig;
 }
 
-inline vector<bcostars::ConsensusNode> toTarsConsensusNodeList(
+inline std::vector<bcostars::ConsensusNode> toTarsConsensusNodeList(
     bcos::consensus::ConsensusNodeList const& _nodeList)
 {
     // set consensusNodeList
-    vector<bcostars::ConsensusNode> tarsConsensusNodeList;
-    for (auto node : _nodeList)
+    std::vector<bcostars::ConsensusNode> tarsConsensusNodeList;
+    for (const auto& node : _nodeList)
     {
         bcostars::ConsensusNode consensusNode;
         consensusNode.nodeID.assign(node.nodeID->data().begin(), node.nodeID->data().end());

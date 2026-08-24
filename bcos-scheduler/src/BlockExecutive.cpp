@@ -1,8 +1,3 @@
-#include <range/v3/algorithm/copy.hpp>
-#include <range/v3/algorithm/find.hpp>
-#include <range/v3/algorithm/result_types.hpp>
-#include <range/v3/range_fwd.hpp>
-#include <range/v3/view/drop.hpp>
 
 #include "BlockExecutive.h"
 #include "Common.h"
@@ -20,12 +15,8 @@
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-utilities/Error.h>
 #include <tbb/blocked_range.h>
-#include <tbb/parallel_for_each.h>
-#include <boost/algorithm/hex.hpp>
-#include <boost/archive/basic_archive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/asio/defer.hpp>
+#include <tbb/parallel_for.h>
+#include <tbb/task_arena.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
@@ -258,11 +249,11 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     }
 
     // set value
-    message->setValue(std::string(tx->value()));
+    message->setValue(toQuantity(tx->value()));
     message->setGasLimit(tx->gasLimit());
     message->setGasPrice(m_gasPrice);
-    message->setMaxFeePerGas(std::string(tx->maxFeePerGas()));
-    message->setMaxPriorityFeePerGas(std::string(tx->maxPriorityFeePerGas()));
+    message->setMaxFeePerGas(toQuantity(tx->maxFeePerGas().value_or(0)));
+    message->setMaxPriorityFeePerGas(toQuantity(tx->maxPriorityFeePerGas().value_or(0)));
     message->setEffectiveGasPrice(m_gasPrice);
 
     return message;
@@ -1126,13 +1117,14 @@ void BlockExecutive::onDmcExecuteFinish(
     auto dmcChecksum = m_dmcRecorder->dumpAndClearChecksum();
     if (m_staticCall)
     {
-        DMC_LOG(TRACE) << LOG_BADGE("Stat") << "DMCExecute.6:" << "\t " << LOG_BADGE("DMCRecorder")
-                       << " DMCExecute for call finished " << LOG_KV("blockNumber", number())
-                       << LOG_KV("checksum", dmcChecksum);
+        DMC_LOG(TRACE) << LOG_BADGE("Stat") << "DMCExecute.6:"
+                       << "\t " << LOG_BADGE("DMCRecorder") << " DMCExecute for call finished "
+                       << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
     }
     else
     {
-        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:" << "\t " << LOG_BADGE("DMCRecorder")
+        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:"
+                      << "\t " << LOG_BADGE("DMCRecorder")
                       << " DMCExecute for transaction finished " << LOG_KV("blockNumber", number())
                       << LOG_KV("checksum", dmcChecksum);
 

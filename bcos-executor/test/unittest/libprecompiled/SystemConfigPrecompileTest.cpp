@@ -5,10 +5,10 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-task/Wait.h"
-#include "executor/TransactionExecutor.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/SystemConfigPrecompiled.h"
 #include "precompiled/common/PrecompiledResult.h"
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -41,15 +41,14 @@ struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
     std::shared_ptr<bcos::crypto::Keccak256> hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     std::shared_ptr<LedgerCache> ledgerCache =
         std::make_shared<LedgerCache>(std::make_shared<bcos::test::MockLedger>());
-    std::shared_ptr<wasm::GasInjector> gasInjector;
     std::shared_ptr<StateStorage> backendStorage = std::make_shared<StateStorage>(nullptr, false);
     std::shared_ptr<StateStorage> stateStorage =
         std::make_shared<StateStorage>(backendStorage, false);
-    std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(stateStorage,
-        ledgerCache, hashImpl, 0, h256(), utcTime(),
-        static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), false, false, backendStorage);
+    std::shared_ptr<BlockContext> blockContext =
+        std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0, h256(), utcTime(),
+            static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), false, backendStorage);
     std::shared_ptr<MockTransactionExecutive> executive =
-        std::make_shared<MockTransactionExecutive>(*blockContext, "", 100, 0, *gasInjector);
+        std::make_shared<MockTransactionExecutive>(*blockContext, "", 100, 0);
 };
 
 BOOST_FIXTURE_TEST_SUITE(SystemConfigPrecompiledTest, SystemConfigPrecompiledFixture)
@@ -59,7 +58,7 @@ BOOST_AUTO_TEST_CASE(getAndSetFeature)
     SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
     auto setParameters = std::make_shared<PrecompiledExecResult>();
 
-    CodecWrapper codec(hashImpl, false);
+    CodecWrapper codec(hashImpl);
     auto setInput = codec.encodeWithSig(
         "setValueByKey(string,string)", std::string("feature_unknown"), std::string("100"));
     setParameters->m_input = bcos::ref(setInput);
@@ -109,12 +108,12 @@ BOOST_AUTO_TEST_CASE(getAndSetFeature)
 
     std::shared_ptr<LedgerCache> ledgerCache =
         std::make_shared<LedgerCache>(std::make_shared<bcos::test::MockLedger>());
-    std::shared_ptr<BlockContext> newBlockContext = std::make_shared<BlockContext>(
-        executive->blockContext().storage(), ledgerCache, executive->blockContext().hashHandler(),
-        1, h256(), utcTime(), static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), false,
-        false, backendStorage);
+    std::shared_ptr<BlockContext> newBlockContext =
+        std::make_shared<BlockContext>(executive->blockContext().storage(), ledgerCache,
+            executive->blockContext().hashHandler(), 1, h256(), utcTime(),
+            static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), false, backendStorage);
     std::shared_ptr<MockTransactionExecutive> newExecutive =
-        std::make_shared<MockTransactionExecutive>(*newBlockContext, "", 100, 0, *gasInjector);
+        std::make_shared<MockTransactionExecutive>(*newBlockContext, "", 100, 0);
     setInput = codec.encodeWithSig("setValueByKey(string,string)",
         std::string("feature_balance_precompiled"), std::string("1"));
     setParameters->m_input = bcos::ref(setInput);
@@ -135,7 +134,7 @@ BOOST_AUTO_TEST_CASE(upgradeVersion)
         SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
         auto setParameters = std::make_shared<PrecompiledExecResult>();
 
-        CodecWrapper codec(hashImpl, false);
+        CodecWrapper codec(hashImpl);
         auto setInput = codec.encodeWithSig("setValueByKey(string,string)",
             std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), std::string("3.1.3"));
         setParameters->m_input = bcos::ref(setInput);

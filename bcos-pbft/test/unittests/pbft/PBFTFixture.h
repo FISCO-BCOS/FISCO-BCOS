@@ -34,7 +34,8 @@
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
-#include <boost/bind/bind.hpp>
+#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/Worker.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -57,15 +58,15 @@ class FakePBFTConfig : public PBFTConfig
 {
 public:
     using Ptr = std::shared_ptr<FakePBFTConfig>;
-    FakePBFTConfig(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    FakePBFTConfig(boost::asio::io_context& _ioService, bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage,
         protocol::BlockFactory::Ptr _blockFactory)
-      : PBFTConfig(_cryptoSuite, _keyPair, _pbftMessageFactory, _codec, _validator, _frontService,
-            _stateMachine, _storage, _blockFactory)
+      : PBFTConfig(_ioService, _cryptoSuite, _keyPair, _pbftMessageFactory, _codec, _validator,
+            _frontService, _stateMachine, _storage, _blockFactory)
     {}
 
     ~FakePBFTConfig() override {}
@@ -162,17 +163,22 @@ class FakePBFTEngine : public PBFTEngine
 {
 public:
     using Ptr = std::shared_ptr<FakePBFTEngine>;
-    explicit FakePBFTEngine(PBFTConfig::Ptr _config) : PBFTEngine(_config)
+    explicit FakePBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& _ioContext,
+        bcos::IOServicePool::Ptr _ioServicePool)
+      : PBFTEngine(_config, _ioContext, _ioServicePool)
     {
         auto cacheFactory = std::make_shared<FakePBFTCacheFactory>();
         m_cacheProcessor = std::make_shared<FakeCacheProcessor>(cacheFactory, _config);
-        m_logSync = std::make_shared<PBFTLogSync>(_config, m_cacheProcessor);
+        m_logSync = std::make_shared<PBFTLogSync>(_config, m_cacheProcessor, _ioServicePool);
         m_cacheProcessor->registerProposalAppliedHandler(
-            boost::bind(&FakePBFTEngine::onProposalApplied, this, boost::placeholders::_1,
-                boost::placeholders::_2, boost::placeholders::_3));
+            [this](int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
+                PBFTProposalInterface::Ptr _executedProposal) {
+                onProposalApplied(_errorCode, std::move(_proposal), std::move(_executedProposal));
+            });
         m_cacheProcessor->registerOnLoadAndVerifyProposalFinish(
-            boost::bind(&FakePBFTEngine::onLoadAndVerifyProposalFinish, this,
-                boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
+            [this](bool _verifyResult, Error::Ptr _error, PBFTProposalInterface::Ptr _proposal) {
+                onLoadAndVerifyProposalFinish(_verifyResult, _error, _proposal);
+            });
         initSendResponseHandler();
         _config->enableAsMasterNode(true);
     }
@@ -223,7 +229,8 @@ public:
 class FakePBFTImpl : public PBFTImpl
 {
 public:
-    explicit FakePBFTImpl(PBFTEngine::Ptr _pbftEngine) : PBFTImpl(_pbftEngine)
+    explicit FakePBFTImpl(PBFTEngine::Ptr _pbftEngine, bcos::IOServicePool::Ptr _ioServicePool)
+      : PBFTImpl(_pbftEngine, std::move(_ioServicePool))
     {
         m_running = true;
         m_masterNode.store(true);
@@ -241,36 +248,39 @@ class FakePBFTFactory : public PBFTFactory
 {
 public:
     using Ptr = std::shared_ptr<PBFTFactory>;
-    FakePBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
-        bcos::crypto::KeyPairInterface::Ptr _keyPair,
+    FakePBFTFactory(boost::asio::io_context& _ioService,
+        bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
-      : PBFTFactory(_cryptoSuite, _keyPair, _frontService, _storage, _ledger, _scheduler, _txpool,
-            _blockFactory, _txResultFactory)
+        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
+        bcos::IOServicePool::Ptr _ioServicePool)
+      : PBFTFactory(_ioService, _cryptoSuite, _keyPair, _frontService, _storage, _ledger,
+            _scheduler, _txpool, _blockFactory, _txResultFactory, std::move(_ioServicePool))
     {}
 
     PBFTImpl::Ptr createPBFT() override
     {
         auto pbft = PBFTFactory::createPBFT();
         auto orgPBFTConfig = pbft->pbftEngine()->pbftConfig();
-        auto stateMachine = std::make_shared<StateMachine>(m_scheduler, m_blockFactory);
+        auto stateMachine =
+            std::make_shared<StateMachine>(m_scheduler, m_blockFactory, m_ioServicePool);
 
         PBFT_LOG(DEBUG) << LOG_DESC("create pbftStorage");
-        auto pbftStorage = std::make_shared<LedgerStorage>(
-            m_scheduler, m_storage, m_blockFactory, orgPBFTConfig->pbftMessageFactory());
+        auto pbftStorage = std::make_shared<LedgerStorage>(m_scheduler, m_storage, m_blockFactory,
+            orgPBFTConfig->pbftMessageFactory(), m_ioServicePool);
 
-        auto pbftConfig = std::make_shared<FakePBFTConfig>(m_cryptoSuite, m_keyPair,
+        auto pbftConfig = std::make_shared<FakePBFTConfig>(m_ioService, m_cryptoSuite, m_keyPair,
             orgPBFTConfig->pbftMessageFactory(), orgPBFTConfig->codec(), orgPBFTConfig->validator(),
             orgPBFTConfig->frontService(), stateMachine, pbftStorage, m_blockFactory);
         PBFT_LOG(DEBUG) << LOG_DESC("create PBFTEngine");
-        auto pbftEngine = std::make_shared<FakePBFTEngine>(pbftConfig);
+        auto pbftEngine =
+            std::make_shared<FakePBFTEngine>(pbftConfig, m_ioService, m_ioServicePool);
 
         PBFT_LOG(INFO) << LOG_DESC("create PBFT");
-        auto fakedPBFT = std::make_shared<FakePBFTImpl>(pbftEngine);
+        auto fakedPBFT = std::make_shared<FakePBFTImpl>(pbftEngine, m_ioServicePool);
         fakedPBFT->setLedger(m_ledger);
         pbftConfig->setTimeoutState(false);
         pbftConfig->timer()->stop();
@@ -319,8 +329,9 @@ public:
 
         auto txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
 
-        auto pbftFactory = std::make_shared<FakePBFTFactory>(_cryptoSuite, _keyPair, m_frontService,
-            m_storage, m_ledger, m_scheduler, m_txpool, m_blockFactory, txResultFactory);
+        auto pbftFactory = std::make_shared<FakePBFTFactory>(*m_ioServicePool->getIOService(),
+            _cryptoSuite, _keyPair, m_frontService, m_storage, m_ledger, m_scheduler, m_txpool,
+            m_blockFactory, txResultFactory, m_ioServicePool);
         m_pbft = pbftFactory->createPBFT();
         m_pbftEngine = std::dynamic_pointer_cast<FakePBFTEngine>(m_pbft->pbftEngine());
         m_pbft->registerFaultyDiscriminator([](bcos::crypto::NodeIDPtr) { return false; });
@@ -399,8 +410,14 @@ public:
     }
 
     BlockFactory::Ptr blockFactory() { return m_blockFactory; }
+    boost::asio::io_context& ioContext() { return *m_ioServicePool->getIOService(); }
+    bcos::IOServicePool::Ptr ioServicePool() { return m_ioServicePool; }
 
 private:
+    // Must be declared first so io_context outlives all Workers using it
+    bcos::IOServicePool::Ptr m_ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "pbftFixture");
+
     CryptoSuite::Ptr m_cryptoSuite;
     KeyPairInterface::Ptr m_keyPair;
     PublicPtr m_nodeId;

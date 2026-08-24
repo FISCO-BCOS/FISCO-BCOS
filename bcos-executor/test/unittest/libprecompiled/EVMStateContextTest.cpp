@@ -22,6 +22,7 @@
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -38,8 +39,8 @@ class EVMStateContextFixture : public PrecompiledFixture
 public:
     EVMStateContextFixture()
     {
-        codec = std::make_shared<CodecWrapper>(hashImpl, false);
-        setIsWasm(false, false, true);
+        codec = std::make_shared<CodecWrapper>(hashImpl);
+        prepareEnv(false, true);
         testAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
         origin = Address("0x1234567890123456789012345678901234567890").hex();
     }

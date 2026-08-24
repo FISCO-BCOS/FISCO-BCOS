@@ -33,7 +33,7 @@ class LeaderElection : public LeaderElectionInterface,
 {
 public:
     using Ptr = std::shared_ptr<LeaderElection>;
-    LeaderElection(CampaignConfig::Ptr _config)
+    LeaderElection(CampaignConfig::Ptr _config, boost::asio::io_context& _ioContext)
       : m_config(_config),
         m_etcdClient(_config->etcdClient()),
         // FIB-175: bound every blocking unary etcd op (leasegrant/txn/get) to
@@ -43,7 +43,8 @@ public:
         // overflow the unsigned multiply before the cast.
         m_etcdOpTimeout(std::chrono::seconds(m_config->leaseTTL()))
     {
-        m_campaignTimer = std::make_shared<Timer>(m_config->leaseTTL() * 1000, "campTimer");
+        m_campaignTimer =
+            std::make_shared<Timer>(_ioContext, m_config->leaseTTL() * 1000, "campTimer");
         // FIB-175: arm the bound as a client-level grpc timeout. etcd-cpp-apiv3
         // applies this deadline on the completion-queue wait of unary RPCs only;
         // the watch stream pumps an unbounded cq_.Next() loop and is unaffected,

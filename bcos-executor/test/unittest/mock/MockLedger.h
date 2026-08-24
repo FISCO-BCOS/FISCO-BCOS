@@ -5,20 +5,12 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-framework/storage/Serialize.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <sstream>
-
-#ifndef WITH_WASM
-namespace bcos::wasm
-{
-class GasInjector
-{
-};
-}  // namespace bcos::wasm
-#endif
 
 namespace bcos::test
 {
@@ -34,10 +26,10 @@ public:
       : m_storage(std::move(_storage))
     {}
 
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features) override
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr,
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr,
+        std::function<void(std::string, Error::Ptr&&)>, bool, std::optional<bcos::ledger::Features>,
+        std::optional<bcos::crypto::HashType>, bool) override
     {
         BOOST_CHECK(false);  // Need implementations
     };
@@ -162,7 +154,9 @@ public:
                     [&promise](auto&& e, std::optional<storage::Entry> entry) {
                         promise.set_value(entry.value());
                     });
-                auto entry = promise.get_future().get().getObject<ledger::SystemConfigEntry>();
+                auto rawEntry = promise.get_future().get();
+                auto entry =
+                    bcos::storage::serialize::decode<ledger::SystemConfigEntry>(rawEntry.get());
                 _onGetConfig(nullptr, std::get<0>(entry), std::get<1>(entry));
                 return;
             }

@@ -29,8 +29,8 @@
 using namespace bcostars;
 
 bcostars::Error LedgerServiceServer::asyncGetBatchTxsByHashList(
-    const vector<vector<tars::Char>>& _txsHashList, tars::Bool _withProof,
-    vector<bcostars::Transaction>&, map<std::string, vector<std::string>>&,
+    const std::vector<std::vector<tars::Char>>& _txsHashList, tars::Bool _withProof,
+    std::vector<bcostars::Transaction>&, std::map<std::string, std::vector<std::string>>&,
     tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
@@ -97,7 +97,7 @@ bcostars::Error LedgerServiceServer::asyncGetBlockDataByNumber(tars::Int64 _bloc
 }
 
 bcostars::Error LedgerServiceServer::asyncGetBlockHashByNumber(
-    tars::Int64 _blockNumber, vector<tars::Char>&, tars::TarsCurrentPtr current)
+    tars::Int64 _blockNumber, std::vector<tars::Char>&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     m_ledger->asyncGetBlockHashByNumber(
@@ -105,10 +105,10 @@ bcostars::Error LedgerServiceServer::asyncGetBlockHashByNumber(
             if (_error)
             {
                 async_response_asyncGetBlockHashByNumber(
-                    current, toTarsError(_error), vector<tars::Char>());
+                    current, toTarsError(_error), std::vector<tars::Char>());
                 return;
             }
-            vector<tars::Char> blockHash(_blockHash.begin(), _blockHash.end());
+            std::vector<tars::Char> blockHash(_blockHash.begin(), _blockHash.end());
             async_response_asyncGetBlockHashByNumber(current, toTarsError(_error), blockHash);
         });
     return bcostars::Error();
@@ -124,7 +124,7 @@ bcostars::Error LedgerServiceServer::asyncGetBlockNumber(tars::Int64&, tars::Tar
     return bcostars::Error();
 }
 bcostars::Error LedgerServiceServer::asyncGetBlockNumberByHash(
-    const vector<tars::Char>& _blockHash, tars::Int64&, tars::TarsCurrentPtr current)
+    const std::vector<tars::Char>& _blockHash, tars::Int64&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     bcos::crypto::HashType blockHash;
@@ -142,7 +142,7 @@ bcostars::Error LedgerServiceServer::asyncGetBlockNumberByHash(
 }
 
 bcostars::Error LedgerServiceServer::asyncGetNodeListByType(
-    const std::string& _type, vector<bcostars::ConsensusNode>&, tars::TarsCurrentPtr current)
+    const std::string& _type, std::vector<bcostars::ConsensusNode>&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     m_ledger->asyncGetNodeListByType(
@@ -179,8 +179,8 @@ bcostars::Error LedgerServiceServer::asyncGetTotalTransactionCount(
 }
 
 bcostars::Error LedgerServiceServer::asyncGetTransactionReceiptByHash(
-    const vector<tars::Char>& _txHash, tars::Bool _withProof, bcostars::TransactionReceipt&,
-    vector<std::string>&, tars::TarsCurrentPtr current)
+    const std::vector<tars::Char>& _txHash, tars::Bool _withProof, bcostars::TransactionReceipt&,
+    std::vector<std::string>&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     bcos::crypto::HashType txHash;
@@ -204,7 +204,7 @@ bcostars::Error LedgerServiceServer::asyncGetTransactionReceiptByHash(
                                   ->inner();
             }
             // get tars merkle
-            vector<std::string> tarsMerkleItemList;
+            std::vector<std::string> tarsMerkleItemList;
             if (_merkleProofList)
             {
                 for (auto const& merkle : *_merkleProofList)

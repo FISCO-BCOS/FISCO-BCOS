@@ -9,8 +9,8 @@
  */
 
 #include "libprecompiled/PreCompiledFixture.h"
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::precompiled;
 using namespace bcos::executor;
@@ -25,7 +25,9 @@ public:
         // V3_0 makes the executor create the DagTransfer test table in the
         // backend at build (TransactionExecutor init), so openTable is stable
         // across blocks instead of depending on genesis state layering.
-        setIsWasm(false, false, false, protocol::BlockVersion::V3_0_VERSION);
+        // setIsWasm(isWasm, isCheckAuth, isKeyPage, version) became prepareEnv(...) when WASM
+        // support was removed (#5348); the leading isWasm=false argument no longer exists.
+        prepareEnv(false, false, protocol::BlockVersion::V3_0_VERSION);
     }
     ~DagTransferPrecompiledFixture() override = default;
 
@@ -89,14 +91,14 @@ BOOST_AUTO_TEST_CASE(emptyUserNameRejectedByEveryMethod)
 
     // every mutating method rejects an empty user name with CODE_INVALID_USER_NAME
     // before it ever opens the table — deterministic regardless of table state.
-    BOOST_CHECK_LT(decodeRet(callDag(number++, codec->encodeWithSig("userAdd(string,uint256)",
-                                                   std::string(""), u256(1)))),
+    BOOST_CHECK_LT(decodeRet(callDag(number++,
+                       codec->encodeWithSig("userAdd(string,uint256)", std::string(""), u256(1)))),
         0);
-    BOOST_CHECK_LT(decodeRet(callDag(number++, codec->encodeWithSig("userSave(string,uint256)",
-                                                   std::string(""), u256(1)))),
+    BOOST_CHECK_LT(decodeRet(callDag(number++,
+                       codec->encodeWithSig("userSave(string,uint256)", std::string(""), u256(1)))),
         0);
-    BOOST_CHECK_LT(decodeRet(callDag(number++, codec->encodeWithSig("userDraw(string,uint256)",
-                                                   std::string(""), u256(1)))),
+    BOOST_CHECK_LT(decodeRet(callDag(number++,
+                       codec->encodeWithSig("userDraw(string,uint256)", std::string(""), u256(1)))),
         0);
     BOOST_CHECK_LT(
         decodeRet(callDag(number++, codec->encodeWithSig("userTransfer(string,string,uint256)",
@@ -126,8 +128,9 @@ BOOST_AUTO_TEST_CASE(zeroAmountRejected)
 BOOST_AUTO_TEST_CASE(transferToSelfReturnsBeforeTable)
 {
     // fromUser == toUser short-circuits to success without touching the table
-    BOOST_CHECK_EQUAL(decodeRet(callDag(2, codec->encodeWithSig("userTransfer(string,string,uint256)",
-                                               std::string("self"), std::string("self"), u256(5)))),
+    BOOST_CHECK_EQUAL(
+        decodeRet(callDag(2, codec->encodeWithSig("userTransfer(string,string,uint256)",
+                                 std::string("self"), std::string("self"), u256(5)))),
         0);
 }
 

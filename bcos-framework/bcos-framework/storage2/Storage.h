@@ -15,9 +15,32 @@
 namespace bcos::storage2
 {
 
-inline constexpr struct DIRECT_TYPE
+// Helper: check if a tag type is present in a parameter pack.
+// Usage: if constexpr (contains_tag_v<BYPASS_READ_SET_TYPE, decltype(tags)...>) { ... }
+template <class Tag, class... Tags>
+inline constexpr bool contains_tag_v = (std::same_as<std::decay_t<Tags>, Tag> || ...);
+
+// Bypass logical deletion: physically erase the entry instead of marking a
+// deleteItem sentinel. Used by MemoryStorage (removeOne/removeSome) and
+// RollbackableStorage (rollback).
+inline constexpr struct BYPASS_LOGICAL_DELETE_TYPE
 {
-} DIRECT;
+} BYPASS_LOGICAL_DELETE;
+
+// Bypass read-set tracking: do not register the read in the parallel
+// scheduler's conflict set. Used by ReadWriteSetStorage (readOne/readSome),
+// EVM metadata reads (SSTORE status), and Rollbackable pre-image capture.
+inline constexpr struct BYPASS_READ_SET_TYPE
+{
+} BYPASS_READ_SET;
+
+// Bypass MultiLayerStorage layer resolution: read from the most recent layer
+// directly instead of walking the full mutable→immutable→cache→backend chain.
+// Used when the caller already knows which layer to target (e.g. pre-image
+// capture, metadata queries that only need the latest value).
+inline constexpr struct BYPASS_MULTILAYER_TYPE
+{
+} BYPASS_MULTILAYER;
 
 inline constexpr struct RANGE_SEEK_TYPE
 {

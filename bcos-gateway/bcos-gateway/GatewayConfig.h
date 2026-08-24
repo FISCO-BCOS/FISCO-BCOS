@@ -8,7 +8,6 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
-#include "bcos-utilities/ObjectCounter.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/asio/ssl/context.hpp>
 #include <boost/property_tree/ini_parser.hpp>
@@ -17,7 +16,7 @@
 
 namespace bcos::gateway
 {
-class GatewayConfig : public bcos::ObjectCounter<GatewayConfig>
+class GatewayConfig
 {
 public:
     using Ptr = std::shared_ptr<GatewayConfig>;
@@ -43,23 +42,6 @@ public:
         std::string multiCaPath;
     };
 
-    // config for redis
-    struct RedisConfig
-    {
-        // redis server ip
-        std::string host;
-        // redis server port
-        uint16_t port;
-        // redis request timeout
-        int32_t timeout = -1;
-        // redis connection pool size, default 16
-        int32_t connectionPoolSize = 16;
-        // redis password, default empty
-        std::string password;
-        // redis db, default 0th
-        int db = 0;
-    };
-
     // config for rate limit
     struct RateLimiterConfig
     {
@@ -73,13 +55,6 @@ public:
 
         // stat reporter interval, unit: ms
         int32_t statInterval = 60000;
-
-        // distributed ratelimit switch
-        bool enableDistributedRatelimit = false;
-        // distributed ratelimit local cache switch
-        bool enableDistributedRateLimitCache = true;
-        // distributed ratelimit local cache percent
-        int32_t distributedRateLimitCachePercent = 20;
 
         //-------------- output bandwidth ratelimit begin------------------
         // total outgoing bandwidth limit
@@ -165,8 +140,6 @@ public:
     void initSMCertConfig(const boost::property_tree::ptree& _pt);
     // loads ratelimit config
     void initFlowControlConfig(const boost::property_tree::ptree& _pt);
-    // loads redis config
-    void initRedisConfig(const boost::property_tree::ptree& _pt);
     // loads peer blacklist config
     void initPeerBlacklistConfig(const boost::property_tree::ptree& _pt);
     // loads peer whitelist config
@@ -180,7 +153,6 @@ public:
 
     std::string listenIP() const;
     uint16_t listenPort() const;
-    uint32_t threadPoolSize() const;
     bool smSSL() const;
     uint8_t sslClientMode() const;
     uint8_t sslServerMode() const;
@@ -188,7 +160,6 @@ public:
     CertConfig certConfig() const;
     SMCertConfig smCertConfig() const;
     RateLimiterConfig rateLimiterConfig() const;
-    RedisConfig redisConfig() const;
 
     const std::set<NodeIPEndpoint>& connectedNodes() const;
 
@@ -323,8 +294,6 @@ private:
     std::string m_listenIP;
     // p2p network listen Port
     uint16_t m_listenPort;
-    // threadPool size
-    uint32_t m_threadPoolSize{8};
     // p2p connected nodes host list
     std::set<NodeIPEndpoint> m_connectedNodes;
     // peer black list
@@ -344,7 +313,6 @@ private:
     SMCertConfig m_smCertConfig;
 
     RateLimiterConfig m_rateLimiterConfig;
-    RedisConfig m_redisConfig;
 
     std::string m_certPath;
     std::string m_nodePath;

@@ -22,7 +22,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <concepts/bcos-concepts/Basic.h>
-#include <utility>
+#include <optional>
 #include <vector>
 
 // Note:https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/
@@ -157,6 +157,12 @@ inline size_t length(const bcos::FixedBytes<N>& v) noexcept
 }
 
 template <typename T>
+inline size_t length(const std::optional<T>& v) noexcept
+{
+    return v.has_value() ? length(*v) : 0;
+}
+
+template <typename T>
     requires(!std::same_as<std::remove_cvref_t<T>, bcos::byte>)
 inline size_t length(const std::vector<T>& v) noexcept;
 
@@ -175,34 +181,24 @@ inline size_t length(const std::span<const T>& v) noexcept
 }
 
 template <typename T>
-inline size_t lengthOfItems(const std::vector<T>& v) noexcept
-{
-    return lengthOfItems(std::span<const T>{v.data(), v.size()});
-}
-
-template <typename T>
     requires(!std::same_as<std::remove_cvref_t<T>, bcos::byte>)
 inline size_t length(const std::vector<T>& v) noexcept
 {
     return length(std::span<const T>{v.data(), v.size()});
 }
 
-template <typename Arg1, typename Arg2>
-inline size_t lengthOfItems(const Arg1& arg1, const Arg2& arg2) noexcept
+template <typename... Args>
+    requires(sizeof...(Args) > 1)
+inline size_t lengthOfItems(const Args&... args) noexcept
 {
-    return length(arg1) + length(arg2);
+    return (... + length(args));
 }
 
-template <typename Arg1, typename Arg2, typename... Args>
-inline size_t lengthOfItems(const Arg1& arg1, const Arg2& arg2, const Args&... args) noexcept
+template <typename... Args>
+    requires(sizeof...(Args) > 1)
+inline size_t length(const Args&... args) noexcept
 {
-    return length(arg1) + lengthOfItems(arg2, args...);
-}
-
-template <typename Arg1, typename Arg2, typename... Args>
-inline size_t length(const Arg1& arg1, const Arg2& arg2, const Args&... args) noexcept
-{
-    const size_t payload_length = lengthOfItems(arg1, arg2, args...);
+    const size_t payload_length = lengthOfItems(args...);
     return lengthOfLength(payload_length) + payload_length;
 }
 

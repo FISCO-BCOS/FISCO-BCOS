@@ -19,7 +19,6 @@
  * @date 2021-04-23
  */
 #include "PBFTCache.h"
-#include "bcos-task/Wait.h"
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -337,7 +336,7 @@ void PBFTCache::resetExceptionCache(ViewType _curView)
         return;
     }
     for (auto exceptionPrePrepare = m_exceptionPrePrepareList.begin();
-        exceptionPrePrepare != m_exceptionPrePrepareList.end();)
+         exceptionPrePrepare != m_exceptionPrePrepareList.end();)
     {
         PBFT_LOG(INFO) << LOG_DESC("resetCache: asyncResetTxsFlag exceptionPrePrepare")
                        << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")

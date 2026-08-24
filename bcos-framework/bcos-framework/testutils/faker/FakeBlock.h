@@ -246,12 +246,10 @@ inline BlocksPtr fakeBlocks(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
     parentInfo.blockHash = HashType(hash);
     for (size_t i = 0; i < _blockNumber; ++i)
     {
-        ParentInfoList parentInfos;
         auto block = fakeAndCheckBlock(_cryptoSuite, _blockFactory, _txsNumBegin + i,
             _receiptsNumBegin + i, i + 1, true, false);
-        parentInfos.push_back(parentInfo);
         block->blockHeader()->setNumber(1 + i);
-        block->blockHeader()->setParentInfo(parentInfos);
+        block->blockHeader()->setParentInfo(parentInfo);
         block->blockHeader()->calculateHash(*_cryptoSuite->hashImpl());
         parentInfo.blockNumber = block->blockHeader()->number();
         parentInfo.blockHash = block->blockHeader()->hash();
@@ -269,11 +267,9 @@ inline BlocksPtr fakeEmptyBlocks(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Pt
     parentInfo.blockHash = HashType(hash);
     for (size_t i = 0; i < _blockNumber; ++i)
     {
-        ParentInfoList parentInfos;
         auto block = fakeEmptyBlock(_cryptoSuite, _blockFactory, i + 1);
-        parentInfos.push_back(parentInfo);
         block->blockHeader()->setNumber(1 + i);
-        block->blockHeader()->setParentInfo(parentInfos);
+        block->blockHeader()->setParentInfo(parentInfo);
         block->blockHeader()->calculateHash(*_cryptoSuite->hashImpl());
         parentInfo.blockNumber = block->blockHeader()->number();
         parentInfo.blockHash = block->blockHeader()->hash();

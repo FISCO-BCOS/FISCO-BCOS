@@ -26,7 +26,7 @@
 #include "bcos-sync/utilities/SyncTreeTopology.h"
 #include "bcos-tool/NodeTimeMaintenance.h"
 #include <bcos-framework/sync/BlockSyncInterface.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
 #include <bcos-utilities/Worker.h>
 namespace bcos::sync
@@ -38,7 +38,8 @@ class BlockSync : public BlockSyncInterface,
 public:
     using Ptr = std::shared_ptr<BlockSync>;
     // FIXME: make idle configable
-    BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs = 200);
+    BlockSync(BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext,
+        bcos::IOServicePool::Ptr _ioServicePool, unsigned _idleWaitMs = 200);
     ~BlockSync() override = default;
 
     void start() override;
@@ -102,7 +103,6 @@ protected:
 
     void initSendResponseHandler();
     void executeWorker() override;
-    void workerProcessLoop() override;
     /// for message handle
     // call when receive BlockStatusPacket, update peers status
     virtual void onPeerStatus(bcos::crypto::NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg);
@@ -151,16 +151,14 @@ protected:
     std::function<void(std::string const&, int, bcos::crypto::NodeIDPtr, bytesConstRef)>
         m_sendResponseHandler;
 
-    bcos::ThreadPool::Ptr m_downloadBlockProcessor = nullptr;
-    bcos::ThreadPool::Ptr m_sendBlockProcessor = nullptr;
+    bcos::Strand m_downloadStrand;
+    bcos::Strand m_sendStrand;
     std::shared_ptr<Timer> m_downloadingTimer;
 
     std::atomic_bool m_running = {false};
     std::atomic<SyncState> m_state = {SyncState::Idle};
     std::atomic<bcos::protocol::BlockNumber> m_maxRequestNumber = {0};
 
-    boost::condition_variable m_signalled;
-    boost::mutex x_signalled;
     bcos::protocol::BlockNumber m_waterMark = 10;
     bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 50;
 

@@ -19,6 +19,7 @@
  */
 
 #include "bcos-transaction-scheduler/GC.h"
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <chrono>
@@ -31,8 +32,8 @@ using namespace bcos::scheduler_v1;
 namespace
 {
 // Resource with an observable destructor used to verify GC paths.
-// Optionally blocks on a shared gate so a single instance can pin the
-// single-threaded GC arena thread, forcing the queue to fill up.
+// Optionally blocks on a shared gate so a single instance can pin an
+// io_context thread, forcing the queue to fill up.
 struct Resource
 {
     static inline std::atomic<int> destroyed{0};
@@ -86,26 +87,32 @@ BOOST_AUTO_TEST_CASE(MaxPendingGCConstant)
 
 BOOST_AUTO_TEST_CASE(NormalCollectWorks)
 {
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "gcTest");
+    GC gc(ioServicePool);
+
     auto ptr = std::make_shared<int>(42);
     BOOST_CHECK_EQUAL(ptr.use_count(), 1);
-    GC::collect(std::move(ptr));
+    gc.collect(std::move(ptr));
     BOOST_CHECK(!ptr);
 }
 
 BOOST_AUTO_TEST_CASE(CollectMultipleResources)
 {
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "gcTest");
+    GC gc(ioServicePool);
+
     auto ptr1 = std::make_shared<int>(1);
     auto ptr2 = std::make_shared<std::string>("hello");
-    GC::collect(std::move(ptr1), std::move(ptr2));
+    gc.collect(std::move(ptr1), std::move(ptr2));
     BOOST_CHECK(!ptr1);
     BOOST_CHECK(!ptr2);
 }
 
 // Core regression: when the deferred-destruction queue is at capacity,
 // the next collect() MUST destroy synchronously instead of growing the
-// backlog. We pin the GC arena's single thread with a Blocker resource
+// backlog. We pin an io_context thread with a Blocker resource
 // whose destructor waits on a gate, then prove:
-//   1. While the arena is blocked, pending climbs to MAX_PENDING_GC.
+//   1. While a thread is blocked, pending climbs to MAX_PENDING_GC.
 //   2. The (MAX_PENDING_GC + 1)-th call destructs in the caller's thread
 //      (observable: destroyed counter ticks before we open the gate).
 BOOST_AUTO_TEST_CASE(BackpressureForcesSynchronousDestruction)
@@ -115,10 +122,15 @@ BOOST_AUTO_TEST_CASE(BackpressureForcesSynchronousDestruction)
     std::promise<void> gatePromise;
     Resource::gate = gatePromise.get_future().share();
 
-    // 1. Pin the GC arena with a blocker. Its lambda body runs (decrementing
-    //    pending), then its capture is destroyed, parking the arena thread
+    // Use a single-thread pool so that one blocker can pin the sole
+    // io_context thread.
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "gcTest");
+    GC gc(ioServicePool);
+
+    // 1. Pin the io_context thread with a blocker. Its lambda body runs,
+    //    then its capture is destroyed, parking the io_context thread
     //    inside gate.wait().
-    GC::collect(Resource{true});
+    gc.collect(Resource{true});
 
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!Resource::blockerStarted.load(std::memory_order_acquire))
@@ -126,27 +138,27 @@ BOOST_AUTO_TEST_CASE(BackpressureForcesSynchronousDestruction)
         if (std::chrono::steady_clock::now() > deadline)
         {
             gatePromise.set_value();  // unblock so process can exit
-            BOOST_FAIL("GC arena did not start running blocker within 5s");
+            BOOST_FAIL("GC io_context thread did not start running blocker within 5s");
         }
         std::this_thread::yield();
     }
-    // Arena is now stuck in the blocker's destructor. pending==0.
+    // io_context thread is now stuck in the blocker's destructor. pending==0.
 
     // 2. Saturate the queue exactly to capacity. Nothing runs because the
-    //    arena thread is parked.
+    //    io_context thread is parked.
     for (size_t i = 0; i < GC::MAX_PENDING_GC; ++i)
     {
-        GC::collect(Resource{false});
+        gc.collect(Resource{false});
     }
     BOOST_CHECK_EQUAL(Resource::destroyed.load(std::memory_order_relaxed), 0);
 
     // 3. The next call must hit the synchronous fallback in this thread,
     //    so destroyed ticks immediately (still no async work has run).
-    GC::collect(Resource{false});
+    gc.collect(Resource{false});
     BOOST_CHECK_EQUAL(Resource::destroyed.load(std::memory_order_relaxed), 1);
 
-    // 4. Release the arena and wait for it to drain so we don't leave a
-    //    blocked thread for the rest of the test binary to deal with.
+    // 4. Release the io_context thread and wait for it to drain so we don't
+    //    leave a blocked thread for the rest of the test binary to deal with.
     gatePromise.set_value();
     auto const expected = static_cast<int>(GC::MAX_PENDING_GC) + 2;
     deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -154,7 +166,7 @@ BOOST_AUTO_TEST_CASE(BackpressureForcesSynchronousDestruction)
     {
         if (std::chrono::steady_clock::now() > deadline)
         {
-            BOOST_FAIL("GC arena did not drain after gate opened within 5s");
+            BOOST_FAIL("GC io_context did not drain after gate opened within 5s");
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }

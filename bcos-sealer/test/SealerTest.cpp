@@ -3,9 +3,7 @@
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <boost/exception/diagnostic_information.hpp>
-#include <boost/filesystem.hpp>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <memory>
@@ -85,7 +83,7 @@ struct TestSealerFixture2
         auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             cryptoSuite, nullptr, nullptr, nullptr);
         sealerConfig = std::make_shared<sealer::SealerConfig>(blockFactory, txpool, nullptr);
-        sealer = std::make_shared<sealer::Sealer>(sealerConfig);
+        sealer = std::make_shared<sealer::Sealer>(sealerConfig, *m_ioServicePool->getIOService());
     }
 
     crypto::Hash::Ptr hashImpl;
@@ -94,6 +92,9 @@ struct TestSealerFixture2
     crypto::CryptoSuite::Ptr cryptoSuite = nullptr;
     std::shared_ptr<MockTxPool> txpool;
     sealer::SealerConfig::Ptr sealerConfig;
+    // Must be before sealer to outlive the Worker's timer
+    bcos::IOServicePool::Ptr m_ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "sealerTest");
     sealer::Sealer::Ptr sealer;
 };
 

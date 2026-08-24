@@ -1,0 +1,21 @@
+# run_oprevm — op-revm 20.0.0 DA/operator-fee matrix runner (Task 5).
+#
+# Build (rust 1.94+ required by op-revm workspace):
+#   cargo +1.94 build --release
+# Run:
+#   ./target/release/run_oprevm --grid <da_matrix.json> --out out_oprevm.json
+#
+# Depends on the local op-revm 20.0.0 checkout (the OP Foundation revm fork that
+# carries JOVIAN/KARST OpSpecId and the deposit 0x7E gate — revm 19.4.0 has
+# neither). First build pulls the revm 40 workspace deps and is slow (10-20 min).
+
+[package]
+name = "run_oprevm"
+version = "0.1.0"
+edition = "2021"
+description = "op-revm DA/operator-fee grid runner for the FISCO opstack da-matrix"
+publish = false
+
+[dependencies]
+op-revm = { path = "/Users/octopus/octo/code/blockchain-impl/optimism/rust/op-revm", version = "=20.0.0" }
+serde_json = "1"

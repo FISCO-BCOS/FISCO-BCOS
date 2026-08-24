@@ -21,8 +21,10 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <boost/endian/conversion.hpp>
-#include <range/v3/algorithm/any_of.hpp>
+#include <boost/test/unit_test.hpp>
+#include <algorithm>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -36,10 +38,10 @@ class ConfigPrecompiledFixture : public PrecompiledFixture
 public:
     ConfigPrecompiledFixture()
     {
-        codec = std::make_shared<CodecWrapper>(hashImpl, false);
+        codec = std::make_shared<CodecWrapper>(hashImpl);
         auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             IGNORED_ARRAY_310.begin(), IGNORED_ARRAY_310.end());
-        setIsWasm(false, false, true, DEFAULT_VERSION);
+        prepareEnv(false, true, DEFAULT_VERSION);
         std::stringstream nodeFactory;
         nodeFactory << std::setfill('1') << std::setw(128) << 1;
         node1 = nodeFactory.str();
@@ -316,7 +318,7 @@ public:
             p.set_value(entry.value());
         });
         auto entry = p.get_future().get();
-        auto nodeList = entry.getObject<ledger::ConsensusNodeList>();
+        auto nodeList = bcos::storage::serialize::decode<ledger::ConsensusNodeList>(entry.get());
         return nodeList;
     }
 
@@ -328,7 +330,7 @@ public:
             p.set_value(entry.value());
         });
         auto entry = p.get_future().get();
-        auto systemConfig = entry.getObject<SystemConfigEntry>();
+        auto systemConfig = bcos::storage::serialize::decode<SystemConfigEntry>(entry.get());
         return systemConfig;
     }
 
@@ -676,9 +678,10 @@ BOOST_AUTO_TEST_CASE(consensus_test)
 
         auto nodeID = KeyImpl(fromHex(node1));
 
-        BOOST_CHECK(::ranges::any_of(nodeList, [&](const consensus::ConsensusNode& node) {
-            return node.nodeID->data() == nodeID.data() && node.termWeight == 2022;
-        }));
+        BOOST_CHECK(std::any_of(
+            nodeList.begin(), nodeList.end(), [&](const consensus::ConsensusNode& node) {
+                return node.nodeID->data() == nodeID.data() && node.termWeight == 2022;
+            }));
     }
 
     // add node3 to sealer

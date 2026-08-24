@@ -22,10 +22,8 @@
 
 #pragma once
 
-#include "bcos-utilities/ratelimiter/DistributedRateLimiter.h"
 #include "bcos-utilities/ratelimiter/RateLimiterInterface.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
-#include <sw/redis++/redis++.h>
 
 namespace bcos
 {
@@ -43,22 +41,12 @@ public:
 
 public:
     RateLimiterFactory() = default;
-    RateLimiterFactory(std::shared_ptr<sw::redis::Redis> _redis);
-    std::shared_ptr<sw::redis::Redis> redis() const;
 
     static std::string toTokenKey(const std::string& _baseKey);
 
     // time window rate limiter
     bcos::ratelimiter::RateLimiterInterface::Ptr buildTimeWindowRateLimiter(
         int64_t _maxPermits, int32_t _timeWindowMS = 1000, bool _allowExceedMaxPermitSize = false);
-
-    // redis distributed rate limiter
-    bcos::ratelimiter::RateLimiterInterface::Ptr buildDistributedRateLimiter(
-        const std::string& _distributedKey, int64_t _maxPermitsSize, int32_t _intervalSec,
-        bool _allowExceedMaxPermitSize, bool _enableLocalCache, int32_t _localCachePercent);
-
-private:
-    std::shared_ptr<sw::redis::Redis> m_redis = nullptr;
 };
 
 }  // namespace ratelimiter

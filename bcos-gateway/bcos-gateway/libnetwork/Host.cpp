@@ -20,11 +20,12 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
-#include "bcos-utilities/ThreadPool.h"
-#include <boost/algorithm/string.hpp>
+#include "bcos-utilities/IOServicePool.h"
+#include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <algorithm>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <set>
@@ -154,8 +155,8 @@ void Host::startAccept(boost::system::error_code boost_error)
                 // slot released. The timer and the handshake completion run on the socket's single
                 // io_context thread, so they are serialised (no race on close/cancel). Same pattern
                 // as the outbound connectTimer.
-                auto handshakeTimer = std::make_shared<boost::asio::deadline_timer>(
-                    socket->ioService(), boost::posix_time::milliseconds(m_handshakeTimeout));
+                auto handshakeTimer = std::make_shared<boost::asio::steady_timer>(
+                    socket->ioService(), std::chrono::milliseconds(m_handshakeTimeout));
                 handshakeTimer->async_wait([socket](const boost::system::error_code& timerError) {
                     if (timerError == boost::asio::error::operation_aborted)
                     {
@@ -613,22 +614,20 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
     // Bind a slot-release guard to the session; the slot is freed when the session is destroyed.
     session->setLifetimeGuard(std::make_shared<SessionSlotGuard>(weakHost, remoteAddress));
 
-    m_taskArena.execute([&]() {
-        m_asyncGroup.run([weakHost, session = std::move(session), p2pInfo]() {
-            auto host = weakHost.lock();
-            if (!host)
-            {
-                return;
-            }
-            if (host->m_connectionHandler)
-            {
-                host->m_connectionHandler(NetworkException(0, ""), p2pInfo, session);
-            }
-            else
-            {
-                HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
-            }
-        });
+    boost::asio::post(socket->ioService(), [weakHost, session = std::move(session), p2pInfo]() {
+        auto host = weakHost.lock();
+        if (!host)
+        {
+            return;
+        }
+        if (host->m_connectionHandler)
+        {
+            host->m_connectionHandler(NetworkException(0, ""), p2pInfo, session);
+        }
+        else
+        {
+            HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
+        }
     });
     HOST_LOG(INFO) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
                    << LOG_KV("local endpoint", socket->localEndpoint())
@@ -647,12 +646,10 @@ void Host::start()
     if (!haveNetwork())
     {
         m_run = true;
-        m_asioInterface->init(m_listenHost, m_listenPort);
         if (m_asioInterface->acceptor())
         {
             startAccept();
         }
-        m_asioInterface->start();
     }
 }
 
@@ -681,8 +678,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
 
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(false, _nodeIPEndpoint);
     /// if async connect timeout, close the socket directly
-    auto connectTimer = std::make_shared<boost::asio::deadline_timer>(
-        socket->ioService(), boost::posix_time::milliseconds(m_connectTimeThre));
+    auto connectTimer = std::make_shared<boost::asio::steady_timer>(
+        socket->ioService(), std::chrono::milliseconds(m_connectTimeThre));
     connectTimer->async_wait(
         [this, socket, _nodeIPEndpoint](const boost::system::error_code& error) {
             /// return when cancel has been called
@@ -717,10 +714,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
                                 << LOG_KV("message", ec.message());
                 socket->close();
 
-                m_taskArena.execute([&]() {
-                    m_asyncGroup.run([callback = std::move(callback)]() {
-                        callback(NetworkException(ConnectError, "Connect failed"), {}, {});
-                    });
+                boost::asio::post(socket->ioService(), [callback = std::move(callback)]() mutable {
+                    callback(NetworkException(ConnectError, "Connect failed"), {}, {});
                 });
                 return;
             }
@@ -751,7 +746,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
 void Host::handshakeClient(const boost::system::error_code& error,
     std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string> endpointPublicKey,
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)> callback,
-    NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr)
+    NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::steady_timer> timerPtr)
 {
     timerPtr->cancel();
     erasePendingConns(_nodeIPEndpoint);
@@ -796,21 +791,14 @@ void Host::stop()
     }
     // signal run() to prepare for shutdown and reset m_timer
     m_run = false;
-    if (m_asioInterface)
-    {
-        m_asioInterface->stop();
-    }
-    m_asyncGroup.wait();
-    // FIB-186 (vector D): drain the dedicated teardown executor after the network is down, so no
-    // teardown notification outlives the Host.
-    if (m_teardownPool)
-    {
-        m_teardownPool->stop();
-    }
-    // A teardown notification that was still running on the pool when it stopped could have posted
-    // follow-up work onto m_asyncGroup after the wait() above returned; drain m_asyncGroup once
-    // more so no such task outlives Host::stop(). wait() on an already-idle group is a cheap no-op.
-    m_asyncGroup.wait();
+    // FIB-186 (vector D): the dedicated teardown executor is deliberately NOT stopped here.
+    // Clearing m_run above is what stops work arriving: Session::drop() checks haveNetwork() and
+    // runs the teardown notification inline once it is false, so nothing new is enqueued after this
+    // point. The executor is stopped and joined by ~IOServicePool when the Host is destroyed -- the
+    // same io_context::stop() + join that the ThreadPool::stop() this replaces performed, so the
+    // "no teardown notification outlives the Host" guarantee is unchanged. Stopping it here instead
+    // would leave a live Host holding a dead executor, and any drop() racing the m_run store would
+    // silently lose its disconnect notification.
 }
 bcos::gateway::Host::Host(bcos::crypto::Hash::Ptr _hash,
     std::shared_ptr<ASIOInterface> _asioInterface, std::shared_ptr<SessionFactory> _sessionFactory,
@@ -821,13 +809,17 @@ bcos::gateway::Host::Host(bcos::crypto::Hash::Ptr _hash,
     m_messageFactory(std::move(_messageFactory))
 {
     // FIB-186 (vector D): a single dedicated thread for session-teardown notifications, off the
-    // shared m_asyncGroup that carries inbound-message delivery. See postTeardown / Host.h.
-    m_teardownPool = std::make_shared<ThreadPool>("p2pTeardown", 1);
+    // shared IOServicePool that carries inbound-message delivery. See postTeardown / Host.h.
+    // A one-worker IOServicePool is the direct replacement for the ThreadPool("p2pTeardown", 1)
+    // this used to be: one owned io_context, one owned thread, stopped and joined on destruction.
+    m_teardownPool = std::make_shared<bcos::IOServicePool>(1, "p2pTeardown");
 }
 
 void bcos::gateway::Host::postTeardown(std::function<void()> f)
 {
-    m_teardownPool->enqueue(std::move(f));
+    // IOServicePool::post already wraps the task in safeExecute, so a throwing teardown
+    // notification cannot kill the dedicated thread and wedge every later teardown.
+    m_teardownPool->post(std::move(f));
 }
 bcos::gateway::Host::~Host()
 {
@@ -885,7 +877,7 @@ void bcos::gateway::Host::setSessionCallbackManager(
 {
     m_sessionCallbackManager = std::move(sessionCallbackManager);
 }
-std::shared_ptr<ASIOInterface> bcos::gateway::Host::asioInterface() const
+const std::shared_ptr<ASIOInterface>& bcos::gateway::Host::asioInterface() const
 {
     return m_asioInterface;
 }

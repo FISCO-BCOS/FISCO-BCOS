@@ -32,16 +32,18 @@ class RPBFTConfig : public PBFTConfig
 public:
     using Ptr = std::shared_ptr<RPBFTConfig>;
 
-    RPBFTConfig(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    RPBFTConfig(boost::asio::io_context& _ioService,
+        bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage,
         bcos::protocol::BlockFactory::Ptr _blockFactory)
-      : PBFTConfig(std::move(_cryptoSuite), std::move(_keyPair), std::move(_pbftMessageFactory),
-            std::move(_codec), std::move(_validator), std::move(_frontService),
-            std::move(_stateMachine), std::move(_storage), std::move(_blockFactory)),
+      : PBFTConfig(_ioService, std::move(_cryptoSuite), std::move(_keyPair),
+            std::move(_pbftMessageFactory), std::move(_codec), std::move(_validator),
+            std::move(_frontService), std::move(_stateMachine), std::move(_storage),
+            std::move(_blockFactory)),
         m_configTools(std::make_shared<RPBFTConfigTools>())
     {
         setConsensusType(ledger::ConsensusType::RPBFT_TYPE);

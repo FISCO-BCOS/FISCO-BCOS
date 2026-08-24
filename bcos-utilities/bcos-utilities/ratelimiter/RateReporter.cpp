@@ -22,10 +22,11 @@
 
 using namespace bcos;
 
-RateReporter::RateReporter(std::string _moduleName, uint64_t _intervalMS)
+RateReporter::RateReporter(
+    boost::asio::io_context& _ioService, std::string _moduleName, uint64_t _intervalMS)
   : m_moduleName(std::move(_moduleName)), m_intervalMS(_intervalMS)
 {
-    m_reportTimer = std::make_shared<Timer>(_intervalMS, m_moduleName);
+    m_reportTimer = std::make_shared<Timer>(_ioService, _intervalMS, m_moduleName);
     m_reportTimer->registerTimeoutHandler([this]() {
         report();
         flush();
@@ -94,7 +95,8 @@ void RateReporter::update(std::size_t _dataSize, bool _success)
     }
 }
 
-RateReporter::Ptr RateReporterFactory::build(std::string _moduleName, uint64_t _intervalMS)
+RateReporter::Ptr RateReporterFactory::build(
+    boost::asio::io_context& _ioService, std::string _moduleName, uint64_t _intervalMS)
 {
-    return std::make_shared<RateReporter>(std::move(_moduleName), _intervalMS);
+    return std::make_shared<RateReporter>(_ioService, std::move(_moduleName), _intervalMS);
 }

@@ -40,8 +40,8 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "evmc/evmc.h"
 #include "executor/TransactionExecutorFactory.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/tools/old/interface.hpp>
@@ -82,25 +82,21 @@ struct TransactionExecutorFixture
         auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-            backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+            backend, executionResultFactory, stateStorageFactory, hashImpl, false);
 
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         auto secretKeyBytes =
             fromHex("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
-        memcpy(keyPair->secretKey()->mutableData(),
-            secretKeyBytes.data(),
-            32);
+        memcpy(keyPair->secretKey()->mutableData(), secretKeyBytes.data(), 32);
         // address: "11ac3ca85a307ae2aff614e83949ab691ba019c5"
         auto publicKeyBytes = fromHex(
             "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
             "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae");
-        memcpy(keyPair->publicKey()->mutableData(),
-            publicKeyBytes.data(),
-            64);
+        memcpy(keyPair->publicKey()->mutableData(), publicKeyBytes.data(), 64);
         eoa = keyPair->address(hashImpl).hex();
 
-        codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
+        codec = std::make_unique<bcos::CodecWrapper>(hashImpl);
     }
     ~TransactionExecutorFixture() { boost::log::core::get()->set_logging_enabled(true); }
 
@@ -188,13 +184,12 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -262,15 +257,14 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto entry = table.getRow("code");
     BOOST_CHECK(entry);
-    BOOST_CHECK_GT(entry->getField(0).size(), 0);
+    BOOST_CHECK_GT(entry->get().size(), 0);
 
     // start new block
-    auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader2->setNumber(2);
 
-    parentInfos = {{{blockHeader2->number() - 1, h256(blockHeader2->number() - 1)}}};
-    blockHeader2->setParentInfo(parentInfos);
+    parentInfo = {blockHeader2->number() - 1, h256(blockHeader2->number() - 1)};
+    blockHeader2->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader2->number() - 1);
     blockHeader2->calculateHash(*cryptoSuite->hashImpl());
 
@@ -369,7 +363,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     ledger::SystemConfigEntry se = {"1", 0};
     storage::Entry entry;
-    entry.setObject(se);
+    entry.set(bcos::storage::serialize::encode(se));
     backend->setRow(ledger::SYS_CONFIG, "feature_evm_address", entry);
     std::string ABin =
         "608060405234801561001057600080fd5b5061037f806100206000396000f3fe60806040523480156100105760"
@@ -436,13 +430,12 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -840,13 +833,12 @@ BOOST_AUTO_TEST_CASE(performance)
 
         NativeExecutionMessage paramsBak = *params;
 
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
         blockHeader->setNumber(blockNumber);
 
-        std::vector<bcos::protocol::ParentInfo> parentInfos{
-            {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
-        blockHeader->setParentInfo(parentInfos);
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+        blockHeader->setParentInfo(parentInfo);
         ledger->setBlockNumber(blockHeader->number() - 1);
         blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
@@ -1058,13 +1050,12 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
         paramsList.emplace_back(std::move(params));
     }
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -1180,13 +1171,12 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
 
         NativeExecutionMessage paramsBak = *params;
 
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
         blockHeader->setNumber(1);
 
-        std::vector<bcos::protocol::ParentInfo> parentInfos{
-            {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-        blockHeader->setParentInfo(parentInfos);
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+        blockHeader->setParentInfo(parentInfo);
         ledger->setBlockNumber(blockHeader->number() - 1);
         blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
@@ -1367,13 +1357,12 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
 
         NativeExecutionMessage paramsBak = *params;
 
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
         blockHeader->setNumber(2);
 
-        std::vector<bcos::protocol::ParentInfo> parentInfos{
-            {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-        blockHeader->setParentInfo(parentInfos);
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+        blockHeader->setParentInfo(parentInfo);
         ledger->setBlockNumber(blockHeader->number() - 1);
         blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
@@ -1527,14 +1516,13 @@ contract DelegateCallTest {
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -1724,14 +1712,13 @@ contract HelloWorld {
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -1903,13 +1890,12 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
     params->setCreate(true);
 
     NativeExecutionMessage paramsBak = *params;
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -1944,8 +1930,8 @@ BOOST_AUTO_TEST_CASE(transientStorageTest2)
         std::make_shared<MockTransactionalStorage>(hashImpl);
     Entry entry;
     bcos::protocol::BlockNumber blockNumber = 0;
-    entry.setObject(
-        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    entry.set(bcos::storage::serialize::encode(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber}));
     newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     // check feature_evm_cancun whether is on
@@ -1957,7 +1943,7 @@ BOOST_AUTO_TEST_CASE(transientStorageTest2)
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
     auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false);
 
     std::string transientCodeBin =
         "6080604052348015600e575f80fd5b506108748061001c5f395ff3fe608060405234801561000f575f80fd5b50"
@@ -2041,14 +2027,13 @@ BOOST_AUTO_TEST_CASE(transientStorageTest2)
 
     NativeExecutionMessage paramsBak1 = *params1;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
     blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2127,12 +2112,11 @@ BOOST_AUTO_TEST_CASE(mcopy_opcode_test)
     params->setCreate(true);
 
     NativeExecutionMessage paramsBak = *params;
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2167,8 +2151,8 @@ BOOST_AUTO_TEST_CASE(mcopy_opcode_test_1)
         std::make_shared<MockTransactionalStorage>(hashImpl);
     Entry entry;
     bcos::protocol::BlockNumber blockNumber = 0;
-    entry.setObject(
-        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    entry.set(bcos::storage::serialize::encode(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber}));
     newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     // check feature_evm_cancun whether is on
@@ -2180,7 +2164,7 @@ BOOST_AUTO_TEST_CASE(mcopy_opcode_test_1)
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
     auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false);
 
     std::string mcopyCodeBin =
         "6080604052348015600e575f80fd5b5060b980601a5f395ff3fe6080604052348015600e575f80"
@@ -2222,12 +2206,11 @@ BOOST_AUTO_TEST_CASE(mcopy_opcode_test_1)
     params->setCreate(true);
 
     NativeExecutionMessage paramsBak = *params;
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2275,8 +2258,8 @@ BOOST_AUTO_TEST_CASE(blobBaseFee_test)
         std::make_shared<MockTransactionalStorage>(hashImpl);
     Entry entry;
     bcos::protocol::BlockNumber blockNumber = 0;
-    entry.setObject(
-        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    entry.set(bcos::storage::serialize::encode(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber}));
     newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     // check feature_evm_cancun whether is on
@@ -2288,7 +2271,7 @@ BOOST_AUTO_TEST_CASE(blobBaseFee_test)
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
     auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false);
 
     std::string blobBaseFeeCodeBin =
         "6080604052348015600e575f80fd5b5060d980601a5f395ff3fe6080"
@@ -2328,12 +2311,11 @@ BOOST_AUTO_TEST_CASE(blobBaseFee_test)
     params->setCreate(true);
 
     NativeExecutionMessage paramsBak = *params;
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2377,8 +2359,8 @@ BOOST_AUTO_TEST_CASE(blobHash_test)
         std::make_shared<MockTransactionalStorage>(hashImpl);
     Entry entry;
     bcos::protocol::BlockNumber blockNumber = 0;
-    entry.setObject(
-        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    entry.set(bcos::storage::serialize::encode(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber}));
     newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     // check feature_evm_cancun whether is on
@@ -2390,7 +2372,7 @@ BOOST_AUTO_TEST_CASE(blobHash_test)
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
     auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false);
 
     std::string blobHashCodeBin =
         "6080604052348015600e575f80fd5b5060d780601a5f395ff3fe6080604052348015600e575f80fd5b50600436"
@@ -2429,12 +2411,11 @@ BOOST_AUTO_TEST_CASE(blobHash_test)
     params->setCreate(true);
 
     NativeExecutionMessage paramsBak = *params;
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2467,8 +2448,8 @@ BOOST_AUTO_TEST_CASE(getTransientStorageTest)
         std::make_shared<MockTransactionalStorage>(hashImpl);
     Entry entry;
     bcos::protocol::BlockNumber blockNumber = 0;
-    entry.setObject(
-        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    entry.set(bcos::storage::serialize::encode(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber}));
     newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     // check feature_evm_cancun whether is on
@@ -2480,7 +2461,7 @@ BOOST_AUTO_TEST_CASE(getTransientStorageTest)
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
     auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false);
 
     std::string transientCodeBin =
         "60806040527fe3598e46f24394be411dcf68a978c22ef80d97a0ef7c630d9b8e35d241c0210060015534801560"
@@ -2555,14 +2536,13 @@ BOOST_AUTO_TEST_CASE(getTransientStorageTest)
 
     NativeExecutionMessage paramsBak1 = *params1;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
     blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2610,7 +2590,7 @@ contract HelloFactory {
 
     ledger::SystemConfigEntry se = {"1", 0};
     storage::Entry entry;
-    entry.setObject(se);
+    entry.set(bcos::storage::serialize::encode(se));
     backend->setRow(ledger::SYS_CONFIG, "feature_evm_address", entry);
     bytes input;
     boost::algorithm::unhex(helloFactory, std::back_inserter(input));
@@ -2642,13 +2622,12 @@ contract HelloFactory {
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;

@@ -1,6 +1,4 @@
 #include <bcos-security/BcosKmsDataEncryption.h>
-#include <bcos-security/HsmDataEncryption.h>
-#include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
 
 

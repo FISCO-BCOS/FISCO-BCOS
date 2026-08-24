@@ -18,11 +18,9 @@
  * @date 2021-06-20
  */
 
-#include "libprecompiled/PreCompiledFixture.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-tool/VersionConverter.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <json/json.h>
+#include "libprecompiled/PreCompiledFixture.h"
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -39,30 +37,19 @@ public:
 
     ~ShardPrecompiledFixture() override = default;
 
-    void init(bool _isWasm, protocol::BlockVersion version = DEFAULT_VERSION)
+    void init(protocol::BlockVersion version = DEFAULT_VERSION)
     {
-        setIsWasm(_isWasm, false, true, version);
-        bfsAddress = _isWasm ? precompiled::BFS_NAME : BFS_ADDRESS;
-        shardingPrecompiledAddress =
-            _isWasm ? precompiled::SHARDING_PRECOMPILED_NAME : SHARDING_PRECOMPILED_ADDRESS;
-        tableAddress = _isWasm ? precompiled::KV_TABLE_NAME : KV_TABLE_ADDRESS;
+        prepareEnv(false, true, version);
+        bfsAddress = BFS_ADDRESS;
+        shardingPrecompiledAddress = SHARDING_PRECOMPILED_ADDRESS;
+        tableAddress = KV_TABLE_ADDRESS;
         tableTestAddress1 = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
         tableTestAddress2 = Address("0x420f853b49838bd3e9466c85a4cc3428c9601234").hex();
 
-        if (_isWasm)
-        {
-            auto result1 = creatKVTable(1, "test1", "id", "item1", "/tables/test1");
-            BOOST_CHECK(result1->data().toBytes() == codec->encode(int32_t(0)));
-            auto result2 = creatKVTable(2, "test2", "id", "item1", "/tables/test2");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(0)));
-        }
-        else
-        {
-            auto result1 = creatKVTable(1, "test1", "id", "item1", tableTestAddress1);
-            BOOST_CHECK(result1->data().toBytes() == codec->encode(int32_t(0)));
-            auto result2 = creatKVTable(2, "test2", "id", "item1", tableTestAddress2);
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(0)));
-        }
+        auto result1 = creatKVTable(1, "test1", "id", "item1", tableTestAddress1);
+        BOOST_CHECK(result1->data().toBytes() == codec->encode(int32_t(0)));
+        auto result2 = creatKVTable(2, "test2", "id", "item1", tableTestAddress2);
+        BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(0)));
 
         h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
         addressString = addressCreate.hex().substr(0, 40);
@@ -174,7 +161,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS));
+        params2->setTo(std::string(TABLE_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -310,15 +297,7 @@ public:
         /*
                 if (_errorCode != 0)
                 {
-                    if (isWasm && versionCompareTo(m_blockVersion, BlockVersion::V3_2_VERSION) >= 0)
-                    {
-                        BOOST_CHECK(result4->data().toBytes() ==
-           codec->encode(int32_t(_errorCode)));
-                    }
-                    else
-                    {
-                        BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
-                    }
+                    BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
                 }
         */
         commitBlock(_number);
@@ -382,15 +361,7 @@ public:
         /*
                 if (_errorCode != 0)
                 {
-                    if (isWasm && versionCompareTo(m_blockVersion, BlockVersion::V3_2_VERSION) >= 0)
-                    {
-                        BOOST_CHECK(result4->data().toBytes() ==
-           codec->encode(int32_t(_errorCode)));
-                    }
-                    else
-                    {
-                        BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
-                    }
+                    BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
                 }
         */
         commitBlock(_number);
@@ -398,9 +369,8 @@ public:
     };
 
 
-    ExecutionMessage::UniquePtr linkShard([[maybe_unused]] bool _isWasm,
-        protocol::BlockNumber _number, std::string const& name, std::string const& address,
-        int _errorCode = 0, bool _isCover = false)
+    ExecutionMessage::UniquePtr linkShard(protocol::BlockNumber _number, std::string const& name,
+        std::string const& address, int _errorCode = 0, bool _isCover = false)
     {
         bytes in;
 
@@ -555,9 +525,9 @@ public:
         return result4;
     };
 
-    ExecutionMessage::UniquePtr link([[maybe_unused]] bool _isWasm, protocol::BlockNumber _number,
-        std::string const& name, std::string const& version, std::string const& address,
-        std::string const& abi, int _errorCode = 0, bool _isCover = false)
+    ExecutionMessage::UniquePtr link(protocol::BlockNumber _number, std::string const& name,
+        std::string const& version, std::string const& address, std::string const& abi,
+        int _errorCode = 0, bool _isCover = false)
     {
         bytes in;
         if (version.empty())
@@ -683,8 +653,7 @@ public:
         bytes in = codec->encodeWithSig("rebuildBfs(uint256,uint256)", from, to);
         auto tx =
             fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
-        Address newSender = Address(isWasm ? std::string(precompiled::SYS_CONFIG_NAME) :
-                                             std::string(precompiled::SYS_CONFIG_ADDRESS));
+        Address newSender = Address(std::string(precompiled::SYS_CONFIG_ADDRESS));
         tx->forceSender(newSender.asBytes());
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -737,7 +706,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? SYS_CONFIG_NAME : SYS_CONFIG_ADDRESS));
+        params2->setTo(std::string(SYS_CONFIG_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -800,7 +769,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? BFS_NAME : BFS_ADDRESS));
+        params2->setTo(std::string(BFS_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -837,7 +806,7 @@ BOOST_FIXTURE_TEST_SUITE(shardPrecompiledTest, ShardPrecompiledFixture)
 
 BOOST_AUTO_TEST_CASE(makeShardTest)
 {
-    init(false);
+    init();
     bcos::protocol::BlockNumber _number = 3;
 
     {
@@ -866,7 +835,7 @@ BOOST_AUTO_TEST_CASE(makeShardTest)
 
 BOOST_AUTO_TEST_CASE(couldNotMakeShardTest)
 {
-    init(false, protocol::BlockVersion::V3_3_VERSION);
+    init(protocol::BlockVersion::V3_3_VERSION);
     bcos::protocol::BlockNumber _number = 3;
     // must could not mkShard shard in normal BFS precompiled
     {
@@ -876,7 +845,7 @@ BOOST_AUTO_TEST_CASE(couldNotMakeShardTest)
 
 BOOST_AUTO_TEST_CASE(linkShardTest)
 {
-    init(false);
+    init();
     bcos::protocol::BlockNumber number = 3;
     deployHelloContract(number++, addressString);
 
@@ -924,7 +893,7 @@ BOOST_AUTO_TEST_CASE(linkShardTest)
 
     // simple link shard
     {
-        linkShard(false, number++, shardName, addressString);
+        linkShard(number++, shardName, addressString);
         auto result = list(number++, "/shards/" + shardName);
         s256 code;
         std::vector<BfsTuple> ls;
@@ -944,13 +913,13 @@ BOOST_AUTO_TEST_CASE(linkShardTest)
     {
         std::string errorShardName = "hello/world";
         auto result =
-            linkShard(false, number++, errorShardName, addressString, CODE_FILE_INVALID_TYPE, true);
+            linkShard(number++, errorShardName, addressString, CODE_FILE_INVALID_TYPE, true);
     }
 }
 
 BOOST_AUTO_TEST_CASE(getContractShardErrorTest)
 {
-    init(false);
+    init();
     bcos::protocol::BlockNumber number = 3;
     // invalid contract address
     {

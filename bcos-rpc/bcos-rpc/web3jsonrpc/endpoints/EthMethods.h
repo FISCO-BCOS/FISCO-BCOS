@@ -31,6 +31,20 @@ enum class EthMethod
     net_version,
     net_listening,
     net_peerCount,
+    engine_exchangeCapabilities,
+    engine_forkchoiceUpdatedV1,
+    engine_forkchoiceUpdatedV2,
+    engine_forkchoiceUpdatedV3,
+    engine_forkchoiceUpdatedV4,
+    engine_getPayloadV1,
+    engine_getPayloadV2,
+    engine_getPayloadV3,
+    engine_getPayloadV4,
+    engine_getPayloadV5,
+    engine_newPayloadV1,
+    engine_newPayloadV2,
+    engine_newPayloadV3,
+    engine_newPayloadV4,
     eth_protocolVersion,
     eth_syncing,
     eth_coinbase,
@@ -38,6 +52,7 @@ enum class EthMethod
     eth_mining,
     eth_hashrate,
     eth_gasPrice,
+    eth_feeHistory,
     eth_accounts,
     eth_blockNumber,
     eth_getBalance,
@@ -69,7 +84,9 @@ enum class EthMethod
     eth_getFilterChanges,
     eth_getFilterLogs,
     eth_getLogs,
-    eth_maxPriorityFeePerGas
+    eth_maxPriorityFeePerGas,
+    eth_getProof,
+    miner_setMaxDASize
 };
 
 [[maybe_unused]] static std::string methodString(EthMethod _method)

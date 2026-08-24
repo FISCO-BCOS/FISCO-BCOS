@@ -27,6 +27,7 @@
 #include "bcos-crypto/signature/sm2.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-executor/src/precompiled/extension/CommitteeBin.h"
 #include "bcos-framework/executor/NativeExecutionMessage.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
@@ -50,6 +51,7 @@
 #include "mock/MockTransactionalStorage.h"
 #include "mock/MockTxPool.h"
 #include "precompiled/extension/UserPrecompiled.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <libinitializer/AuthInitializer.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -83,12 +85,10 @@ public:
 
     virtual ~PrecompiledFixture() = default;
 
-    /// must set isWasm
-    void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = true,
+    void prepareEnv(bool _isCheckAuth = false, bool _isKeyPage = true,
         protocol::BlockVersion version = DEFAULT_VERSION,
         std::shared_ptr<std::set<std::string, std::less<>>> _ignoreTables = nullptr)
     {
-        isWasm = _isWasm;
         storage = std::make_shared<MockTransactionalStorage>(hashImpl);
         if (_isKeyPage)
         {
@@ -109,7 +109,8 @@ public:
         ledger->setBlockNumber(header->number() - 1);
         std::promise<bool> p;
         Entry authEntry;
-        authEntry.setObject(SystemConfigEntry(_isCheckAuth ? "1" : "0", 0));
+        authEntry.set(
+            bcos::storage::serialize::encode(SystemConfigEntry(_isCheckAuth ? "1" : "0", 0)));
         storage->asyncSetRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_AUTH_CHECK_STATUS,
             std::move(authEntry), [&p](auto&& e) { p.set_value(true); });
         p.get_future().get();
@@ -117,14 +118,14 @@ public:
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-            storage, executionResultFactory, stateStorageFactory, hashImpl, _isWasm, _isCheckAuth,
+            storage, executionResultFactory, stateStorageFactory, hashImpl, _isCheckAuth,
             std::string("executor"));
         if (_ignoreTables != nullptr)
         {
             executor->setKeyPageIgnoreTable(_ignoreTables);
         }
 
-        codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
+        codec = std::make_shared<CodecWrapper>(hashImpl);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         auto secretKeyBytes =
             fromHex("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
@@ -157,14 +158,14 @@ public:
                 });
             auto table = promise1.get_future().get();
             auto entry = table->newEntry();
-            entry.setObject(SystemConfigEntry{"3000000", 0});
+            entry.set(bcos::storage::serialize::encode(SystemConfigEntry{"3000000", 0}));
             table->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(entry));
 
             // for each feature
             for (auto& feature : features)
             {
                 Entry featureEntry;
-                featureEntry.setObject(SystemConfigEntry{"1", 0});
+                featureEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{"1", 0}));
                 table->setRow(feature, std::move(featureEntry));
             }
         }
@@ -190,12 +191,12 @@ public:
                 newSubMap.insert(std::make_pair("apps", executor::FS_TYPE_DIR));
                 newSubMap.insert(std::make_pair("sys", executor::FS_TYPE_DIR));
                 newSubMap.insert(std::make_pair("tables", executor::FS_TYPE_DIR));
-                tEntry.importFields({executor::FS_TYPE_DIR});
-                newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-                aclTypeEntry.importFields({"0"});
-                aclWEntry.importFields({""});
-                aclBEntry.importFields({""});
-                extraEntry.importFields({""});
+                tEntry.set(executor::FS_TYPE_DIR);
+                newSubEntry.set(asString(codec::scale::encode(newSubMap)));
+                aclTypeEntry.set("0");
+                aclWEntry.set("");
+                aclBEntry.set("");
+                extraEntry.set("");
                 rootTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
                 rootTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
                 rootTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
@@ -215,12 +216,12 @@ public:
                 auto tablesTable = promise3.get_future().get();
                 storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
                 std::map<std::string, std::string> newSubMap;
-                tEntry.importFields({executor::FS_TYPE_DIR});
-                newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-                aclTypeEntry.importFields({"0"});
-                aclWEntry.importFields({""});
-                aclBEntry.importFields({""});
-                extraEntry.importFields({""});
+                tEntry.set(executor::FS_TYPE_DIR);
+                newSubEntry.set(asString(codec::scale::encode(newSubMap)));
+                aclTypeEntry.set("0");
+                aclWEntry.set("");
+                aclBEntry.set("");
+                extraEntry.set("");
                 tablesTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
                 tablesTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
                 tablesTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
@@ -240,12 +241,12 @@ public:
                 auto appsTable = promise4.get_future().get();
                 storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
                 std::map<std::string, std::string> newSubMap;
-                tEntry.importFields({executor::FS_TYPE_DIR});
-                newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-                aclTypeEntry.importFields({"0"});
-                aclWEntry.importFields({""});
-                aclBEntry.importFields({""});
-                extraEntry.importFields({""});
+                tEntry.set(executor::FS_TYPE_DIR);
+                newSubEntry.set(asString(codec::scale::encode(newSubMap)));
+                aclTypeEntry.set("0");
+                aclWEntry.set("");
+                aclBEntry.set("");
+                extraEntry.set("");
                 appsTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
                 appsTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
                 appsTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
@@ -266,12 +267,12 @@ public:
                 storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
                 std::map<std::string, std::string> newSubMap;
                 newSubMap.insert({"auth", "contract"});
-                tEntry.importFields({executor::FS_TYPE_DIR});
-                newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-                aclTypeEntry.importFields({"0"});
-                aclWEntry.importFields({""});
-                aclBEntry.importFields({""});
-                extraEntry.importFields({""});
+                tEntry.set(executor::FS_TYPE_DIR);
+                newSubEntry.set(asString(codec::scale::encode(newSubMap)));
+                aclTypeEntry.set("0");
+                aclWEntry.set("");
+                aclBEntry.set("");
+                extraEntry.set("");
                 appsTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
                 appsTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
                 appsTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
@@ -289,8 +290,7 @@ public:
             // for parallel test
             return;
         }
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
         blockHeader->setNumber(blockNumber);
         Features features;
         features.setUpgradeFeatures(BlockVersion::V3_0_VERSION, version);
@@ -298,8 +298,7 @@ public:
 
         bcos::protocol::ParentInfo p{
             .blockNumber = blockNumber - 1, .blockHash = h256(blockNumber - 1)};
-        std::vector<bcos::protocol::ParentInfo> parentInfos{p};
-        blockHeader->setParentInfo(parentInfos);
+        blockHeader->setParentInfo(p);
 
         blockHeader->setVersion((uint32_t)version);
         ledger->setBlockNumber(blockNumber - 1);
@@ -334,7 +333,7 @@ public:
 
     void deployAuthSolidity(protocol::BlockNumber blockNumber)
     {
-        static const char* committeeBin = bcos::initializer::committeeBin;
+        auto committeeBin = bcos::committeeBin;
 
         // deploy CommitteeManager
 
@@ -412,7 +411,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? BFS_NAME : BFS_ADDRESS));
+        params2->setTo(std::string(BFS_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -451,7 +450,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? BFS_NAME : BFS_ADDRESS));
+        params2->setTo(std::string(BFS_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -492,7 +491,6 @@ protected:
     KeyPairInterface::Ptr keyPair;
 
     int64_t gas = MockLedger::TX_GAS_LIMIT;
-    bool isWasm = false;
     std::string admin = "1111654b49838bd3e9466c85a4cc3428c9601111";
     protocol::BlockVersion m_blockVersion = protocol::DEFAULT_VERSION;
 };

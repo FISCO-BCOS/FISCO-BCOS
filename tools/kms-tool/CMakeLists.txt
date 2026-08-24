@@ -1,10 +1,10 @@
 # file(GLOB SRC_LIST "*.cpp")
 
 # aws sdk
-# find_package(${SECURITY_TARGET} REQUIRED)
+# find_package(security REQUIRED)
 find_package(AWSSDK REQUIRED COMPONENTS kms)
 add_executable(kms_tool KmsTool.cpp)
-target_link_libraries(kms_tool PUBLIC ${SECURITY_TARGET})
+target_link_libraries(kms_tool PUBLIC security)
 # target_link_libraries(kms_tool
 #     PUBLIC
 #     AWSSDK

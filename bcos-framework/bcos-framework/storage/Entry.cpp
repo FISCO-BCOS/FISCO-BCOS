@@ -1,48 +1,136 @@
 #include "bcos-framework/storage/Entry.h"
-
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-utilities/BoostLog.h>
 #include <boost/endian/conversion.hpp>
 
 namespace bcos::storage
 {
-std::string_view Entry::getField(size_t index) const&
-{
-    if (index > 0)
-    {
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(-1, "Get field index: " + boost::lexical_cast<std::string>(index) +
-                               " failed, index out of range"));
-    }
+DERIVE_BCOS_EXCEPTION(TypedEntryStatusChange);
+DERIVE_BCOS_EXCEPTION(TypedEntryHashCall);
 
-    return get();
-}
-
-void Entry::setStatus(Status status)
+std::string_view Entry::get() const&
 {
-    m_status = status;
-    if (m_status == DELETED)
-    {
-        m_size = 0;
-        m_value = std::string();
-    }
+    if (!m_buffer.has_value()) [[unlikely]]
+        return {};
+    return {m_buffer->data(), m_buffer->size()};
 }
 
 const char* Entry::data() const&
 {
-    auto view = outputValueView(m_value);
-    return view.data();
+    if (!m_buffer.has_value()) [[unlikely]]
+        return "";
+    return m_buffer->data();
+}
+
+int32_t Entry::size() const
+{
+    return m_buffer.has_value() ? static_cast<int32_t>(m_buffer->size()) : 0;
+}
+
+Entry::Status Entry::status() const
+{
+    if (!m_buffer.has_value()) [[unlikely]]
+        return Status::EMPTY;
+    return static_cast<Status>(m_buffer->status());
+}
+
+void Entry::setStatus(Status status)
+{
+    // Typed entries are immutable — refuse status mutation.
+    if (m_buffer.has_value() && m_buffer->getTypedPtr() != nullptr)
+    {
+        BOOST_THROW_EXCEPTION(TypedEntryStatusChange{});
+    }
+
+    auto cur = this->status();
+    if (cur == status)
+        return;
+
+    if (status == DELETED)
+    {
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(DeletedModel{});
+    }
+    else if (status == EMPTY)
+    {
+        m_buffer = Holder{};
+    }
+    else
+    {
+        // NORMAL or MODIFIED: preserve data, change status tag.
+        if (m_buffer.has_value())
+        {
+            auto view = get();
+            m_buffer = makeBuffer(static_cast<EntryStatus>(status), view.data(), view.size());
+        }
+        else
+        {
+            m_buffer = makeBuffer(static_cast<EntryStatus>(status), "", 0);
+        }
+    }
+}
+
+bool Entry::dirty() const
+{
+    if (!m_buffer.has_value()) [[unlikely]]
+        return false;
+    auto s = m_buffer->status();
+    return s == ENTRY_MODIFIED || s == ENTRY_DELETED;
+}
+
+bool Entry::valid() const
+{
+    if (!m_buffer.has_value()) [[unlikely]]
+        return false;
+    return m_buffer->status() == ENTRY_NORMAL;
+}
+
+void Entry::setImplCopy(const char* data, size_t sz)
+{
+    if (sz <= SMALL_SIZE)
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(SmallBuffer<ENTRY_MODIFIED>{data, sz});
+    else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(Fixed32Buffer<ENTRY_MODIFIED>{data, sz});
+    else
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
+            BufferModel<std::string, ENTRY_MODIFIED>{std::string(data, sz)});
+}
+
+Entry::Holder Entry::makeBuffer(EntryStatus es, const char* data, size_t sz)
+{
+    switch (es)
+    {
+    case ENTRY_NORMAL:
+        return makeBufferImpl<ENTRY_NORMAL>(data, sz);
+    case ENTRY_MODIFIED:
+        return makeBufferImpl<ENTRY_MODIFIED>(data, sz);
+    default:
+        return Holder{};
+    }
+}
+
+/* static */ Entry Entry::decode(bytesConstRef data)
+{
+    Entry entry;
+    entry.set(std::string_view(
+        reinterpret_cast<const char*>(data.data()), data.size()));
+    return entry;
 }
 
 crypto::HashType Entry::hash(std::string_view table, std::string_view key,
     const bcos::crypto::Hash& hashImpl, uint32_t blockVersion,
     std::optional<bcos::ledger::Features> const& features) const
 {
+    if (m_buffer.has_value() && m_buffer->getTypedPtr() != nullptr)
+    {
+        BOOST_THROW_EXCEPTION(TypedEntryHashCall{});
+    }
+
     const bool enableHashCollisionFix =
         features.has_value() &&
         features->get(bcos::ledger::Features::Flag::bugfix_statestorage_hash_v3_17);
 
     bcos::crypto::HashType entryHash(0);
+    const auto s = status();
     if (enableHashCollisionFix)
     {
         // FIB-99: Length-prefixed, status-aware hashing to prevent boundary
@@ -64,9 +152,9 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
         hasher.update(key);
         // Entry status (int8_t) distinguishes DELETED from MODIFIED-with-empty-value;
         // single-byte field, no endianness conversion needed.
-        hasher.update(m_status);
+        hasher.update(static_cast<int8_t>(s));
 
-        switch (m_status)
+        switch (s)
         {
         case MODIFIED:
         {
@@ -94,7 +182,7 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
         default:
         {
             STORAGE_LOG(DEBUG) << "Entry hash v3.17+, clean entry: " << table << " | " << toHex(key)
-                               << " | " << static_cast<int>(m_status);
+                               << " | " << static_cast<int>(s);
             break;
         }
         }
@@ -105,7 +193,7 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
         hasher.update(table);
         hasher.update(key);
 
-        switch (m_status)
+        switch (s)
         {
         case MODIFIED:
         {
@@ -133,14 +221,14 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
         default:
         {
             STORAGE_LOG(DEBUG) << "Entry hash, clean entry: " << table << " | " << toHex(key)
-                               << " | " << (int)m_status;
+                               << " | " << static_cast<int>(s);
             break;
         }
         }
     }
     else
     {
-        if (m_status == Entry::MODIFIED)
+        if (s == Entry::MODIFIED)
         {
             auto value = get();
             bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
@@ -152,7 +240,7 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
                     << toHex(value) << LOG_KV("hash", entryHash.abridged());
             }
         }
-        else if (m_status == Entry::DELETED)
+        else if (s == Entry::DELETED)
         {
             entryHash = bcos::crypto::HashType(0x1);
             if (c_fileLogLevel == TRACE) [[unlikely]]
@@ -165,15 +253,4 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
     return entryHash;
 }
 
-auto Entry::outputValueView(const ValueType& value) const& -> std::string_view
-{
-    std::string_view view;
-    std::visit(
-        [this, &view](auto&& valueInside) {
-            auto viewRaw = inputValueView(valueInside);
-            view = std::string_view(viewRaw.data(), m_size);
-        },
-        value);
-    return view;
-}
 }  // namespace bcos::storage

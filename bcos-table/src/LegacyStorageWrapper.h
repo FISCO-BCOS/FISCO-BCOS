@@ -163,7 +163,7 @@ public:
                             ::ranges::views::transform([&](auto tuple) {
                                 auto& [key, value] = tuple;
                                 storage::Entry entry;
-                                entry.setField(0, value);
+                                entry.set(value);
                                 return std::make_pair(
                                     executor_v1::StateKey{tableName, key}, std::move(entry));
                             }));

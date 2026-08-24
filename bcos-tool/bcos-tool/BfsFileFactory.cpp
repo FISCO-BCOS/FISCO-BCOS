@@ -1,3 +1,4 @@
+#include <bcos-framework/storage/Serialize.h>
 /**
  *  Copyright (C) 2022 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
@@ -72,18 +73,18 @@ void BfsFileFactory::buildDirEntry(
             }
         },
         fileType);
-    _mutableEntry.setObject<std::vector<std::string>>({type.data(), "0", "0", "", "", ""});
+    _mutableEntry.set(bcos::storage::serialize::encode<std::vector<std::string>>({type.data(), "0", "0", "", "", ""}));
 }
 
 bool BfsFileFactory::buildLink(Table& _table, const std::string& _address, const std::string& _abi,
     uint32_t blockVersion, const std::string& name)
 {
     Entry tEntry;
-    tEntry.importFields({std::string(FS_TYPE_LINK)});
+    tEntry.set(std::string(FS_TYPE_LINK));
     _table.setRow(FS_KEY_TYPE, std::move(tEntry));
 
     Entry linkEntry;
-    linkEntry.importFields({_address});
+    linkEntry.set(_address);
     _table.setRow(FS_LINK_ADDRESS, std::move(linkEntry));
 
     // in block version 3.0, save abi in link even if it is empty
@@ -92,14 +93,14 @@ bool BfsFileFactory::buildLink(Table& _table, const std::string& _address, const
         BCOS_LOG(TRACE) << LOG_BADGE("BFS") << "buildLink with abi"
                         << LOG_KV("abiSize", _abi.size());
         Entry abiEntry;
-        abiEntry.importFields({_abi});
+        abiEntry.set(_abi);
         _table.setRow(FS_LINK_ABI, std::move(abiEntry));
     }
 
     if (!name.empty() || blockVersion == (uint32_t)protocol::BlockVersion::V3_0_VERSION)
     {
         Entry nameEntry;
-        nameEntry.importFields({name});
+        nameEntry.set(name);
         _table.setRow(FS_KEY_NAME, std::move(nameEntry));
     }
 
@@ -108,23 +109,23 @@ bool BfsFileFactory::buildLink(Table& _table, const std::string& _address, const
 bool BfsFileFactory::buildAuth(Table& _table, const std::string& _admin)
 {
     Entry adminEntry;
-    adminEntry.importFields({_admin});
+    adminEntry.set(_admin);
     _table.setRow(executor::ADMIN_FIELD, std::move(adminEntry));
 
     Entry statusEntry;
-    statusEntry.importFields({"normal"});
+    statusEntry.set("normal");
     _table.setRow(executor::STATUS_FIELD, std::move(statusEntry));
 
     Entry emptyType;
-    emptyType.importFields({""});
+    emptyType.set("");
     _table.setRow(executor::METHOD_AUTH_TYPE, std::move(emptyType));
 
     Entry emptyWhite;
-    emptyWhite.importFields({""});
+    emptyWhite.set("");
     _table.setRow(executor::METHOD_AUTH_WHITE, std::move(emptyWhite));
 
     Entry emptyBlack;
-    emptyBlack.importFields({""});
+    emptyBlack.set("");
     _table.setRow(executor::METHOD_AUTH_BLACK, std::move(emptyBlack));
     return true;
 }

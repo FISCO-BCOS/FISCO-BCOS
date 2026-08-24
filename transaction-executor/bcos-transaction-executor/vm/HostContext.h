@@ -28,7 +28,13 @@
 #include "VMInstance.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/vm/Eip2929AccessState.h"
+#include "bcos-executor/src/vm/Eip2929CheckpointGuard.h"
+#include "bcos-executor/src/vm/Eip2929TransactionPrewarm.h"
+#include "bcos-executor/src/vm/Eip2929Util.h"
+#include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -48,17 +54,19 @@
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
-#include <evmc/instructions.h>
 #include <evmone/evmone.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/concept_archetype.hpp>
+#include <boost/container_hash/hash.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
+#include <cassert>
 #include <functional>
 #include <intx/intx.hpp>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/fill.hpp>
 #include <range/v3/algorithm/move.hpp>
@@ -73,7 +81,7 @@ namespace bcos::executor_v1::hostcontext
 struct NotFoundCodeError : public bcos::Error {};
 // clang-format on
 
-evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size);
+evmc_bytes32 evm_hash_fn(evmc_host_context* context, const uint8_t* data, size_t size);
 
 evmc_message getMessage(bool web3Tx, const evmc_message& inputMessage,
     protocol::BlockNumber blockNumber, int64_t contextID, int64_t seq, const u256& nonce,
@@ -81,8 +89,8 @@ evmc_message getMessage(bool web3Tx, const evmc_message& inputMessage,
 
 struct Executable
 {
-    Executable(storage::Entry code, evmc_revision revision);
-    Executable(bytesConstRef code, evmc_revision revision);
+    Executable(storage::Entry code);
+    Executable(bytesConstRef code);
 
     std::optional<storage::Entry> m_code;
     VMInstance m_vmInstance;
@@ -90,6 +98,37 @@ struct Executable
 
 template <class Storage>
 using Account = ledger::account::EVMAccount<Storage>;
+
+/// True when @p Storage is (or wraps) a historical state stack — a storage pinned to a past
+/// block's state, marked by a `isHistoricalStateStorage` member (HistoricalCallStorage.h).
+/// The walk sees through the two wrappers a storage reaches getExecutable in: Rollbackable
+/// (via its StorageType alias) and storage2::View (via its BackendStorage alias).
+///
+/// getExecutable consults it because the global executable cache is keyed by address alone
+/// and shared with the latest-state paths, so historical execution must bypass it both
+/// ways: a hit would execute the code the address holds TODAY (possibly deployed after the
+/// pinned block), and a fill would poison latest-path lookups with the pinned block's code.
+template <class Storage>
+consteval bool isHistoricalStorage()
+{
+    using StorageType = std::decay_t<Storage>;
+    if constexpr (requires { StorageType::isHistoricalStateStorage; })
+    {
+        return true;
+    }
+    else if constexpr (requires { typename StorageType::StorageType; })
+    {
+        return isHistoricalStorage<typename StorageType::StorageType>();
+    }
+    else if constexpr (requires { typename StorageType::BackendStorage; })
+    {
+        return isHistoricalStorage<typename StorageType::BackendStorage>();
+    }
+    else
+    {
+        return false;
+    }
+}
 
 using CacheExecutables =
     storage2::memory_storage::MemoryStorage<evmc_address, std::shared_ptr<Executable>,
@@ -101,25 +140,38 @@ CacheExecutables& getCacheExecutables();
 task::Task<std::shared_ptr<Executable>> getExecutable(
     auto& storage, const evmc_address& address, const evmc_revision& revision, bool binaryAddress)
 {
-    if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
+    constexpr bool useGlobalCache = !isHistoricalStorage<decltype(storage)>();
+    if constexpr (useGlobalCache)
     {
-        co_return std::move(*executable);
+        if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
+        {
+            co_return std::move(*executable);
+        }
     }
 
     if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
         auto codeEntry = co_await account.code())
     {
-        auto executable = std::make_shared<Executable>(std::move(*codeEntry), revision);
-        co_await storage2::writeOne(getCacheExecutables(), address, executable);
+        auto executable = std::make_shared<Executable>(std::move(*codeEntry));
+        if constexpr (useGlobalCache)
+        {
+            co_await storage2::writeOne(getCacheExecutables(), address, executable);
+        }
         co_return executable;
     }
     co_return {};
 }
 
 template <class Storage, class TransientStorage>
-class HostContext : public evmc_host_context
+class HostContext
 {
 private:
+    /// EVMC host interface table (formerly the inherited `interface` field of the
+    /// concretized evmc_host_context; the evmc type is upstream-opaque again).
+    /// Renamed: `interface` is a Windows SDK macro. Declared first so the
+    /// mem-init list order below matches declaration order.
+    const evmc_host_interface* m_hostInterface = nullptr;
+
     std::reference_wrapper<Storage> m_rollbackableStorage;
     std::reference_wrapper<TransientStorage> m_rollbackableTransientStorage;
     std::reference_wrapper<const protocol::BlockHeader> m_blockHeader;
@@ -141,6 +193,11 @@ private:
     bool m_enableTransfer = false;
     int64_t m_level;
     bool m_web3Tx;
+
+    // EIP-2929/2930 access tracking (shared Eip2929AccessState; see accessAccount/accessStorage)
+    std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
+    std::shared_ptr<const executor::Eip2930AccessList> m_eip2930AccessList;
+    uint8_t m_web3TypedTxKindForAccessList = 0;
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -187,13 +244,11 @@ private:
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
         crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce,
-        const evmc_host_interface* hostInterface)
-      : evmc_host_context{.interface = hostInterface,
-            .wasm_interface = nullptr,
-            .hash_fn = evm_hash_fn,
-            .isSMCrypto = (hashImpl.getHashImplType() == crypto::HashImplType::Sm3Hash),
-            .version = 0,
-            .metrics = std::addressof(executor::ethMetrics)},
+        const evmc_host_interface* hostInterface,
+        std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
+        uint8_t web3TypedTxKind = 0,
+        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
+      : m_hostInterface(hostInterface),
         m_rollbackableStorage(storage),
         m_rollbackableTransientStorage(transientStorage),
         m_blockHeader(blockHeader),
@@ -207,20 +262,37 @@ private:
         m_message(getMessage(
             web3Tx, message, m_blockHeader.get().number(), m_contextID, m_seq, nonce, m_hashImpl)),
         m_recipientAccount(getAccount(*this, this->message().recipient)),
-        m_revision(EVMC_CANCUN),
+        // Never downgrade below EVMC_CANCUN (pre-PR baseline).
+        // Future EVM feature flags (Amsterdam, etc.) automatically upgrade through
+        // toRevision without requiring code changes here.
+        m_revision(
+            std::max(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version()),
+                EVMC_CANCUN)),
         m_level(seq),
-        m_web3Tx(web3Tx)
-    {}
+        m_web3Tx(web3Tx),
+        m_eip2929Access(std::move(eip2929Access)),
+        m_eip2930AccessList(std::move(accessList)),
+        m_web3TypedTxKindForAccessList(web3TypedTxKind)
+    {
+        // W1 warm at top-level construction (sync). Nested HostContext (m_level>0) skips.
+        // prepare() handles prepareCall/Create only; see TransactionExecutorImpl prepare().
+        warmEip2929AtTransactionEntry();
+        assert(!executor::eip2929Enabled(m_revision, m_ledgerConfig.get()) || m_eip2929Access);
+    }
 
 public:
     HostContext(Storage& storage, TransientStorage& transientStorage,
         protocol::BlockHeader const& blockHeader, const evmc_message& message,
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
-        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator)
+        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator,
+        std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
+        uint8_t web3TypedTxKind = 0,
+        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
       : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
             contextID, seq, precompiledManager, ledgerConfig, hashImpl, web3Tx, nonce,
-            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)))
+            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)),
+            std::move(accessList), web3TypedTxKind, std::move(eip2929Access))
     {}
 
     ~HostContext() noexcept = default;
@@ -240,17 +312,13 @@ public:
                 ledger::Features::Flag::feature_raw_address));
     }
 
-    task::Task<evmc_bytes32> get(const evmc_bytes32* key, auto&&... /*unused*/)
+    // Tag-forwarding variant: passes all tags through to the underlying
+    // EVMAccount::storage call. Callers compose the exact set of tags they need
+    // (e.g. BYPASS_READ_SET | BYPASS_MULTILAYER for metadata reads that
+    // must skip both conflict tracking and layer resolution).
+    task::Task<evmc_bytes32> get(const evmc_bytes32* key, auto... tags)
     {
-        co_return co_await m_recipientAccount.storage(*key);
-    }
-
-    // DIRECT-tagged variant: reads the underlying slot without populating the
-    // ReadWriteSetStorage read set. Use only for internal metadata reads (e.g.
-    // SSTORE status determination) that must not influence DAG conflict edges.
-    task::Task<evmc_bytes32> get(const evmc_bytes32* key, storage2::DIRECT_TYPE direct)
-    {
-        co_return co_await m_recipientAccount.storage(*key, direct);
+        co_return co_await m_recipientAccount.storage(*key, tags...);
     }
 
     task::Task<void> set(const evmc_bytes32* key, const evmc_bytes32* value, auto&&... /*unused*/)
@@ -388,15 +456,19 @@ public:
     task::Task<void> prepare()
     {
         auto const& ref = message();
+
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
         {
             prepareCreate();
+            co_return;
         }
-        else
-        {
-            co_await prepareCall();
-        }
+        co_await prepareCall();
     }
+
+    /// The EVMC host interface table paired with this context, plus the opaque
+    /// context pointer to pass back into it (tests drive the C shims directly).
+    const evmc_host_interface* hostInterface() const noexcept { return m_hostInterface; }
+    evmc_host_context* hostCtx() noexcept { return reinterpret_cast<evmc_host_context*>(this); }
 
     task::Task<EVMCResult> execute()
     {
@@ -405,6 +477,13 @@ public:
 
         auto savepoint = m_rollbackableStorage.get().current();
         auto transientSavepoint = m_rollbackableTransientStorage.get().current();
+
+        std::optional<bcos::executor::Eip2929CheckpointGuard> topCheckpointGuard;
+        if (m_level == 0 && m_eip2929Access &&
+            executor::eip2929Enabled(m_revision, m_ledgerConfig.get()))
+        {
+            topCheckpointGuard.emplace(m_eip2929Access);
+        }
 
         std::optional<EVMCResult> evmResult;
         // FIB-76~92 (bugfix_v1_error_handling): read once, gates all receipt-affecting
@@ -432,6 +511,27 @@ public:
 
             if (!evmResult)
             {
+                // EIP-7623 calldata floor cost (Prague+, top-level transactions only)
+                // Computes max(standard_calldata_gas, tokens*10) and deducts it upfront.
+                // The 21000 base cost sits outside this formula and is handled separately.
+                if (m_level == 0 && m_revision >= EVMC_PRAGUE)
+                {
+                    auto& msg = mutableMessage();
+                    const int64_t calldataGas = executor::calcEip7623CalldataGas(
+                        bcos::bytesConstRef(msg.input_data, msg.input_size));
+                    if (msg.gas < calldataGas)
+                    {
+                        evmResult.emplace(
+                            makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                                EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : msg.gas,
+                                "EIP-7623 calldata floor OOG", fixErrorHandling));
+                    }
+                    else
+                    {
+                        msg.gas -= calldataGas;
+                    }
+                }
+
                 // Transfer first, then proceed execute
                 if (m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_delegatecall_transfer))
@@ -527,6 +627,10 @@ public:
 
         HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
                                 << " level: " << m_level << " seq: " << m_seq << " " << *evmResult;
+        if (topCheckpointGuard && evmResult->status_code == EVMC_SUCCESS)
+        {
+            topCheckpointGuard->commit();
+        }
         co_return std::move(*evmResult);
     }
 
@@ -534,14 +638,28 @@ public:
     {
         ++m_seq;
         HOST_CONTEXT_LOG(TRACE) << "External call, seq: " << m_seq;
-        auto senderAccount = getAccount(*this, message.sender);
 
+        auto senderAccount = getAccount(*this, message.sender);
         auto nonceStr = co_await senderAccount.nonce();
         auto nonce = u256(nonceStr.value_or(std::string("0")));
+
+        std::optional<bcos::executor::Eip2929CheckpointGuard> checkpointGuard;
+        if (m_eip2929Access && executor::eip2929Enabled(m_revision, m_ledgerConfig.get()))
+        {
+            checkpointGuard.emplace(m_eip2929Access);
+            if (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2)
+            {
+                // EVM CREATE passes empty code_address; pin must match getMessage() resolution.
+                auto const resolved = getMessage(m_web3Tx, message, m_blockHeader.get().number(),
+                    m_contextID, m_seq, nonce, m_hashImpl);
+                m_eip2929Access->setCreateRollbackPin(resolved.code_address);
+            }
+        }
+
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
-            interface);
+            m_hostInterface, m_eip2930AccessList, m_web3TypedTxKindForAccessList, m_eip2929Access);
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
@@ -551,17 +669,71 @@ public:
             m_logs.reserve(m_logs.size() + ::ranges::size(logs));
             ::ranges::move(logs, std::back_inserter(m_logs));
         }
+        if (checkpointGuard)
+        {
+            if (result.status_code == EVMC_SUCCESS)
+            {
+                checkpointGuard->commit();
+            }
+        }
         co_return result;
     }
 
     std::vector<protocol::LogEntry>& logs() & { return m_logs; }
 
+    evmc_access_status accessAccount(const evmc_address& addr) noexcept
+    {
+        if (!m_eip2929Access ||
+            !executor::eip2929Enabled(m_revision, m_ledgerConfig.get().features()))
+        {
+            return EVMC_ACCESS_COLD;
+        }
+        return m_eip2929Access->warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+    }
+
+    evmc_access_status accessStorage(const evmc_address& addr, const evmc_bytes32& key) noexcept
+    {
+        if (!m_eip2929Access ||
+            !executor::eip2929Enabled(m_revision, m_ledgerConfig.get().features()))
+        {
+            return EVMC_ACCESS_COLD;
+        }
+        return m_eip2929Access->warmUpStorage(addr, key) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+    }
+
 private:
+    void warmEip2929AtTransactionEntry() noexcept
+    {
+        auto const& ref = message();
+        if (!executor::eip2929TransactionEntryWarmEnabled(
+                m_level, m_revision, m_ledgerConfig.get().features(), m_eip2929Access.get()))
+        {
+            return;
+        }
+
+        executor::Eip2929TxPrewarmInput input;
+        input.revision = m_revision;
+        input.origin = m_origin;
+        if (ref.kind != EVMC_CREATE && ref.kind != EVMC_CREATE2)
+        {
+            input.callee = ref.recipient;
+        }
+        if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
+        {
+            input.createCodeAddress = ref.code_address;
+        }
+        // TODO(EIP-3651): set input.coinbase from block sealer at revision >= EVMC_SHANGHAI.
+        input.web3TypedTxKind = m_web3TypedTxKindForAccessList;
+        input.accessList = m_eip2930AccessList.get();
+        executor::warmEip2929AtTransactionEntry(
+            *m_eip2929Access, input, [](bcos::Address const& addr) { return toEvmC(addr); });
+    }
+
     void prepareCreate()
     {
         auto& ref = message();
         bytesConstRef createCode(ref.input_data, ref.input_size);
-        m_executable = std::make_shared<Executable>(createCode, m_revision);
+        m_executable = std::make_shared<Executable>(createCode);
     }
 
     task::Task<EVMCResult> executeCreate()
@@ -601,9 +773,10 @@ private:
         {
             co_await m_recipientAccount.setNonce("1");
         }
-        auto result = m_executable->m_vmInstance.execute(
-            interface, this, m_revision, std::addressof(ref), ref.input_data, ref.input_size);
-        if (result.status_code == 0)
+        auto result = m_executable->m_vmInstance.execute(m_hostInterface,
+            reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
+            ref.input_data, ref.input_size);
+        if (result.status_code == EVMC_SUCCESS)
         {
             auto code = bytesConstRef(result.output_data, result.output_size);
             auto codeHash = m_hashImpl.get().hash(code);
@@ -752,9 +925,9 @@ private:
                 m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
         }
 
-        co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
-            std::addressof(ref), (const uint8_t*)m_executable->m_code->data(),
-            m_executable->m_code->size());
+        co_return m_executable->m_vmInstance.execute(m_hostInterface,
+            reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
+            (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size());
     }
 };
 

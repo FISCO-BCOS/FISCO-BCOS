@@ -16,7 +16,6 @@
 # limitations under the License.
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.10)
 
 project(bcos-gateway VERSION ${VERSION})
 
@@ -27,9 +26,11 @@ file(GLOB_RECURSE SRCS bcos-gateway/*.cpp)
 
 find_package(tarscpp REQUIRED)
 
-add_library(${GATEWAY_TARGET} ${SRCS})
-target_link_libraries(${GATEWAY_TARGET} PUBLIC jsoncpp_static Boost::filesystem bcos-boostssl bcos-crypto ${FRONT_TARGET} ${TARS_PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
-set_target_properties(${GATEWAY_TARGET} PROPERTIES UNITY_BUILD "ON")
+add_library(gateway ${SRCS})
+target_include_directories(gateway PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+target_link_libraries(gateway PUBLIC jsoncpp_static Boost::filesystem bcos-boostssl bcos-crypto front protocol-tars tarscpp::tarsservant tarscpp::tarsutil)
+set_target_properties(gateway PROPERTIES UNITY_BUILD "ON")
 
 # ut
 if (TESTS)

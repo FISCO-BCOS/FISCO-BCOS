@@ -16,7 +16,6 @@ gateway_sm_ssl=false
 group_id="group0"
 # the genesis configuration path of the group, will generate new genesis configuration if not configured
 # genesis_config_path = ""
-# VM type, now only support evm/wasm
 vm_type="evm"
 # use sm-crypto or not
 sm_crypto=false
@@ -34,7 +33,7 @@ consensus_type = "pbft"
 # transaction gas limit
 gas_limit = "3000000000"
 # compatible version, can be dynamically upgraded through setSystemConfig
-compatibility_version = "3.17.0"
+compatibility_version = "3.18.0"
 
 [[agency]]
 name = "agencyA"
@@ -50,7 +49,6 @@ enable_storage_security = false
     listen_ip="0.0.0.0"
     # rpc listen port
     listen_port=20200
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port
@@ -102,7 +100,6 @@ enable_storage_security = false
     listen_ip="0.0.0.0"
     # rpc listen port
     listen_port=20201
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port
@@ -155,7 +152,6 @@ enable_storage_security = false
     listen_ip="0.0.0.0"
     # rpc listen port
     listen_port=20202
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port
@@ -208,7 +204,6 @@ enable_storage_security = false
     listen_ip="0.0.0.0"
     # rpc listen port
     listen_port=20203
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port

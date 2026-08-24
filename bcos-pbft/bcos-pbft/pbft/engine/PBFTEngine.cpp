@@ -32,8 +32,6 @@
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/ITTAPI.h>
-#include <bcos-utilities/ThreadPool.h>
-#include <boost/bind/bind.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -43,16 +41,22 @@ using namespace bcos::front;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
-PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
-  : ConsensusEngine("pbft", 0), m_config(_config), m_ledgerConfig(std::make_shared<LedgerConfig>())
+PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& _ioContext,
+    bcos::IOServicePool::Ptr _ioServicePool)
+  : ConsensusEngine(_ioContext, "pbft", 20),
+    m_config(_config),
+    m_ledgerConfig(std::make_shared<LedgerConfig>())
 {
     auto cacheFactory = std::make_shared<PBFTCacheFactory>();
     m_cacheProcessor = std::make_shared<PBFTCacheProcessor>(cacheFactory, _config);
-    m_logSync = std::make_shared<PBFTLogSync>(m_config, m_cacheProcessor);
+    m_logSync =
+        std::make_shared<PBFTLogSync>(m_config, m_cacheProcessor, std::move(_ioServicePool));
     // register the timeout function
-    m_config->timer()->registerTimeoutHandler(boost::bind(&PBFTEngine::onTimeout, this));
-    m_config->storage()->registerFinalizeHandler(boost::bind(
-        &PBFTEngine::finalizeConsensus, this, boost::placeholders::_1, boost::placeholders::_2));
+    m_config->timer()->registerTimeoutHandler([this]() { onTimeout(); });
+    m_config->storage()->registerFinalizeHandler(
+        [this](std::shared_ptr<bcos::ledger::LedgerConfig> _ledgerConfig, bool _syncedBlock) {
+            finalizeConsensus(std::move(_ledgerConfig), _syncedBlock);
+        });
 
     m_config->storage()->registerOnStableCheckPointCommitFailed(
         [this](Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal) {
@@ -60,12 +64,16 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
         });
 
     m_config->registerFastViewChangeHandler([this]() { triggerTimeout(false); });
-    m_cacheProcessor->registerProposalAppliedHandler(boost::bind(&PBFTEngine::onProposalApplied,
-        this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
+    m_cacheProcessor->registerProposalAppliedHandler(
+        [this](int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
+            PBFTProposalInterface::Ptr _executedProposal) {
+            onProposalApplied(_errorCode, std::move(_proposal), std::move(_executedProposal));
+        });
 
     m_cacheProcessor->registerOnLoadAndVerifyProposalFinish(
-        boost::bind(&PBFTEngine::onLoadAndVerifyProposalFinish, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+        [this](bool _verifyResult, Error::Ptr _error, PBFTProposalInterface::Ptr _proposal) {
+            onLoadAndVerifyProposalFinish(_verifyResult, _error, _proposal);
+        });
     initSendResponseHandler();
     // when the node first setup, set timeout to be true for view recovery
     // set timeout to be true to in case of notify-seal before the PBFTEngine
@@ -73,8 +81,8 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
     m_config->setTimeoutState(true);
 
     // Timer is used to manage checkpoint timeout
-    m_timer =
-        std::make_shared<PBFTTimer>(m_config->checkPointTimeoutInterval(), "checkPointResendTimer");
+    m_timer = std::make_shared<PBFTTimer>(
+        m_config->ioService(), m_config->checkPointTimeoutInterval(), "checkPointResendTimer");
 
     // Configure the admission pipeline from PBFTConfig (originally from node.ini).
     // Safe to call here because the worker thread has not yet been started.
@@ -300,8 +308,7 @@ void PBFTEngine::onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface
         // Note: must erase the proposal firstly for updateCommitQueue will not
         // receive the duplicated executing proposal
         m_cacheProcessor->eraseExecutedProposal(_proposal->hash());
-        // retry after 20ms
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        // Re-push for retry; Worker timer provides natural backoff.
         m_cacheProcessor->updateCommitQueue(_proposal);
         return;
     }
@@ -612,7 +619,7 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
             return;
         }
         m_msgQueue.push(pbftMsg);
-        m_signalled.notify_all();
+        notify();
     }
     catch (std::exception const& _e)
     {
@@ -653,20 +660,16 @@ void PBFTEngine::executeWorker()
     // the node is not the consensusNode
     if (!m_config->isConsensusNode())
     {
-        waitSignal();
         return;
     }
     // when the node is syncing, not handle the PBFT message
     if (isSyncingHigher())
     {
-        waitSignal();
         return;
     }
     // handle the PBFT message(here will wait when the msgQueue is empty)
     std::shared_ptr<PBFTBaseMessageInterface> messageResult;
-    m_msgQueue.try_pop(messageResult);
-    auto empty = m_msgQueue.empty();
-    if (messageResult)
+    if (m_msgQueue.try_pop(messageResult))
     {
         const auto& pbftMsg = messageResult;
         auto packetType = pbftMsg->packetType();
@@ -682,21 +685,11 @@ void PBFTEngine::executeWorker()
                             << m_config->printCurrentState();
 #endif
             m_msgQueue.push(pbftMsg);
-            if (empty)
-            {
-                // only one pbft msg, and cannot handle proposal
-                // re-push msg to queue and wait for signal try to re-handle
-                waitSignal();
-            }
             return;
         }
         // FIB-145: notify pipeline that a message was consumed (decrements per-peer counter)
         m_pipeline.consumed(pbftMsg);
         handleMsg(pbftMsg);
-    }
-    else
-    {
-        waitSignal();
     }
 }
 
@@ -2124,8 +2117,7 @@ void PBFTEngine::onStableCheckPointCommitFailed(
                                  "onStableCheckPointCommitFailed for BlockIsCommitting: "
                                  "retry to commit again")
                           << m_config->printCurrentState() << printPBFTProposal(_stableProposal);
-        // retry after 20ms
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        // Re-push for retry; Worker timer provides natural backoff.
         RecursiveGuard l(m_mutex);
         m_cacheProcessor->updateStableCheckPointQueue(_stableProposal);
         return;

@@ -24,7 +24,6 @@
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
-#include "bcos-framework/security/CloudKmsType.h"
 #include "bcos-framework/security/KeyEncryptionType.h"
 #include "bcos-framework/security/StorageEncryptionType.h"
 #include "bcos-utilities/BoostLog.h"
@@ -32,17 +31,21 @@
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
-#include <json/forwards.h>
-#include <json/reader.h>
-#include <json/value.h>
-#include <servant/RemoteLogger.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <util/tc_clientsocket.h>
-#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <limits>
+#include <set>
+#include <string_view>
 #include <thread>
 #include <utility>
 
@@ -54,6 +57,62 @@ using namespace bcos::tool;
 using namespace bcos::consensus;
 using namespace bcos::ledger;
 using namespace bcos::protocol;
+
+namespace
+{
+// Trust-boundary helpers for [alloc.N] parsing. Functions are camelCase; no
+// members so no m_ prefix.
+bool isHex(std::string_view sv)
+{
+    return !sv.empty() &&
+           std::all_of(sv.begin(), sv.end(), [](unsigned char c) { return std::isxdigit(c) != 0; });
+}
+
+// Require that `value` (the raw config value of `field` in `section`) is a
+// 0x-prefixed hex string. If expectedLen > 0, the hex body (after 0x) must be
+// exactly that many chars; otherwise it must merely be valid hex of even
+// length when `evenLength` is set. Throws InvalidConfig naming section+field.
+void requireHexField(std::string const& section, std::string const& field, std::string const& value,
+    size_t expectedLen, bool evenLength)
+{
+    if (value.rfind("0x", 0) != 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[" + section + "]." + field + " must be 0x-prefixed: " + value));
+    }
+    std::string_view body{value};
+    body.remove_prefix(2);
+    if (expectedLen > 0 && body.size() != expectedLen)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[" + section + "]." + field + " must be " +
+                                  std::to_string(expectedLen) + " hex chars: " + value));
+    }
+    if (!isHex(body))
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[" + section + "]." + field + " is not valid hex: " + value));
+    }
+    if (evenLength && (body.size() % 2) != 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[" + section + "]." + field + " must be even-length hex: " + value));
+    }
+}
+
+void requireDecimalField(
+    std::string const& section, std::string const& field, std::string const& value)
+{
+    if (value.empty() || !std::all_of(value.begin(), value.end(),
+                             [](unsigned char c) { return std::isdigit(c) != 0; }))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[" + section + "]." + field + " must be decimal digits: " + value));
+    }
+}
+}  // namespace
 
 NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
   : m_keyFactory(std::move(_keyFactory)), m_ledgerConfig(std::make_shared<LedgerConfig>())
@@ -106,8 +165,10 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
     loadWeb3RpcConfig(_pt);
+    loadOpEngineRpcConfig(_pt);
     loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
+    loadSingleNodeConsensusConfig(_pt);
     loadTxPoolConfig(_pt);
     // loadSecurityConfig before loadStorageSecurityConfig for deciding whether to use HSM
     loadSecurityConfig(_pt);
@@ -137,6 +198,259 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
 
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
+
+    // === A6.5: L2 genesis allocs; L2 mode is gated by feature_l2_ethereum_compat ===
+    loadAllocs(_genesisConfig);
+    // === A3: B0 full Ethereum genesis header from the merged genesis artifact ===
+    loadEthGenesisHeader(_genesisConfig);
+    validateL2Invariants();
+}
+
+void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
+{
+    // NOTE on boost read_ini representation (verified empirically):
+    // [alloc.0] becomes a FLAT top-level ptree key literally named "alloc.0"
+    // (NOT nested alloc->0), and [alloc.0.storage] is a separate flat key
+    // "alloc.0.storage". Because get_child treats '.' as a path separator,
+    // the storage sub-tree must be fetched with a NUL ('\0') path separator
+    // so the literal dotted key is matched.
+    m_genesisConfig.m_allocs.clear();
+    std::set<std::string> seen;
+    for (auto const& kv : _genesisConfig)
+    {
+        if (kv.first.rfind("alloc.", 0) != 0)
+        {
+            continue;
+        }
+        if (kv.first.find(".storage") != std::string::npos)
+        {
+            continue;
+        }
+        ledger::Alloc alloc;
+        try
+        {
+            alloc.address = kv.second.get<std::string>("address");
+            std::transform(alloc.address.begin(), alloc.address.end(), alloc.address.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+            requireHexField(kv.first, "address", alloc.address, 40, false);
+            if (!seen.insert(alloc.address).second)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig()
+                    << errinfo_comment("[" + kv.first + "].address duplicate: " + alloc.address));
+            }
+            auto balance = kv.second.get<std::string>("balance", "0");
+            requireDecimalField(kv.first, "balance", balance);
+            alloc.balance = u256(balance);
+            alloc.nonce = kv.second.get<std::string>("nonce", "0");
+            requireDecimalField(kv.first, "nonce", alloc.nonce);
+            // nonce is serialized into the genesis allocs hash as a uint64
+            // big-endian field; reject anything that does not fit uint64 here so
+            // the operator gets a clear error instead of a silent truncation /
+            // parse failure at hashing time. requireDecimalField already pinned
+            // the value to decimal digits, so the only remaining failure is
+            // overflow, which lexical_cast reports via bad_lexical_cast.
+            try
+            {
+                boost::lexical_cast<uint64_t>(alloc.nonce);
+            }
+            catch (boost::bad_lexical_cast const&)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment(
+                        "[" + kv.first + "].nonce must fit in uint64: " + alloc.nonce));
+            }
+            alloc.code = kv.second.get<std::string>("code", "");
+            // An EOA alloc (no deployed code) is represented by an empty `code`.
+            // importGenesisState / computeGenesisStateTrie already treat an empty
+            // code as "no code", so only a non-empty value is validated here.
+            if (!alloc.code.empty())
+            {
+                requireHexField(kv.first, "code", alloc.code, 0, true);
+            }
+            // storage section is a sibling flat key "<alloc.N>.storage"; '\0'
+            // separator avoids boost interpreting the dots as a nested path.
+            boost::property_tree::ptree::path_type storagePath(kv.first + ".storage", '\0');
+            if (auto storageNode = _genesisConfig.get_child_optional(storagePath))
+            {
+                for (auto const& slot : *storageNode)
+                {
+                    requireHexField(kv.first + ".storage", "key", slot.first, 64, false);
+                    requireHexField(kv.first + ".storage", "value", slot.second.data(), 64, false);
+                    alloc.storage.emplace_back(slot.first, slot.second.data());
+                }
+            }
+        }
+        catch (InvalidConfig const&)
+        {
+            // already names the offending section + field; surface as-is.
+            throw;
+        }
+        catch (std::exception const& e)
+        {
+            // boost ptree (missing key, bad data) and u256 parse failures land
+            // here; name the failing [alloc.N] section so the operator can find it.
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[" + kv.first + "] malformed: " + e.what()));
+        }
+        NodeConfig_LOG(INFO) << LOG_DESC("loadAllocs") << LOG_KV("section", kv.first)
+                             << LOG_KV("address", alloc.address)
+                             << LOG_KV("storageSlots", alloc.storage.size());
+        m_genesisConfig.m_allocs.push_back(std::move(alloc));
+    }
+}
+
+void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesisConfig)
+{
+    m_genesisConfig.m_ethGenesisHeader.reset();
+    auto section = _genesisConfig.get_child_optional("eth_genesis_header");
+    if (!section)
+    {
+        return;  // legacy / non-L2 chain: no Ethereum genesis header
+    }
+
+    constexpr std::string_view sectionName = "eth_genesis_header";
+    // Every field of the artifact header is REQUIRED — a missing key means the
+    // artifact-to-config conversion is broken, and a defaulted field would
+    // silently change the genesis hash. Fail on the first missing key.
+    auto requireField = [&](std::string const& key) -> std::string {
+        auto value = section->get_optional<std::string>(key);
+        if (!value || value->empty())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[" + std::string(sectionName) + "]." + key +
+                                                   " is required (all 22 eth genesis header "
+                                                   "fields must come from the genesis artifact)"));
+        }
+        return *value;
+    };
+    auto hashField = [&](std::string const& key) -> crypto::HashType {
+        auto value = requireField(key);
+        requireHexField(std::string(sectionName), key, value, 64, false);
+        return crypto::HashType(value);
+    };
+    auto quantityField = [&](std::string const& key) -> u256 {
+        auto value = requireField(key);
+        requireHexField(std::string(sectionName), key, value, 0, false);
+        // u256's fixed-width backend silently truncates over-wide input; cap
+        // the hex body at 64 chars (32 bytes) so an oversized quantity is
+        // named here instead of surfacing as a baffling hash mismatch.
+        if (value.size() > 2 + 64)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "[" + std::string(sectionName) + "]." + key + " exceeds 32 bytes: " + value));
+        }
+        return u256(value);
+    };
+
+    ledger::EthGenesisHeader header;
+    header.m_parentHash = hashField("parent_hash");
+    header.m_sha3Uncles = hashField("sha3_uncles");
+    auto miner = requireField("miner");
+    requireHexField(std::string(sectionName), "miner", miner, 40, false);
+    header.m_miner = Address(miner);
+    header.m_stateRoot = hashField("state_root");
+    header.m_transactionsRoot = hashField("transactions_root");
+    header.m_receiptsRoot = hashField("receipts_root");
+    auto logsBloom = requireField("logs_bloom");
+    requireHexField(std::string(sectionName), "logs_bloom", logsBloom, 512, false);
+    header.m_logsBloom = fromHex(logsBloom);
+    header.m_difficulty = quantityField("difficulty");
+    auto number = quantityField("number");
+    if (number != 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[eth_genesis_header].number must be 0x0 (genesis block)"));
+    }
+    header.m_number = 0;
+    header.m_gasLimit = quantityField("gas_limit");
+    header.m_gasUsed = quantityField("gas_used");
+    auto timestamp = quantityField("timestamp");
+    // The artifact timestamp is seconds; Ledger::applyEthGenesisHeader multiplies it by 1000
+    // to store internal milliseconds, so the parse bound must leave headroom for the x1000.
+    if (timestamp > u256(std::numeric_limits<int64_t>::max() / 1000))
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[eth_genesis_header].timestamp exceeds int64 milliseconds"));
+    }
+    header.m_timestamp = static_cast<int64_t>(timestamp);
+    auto extraData = requireField("extra_data");
+    requireHexField(std::string(sectionName), "extra_data", extraData, 0, true);
+    header.m_extraData = fromHex(extraData);
+    header.m_mixHash = hashField("mix_hash");
+    auto nonce = requireField("nonce");
+    requireHexField(std::string(sectionName), "nonce", nonce, 16, false);
+    header.m_nonce = h64(nonce);
+    header.m_baseFeePerGas = quantityField("base_fee_per_gas");
+    header.m_withdrawalsRoot = hashField("withdrawals_root");
+    header.m_blobGasUsed = quantityField("blob_gas_used");
+    header.m_excessBlobGas = quantityField("excess_blob_gas");
+    header.m_parentBeaconBlockRoot = hashField("parent_beacon_block_root");
+    header.m_requestsHash = hashField("requests_hash");
+    // The artifact's own hash claim. Ledger recomputes keccak256(rlp(header))
+    // from the 21 fields above and refuses to build genesis on mismatch, so a
+    // stale or hand-edited section cannot silently mint a different B0.
+    header.m_hash = hashField("hash");
+
+    m_genesisConfig.m_ethGenesisHeader = std::move(header);
+    NodeConfig_LOG(INFO) << LOG_DESC("loadEthGenesisHeader")
+                         << LOG_KV("hash", m_genesisConfig.m_ethGenesisHeader->m_hash.hex())
+                         << LOG_KV("timestamp", m_genesisConfig.m_ethGenesisHeader->m_timestamp);
+}
+
+void NodeConfig::validateL2Invariants()
+{
+    auto const& genesis = m_genesisConfig;
+    // L2 mode is signalled by the feature_l2_ethereum_compat flag in [features];
+    // there is no separate chain_mode. allocs and the flag must agree.
+    bool l2Enabled = std::any_of(genesis.m_features.begin(), genesis.m_features.end(),
+        [](ledger::FeatureSet const& featureSet) {
+            return featureSet.flag == ledger::Features::Flag::feature_l2_ethereum_compat &&
+                   featureSet.enable > 0;
+        });
+    if (l2Enabled && genesis.m_allocs.empty())
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "feature_l2_ethereum_compat requires a non-empty [alloc.*] "
+                                  "section in config.genesis"));
+    }
+    if (!l2Enabled && !genesis.m_allocs.empty())
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[alloc.*] section requires feature_l2_ethereum_compat enabled "
+                                  "in [features]"));
+    }
+    // The Ethereum B0 header and L2 mode are bound both ways: a pbft chain
+    // with an [eth_genesis_header] section is a mis-assembled config, and an
+    // L2 chain WITHOUT the section would mint a Tars-hashed B0 that no
+    // op-node/op-reth can ever match — fail fast in both directions.
+    if (!l2Enabled && genesis.m_ethGenesisHeader.has_value())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("[eth_genesis_header] section requires "
+                                               "feature_l2_ethereum_compat enabled in [features]"));
+    }
+    if (l2Enabled && !genesis.m_ethGenesisHeader.has_value())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "feature_l2_ethereum_compat requires an [eth_genesis_header] section in "
+                "config.genesis (all 22 fields from the merged genesis artifact); an L2 chain "
+                "without it would build a non-Ethereum genesis block"));
+    }
+}
+
+bool NodeConfig::opJovianActive() const
+{
+    // OP-Stack Jovian fork semantics are selected by feature_op_jovian in [features] (the
+    // FISCO-native mechanism), replacing the former chain.isthmus_time/chain.jovian_time
+    // timestamp thresholds. OFF → Isthmus semantics (the OP-mode baseline).
+    return std::any_of(m_genesisConfig.m_features.begin(), m_genesisConfig.m_features.end(),
+        [](ledger::FeatureSet const& featureSet) {
+            return featureSet.flag == ledger::Features::Flag::feature_op_jovian &&
+                   featureSet.enable > 0;
+        });
 }
 
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,
@@ -402,7 +716,6 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     */
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("rpc.listen_port", 20200);
-    int threadCount = _pt.get<int>("rpc.thread_count", 8);
     int filterTimeout = _pt.get<int>("rpc.filter_timeout", 300);
     int maxProcessBlock = _pt.get<int>("rpc.filter_max_process_block", 10);
     bool smSsl = _pt.get<bool>("rpc.sm_ssl", false);
@@ -414,9 +727,16 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     }
     bool needRetInput = _pt.get<bool>("rpc.return_input_params", true);
 
+    // Deprecation warning for removed rpc.thread_count
+    if (_pt.get_optional<int>("rpc.thread_count"))
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "loadRpcConfig: rpc.thread_count is deprecated, "
+            "use thread_pool.io_thread_count instead");
+    }
+
     m_rpcListenIP = listenIP;
     m_rpcListenPort = listenPort;
-    m_rpcThreadPoolSize = threadCount;
     m_rpcDisableSsl = disableSsl;
     m_rpcSmSsl = smSsl;
     m_rpcFilterTimeout = filterTimeout * 1000;  // to milliseconds
@@ -451,10 +771,13 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         cors_allowed_headers=Content-Type, Authorization, X-Requested-With
         cors_max_age=86400
         sync_transaction=false
+        ; how many blocks behind latest the safe/finalized blockTag point to (default 0 = latest)
+        ; PBFT has no finalization window: a committed block is already final
+        ; safe_block_depth=0
+        ; finalized_block_depth=0
     */
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
-    const int threadCount = _pt.get<int>("web3_rpc.thread_count", 8);
     const int filterTimeout = _pt.get<int>("web3_rpc.filter_timeout", 300);
     const int maxProcessBlock = _pt.get<int>("web3_rpc.filter_max_process_block", 10);
     const bool enableWeb3Rpc = _pt.get<bool>("web3_rpc.enable", false);
@@ -470,9 +793,16 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         "web3_rpc.cors_allowed_headers", "Content-Type, Authorization, X-Requested-With");
     const int32_t corsMaxAge = _pt.get<int32_t>("web3_rpc.cors_max_age", 86400);
 
+    // Deprecation warning for removed web3_rpc.thread_count
+    if (_pt.get_optional<int>("web3_rpc.thread_count"))
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "loadWeb3RpcConfig: web3_rpc.thread_count is deprecated, "
+            "use thread_pool.io_thread_count instead");
+    }
+
     m_web3RpcListenIP = listenIP;
     m_web3RpcListenPort = listenPort;
-    m_web3RpcThreadSize = threadCount;
     m_enableWeb3Rpc = enableWeb3Rpc;
     m_web3FilterTimeout = filterTimeout * 1000;  // to milliseconds
     m_web3MaxProcessBlock = maxProcessBlock;
@@ -485,10 +815,11 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     m_web3CorsMaxAge = corsMaxAge;
     m_web3CorsAllowCredentials = corsAllowCredentials;
     m_web3SyncTransaction = _pt.get<bool>("web3_rpc.sync_transaction", false);
+    m_web3SafeBlockDepth = _pt.get<uint32_t>("web3_rpc.safe_block_depth", 0);
+    m_web3FinalizedBlockDepth = _pt.get<uint32_t>("web3_rpc.finalized_block_depth", 0);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
-                         << LOG_KV("listenPort", listenPort) << LOG_KV("threadCount", threadCount)
                          << LOG_KV("filterTimeout", filterTimeout)
                          << LOG_KV("maxProcessBlock", maxProcessBlock)
                          << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit)
@@ -498,7 +829,72 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("corsAllowedHeaders", corsAllowedHeaders)
                          << LOG_KV("corsMaxAge", corsMaxAge)
                          << LOG_KV("corsAllowCredentials", corsAllowCredentials)
-                         << LOG_KV("syncTransaction", m_web3SyncTransaction);
+                         << LOG_KV("syncTransaction", m_web3SyncTransaction)
+                         << LOG_KV("safeBlockDepth", m_web3SafeBlockDepth)
+                         << LOG_KV("finalizedBlockDepth", m_web3FinalizedBlockDepth);
+}
+
+uint32_t NodeConfig::web3SafeBlockDepth() const
+{
+    return m_web3SafeBlockDepth;
+}
+
+uint32_t NodeConfig::web3FinalizedBlockDepth() const
+{
+    return m_web3FinalizedBlockDepth;
+}
+
+void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
+{
+    /*
+    [op_engine_rpc]
+        enable=false
+        listen_ip=127.0.0.1
+        listen_port=8551
+        request_body_size_limit=10485760
+        batch_request_size_limit=8
+        jwt_secret_file=conf/op-engine/jwt.hex
+        clock_skew_secs=60
+    */
+    const bool enableOpEngineRpc = _pt.get<bool>("op_engine_rpc.enable", false);
+    const std::string listenIP = _pt.get<std::string>("op_engine_rpc.listen_ip", "127.0.0.1");
+    const int listenPort = _pt.get<int>("op_engine_rpc.listen_port", 8551);
+    const int requestBodySizeLimit =
+        _pt.get<int>("op_engine_rpc.request_body_size_limit", 10485760);
+    const int batchRequestSizeLimit = _pt.get<int>("op_engine_rpc.batch_request_size_limit", 8);
+    const std::string jwtSecretFile =
+        _pt.get<std::string>("op_engine_rpc.jwt_secret_file", "conf/op-engine/jwt.hex");
+    const int32_t clockSkewSecs = _pt.get<int32_t>("op_engine_rpc.clock_skew_secs", 60);
+    // test-only escape hatch, see Initializer's executor-version guard
+    const bool allowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
+
+    m_enableOpEngineRpc = enableOpEngineRpc;
+    // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
+    // two loaders runs second fires the guard, so it holds regardless of loadConfig's loader
+    // order and also when a loader is invoked on its own.
+    if (m_enableOpEngineRpc && m_enableSingleNodeConsensus)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
+                "exclusive: both drive the same EngineService; enable at most one"));
+    }
+    m_opEngineRpcListenIP = listenIP;
+    m_opEngineRpcListenPort = listenPort;
+    m_opEngineHttpBodySizeLimit = requestBodySizeLimit;
+    m_opEngineBatchRequestSizeLimit = batchRequestSizeLimit;
+    m_opEngineJwtSecretFile = jwtSecretFile;
+    m_opEngineClockSkewSecs = clockSkewSecs;
+    m_opEngineAllowV1Executor = allowV1Executor;
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
+                         << LOG_KV("enableOpEngineRpc", enableOpEngineRpc)
+                         << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
+                         << LOG_KV("requestBodySizeLimit", requestBodySizeLimit)
+                         << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit)
+                         << LOG_KV("jwtSecretFile", jwtSecretFile)
+                         << LOG_KV("clockSkewSecs", clockSkewSecs)
+                         << LOG_KV("unsafeAllowV1Executor", allowV1Executor);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -602,24 +998,25 @@ void NodeConfig::loadCertConfig(boost::property_tree::ptree const& _pt)
 // load the txpool related params
 void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
 {
+    // Deprecation warnings for removed txpool thread config keys
+    if (_pt.get_optional<std::string>("txpool.notify_worker_num"))
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "loadTxPoolConfig: txpool.notify_worker_num is deprecated, "
+            "use thread_pool.io_thread_count instead");
+    }
+    if (_pt.get_optional<std::string>("txpool.verify_worker_num"))
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "loadTxPoolConfig: txpool.verify_worker_num is deprecated, "
+            "use thread_pool.io_thread_count instead");
+    }
+
     m_txpoolLimit = checkAndGetValue(_pt, "txpool.limit", "15000");
     if (m_txpoolLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("Please set txpool.limit to positive !"));
-    }
-    m_notifyWorkerNum = checkAndGetValue(_pt, "txpool.notify_worker_num", "2");
-    if (m_notifyWorkerNum <= 0)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set txpool.notify_worker_num to positive !"));
-    }
-    m_verifierWorkerNum = checkAndGetValue(_pt, "txpool.verify_worker_num",
-        std::to_string(std::min(8U, std::thread::hardware_concurrency() + 1)));
-    if (m_verifierWorkerNum <= 0)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set txpool.verify_worker_num to positive !"));
     }
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
@@ -648,8 +1045,6 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     }
     m_preStoreMaxInflight = static_cast<size_t>(preStoreCap);
     NodeConfig_LOG(INFO) << LOG_DESC("loadTxPoolConfig") << LOG_KV("txpoolLimit", m_txpoolLimit)
-                         << LOG_KV("notifierWorkers", m_notifyWorkerNum)
-                         << LOG_KV("verifierWorkers", m_verifierWorkerNum)
                          << LOG_KV("checkBlockLimit", m_checkBlockLimit)
                          << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime)
                          << LOG_KV("enableTxsFromFreeNode", m_enableTxsFromFreeNode)
@@ -854,6 +1249,41 @@ void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
     NodeConfig_LOG(INFO) << LOG_DESC("loadSealerConfig") << LOG_KV("minSealTime", m_minSealTime);
 }
 
+void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const& _pt)
+{
+    /*
+    [consensus]
+        enable_single_node_consensus=false
+        block_interval=1000
+        produce_empty_blocks=true
+        fee_recipient=0x0
+    */
+    m_enableSingleNodeConsensus = _pt.get<bool>("consensus.enable_single_node_consensus", false);
+    // Mutual exclusion with [op_engine_rpc].enable: the built-in single-node driver and an
+    // external op-node would both drive the same EngineService forkchoice/payload state.
+    // Refuse the combination at startup instead of leaving two block producers reachable by
+    // configuration. The check is symmetric (loadOpEngineRpcConfig carries the same guard),
+    // so it does not depend on the order the two loaders run in loadConfig.
+    if (m_enableSingleNodeConsensus && m_enableOpEngineRpc)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
+                "exclusive: both drive the same EngineService; enable at most one"));
+    }
+    m_singleNodeConsensusBlockInterval = _pt.get<uint64_t>("consensus.block_interval", 1000);
+    m_singleNodeConsensusProduceEmptyBlocks = _pt.get<bool>("consensus.produce_empty_blocks", true);
+    m_singleNodeConsensusFeeRecipient = _pt.get<std::string>(
+        "consensus.fee_recipient", "0x0000000000000000000000000000000000000000");
+    m_singleNodeConsensusPrevRandao = _pt.get<std::string>("consensus.prev_randao", "");
+    m_singleNodeConsensusFixedTimestamp = _pt.get<std::uint64_t>("consensus.fixed_timestamp", 0);
+    NodeConfig_LOG(INFO) << LOG_DESC("loadSingleNodeConsensusConfig")
+                         << LOG_KV("enableSingleNodeConsensus", m_enableSingleNodeConsensus)
+                         << LOG_KV("blockInterval", m_singleNodeConsensusBlockInterval)
+                         << LOG_KV("produceEmptyBlocks", m_singleNodeConsensusProduceEmptyBlocks)
+                         << LOG_KV("feeRecipient", m_singleNodeConsensusFeeRecipient);
+}
+
 void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_storageSecurityEnable = _pt.get<bool>("storage_security.enable", false);
@@ -1021,13 +1451,29 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_vmCacheSize = _pt.get<int>("executor.vm_cache_size", 1024);
     m_baselineSchedulerConfig.grainSize =
         _pt.get<int>("executor.baseline_scheduler_chunksize", 100);
-    m_baselineSchedulerConfig.maxThread = _pt.get<int>("executor.baseline_scheduler_maxthread", 16);
     m_baselineSchedulerConfig.parallel =
         _pt.get<bool>("executor.baseline_scheduler_parallel", false);
 
+    // Deprecation warning for removed config keys
+    if (_pt.get_optional<std::string>("executor.baseline_scheduler_maxthread"))
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "loadOthersConfig: executor.baseline_scheduler_maxthread is deprecated, "
+            "use thread_pool.tbb_thread_count instead");
+    }
+    if (_pt.get_optional<std::string>("rpc.tars_rpc_thread_count"))
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "loadOthersConfig: rpc.tars_rpc_thread_count is deprecated, "
+            "use thread_pool.io_thread_count instead");
+    }
+
+    m_ioThreadCount = checkAndGetValue(_pt, "thread_pool.io_thread_count",
+        std::to_string(std::thread::hardware_concurrency() + 1));
+    m_tbbThreadCount = checkAndGetValue(_pt, "thread_pool.tbb_thread_count", "0");
+
     m_tarsRPCConfig.host = _pt.get<std::string>("rpc.tars_rpc_host", "127.0.0.1");
     m_tarsRPCConfig.port = _pt.get<int>("rpc.tars_rpc_port", 0);
-    m_tarsRPCConfig.threadCount = _pt.get<int>("rpc.tars_rpc_thread_count", 8);
 
     m_checkTransactionSignature = _pt.get<bool>("experimental.check_transaction_signature", true);
     m_checkParallelConflict = _pt.get<bool>("experimental.check_parallel_conflict", true);
@@ -1040,6 +1486,8 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize)
+                         << LOG_KV("ioThreadCount", m_ioThreadCount)
+                         << LOG_KV("tbbThreadCount", m_tbbThreadCount)
                          << LOG_KV("checkTransactionSignature", m_checkTransactionSignature)
                          << LOG_KV("checkParallelConflict", m_checkParallelConflict)
                          << LOG_KV("singlePointConsensus", m_singlePointConsensus)
@@ -1122,7 +1570,26 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
             InvalidConfig() << errinfo_comment(
                 "Please set tx.gas_limit to more than " + std::to_string(TX_GAS_LIMIT_MIN) + " !"));
     }
+    else if (txGasLimit < 100000)
+    {
+        // Small block gas limits (>= MIN, < 100000) are accepted for Ethereum
+        // compatibility (EEST lowGasLimit fixtures use 80000), but flag them so an
+        // operator setting a tiny limit by accident sees it in the boot log.
+        NodeConfig_LOG(WARNING) << LOG_DESC("low tx.gas_limit") << LOG_KV("gasLimit", txGasLimit);
+    }
     m_genesisConfig.m_txGasLimit = txGasLimit;
+    // txGasPrice (base fee per gas; consumed by the v2 Ethereum executor as base_fee).
+    // Seeded into SYS_CONFIG/tx_gas_price at genesis so EEST fixtures can reproduce their
+    // environment's currentBaseFee.
+    m_genesisConfig.m_txGasPrice = _genesisConfig.get<std::string>("tx.gas_price", "0x0");
+    // txExcessBlobGas (EIP-4844 blob base-fee state; consumed by the v2 Ethereum executor).
+    // Seeded into SYS_CONFIG/excess_blob_gas at genesis so EEST fixtures can reproduce their
+    // environment's currentExcessBlobGas.
+    auto excessBlobGasStr = _genesisConfig.get<std::string>("tx.excess_blob_gas", "");
+    if (!excessBlobGasStr.empty())
+    {
+        m_genesisConfig.m_excessBlobGas = boost::lexical_cast<uint64_t>(excessBlobGasStr);
+    }
     // the compatibility version
     auto compatibilityVersion = _genesisConfig.get<std::string>(
         "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
@@ -1231,7 +1698,6 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
 {
     try
     {
-        m_genesisConfig.m_isWasm = _genesisConfig.get<bool>("executor.is_wasm", false);
         m_genesisConfig.m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
         m_genesisConfig.m_isSerialExecute =
             _genesisConfig.get<bool>("executor.is_serial_execute", false);
@@ -1240,34 +1706,155 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "executor.is_wasm/executor.is_auth_check/"
+                                  "executor.is_auth_check/"
                                   "executor.is_serial_execute is null, please set it!"));
     }
-    if (m_genesisConfig.m_isWasm && !m_genesisConfig.m_isSerialExecute)
+    // EVMC revision config — consumed by ethereum-executor (executor_version=2):
+    //   executor.evm_revision       = explicit single revision for all blocks, e.g. "cancun"
+    //   executor.evm_revision_forks = comma-separated "block:revision" fork transitions,
+    //                                 e.g. "0:cancun,100000:osaka"
+    // If neither is set, the ethereum-executor defaults to the latest revision from genesis.
+    try
     {
-        if (m_genesisConfig.m_compatibilityVersion >=
-            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        auto evmcRevisionStr = _genesisConfig.get<std::string>("executor.evm_revision", "");
+        if (!evmcRevisionStr.empty())
         {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "loadExecutorConfig wasm only support serial executing, "
-                                      "please set is_serial_execute to true"));
+            if (auto rev = ledger::evmcRevisionFromName(evmcRevisionStr); rev)
+            {
+                if (*rev == EVMC_EXPERIMENTAL)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "executor.evm_revision=experimental is not a released fork: evmone's "
+                            "semantics for it change between versions, which would tie consensus "
+                            "to the binary"));
+                }
+                m_genesisConfig.m_evmcRevision = *rev;
+            }
+            else
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment(
+                        "executor.evm_revision is invalid: " + evmcRevisionStr +
+                        ", supported revisions: frontier/homestead/tangerinewhistle/"
+                        "spuriousdragon/byzantium/constantinople/petersburg/istanbul/berlin/"
+                        "london/paris/shanghai/cancun/prague/osaka"));
+            }
         }
-        NodeConfig_LOG(WARNING)
-            << METRIC
-            << LOG_DESC("loadExecutorConfig wasm with serial executing is not recommended");
+
+        auto evmcForksStr = _genesisConfig.get<std::string>("executor.evm_revision_forks", "");
+        if (!evmcForksStr.empty())
+        {
+            auto trim = [](std::string_view s) -> std::string_view {
+                auto b = s.find_first_not_of(" \t\r\n");
+                if (b == std::string_view::npos)
+                {
+                    return {};
+                }
+                auto e = s.find_last_not_of(" \t\r\n");
+                return s.substr(b, e - b + 1);
+            };
+            std::stringstream ss(evmcForksStr);
+            std::string token;
+            while (std::getline(ss, token, ','))
+            {
+                auto entry = trim(token);
+                if (entry.empty())
+                {
+                    continue;
+                }
+                auto colon = entry.find(':');
+                if (colon == std::string_view::npos)
+                {
+                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                              "executor.evm_revision_forks invalid entry (expected "
+                                              "\"block:revision\"): " +
+                                              std::string(entry)));
+                }
+                auto blockStr = trim(entry.substr(0, colon));
+                auto name = trim(entry.substr(colon + 1));
+                auto block = boost::lexical_cast<protocol::BlockNumber>(blockStr);
+                if (block < 0)
+                {
+                    // A negative fork height would otherwise become the block-0 baseline
+                    // (encodeEVMCRevisionConfig picks forks.begin()->second when no 0: entry
+                    // exists) — an operator typing -5 instead of 5 would silently get a
+                    // different fork schedule. Reject it here.
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "executor.evm_revision_forks block height must be >= 0, got " +
+                            std::to_string(block) + " in entry: " + std::string(entry)));
+                }
+                auto rev = ledger::evmcRevisionFromName(name);
+                if (!rev)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "executor.evm_revision_forks invalid revision \"" + std::string(name) +
+                            "\" in entry: " + std::string(entry)));
+                }
+                if (*rev == EVMC_EXPERIMENTAL)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "executor.evm_revision_forks revision \"experimental\" is not a "
+                            "released fork (evmone semantics change between versions); entry: " +
+                            std::string(entry)));
+                }
+                m_genesisConfig.m_evmcRevisionForks[block] = *rev;
+            }
+        }
     }
-    if (m_genesisConfig.m_isWasm && m_genesisConfig.m_isAuthCheck)
+    catch (InvalidConfig const& e)
     {
-        if (m_genesisConfig.m_compatibilityVersion >=
-            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "loadExecutorConfig auth only support solidity, "
-                                      "please set is_auth_check to false or set is_wasm to false"));
-        }
-        NodeConfig_LOG(WARNING) << METRIC
-                                << LOG_DESC(
-                                       "loadExecutorConfig wasm auth is not supported for now");
+        throw;  // already carries a precise message
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "Invalid executor.evm_revision config: " + std::string(e.what())));
+    }
+    // A v2 chain (executor_version >= 2 selects the ethereum-executor) MUST pin its EVMC
+    // revision explicitly. Unlike v0/v1 the revision is consumed on every block, and a
+    // binary-side default would be recorded nowhere on-chain — tying "upgrade the binary" to a
+    // hard fork (replay/resync would diverge and a mixed-version network could split, without
+    // either side erroring). Requiring it here makes the effective revision part of the
+    // genesis config and therefore of the on-chain state.
+    if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
+        !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "executor.version=2 (ethereum-executor) requires an explicit "
+                "executor.evm_revision (or executor.evm_revision_forks) so the EVM "
+                "revision is recorded on-chain; refusing to run with an implicit "
+                "binary-side default"));
+    }
+    // A v2 chain must ALSO be able to persist that revision: Ledger::buildGenesisBlock only
+    // writes evmc_revision for compatibility_version >= V3_18_0 (and executor_version for
+    // >= V3_15_0). Below 3.18.0 the operator would be forced to write a value that is then
+    // ignored (the chain runs the binary default); below 3.15.0 executor_version is not
+    // persisted either, so getLedgerConfig never injects a revision and every transaction
+    // throws EvmcRevisionNotConfigured. Reject both ranges up front.
+    if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
+        m_genesisConfig.m_compatibilityVersion <
+            static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "executor.version=2 requires compatibility_version >= 3.18.0: below that "
+                "Ledger::buildGenesisBlock cannot persist evmc_revision, so the EVM revision "
+                "would not be recorded on-chain"));
+    }
+    // WASM support was removed in 3.18; reject executor.is_wasm=true explicitly so operators get a
+    // clear error instead of a silent EVM fallback or an opaque genesis-mismatch on startup.
+    if (_genesisConfig.get<bool>("executor.is_wasm", false))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "executor.is_wasm=true is not supported: WASM support was removed "
+                "in FISCO-BCOS 3.18; use the EVM executor (set is_wasm=false)"));
     }
     try
     {
@@ -1370,16 +1957,6 @@ std::string bcos::tool::NodeConfig::getDefaultServiceName(
 size_t NodeConfig::txpoolLimit() const
 {
     return m_txpoolLimit;
-}
-
-size_t NodeConfig::notifyWorkerNum() const
-{
-    return m_notifyWorkerNum;
-}
-
-size_t NodeConfig::verifierWorkerNum() const
-{
-    return m_verifierWorkerNum;
 }
 
 int64_t NodeConfig::txsExpirationTime() const
@@ -1607,11 +2184,6 @@ std::int64_t NodeConfig::epochBlockNum() const
     return m_genesisConfig.m_epochBlockNum;
 }
 
-bool NodeConfig::isWasm() const
-{
-    return m_genesisConfig.m_isWasm;
-}
-
 bool NodeConfig::isAuthCheck() const
 {
     return m_genesisConfig.m_isAuthCheck;
@@ -1672,11 +2244,6 @@ uint16_t NodeConfig::rpcListenPort() const
     return m_rpcListenPort;
 }
 
-uint32_t NodeConfig::rpcThreadPoolSize() const
-{
-    return m_rpcThreadPoolSize;
-}
-
 uint32_t NodeConfig::rpcFilterTimeout() const
 {
     return m_rpcFilterTimeout;
@@ -1710,11 +2277,6 @@ const std::string& NodeConfig::web3RpcListenIP() const
 uint16_t NodeConfig::web3RpcListenPort() const
 {
     return m_web3RpcListenPort;
-}
-
-uint32_t NodeConfig::web3RpcThreadSize() const
-{
-    return m_web3RpcThreadSize;
 }
 
 uint32_t NodeConfig::web3FilterTimeout() const
@@ -1770,6 +2332,81 @@ bool NodeConfig::web3CorsAllowCredentials() const
 bool NodeConfig::web3SyncTransaction() const
 {
     return m_web3SyncTransaction;
+}
+
+bool NodeConfig::enableOpEngineRpc() const
+{
+    return m_enableOpEngineRpc;
+}
+
+bool NodeConfig::opEngineAllowV1Executor() const
+{
+    return m_opEngineAllowV1Executor;
+}
+
+bool NodeConfig::engineDrivenBlockProduction() const
+{
+    return m_enableSingleNodeConsensus || m_enableOpEngineRpc;
+}
+
+bool NodeConfig::enableSingleNodeConsensus() const
+{
+    return m_enableSingleNodeConsensus;
+}
+
+uint64_t NodeConfig::singleNodeConsensusBlockInterval() const
+{
+    return m_singleNodeConsensusBlockInterval;
+}
+
+bool NodeConfig::singleNodeConsensusProduceEmptyBlocks() const
+{
+    return m_singleNodeConsensusProduceEmptyBlocks;
+}
+
+const std::string& NodeConfig::singleNodeConsensusFeeRecipient() const
+{
+    return m_singleNodeConsensusFeeRecipient;
+}
+
+const std::string& NodeConfig::singleNodeConsensusPrevRandao() const
+{
+    return m_singleNodeConsensusPrevRandao;
+}
+
+std::uint64_t NodeConfig::singleNodeConsensusFixedTimestamp() const
+{
+    return m_singleNodeConsensusFixedTimestamp;
+}
+
+const std::string& NodeConfig::opEngineRpcListenIP() const
+{
+    return m_opEngineRpcListenIP;
+}
+
+uint16_t NodeConfig::opEngineRpcListenPort() const
+{
+    return m_opEngineRpcListenPort;
+}
+
+uint32_t NodeConfig::opEngineHttpBodySizeLimit() const
+{
+    return m_opEngineHttpBodySizeLimit;
+}
+
+uint32_t NodeConfig::opEngineBatchRequestSizeLimit() const
+{
+    return m_opEngineBatchRequestSizeLimit;
+}
+
+const std::string& NodeConfig::opEngineJwtSecretFile() const
+{
+    return m_opEngineJwtSecretFile;
+}
+
+int32_t NodeConfig::opEngineClockSkewSecs() const
+{
+    return m_opEngineClockSkewSecs;
 }
 
 const std::string& NodeConfig::p2pListenIP() const
@@ -2024,6 +2661,16 @@ size_t NodeConfig::preStoreMaxInflight() const
     return m_preStoreMaxInflight;
 }
 
+size_t NodeConfig::ioThreadCount() const
+{
+    return m_ioThreadCount;
+}
+
+size_t NodeConfig::tbbThreadCount() const
+{
+    return m_tbbThreadCount;
+}
+
 void NodeConfig::loadAlloc(boost::property_tree::ptree const& ptree)
 {
     if (auto node = ptree.get_child_optional("alloc"))
@@ -2058,12 +2705,33 @@ std::string bcos::tool::generateGenesisData(
            << "compatibility_version:"
            << bcos::protocol::BlockVersion(genesisConfig.m_compatibilityVersion) << '\n'
            << "[tx]" << '\n'
-           << "gaslimit:" << genesisConfig.m_txGasLimit << '\n'
+           << "gaslimit:" << genesisConfig.m_txGasLimit
+           << '\n'
+           // tx.gas_price / tx.excess_blob_gas are seeded into SYS_CONFIG at genesis and feed
+           // v2 execution (base fee / blob base fee), so they must be part of the genesis pin
+           // the guard at Ledger::buildGenesisBlock compares on restart — otherwise two nodes
+           // configured identically except for these keys pass the genesis-mismatch check and
+           // diverge on the first block. Emit them only when non-default (mirroring the
+           // evmRevision pattern) so a default-configured chain's genesis string is byte-
+           // identical to before this change and existing chains are unaffected.
+           << (genesisConfig.m_txGasPrice != "0x0" ?
+                      "gasprice:" + genesisConfig.m_txGasPrice + "\n" :
+                      "")
+           << (genesisConfig.m_excessBlobGas ?
+                      "excessBlobGas:" + std::to_string(*genesisConfig.m_excessBlobGas) + "\n" :
+                      "")
            << "[executor]" << '\n'
            << "iswasm: " << genesisConfig.m_isWasm << '\n'
            << "isAuthCheck:" << genesisConfig.m_isAuthCheck << '\n'
            << "authAdminAccount:" << genesisConfig.m_authAdminAccount << '\n'
            << "isSerialExecute:" << genesisConfig.m_isSerialExecute << '\n';
+        if (genesisConfig.m_evmcRevision || !genesisConfig.m_evmcRevisionForks.empty())
+        {
+            ss << "evmRevision:"
+               << ledger::encodeEVMCRevisionConfig(
+                      genesisConfig.m_evmcRevision, genesisConfig.m_evmcRevisionForks)
+               << '\n';
+        }
         if (genesisConfig.m_compatibilityVersion >=
             (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
         {
@@ -2077,6 +2745,37 @@ std::string bcos::tool::generateGenesisData(
             {
                 ss << feature.flag << ":" << feature.enable << '\n';
             }
+        }
+        // A3: the eth genesis header is part of the genesis pin. Emitted only
+        // when present, so every legacy chain's genesis string stays
+        // byte-identical to before this change (node-admission compatibility).
+        if (genesisConfig.m_ethGenesisHeader.has_value())
+        {
+            auto const& ethHeader = *genesisConfig.m_ethGenesisHeader;
+            ss << "[ethGenesisHeader]" << '\n'
+               << "parent_hash:" << ethHeader.m_parentHash.hexPrefixed() << '\n'
+               << "sha3_uncles:" << ethHeader.m_sha3Uncles.hexPrefixed() << '\n'
+               << "miner:" << ethHeader.m_miner.hexPrefixed() << '\n'
+               << "state_root:" << ethHeader.m_stateRoot.hexPrefixed() << '\n'
+               << "transactions_root:" << ethHeader.m_transactionsRoot.hexPrefixed() << '\n'
+               << "receipts_root:" << ethHeader.m_receiptsRoot.hexPrefixed() << '\n'
+               << "logs_bloom:" << toHexStringWithPrefix(ethHeader.m_logsBloom) << '\n'
+               << "difficulty:" << ethHeader.m_difficulty << '\n'
+               << "number:" << ethHeader.m_number << '\n'
+               << "gas_limit:" << ethHeader.m_gasLimit << '\n'
+               << "gas_used:" << ethHeader.m_gasUsed << '\n'
+               << "timestamp:" << ethHeader.m_timestamp << '\n'
+               << "extra_data:" << toHexStringWithPrefix(ethHeader.m_extraData) << '\n'
+               << "mix_hash:" << ethHeader.m_mixHash.hexPrefixed() << '\n'
+               << "nonce:" << ethHeader.m_nonce.hexPrefixed() << '\n'
+               << "base_fee_per_gas:" << ethHeader.m_baseFeePerGas << '\n'
+               << "withdrawals_root:" << ethHeader.m_withdrawalsRoot.hexPrefixed() << '\n'
+               << "blob_gas_used:" << ethHeader.m_blobGasUsed << '\n'
+               << "excess_blob_gas:" << ethHeader.m_excessBlobGas << '\n'
+               << "parent_beacon_block_root:" << ethHeader.m_parentBeaconBlockRoot.hexPrefixed()
+               << '\n'
+               << "requests_hash:" << ethHeader.m_requestsHash.hexPrefixed() << '\n'
+               << "hash:" << ethHeader.m_hash.hexPrefixed() << '\n';
         }
 
         size_t j = 0;
@@ -2126,6 +2825,15 @@ bool bcos::tool::NodeConfig::checkParallelConflict() const
 int bcos::tool::NodeConfig::executorVersion() const
 {
     return m_genesisConfig.m_executorVersion;
+}
+std::optional<evmc_revision> bcos::tool::NodeConfig::evmcRevision() const
+{
+    return m_genesisConfig.m_evmcRevision;
+}
+std::map<protocol::BlockNumber, evmc_revision> const& bcos::tool::NodeConfig::evmcRevisionForks()
+    const
+{
+    return m_genesisConfig.m_evmcRevisionForks;
 }
 bool bcos::tool::NodeConfig::singlePointConsensus() const
 {

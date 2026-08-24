@@ -1,13 +1,10 @@
 #include "../../../src/CallParameters.h"
 #include "../../../src/executive/BlockContext.h"
-#include "../../../src/executive/ExecutiveFactory.h"
 #include "../../../src/executive/ExecutiveState.h"
-#include "../../../src/executive/TransactionExecutive.h"
 #include "../mock/MockExecutiveFactory.h"
 #include "../mock/MockLedger.h"
-#include "../mock/MockTransactionExecutive.h"
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
@@ -27,11 +24,11 @@ struct ExecutiveStateFixture
         input->codeAddress = "aabbccddee";
         input->contextID = 1;
         input->seq = 1;
-        blockContext = std::make_shared<BlockContext>(
-            nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, false, false);
+        blockContext =
+            std::make_shared<BlockContext>(nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, false);
 
-        executiveFactory = std::make_shared<MockExecutiveFactory>(
-            *blockContext, nullptr, nullptr, nullptr, nullptr);
+        executiveFactory =
+            std::make_shared<MockExecutiveFactory>(*blockContext, nullptr, nullptr, nullptr);
     }
     LedgerCache::Ptr ledgerCache;
     std::shared_ptr<MockTransactionExecutive> executive;

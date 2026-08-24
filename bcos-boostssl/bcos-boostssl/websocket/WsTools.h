@@ -20,7 +20,7 @@
 #pragma once
 #include "../interfaces/NodeInfoDef.h"
 #include <bcos-utilities/Common.h>
-#include <boost/asio/deadline_timer.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>

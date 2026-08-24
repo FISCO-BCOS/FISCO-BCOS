@@ -27,6 +27,7 @@
 #include <bcos-utilities/Common.h>
 #include <boost/thread/thread.hpp>
 #include <algorithm>
+#include <chrono>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -215,7 +216,7 @@ void Service::startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _ses
     message->setPacketType(bcos::protocol::MessageType::HANDSHAKE);
     bcos::rpc::HandshakeRequest request(m_localProtocol);
     auto requestData = request.encode();
-    message->setPayload(requestData);
+    message->setPayload(std::move(requestData));
 
     RPC_WS_LOG(INFO) << LOG_BADGE("startHandshake")
                      << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""));
@@ -236,7 +237,7 @@ void Service::startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _ses
             }
 
             auto endPoint = session ? session->endPoint() : std::string("");
-            auto response = std::string(_msg->payload()->begin(), _msg->payload()->end());
+            auto response = std::string(_msg->payload().begin(), _msg->payload().end());
             auto handshakeResponse = std::make_shared<HandshakeResponse>(service->m_groupInfoCodec);
             if (!handshakeResponse->decode(response))
             {
@@ -314,7 +315,7 @@ void Service::onNotifyGroupInfo(const std::string& _groupInfoJson, const std::st
 void Service::onNotifyGroupInfo(
     std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg, const std::string& endPoint)
 {
-    std::string groupInfo = std::string(_msg->payload()->begin(), _msg->payload()->end());
+    std::string groupInfo = std::string(_msg->payload().begin(), _msg->payload().end());
 
     RPC_WS_LOG(INFO) << LOG_BADGE("onNotifyGroupInfo") << LOG_KV("groupInfo", groupInfo);
 

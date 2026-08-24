@@ -36,7 +36,30 @@ inline task::Task<std::optional<Entry>> tag_invoke(
         std::string_view m_key;
         std::variant<std::monostate, std::optional<Entry>, std::exception_ptr> m_result;
 
-        constexpr static bool await_ready() noexcept { return false; }
+        bool await_ready()
+        {
+            if (!m_storage.isSynchronousCompletion())
+            {
+                return false;
+            }
+            // Synchronous backend: the callback fires inline inside asyncGetRow,
+            // so complete here without suspending. A suspending round-trip would
+            // resume the coroutine from the callback, and a sequential co_await
+            // loop would nest one resume per row without unwinding — fresh-genesis
+            // alloc import (~20k rows) overflowed the default 8MB stack that way.
+            m_storage.asyncGetRow(
+                m_table, m_key, [this](Error::UniquePtr error, std::optional<Entry> entry) mutable {
+                    if (error)
+                    {
+                        m_result.emplace<std::exception_ptr>(std::make_exception_ptr(*error));
+                    }
+                    else
+                    {
+                        m_result.emplace<std::optional<Entry>>(std::move(entry));
+                    }
+                });
+            return true;
+        }
         void await_suspend(std::coroutine_handle<> handle)
         {
             m_storage.asyncGetRow(m_table, m_key,
@@ -106,7 +129,23 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*
         Entry m_entry;
         std::variant<std::monostate, std::exception_ptr> m_result;
 
-        constexpr static bool await_ready() noexcept { return false; }
+        bool await_ready()
+        {
+            if (!m_storage.isSynchronousCompletion())
+            {
+                return false;
+            }
+            // Same stack-nesting hazard as the readOne awaitable above: complete
+            // inline on synchronous backends, never suspend.
+            m_storage.asyncSetRow(
+                m_table, m_key, std::move(m_entry), [this](Error::UniquePtr error) mutable {
+                    if (error)
+                    {
+                        m_result.emplace<std::exception_ptr>(std::make_exception_ptr(*error));
+                    }
+                });
+            return true;
+        }
         void await_suspend(std::coroutine_handle<> handle)
         {
             m_storage.asyncSetRow(

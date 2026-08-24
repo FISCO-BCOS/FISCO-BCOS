@@ -21,7 +21,7 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
-#include "bcos-transaction-scheduler/BaselineScheduler.h"
+#include "bcos-transaction-scheduler/BaselineScheduler-tpp.h"
 #include <boost/test/unit_test.hpp>
 #include <optional>
 
@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(calculateStateRootRespectsBugfixFlag)
     Storage storage;
 
     Entry entry;
-    entry.importFields({"hello"});
+    entry.set("hello");
     task::syncWait(
         storage2::writeOne(storage, StateKey{"test_table", "test_key"}, std::move(entry)));
 
@@ -84,9 +84,9 @@ BOOST_AUTO_TEST_CASE(boundaryAmbiguityFixedByFlag)
     constexpr auto v31 = static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION);
 
     Entry entryA;
-    entryA.importFields({"d"});
+    entryA.set("d");
     Entry entryB;
-    entryB.importFields({"d"});
+    entryB.set("d");
 
     const std::optional<ledger::Features> noFix{ledger::Features{}};
     const auto fix = featuresWithFix();
@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(statusAmbiguityFixedByFlag)
     Entry deletedEntry;
     deletedEntry.setStatus(Entry::DELETED);
     Entry emptyModified;
-    emptyModified.importFields({""});
+    emptyModified.set("");
 
     const std::optional<ledger::Features> noFix{ledger::Features{}};
     const auto fix = featuresWithFix();
@@ -135,7 +135,7 @@ BOOST_AUTO_TEST_CASE(backwardCompatibilityPreserved)
     crypto::Keccak256 hashImpl;
 
     Entry modifiedEntry;
-    modifiedEntry.importFields({"value123"});
+    modifiedEntry.set("value123");
     Entry deletedEntry;
     deletedEntry.setStatus(Entry::DELETED);
 
@@ -209,7 +209,7 @@ BOOST_AUTO_TEST_CASE(crossPlatformHashStable_FIB99_V3_17_BE)
 
     // MODIFIED entry: preimage = 00 00 00 03 'tbl' 00 00 00 03 'key' 03 'value'
     Entry modified;
-    modified.importFields({"value"});
+    modified.set("value");
     BOOST_CHECK_EQUAL(modified.hash("tbl", "key", hashImpl, v31, fix),
         crypto::HashType("0x8079da3138e857fbdb6c43b1209696220bb398fb4ceb6fdf136bf010b3c5fbad"));
 

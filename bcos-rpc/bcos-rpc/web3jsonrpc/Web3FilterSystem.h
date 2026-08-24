@@ -12,10 +12,10 @@ namespace rpc
 class Web3FilterSystem : public FilterSystem
 {
 public:
-    Web3FilterSystem(GroupManager::Ptr groupManager, const std::string& groupId, int filterTimeout,
-        int maxBlockProcessPerReq)
-      : FilterSystem(groupManager, groupId, std::make_shared<Web3FilterRequestFactory>(),
-            filterTimeout, maxBlockProcessPerReq)
+    Web3FilterSystem(boost::asio::io_context& _ioService, GroupManager::Ptr groupManager,
+        const std::string& groupId, int filterTimeout, int maxBlockProcessPerReq)
+      : FilterSystem(_ioService, groupManager, groupId,
+            std::make_shared<Web3FilterRequestFactory>(), filterTimeout, maxBlockProcessPerReq)
     {}
 
     virtual int32_t InvalidParamsCode() override { return Web3JsonRpcError::Web3DefaultError; }

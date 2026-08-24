@@ -21,13 +21,8 @@
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/context/ContextConfig.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Exceptions.h>
-#include <boost/exception/diagnostic_information.hpp>
-#include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
-#include <exception>
-#include <iostream>
 
 using namespace bcos;
 using namespace bcos::boostssl;

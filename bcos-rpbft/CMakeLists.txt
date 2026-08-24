@@ -16,16 +16,17 @@
 # limitations under the License.
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.10)
 
 project(bcos-rpbft VERSION ${VERSION})
 
 file(GLOB_RECURSE SRCS bcos-rpbft/*.cpp)
-add_library(${RPBFT_TARGET} ${SRCS})
-include_directories(${CMAKE_BINARY_DIR}/bcos-pbft/)
-target_link_libraries(${RPBFT_TARGET} PUBLIC bcos-framework)
-set_target_properties(${RPBFT_TARGET} PROPERTIES UNITY_BUILD "ON")
-add_dependencies(${RPBFT_TARGET} ${PBFT_TARGET})
+add_library(rpbft ${SRCS})
+target_include_directories(rpbft PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/bcos-pbft>)
+target_link_libraries(rpbft PUBLIC bcos-framework bcos-protocol)
+set_target_properties(rpbft PROPERTIES UNITY_BUILD "ON")
+add_dependencies(rpbft pbft)
 
 if (TESTS)
     # fetch bcos-test

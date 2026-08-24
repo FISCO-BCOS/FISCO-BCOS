@@ -1,0 +1,80 @@
+# OP-Stack pins for FISCO-BCOS L2 mode. Two pins live here:
+#
+#   * [karst_pin] (end of file) — the FROZEN Karst-era artifact quintuple.
+#     This is the AUTHORITATIVE pin: the genesis pipeline consumes the
+#     op-deployer terminal allocs generated from it (no OP forge artifact
+#     feeds genesis), and tools/opstack-genesis/Makefile's op-fork targets
+#     clone the fork tree at [karst_pin].op_contracts_commit.
+#
+#   * the LEGACY compile-check pin directly below (op-contracts/v1.6.0,
+#     pre-Karst: Ecotone-only L1Block, no OperatorFeeVault). Its ONLY
+#     remaining consumer is the CI source-compile step in
+#     .github/workflows/l2-contracts.yml (`grep -E '^commit'`), kept until a
+#     forge build of the fork tree at the Karst tag is verified — v7.0.0
+#     ships its own toolchain expectations that cannot be verified from this
+#     machine. Nothing genesis-related reads it.
+#
+# The upstream source tree is NOT vendored into this repo. CI clones it into
+# /tmp before running `forge build` against the OP sources. PR-7 adds the
+# storage-layout drift gate and its baseline for the self-written predeploys.
+
+upstream      = "ethereum-optimism/optimism"
+tag           = "op-contracts/v1.6.0"   # LEGACY compile-check pin, see header
+commit        = "33f06d2d5e4034125df02264a5ffe84571bd0359"
+date_pinned   = "2026-06-04"
+contracts_path = "packages/contracts-bedrock"
+
+# The runtime OP predeploy set is asserted by the expected_predeploys
+# checklist in tools/opstack-genesis/chain-config.template.yaml (existence +
+# non-empty code against the op-deployer base allocs); the former source-path
+# enumeration of the fork tree lived here and is re-done whenever the fork
+# tree is next compiled at the Karst tag.
+
+# Solidity deps for the SELF-WRITTEN contracts (SystemConfig/L2ValidatorSet):
+# CI clones lib/ at exactly these SHAs for `forge build`/`forge test` and the
+# storage-layout gate. They were originally taken from op-contracts/v1.6.0's
+# submodules but do NOT track the OP tag — bumping OZ can shift inherited
+# storage slots, which is exactly what the layout gate exists to catch.
+[deps]
+"openzeppelin-contracts"             = "ecd2ca2cd7cac116f7a37d0e474bbb3d7d5e1c4d"
+"openzeppelin-contracts-upgradeable" = "0a2cb9a445c365870ed7a8ab461b12acf3e27d63"
+solady                               = "502cc1ea718e6fa73b380635ee0868b0740595f0"
+solmate                              = "8f9b23f8838670afda0fd8983f2c41e8037ae6bc"
+
+# --------------------------------------------------------------------------
+# K1.1 artifact quintuple — FROZEN 2026-08-12 (researched against, and
+# consistent with, the frozen anchors op-node v1.19.3 / op-reth v2.4.0;
+# anchors deliberately NOT bumped to op-node v1.19.4 / op-reth v2.4.1).
+#
+# op-contracts/v7.0.0 is the Upgrade 19 / Karst contracts release ("Add Karst
+# hard fork activation", release notes 2026-06-25); op-deployer v0.7.1 states
+# it is "the op-deployer release associated with op-contracts/v7.0.0 and
+# Upgrade 19" (v0.7.0 and v0.7.1 dereference to the same commit; use v0.7.1).
+# superchain-registry has no release tags: the 2026-08-04 HEAD below was
+# chosen over the pin op-node v1.19.0's release notes cite for the canonical
+# Karst timestamps (c90d86d2ed13541f16daf5ce8707c688723ca039) because it
+# postdates the keep_karst_upgrade_gas corrections that op-node v1.19.3
+# exists to sync (PR #21674).
+#
+# This table is the pin the genesis pipeline and the Makefile op-fork targets
+# consume. Before also flipping the LEGACY compile-check pin at the top of
+# this file (CI's `grep -E '^commit'`) to v7.0.0: verify a forge build of the
+# fork tree at the new tag (its toolchain expectations differ), and only
+# bump [deps] deliberately — those SHAs pin the self-written contracts'
+# build, and moving OZ shifts the storage-layout fixtures.
+# --------------------------------------------------------------------------
+[karst_pin]
+op_contracts_tag           = "op-contracts/v7.0.0"
+op_contracts_commit        = "a7c88c8d636ceb9944ea0edaf7d033da258778ab"
+op_deployer_tag            = "op-deployer/v0.7.1"
+op_deployer_commit         = "7525482253bdc076548840638cde165c9004349f"
+superchain_registry_commit = "8336d2aedd19b87a57b01ae36ba4afef8ea377d0"
+# SHA-256 of the frozen op-deployer terminal alloc JSON (the genesis base).
+# Filled when the artifact is generated with the pinned op-deployer; mirror
+# the value into the chain config's base_allocs_sha256 — build-allocs.py then
+# rejects any base file that is not the frozen artifact.
+base_allocs_sha256         = ""
+# consistency anchors (frozen in the plan; kept at these versions on the
+# 2026-08-12 decision):
+op_node_tag                = "op-node/v1.19.3"   # 7f91e599c89fa309850f44debcd8ba84b98164e0
+op_reth_tag                = "op-reth/v2.4.0"    # b40d2ce097b928fe1a4ec79a8a1925eb231c675e

@@ -20,16 +20,11 @@
  */
 
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-txpool/test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/protocol/CommonError.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::front;

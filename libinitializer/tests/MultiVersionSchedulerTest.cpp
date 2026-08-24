@@ -1,0 +1,133 @@
+// MultiVersionSchedulerTest — slot-3 routing after the 3->4 slot extension (spec §5.4).
+// Proves: scheduler(3) returns the 4th (OP) scheduler; setVersion(3) selects slot 3; setVersion
+// above the top saturates to slot 3 (min(version, size-1)); scheduler(3) on a non-OP assembly
+// returns the refuse stub (non-null).
+// BOOST_TEST_MODULE must be defined in exactly one TU before the framework include: the compiled
+// Boost.Test library's default main() calls init_unit_test_suite(), which only exists when the
+// module macro is defined (same pattern as opstack-executor-block-tests' TestMain.cpp).
+#define BOOST_TEST_MODULE LibinitializerTests
+#include <bcos-framework/storage/Entry.h>  // complete bcos::storage::Entry (fake's co_return nullopt)
+#include <libinitializer/MultiVersionScheduler.h>
+#include <boost/test/unit_test.hpp>
+#include <functional>
+#include <memory>
+
+namespace
+{
+using bcos::scheduler::SchedulerInterface;
+
+// Minimal fake: records which fake handled a call()/callAtBlock() (id == 0 means not selected);
+// no-op otherwise. callAtBlock additionally records the forwarded block number — the whole point
+// of the MultiVersionScheduler override is that the height survives the passthrough.
+struct FakeScheduler : public SchedulerInterface
+{
+    int id;
+    std::shared_ptr<int> lastCallerId;  // shared across the 4 fakes; set by the selected one
+    std::shared_ptr<bcos::protocol::BlockNumber> lastCallAtBlockNumber;
+    explicit FakeScheduler(int i, std::shared_ptr<int> recorder,
+        std::shared_ptr<bcos::protocol::BlockNumber> blockRecorder = {})
+      : id(i), lastCallerId(recorder), lastCallAtBlockNumber(std::move(blockRecorder))
+    {}
+    void executeBlock(bcos::protocol::Block::Ptr, bool,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> cb) override
+    {
+        cb({}, nullptr, false);
+    }
+    void commitBlock(bcos::protocol::BlockHeader::Ptr,
+        std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> cb) override
+    {
+        cb({}, nullptr);
+    }
+    void call(bcos::protocol::Transaction::Ptr,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr)> cb) override
+    {
+        *lastCallerId = id;
+        cb({}, nullptr);
+    }
+    void callAtBlock(bcos::protocol::Transaction::Ptr, bcos::protocol::BlockNumber blockNumber,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr)> cb) override
+    {
+        *lastCallerId = id;
+        if (lastCallAtBlockNumber)
+            *lastCallAtBlockNumber = blockNumber;
+        cb({}, nullptr);
+    }
+    void preExecuteBlock(
+        bcos::protocol::Block::Ptr, bool, std::function<void(bcos::Error::Ptr)> cb) override
+    {
+        cb({});
+    }
+    void getCode(std::string_view, std::function<void(bcos::Error::Ptr, bcos::bytes)> cb) override
+    {
+        cb({}, {});
+    }
+    void getABI(std::string_view, std::function<void(bcos::Error::Ptr, std::string)> cb) override
+    {
+        cb({}, {});
+    }
+    bcos::task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view, std::string_view, bcos::protocol::BlockNumber) override
+    {
+        co_return std::nullopt;
+    }
+    void status(
+        std::function<void(bcos::Error::Ptr, bcos::protocol::Session::ConstPtr)> cb) override
+    {
+        cb({}, {});
+    }
+    void reset(std::function<void(bcos::Error::Ptr)> cb) override { cb({}); }
+};
+
+std::array<bcos::scheduler::SchedulerInterface::Ptr, 4> fakes(
+    std::shared_ptr<int> recorder, std::shared_ptr<bcos::protocol::BlockNumber> blockRecorder = {})
+{
+    return {std::make_shared<FakeScheduler>(0, recorder, blockRecorder),
+        std::make_shared<FakeScheduler>(1, recorder, blockRecorder),
+        std::make_shared<FakeScheduler>(2, recorder, blockRecorder),
+        std::make_shared<FakeScheduler>(3, recorder, blockRecorder)};
+}
+}  // namespace
+
+BOOST_AUTO_TEST_SUITE(MultiVersionSchedulerSuite)
+
+BOOST_AUTO_TEST_CASE(Slot3Routing)
+{
+    auto recorder = std::make_shared<int>(-1);
+    bcos::scheduler_v1::MultiVersionScheduler mvs(fakes(recorder));
+    // scheduler(3) direct index (public, version-independent) returns the 4th slot.
+    BOOST_CHECK_EQUAL(dynamic_cast<FakeScheduler&>(mvs.scheduler(3)).id, 3);
+    // Selection IS observable through call(): MultiVersionScheduler::call() forwards to
+    // getScheduler() (MultiVersionScheduler.cpp:34-39), the version-selected slot. setVersion(3)
+    // selects slot 3; setVersion(4) saturates to slot 3 (min(version, size-1)).
+    mvs.setVersion(3, {});
+    mvs.call(nullptr, [](bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr) {});
+    BOOST_CHECK_EQUAL(*recorder, 3);
+    mvs.setVersion(4, {});
+    mvs.call(nullptr, [](bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr) {});
+    BOOST_CHECK_EQUAL(*recorder, 3);  // saturation: 4 >= size-1 -> newest (slot 3)
+    mvs.setVersion(0, {});
+    mvs.call(nullptr, [](bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr) {});
+    BOOST_CHECK_EQUAL(*recorder, 0);  // low version routes to the first slot, not OP
+}
+
+/// callAtBlock must reach the version-selected slot WITH its block number — without the
+/// MultiVersionScheduler override the interface default would silently drop the height and
+/// serve call() (the latest state), a wrong answer instead of an error.
+BOOST_AUTO_TEST_CASE(CallAtBlockRouting)
+{
+    auto recorder = std::make_shared<int>(-1);
+    auto blockRecorder = std::make_shared<bcos::protocol::BlockNumber>(-1);
+    bcos::scheduler_v1::MultiVersionScheduler mvs(fakes(recorder, blockRecorder));
+
+    mvs.setVersion(3, {});
+    mvs.callAtBlock(nullptr, 42, [](bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr) {});
+    BOOST_CHECK_EQUAL(*recorder, 3);        // routed to the OP slot...
+    BOOST_CHECK_EQUAL(*blockRecorder, 42);  // ...with the height intact (not dropped to call())
+
+    mvs.setVersion(0, {});
+    mvs.callAtBlock(nullptr, 7, [](bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr) {});
+    BOOST_CHECK_EQUAL(*recorder, 0);
+    BOOST_CHECK_EQUAL(*blockRecorder, 7);
+}
+
+BOOST_AUTO_TEST_SUITE_END()

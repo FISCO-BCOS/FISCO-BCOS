@@ -27,7 +27,7 @@ class AuthManagerPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     using Ptr = std::shared_ptr<AuthManagerPrecompiled>;
-    AuthManagerPrecompiled(crypto::Hash::Ptr _hashImpl, bool _isWasm);
+    AuthManagerPrecompiled(crypto::Hash::Ptr _hashImpl);
     ~AuthManagerPrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(

@@ -21,7 +21,7 @@
 #pragma once
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include <evmc/instructions.h>
+#include <evmc/evmc.h>
 #include <gsl/pointers>
 #include <tuple>
 

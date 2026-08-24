@@ -1,18 +1,21 @@
 #include "SchedulerManager.h"
+#include <chrono>
 
 using namespace bcos::scheduler;
 
-SchedulerManager::SchedulerManager(
-    int64_t schedulerSeq, SchedulerFactory::Ptr factory, ExecutorManager::Ptr executorManager)
+SchedulerManager::SchedulerManager(int64_t schedulerSeq, SchedulerFactory::Ptr factory,
+    ExecutorManager::Ptr executorManager, bcos::IOServicePool::Ptr ioServicePool)
   : m_factory(std::move(factory)),
     m_schedulerTerm(schedulerSeq),
     m_executorManager(std::move(executorManager)),
-    m_pool("SchedulerManager", 1),
+    m_ioServicePool(std::move(ioServicePool)),
     m_status(INITIALING)
 {
-    m_executorManager->setExecutorChangeHandler([this]() {
-        asyncSelfSwitchTerm();
-    });
+    if (m_ioServicePool)
+    {
+        m_strand = std::make_unique<bcos::Strand>(m_ioServicePool);
+    }
+    m_executorManager->setExecutorChangeHandler([this]() { asyncSelfSwitchTerm(); });
 }
 
 SchedulerFactory::Ptr SchedulerManager::getFactory()
@@ -35,12 +38,10 @@ int64_t SchedulerManager::SchedulerTerm::getSchedulerTermID()
     if (id <= 0)
     {
         BCOS_LOG(FATAL) << "SchedulerTermID overflow!" << LOG_KV("m_schedulerSeq", m_schedulerSeq)
-                        << LOG_KV("m_executorSeq", m_executorSeq)
-                        << LOG_KV("SchedulerTermID", id);
+                        << LOG_KV("m_executorSeq", m_executorSeq) << LOG_KV("SchedulerTermID", id);
     }
     BCOS_LOG(DEBUG) << "Build SchedulerTermID" << LOG_KV("m_schedulerSeq", m_schedulerSeq)
-                    << LOG_KV("m_executorSeq", m_executorSeq)
-                    << LOG_KV("SchedulerTermID", id);
+                    << LOG_KV("m_executorSeq", m_executorSeq) << LOG_KV("SchedulerTermID", id);
 
     return id;
 }
@@ -352,7 +353,7 @@ void SchedulerManager::asyncSwitchTerm(
 
     // Will update scheduler session, clear all scheduler & executor block pipeline cache and
     // re-dispatch executor
-    m_pool.enqueue([this, callback = std::move(callback), schedulerSeq]() {
+    m_strand->post([this, callback = std::move(callback), schedulerSeq]() {
         try
         {
             switchTerm(schedulerSeq);
@@ -560,7 +561,7 @@ void SchedulerManager::asyncSelfSwitchTerm()
         return;
     }
 
-    m_pool.enqueue([this]() { selfSwitchTerm(false); });
+    m_strand->post([this]() { selfSwitchTerm(false); });
 }
 
 void SchedulerManager::onSwitchTermNotify()

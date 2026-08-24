@@ -20,13 +20,10 @@
 #include "../../../src/executive/BlockContext.h"
 #include "../../../src/executive/ExecutiveFlowInterface.h"
 #include "../../../src/executive/ExecutiveStackFlow.h"
-#include "../../../src/executive/ExecutiveState.h"
 #include "../mock/MockExecutiveFactory.h"
 #include "../mock/MockLedger.h"
-#include <tbb/concurrent_unordered_map.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
-#include <atomic>
-#include <stack>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -82,16 +79,19 @@ struct ExecutiveStackFlowFixture
 
         LedgerCache::Ptr ledgerCache =
             std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
-        blockContext = std::make_shared<BlockContext>(
-            nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, false, false);
+        blockContext =
+            std::make_shared<BlockContext>(nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, false);
 
-        executiveFactory = std::make_shared<MockExecutiveFactory>(
-            *blockContext, nullptr, nullptr, nullptr, nullptr);
+        executiveFactory =
+            std::make_shared<MockExecutiveFactory>(*blockContext, nullptr, nullptr, nullptr);
+
+        ioServicePool = std::make_shared<bcos::IOServicePool>(1, "executive-test");
     }
     std::shared_ptr<ExecutiveStackFlow> executiveStackFlow;
     std::shared_ptr<MockExecutiveFactory> executiveFactory;
     std::shared_ptr<BlockContext> blockContext;
     std::shared_ptr<ExecutiveState> executiveState;
+    std::shared_ptr<bcos::IOServicePool> ioServicePool;
     std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs =
         make_shared<std::vector<CallParameters::UniquePtr>>();
 };
@@ -105,6 +105,8 @@ BOOST_AUTO_TEST_CASE(RunTest)
     ExecutiveStackFlow::Ptr executiveStackFlow =
         std::make_shared<ExecutiveStackFlow>(executiveFactory);
     BOOST_CHECK(executiveStackFlow != nullptr);
+
+    executiveStackFlow->setThreadPool(ioServicePool);
 
     executiveStackFlow->submit(txInputs);
     EXECUTOR_LOG(DEBUG) << "submit 20 transaction success!";

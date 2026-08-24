@@ -23,6 +23,7 @@
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-front/FrontService.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <utility>
 
 namespace bcos::front
@@ -40,9 +41,15 @@ public:
         m_gatewayInterface = std::move(_gatewayInterface);
     }
 
+    void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
+    {
+        m_ioServicePool = std::move(_ioServicePool);
+    }
+
 private:
     // gatewayInterface
     bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;
+    bcos::IOServicePool::Ptr m_ioServicePool;
 };
 
 }  // namespace bcos::front

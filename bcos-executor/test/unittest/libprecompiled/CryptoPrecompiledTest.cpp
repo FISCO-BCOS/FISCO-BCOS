@@ -26,7 +26,7 @@
 #include "bcos-executor/src/executive/LedgerCache.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "libprecompiled/PreCompiledFixture.h"
-#include "vm/gas_meter/GasInjector.h"
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -43,8 +43,8 @@ class CryptoPrecompiledFixture : public PrecompiledFixture
 public:
     CryptoPrecompiledFixture()
     {
-        codec = std::make_shared<CodecWrapper>(hashImpl, false);
-        setIsWasm(false);
+        codec = std::make_shared<CodecWrapper>(hashImpl);
+        prepareEnv();
         cryptoAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
     }
 
@@ -105,7 +105,7 @@ public:
         BOOST_CHECK_LT(result->gasAvailable(), gas);
 
         // --------------------------------
-        // Create contract twice to avoid address used in wasm
+        // Create contract twice to avoid address reuse
         // --------------------------------
 
         paramsBak.setSeq(1001);
@@ -292,11 +292,10 @@ public:
         m_cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
         m_cryptoPrecompiled = std::make_shared<CryptoPrecompiled>(m_cryptoSuite->hashImpl());
-        m_blockContext = std::make_shared<BlockContext>(nullptr, m_ledgerCache,
-            m_cryptoSuite->hashImpl(), 0, h256(), utcTime(),
-            (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION), false, false);
-        m_executive =
-            std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0, m_gasInjector);
+        m_blockContext =
+            std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_cryptoSuite->hashImpl(), 0,
+                h256(), utcTime(), (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION), false);
+        m_executive = std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0);
         m_abi = std::make_shared<bcos::codec::abi::ContractABICodec>(*m_cryptoSuite->hashImpl());
     }
 
@@ -307,7 +306,6 @@ public:
     CryptoPrecompiled::Ptr m_cryptoPrecompiled;
     std::string m_sm2VerifyFunction = "sm2Verify(bytes32,bytes,bytes32,bytes32)";
     std::shared_ptr<bcos::codec::abi::ContractABICodec> m_abi;
-    wasm::GasInjector m_gasInjector;
     LedgerCache::Ptr m_ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
 };
 

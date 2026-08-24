@@ -45,13 +45,13 @@ SmallBankPrecompiled::SmallBankPrecompiled(crypto::Hash::Ptr hashImpl, std::stri
 }
 
 
-std::vector<std::string> SmallBankPrecompiled::getParallelTag(bytesConstRef _param, bool _isWasm)
+std::vector<std::string> SmallBankPrecompiled::getParallelTag(bytesConstRef _param)
 {
     // parse function name
     uint32_t func = getParamFunc(_param);
     bytesConstRef data = getParamData(_param);
     std::vector<std::string> results;
-    auto codec = CodecWrapper(m_hashImpl, _isWasm);
+    auto codec = CodecWrapper(m_hashImpl);
 
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[SMALL_BANK_METHOD_ADD_STR_UINT])
@@ -103,7 +103,7 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
                                << LOG_KV("tableName", m_tableName);
         const auto& blockContext = _executive->blockContext();
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_OPEN_ERROR,
-            CodecWrapper(blockContext.hashHandler(), blockContext.isWasm()));
+            CodecWrapper(blockContext.hashHandler()));
         return _callParameters;
     }
 
@@ -138,7 +138,7 @@ void SmallBankPrecompiled::updateBalanceCall(
     std::string user;
     u256 amount;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(_data, user, amount);
 
     int ret;
@@ -170,7 +170,7 @@ void SmallBankPrecompiled::updateBalanceCall(
 
         // user not exist, insert user into it.
         auto newEntry = table->newEntry();
-        newEntry.setField(SMALLBANK_TRANSFER_FIELD_BALANCE, amount.str());
+        newEntry.set(amount.str());
         // std::cout << "SmallBank  ---------- user message has insert tableName: " << m_tableName
         // << ", userName is" << user << ", balance is " << amount.str() << std::endl;
         table->setRow(user, newEntry);
@@ -189,7 +189,7 @@ void SmallBankPrecompiled::sendPaymentCall(
     std::string const&, bytes& _out)
 {
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     std::string fromUser, toUser;
     u256 amount;
     codec.decode(_data, fromUser, toUser, amount);
@@ -238,7 +238,7 @@ void SmallBankPrecompiled::sendPaymentCall(
             break;
         }
 
-        fromUserBalance = u256(entry->getField(SMALLBANK_TRANSFER_FIELD_BALANCE));
+        fromUserBalance = u256(entry->get());
         if (fromUserBalance < amount)
         {
             strErrorMsg = "from user insufficient balance";
@@ -251,13 +251,13 @@ void SmallBankPrecompiled::sendPaymentCall(
         {
             // If to user not exist, add it first.
             auto newEntry = table->newEntry();
-            newEntry.setField(SMALLBANK_TRANSFER_FIELD_BALANCE, u256(0).str());
+            newEntry.set(u256(0).str());
             table->setRow(toUser, newEntry);
             toUserBalance = 0;
         }
         else
         {
-            toUserBalance = u256(entry->getField(SMALLBANK_TRANSFER_FIELD_BALANCE));
+            toUserBalance = u256(entry->get());
         }
 
         // overflow check
@@ -277,12 +277,12 @@ void SmallBankPrecompiled::sendPaymentCall(
         // toUserBalance is" << toUserBalance << ", newToUserBalance is "<< newToUserBalance <<
         // std::endl; update fromUser balance info.
         entry = table->newEntry();
-        entry->setField(SMALLBANK_TRANSFER_FIELD_BALANCE, newFromUserBalance.str());
+        entry->set(newFromUserBalance.str());
         table->setRow(fromUser, *entry);
 
         // update toUser balance info.
         entry = table->newEntry();
-        entry->setField(SMALLBANK_TRANSFER_FIELD_BALANCE, newToUserBalance.str());
+        entry->set(newToUserBalance.str());
         table->setRow(toUser, *entry);
         // end with success
         ret = 0;

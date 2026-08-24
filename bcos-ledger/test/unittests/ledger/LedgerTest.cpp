@@ -23,7 +23,8 @@
 
 #include "bcos-ledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
-#include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "GenesisFeatureFlagsHelper.h"
+#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
@@ -32,20 +33,19 @@
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/Bloom.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
-#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/storage/LegacyStorageMethods.h>
+#include <bcos-framework/storage/Serialize.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/storage/Table.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
@@ -53,9 +53,9 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/lexical_cast.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <memory>
 
 using namespace bcos;
@@ -66,26 +66,29 @@ using namespace bcos::crypto;
 using namespace bcos::tool;
 using namespace std::string_literals;
 
-namespace std
+namespace bcos::storage
 {
-inline ostream& operator<<(ostream& os, const std::optional<Entry>& entry)
+inline std::ostream& operator<<(std::ostream& os, const std::optional<Entry>& entry)
 {
     os << entry.has_value();
     return os;
 }
 
-inline ostream& operator<<(ostream& os, const std::optional<Table>& table)
+inline std::ostream& operator<<(std::ostream& os, const std::optional<Table>& table)
 {
     os << table.has_value();
     return os;
 }
+}  // namespace bcos::storage
 
-inline ostream& operator<<(ostream& os, const std::unique_ptr<Error>& error)
+namespace bcos
+{
+inline std::ostream& operator<<(std::ostream& os, const std::unique_ptr<Error>& error)
 {
     os << error->what();
     return os;
 }
-}  // namespace std
+}  // namespace bcos
 
 namespace bcos::test
 {
@@ -368,8 +371,8 @@ public:
             std::promise<bool> prewritePromise;
             m_ledger->asyncPrewriteBlock(
                 m_storage, nullptr, block,
-                [&](std::string, Error::Ptr&&) { prewritePromise.set_value(true); }, true,
-                features);
+                [&](std::string, Error::Ptr&&) { prewritePromise.set_value(true); }, true, features,
+                std::nullopt, true);
             prewritePromise.get_future().get();
             // update nonce logic move to executor
             //            for (size_t j = 0; j < txSize; ++j)
@@ -419,10 +422,12 @@ public:
 
             std::promise<bool> p3;
             m_ledger->asyncPrewriteBlock(
-                m_storage, nullptr, m_fakeBlocks->at(i), [&](std::string, Error::Ptr&& error) {
+                m_storage, nullptr, m_fakeBlocks->at(i),
+                [&](std::string, Error::Ptr&& error) {
                     BOOST_CHECK(!error);
                     p3.set_value(true);
-                });
+                },
+                true, std::nullopt, std::nullopt, true);
             BOOST_CHECK_EQUAL(p3.get_future().get(), true);
         }
     }
@@ -580,7 +585,7 @@ BOOST_AUTO_TEST_CASE(test_3_0_FixtureLedger)
     m_storage->asyncGetRow(
         tool::FS_ROOT, tool::FS_KEY_SUB, [&](Error::UniquePtr, std::optional<Entry> _entry) {
             std::map<std::string, std::string> bfsInfos;
-            auto&& out = asBytes(std::string(_entry->getField(0)));
+            auto&& out = asBytes(std::string(_entry->get()));
             codec::scale::decode(bfsInfos, gsl::make_span(out));
             for (const auto& item : v)
             {
@@ -647,7 +652,7 @@ BOOST_AUTO_TEST_CASE(getBlockHashByNumber)
     auto oldHashEntry = getRowPromise.get_future().get();
 
     Entry hashEntry;
-    hashEntry.importFields({""});
+    hashEntry.set("");
 
     // deal with version conflict
     std::promise<Error::UniquePtr> setRowPromise;
@@ -702,7 +707,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
             BOOST_CHECK(!error);
             BOOST_CHECK(hashEntry);
             auto hash = bcos::crypto::HashType(
-                std::string(hashEntry->getField(0)), bcos::crypto::HashType::FromBinary);
+                std::string(hashEntry->get()), bcos::crypto::HashType::FromBinary);
 
             Entry numberEntry;
             m_storage->asyncSetRow(SYS_HASH_2_NUMBER,
@@ -968,6 +973,67 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
     BOOST_CHECK_EQUAL(f6.get(), true);
     BOOST_CHECK_EQUAL(f7.get(), true);
     BOOST_CHECK_EQUAL(f8.get(), true);
+}
+
+BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)
+{
+    // The ledger persists header / tx hashes / txs / receipts but NOT the block-level
+    // logsBloom, so asyncGetBlockDataByNumber recomputes it from the receipts' log entries.
+    // Without that, eth_getBlockByNumber reports 256 zero bytes for every block that has
+    // logs (both the legacy BaselineScheduler commit path and the single-node driver).
+    // Regression test: write a block whose receipt carries a log entry, read it back and
+    // assert the bloom is non-zero and equals the OR of the per-receipt blooms.
+    initFixture();
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(1);
+    header->setTimestamp(1000);
+    header->setGasLimit(30000000);
+    header->setSealer(0);
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+
+    // one transaction so the block has a tx-hash row for the receipt lookup
+    auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
+        "0x1000000000000000000000000000000000000000", bcos::bytes{0x60}, "1", 1000, "chain0",
+        "group0", 0);
+    block->appendTransaction(tx);
+
+    protocol::LogEntry logEntry(bcos::bytes(20, 0x10),
+        {bcos::h256("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")},
+        bcos::bytes(32, 0xab));
+    auto receipt = m_blockFactory->receiptFactory()->createReceipt2(21000, "", {logEntry}, 0,
+        bcos::ref(bcos::bytes{}), 1, "1", protocol::TransactionVersion::V1_VERSION, true);
+    block->appendReceipt(receipt);
+
+    bcos::Bloom expectedBloom{};
+    bcos::orBloom(expectedBloom, bcos::getLogsBloom(receipt->logEntries()));
+
+    std::promise<bool> prewritePromise;
+    m_ledger->asyncPrewriteBlock(
+        m_storage, nullptr, block,
+        [&](std::string, Error::Ptr&& error) {
+            BOOST_CHECK(!error);
+            prewritePromise.set_value(true);
+        },
+        true, std::nullopt, std::nullopt, true);
+    BOOST_CHECK(prewritePromise.get_future().get());
+
+    std::promise<protocol::Block::Ptr> blockPromise;
+    m_ledger->asyncGetBlockDataByNumber(
+        1, bcos::ledger::RECEIPTS, [&](Error::Ptr error, protocol::Block::Ptr result) {
+            BOOST_CHECK(!error);
+            blockPromise.set_value(std::move(result));
+        });
+    auto readBlock = blockPromise.get_future().get();
+    BOOST_REQUIRE(readBlock != nullptr);
+    BOOST_CHECK_EQUAL(readBlock->receiptsSize(), 1);
+    auto readBloom = readBlock->logsBloom();
+    BOOST_CHECK(!readBloom.empty());
+    bcos::bytes readBloomBytes(readBloom.begin(), readBloom.end());
+    BOOST_CHECK(readBloomBytes != bcos::bytes(bcos::BloomBytesSize, 0));
+    BOOST_CHECK(readBloomBytes == bcos::bytes(expectedBloom.begin(), expectedBloom.end()));
 }
 
 BOOST_AUTO_TEST_CASE(getTransactionByHash)
@@ -1336,12 +1402,13 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     auto table = tablePromise.get_future().get();
 
     auto oldEntry = table.getRow(SYSTEM_KEY_TX_COUNT_LIMIT);
-    auto [txCountLimit, enableNum] = oldEntry->getObject<SystemConfigEntry>();
+    auto [txCountLimit, enableNum] =
+        bcos::storage::serialize::decode<SystemConfigEntry>(oldEntry->get());
     BOOST_CHECK_EQUAL(txCountLimit, "1000");
     BOOST_CHECK_EQUAL(enableNum, 0);
 
     Entry newEntry = table.newEntry();
-    newEntry.setObject(SystemConfigEntry{"2000", 5});
+    newEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{"2000", 5}));
 
     table.setRow(SYSTEM_KEY_TX_COUNT_LIMIT, newEntry);
 
@@ -1415,7 +1482,8 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     auto transactions = std::make_shared<Transactions>();
     transactions->push_back(tx);
     m_ledger->asyncPrewriteBlock(
-        m_storage, blockTxs, block, [](std::string, Error::Ptr&& error) { BOOST_CHECK(!error); });
+        m_storage, blockTxs, block, [](std::string, Error::Ptr&& error) { BOOST_CHECK(!error); },
+        true, std::nullopt, std::nullopt, true);
 
     m_ledger->asyncGetBlockDataByNumber(
         100, TRANSACTIONS, [tx](Error::Ptr error, bcos::protocol::Block::Ptr block) {
@@ -1435,22 +1503,22 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         SystemConfigEntry config;
 
         config = {"12", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_TX_COUNT_LIMIT}, value);
 
         config = {"100", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD}, value);
 
         config = {"200", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_TX_GAS_LIMIT}, value);
 
         config = {"3.8.1", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION}, value);
 
@@ -1463,12 +1531,12 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         // co_await storage2::writeOne(*m_storage, KeyType{SYS_NUMBER_2_HASH, "10086"}, value);
 
         config = {"1", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_SWITCH}, value);
 
         config = {"12345", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM}, value);
 
@@ -1486,7 +1554,7 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         blockHeader->encode(headerBuffer);
 
         storage::Entry number2HeaderEntry;
-        number2HeaderEntry.importFields({std::move(headerBuffer)});
+        number2HeaderEntry.set(std::move(headerBuffer));
         co_await storage2::writeOne(*m_storage,
             KeyType{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(blockHeader->number())},
             std::move(number2HeaderEntry));
@@ -1566,6 +1634,107 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
     }());
 }
 
+// State-layout contract (08-18 diagnosis "Bug A"): the genesis alloc import writes raw
+// "table:key" rows, and the storage2 executor line (v2/v3) persists state the same way —
+// so the storage2-line wiring reads the ledger with keyPageSize=0 (raw). This pins that
+// getStorageAt sees the allocs under that wiring. The v1 executor instead persists KeyPage
+// pages and keeps the configured keyPageSize (reads match its own writer).
+BOOST_AUTO_TEST_CASE(genesisAllocsReadableViaGetStorageAtRawLayout)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        memoryStorage->setEnableTraverse(true);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        storage->setEnableTraverse(true);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        ledger->setKeyPageSize(0);
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion =
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
+        genesisConfig.m_allocs.push_back(
+            Alloc{.address = "6afa9580383e6627da926b6f6ed9ab2b9c8cc693",
+                .balance = bcos::u256("1000000000000000000000000"),
+                .nonce = "0",
+                .code = "",
+                .storage = {}});
+
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        auto balanceEntry = co_await ledger->getStorageAt(
+            "6afa9580383e6627da926b6f6ed9ab2b9c8cc693", ACCOUNT_TABLE_FIELDS::BALANCE, 0);
+        BOOST_REQUIRE(balanceEntry.has_value());
+        BOOST_CHECK_EQUAL(balanceEntry->get(), "1000000000000000000000000");
+
+        auto nonceEntry = co_await ledger->getStorageAt(
+            "6afa9580383e6627da926b6f6ed9ab2b9c8cc693", ACCOUNT_TABLE_FIELDS::NONCE, 0);
+        BOOST_REQUIRE(nonceEntry.has_value());
+        BOOST_CHECK_EQUAL(nonceEntry->get(), "0");
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion =
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
+        // enable the L2 feature in genesis
+        genesisConfig.m_features.push_back(
+            ledger::FeatureSet{.flag = Features::Flag::feature_l2_ethereum_compat, .enable = 1});
+        // SystemConfig predeploy at the canonical L2 address (no 0x prefix, 40 hex)
+        genesisConfig.m_allocs.push_back(
+            Alloc{.address = "43000000000000000000000000000000000000c0",
+                .balance = {},
+                .nonce = {},
+                .code = "6080604052",
+                .storage = {}});
+        appendGenesisFeatureFlagsSlot(genesisConfig);
+
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        // slot = keccak256(utf8("feature_flags") || be32(101))
+        bcos::bytes slotInput;
+        std::string key = "feature_flags";
+        slotInput.insert(slotInput.end(), key.begin(), key.end());
+        bcos::bytes baseSlot(32, 0);
+        baseSlot[31] = 101;
+        slotInput.insert(slotInput.end(), baseSlot.begin(), baseSlot.end());
+        auto slotHash = hashImpl->hash(bcos::ref(slotInput));
+
+        auto tableName = fmt::format(
+            "{}{}", SYS_DIRECTORY::USER_APPS, "43000000000000000000000000000000000000c0");
+        auto slotView = std::string_view(reinterpret_cast<const char*>(slotHash.data()), 32);
+        auto entry =
+            co_await storage2::readOne(*storage, executor_v1::StateKeyView(tableName, slotView));
+        BOOST_REQUIRE(entry.has_value());
+        auto value = entry->get();
+        BOOST_CHECK_EQUAL(value.size(), 32U);
+
+        // the feature_l2_ethereum_compat bit (= its enum value) must be set in the big-endian value
+        auto idx = static_cast<size_t>(Features::Flag::feature_l2_ethereum_compat);
+        auto theByte = static_cast<uint8_t>(value[value.size() - 1 - (idx / 8)]);
+        BOOST_CHECK(((theByte >> (idx % 8)) & 1U) == 1U);
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(genesisExecutorVersion)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -1585,11 +1754,74 @@ BOOST_AUTO_TEST_CASE(genesisExecutorVersion)
                           magic_enum::enum_name(ledger::SystemConfig::executor_version)));
         BOOST_REQUIRE(value);
 
-        ledger::SystemConfigEntry entry;
-        value->getObject(entry);
+        auto entry = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(value->get());
         using namespace std::string_view_literals;
         BOOST_CHECK_EQUAL(std::get<0>(entry), "10086"sv);
     }());
+}
+
+BOOST_AUTO_TEST_CASE(genesisEVMCRevision)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        GenesisConfig genesisConfig;
+        genesisConfig.m_evmcRevision = EVMC_CANCUN;
+        genesisConfig.m_evmcRevisionForks[100000] = EVMC_OSAKA;
+
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        auto value = co_await storage2::readOne(*storage,
+            executor_v1::StateKeyView(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_EVMC_REVISION));
+        BOOST_REQUIRE(value);
+
+        auto entry = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(value->get());
+        using namespace std::string_view_literals;
+        // The block-0 base (Cancun) is emitted first, followed by the 100000 Osaka transition.
+        BOOST_CHECK_EQUAL(std::get<0>(entry), "0:cancun,100000:osaka"sv);
+
+        // Round-trip through the LedgerConfig population used by getLedgerConfig.
+        LedgerConfig parsed;
+        ledger::applyEVMCRevisionConfig(parsed, std::get<0>(entry));
+        BOOST_CHECK(parsed.evmcRevisionForBlock(0).has_value());
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(0), EVMC_CANCUN);
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(99999), EVMC_CANCUN);
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100000), EVMC_OSAKA);
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100001), EVMC_OSAKA);
+    }());
+}
+
+// Every evmc_revision enumerator must round-trip encode -> decode (finding 6):
+// evmcRevisionName and evmcRevisionFromName are two hand-maintained tables, and a
+// name one emits must be accepted by the other. This pins the invariant and would
+// catch a future evmc bump that adds a revision handled in only one direction.
+BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
+{
+    for (int rev = static_cast<int>(EVMC_FRONTIER); rev <= static_cast<int>(EVMC_MAX_REVISION);
+         ++rev)
+    {
+        auto r = static_cast<evmc_revision>(rev);
+        auto name = ledger::evmcRevisionName(r);
+        // evmcRevisionName is a total switch, so it must always yield a non-empty name.
+        BOOST_REQUIRE(!name.empty());
+        auto decoded = ledger::evmcRevisionFromName(name);
+        BOOST_REQUIRE_MESSAGE(decoded.has_value(),
+            "evmcRevisionName(" << rev << ") = \"" << name
+                                << "\" is not accepted by evmcRevisionFromName");
+        BOOST_CHECK_EQUAL(static_cast<int>(*decoded), rev);
+
+        // Full encode -> apply round-trip through the same path getLedgerConfig uses.
+        std::map<bcos::protocol::BlockNumber, evmc_revision> forks;
+        auto encoded = ledger::encodeEVMCRevisionConfig(r, forks);
+        LedgerConfig parsed;
+        ledger::applyEVMCRevisionConfig(parsed, encoded);
+        BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
+        BOOST_CHECK_EQUAL(static_cast<int>(*parsed.evmcRevisionForBlock(0)), rev);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(replaceBinary)

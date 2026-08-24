@@ -292,6 +292,9 @@ public:
     bytesRef ref() { return bytesRef(m_data.data(), N); }
     /// @returns a constant byte RefDataContainer to the object's data.
     bytesConstRef ref() const { return bytesConstRef(m_data.data(), N); }
+    std::span<byte> span() { return std::span<byte>(m_data.data(), N); }
+    std::span<const byte> constSpan() const { return std::span<const byte>(m_data.data(), N); }
+
     /// @returns a mutable byte pointer to the object's data.
     byte* data() { return m_data.data(); }
     /// @returns a constant byte pointer to the object's data.
@@ -399,7 +402,10 @@ public:
 
     auto begin() { return m_data.begin(); }
     auto end() { return m_data.end(); }
-    auto size() const { return SIZE; }
+    // Returns size_t, not the unnamed enum SIZE is declared in. MSVC rejects
+    // bytesConstRef{data(), size()} otherwise: brace-init forbids narrowing, and the enum's
+    // underlying type is signed int, so int -> size_t is a narrowing conversion there.
+    constexpr size_t size() const { return SIZE; }
     void clear() { m_data.fill(0); }
 
 private:

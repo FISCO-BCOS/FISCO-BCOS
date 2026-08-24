@@ -1,3 +1,4 @@
+#include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
@@ -21,11 +22,9 @@ struct MockExecutorSerial
     template <class Storage>
     struct ExecuteContext
     {
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
-        {
-            co_return {};
-        }
+        task::Task<void> prepare() { co_return; }
+        task::Task<void> execute() { co_return; }
+        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
@@ -52,18 +51,24 @@ public:
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
+    using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
 
     TestSchedulerSerialFixture()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         receiptFactory(cryptoSuite),
-        multiLayerStorage(backendStorage)
+        checkpointBackend(backendStorage),
+        multiLayerStorage(checkpointBackend),
+        ioServicePool(std::make_shared<bcos::IOServicePool>(1, "testSerialGC")),
+        scheduler(ioServicePool)
     {}
 
-    BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
-    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+    BackendStorage backendStorage;
+    CheckpointBackend checkpointBackend;
+    MultiLayerStorage<MutableStorage, void, CheckpointBackend> multiLayerStorage;
+    bcos::IOServicePool::Ptr ioServicePool;
     SchedulerSerialImpl scheduler;
 
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
@@ -74,8 +79,7 @@ BOOST_FIXTURE_TEST_SUITE(TestSchedulerSerial, TestSchedulerSerialFixture)
 BOOST_AUTO_TEST_CASE(executeBlock)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
         auto transactions =
             ::ranges::iota_view<int, int>(0, 100) | ::ranges::views::transform([](int index) {
                 return std::make_unique<bcostars::protocol::TransactionImpl>(

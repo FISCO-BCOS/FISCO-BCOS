@@ -22,7 +22,7 @@
 #include "bcos-framework/consensus/StateMachineInterface.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 
 #include <utility>
 namespace bcos
@@ -33,22 +33,11 @@ class StateMachine : public StateMachineInterface, public std::enable_shared_fro
 {
 public:
     StateMachine(bcos::scheduler::SchedulerInterface::Ptr _scheduler,
-        bcos::protocol::BlockFactory::Ptr _blockFactory)
-      : m_scheduler(std::move(_scheduler)), m_blockFactory(std::move(_blockFactory))
-    {
-        // since execute block is serial, only use one thread to decrease the timecost
-        m_worker = std::make_shared<ThreadPool>("stateMachine", 1);
-    }
-
-    ~StateMachine() override { stop(); }
-
-    void stop() override
-    {
-        if (m_worker)
-        {
-            m_worker->stop();
-        }
-    }
+        bcos::protocol::BlockFactory::Ptr _blockFactory,
+        bcos::IOServicePool::Ptr _ioServicePool)
+      : m_scheduler(std::move(_scheduler)), m_blockFactory(std::move(_blockFactory)),
+        m_strand(std::move(_ioServicePool))
+    {}
 
     void asyncApply(ssize_t _execTimeout, ProposalInterface::ConstPtr _lastAppliedProposal,
         ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
@@ -67,7 +56,7 @@ private:
 protected:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    bcos::ThreadPool::Ptr m_worker;
+    bcos::Strand m_strand;
 };
 }  // namespace consensus
 }  // namespace bcos

@@ -28,13 +28,13 @@ BOOST_AUTO_TEST_CASE(factoryBuildsRawMessage)
 BOOST_AUTO_TEST_CASE(accessorsRoundTrip)
 {
     RawWsMessage msg;
-    auto payload = std::make_shared<bcos::bytes>(bcos::bytes{0x01, 0x02, 0x03});
-    msg.setPayload(payload);
+    // setPayload takes bcos::bytes by value and payload() returns a non-owning bytesConstRef
+    // now (the shared_ptr<bytes> buffer was replaced by a value + view pair).
+    msg.setPayload(bcos::bytes{0x01, 0x02, 0x03});
     msg.setSeq("seq-1");
     msg.setPacketType(7);
 
-    BOOST_REQUIRE(msg.payload());
-    BOOST_CHECK_EQUAL(msg.payload()->size(), 3U);
+    BOOST_CHECK_EQUAL(msg.payload().size(), 3U);
     BOOST_CHECK_EQUAL(msg.seq(), "seq-1");
     // setPacketType is a no-op for raw messages: packetType() stays fixed at
     // WS_RAW_MESSAGE_TYPE regardless of the value passed above.
@@ -60,7 +60,7 @@ BOOST_AUTO_TEST_CASE(encodeAppendsPayloadDecodeRestoresIt)
 {
     RawWsMessage msg;
     bcos::bytes data{0xDE, 0xAD, 0xBE, 0xEF};
-    msg.setPayload(std::make_shared<bcos::bytes>(data));
+    msg.setPayload(data);
 
     bcos::bytes buffer;
     BOOST_REQUIRE(msg.encode(buffer));
@@ -70,8 +70,7 @@ BOOST_AUTO_TEST_CASE(encodeAppendsPayloadDecodeRestoresIt)
     RawWsMessage decoded;
     auto consumed = decoded.decode(bcos::ref(buffer));
     BOOST_CHECK_EQUAL(consumed, static_cast<int64_t>(buffer.size()));
-    BOOST_REQUIRE(decoded.payload());
-    BOOST_CHECK(*decoded.payload() == data);
+    BOOST_CHECK(decoded.payload().toBytes() == data);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

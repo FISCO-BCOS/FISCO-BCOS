@@ -28,8 +28,8 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <wedpr-crypto/WedprUtilities.h>
-#include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
@@ -57,11 +57,14 @@ struct TestSealerFixture
         txpool::TxPoolFactory factory(keyPair->publicKey(), cryptoSuite,
             std::make_shared<protocol::TransactionSubmitResultFactoryImpl>(), blockFactory, nullptr,
             ledger, "", "", 1000, bcos::txpool::DEFAULT_POOL_LIMIT, true);
-        txpool = factory.createTxPool();
+        txpool = factory.createTxPool(*ioServicePool->getIOService(), ioServicePool);
         txpool->init();
     }
 
     ~TestSealerFixture() = default;
+    // ioServicePool MUST be declared before txpool to ensure it outlives
+    // Timer objects created by txpool that reference its io_context.
+    bcos::IOServicePool::Ptr ioServicePool = std::make_shared<bcos::IOServicePool>(1, "vrfTest");
     crypto::Hash::Ptr hashImpl;
     txpool::TxPool::Ptr txpool;
     protocol::BlockFactory::Ptr blockFactory;
@@ -70,11 +73,11 @@ struct TestSealerFixture
     crypto::KeyPairInterface::Ptr keyPair;
 };
 
-BOOST_FIXTURE_TEST_SUITE(TestSealerFactory, TestSealerFixture)
+BOOST_FIXTURE_TEST_SUITE(TestVRFSealerFactory, TestSealerFixture)
 BOOST_AUTO_TEST_CASE(testVRFSealer)
 {
     auto factory = std::make_shared<bcos::sealer::SealerFactory>(
-        nodeConfig, blockFactory, txpool, nullptr, keyPair);
+        nodeConfig, blockFactory, txpool, nullptr, keyPair, *ioServicePool->getIOService());
 
     auto sealer = factory->createVRFBasedSealer();
     auto block = fakeAndCheckBlock(cryptoSuite, blockFactory, 0, 0, 10, true, false);

@@ -66,8 +66,10 @@ public:
     SchedulerHandlersFixture()
     {
         auto codeScheduler = std::make_shared<CodeScheduler>(m_ledger, m_blockFactory);
+        // NodeService gained a trailing AnyEngineService argument; this test does not exercise
+        // the engine service, so pass none.
         auto svc = std::make_shared<rpc::NodeService>(
-            m_ledger, codeScheduler, txPool, nullptr, nullptr, m_blockFactory);
+            m_ledger, codeScheduler, txPool, nullptr, nullptr, m_blockFactory, nullptr);
         rpc = factory->buildLocalRpc(groupInfo, svc);
         rpc->groupManager()->updateGroupInfo(groupInfo);
     }

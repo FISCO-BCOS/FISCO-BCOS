@@ -36,7 +36,8 @@ class AMOPClient : public std::enable_shared_from_this<AMOPClient>
 {
 public:
     using Ptr = std::shared_ptr<AMOPClient>;
-    AMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService,
+    AMOPClient(boost::asio::io_context& _ioService,
+        std::shared_ptr<boostssl::ws::WsService> _wsService,
         std::shared_ptr<bcos::boostssl::MessageFaceFactory> _wsMessageFactory,
         std::shared_ptr<bcos::protocol::AMOPRequestFactory> _requestFactory,
         bcos::gateway::GatewayInterface::Ptr _gateway, std::string _gatewayServiceName)
@@ -48,7 +49,7 @@ public:
     {
         initMsgHandler();
         // create gatewayStatusDetector to detect status of gateway periodically
-        m_gatewayStatusDetector = std::make_shared<Timer>(5000, "gatewayDetector");
+        m_gatewayStatusDetector = std::make_shared<Timer>(_ioService, 5000, "gatewayDetector");
         m_gatewayStatusDetector->registerTimeoutHandler([this]() { pingGatewayAndNotifyTopics(); });
     }
 

@@ -71,7 +71,8 @@ uint32_t GatewayNodeManager::statusSeq()
 }
 
 GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
-    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
+    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface,
+    boost::asio::io_context& _ioContext)
   : GatewayNodeManager(_uuid, _keyFactory, _p2pInterface)
 {
     m_uuid = _uuid;
@@ -83,23 +84,29 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
     m_p2pInterface = _p2pInterface;
     // SyncNodeSeq
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::SyncNodeSeq,
-        boost::bind(&GatewayNodeManager::onReceiveStatusSeq, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+        [this](NetworkException const& _e, P2PSession::Ptr _session,
+            std::shared_ptr<P2PMessage> _msg) {
+            onReceiveStatusSeq(_e, _session, std::move(_msg));
+        });
     // RequestNodeStatus
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::RequestNodeStatus,
-        boost::bind(&GatewayNodeManager::onRequestNodeStatus, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+        [this](NetworkException const& _e, P2PSession::Ptr _session,
+            std::shared_ptr<P2PMessage> _msg) {
+            onRequestNodeStatus(_e, _session, std::move(_msg));
+        });
     // ResponseNodeStatus
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::ResponseNodeStatus,
-        boost::bind(&GatewayNodeManager::onReceiveNodeStatus, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
-    m_timer = std::make_shared<Timer>(SEQ_SYNC_PERIOD, "seqSync");
+        [this](NetworkException const& _e, P2PSession::Ptr _session,
+            std::shared_ptr<P2PMessage> _msg) {
+            onReceiveNodeStatus(_e, _session, std::move(_msg));
+        });
+    m_timer = std::make_shared<Timer>(_ioContext, SEQ_SYNC_PERIOD, "seqSync");
     // broadcast seq periodically; also flush a coalesced node-list sync if peers dropped since the
     // last tick (FIB-186 vector D: one sync per period instead of one per dropped session)
     m_timer->registerTimeoutHandler([this]() {
         if (m_nodeIDListDirty.exchange(false, std::memory_order_acq_rel))
         {
-            // FIB-186 (vector D): syncLatestNodeIDList runs on the timer thread, before
+            // FIB-186 (vector D): syncLatestNodeIDList runs on the timer's io_context, before
             // broadcastStatusSeq() re-arms the timer (m_timer->restart() is its first line).
             // Timer's async_wait handler only logs a throwing timeout handler and does NOT
             // reschedule, so an exception escaping here would leave the timer un-rearmed and the

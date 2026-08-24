@@ -1,0 +1,20 @@
+{
+    "name": "evmone",
+    "version-string": "0.21.0",
+    "port-version": 10,
+    "homepage": "https://github.com/ipsilon/evmone",
+    "description": "Fast Ethereum Virtual Machine implementation (EVMC merged)",
+    "dependencies": [
+        {
+            "name": "vcpkg-cmake",
+            "host": true
+        },
+        {
+            "name": "vcpkg-cmake-config",
+            "host": true
+        },
+        "evmc",
+        "intx",
+        "blst"
+    ]
+}

@@ -22,12 +22,10 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
-#include "bcos-utilities/ThreadPool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
-#include <atomic>
 #include <queue>
 
 using namespace bcos;
@@ -43,7 +41,10 @@ class FakeASIO_FIB : public bcos::gateway::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
-    FakeASIO_FIB() : m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO_FIB", 1)) {}
+    FakeASIO_FIB()
+      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
+        m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"))
+    {}
     ~FakeASIO_FIB() noexcept override {}
 
     void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers,
@@ -78,7 +79,7 @@ public:
     void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
         boost::asio::mutable_buffer buffers, ReadWriteHandler handler) override
     {
-        m_threadPool->enqueue([this, socket, buffers, handler]() {
+        m_threadPool->post([this, socket, buffers, handler]() {
             if (m_recvPackets.empty())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -89,17 +90,17 @@ public:
         });
     }
 
-    void strandPost(Base_Handler handler) override { m_handler = handler; }
-    void stop() override { m_threadPool->stop(); }
+    void strandPost(Base_Handler handler) { m_handler = handler; }
+    void stop() { m_threadPool.reset(); }
 
     void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
     void asyncAppendRecvPacket(Packet packet)
     {
-        m_threadPool->enqueue([this, packet]() { appendRecvPacket(packet); });
+        m_threadPool->post([this, packet]() { appendRecvPacket(packet); });
     }
     void triggerRead()
     {
-        m_threadPool->enqueue([this]() {
+        m_threadPool->post([this]() {
             if (m_handler)
             {
                 m_handler();
@@ -110,7 +111,7 @@ public:
 protected:
     Base_Handler m_handler;
     std::queue<Packet> m_recvPackets;
-    bcos::ThreadPool::Ptr m_threadPool;
+    bcos::IOServicePool::Ptr m_threadPool;
 };
 
 // A message that always returns MESSAGE_ERROR to simulate decode failure
@@ -169,15 +170,31 @@ public:
 
 // A FakeSocket backed by a real SSL context and stream so that drop() can safely
 // call sslref().async_shutdown() without crashing.
+// We create a connected TCP socket-pair (accept → connect) so the underlying TCP
+// socket is in a valid ESTABLISHED state. Without this, async_shutdown on an
+// unconnected SSL stream triggers a null-pointer dereference in some SSL
+// implementations (e.g. Apple's SecureTransport / LibreSSL on macOS).
 class FakeSocket_FIB : public SocketFace
 {
 public:
     FakeSocket_FIB()
       : SocketFace(),
         m_ioContext(std::make_shared<ba::io_context>()),
-        m_sslContext(ba::ssl::context::tlsv12),
-        m_sslSocket(std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*m_ioContext, m_sslContext))
-    {}
+        m_sslContext(ba::ssl::context::tlsv12)
+    {
+        // Create a connected TCP socket pair so the SSL stream has a valid transport.
+        bi::tcp::acceptor acceptor(*m_ioContext, bi::tcp::endpoint(bi::tcp::v4(), 0));
+        auto endpoint = acceptor.local_endpoint();
+        bi::tcp::socket clientSocket(*m_ioContext);
+        clientSocket.connect(endpoint);
+        bi::tcp::socket serverSocket(*m_ioContext);
+        acceptor.accept(serverSocket);
+        // clientSocket is now in ESTABLISHED state; serverSocket is the
+        // acceptor-side and will close when it goes out of scope.
+
+        m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket>>(
+            std::move(clientSocket), m_sslContext);
+    }
     ~FakeSocket_FIB() override = default;
 
     bool isConnected() const override { return m_connected; }

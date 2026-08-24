@@ -22,6 +22,8 @@
 #include "TxPool.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-utilities/IOServicePool.h>
+#include <boost/asio/io_context.hpp>
 
 namespace bcos::txpool
 {
@@ -38,7 +40,9 @@ public:
         bool checkTransactionSignature);
 
     virtual ~TxPoolFactory() = default;
-    TxPool::Ptr createTxPool(size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 4,
+    TxPool::Ptr createTxPool(boost::asio::io_context& _ioContext,
+        bcos::IOServicePool::Ptr _ioServicePool,
+        size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 4,
         uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
 
     void setScheduler(std::shared_ptr<bcos::scheduler::SchedulerInterface> _scheduler);

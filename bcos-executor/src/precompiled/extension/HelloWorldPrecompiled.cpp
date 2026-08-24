@@ -52,7 +52,8 @@ const char* const HELLO_WORLD_METHOD_SET = "set(string)";
 // register contract methods' interface in constructor
 HelloWorldPrecompiled::HelloWorldPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
-    // name2Selector is a member of the base class Precompiled, and keeps the mapping of interface and its implementation
+    // name2Selector is a member of the base class Precompiled, and keeps the mapping of interface
+    // and its implementation
     name2Selector[HELLO_WORLD_METHOD_GET] = getFuncSelector(HELLO_WORLD_METHOD_GET, _hashImpl);
     name2Selector[HELLO_WORLD_METHOD_SET] = getFuncSelector(HELLO_WORLD_METHOD_SET, _hashImpl);
 }
@@ -68,7 +69,7 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(_callParameters->input().size());
 
@@ -100,7 +101,7 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
             gasPricer->updateMemUsed(entry->size());
             gasPricer->appendOperation(InterfaceOpcode::Select, 1);
 
-            retValue = entry->getField(0);
+            retValue = entry->get();
             PRECOMPILED_LOG(DEBUG) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
                                    << LOG_KV("value", retValue);
         }
@@ -113,7 +114,7 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
         auto entry = table->getRow(HELLO_WORLD_KEY_FIELD_NAME);
         gasPricer->updateMemUsed(entry->size());
         gasPricer->appendOperation(InterfaceOpcode::Select, 1);
-        entry->setField(0, strValue);
+        entry->set(strValue);
 
         table->setRow(HELLO_WORLD_KEY_FIELD_NAME, *entry);
         gasPricer->appendOperation(InterfaceOpcode::Update, 1);

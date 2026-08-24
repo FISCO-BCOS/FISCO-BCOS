@@ -13,6 +13,7 @@
 #include "bcos-framework/protocol/ProtocolInfoCodec.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
+#include <boost/asio/steady_timer.hpp>
 #include <array>
 #include <shared_mutex>
 
@@ -156,7 +157,7 @@ protected:
     std::shared_ptr<MessageFactory> m_messageFactory;
     P2PInfo m_selfInfo;
     P2pID m_nodeID;
-    std::optional<boost::asio::deadline_timer> m_timer;
+    std::optional<boost::asio::steady_timer> m_timer;
     bool m_run = false;
 
     std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers{};

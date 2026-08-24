@@ -24,7 +24,6 @@
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/RateLimiter.h>
-#include <bcos-utilities/ThreadPool.h>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -47,7 +46,7 @@ void sendMessage(NodeIPEndpoint const& _endPoint, std::shared_ptr<P2PMessage> _m
         auto seq = _service->messageFactory()->newSeq();
         _msg->setSeq(seq);
         auto startT = utcTime();
-        auto msgSize = _msg->payload()->size();
+        auto msgSize = _msg->payload().size();
         _service->asyncSendMessageByEndPoint(_endPoint, _msg,
             [msgSize, startT](NetworkException _e, std::shared_ptr<P2PSession> _session,
                 std::shared_ptr<P2PMessage>) {
@@ -104,7 +103,7 @@ int main(int argc, char** argv)
     auto msg = std::dynamic_pointer_cast<P2PMessage>(service->messageFactory()->buildMessage());
     msg->setPacketType(999);
     std::string randStr(payLoadSize, 'a');
-    msg->setPayload(std::make_shared<bytes>(randStr.begin(), randStr.end()));
+    msg->setPayload(bcos::bytes(randStr.begin(), randStr.end()));
     auto rateLimiter = std::make_shared<RateLimiter>(packetQPS);
     sendMessage(serverEndPoint, msg, service, rateLimiter);
     return EXIT_SUCCESS;

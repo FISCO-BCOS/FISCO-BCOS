@@ -18,8 +18,9 @@
  * @date 2026/4/7
  */
 
+#include "SharedBaselineSchedulerMock.h"
+#include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -33,14 +34,11 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-transaction-scheduler/BaselineScheduler.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
-#include <future>
 
 // Wrap the entire fixture / mock surface in an anonymous namespace so the
 // `using namespace bcos::*` directives below do not leak into other unity-build
@@ -53,81 +51,9 @@ using namespace bcos::storage2;
 using namespace bcos::executor_v1;
 using namespace bcos::scheduler_v1;
 
-using FIBMutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
-using FIBBackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
-    std::hash<StateKey>>;
-using FIBMultiLayerStorage = MultiLayerStorage<FIBMutableStorage, void, FIBBackendStorage>;
-
-struct FIBMockExecutor
-{
-    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
-        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call)
-    {
-        co_return {};
-    }
-
-    template <class Storage>
-    struct ExecuteContext
-    {
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
-        {
-            co_return {};
-        }
-    };
-
-    auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int32_t contextID,
-        ledger::LedgerConfig const& ledgerConfig, bool call)
-        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
-    {
-        co_return {};
-    }
-};
-
-struct FIBMockScheduler
-{
-    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
-        auto& executor, protocol::BlockHeader const& blockHeader,
-        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
-    {
-        auto receipts =
-            ::ranges::iota_view<size_t, size_t>(0, ::ranges::size(transactions)) |
-            ::ranges::views::transform([](size_t index) -> protocol::TransactionReceipt::Ptr {
-                auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-                constexpr static std::string_view str = "abc";
-                auto& inner = receipt->inner();
-                inner.dataHash.assign(str.begin(), str.end());
-                inner.data.gasUsed = "100";
-
-                bytes logAddress;
-                logAddress.assign(str.begin(), str.end());
-                bcos::protocol::LogEntry logEntry{
-                    logAddress, bcos::h256s{bcos::h256{}}, bcos::bytes{}};
-                std::vector<bcos::protocol::LogEntry> logs;
-                logs.emplace_back(std::move(logEntry));
-                receipt->setLogEntries(logs);
-                return receipt;
-            }) |
-            ::ranges::to<std::vector<protocol::TransactionReceipt::Ptr>>();
-
-        co_return receipts;
-    }
-};
-
-// Storage-level getLedgerConfig stub for tests. Found via ADL when the
-// BaselineScheduler template is instantiated; clang's -Wunused-function can't
-// see indirect template uses, so [[maybe_unused]] silences a false positive.
-[[maybe_unused]] task::AwaitableValue<void> tag_invoke(
-    ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/,
-    FIBMultiLayerStorage::ViewType& /*storage*/, bcos::ledger::LedgerConfig& /*ledgerConfig*/,
-    protocol::BlockNumber /*blockNumber*/, protocol::BlockFactory& /*blockFactory*/)
-{
-    return {};
-}
+using bcos::test::sharedmock::SharedBackendStorage;
+using bcos::test::sharedmock::SharedCheckpointBackend;
+using bcos::test::sharedmock::SharedMultiLayerStorage;
 
 bcos::task::Task<std::vector<bcos::protocol::Transaction::ConstPtr>> emptyTxsTaskFIB()
 {
@@ -138,7 +64,8 @@ class FIBSchedulerFixture
 {
 public:
     FIBSchedulerFixture()
-      : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
+      : checkpointBackend(backendStorage),
+        cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         blockHeaderFactory(
             std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite)),
@@ -150,16 +77,25 @@ public:
             cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory)),
         transactionSubmitResultFactory(
             std::make_shared<protocol::TransactionSubmitResultFactoryImpl>()),
-        multiLayerStorage(backendStorage),
+        multiLayerStorage(checkpointBackend),
         baselineScheduler(multiLayerStorage, mockScheduler, mockExecutor, *blockFactory,
             mockLedger.get(), mockTxPool.get(), *transactionSubmitResultFactory, *hashImpl)
     {
+        // Shared mock configuration (SharedBaselineSchedulerMock.h): log-carrying
+        // receipts; trivial getLedgerConfig stub behaviour (default Features).
+        mockScheduler.m_receiptsWithLogs = true;
+        bcos::test::sharedmock::g_stubFeatures = ledger::Features{};
+        // Guard against a future edit silently weakening the receipt shape this
+        // file's mocks historically produced.
+        BOOST_REQUIRE(mockScheduler.m_receiptsWithLogs);
+
         // Ledger: asyncPrewriteBlock => invoke callback(success)
         fakeit::When(Method(mockLedger, asyncPrewriteBlock))
             .AlwaysDo([this](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
                           protocol::Block::ConstPtr,
                           std::function<void(std::string, Error::Ptr&&)> callback, bool,
-                          std::optional<ledger::Features>) {
+                          std::optional<ledger::Features>, std::optional<bcos::crypto::HashType>,
+                          bool) {
                 if (prewriteBlockFails)
                 {
                     callback({},
@@ -194,7 +130,7 @@ public:
         bh->encode(headerBuffer);
 
         storage::Entry number2HeaderEntry;
-        number2HeaderEntry.importFields({std::move(headerBuffer)});
+        number2HeaderEntry.set(std::move(headerBuffer));
         task::syncWait(storage2::writeOne(backendStorage,
             StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(bh->number())},
             std::move(number2HeaderEntry)));
@@ -228,7 +164,8 @@ public:
         return executedHeader;
     }
 
-    FIBBackendStorage backendStorage;
+    SharedBackendStorage backendStorage;
+    SharedCheckpointBackend checkpointBackend;
     crypto::CryptoSuite::Ptr cryptoSuite;
     std::shared_ptr<bcostars::protocol::BlockHeaderFactoryImpl> blockHeaderFactory;
     std::shared_ptr<bcostars::protocol::TransactionFactoryImpl> transactionFactory;
@@ -241,14 +178,14 @@ public:
     bool prewriteBlockFails = false;
     std::string prewriteFailure = "injected prewrite failure";
 
-    FIBMockScheduler mockScheduler;
+    bcos::test::sharedmock::SharedMockScheduler mockScheduler;
     fakeit::Mock<ledger::LedgerInterface> mockLedger;
     fakeit::Mock<txpool::TxPoolInterface> mockTxPool;
-    FIBMultiLayerStorage multiLayerStorage;
-    FIBMockExecutor mockExecutor;
-    BaselineScheduler<decltype(multiLayerStorage), FIBMockExecutor, FIBMockScheduler,
-        ledger::LedgerInterface>
-        baselineScheduler;
+    SharedMultiLayerStorage multiLayerStorage;
+    bcos::test::sharedmock::SharedMockExecutor mockExecutor;
+    // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
+    bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
+    bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
 
 BOOST_FIXTURE_TEST_SUITE(FIB101_102_103_104_SchedulerTest, FIBSchedulerFixture)

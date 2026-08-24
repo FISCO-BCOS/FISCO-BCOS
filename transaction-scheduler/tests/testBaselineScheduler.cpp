@@ -1,3 +1,5 @@
+#include "SharedBaselineSchedulerMock.h"
+#include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -14,11 +16,9 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-transaction-scheduler/BaselineScheduler.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <future>
@@ -28,82 +28,9 @@ using namespace bcos::storage2;
 using namespace bcos::executor_v1;
 using namespace bcos::scheduler_v1;
 
-using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
-using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
-    std::hash<StateKey>>;
-using MyMultiLayerStorage = MultiLayerStorage<MutableStorage, void, BackendStorage>;
-
-struct MockExecutorBaseline
-{
-    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
-        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call)
-    {
-        if (transaction.version() == 99)
-        {
-            BOOST_CHECK_EQUAL(blockHeader.timestamp(), 10088);
-        }
-        co_return {};
-    }
-
-    template <class Storage>
-    struct ExecuteContext
-    {
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
-        {
-            co_return {};
-        }
-    };
-
-    auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int32_t contextID,
-        ledger::LedgerConfig const& ledgerConfig, bool call)
-        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
-    {
-        co_return {};
-    }
-};
-struct MockScheduler
-{
-    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
-        auto& executor, protocol::BlockHeader const& blockHeader,
-        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
-    {
-        auto receipts =
-            ::ranges::iota_view<size_t, size_t>(0, ::ranges::size(transactions)) |
-            ::ranges::views::transform([](size_t index) -> protocol::TransactionReceipt::Ptr {
-                auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-                constexpr static std::string_view str = "abc";
-                auto& inner = receipt->inner();
-                inner.dataHash.assign(str.begin(), str.end());
-                inner.data.gasUsed = "100";
-
-                bytes logAddress;
-                logAddress.assign(str.begin(), str.end());
-                bcos::protocol::LogEntry logEntry{
-                    logAddress, bcos::h256s{bcos::h256{}}, bcos::bytes{}};
-                std::vector<bcos::protocol::LogEntry> logs;
-                logs.emplace_back(std::move(logEntry));
-                receipt->setLogEntries(logs);
-                return receipt;
-            }) |
-            ::ranges::to<std::vector<protocol::TransactionReceipt::Ptr>>();
-
-        co_return receipts;
-    }
-};
-
-// Keep storage-level getLedgerConfig stub minimal for tests
-inline task::AwaitableValue<void> tag_invoke(
-    ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/, MyMultiLayerStorage::ViewType& storage,
-    bcos::ledger::LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber,
-    protocol::BlockFactory& blockFactory)
-{
-    return {};
-}
+using bcos::test::sharedmock::SharedBackendStorage;
+using bcos::test::sharedmock::SharedCheckpointBackend;
+using bcos::test::sharedmock::SharedMultiLayerStorage;
 
 // Helper: empty task returning no transactions
 static bcos::task::Task<std::vector<bcos::protocol::Transaction::ConstPtr>> emptyTxsTask()
@@ -127,16 +54,29 @@ public:
             cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory)),
         transactionSubmitResultFactory(
             std::make_shared<protocol::TransactionSubmitResultFactoryImpl>()),
-        multiLayerStorage(backendStorage),
+        checkpointBackend(backendStorage),
+        multiLayerStorage(checkpointBackend),
         baselineScheduler(multiLayerStorage, mockScheduler, mockExecutor, *blockFactory,
             mockLedger.get(), mockTxPool.get(), *transactionSubmitResultFactory, *hashImpl)
     {
+        // Shared mock configuration (SharedBaselineSchedulerMock.h): the version-99
+        // timestamp probe and log-carrying receipts this file's mocks used to provide;
+        // the trivial getLedgerConfig stub behaviour (default Features).
+        mockExecutor.m_checkTimestamp99 = true;
+        mockScheduler.m_receiptsWithLogs = true;
+        bcos::test::sharedmock::g_stubFeatures = ledger::Features{};
+        // Guard against a future edit silently weakening the switch-gated mock
+        // assertions (the timestamp probe only runs with the switches on).
+        BOOST_REQUIRE(mockExecutor.m_checkTimestamp99);
+        BOOST_REQUIRE(mockScheduler.m_receiptsWithLogs);
+
         // Ledger: asyncPrewriteBlock => invoke callback(success)
         fakeit::When(Method(mockLedger, asyncPrewriteBlock))
             .AlwaysDo([](bcos::storage::StorageInterface::Ptr, bcos::protocol::ConstTransactionsPtr,
                           bcos::protocol::Block::ConstPtr,
                           std::function<void(std::string, bcos::Error::Ptr&&)> callback, bool,
-                          std::optional<bcos::ledger::Features>) { callback({}, nullptr); });
+                          std::optional<bcos::ledger::Features>,
+                          std::optional<bcos::crypto::HashType>, bool) { callback({}, nullptr); });
         // Ledger: storeTransactionsAndReceipts => no error
         fakeit::When(Method(mockLedger, storeTransactionsAndReceipts))
             .AlwaysDo([](bcos::protocol::ConstTransactionsPtr,
@@ -170,13 +110,12 @@ public:
         blockHeader->encode(headerBuffer);
 
         storage::Entry number2HeaderEntry;
-        number2HeaderEntry.importFields({std::move(headerBuffer)});
+        number2HeaderEntry.set(std::move(headerBuffer));
         task::syncWait(storage2::writeOne(backendStorage,
             StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(blockHeader->number())},
             std::move(number2HeaderEntry)));
     }
 
-    BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     std::shared_ptr<bcostars::protocol::BlockHeaderFactoryImpl> blockHeaderFactory;
     std::shared_ptr<bcostars::protocol::TransactionFactoryImpl> transactionFactory;
@@ -184,17 +123,20 @@ public:
     std::shared_ptr<bcostars::protocol::BlockFactoryImpl> blockFactory;
     std::shared_ptr<protocol::TransactionSubmitResultFactoryImpl> transactionSubmitResultFactory;
 
+    SharedBackendStorage backendStorage;
+    SharedCheckpointBackend checkpointBackend;
+
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 
-    MockScheduler mockScheduler;
+    bcos::test::sharedmock::SharedMockScheduler mockScheduler;
     // FakeIt mocks for ledger and txpool
     fakeit::Mock<bcos::ledger::LedgerInterface> mockLedger;
     fakeit::Mock<bcos::txpool::TxPoolInterface> mockTxPool;
-    MyMultiLayerStorage multiLayerStorage;
-    MockExecutorBaseline mockExecutor;
-    BaselineScheduler<decltype(multiLayerStorage), MockExecutorBaseline, MockScheduler,
-        bcos::ledger::LedgerInterface>
-        baselineScheduler;
+    SharedMultiLayerStorage multiLayerStorage;
+    bcos::test::sharedmock::SharedMockExecutor mockExecutor;
+    // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
+    bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
+    bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestBaselineScheduler, TestBaselineSchedulerFixture)
@@ -425,7 +367,7 @@ BOOST_AUTO_TEST_CASE(call)
     blockHeader->encode(headerBuffer);
 
     storage::Entry number2HeaderEntry;
-    number2HeaderEntry.importFields({std::move(headerBuffer)});
+    number2HeaderEntry.set(std::move(headerBuffer));
     task::syncWait(storage2::writeOne(backendStorage,
         StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(blockHeader->number())},
         std::move(number2HeaderEntry)));

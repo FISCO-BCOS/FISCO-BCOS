@@ -18,16 +18,16 @@
  * @author: octopus
  * @date 2021-05-14
  */
+#include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-crypto/signature/key/KeyFactoryImpl.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-front/FrontServiceFactory.h"
 #include "bcos-gateway/Gateway.h"
-#include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::test;
@@ -121,7 +121,9 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
         keyFactory->createKey(bytesConstRef((bcos::byte*)strNodeID.data(), strNodeID.size()));
 
     auto frontServiceFactory = std::make_shared<bcos::front::FrontServiceFactory>();
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "gwNodeTest");
     frontServiceFactory->setGatewayInterface(std::make_shared<FakeGateway>());
+    frontServiceFactory->setIOServicePool(ioServicePool);
 
     auto frontService = frontServiceFactory->buildFrontService(groupID, nodeID);
 

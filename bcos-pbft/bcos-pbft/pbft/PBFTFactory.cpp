@@ -32,15 +32,17 @@ using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::protocol;
 
-PBFTFactory::PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
-    bcos::crypto::KeyPairInterface::Ptr _keyPair,
+PBFTFactory::PBFTFactory(boost::asio::io_context& _ioService,
+    bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bcos::crypto::KeyPairInterface::Ptr _keyPair,
     std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
     std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
     std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler, bcos::txpool::TxPoolInterface::Ptr _txpool,
     bcos::protocol::BlockFactory::Ptr _blockFactory,
-    bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
-  : m_cryptoSuite(std::move(_cryptoSuite)),
+    bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
+    bcos::IOServicePool::Ptr _ioServicePool)
+  : m_ioService(_ioService),
+    m_cryptoSuite(std::move(_cryptoSuite)),
     m_keyPair(std::move(_keyPair)),
     m_frontService(std::move(_frontService)),
     m_storage(std::move(_storage)),
@@ -48,7 +50,8 @@ PBFTFactory::PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
     m_scheduler(std::move(_scheduler)),
     m_txpool(std::move(_txpool)),
     m_blockFactory(std::move(_blockFactory)),
-    m_txResultFactory(std::move(_txResultFactory))
+    m_txResultFactory(std::move(_txResultFactory)),
+    m_ioServicePool(std::move(_ioServicePool))
 {}
 
 PBFTImpl::Ptr PBFTFactory::createPBFT()
@@ -61,22 +64,22 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
     auto validator = std::make_shared<TxsValidator>(m_txpool, m_blockFactory, m_txResultFactory);
 
     PBFT_LOG(DEBUG) << LOG_DESC("create StateMachine");
-    auto stateMachine = std::make_shared<StateMachine>(m_scheduler, m_blockFactory);
+    auto stateMachine = std::make_shared<StateMachine>(m_scheduler, m_blockFactory, m_ioServicePool);
 
     PBFT_LOG(INFO) << LOG_DESC("create pbftStorage");
     auto pbftStorage =
-        std::make_shared<LedgerStorage>(m_scheduler, m_storage, m_blockFactory, pbftMessageFactory);
+        std::make_shared<LedgerStorage>(m_scheduler, m_storage, m_blockFactory, pbftMessageFactory, m_ioServicePool);
 
     PBFT_LOG(INFO) << LOG_DESC("create pbftConfig");
     PBFTConfig::Ptr pbftConfig =
-        std::make_shared<PBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory, pbftCodec,
-            validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
+        std::make_shared<PBFTConfig>(m_ioService, m_cryptoSuite, m_keyPair, pbftMessageFactory,
+            pbftCodec, validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
 
     PBFT_LOG(INFO) << LOG_DESC("create PBFTEngine");
-    auto pbftEngine = std::make_shared<PBFTEngine>(pbftConfig);
+    auto pbftEngine = std::make_shared<PBFTEngine>(pbftConfig, m_ioService, m_ioServicePool);
 
     PBFT_LOG(INFO) << LOG_DESC("create PBFT");
-    auto pbft = std::make_shared<PBFTImpl>(pbftEngine);
+    auto pbft = std::make_shared<PBFTImpl>(pbftEngine, m_ioServicePool);
     pbft->setLedger(m_ledger);
     return pbft;
 }

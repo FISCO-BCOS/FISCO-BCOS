@@ -52,8 +52,4 @@ public:
         return header;
     }
 };
-
-template <class T>
-concept IsBlockHeaderFactory = std::derived_from<std::remove_cvref_t<T>, BlockHeaderFactory> ||
-    std::same_as<std::remove_cvref_t<T>, BlockHeaderFactory>;
 }  // namespace bcos::protocol

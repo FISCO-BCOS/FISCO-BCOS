@@ -1,4 +1,5 @@
 #pragma once
+#include "CheckpointStorage.h"
 #include "Storage.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
@@ -97,16 +98,27 @@ public:
 
     std::shared_ptr<MutableStorageType> m_mutableStorage;
     std::deque<std::shared_ptr<MutableStorageType>> m_immutableStorages;
-    std::reference_wrapper<std::remove_reference_t<BackendStorage>> m_backendStorage;
+    std::variant<BackendStorage, BackendStorage*> m_backendStorage;
     [[no_unique_address]] std::conditional_t<withCacheStorage,
         std::reference_wrapper<std::remove_reference_t<CachedStorage>>, std::monostate>
         m_cacheStorage;
 
-    View(BackendStorage& backendStorage)
+    View(BackendStorage backendStorage)
+        requires(!withCacheStorage)
+      : m_backendStorage(std::move(backendStorage))
+    {}
+    View(BackendStorage* backendStorage)
         requires(!withCacheStorage)
       : m_backendStorage(backendStorage)
     {}
-    View(BackendStorage& backendStorage,
+    View(BackendStorage backendStorage,
+        std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
+            std::monostate>
+            cacheStorage)
+        requires(withCacheStorage)
+      : m_backendStorage(std::move(backendStorage)), m_cacheStorage(cacheStorage)
+    {}
+    View(BackendStorage* backendStorage,
         std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
             std::monostate>
             cacheStorage)
@@ -119,6 +131,22 @@ public:
     View(View&&) noexcept = default;
     View& operator=(View&&) noexcept = default;
     ~View() noexcept = default;
+
+    BackendStorage& backendStorageRef()
+    {
+        return std::visit(
+            []<typename T>(T& storage) -> BackendStorage& {
+                if constexpr (std::is_same_v<std::decay_t<T>, BackendStorage>)
+                {
+                    return storage;
+                }
+                else
+                {
+                    return *storage;
+                }
+            },
+            m_backendStorage);
+    }
 
     friend MutableStorage& mutableStorage(View& storage)
     {
@@ -161,31 +189,39 @@ public:
         }
 
         co_await fillMissingValues<typename View::Key, typename View::Value>(
-            m_backendStorage.get(), keys, values);
+            backendStorageRef(), keys, values);
         co_return values;
     }
 
     template <::ranges::input_range Keys>
-    auto readSomeRaw(Keys keys, storage2::DIRECT_TYPE /*unused*/)
+    auto readSomeRaw(Keys keys, auto... tags)
         -> task::Task<std::vector<storage2::StorageValueType<Value>>>
         requires ::ranges::sized_range<Keys>
     {
-        if (m_mutableStorage)
+        constexpr bool bypassMultiLayer = contains_tag_v<BYPASS_MULTILAYER_TYPE, decltype(tags)...>;
+        if constexpr (bypassMultiLayer)
         {
-            co_return co_await m_mutableStorage->readSomeRaw(std::move(keys));
-        }
+            if (m_mutableStorage)
+            {
+                co_return co_await m_mutableStorage->readSomeRaw(std::move(keys));
+            }
 
-        for (auto& immutableStorage : m_immutableStorages)
+            for (auto& immutableStorage : m_immutableStorages)
+            {
+                co_return co_await immutableStorage->readSomeRaw(std::move(keys));
+            }
+
+            if constexpr (withCacheStorage)
+            {
+                co_return co_await m_cacheStorage.get().readSomeRaw(std::move(keys));
+            }
+
+            co_return co_await backendStorageRef().readSomeRaw(std::move(keys));
+        }
+        else
         {
-            co_return co_await immutableStorage->readSomeRaw(std::move(keys));
+            co_return co_await readSomeRaw(std::move(keys));
         }
-
-        if constexpr (withCacheStorage)
-        {
-            co_return co_await m_cacheStorage.get().readSomeRaw(std::move(keys));
-        }
-
-        co_return co_await m_backendStorage.get().readSomeRaw(std::move(keys));
     }
 
     auto readOneRaw(const auto& key) -> task::Task<storage2::StorageValueType<Value>>
@@ -217,28 +253,35 @@ public:
             }
         }
 
-        co_return co_await m_backendStorage.get().readOneRaw(key);
+        co_return co_await backendStorageRef().readOneRaw(key);
     }
 
-    auto readOneRaw(const auto& key, storage2::DIRECT_TYPE /*unused*/)
-        -> task::Task<storage2::StorageValueType<Value>>
+    auto readOneRaw(const auto& key, auto... tags) -> task::Task<storage2::StorageValueType<Value>>
     {
-        if (m_mutableStorage)
+        constexpr bool bypassMultiLayer = contains_tag_v<BYPASS_MULTILAYER_TYPE, decltype(tags)...>;
+        if constexpr (bypassMultiLayer)
         {
-            co_return co_await m_mutableStorage->readOneRaw(key);
-        }
+            if (m_mutableStorage)
+            {
+                co_return co_await m_mutableStorage->readOneRaw(key);
+            }
 
-        for (auto& immutableStorage : m_immutableStorages)
+            for (auto& immutableStorage : m_immutableStorages)
+            {
+                co_return co_await immutableStorage->readOneRaw(key);
+            }
+
+            if constexpr (withCacheStorage)
+            {
+                co_return co_await m_cacheStorage.get().readOneRaw(key);
+            }
+
+            co_return co_await backendStorageRef().readOneRaw(key);
+        }
+        else
         {
-            co_return co_await immutableStorage->readOneRaw(key);
+            co_return co_await readOneRaw(key);
         }
-
-        if constexpr (withCacheStorage)
-        {
-            co_return co_await m_cacheStorage.get().readOneRaw(key);
-        }
-
-        co_return co_await m_backendStorage.get().readOneRaw(key);
     }
 
     template <::ranges::input_range Keys>
@@ -283,7 +326,7 @@ public:
             }
         }
 
-        co_return co_await storage2::readOne(m_backendStorage.get(), key);
+        co_return co_await storage2::readOne(backendStorageRef(), key);
     }
 
     task::Task<void> writeSome(::ranges::input_range auto keyValues)
@@ -357,7 +400,7 @@ public:
                     co_await storage2::range(*storage, std::forward<decltype(args)>(args)...),
                     RangeValue{});
             }
-            m_iterators.emplace_back(co_await storage2::range(view.m_backendStorage.get(),
+            m_iterators.emplace_back(co_await storage2::range(view.backendStorageRef(),
                                          std::forward<decltype(args)>(args)...),
                 RangeValue{});
             co_await forwardIterators(::ranges::views::all(m_iterators));
@@ -365,7 +408,6 @@ public:
 
         task::Task<RangeValue> next()
         {
-            // 基于合并排序，找到所有迭代器的最小值，推进迭代器并返回值
             // Based on merge sort, find the minimum value of all iterators, advance the
             // iterator and return its value
             auto iterators = m_iterators | ::ranges::views::filter([](auto const& rangeValue) {
@@ -417,7 +459,7 @@ public:
         m_mutableStorage = std::make_shared<MutableStorage>(std::forward<decltype(args)>(args)...);
     }
 
-    friend BackendStorage& backendStorage(View& view) { return view.m_backendStorage; }
+    friend BackendStorage& backendStorage(View& view) { return view.backendStorageRef(); }
 
     task::Task<Iterator> range(auto&&... args)
     {
@@ -428,14 +470,19 @@ public:
 };
 
 template <class MutableStorageType, class CachedStorage, class BackendStorage>
-    requires MutableStorageType::withLogicalDeletion
+    requires MutableStorageType::withLogicalDeletion &&
+             CheckpointStorage<std::remove_reference_t<BackendStorage>,
+                 typename MutableStorageType::Key, typename MutableStorageType::Value>
 class MultiLayerStorage
 {
 public:
     constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
     using KeyType = std::remove_cvref_t<typename MutableStorageType::Key>;
     using ValueType = std::remove_cvref_t<typename MutableStorageType::Value>;
-    using ViewType = View<MutableStorageType, CachedStorage, BackendStorage>;
+    using OpenedStorage = decltype(std::declval<std::remove_reference_t<BackendStorage>&>().open());
+    using ViewType =
+        View<MutableStorageType, CachedStorage, std::remove_reference_t<OpenedStorage>>;
+    using CheckpointName = typename std::remove_reference_t<BackendStorage>::CheckpointName;
 
     std::deque<std::shared_ptr<MutableStorageType>> m_storages;
     std::mutex m_listMutex;
@@ -445,6 +492,7 @@ public:
     [[no_unique_address]] std::conditional_t<withCacheStorage,
         std::reference_wrapper<std::remove_reference_t<CachedStorage>>, std::monostate>
         m_cacheStorage;
+    OpenedStorage m_latestBackend;
 
     using MutableStorage = MutableStorageType;
     using Key = KeyType;
@@ -452,19 +500,17 @@ public:
 
     explicit MultiLayerStorage(BackendStorage& backendStorage) noexcept
         requires(!withCacheStorage)
-      : m_backendStorage(backendStorage)
-    {
-        static_assert(std::same_as<typename MutableStorageType::Key, typename BackendStorage::Key>);
-        static_assert(
-            std::same_as<typename MutableStorageType::Value, typename BackendStorage::Value>);
-    }
+      : m_backendStorage(backendStorage), m_latestBackend(backendStorage.open())
+    {}
 
     MultiLayerStorage(BackendStorage& backendStorage,
         std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
             std::monostate>
             cacheStorage) noexcept
         requires(withCacheStorage)
-      : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
+      : m_backendStorage(backendStorage),
+        m_cacheStorage(cacheStorage),
+        m_latestBackend(backendStorage.open())
     {
         static_assert(std::same_as<typename MutableStorageType::Key, typename CachedStorage::Key>);
         static_assert(
@@ -481,15 +527,31 @@ public:
         std::unique_lock lock(m_listMutex);
         if constexpr (withCacheStorage)
         {
-            ViewType view(m_backendStorage, m_cacheStorage);
+            ViewType view(&m_latestBackend, m_cacheStorage);
             view.m_immutableStorages = m_storages;
             return view;
         }
         else
         {
-            ViewType view(m_backendStorage);
+            ViewType view(&m_latestBackend);
             view.m_immutableStorages = m_storages;
             return view;
+        }
+    }
+
+    /// A fresh COMMITTED view (cache -> committed backend, NO in-flight pending layers).
+    /// Unlike fork(), the uncommitted layers of in-flight blocks stay invisible — the
+    /// "latest = last committed block" plane Ethereum state-read semantics require.
+    ViewType forkCommitted()
+    {
+        std::unique_lock lock(m_listMutex);
+        if constexpr (withCacheStorage)
+        {
+            return ViewType(&m_latestBackend, m_cacheStorage);
+        }
+        else
+        {
+            return ViewType(&m_latestBackend);
         }
     }
 
@@ -501,6 +563,29 @@ public:
         }
         std::unique_lock lock(m_listMutex);
         m_storages.push_front(std::move(view.m_mutableStorage));
+    }
+
+    /// mergeView = pushView + mergeBackStorage combined: push first, then merge the oldest layer
+    /// (m_storages.back(), FIFO). If mergeBackStorage throws, the pushed layer stays queued for
+    /// retry (degraded semantics, exception propagation decided by caller). No-op on empty mutable.
+    ///
+    /// WARNING -- FIFO merge target, NOT the pushed layer:
+    /// The push adds the view to the FRONT of the deque, but mergeBackStorage merges the BACK
+    /// (oldest pending). So the layer just pushed is NOT the one that gets merged this call --
+    /// it will be merged by a FUTURE mergeView/mergeBackStorage call when it becomes the oldest.
+    /// If the deque already has N pending layers, this call merges the Nth-oldest, not the (N+1)th
+    /// just pushed. Callers that need the pushed layer's writes to reach the backend immediately
+    /// must drain the deque first (call mergeBackStorage in a loop until empty).
+    ///
+    /// Caveats:
+    /// 1. NOT atomic: pushView and mergeBackStorage are independent critical sections.
+    /// 2. Empty-mutable no-op: a view with no writes does NOT advance the merge pipeline.
+    task::Task<void> mergeView(ViewType view)
+    {
+        if (!view.m_mutableStorage)
+            co_return;
+        pushView(std::move(view));
+        co_await mergeBackStorage();
     }
 
     void popFrontStorage()
@@ -531,7 +616,7 @@ public:
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                         ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
                     task::tbb::syncWait(
-                        storage2::merge(m_backendStorage.get(), backStorage, extraStorages...));
+                        storage2::merge(m_latestBackend, backStorage, extraStorages...));
                 },
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
@@ -544,7 +629,7 @@ public:
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                 ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-            co_await storage2::merge(m_backendStorage.get(), backStorage, extraStorages...);
+            co_await storage2::merge(m_latestBackend, backStorage, extraStorages...);
         }
 
         listLock.lock();
@@ -553,7 +638,19 @@ public:
         co_return backStoragePtr;
     }
 
+    auto fork(CheckpointName const& blockhash)
+    {
+        auto openedBackend = m_backendStorage.get().open(blockhash);
+        using HistoricalViewType =
+            View<MutableStorageType, void, std::decay_t<decltype(openedBackend)>>;
+        HistoricalViewType view(std::move(openedBackend));
+        // Read-only historical view: no mutable, no immutable, no cache
+        return view;
+    }
+
     BackendStorage& backendStorage() { return m_backendStorage; }
+
+    OpenedStorage& latestBackend() { return m_latestBackend; }
 };
 
 }  // namespace bcos::storage2

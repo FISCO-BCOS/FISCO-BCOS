@@ -53,7 +53,7 @@ Error PBFTServiceServer::asyncGetPBFTView(tars::Int64& _view, tars::TarsCurrentP
 }
 
 Error PBFTServiceServer::asyncNotifyConsensusMessage(std::string const& _uuid,
-    const vector<tars::Char>& _nodeId, const vector<tars::Char>& _data,
+    const std::vector<tars::Char>& _nodeId, const std::vector<tars::Char>& _data,
     tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
@@ -68,7 +68,7 @@ Error PBFTServiceServer::asyncNotifyConsensusMessage(std::string const& _uuid,
 }
 
 bcostars::Error PBFTServiceServer::asyncNotifyBlockSyncMessage(std::string const& _uuid,
-    const vector<tars::Char>& _nodeId, const vector<tars::Char>& _data,
+    const std::vector<tars::Char>& _nodeId, const std::vector<tars::Char>& _data,
     tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
@@ -97,7 +97,7 @@ Error PBFTServiceServer::asyncNotifyNewBlock(
 
 Error PBFTServiceServer::asyncSubmitProposal(bool _containSysTxs,
     const bcostars::Block& _proposalData, tars::Int64 _proposalIndex,
-    const vector<tars::Char>& _proposalHash, tars::TarsCurrentPtr _current)
+    const std::vector<tars::Char>& _proposalHash, tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
     auto proposalHash = bcos::crypto::HashType();

@@ -39,14 +39,16 @@ struct ParentInfo
         return this->blockNumber == rhs.blockNumber && this->blockHash == rhs.blockHash;
     }
 
-    template <class Stream, typename = std::enable_if_t<Stream::is_decoder_stream>>
+    template <class Stream>
     friend Stream& operator>>(Stream& _stream, ParentInfo& parentInfo)
+        requires Stream::is_decoder_stream
     {
         return _stream >> parentInfo.blockNumber >> parentInfo.blockHash;
     }
 
-    template <class Stream, typename = std::enable_if_t<Stream::is_encoder_stream>>
+    template <class Stream>
     friend Stream& operator<<(Stream& _stream, ParentInfo const& parentInfo)
+        requires Stream::is_encoder_stream
     {
         return _stream << parentInfo.blockNumber << parentInfo.blockHash;
     }
@@ -59,14 +61,16 @@ struct Signature
     int64_t index;
     bytes signature;
 
-    template <class Stream, typename = std::enable_if_t<Stream::is_decoder_stream>>
+    template <class Stream>
     friend Stream& operator>>(Stream& _stream, Signature& _signature)
+        requires Stream::is_decoder_stream
     {
         return _stream >> _signature.index >> _signature.signature;
     }
 
-    template <class Stream, typename = std::enable_if_t<Stream::is_encoder_stream>>
+    template <class Stream>
     friend Stream& operator<<(Stream& _stream, Signature const& _signature)
+        requires Stream::is_encoder_stream
     {
         return _stream << _signature.index << _signature.signature;
     }

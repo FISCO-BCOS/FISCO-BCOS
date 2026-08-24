@@ -21,8 +21,8 @@
 #pragma once
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-utilities/Common.h>
+#include <algorithm>
 #include <charconv>
-#include <range/v3/algorithm/binary_search.hpp>
 
 namespace bcos
 {
@@ -49,7 +49,7 @@ constexpr auto toSortedList(auto input)
 
 namespace precompiled
 {
-/// precompiled contract path for wasm
+/// BFS paths of the system precompiled contracts
 constexpr static std::string_view SYS_CONFIG_NAME = "/sys/status";
 constexpr static std::string_view TABLE_NAME = "/sys/table_storage";
 constexpr static std::string_view TABLE_MANAGER_NAME = "/sys/table_manager";
@@ -99,7 +99,9 @@ constexpr static std::string_view SHARDING_PRECOMPILED_ADDRESS =
 constexpr static std::string_view BALANCE_PRECOMPILED_ADDRESS =
     "0000000000000000000000000000000000001011";
 constexpr std::string_view SYS_ADDRESS_PREFIX = "00000000000000000000000000000000000";
-constexpr std::string_view EVM_PRECOMPILED_PREFIX = "000000000000000000000000000000000000000";
+// 36 zeros covers Ethereum precompile addresses up to 0x0FFF (incl. p256verify at 0x0100).
+// SYS_ADDRESS_PREFIX (35 zeros) is checked first in isStaticPrecompiled, no conflict.
+constexpr std::string_view EVM_PRECOMPILED_PREFIX = "000000000000000000000000000000000000";
 constexpr std::string_view EMPTY_ADDRESS = "0000000000000000000000000000000000000000";
 // Contract address related to privacy computing
 constexpr static std::string_view PAILLIER_ADDRESS = "0000000000000000000000000000000000005003";
@@ -146,11 +148,18 @@ constexpr static auto c_systemTxsAddress =
         bcos::precompiled::ACCOUNT_ADDRESS, bcos::precompiled::ACCOUNT_MGR_ADDRESS,
         bcos::precompiled::ACCOUNT_MANAGER_NAME, bcos::precompiled::SHARDING_PRECOMPILED_ADDRESS}));
 
-template <class Arg>
-bool contains(::ranges::input_range auto const& args, const Arg& arg)
-    requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(args)>>, std::decay_t<Arg>>
+template <class Arg, class Range>
+bool contains(Range const& args, Arg const& arg)
+    requires requires(Range const& r) {
+        {
+            r.begin()
+        } -> std::input_iterator;
+        {
+            r.end()
+        } -> std::input_iterator;
+    } && std::same_as<std::decay_t<decltype(*args.begin())>, std::decay_t<Arg>>
 {
-    return ::ranges::binary_search(args, arg);
+    return std::binary_search(args.begin(), args.end(), arg);
 }
 
 /// for testing

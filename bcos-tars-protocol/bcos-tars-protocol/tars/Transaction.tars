@@ -1,4 +1,23 @@
 module bcostars {
+    /// EIP-2930 access list entry (derived from Web3 RLP at submission; optional on chain).
+    struct Web3AccessListEntry
+    {
+        0 optional string account;              // 40-char hex address, no 0x prefix
+        1 optional vector<vector<byte>> storageKeys;  // each key is 32 bytes (h256)
+    };
+
+    /// EIP-7702 authorization entry (set_code transactions, Prague+).
+    struct AuthorizationEntry
+    {
+        0 optional long   chainID;       // EIP-155 chain ID (0 = any)
+        1 optional string address;       // 40-char hex delegation target, no 0x prefix
+        2 optional long   nonce;         // signer nonce at authorization time
+        3 optional string signer;        // 40-char hex recovered signer address
+        4 optional string r;             // ECDSA signature r (hex, 0x prefix)
+        5 optional string s;             // ECDSA signature s (hex, 0x prefix)
+        6 optional byte   v;             // y_parity (0 or 1)
+    };
+
     struct TransactionData {
         1  optional int          version;
         2  optional string       chainID;
@@ -14,6 +33,10 @@ module bcostars {
         12 optional string       maxFeePerGas;
         13 optional string       maxPriorityFeePerGas;
         14 optional vector<byte> extension;
+        15 optional vector<Web3AccessListEntry> accessList;
+        16 optional vector<AuthorizationEntry> authorizationList;  // EIP-7702
+        17 optional string                    maxFeePerBlobGas;    // EIP-4844 blob gas price cap
+        18 optional vector<vector<byte>>      blobVersionedHashes; // EIP-4844 blob commitments
     };
 
     struct Transaction
@@ -29,5 +52,22 @@ module bcostars {
         9  optional byte            type;
         10 optional vector<byte>    extraTransactionBytes;
         11 optional vector<byte>    extraTransactionHash; // hash(rlp(10|3)); real transaction hash
+        /// bcos::rpc::TransactionType (0=Legacy, 1=EIP2930, 2=EIP1559, 3=EIP4844); only when type==1 (Web3)
+        12 optional byte            web3TypedTxKind;
+        /// deposit-only (0x7e) tx metadata (OP Stack); only when web3TypedTxKind==0x7e.
+        /// In the outer struct (not TransactionData) so BCOS tx hashes are unaffected.
+        /// WARNING: these mirrors are display-only and unauthenticated — the signature binds
+        /// only extraTransactionBytes; execution MUST re-derive sourceHash/mint/isSystemTx
+        /// from the envelope, never trust the tars mirrors from an untrusted peer.
+        13 optional string          sourceHash;          // deposit source hash(hex)
+        14 optional string          mint;                // deposit mint(hex string)
+        15 optional byte            isSystemTransaction; // bool flag
+        /// Full raw EIP-2718 envelope bytes as received by eth_sendRawTransaction (NOT
+        /// extraTransactionBytes, which is encodeForSign() without the signature). OP block
+        /// building (sequencer) consumes this verbatim as the block's raw transaction list —
+        /// execution must see exactly the bytes the user submitted, so the node re-serializing
+        /// from fields would break the txRoot/blockHash against op-geth. Empty for txs that
+        /// entered via non-web3 paths (never sealed into an OP block).
+        16 optional vector<byte>    rawTransactionBytes;
     };
 };

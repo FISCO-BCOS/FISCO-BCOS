@@ -29,14 +29,12 @@ BOOST_AUTO_TEST_CASE(txPoolConfigRejectsZero)
 {
     LoaderProbe p;
     BOOST_CHECK_THROW(p.loadTxPoolConfig(fromIni("[txpool]\nlimit=0\n")), std::exception);
-    BOOST_CHECK_THROW(
-        p.loadTxPoolConfig(fromIni("[txpool]\nnotify_worker_num=0\n")), std::exception);
-    BOOST_CHECK_THROW(
-        p.loadTxPoolConfig(fromIni("[txpool]\nverify_worker_num=0\n")), std::exception);
+    // txpool.notify_worker_num / verify_worker_num were removed along with the per-module worker
+    // pools, so there is no longer a `<= 0` guard to exercise for them -- the keys are simply
+    // ignored. txpool.limit is the one that still has to reject a wedging value.
     // A positive configuration is accepted.
     LoaderProbe ok;
-    BOOST_CHECK_NO_THROW(ok.loadTxPoolConfig(
-        fromIni("[txpool]\nlimit=100\nnotify_worker_num=1\nverify_worker_num=1\n")));
+    BOOST_CHECK_NO_THROW(ok.loadTxPoolConfig(fromIni("[txpool]\nlimit=100\n")));
 }
 
 
@@ -227,7 +225,7 @@ BOOST_AUTO_TEST_CASE(gettersAfterFullGenesisLoad)
     BOOST_CHECK_EQUAL(cfg.consensusType(), "rpbft");
     BOOST_CHECK_EQUAL(cfg.epochSealerNum(), 4);
     BOOST_CHECK_EQUAL(cfg.epochBlockNum(), 1000);
-    BOOST_CHECK(!cfg.isWasm());
+    // isWasm() went away with WASM/Liquid execution support (#5348).
     BOOST_CHECK(!cfg.isAuthCheck());
     BOOST_CHECK(!cfg.isSerialExecute());
     BOOST_CHECK_GT(cfg.txGasLimit(), 0U);
@@ -235,6 +233,24 @@ BOOST_AUTO_TEST_CASE(gettersAfterFullGenesisLoad)
     BOOST_CHECK(!cfg.compatibilityVersionStr().empty());
     BOOST_CHECK_NO_THROW(cfg.genesisData());
     BOOST_CHECK_NO_THROW(cfg.pdAddrs());
+}
+
+// OP-Stack Jovian fork selection is feature-flag driven: feature_op_jovian in [features]
+// (the FISCO-native mechanism) — replaces the former [chain].isthmus_time / jovian_time
+// timestamp thresholds.
+BOOST_AUTO_TEST_CASE(chainConfigOpJovianActiveByFeatureFlag)
+{
+    LoaderProbe p;
+    p.loadGenesisFeatures(fromIni("[features]\nfeature_op_jovian=true\n"));
+    BOOST_CHECK(p.opJovianActive());
+}
+
+// Absent feature_op_jovian defaults to Isthmus (feature off).
+BOOST_AUTO_TEST_CASE(chainConfigOpJovianDefaultsOff)
+{
+    LoaderProbe p;
+    p.loadGenesisFeatures(fromIni("[features]\nfeature_l2_ethereum_compat=true\n"));
+    BOOST_CHECK(!p.opJovianActive());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

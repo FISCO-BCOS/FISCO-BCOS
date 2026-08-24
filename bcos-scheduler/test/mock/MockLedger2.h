@@ -13,13 +13,14 @@ public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features>) override
+        std::optional<bcos::ledger::Features>, std::optional<bcos::crypto::HashType>,
+        bool writeNonces) override
     {
         auto mutableBlock = std::const_pointer_cast<bcos::protocol::Block>(block);
         auto header = mutableBlock->blockHeader();
         auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
         storage::Entry numberEntry;
-        numberEntry.importFields({blockNumberStr});
+        numberEntry.set(blockNumberStr);
         storage->asyncSetRow(ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_CURRENT_NUMBER,
             std::move(numberEntry), [callback = std::move(callback)](auto&& error) {
                 if (error)

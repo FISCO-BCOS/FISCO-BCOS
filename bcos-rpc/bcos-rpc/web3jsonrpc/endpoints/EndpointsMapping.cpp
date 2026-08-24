@@ -37,8 +37,12 @@ std::optional<EndpointsMapping::Handler> EndpointsMapping::findHandler(
     return it->second;
 }
 
-void EndpointsMapping::addHandlers()
+void EndpointsMapping::addHandlers(bool enableOPEngine)
 {
+    if (enableOPEngine)
+    {
+        addEngineHandlers();
+    }
     addEthHandlers();
     addNetHandlers();
     addWeb3Handlers();
@@ -47,6 +51,26 @@ void EndpointsMapping::addHandlers()
         WEB3_LOG(INFO) << LOG_BADGE("initHandler") << LOG_KV("method", method);
     }
     WEB3_LOG(INFO) << LOG_BADGE("initHandler") << LOG_KV("size", m_handlers.size());
+}
+
+void EndpointsMapping::addEngineHandlers()
+{
+    // clang-format off
+    m_handlers[methodString(EthMethod::engine_exchangeCapabilities)] = &Endpoints::exchangeCapabilities;
+    m_handlers[methodString(EthMethod::engine_forkchoiceUpdatedV1)] = &Endpoints::forkchoiceUpdatedV1;
+    m_handlers[methodString(EthMethod::engine_forkchoiceUpdatedV2)] = &Endpoints::forkchoiceUpdatedV2;
+    m_handlers[methodString(EthMethod::engine_forkchoiceUpdatedV3)] = &Endpoints::forkchoiceUpdatedV3;
+    m_handlers[methodString(EthMethod::engine_forkchoiceUpdatedV4)] = &Endpoints::forkchoiceUpdatedV4;
+    m_handlers[methodString(EthMethod::engine_getPayloadV1)] = &Endpoints::getPayloadV1;
+    m_handlers[methodString(EthMethod::engine_getPayloadV2)] = &Endpoints::getPayloadV2;
+    m_handlers[methodString(EthMethod::engine_getPayloadV3)] = &Endpoints::getPayloadV3;
+    m_handlers[methodString(EthMethod::engine_getPayloadV4)] = &Endpoints::getPayloadV4;
+    m_handlers[methodString(EthMethod::engine_getPayloadV5)] = &Endpoints::getPayloadV5;
+    m_handlers[methodString(EthMethod::engine_newPayloadV1)] = &Endpoints::newPayloadV1;
+    m_handlers[methodString(EthMethod::engine_newPayloadV2)] = &Endpoints::newPayloadV2;
+    m_handlers[methodString(EthMethod::engine_newPayloadV3)] = &Endpoints::newPayloadV3;
+    m_handlers[methodString(EthMethod::engine_newPayloadV4)] = &Endpoints::newPayloadV4;
+    // clang-format on
 }
 
 void EndpointsMapping::addEthHandlers()
@@ -59,6 +83,7 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_mining)] = &Endpoints::mining;
     m_handlers[methodString(EthMethod::eth_hashrate)] = &Endpoints::hashrate;
     m_handlers[methodString(EthMethod::eth_gasPrice)] = &Endpoints::gasPrice;
+    m_handlers[methodString(EthMethod::eth_feeHistory)] = &Endpoints::feeHistory;
     m_handlers[methodString(EthMethod::eth_accounts)] = &Endpoints::accounts;
     m_handlers[methodString(EthMethod::eth_blockNumber)] = &Endpoints::blockNumber;
     m_handlers[methodString(EthMethod::eth_getBalance)] = &Endpoints::getBalance;
@@ -91,6 +116,8 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_getFilterLogs)] = &Endpoints::getFilterLogs;
     m_handlers[methodString(EthMethod::eth_getLogs)] = &Endpoints::getLogs;
     m_handlers[methodString(EthMethod::eth_maxPriorityFeePerGas)] = &Endpoints::maxPriorityFeePerGas;
+    m_handlers[methodString(EthMethod::eth_getProof)] = &Endpoints::getProof;
+    m_handlers[methodString(EthMethod::miner_setMaxDASize)] = &Endpoints::setMaxDASize;
     // clang-format on
 }
 

@@ -1,4 +1,3 @@
-cmake_minimum_required(VERSION 3.10)
 
 # for tars generator
 set(TARS_HEADER_DIR ${CMAKE_BINARY_DIR}/generated/bcos-tars-protocol/tars)
@@ -16,6 +15,7 @@ if(TARS_INPUT)
             WORKING_DIRECTORY ${TARS_PATH}
             COMMAND ${TARS_TARS2CPP} ${TARS_FILE} --unjson --without-trace --dir=${TARS_HEADER_DIR}
             COMMENT "generating ${TARS_FILE} to ${TARS_HEADER_DIR}"
+            DEPENDS ${TARS_FILE}
             VERBATIM
         )
 
@@ -41,14 +41,19 @@ find_package(tarscpp REQUIRED)
 find_package(TBB REQUIRED)
 find_package(jsoncpp REQUIRED)
 
-add_library(${TARS_PROTOCOL_TARGET} ${SRC_LIST} ${OUT_TARS_H_LIST})
-target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC
+add_library(protocol-tars ${SRC_LIST} ${OUT_TARS_H_LIST})
+target_include_directories(protocol-tars PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${TARSCPP_ROOT}/include>
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include/bcos-tars-protocol>)
-target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-framework bcos-crypto ${CODEC_TARGET} tarscpp::tarsservant tarscpp::tarsutil TBB::tbb jsoncpp_static)
-set_target_properties(${TARS_PROTOCOL_TARGET} PROPERTIES UNITY_BUILD "ON")
+# `codec` carries the RLP headers TransactionImpl.cpp needs for the FIB-New1 canonical Web3
+# txHash recompute. release-3.17.0 spelled it ${CODEC_TARGET}; that variable went away with
+# TargetSettings.cmake (#5174), so it is named directly here.
+# `rlp-protocol` provides EthBlockHeader, which BlockHeaderImpl::calculateHash uses to
+# recompute the RLP hash for Ethereum-standard headers.
+target_link_libraries(protocol-tars PUBLIC bcos-concepts bcos-framework bcos-crypto codec rlp-protocol tarscpp::tarsservant tarscpp::tarsutil TBB::tbb jsoncpp_static)
+set_target_properties(protocol-tars PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
     enable_testing()
@@ -58,6 +63,6 @@ if(TESTS)
 endif()
 
 include(GNUInstallDirs)
-install(TARGETS ${TARS_PROTOCOL_TARGET} EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(TARGETS protocol-tars EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY "bcos-tars-protocol" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")
 install(DIRECTORY "${CMAKE_BINARY_DIR}/generated/bcos-tars-protocol" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")

@@ -25,6 +25,7 @@
 #include <bcos-cpp-sdk/event/EventSubTask.h>
 #include <bcos-cpp-sdk/ws/Service.h>
 #include <bcos-utilities/BoostLog.h>
+#include <boost/asio/io_context.hpp>
 #include <boost/thread/thread.hpp>
 #include <atomic>
 #include <memory>
@@ -39,7 +40,7 @@ public:
     using Ptr = std::shared_ptr<EventSub>;
     using UniquePtr = std::unique_ptr<EventSub>;
 
-    EventSub() = default;
+    EventSub(boost::asio::io_context& _ioContext) : m_ioContext(&_ioContext) {}
     ~EventSub() override
     {
         stop();
@@ -126,6 +127,7 @@ private:
 
     // timer
     std::shared_ptr<bcos::Timer> m_timer;
+    boost::asio::io_context* m_ioContext;
     // message factory
     std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> m_messagefactory;
     // websocket service

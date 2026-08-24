@@ -29,6 +29,7 @@
 #include <bcos-framework/testutils/faker/FakeTxPool.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-utilities/IOServicePool.h>
 
 using namespace bcos;
 using namespace bcos::sync;
@@ -45,8 +46,9 @@ class FakeBlockSync : public BlockSync
 {
 public:
     using Ptr = std::shared_ptr<FakeBlockSync>;
-    FakeBlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs = 200)
-      : BlockSync(_config, _idleWaitMs)
+    FakeBlockSync(BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext,
+        bcos::IOServicePool::Ptr _ioServicePool, unsigned _idleWaitMs = 200)
+      : BlockSync(_config, _ioContext, std::move(_ioServicePool), _idleWaitMs)
     {
         m_running = true;
         enableAsMaster(true);
@@ -88,10 +90,12 @@ public:
             _nodeTimeMaintenance)
     {}
 
-    BlockSync::Ptr createBlockSync() override
+    BlockSync::Ptr createBlockSync(
+        boost::asio::io_context& _ioContext, bcos::IOServicePool::Ptr _ioServicePool) override
     {
-        auto sync = BlockSyncFactory::createBlockSync();
-        return std::make_shared<FakeBlockSync>(sync->config());
+        auto pool = _ioServicePool;  // keep a copy before move
+        auto sync = BlockSyncFactory::createBlockSync(_ioContext, std::move(_ioServicePool));
+        return std::make_shared<FakeBlockSync>(sync->config(), _ioContext, std::move(pool));
     }
 };
 
@@ -120,12 +124,46 @@ public:
         auto blockSyncFactory =
             std::make_shared<FakeBlockSyncFactory>(m_keyPair->publicKey(), m_blockFactory, m_ledger,
                 m_frontService, m_scheduler, m_consensus, m_nodeTimeMaintenance);
-        m_sync = std::dynamic_pointer_cast<FakeBlockSync>(blockSyncFactory->createBlockSync());
+        m_sync = std::dynamic_pointer_cast<FakeBlockSync>(
+            blockSyncFactory->createBlockSync(*m_ioServicePool->getIOService(), m_ioServicePool));
         if (_fakeGateWay)
         {
             _fakeGateWay->addSync(m_keyPair->publicKey(), m_sync);
         }
         m_frontService->setGateWay(_fakeGateWay);
+    }
+
+    virtual ~SyncFixture()
+    {
+        if (m_sync)
+        {
+            m_sync->stop();
+        }
+        if (m_ledger)
+        {
+            m_ledger->stop();
+        }
+        if (m_frontService)
+        {
+            m_frontService->stop();
+        }
+        // Break the reference cycle this fixture creates:
+        //   FakeGateWay --(m_nodeId2Sync)--> BlockSync --(BlockSyncConfig)-->
+        //   FakeFrontService --(m_fakeGateWay)--> FakeGateWay
+        // Both edges are strong shared_ptrs, so without explicit teardown the
+        // whole node graph (ledger, blocks, txs, io_context) stays alive until
+        // process exit and trips LeakSanitizer. Sever both cross-references
+        // here so the object graph can actually release; the same
+        // FrontService <-> BlockSync cycle exists in production components
+        // and is tracked separately in #5433.
+        if (m_frontService)
+        {
+            m_frontService->setGateWay(nullptr);
+        }
+        if (m_gateWay && m_keyPair)
+        {
+            m_gateWay->removeSync(m_keyPair->publicKey());
+        }
     }
 
     FakeFrontService::Ptr frontService() { return m_frontService; }
@@ -207,6 +245,9 @@ private:
     FakeLedger::Ptr m_ledger;
 
     FakeScheduler::Ptr m_scheduler;
+    // m_ioServicePool MUST be declared before m_sync to ensure it outlives
+    // Timer objects created by m_sync that reference its io_context.
+    IOServicePool::Ptr m_ioServicePool = std::make_shared<IOServicePool>(1, "syncTest");
     FakeBlockSync::Ptr m_sync;
     NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 };

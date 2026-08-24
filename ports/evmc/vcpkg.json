@@ -1,0 +1,12 @@
+{
+    "name": "evmc",
+    "version-string": "0.21.0",
+    "homepage": "https://github.com/ipsilon/evmone",
+    "description": "EVMC headers, as vendored by evmone 0.21.0 (header-only)",
+    "dependencies": [
+        {
+            "name": "vcpkg-cmake",
+            "host": true
+        }
+    ]
+}

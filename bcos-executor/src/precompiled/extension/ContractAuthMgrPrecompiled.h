@@ -36,7 +36,7 @@ enum AuthType : int
 class ContractAuthMgrPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
-    ContractAuthMgrPrecompiled(crypto::Hash::Ptr _hashImpl, bool _isWasm);
+    ContractAuthMgrPrecompiled(crypto::Hash::Ptr _hashImpl);
     ~ContractAuthMgrPrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(

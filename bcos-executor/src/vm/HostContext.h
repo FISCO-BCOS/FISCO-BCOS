@@ -24,11 +24,12 @@
 #include "../Common.h"
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
-#include "bcos-framework/protocol/Protocol.h"
+#include "Eip2929AccessState.h"
+#include "Eip2929Util.h"
+#include "VMInstance.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
-#include <evmc/instructions.h>
 #include <memory>
 
 namespace bcos
@@ -37,9 +38,18 @@ namespace executor
 {
 class TransactionExecutive;
 
-class HostContext : public evmc_host_context
+/// Host-provided hash for the KECCAK256 opcode; dispatches via GlobalHashImpl::g_hashImpl
+/// (SM3 on SM chains). Installed on evmone::VM by VMInstance.
+evmc_bytes32 evm_hash_fn(evmc_host_context* context, const uint8_t* data, size_t size);
+
+class HostContext
 {
 public:
+    /// EVMC host interface table (formerly the inherited `interface` field of the
+    /// concretized evmc_host_context; the evmc type is upstream-opaque again).
+    /// Renamed: `interface` is a Windows SDK macro (#define interface struct).
+    const evmc_host_interface* hostInterface = nullptr;
+
     using UniquePtr = std::unique_ptr<HostContext>;
     using UniqueConstPtr = std::unique_ptr<const HostContext>;
 
@@ -139,7 +149,6 @@ public:
 
     static crypto::Hash::Ptr& hashImpl() { return GlobalHashImpl::g_hashImpl; }
 
-    bool isWasm();
     const std::shared_ptr<TransactionExecutive>& getTransactionExecutive() const
     {
         return m_executive;
@@ -149,6 +158,29 @@ public:
     const bcos::ledger::Features& features() const
     {
         return m_executive->blockContext().features();
+    }
+
+    evmc_revision revision() const { return toRevision(m_executive->blockContext().vmSchedule()); }
+
+    evmc_access_status accessAccount(const evmc_address& addr, evmc_revision rev)
+    {
+        if (!eip2929Enabled(rev, m_executive->blockContext().features()))
+        {
+            return EVMC_ACCESS_COLD;
+        }
+        auto& accessState = eip2929AccessState();
+        return accessState.warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+    }
+
+    evmc_access_status accessStorage(
+        const evmc_address& addr, const evmc_bytes32& key, evmc_revision rev)
+    {
+        if (!eip2929Enabled(rev, m_executive->blockContext().features()))
+        {
+            return EVMC_ACCESS_COLD;
+        }
+        auto& accessState = eip2929AccessState();
+        return accessState.warmUpStorage(addr, key) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
     std::string getContractTableName(const std::string_view& _address);
@@ -171,6 +203,55 @@ private:
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
     std::list<CallParameters::UniquePtr> m_responseStore;
+
+    /// Per-transaction warm set; cached at construction to avoid BucketMap lookup on every
+    /// accessAccount/accessStorage (same pattern as TE HostContext::m_eip2929Access).
+    std::shared_ptr<Eip2929AccessState> m_eip2929Access;
+
+    Eip2929AccessState& eip2929AccessState()
+    {
+        if (!m_eip2929Access)
+        {
+            m_eip2929Access = m_executive->getEip2929AccessState(m_executive->contextID());
+        }
+        return *m_eip2929Access;
+    }
+    struct EVMCAddrHash
+    {
+        size_t operator()(const evmc_address& a) const noexcept
+        {
+            return boost::hash_range(a.bytes, a.bytes + 20);
+        }
+    };
+    struct EVMCAddrEqual
+    {
+        bool operator()(const evmc_address& a, const evmc_address& b) const noexcept
+        {
+            return std::memcmp(a.bytes, b.bytes, 20) == 0;
+        }
+    };
+    struct EVMCPairHash
+    {
+        size_t operator()(const std::pair<evmc_address, evmc_bytes32>& p) const noexcept
+        {
+            size_t h = 0;
+            boost::hash_combine(h, boost::hash_range(p.first.bytes, p.first.bytes + 20));
+            boost::hash_combine(h, boost::hash_range(p.second.bytes, p.second.bytes + 32));
+            return h;
+        }
+    };
+    struct EVMCPairEqual
+    {
+        bool operator()(const std::pair<evmc_address, evmc_bytes32>& a,
+            const std::pair<evmc_address, evmc_bytes32>& b) const noexcept
+        {
+            return std::memcmp(a.first.bytes, b.first.bytes, 20) == 0 &&
+                   std::memcmp(a.second.bytes, b.second.bytes, 32) == 0;
+        }
+    };
+    std::unordered_set<evmc_address, EVMCAddrHash, EVMCAddrEqual> m_warmAccounts;
+    std::unordered_set<std::pair<evmc_address, evmc_bytes32>, EVMCPairHash, EVMCPairEqual>
+        m_warmStorage;
 };
 
 }  // namespace executor

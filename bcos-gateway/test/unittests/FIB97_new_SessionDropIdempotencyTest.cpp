@@ -23,10 +23,9 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
-#include "bcos-utilities/ThreadPool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <thread>
@@ -46,7 +45,9 @@ namespace
 class FakeASIO_FIB97new : public bcos::gateway::ASIOInterface
 {
 public:
-    FakeASIO_FIB97new() = default;
+    FakeASIO_FIB97new()
+      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB97new"), "0.0.0.0", 0)
+    {}
     ~FakeASIO_FIB97new() noexcept override = default;
 
     // Never issues actual async reads — tests that call drop() don't need reads.
@@ -54,8 +55,8 @@ public:
         boost::asio::mutable_buffer /*buffers*/, ReadWriteHandler /*handler*/) override
     {}
 
-    void strandPost(Base_Handler /*handler*/) override {}
-    void stop() override {}
+    void strandPost(Base_Handler /*handler*/) {}
+    void stop() {}
 };
 
 class FakeSocket_FIB97new : public SocketFace

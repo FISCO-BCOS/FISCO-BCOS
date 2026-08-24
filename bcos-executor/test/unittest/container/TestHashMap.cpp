@@ -1,7 +1,3 @@
-#include <range/v3/range_fwd.hpp>
-#include <range/v3/algorithm/partition_point.hpp>
-#include <range/v3/algorithm/lower_bound.hpp>
-#include <range/v3/algorithm/binary_search.hpp>
 
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_unordered_map.h>

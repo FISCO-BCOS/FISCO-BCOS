@@ -62,10 +62,10 @@ bcostars::Error TxPoolServiceServer::broadcastTransaction(
 }
 
 bcostars::Error TxPoolServiceServer::broadcastTransactionBuffer(
-    const vector<tars::Char>& transactionBuffer, tars::TarsCurrentPtr current)
+    const std::vector<tars::Char>& transactionBuffer, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    bcos::task::wait([](decltype(this) self, vector<tars::Char> transactionBuffer,
+    bcos::task::wait([](decltype(this) self, std::vector<tars::Char> transactionBuffer,
                          decltype(current) current) -> bcos::task::Task<void> {
         try
         {
@@ -78,12 +78,12 @@ bcostars::Error TxPoolServiceServer::broadcastTransactionBuffer(
         {
             async_response_broadcastTransactionBuffer(current, toTarsError(e));
         }
-    }(this, std::move(const_cast<vector<tars::Char>&>(transactionBuffer)), current));
+    }(this, std::move(const_cast<std::vector<tars::Char>&>(transactionBuffer)), current));
     return {};
 }
 
-bcostars::Error TxPoolServiceServer::asyncFillBlock(const vector<vector<tars::Char>>& txHashs,
-    vector<bcostars::Transaction>& filled, tars::TarsCurrentPtr current)
+bcostars::Error TxPoolServiceServer::asyncFillBlock(const std::vector<std::vector<tars::Char>>& txHashs,
+    std::vector<bcostars::Transaction>& filled, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     auto hashList = std::make_shared<std::vector<bcos::crypto::HashType>>();
@@ -118,8 +118,8 @@ bcostars::Error TxPoolServiceServer::asyncFillBlock(const vector<vector<tars::Ch
 }
 
 
-bcostars::Error TxPoolServiceServer::asyncMarkTxs(const vector<vector<tars::Char>>& txHashs,
-    tars::Bool sealedFlag, tars::Int64 _batchId, const vector<tars::Char>& _batchHash,
+bcostars::Error TxPoolServiceServer::asyncMarkTxs(const std::vector<std::vector<tars::Char>>& txHashs,
+    tars::Bool sealedFlag, tars::Int64 _batchId, const std::vector<tars::Char>& _batchHash,
     tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
@@ -137,7 +137,7 @@ bcostars::Error TxPoolServiceServer::asyncMarkTxs(const vector<vector<tars::Char
 }
 
 bcostars::Error TxPoolServiceServer::asyncNotifyBlockResult(tars::Int64 blockNumber,
-    const vector<bcostars::TransactionSubmitResult>& result, tars::TarsCurrentPtr current)
+    const std::vector<bcostars::TransactionSubmitResult>& result, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
 
@@ -158,7 +158,7 @@ bcostars::Error TxPoolServiceServer::asyncNotifyBlockResult(tars::Int64 blockNum
 }
 
 bcostars::Error TxPoolServiceServer::asyncNotifyTxsSyncMessage(const bcostars::Error& error,
-    const std::string& id, const vector<tars::Char>& nodeID, const vector<tars::Char>& data,
+    const std::string& id, const std::vector<tars::Char>& nodeID, const std::vector<tars::Char>& data,
     tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
@@ -176,7 +176,7 @@ bcostars::Error TxPoolServiceServer::asyncNotifyTxsSyncMessage(const bcostars::E
 }
 
 bcostars::Error TxPoolServiceServer::asyncSealTxs(tars::Int64 txsLimit,
-    const vector<vector<tars::Char>>& avoidTxs, bcostars::Block& txsList,
+    const std::vector<std::vector<tars::Char>>& avoidTxs, bcostars::Block& txsList,
     bcostars::Block& sysTxsList, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
@@ -209,7 +209,7 @@ bcostars::Error TxPoolServiceServer::asyncSealTxs(tars::Int64 txsLimit,
     return {};
 }
 
-bcostars::Error TxPoolServiceServer::asyncVerifyBlock(const vector<tars::Char>& generatedNodeID,
+bcostars::Error TxPoolServiceServer::asyncVerifyBlock(const std::vector<tars::Char>& generatedNodeID,
     const bcostars::Block& block, tars::Bool& result, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
@@ -226,7 +226,7 @@ bcostars::Error TxPoolServiceServer::asyncVerifyBlock(const vector<tars::Char>& 
 }
 
 bcostars::Error TxPoolServiceServer::notifyConnectedNodes(
-    const vector<vector<tars::Char>>& connectedNodes, tars::TarsCurrentPtr current)
+    const std::vector<std::vector<tars::Char>>& connectedNodes, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
 
@@ -246,7 +246,7 @@ bcostars::Error TxPoolServiceServer::notifyConnectedNodes(
 }
 
 bcostars::Error TxPoolServiceServer::notifyConsensusNodeList(
-    const vector<bcostars::ConsensusNode>& consensusNodeList, tars::TarsCurrentPtr current)
+    const std::vector<bcostars::ConsensusNode>& consensusNodeList, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
 
@@ -268,7 +268,7 @@ bcostars::Error TxPoolServiceServer::notifyConsensusNodeList(
 }
 
 bcostars::Error TxPoolServiceServer::notifyObserverNodeList(
-    const vector<bcostars::ConsensusNode>& observerNodeList, tars::TarsCurrentPtr current)
+    const std::vector<bcostars::ConsensusNode>& observerNodeList, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
 

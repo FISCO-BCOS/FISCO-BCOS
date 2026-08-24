@@ -195,7 +195,7 @@ int main(int argc, char** argv)
     std::promise<bool> p;
     auto f = p.get_future();
     rpcService->sendTransaction(*keyPair, group, "", "", std::move(binBytes), "", 0, "extraData",
-        [&p](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
+        [&p](bcos::Error::Ptr _error, bcos::bytes _resp) {
             if (_error && _error->errorCode() != 0)
             {
                 std::cout << LOG_DESC(" [DeployHello] send transaction response failed")
@@ -204,7 +204,7 @@ int main(int argc, char** argv)
             }
             else
             {
-                std::string receipt = std::string(_resp->begin(), _resp->end());
+                std::string receipt = std::string(_resp.begin(), _resp.end());
                 std::cout << LOG_DESC(" [DeployHello] recv response success ")
                           << LOG_KV("transaction receipt", receipt) << std::endl;
 

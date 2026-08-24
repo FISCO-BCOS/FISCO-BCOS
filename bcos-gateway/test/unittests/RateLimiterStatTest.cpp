@@ -62,7 +62,10 @@ BOOST_AUTO_TEST_CASE(keyFormatters)
 
 BOOST_AUTO_TEST_CASE(updateAndFlush)
 {
-    RateLimiterStat stat;
+    // RateLimiterStat borrows an external io_context now (it used to own its report Timer);
+    // never run here, so the periodic report never fires.
+    boost::asio::io_context ioContext;
+    RateLimiterStat stat(ioContext);
     stat.setStatInterval(60000);
     BOOST_CHECK_EQUAL(stat.statInterval(), 60000);
 

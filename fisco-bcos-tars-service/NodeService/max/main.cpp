@@ -45,11 +45,11 @@ int main(int argc, char* argv[])
     }
     catch (std::exception& e)
     {
-        cerr << "NodeService std::exception:" << e.what() << std::endl;
+        std::cerr << "NodeService std::exception:" << e.what() << std::endl;
     }
     catch (...)
     {
-        cerr << "NodeService unknown exception." << std::endl;
+        std::cerr << "NodeService unknown exception." << std::endl;
     }
     return -1;
 }

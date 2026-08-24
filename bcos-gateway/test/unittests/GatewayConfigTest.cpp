@@ -22,10 +22,8 @@
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/algorithm/string/join.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace gateway;
 using namespace bcos::test;
@@ -149,7 +147,6 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
         std::set<NodeIPEndpoint> nodeIPEndpointSet;
         config->parseConnectedJson(json, nodeIPEndpointSet);
         BOOST_CHECK_EQUAL(nodeIPEndpointSet.size(), 3);
-        BOOST_CHECK_EQUAL(config->threadPoolSize(), 8);
     }
 
     {
@@ -158,7 +155,6 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
         std::set<NodeIPEndpoint> nodeIPEndpointSet;
         config->parseConnectedJson(json, nodeIPEndpointSet);
         BOOST_CHECK_EQUAL(nodeIPEndpointSet.size(), 0);
-        BOOST_CHECK_EQUAL(config->threadPoolSize(), 8);
     }
 
     {
@@ -170,7 +166,6 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
         std::set<NodeIPEndpoint> nodeIPEndpointSet;
         config->parseConnectedJson(json, nodeIPEndpointSet);
         BOOST_CHECK_EQUAL(nodeIPEndpointSet.size(), 2);
-        BOOST_CHECK_EQUAL(config->threadPoolSize(), 8);
     }
 }
 
@@ -301,7 +296,6 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
         BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 1);
         BOOST_CHECK(!rateLimiterConfig.allowExceedMaxPermitSize);
-        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
         BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
         BOOST_CHECK(!rateLimiterConfig.enableInRateLimit());
         BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
@@ -318,7 +312,6 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 1);
         BOOST_CHECK(!rateLimiterConfig.allowExceedMaxPermitSize);
-        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
         BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
         BOOST_CHECK(!rateLimiterConfig.enableInRateLimit());
         BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
@@ -340,9 +333,6 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         auto timeWindowSec = rateLimiterConfig.timeWindowSec;
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 3);
-        BOOST_CHECK(rateLimiterConfig.enableDistributedRatelimit);
-        BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 13);
         BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 12345);
 
         BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
@@ -417,13 +407,6 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         auto rateLimiterConfig = config->rateLimiterConfig();
 
         BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
-
-        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
-        BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 20);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 60000);
-
-        BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
         BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
         BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
 
@@ -459,23 +442,9 @@ BOOST_AUTO_TEST_CASE(test_doubleMBToBit)
     BOOST_CHECK_EQUAL(config->doubleMBToBit(100), 100 * 1024 * 1024 / 8);
 }
 
-BOOST_AUTO_TEST_CASE(test_RedisConfig)
-{
-    auto config = std::make_shared<GatewayConfig>();
-    std::string configIni("data/config/config_ipv6.ini");
-
-    boost::property_tree::ptree pt;
-    boost::property_tree::ini_parser::read_ini(configIni, pt);
-
-    config->initRedisConfig(pt);
-
-    BOOST_CHECK_EQUAL(config->redisConfig().host, "127.127.127.127");
-    BOOST_CHECK_EQUAL(config->redisConfig().port, 12345);
-    BOOST_CHECK_EQUAL(config->redisConfig().connectionPoolSize, 111);
-    BOOST_CHECK_EQUAL(config->redisConfig().timeout, 54321);
-    BOOST_CHECK_EQUAL(config->redisConfig().password, "abc");
-    BOOST_CHECK_EQUAL(config->redisConfig().db, 12);
-}
+// release-3.17.0 also had a test_RedisConfig case here. GatewayConfig::initRedisConfig() and
+// redisConfig() no longer exist (the distributed-ratelimit redis backend was removed), so there
+// is nothing left for it to exercise and it is dropped rather than stubbed out.
 
 // FIB-184: inbound session caps are plumbed through config (p2p.max_concurrent_sessions /
 // p2p.max_sessions_per_ip) instead of being hardcoded in Host.

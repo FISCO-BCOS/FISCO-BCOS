@@ -10,8 +10,8 @@
 
 #include "precompiled/extension/SmallBankPrecompiled.h"
 #include "libprecompiled/PreCompiledFixture.h"
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::precompiled;
 using namespace bcos::executor;
@@ -25,7 +25,9 @@ public:
     {
         // V3_0 makes the executor create the SmallBank test tables in the backend
         // at build, so the precompiled is registered and routable.
-        setIsWasm(false, false, false, protocol::BlockVersion::V3_0_VERSION);
+        // setIsWasm(isWasm, isCheckAuth, isKeyPage, version) became prepareEnv(...) when WASM
+        // support was removed (#5348); the leading isWasm=false argument no longer exists.
+        prepareEnv(false, false, protocol::BlockVersion::V3_0_VERSION);
     }
     ~SmallBankPrecompiledFixture() override = default;
 

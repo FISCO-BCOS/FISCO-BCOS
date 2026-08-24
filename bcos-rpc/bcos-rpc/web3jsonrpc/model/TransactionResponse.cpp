@@ -1,5 +1,7 @@
 #include "TransactionResponse.h"
+#include "bcos-rpc/web3jsonrpc/model/DepositTransaction.h"
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
+#include <bcos-crypto/hash/Keccak256.h>
 
 void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
     const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash)
@@ -10,6 +12,28 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     {
         auto gasPrice = receipt.effectiveGasPrice();
         result["gasPrice"] = std::string{gasPrice.empty() ? "0x0" : gasPrice};
+    }
+
+    // OP Stack deposit (0x7e): the tx JSON nonce must reflect the deposit's actual
+    // execution nonce (Regolith+ semantics — the deposit nonce lives in the receipt,
+    // deposits carry no nonce field of their own). The base combineTxResponse above
+    // emits 0x0; overwrite it with the receipt's depositNonce when present, so
+    // contract-address derivation (keccak(rlp([sender, nonce]))[12:]) and wallets see
+    // the value op-geth reports. Without the meta the deposit was never executed (or is
+    // a pre-Regolith block) and 0x0 stands.
+    if (auto extraBytes = tx.extraTransactionBytes();
+        !extraBytes.empty() && extraBytes[0] == c_depositTxType)
+    {
+        if (auto meta = receipt.opStackMeta(); meta.has_value() && meta->deposit_nonce)
+        {
+            result["nonce"] = toQuantity(*meta->deposit_nonce);
+            // op-geth also surfaces depositReceiptVersion on the tx object
+            // (internal/ethapi/api.go:1210-1213); absent without the meta.
+            if (meta->deposit_receipt_version)
+            {
+                result["depositReceiptVersion"] = toQuantity(*meta->deposit_receipt_version);
+            }
+        }
     }
 }
 
@@ -39,21 +63,45 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     }
     result["gas"] = toQuantity(tx.gasLimit());
     auto gasPrice = tx.gasPrice();
-
-    // FIXME)): return will case coredump in executor
-    result["gasPrice"] = std::string(gasPrice.empty() ? "0x0" : gasPrice);
+    result["gasPrice"] = toQuantity(gasPrice.value_or(0));
     result["hash"] = tx.hash().hexPrefixed();
     result["input"] = toHexStringWithPrefix(tx.input());
+
+    // OP Stack deposit (0x7e): extraTransactionBytes carries the full raw envelope, and
+    // the geth-shaped deposit fields (sourceHash/mint/isSystemTx, zero nonce/gasPrice and
+    // zero v/r/s — deposits are unsigned) come from decoding it. Return early: the
+    // signature-derived fields below have no deposit semantics.
+    if (auto extraBytes = tx.extraTransactionBytes();
+        !extraBytes.empty() && extraBytes[0] == c_depositTxType)
+    {
+        DepositTransaction deposit;
+        auto rawCursor = bcos::bytesRef(const_cast<byte*>(extraBytes.data()), extraBytes.size());
+        if (auto error = decodeDepositTransaction(rawCursor, deposit); error == nullptr)
+        {
+            combineDepositTxResponse(result, deposit);
+        }
+        else
+        {
+            // Undecodable deposit bytes: keep the generic fields already filled and mark
+            // the type; never fall through to the Web3 payload decoder (wrong format) or
+            // to the signature fields (deposits carry none).
+            result["type"] = toQuantity(static_cast<uint64_t>(c_depositTxType));
+            result["nonce"] = "0x0";
+            result["v"] = "0x0";
+            result["r"] = "0x0";
+            result["s"] = "0x0";
+        }
+        return;
+    }
 
     if (tx.type() == bcos::protocol::TransactionType::BCOSTransaction) [[unlikely]]
     {
         result["type"] = toQuantity(0);
         // web3 tools do not compatible with too long hex
         result["nonce"] = "0x" + std::string(tx.nonce());
-        result["value"] = std::string(tx.value().empty() ? "0x0" : tx.value());
-        result["maxPriorityFeePerGas"] =
-            std::string(tx.maxPriorityFeePerGas().empty() ? "0x0" : tx.maxPriorityFeePerGas());
-        result["maxFeePerGas"] = std::string(tx.maxFeePerGas().empty() ? "0x0" : tx.maxFeePerGas());
+        result["value"] = toQuantity(tx.value());
+        result["maxPriorityFeePerGas"] = toQuantity(tx.maxPriorityFeePerGas().value_or(0));
+        result["maxFeePerGas"] = toQuantity(tx.maxFeePerGas().value_or(0));
         result["chainId"] = "0x0";
     }
     else [[likely]]
@@ -65,7 +113,9 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         result["nonce"] = toQuantity(web3Tx.nonce);
         result["type"] = toQuantity(static_cast<uint8_t>(web3Tx.type));
         result["value"] = toQuantity(web3Tx.value);
-        if (web3Tx.type >= TransactionType::EIP2930)
+        // Use explicit range checks rather than `>=` so that Deposit (0x7e), which is numerically
+        // larger than all EIP types, is excluded from EIP-specific field output.
+        if (web3Tx.type >= TransactionType::EIP2930 && web3Tx.type <= TransactionType::EIP4844)
         {
             result["accessList"] = Json::arrayValue;
             result["accessList"].resize(web3Tx.accessList.size());
@@ -83,13 +133,29 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
                 result["accessList"].append(std::move(access));
             }
         }
-        if (web3Tx.type >= TransactionType::EIP1559)
+        if (web3Tx.type >= TransactionType::EIP1559 && web3Tx.type <= TransactionType::EIP4844)
         {
             result["maxPriorityFeePerGas"] = toQuantity(web3Tx.maxPriorityFeePerGas);
             result["maxFeePerGas"] = toQuantity(web3Tx.maxFeePerGas);
         }
         result["chainId"] = toQuantity(web3Tx.chainId.value_or(0));
-        if (web3Tx.type >= TransactionType::EIP4844)
+        // Legacy transactions encode v as the EIP-155 value chainId*2+35+parity (27+parity
+        // pre-EIP-155); typed transactions use the plain y-parity. Clients like op-geth's
+        // types.NewTx reject a legacy v < 35 when chainId is set, so the full value must be
+        // reconstructed from the stored parity byte — the storage layer keeps only the parity.
+        if (web3Tx.type == TransactionType::Legacy)
+        {
+            if (web3Tx.chainId.has_value() && web3Tx.chainId.value() != 0)
+            {
+                result["v"] =
+                    toQuantity(u256(web3Tx.chainId.value()) * 2 + 35 + tx.signatureData()[64]);
+            }
+            else
+            {
+                result["v"] = toQuantity(27 + tx.signatureData()[64]);
+            }
+        }
+        if (web3Tx.type == TransactionType::EIP4844)
         {
             result["maxFeePerBlobGas"] = web3Tx.maxFeePerBlobGas.str();
             result["blobVersionedHashes"] = Json::arrayValue;
@@ -103,5 +169,10 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     }
     result["r"] = toQuantity(tx.signatureData().getCroppedData(0, 32));
     result["s"] = toQuantity(tx.signatureData().getCroppedData(32, 32));
-    result["v"] = toQuantity(tx.signatureData().getCroppedData(64, 1));
+    // v: set for legacy transactions above (EIP-155 reconstruction); everything else
+    // reports the stored y-parity byte directly.
+    if (!result.isMember("v"))
+    {
+        result["v"] = toQuantity(tx.signatureData().getCroppedData(64, 1));
+    }
 }

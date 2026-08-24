@@ -31,7 +31,7 @@ class EndpointsMapping
 {
 public:
     using Handler = task::Task<void> (Endpoints::*)(const Json::Value&, Json::Value&);
-    EndpointsMapping() { addHandlers(); };
+    EndpointsMapping(bool enableOPEngine = false) { addHandlers(enableOPEngine); };
     ~EndpointsMapping() = default;
     EndpointsMapping(const EndpointsMapping&) = delete;
     EndpointsMapping& operator=(const EndpointsMapping&) = delete;
@@ -39,7 +39,8 @@ public:
     [[nodiscard]] std::optional<Handler> findHandler(const std::string& _method) const;
 
 private:
-    void addHandlers();
+    void addHandlers(bool enableOPEngine = false);
+    void addEngineHandlers();
     void addEthHandlers();
     void addNetHandlers();
     void addWeb3Handlers();

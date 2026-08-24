@@ -16,7 +16,6 @@
 # limitations under the License.
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.10)
 
 if(WITH_LEDGER_ELECTION)
     project(bcos-leader-election VERSION ${VERSION})
@@ -24,8 +23,8 @@ if(WITH_LEDGER_ELECTION)
     file(GLOB_RECURSE SRCS src/*.cpp)
     find_package(etcd-cpp-api CONFIG REQUIRED)
     find_package(gRPC REQUIRED)
-    add_library(${LEADER_ELECTION_TARGET} ${SRCS})
-    target_link_libraries(${LEADER_ELECTION_TARGET} PUBLIC bcos-utilities bcos-framework etcd-cpp-api)
+    add_library(leader_election ${SRCS})
+    target_link_libraries(leader_election PUBLIC bcos-utilities bcos-framework etcd-cpp-api)
 
     if(TESTS)
         add_subdirectory(test)

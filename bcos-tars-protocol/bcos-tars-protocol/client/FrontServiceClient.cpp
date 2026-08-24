@@ -157,8 +157,8 @@ void bcostars::FrontServiceClient::asyncSendMessageByNodeID(int _moduleID,
         {}
 
         void callback_asyncSendMessageByNodeID(const bcostars::Error& ret,
-            const vector<tars::Char>& responseNodeID, const vector<tars::Char>& responseData,
-            const std::string& seq) override
+            const std::vector<tars::Char>& responseNodeID,
+            const std::vector<tars::Char>& responseData, const std::string& seq) override
         {
             if (!m_callback)
             {

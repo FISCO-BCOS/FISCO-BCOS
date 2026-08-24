@@ -26,8 +26,9 @@ class PBFTTimer : public Timer
 {
 public:
     using Ptr = std::shared_ptr<PBFTTimer>;
-    explicit PBFTTimer(int64_t _timeout, std::string const& _name = "pbftTimer")
-      : Timer(_timeout, _name)
+    explicit PBFTTimer(boost::asio::io_context& _ioService, int64_t _timeout,
+        std::string const& _name = "pbftTimer")
+      : Timer(_ioService, _timeout, _name)
     {
         updateAdjustedTimeout();
     }

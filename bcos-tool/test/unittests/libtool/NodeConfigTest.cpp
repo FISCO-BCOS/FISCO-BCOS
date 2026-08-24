@@ -8,7 +8,6 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
-#include <bcos-tool/Exceptions.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
 
@@ -40,8 +39,8 @@ BOOST_AUTO_TEST_CASE(defaultsAreReadableWithoutLoad)
     BOOST_CHECK_NO_THROW(cfg.chainId());
     BOOST_CHECK_NO_THROW(cfg.groupId());
     BOOST_CHECK_NO_THROW(cfg.txpoolLimit());
-    BOOST_CHECK_NO_THROW(cfg.notifyWorkerNum());
-    BOOST_CHECK_NO_THROW(cfg.verifierWorkerNum());
+    // notifyWorkerNum() / verifierWorkerNum() were removed with the per-module worker-pool knobs
+    // (thread_pool.io_thread_count now sizes the shared pool), so there is nothing to probe here.
     BOOST_CHECK_NO_THROW(cfg.checkBlockLimit());
     BOOST_CHECK_NO_THROW(cfg.blockLimit());
     BOOST_CHECK_NO_THROW(cfg.privateKeyPath());
@@ -110,8 +109,8 @@ BOOST_AUTO_TEST_CASE(loadConfigFromStringPartialDocumentDispatchesSubLoaders)
         // config; loadTxPoolConfig runs before it, so its effect is still visible.
     }
     // Concrete post-condition: the [txpool] block was dispatched and applied.
+    // (notifyWorkerNum() was the second post-condition; the getter no longer exists.)
     BOOST_CHECK_EQUAL(cfg.txpoolLimit(), 15000U);
-    BOOST_CHECK_EQUAL(cfg.notifyWorkerNum(), 2U);
 }
 
 // The cert/key material has direct setters (used when certs are injected

@@ -58,7 +58,7 @@ bool PaillierPrecompiled::isParallelPrecompiled()
     return true;
 }
 
-std::vector<std::string> PaillierPrecompiled::getParallelTag(bytesConstRef, bool)
+std::vector<std::string> PaillierPrecompiled::getParallelTag(bytesConstRef)
 {
     return {};
 }
@@ -74,7 +74,7 @@ PrecompiledExecResult::Ptr PaillierPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
 
     if (func == name2Selector[PAILLIER_METHOD_SET_STR])

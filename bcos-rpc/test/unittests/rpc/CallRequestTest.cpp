@@ -4,12 +4,33 @@
  */
 
 #include "bcos-rpc/web3jsonrpc/model/CallRequest.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <json/json.h>
-#include <boost/test/unit_test.hpp>
+#include <bcos-framework/testutils/faker/FakeScheduler.h>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::rpc;
+
+namespace
+{
+/// Scheduler stub that answers getPendingStorageAt("nonce", ...) with a fixed raw
+/// value, simulating the FISCO account-table row (a DECIMAL nonce string).
+class NonceStubScheduler : public bcos::test::FakeScheduler
+{
+public:
+    using bcos::test::FakeScheduler::FakeScheduler;
+    std::string nonceValue;
+
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view, std::string_view, bcos::protocol::BlockNumber) override
+    {
+        co_return bcos::storage::Entry(nonceValue);
+    }
+};
+}  // namespace
 
 BOOST_AUTO_TEST_SUITE(testCallRequest)
 
@@ -164,6 +185,115 @@ BOOST_AUTO_TEST_CASE(decode_invalid_fee_fields_pass_through)
     BOOST_CHECK_EQUAL(req.maxPriorityFeePerGas.value(), "abc");
     BOOST_TEST(req.maxFeePerGas.has_value());
     BOOST_CHECK_EQUAL(req.maxFeePerGas.value(), "\t");
+}
+
+BOOST_AUTO_TEST_CASE(deployEstimateGasParsesDecimalNonce)
+{
+    // FISCO stores account nonces as DECIMAL strings, and the transaction nonce is
+    // parsed as HEX downstream (bcosTransactionToEvmone via safeFromQuantity, and
+    // TransactionExecutorImpl via hex2u). A deployment eth_estimateGas must therefore
+    // convert the stored decimal "12" to the hex quantity "0xc" — reading it as hex
+    // would yield 0x12 = 18 and fail NONCE_TOO_HIGH in the executor.
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+
+    auto nonceScheduler = std::make_shared<NonceStubScheduler>(nullptr, nullptr);
+    nonceScheduler->nonceValue = "12";
+
+    CallRequest req;
+    req.from = "0x1234567890abcdef1234567890abcdef12345678";
+    req.to = "";  // deployment (no `to`)
+
+    auto tx = req.takeToTransaction(txFactory, nonceScheduler);
+    // Decimal 12, not hex 0x12 = 18.
+    BOOST_CHECK_EQUAL(tx->nonce(), "0xc");
+}
+
+BOOST_AUTO_TEST_CASE(deployEstimateGasLeavesCorruptNonceUnset)
+{
+    // A stored nonce that is empty or non-numeric must not abort the RPC (this
+    // function is noexcept) — the nonce is left unset and the executor's dry-run
+    // falls back to the sender's state nonce.
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+
+    for (auto const& corrupt : {std::string{}, std::string{"12a"}, std::string{"abc"}})
+    {
+        auto nonceScheduler = std::make_shared<NonceStubScheduler>(nullptr, nullptr);
+        nonceScheduler->nonceValue = corrupt;
+
+        CallRequest req;
+        req.from = "0x1234567890abcdef1234567890abcdef12345678";
+        req.to = "";
+
+        auto tx = req.takeToTransaction(txFactory, nonceScheduler);
+        BOOST_CHECK(tx->nonce().empty());
+    }
+}
+
+// Bug B regression (08-18): the OP-line call pipeline (OpstackExecutor::m_prepare →
+// opValidate) prices eth_call through the tx's RLP envelope (extraTransactionBytes) and
+// rejects an empty envelope with EINVAL — the RPC-built simulation tx must carry the
+// envelope, keep the nonce passthrough semantics, and force the requested sender.
+BOOST_AUTO_TEST_CASE(callTxCarriesEnvelopeForOpPipeline)
+{
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+
+    CallRequest req;
+    req.from = "0x6afa9580383e6627da926b6f6ed9ab2b9c8cc693";
+    req.to = "0x90f8bf6a479f320ead074411a4b0e7944ea8c9c1";
+    req.value = "0x1";
+    req.gas = 21000;
+
+    auto tx = req.takeToTransaction(txFactory, nullptr);
+    // The envelope the OP pipeline prices and type-checks must be present.
+    BOOST_CHECK(!tx->extraTransactionBytes().empty());
+    // No pending-nonce scheduler → the nonce stays unset for the executor's state fallback.
+    BOOST_CHECK_EQUAL(tx->nonce(), std::string{});
+    // The simulation sender is the request's `from` (forced as raw address bytes), not the
+    // dummy-signature recovery.
+    auto const expectedSender = Address("0x6afa9580383e6627da926b6f6ed9ab2b9c8cc693").asBytes();
+    BOOST_CHECK(
+        tx->sender() == std::string_view(reinterpret_cast<char const*>(expectedSender.data()),
+                            expectedSender.size()));
+
+    // With an explicit gasPrice the envelope is still carried (pricing passes through).
+    req.gasPrice = "0x3b9aca00";
+    auto tx2 = req.takeToTransaction(txFactory, nullptr);
+    BOOST_CHECK(!tx2->extraTransactionBytes().empty());
+}
+
+// Ported from op-alignment's CallTxWithZeroGasUsesBlockGasLeft (audit O4), adapted to merged's
+// architecture: the zero-gas eth_call fallback lives HERE (CallRequest defaults an absent gas to
+// the 30M block-gas figure) instead of inside the executor. Regression for the phase-1 real-node
+// finding where eth_call reported "intrinsic gas too low": without this default, a gas-less call
+// reaches the executor with gasLimit 0 and fails evmone's intrinsic-gas validation.
+BOOST_AUTO_TEST_CASE(callTxWithoutGasDefaultsToBlockGasFigure)
+{
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+
+    CallRequest req;
+    req.from = "0x6afa9580383e6627da926b6f6ed9ab2b9c8cc693";
+    req.to = "0x90f8bf6a479f320ead074411a4b0e7944ea8c9c1";
+    // req.gas deliberately unset — the eth_call default path.
+
+    auto tx = req.takeToTransaction(txFactory, nullptr);
+    BOOST_REQUIRE(tx != nullptr);
+    BOOST_CHECK_EQUAL(tx->gasLimit(), 30'000'000);
+    // An explicit gas still wins over the default.
+    req.gas = 21'000;
+    auto tx2 = req.takeToTransaction(txFactory, nullptr);
+    BOOST_CHECK_EQUAL(tx2->gasLimit(), 21'000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

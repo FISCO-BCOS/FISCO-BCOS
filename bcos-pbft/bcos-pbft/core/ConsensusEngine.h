@@ -22,6 +22,7 @@
 #include "Common.h"
 #include "bcos-framework/consensus/ConsensusEngineInterface.h"
 #include <bcos-utilities/Worker.h>
+#include <boost/asio/io_context.hpp>
 #include <chrono>
 #include <thread>
 
@@ -31,7 +32,9 @@ namespace bcos::consensus
 class ConsensusEngine : public virtual ConsensusEngineInterface, public Worker
 {
 public:
-    ConsensusEngine(std::string _name, unsigned _idleWaitMs) : Worker(_name, _idleWaitMs) {}
+    ConsensusEngine(boost::asio::io_context& _ioContext, std::string _name, unsigned _idleWaitMs)
+      : Worker(_ioContext, _name, _idleWaitMs)
+    {}
 
     ~ConsensusEngine() override { stop(); }
     void start() override
@@ -55,41 +58,16 @@ public:
         }
         CONSENSUS_LOG(INFO) << LOG_DESC("Stop consensusEngine");
         m_started = false;
-        finishWorker();
+        // stopWorking() already calls finishWorker() internally.
         if (isWorking())
         {
             // stop the worker thread
             stopWorking();
-            terminate();
         }
         CONSENSUS_LOG(INFO) << LOG_DESC("ConsensusEngine stopped");
     }
 
-    void workerProcessLoop() override
-    {
-        while (isWorking())
-        {
-            try
-            {
-                executeWorker();
-            }
-            catch (std::exception const& _e)
-            {
-                CONSENSUS_LOG(ERROR) << LOG_DESC("Process consensus task exception")
-                                     << LOG_KV("message", boost::diagnostic_information(_e));
-                // FIB-111: sleep after each exception to prevent tight CPU spin
-                // when executeWorker() repeatedly throws (e.g. due to malformed
-                // consensus messages from a Byzantine peer).
-                std::this_thread::sleep_for(std::chrono::milliseconds(c_exceptionBackoffMs));
-            }
-        }
-    }
-
 protected:
     std::atomic_bool m_started = {false};
-
-    // Backoff delay (ms) applied after each exception in workerProcessLoop().
-    // Prevents tight CPU spin when executeWorker() repeatedly throws.
-    static constexpr unsigned c_exceptionBackoffMs = 50;
 };
 }  // namespace bcos::consensus

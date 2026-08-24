@@ -31,6 +31,7 @@
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/exception_handler.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
+#include <mutex>
 
 using namespace bcos;
 
@@ -38,6 +39,18 @@ namespace logging = boost::log;
 namespace expr = boost::log::expressions;
 
 constexpr int MB_IN_BYTES = 1048576;
+
+namespace
+{
+void initializeLogAttributes()
+{
+    static std::once_flag once;
+    std::call_once(once, []() {
+        boost::log::add_common_attributes();
+        boost::log::core::get()->add_global_attribute("ThreadName", bcos::log::thread_name());
+    });
+}
+}  // namespace
 
 // register SIGUSE2 for dynamic reset log level
 struct BoostLogLevelResetHandler
@@ -115,7 +128,7 @@ boost::shared_ptr<bcos::BoostLogInitializer::console_sink_t>
 BoostLogInitializer::initConsoleLogSink(
     boost::property_tree::ptree const& _pt, unsigned _logLevel, std::string const& channel)
 {
-    boost::log::add_common_attributes();
+    initializeLogAttributes();
     boost::shared_ptr<console_sink_t> consoleSink(new console_sink_t());
     // FIB-184: the sink is asynchronous, so its backend runs on a dedicated feeding thread. An
     // exception thrown there (formatting/IO during feed_records) with no handler propagates to
@@ -243,7 +256,7 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
         setLogFormatter(sink, m_logFormat);
     }
     setFileLogLevel((LogLevel)m_logLevel);
-    boost::log::core::get()->add_global_attribute("ThreadName", bcos::log::thread_name());
+    initializeLogAttributes();
 
     auto enableRateCollector = _pt.get<bool>("log.enable_rate_collector", false);
     if (enableRateCollector)
@@ -270,7 +283,7 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initHo
     sink->set_exception_handler(boost::log::make_exception_suppressor());
     sink->locked_backend()->set_open_mode(std::ios::ate);
     sink->locked_backend()->set_time_based_rotation(
-        boost::bind(&BoostLogInitializer::canRotate, this, (m_currentHourVec.size() - 1)));
+        [this, index = (m_currentHourVec.size() - 1)]() { return canRotate(index); });
 
     sink->locked_backend()->set_file_name_pattern(fileName);
     /// set rotation size MB
@@ -282,8 +295,6 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initHo
     boost::log::core::get()->add_sink(sink);
     m_sinks.push_back(sink);
     boost::log::core::get()->set_logging_enabled(m_enableLog);
-    // add attributes
-    boost::log::add_common_attributes();
     return sink;
 }
 
@@ -328,8 +339,6 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLo
     boost::log::core::get()->add_sink(sink);
     m_sinks.push_back(sink);
     boost::log::core::get()->set_logging_enabled(m_enableLog);
-    // add attributes
-    boost::log::add_common_attributes();
     return sink;
 }
 
@@ -387,7 +396,7 @@ void BoostLogInitializer::stopLogging()
 }
 
 /// stop a single sink
-void BoostLogInitializer::stopLogging(boost::shared_ptr<sink_t> sink)
+void BoostLogInitializer::stopLogging(boost::shared_ptr<sink_t> const& sink)
 {
     if (!sink)
     {
@@ -402,7 +411,6 @@ void BoostLogInitializer::stopLogging(boost::shared_ptr<sink_t> sink)
     sink->stop();
     // flush all log records that may have left buffered
     sink->flush();
-    sink.reset();
 }
 void bcos::BoostLogInitializer::Sink::consume(
     const boost::log::record_view& rec, const std::string& str)

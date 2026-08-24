@@ -24,11 +24,17 @@ set(TEST_BINARY_NAME test-bcos-ledger)
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/bcos-framework)
+# header-only bcos-storage/KeyPrefixes.h ("/mpt/" node-row keys), same as the ledger target
+target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/bcos-storage)
 
 find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} PRIVATE ${LEDGER_TARGET} ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} PRIVATE ledger bcos-crypto protocol-tars Boost::unit_test_framework)
 target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)
+# ethereum/tests vectors (EthereumTrieVectorsTest.cpp), installed by the ethereum-tests
+# data port (ports-data/) under the tests manifest feature
+target_compile_definitions(${TEST_BINARY_NAME} PRIVATE
+    ETHEREUM_TESTS_DIR="${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/ethereum-tests")
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 # add_test(NAME test-ledger WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 include(SearchTestCases)

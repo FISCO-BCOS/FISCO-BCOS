@@ -44,8 +44,6 @@ constexpr std::size_t MAX_PAYLOAD_LENGTH = 8 * 1024 * 1024;  // 8 MB; << MAX_MES
 class FrontMessage
 {
 public:
-    using Ptr = std::shared_ptr<FrontMessage>;
-
     /// moduleID(2) + UUID length(1) + ext(2)
     const static size_t HEADER_MIN_LENGTH = 5;
     /// The maximum front uuid length  10M
@@ -56,45 +54,32 @@ public:
         Response = 0x0001,
     };
 
-    FrontMessage() = default;
-    virtual ~FrontMessage() = default;
+    uint16_t moduleID();
+    void setModuleID(uint16_t _moduleID);
 
-    virtual uint16_t moduleID();
-    virtual void setModuleID(uint16_t _moduleID);
+    uint16_t ext();
+    void setExt(uint16_t _ext);
 
-    virtual uint16_t ext();
-    virtual void setExt(uint16_t _ext);
+    bytesConstRef uuid();
+    void setUuid(bytesConstRef _uuid);
 
-    virtual bytesConstRef uuid();
-    virtual void setUuid(bytes _uuid);
+    bytesConstRef payload();
+    void setPayload(bytesConstRef _payload);
 
-    virtual bytesConstRef payload();
-    virtual void setPayload(bytesConstRef _payload);
-
-    virtual void setResponse();
-    virtual bool isResponse();
+    void setResponse();
+    bool isResponse();
 
     bool encodeHeader(bytes& buffer);
-    virtual bool encode(bytes& _buffer);
-    virtual ssize_t decode(bytesConstRef _buffer);
+    bool encode(bytes& _buffer);
+    ssize_t decode(bytesConstRef _buffer);
 
     static uint16_t tryDecodeModuleID(bytesConstRef _buffer);
 
 private:
-    bytes m_uuid;
+    bytesConstRef m_uuid;
     bytesConstRef m_payload;
     uint16_t m_moduleID = 0;
     uint16_t m_ext = 0;
-};
-
-class FrontMessageFactory
-{
-public:
-    using Ptr = std::shared_ptr<FrontMessageFactory>;
-
-    virtual ~FrontMessageFactory();
-
-    virtual FrontMessage::Ptr buildMessage();
 };
 
 }  // namespace bcos::front

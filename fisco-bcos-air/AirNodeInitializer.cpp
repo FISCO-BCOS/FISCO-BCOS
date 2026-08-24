@@ -20,7 +20,7 @@
  */
 #include "AirNodeInitializer.h"
 #include "libinitializer/Common.h"
-#include <bcos-boostssl/websocket/RawWsMessage.h>
+#include "libinitializer/MemPoolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -30,7 +30,7 @@
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
-#include <rocksdb/env.h>
+#include <bcos-utilities/IOServicePool.h>
 
 using namespace bcos::node;
 using namespace bcos::initializer;
@@ -60,12 +60,16 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
     m_nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
 
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(nodeConfig->ioThreadCount(), "io");
+    m_nodeInitializer->setIOServicePool(ioServicePool);
+
     // create gateway
     // DataEncryption will be inited in ProtocolInitializer when storage_security.enable = true,
     // otherwise keyEncryption() will return nullptr
     GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc",
         m_nodeInitializer->protocolInitializer()->getKeyEncryptionByType(
             nodeConfig->keyEncryptionType()));
+    gatewayFactory.setIOServicePool(ioServicePool);
     auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
     m_gateway = gateway;
 
@@ -78,13 +82,49 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     auto nodeService =
         std::make_shared<NodeService>(m_nodeInitializer->ledger(), m_nodeInitializer->scheduler(),
             m_nodeInitializer->txPoolInitializer()->txpool(), pbftInitializer->pbft(),
-            pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory());
+            pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory(),
+            m_nodeInitializer->engineService());
+    // eth_getProof node reader (M8.3): committed MPT node rows straight from the state
+    // backend. Set unconditionally — feature_mpt_state_root can activate at runtime, and a
+    // pre-MPT header's stateRoot simply misses in the node rows (-32004); -32603 stays
+    // reserved for nodes that structurally cannot serve proofs (tars-built NodeService).
+    // Lifetime: the handle owns its adapter; the borrowed backend lives in m_nodeInitializer,
+    // declared before m_rpc / m_tarsApplication (the NodeService holders), so it is
+    // destroyed after them.
+    nodeService->setMPTNodeReader(m_nodeInitializer->mptNodeReader());
+    // DA throttling bridge (OP mode): the same DACaps instance the engine build path
+    // received at construction — miner_setMaxDASize lands directly in the engine's view.
+    if (auto daCaps = m_nodeInitializer->daCaps(); daCaps)
+    {
+        nodeService->setDACaps(std::move(daCaps));
+    }
+
+    // eth_getStorageAt latest-state path: a provider that forks a fresh latest view of
+    // GlobalStateStorage per request (see Initializer::stateStorageProvider for the lifetime
+    // contract — the provider captures the GlobalStateStorageInitializer shared_ptr).
+    nodeService->setStateStorageProvider(m_nodeInitializer->stateStorageProvider());
+
+    // blockTag semantics ([web3_rpc] safe_block_depth / finalized_block_depth): how many
+    // blocks behind "latest" the safe/finalized tags point to.
+    nodeService->setSafeBlockDepth(nodeConfig->web3SafeBlockDepth());
+    nodeService->setFinalizedBlockDepth(nodeConfig->web3FinalizedBlockDepth());
+
+    // Engine-driven modes ([consensus] enable_single_node_consensus or [op_engine_rpc]):
+    // route sendRawTransaction to the in-process mempool instead of txpool — the
+    // EngineService seals these txs into blocks (driven by the built-in single-node timer
+    // or by an external op-node), bypassing txpool/sealer/pbft, which are never initialized
+    // in these modes.
+    if (nodeConfig->engineDrivenBlockProduction() || nodeConfig->enableSingleNodeConsensus())
+    {
+        nodeService->setMemPool(m_nodeInitializer->memPoolInitializer()->memPool());
+    }
 
     // create rpc
     RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,
         m_nodeInitializer->protocolInitializer()->getKeyEncryptionByType(
             nodeConfig->keyEncryptionType()));
     rpcFactory.setNodeConfig(nodeConfig);
+    rpcFactory.setIOServicePool(ioServicePool);
     m_rpc = rpcFactory.buildLocalRpc(groupInfo, nodeService);
     if (gateway->amop())
     {
@@ -94,18 +134,16 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     }
     m_nodeInitializer->initNotificationHandlers(m_rpc);
 
-    m_objMonitor = std::make_shared<bcos::ObjectAllocatorMonitor>();
-
     // NOTE: this should be last called
     m_nodeInitializer->initSysContract();
 
     // tars rpc
     if (!nodeConfig->tarsRPCConfig().host.empty() && nodeConfig->tarsRPCConfig().port > 0 &&
-        nodeConfig->tarsRPCConfig().threadCount > 0)
+        nodeConfig->ioThreadCount() > 0)
     {
         m_tarsApplication.emplace(nodeService);
         m_tarsConfig.emplace(RPCApplication::generateTarsConfig(nodeConfig->tarsRPCConfig().host,
-            nodeConfig->tarsRPCConfig().port, nodeConfig->tarsRPCConfig().threadCount));
+            nodeConfig->tarsRPCConfig().port, nodeConfig->ioThreadCount()));
     }
 }
 
@@ -124,18 +162,6 @@ void AirNodeInitializer::start()
     if (m_rpc)
     {
         m_rpc->start();
-    }
-
-    if (m_objMonitor)
-    {
-        // start monitor object alloc
-        m_objMonitor->startMonitor</*boostssl start*/ bcos::boostssl::ws::WsMessage,
-            bcos::boostssl::ws::RawWsMessage, bcos::boostssl::ws::WsSession,
-            bcos::boostssl::ws::RawWsStream, bcos::boostssl::ws::SslWsStream,
-            bcos::boostssl::ws::WsSession::CallBack, bcos::boostssl::ws::WsSession::Message,
-            bcos::boostssl::ws::WsStreamDelegate /*boostssl end*/, bcos::gateway::FrontServiceInfo,
-            bcos::ratelimiter::TimeWindowRateLimiter,
-            bcos::ratelimiter::DistributedRateLimiter /*gateway end*/>(4);
     }
 
     if (m_tarsApplication && m_tarsConfig)
@@ -172,11 +198,6 @@ void AirNodeInitializer::stop()
         {
             m_tarsApplication->terminate();
             m_tarsThread->join();
-        }
-
-        if (m_objMonitor)
-        {
-            m_objMonitor->stopMonitor();
         }
     }
     catch (std::exception const& e)

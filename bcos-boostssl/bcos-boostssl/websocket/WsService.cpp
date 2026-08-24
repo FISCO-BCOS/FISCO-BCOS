@@ -25,9 +25,6 @@
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
-#include <json/json.h>
-#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <algorithm>
 #include <chrono>
@@ -52,7 +49,6 @@ WsService::WsService()
 WsService::~WsService()
 {
     stop();
-    m_taskGroup.wait();
     WEBSOCKET_SERVICE(INFO) << LOG_KV("[DELOBJ][WsService]", this);
 }
 
@@ -175,11 +171,6 @@ EndPointsPtr WsService::reconnectedPeers() const
     return m_reconnectedPeers;
 }
 
-void WsService::initTaskArena(uint32_t _taskArenaPoolSize)
-{
-    m_taskArena.initialize(_taskArenaPoolSize, 0);
-}
-
 void WsService::start()
 {
     if (m_running)
@@ -189,16 +180,10 @@ void WsService::start()
     }
     m_running = true;
 
-    // init m_timerFactory if it is not not initialized
+    // init m_timerFactory if it is not initialized
     if (!m_timerFactory)
     {
-        m_timerFactory = std::make_shared<timer::TimerFactory>();
-    }
-
-    // start ioc thread
-    if (m_ioservicePool)
-    {
-        m_ioservicePool->start();
+        m_timerFactory = std::make_shared<timer::TimerFactory>(m_timerIoc);
     }
 
     // start as server
@@ -247,7 +232,6 @@ void WsService::start()
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("start")
                             << LOG_DESC("start websocket service successfully")
                             << LOG_KV("model", m_config->model())
-                            << LOG_KV("taskArenaMaxConcurrency", m_taskArena.max_concurrency())
                             << LOG_KV("max msg size", m_config->maxMsgSize());
 }
 
@@ -266,15 +250,6 @@ void WsService::stop()
     //            session->drop(WsError::SessionDisconnect);
     //        }
     //    }
-
-    // stop ioc thread
-    if (m_ioservicePool)
-    {
-        m_ioservicePool->stop();
-    }
-
-    m_taskGroup.cancel();
-    m_taskGroup.wait();
 
     if (m_statTimer)
     {
@@ -532,7 +507,7 @@ std::shared_ptr<WsSession> WsService::newSession(
     _wsStreamDelegate->setMaxReadMsgSize(m_config->maxMsgSize());
 
     std::string endPoint = _wsStreamDelegate->remoteEndpoint();
-    auto session = m_sessionFactory->createSession(m_taskArena, m_taskGroup);
+    auto session = m_sessionFactory->createSession(m_ioservicePool);
 
     session->setWsStreamDelegate(std::move(_wsStreamDelegate));
     session->setIoc(m_ioservicePool->getIOService());
@@ -690,7 +665,7 @@ void WsService::onRecvMessage(
                              << LOG_DESC("receive message from server")
                              << LOG_KV("type", message->packetType()) << LOG_KV("seq", seq)
                              << LOG_KV("endpoint", session->endPoint())
-                             << LOG_KV("data size", message->payload()->size())
+                             << LOG_KV("data size", message->payload().size())
                              << LOG_KV("use_count", session.use_count());
 
     auto typeHandler = getMsgHandler(message->packetType());
@@ -706,7 +681,7 @@ void WsService::onRecvMessage(
             WEBSOCKET_SERVICE(DEBUG)
                 << LOG_BADGE("onRecvMessage") << LOG_DESC("AMOP is disabled!")
                 << LOG_KV("type", message->packetType()) << LOG_KV("endpoint", session->endPoint())
-                << LOG_KV("seq", seq) << LOG_KV("data size", message->payload()->size())
+                << LOG_KV("seq", seq) << LOG_KV("data size", message->payload().size())
                 << LOG_KV("use_count", session.use_count());
             return;
         }
@@ -714,7 +689,7 @@ void WsService::onRecvMessage(
         WEBSOCKET_SERVICE(WARNING)
             << LOG_BADGE("onRecvMessage") << LOG_DESC("unrecognized message type")
             << LOG_KV("type", message->packetType()) << LOG_KV("endpoint", session->endPoint())
-            << LOG_KV("seq", seq) << LOG_KV("data size", message->payload()->size())
+            << LOG_KV("seq", seq) << LOG_KV("data size", message->payload().size())
             << LOG_KV("use_count", session.use_count());
     }
 }

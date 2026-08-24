@@ -22,6 +22,7 @@
  */
 
 #include "Ledger.h"
+#include "GenesisStateRoot.h"
 #include "LedgerMethods.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -31,12 +32,16 @@
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-storage/KeyPrefixes.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
+#include "mpt/Constants.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/merkle/Merkle.h>
@@ -136,16 +141,33 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 {
     // TODO)): blockNumber is not used nowadays
     std::ignore = _blockNumber;
-    auto const contractTableName = getContractTableName(SYS_DIRECTORY::USER_APPS, _address);
-    auto const stateStorage = getStateStorage();
+    // System-contract addresses (0x1000 range, etc.) are stored under the
+    // "/sys/" prefix by EVMAccount; user accounts under "/apps/". Picking the
+    // right prefix here keeps eth_getBalance / eth_getStorageAt /
+    // eth_getTransactionCount consistent with both the genesis alloc import and
+    // the v2 executor (which both go through EVMAccount). Without this, reads
+    // for system-range accounts hit the wrong table and return empty (e.g.
+    // EEST static VMTests that call 0x1000 saw balance=0 / storage=0).
+    auto const tablePrefix =
+        precompiled::contains(bcos::precompiled::c_systemTxsAddress, _address) ?
+            SYS_DIRECTORY::SYS_APPS :
+            SYS_DIRECTORY::USER_APPS;
+    auto const contractTableName = getContractTableName(tablePrefix, _address);
+    // Read the account state straight off `m_stateStorage` (the storage2 view both the OP
+    // executor's Storage2State and the v2 executor write through), NOT `getStateStorage()`:
+    // the latter wraps `m_stateStorage` in a KeyPageStorage when keyPageSize>0, and that page
+    // overlay cannot see rows the OP executor wrote flat via storage2 (executeOpBlock's
+    // fetchAccount reads them fine; getBalance/getStorageAt came back empty — R3). `blockNumber`
+    // is ignored here, so latest-state is the honest read either way.
     co_return co_await bcos::storage2::readOne(
-        *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
+        *m_stateStorage, executor_v1::StateKeyView{contractTableName, _key});
 }
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
     std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-    std::optional<bcos::ledger::Features> features)
+    std::optional<bcos::ledger::Features> features,
+    std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces)
 {
     if (!block)
     {
@@ -159,7 +181,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         // sys contract deploy
         /// NOTE: write block number for 2pc storage
         Entry numberEntry;
-        numberEntry.importFields({"0"});
+        numberEntry.set("0");
         storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
             [callback](Error::Ptr&& error) {
                 if (error)
@@ -173,6 +195,9 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         return;
     }
     auto header = block->blockHeader();
+    // Short-circuit ternary (NOT value_or): value_or would evaluate header->hash()
+    // unconditionally, which throws for OP headers that rely on the override.
+    const auto blockHash = blockHashOverride ? *blockHashOverride : header->hash();
 
     auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
 
@@ -181,8 +206,12 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     {  // 9 storage callbacks and write hash=>tx
         TOTAL_CALLBACK = 9;
     }
-    auto primiaryKey = bcos::storage::toDBKey(
-        SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(header->hash()));
+    if (!writeNonces)
+    {  // skip the nonce write callback when nonces are not persisted
+        TOTAL_CALLBACK -= 1;
+    }
+    auto primiaryKey =
+        bcos::storage::toDBKey(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash));
     auto setRowCallback = [total = std::make_shared<std::atomic<size_t>>(TOTAL_CALLBACK),
                               failed = std::make_shared<bool>(false),
                               callback = std::move(callback), primiaryKey = std::move(primiaryKey)](
@@ -211,58 +240,66 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     // number 2 hash
     Entry hashEntry;
-    hashEntry.importFields({header->hash().asBytes()});
+    hashEntry.set(blockHash.asBytes());
     storage->asyncSetRow(SYS_NUMBER_2_HASH, blockNumberStr, std::move(hashEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // hash 2 number
     Entry hash2NumberEntry;
-    hash2NumberEntry.importFields({blockNumberStr});
-    storage->asyncSetRow(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(header->hash()),
+    hash2NumberEntry.set(blockNumberStr);
+    storage->asyncSetRow(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash),
         std::move(hash2NumberEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // number 2 header
+    // When blockHashOverride is set (OP path), the stored header's hash() differs
+    // from the override key in SYS_NUMBER_2_HASH. OP-aware readers must use the
+    // override hash, not header->hash().
     bytes headerBuffer;
     header->encode(headerBuffer);
 
     Entry number2HeaderEntry;
-    number2HeaderEntry.importFields({std::move(headerBuffer)});
+    number2HeaderEntry.set(std::move(headerBuffer));
     storage->asyncSetRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr, std::move(number2HeaderEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // number 2 nonce
-    auto nonceBlock = m_blockFactory->createBlock();
-    protocol::NonceList nonceList;
-    // get nonce from _blockTxs
-    if (_blockTxs)
+    if (writeNonces)
     {
-        for (auto const& tx : *_blockTxs)
+        auto nonceBlock = m_blockFactory->createBlock();
+        protocol::NonceList nonceList;
+        // get nonce from _blockTxs
+        if (_blockTxs)
         {
-            nonceList.emplace_back(tx->nonce());
+            for (auto const& tx : *_blockTxs)
+            {
+                nonceList.emplace_back(tx->nonce());
+            }
         }
-    }
-    // get nonce from block txs
-    else
-    {
-        for (auto tx : block->transactions())
+        // get nonce from block txs
+        else
         {
-            nonceList.emplace_back(tx->nonce());
+            for (auto tx : block->transactions())
+            {
+                nonceList.emplace_back(tx->nonce());
+            }
         }
+
+        nonceBlock->setNonceList(nonceList);
+        bytes nonceBuffer;
+        nonceBlock->encode(nonceBuffer);
+
+        Entry number2NonceEntry;
+        number2NonceEntry.set(std::move(nonceBuffer));
+        storage->asyncSetRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr,
+            std::move(number2NonceEntry), [setRowCallback](auto&& error) {
+                setRowCallback(std::forward<decltype(error)>(error));
+            });
     }
-
-    nonceBlock->setNonceList(nonceList);
-    bytes nonceBuffer;
-    nonceBlock->encode(nonceBuffer);
-
-    Entry number2NonceEntry;
-    number2NonceEntry.importFields({std::move(nonceBuffer)});
-    storage->asyncSetRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr, std::move(number2NonceEntry),
-        [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // current number
     Entry numberEntry;
-    numberEntry.importFields({blockNumberStr});
+    numberEntry.set(blockNumberStr);
     storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
@@ -295,7 +332,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     transactionsBlock->encode(transactionsBuffer);
 
     Entry number2TransactionHashesEntry;
-    number2TransactionHashesEntry.importFields({std::move(transactionsBuffer)});
+    number2TransactionHashesEntry.set(std::move(transactionsBuffer));
     storage->asyncSetRow(SYS_NUMBER_2_TXS, blockNumberStr, std::move(number2TransactionHashesEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
@@ -370,7 +407,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             }
             auto totalTxsCount = total + totalCount;
             Entry totalEntry;
-            totalEntry.importFields({boost::lexical_cast<std::string>(totalTxsCount)});
+            totalEntry.set(boost::lexical_cast<std::string>(totalTxsCount));
             storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
                 std::move(totalEntry), [setRowCallback](auto&& error) {
                     setRowCallback(std::forward<decltype(error)>(error));
@@ -379,7 +416,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             if (failedCount != 0)
             {
                 Entry failedEntry;
-                failedEntry.importFields({boost::lexical_cast<std::string>(failedTxs)});
+                failedEntry.set(boost::lexical_cast<std::string>(failedTxs));
                 storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
                     std::move(failedEntry), [setRowCallback](auto&& error) {
                         setRowCallback(std::forward<decltype(error)>(error));
@@ -485,7 +522,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
             }
         });
     auto promise = std::make_shared<std::promise<bcos::Error::Ptr>>();
-    m_threadPool->enqueue([storage = getBlockStorage(), promise, keys = std::move(txsHash),
+    m_ioServicePool->post([storage = getBlockStorage(), promise, keys = std::move(txsHash),
                               values = std::move(receiptsView)]() mutable {
         auto err = storage->setRows(SYS_HASH_2_RECEIPT, keys, values);
         promise->set_value(err);
@@ -709,6 +746,25 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                             {
                                 block->appendReceipt(it);
                             }
+                            // The block-level logsBloom is not persisted with the block
+                            // (only header / tx hashes / txs / receipts are stored), so a
+                            // block reconstructed here would otherwise carry 256 zero bytes
+                            // and eth_getBlockByNumber / eth_getLogs would report an empty
+                            // bloom for blocks with logs — from the legacy BaselineScheduler
+                            // commit path and the built-in single-node driver alike. Recompute
+                            // it from the receipts' log entries (receipts may carry an empty
+                            // per-receipt logsBloom, but their logEntries are populated).
+                            bcos::Bloom logsBloom{};
+                            for (auto const& receipt : receipts)
+                            {
+                                if (!receipt)
+                                {
+                                    continue;
+                                }
+                                bcos::orBloom(logsBloom, bcos::getLogsBloom(receipt->logEntries()));
+                            }
+                            block->setLogsBloom(
+                                bcos::bytesConstRef(logsBloom.data(), logsBloom.size()));
                             finally(std::move(error));
                         });
                 }
@@ -752,13 +808,13 @@ void Ledger::asyncGetBlockNumber(
             bcos::protocol::BlockNumber blockNumber = -1;
             try
             {
-                blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
+                blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(entry->get());
             }
             catch (boost::bad_lexical_cast& e)
             {
                 // Ignore the exception
                 LEDGER_LOG(INFO) << "Cast blockNumber failed, may be empty, set to default value -1"
-                                 << LOG_KV("blockNumber str", entry->getField(0));
+                                 << LOG_KV("blockNumber str", entry->get());
             }
 
             LEDGER_LOG(TRACE) << "GetBlockNumber success" << LOG_KV("blockNumber", blockNumber);
@@ -794,7 +850,7 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
                     return;
                 }
 
-                auto hashStr = entry->getField(0);
+                auto hashStr = entry->get();
                 bcos::crypto::HashType hash(
                     std::string(hashStr), bcos::crypto::HashType::FromBinary);
 
@@ -833,15 +889,14 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
                 bcos::protocol::BlockNumber blockNumber = -1;
                 try
                 {
-                    blockNumber =
-                        boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
+                    blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(entry->get());
                 }
                 catch (boost::bad_lexical_cast& e)
                 {
                     // Ignore the exception
                     LEDGER_LOG(INFO)
                         << "Cast blockNumber failed, may be empty, set to default value -1"
-                        << LOG_KV("blockNumber str", entry->getField(0));
+                        << LOG_KV("blockNumber str", entry->get());
                 }
                 callback(nullptr, blockNumber);
             }
@@ -964,7 +1019,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
                 return;
             }
 
-            auto value = entry->getField(0);
+            auto value = entry->get();
             auto receipt = m_blockFactory->receiptFactory()->createReceipt(
                 bcos::bytesConstRef((bcos::byte*)value.data(), value.size()));
 
@@ -1037,7 +1092,7 @@ void Ledger::asyncGetTotalTransactionCount(
                     {
                         try
                         {
-                            value = boost::lexical_cast<int64_t>(entry->getField(0));
+                            value = boost::lexical_cast<int64_t>(entry->get());
                         }
                         catch (boost::bad_lexical_cast& e)
                         {
@@ -1109,7 +1164,8 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
 
                     LEDGER_LOG(TRACE) << "Entry value: " << toHex(entry->get());
 
-                    auto [value, number] = entry->getObject<SystemConfigEntry>();
+                    auto [value, number] =
+                        bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
 
                     // The param was reset at height getLatestBlockNumber(), and takes effect in
                     // next block. So we query the status of getLatestBlockNumber() + 1.
@@ -1196,7 +1252,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                                 continue;
                             }
 
-                            auto value = entry->getField(0);
+                            auto value = entry->get();
                             auto block = m_blockFactory->createBlock(
                                 bcos::bytesConstRef((bcos::byte*)value.data(), value.size()), false,
                                 false);
@@ -1247,7 +1303,7 @@ void Ledger::removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync)
         }
         else
         {
-            m_threadPool->enqueue(deleteExpiredNonces);
+            m_ioServicePool->post(deleteExpiredNonces);
         }
     }
 }
@@ -1352,7 +1408,7 @@ void Ledger::asyncGetBlockHeader(bcos::protocol::Block::Ptr block,
                         return;
                     }
 
-                    auto field = entry->getField(0);
+                    auto field = entry->get();
                     auto headerPtr = m_blockFactory->blockHeaderFactory()->createBlockHeader(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
 
@@ -1384,7 +1440,7 @@ void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNum
                         return;
                     }
 
-                    auto txs = entry->getField(0);
+                    auto txs = entry->get();
                     auto blockWithTxs = m_blockFactory->createBlock(
                         bcos::bytesConstRef((bcos::byte*)txs.data(), txs.size()));
 
@@ -1435,7 +1491,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                 }
                 else
                 {
-                    auto field = entry->getField(0);
+                    auto field = entry->get();
                     auto transaction = m_blockFactory->transactionFactory()->createTransaction(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false,
                         false);
@@ -1503,7 +1559,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                     }
                     else
                     {
-                        auto field = entry->getField(0);
+                        auto field = entry->get();
                         auto transaction = m_blockFactory->transactionFactory()->createTransaction(
                             bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false,
                             false, false);
@@ -1563,7 +1619,7 @@ void Ledger::asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> has
                     return;
                 }
 
-                auto field = entry->getField(0);
+                auto field = entry->get();
                 auto receipt = m_blockFactory->receiptFactory()->createReceipt(
                     bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
                 receipts.push_back(std::move(receipt));
@@ -1776,16 +1832,32 @@ static task::Task<void> setGenesisFeatures(::ranges::input_range auto const& fea
     co_await writeToStorage(features, storage, 0);
 }
 
+// L2 SystemConfig predeploy: feature_flags is seeded at genesis from the
+// resolved feature set, so the on-chain SystemConfig mirrors the feature bitmap.
+// SystemConfig (bcos-l2-contracts) is a generic mapping(string => Entry); a
+// key's slot is keccak256(utf8(key) || be32(baseSlot)), baseSlot 101 pinned by
+// storage-layout/SystemConfig.json. At genesis the Entry.enableNumber is 0, so
+// the slot value is just the packed flags number (Entry.value, uint192).
+static constexpr std::string_view c_l2SystemConfigAddress =
+    "43000000000000000000000000000000000000c0";
+static constexpr std::string_view c_l2FeatureFlagsKey = "feature_flags";
+static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
+
 static task::Task<void> importGenesisState(
     ::ranges::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
 {
+    // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
+    // a prefix. Strip a leading 0x so both shapes unhex cleanly.
+    auto strip0x = [](std::string_view hex) { return hex.starts_with("0x") ? hex.substr(2) : hex; };
+
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
 
     for (auto&& importAccount : allocs)
     {
-        evmc_address address;
-        boost::algorithm::unhex(importAccount.address, address.bytes);
+        auto addressHex = strip0x(importAccount.address);
+        evmc_address address{};
+        boost::algorithm::unhex(addressHex.begin(), addressHex.end(), address.bytes);
 
         account::EVMAccount account(
             storage, address, features.get(Features::Flag::feature_raw_address));
@@ -1793,9 +1865,10 @@ static task::Task<void> importGenesisState(
 
         if (!importAccount.code.empty())
         {
+            auto codeHex = strip0x(importAccount.code);
             bcos::bytes binaryCode;
-            binaryCode.reserve(importAccount.code.size() / 2);
-            boost::algorithm::unhex(importAccount.code, std::back_inserter(binaryCode));
+            binaryCode.reserve(codeHex.size() / 2);
+            boost::algorithm::unhex(codeHex.begin(), codeHex.end(), std::back_inserter(binaryCode));
 
             auto codeHash = hashImpl.hash(binaryCode);
             co_await account.setCode(std::move(binaryCode), std::string{}, codeHash);
@@ -1815,15 +1888,141 @@ static task::Task<void> importGenesisState(
         {
             for (auto const& [key, value] : importAccount.storage)
             {
-                evmc_bytes32 evmKey;
-                boost::algorithm::unhex(key, evmKey.bytes);
-                evmc_bytes32 evmValue;
-                boost::algorithm::unhex(value, evmValue.bytes);
+                auto keyHex = strip0x(key);
+                auto valueHex = strip0x(value);
+                evmc_bytes32 evmKey{};
+                boost::algorithm::unhex(keyHex.begin(), keyHex.end(), evmKey.bytes);
+                evmc_bytes32 evmValue{};
+                boost::algorithm::unhex(valueHex.begin(), valueHex.end(), evmValue.bytes);
 
                 co_await account.setStorage(evmKey, evmValue);
             }
         }
+
+        // Normalize before comparing: NodeConfig lowercases alloc addresses,
+        // but direct GenesisConfig callers may pass uppercase — an unmatched
+        // case must not silently skip the verification below.
+        std::string addressHexLower(addressHex);
+        std::transform(addressHexLower.begin(), addressHexLower.end(), addressHexLower.begin(),
+            [](unsigned char c) { return std::tolower(c); });
+        if (addressHexLower == c_l2SystemConfigAddress)
+        {
+            // The feature_flags Entry slot must arrive IN the alloc (written
+            // by build-allocs.py) so the genesis state root — computed over
+            // the allocs alone — commits it, and the same alloc JSON feeds
+            // the op-reth oracle. This path only VERIFIES the slot against
+            // the feature set the node actually runs with; injecting it here
+            // (the previous behavior) left the root not covering it.
+            //
+            // slot = keccak256(utf8("feature_flags") || be32(101))
+            bcos::bytes slotInput;
+            slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
+            slotInput.insert(
+                slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
+            bcos::bytes baseSlotBytes(32, 0);
+            baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
+            slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());
+            auto slotHash = crypto::keccak256Hash(bcos::ref(slotInput));
+            auto slotKeyHex = slotHash.hex();  // lowercase, 64 chars
+
+            // expected value = packed flags number as 32-byte big-endian
+            // (enableNumber = 0)
+            std::array<uint8_t, 32> expectedValue{};
+            auto flagsNumber = features.toFlagsNumber();
+            for (size_t i = 0; i < expectedValue.size(); ++i)
+            {
+                expectedValue[expectedValue.size() - 1 - i] =
+                    (flagsNumber & 0xFF).convert_to<uint8_t>();
+                flagsNumber >>= 8;
+            }
+
+            const ledger::Alloc::State* featureFlagsSlot = nullptr;
+            for (auto const& state : importAccount.storage)
+            {
+                std::string keyHex(strip0x(state.first));
+                std::transform(keyHex.begin(), keyHex.end(), keyHex.begin(),
+                    [](unsigned char c) { return std::tolower(c); });
+                if (keyHex == slotKeyHex)
+                {
+                    featureFlagsSlot = &state;
+                    break;
+                }
+            }
+            if (featureFlagsSlot == nullptr)
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
+                                          "L2 genesis allocs must carry the SystemConfig "
+                                          "feature_flags Entry slot (keccak256(\"feature_flags\" "
+                                          "|| be32(101)) = 0x" +
+                                          slotKeyHex +
+                                          ") so the genesis state root commits it; regenerate "
+                                          "the allocs with build-allocs.py"));
+            }
+            auto valueHex = strip0x(featureFlagsSlot->second);
+            std::array<uint8_t, 32> actualValue{};
+            boost::algorithm::unhex(valueHex.begin(), valueHex.end(), actualValue.begin());
+            if (actualValue != expectedValue)
+            {
+                BOOST_THROW_EXCEPTION(
+                    bcos::tool::InvalidConfig() << errinfo_comment(
+                        "SystemConfig feature_flags slot in the genesis allocs does not match "
+                        "this node's genesis feature set (Features::toFlagsNumber()): alloc=0x" +
+                        toHex(actualValue) + " expected=0x" + toHex(expectedValue) +
+                        "; the alloc artifact and the node's [features] config disagree"));
+            }
+        }
     }
+}
+
+// A3: project the [eth_genesis_header] artifact fields onto B0. Precondition:
+// the header's stateRoot already carries the locally derived MPT root — the
+// artifact's state_root is checked against it, so a wrong or stale artifact
+// cannot re-anchor the chain state. After this the header is a complete
+// Prague-era Ethereum header: calculateHash() computes keccak256(rlp(header))
+// instead of the Tars hash, and the RLP header carries no FISCO field (in
+// particular no compatibility_version — the D4 decoupling point).
+static void applyEthGenesisHeader(
+    bcos::protocol::BlockHeader& header, ledger::EthGenesisHeader const& ethHeader)
+{
+    if (ethHeader.m_stateRoot != header.stateRoot())
+    {
+        BOOST_THROW_EXCEPTION(
+            bcos::tool::InvalidConfig() << errinfo_comment(
+                "[eth_genesis_header].state_root does not match the state root derived from "
+                "the genesis allocs: artifact=" +
+                ethHeader.m_stateRoot.hex() + " derived=" + header.stateRoot().hex()));
+    }
+    if (ethHeader.m_parentHash != bcos::crypto::HashType{})
+    {
+        header.setParentInfo(
+            bcos::protocol::ParentInfo{.blockNumber = -1, .blockHash = ethHeader.m_parentHash});
+    }
+    header.setUncleHash(ethHeader.m_sha3Uncles);
+    header.setCoinbase(ethHeader.m_miner);
+    header.setTxsRoot(ethHeader.m_transactionsRoot);
+    header.setReceiptsRoot(ethHeader.m_receiptsRoot);
+    header.setLogsBloom(bcos::ref(ethHeader.m_logsBloom));
+    header.setDifficulty(ethHeader.m_difficulty);
+    header.setGasLimit(ethHeader.m_gasLimit);
+    header.setGasUsed(ethHeader.m_gasUsed);
+    // The artifact carries B0's timestamp in SECONDS (the Ethereum header
+    // domain); internal BlockHeader timestamps are MILLISECONDS everywhere, so
+    // convert on the way in. The RLP bridge (EthBlockHeader) divides by 1000 on
+    // encode, so keccak256(rlp(header)) still reproduces the artifact hash
+    // byte-for-byte. No int64 overflow: the config parser bounds the artifact
+    // seconds by INT64_MAX/1000 (NodeConfig's [eth_genesis_header].timestamp
+    // check), so the x1000 cannot wrap.
+    header.setTimestamp(ethHeader.m_timestamp * 1000);
+    header.setExtraData(bcos::bytes(ethHeader.m_extraData));
+    header.setPrevRandao(ethHeader.m_mixHash);
+    header.setNonce(ethHeader.m_nonce);
+    header.setBaseFee(ethHeader.m_baseFeePerGas);
+    header.setWithdrawalsRoot(ethHeader.m_withdrawalsRoot);
+    header.setBlobGasUsed(ethHeader.m_blobGasUsed);
+    header.setExcessBlobGas(ethHeader.m_excessBlobGas);
+    header.setParentBeaconBlockRoot(ethHeader.m_parentBeaconBlockRoot);
+    header.setRequestsHash(ethHeader.m_requestsHash);
+    header.setEthBlockVersion(bcos::protocol::EthBlockVersion::PRAGUE);
 }
 
 // sync method, to be split
@@ -1843,6 +2042,19 @@ bool Ledger::buildGenesisBlock(
         }
         auto genesisBlockHash = co_await ledger::getBlockHash(*m_stateStorage, 0, fromStorage);
         auto genesisData = generateGenesisData(genesis, ledgerConfig);
+        // op-geth-compatible Ethereum state trie over the allocs: the root is
+        // empty (zero) for pbft chains with no allocs (an empty-alloc L2 chain
+        // instead publishes mpt::emptyRootHash(), see the header-building branch
+        // below), set as the L2 genesis block's stateRoot below, and re-derived
+        // on restart to guard alloc immutability; the produced nodes are
+        // persisted further below on first init of an L2 chain. computeGenesisStateTrie only reads
+        // genesis.m_allocs, so it does not depend on the genesis state being
+        // written first.
+        GenesisStateTrie ethStateTrie;
+        if (!genesis.m_allocs.empty())
+        {
+            ethStateTrie = co_await computeGenesisStateTrie(genesis);
+        }
         if (genesisBlockHash)
         {
             // genesis block exists, quit
@@ -1850,9 +2062,63 @@ bool Ledger::buildGenesisBlock(
             std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
             auto block = co_await ledger::getBlockData(*this, 0, HEADER);
             bcos::protocol::BlockHeader::Ptr genesisBlockHeader = block->blockHeader();
-            auto existsGenesisData = genesisBlockHeader->extraData().toStringView();
+            // A3: an eth-genesis chain keeps the FISCO genesis pin in
+            // SYS_CONFIG (B0's extraData carries the artifact bytes and enters
+            // the RLP hash), so the restart comparison reads it from there.
+            std::string existsGenesisData;
+            if (genesis.m_ethGenesisHeader.has_value())
+            {
+                auto genesisDataEntry = co_await storage2::readOne(*m_stateStorage,
+                    executor_v1::StateKeyView(SYS_CONFIG, INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA));
+                if (!genesisDataEntry)
+                {
+                    BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
+                                              "[eth_genesis_header] is configured but the chain "
+                                              "was not initialized with one (no stored "
+                                              "eth_genesis_data); refuse to start"));
+                }
+                auto [storedData, _] =
+                    bcos::storage::serialize::decode<SystemConfigEntry>(genesisDataEntry->get());
+                existsGenesisData = std::move(storedData);
+                // The stored B0 hash must still match the artifact's claim —
+                // a swapped artifact cannot re-point an initialized chain.
+                if (genesisBlockHeader->hash() != genesis.m_ethGenesisHeader->m_hash)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        bcos::tool::InvalidConfig() << errinfo_comment(
+                            "[eth_genesis_header].hash does not match the stored genesis block: "
+                            "stored=" +
+                            genesisBlockHeader->hash().hex() +
+                            " artifact=" + genesis.m_ethGenesisHeader->m_hash.hex()));
+                }
+            }
+            else
+            {
+                existsGenesisData = std::string(genesisBlockHeader->extraData().toStringView());
+            }
 
-            // check genesisData whether inconsistent with initialGenesisData
+            // generateGenesisData() (hence extraData) covers chainID / groupID /
+            // smCrypto / [features] / consensus / version / executor /
+            // tx / nodes, but NOT the allocs. The allocs are pinned by the
+            // genesis block's stateRoot (set to ethStateRoot on first init); a
+            // config change to any alloc changes that root, so compare the
+            // stored header's stateRoot against the freshly derived one.
+            if (existsGenesisData == genesisData && !genesis.m_allocs.empty() &&
+                genesisBlockHeader->stateRoot() != ethStateTrie.root)
+            {
+                LEDGER_LOG(FATAL) << LOG_BADGE("buildGenesisBlock")
+                                  << LOG_DESC("genesis allocs changed since first init")
+                                  << LOG_KV(
+                                         "storedStateRoot", genesisBlockHeader->stateRoot().hex())
+                                  << LOG_KV("computedStateRoot", ethStateTrie.root.hex());
+                BOOST_THROW_EXCEPTION(
+                    bcos::tool::InvalidConfig() << errinfo_comment(
+                        "genesis allocs changed since first init (op-geth state root mismatch); "
+                        "refuse to start. stored=" +
+                        genesisBlockHeader->stateRoot().hex() +
+                        " computed=" + ethStateTrie.root.hex()));
+            }
+
             if (existsGenesisData == genesisData)
             {
                 auto version = genesis.m_compatibilityVersion;
@@ -1876,7 +2142,8 @@ bool Ledger::buildGenesisBlock(
                     executor_v1::StateKeyView(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
                 if (versionEntry && blockNumberEntry)
                 {
-                    auto [versionStr, _] = versionEntry->getObject<SystemConfigEntry>();
+                    auto [versionStr, _] =
+                        bcos::storage::serialize::decode<SystemConfigEntry>(versionEntry->get());
                     auto storageVersion = tool::toVersionNumber(versionStr);
 
                     // 设置sharding default，相关的bugfix也要设置上，否则会不一致
@@ -1917,6 +2184,78 @@ bool Ledger::buildGenesisBlock(
                                           genesis.m_compatibilityVersion)) +
                                       ", high than support maxVersion"));
         }
+
+        // Build and validate B0's header BEFORE any table/state write: an
+        // eth-genesis artifact mismatch (state_root cross-check or the
+        // keccak256(rlp) checksum below) must fail while the datadir is still
+        // untouched, so the operator can fix the config and simply retry —
+        // the system-table creation further down is not idempotent
+        // (asyncCreateTable rejects an existing table on the next attempt).
+        auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+        header->setNumber(0);
+        if (versionNumber >= protocol::BlockVersion::V3_1_VERSION)
+        {
+            header->setVersion(versionNumber);
+        }
+        if (!genesis.m_ethGenesisHeader.has_value())
+        {
+            // Legacy genesis: the FISCO genesis pin travels in B0's extraData.
+            // Eth-genesis chains keep it in SYS_CONFIG instead (written below)
+            // — their extraData is the artifact's (Jovian format), because
+            // every extraData byte enters the RLP genesis hash.
+            header->setExtraData(bcos::bytes(genesisData.begin(), genesisData.end()));
+        }
+        // L2 genesis: pin the allocs into the block hash via the op-geth state
+        // root (also the value the Engine-API eth-block view serves to op-node
+        // as the genesis stateRoot). pbft chains leave stateRoot empty as before
+        // — the FISCO-BCOS native stateRoot for blocks >= 1 is an XOR of
+        // per-block state-change hashes, a different domain from this MPT root,
+        // so only the (previously empty) genesis block carries it.
+        bool const l2EthereumCompat = std::any_of(genesis.m_features.begin(),
+            genesis.m_features.end(), [](ledger::FeatureSet const& featureSet) {
+                return featureSet.flag == Features::Flag::feature_l2_ethereum_compat &&
+                       featureSet.enable > 0;
+            });
+        if (!genesis.m_allocs.empty())
+        {
+            header->setStateRoot(ethStateTrie.root);
+        }
+        else if (l2EthereumCompat)
+        {
+            // Empty-alloc L2 genesis: NodeConfig::validateL2Invariants rejects this
+            // combination, but buildGenesisBlock is callable directly. Publish the
+            // canonical empty-trie root instead of a zero h256 — commitTrie()
+            // recognizes only emptyRootHash() as the from-empty marker
+            // (mpt/HashBuilder.h), so a zero parent root would send block 1's
+            // incremental MPT build down the node-reading merge path and abort on
+            // the nonexistent zero-hash node.
+            header->setStateRoot(mpt::emptyRootHash());
+        }
+        if (genesis.m_ethGenesisHeader.has_value())
+        {
+            applyEthGenesisHeader(*header, *genesis.m_ethGenesisHeader);
+        }
+        header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+        if (genesis.m_ethGenesisHeader.has_value())
+        {
+            // hash() throws EmptyBlockHeaderHash when the RLP validation
+            // inside calculateHash() rejected the header — fail-fast either
+            // way. The artifact's hash field is a checksum over the other 21
+            // fields: any config/artifact drift lands here.
+            auto builtHash = header->hash();
+            if (builtHash != genesis.m_ethGenesisHeader->m_hash)
+            {
+                BOOST_THROW_EXCEPTION(
+                    bcos::tool::InvalidConfig() << errinfo_comment(
+                        "[eth_genesis_header].hash mismatch: keccak256(rlp(header)) = " +
+                        builtHash.hex() + " but the artifact claims " +
+                        genesis.m_ethGenesisHeader->m_hash.hex() +
+                        "; the artifact and the 21 header fields disagree"));
+            }
+            LEDGER_LOG(INFO) << LOG_DESC("buildGenesisBlock: eth genesis header")
+                             << LOG_KV("hash", builtHash.hex());
+        }
+
         // clang-format off
     constexpr static auto tables = std::to_array<std::string_view>({
         SYS_CONFIG, SYS_VALUE_AND_ENABLE_BLOCK_NUMBER,
@@ -1966,16 +2305,6 @@ bool Ledger::buildGenesisBlock(
                          << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion())
                          << LOG_KV("isAuthCheck", genesis.m_isAuthCheck);
 
-        // build a block
-        auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-        header->setNumber(0);
-        if (versionNumber >= protocol::BlockVersion::V3_1_VERSION)
-        {
-            header->setVersion(versionNumber);
-        }
-        header->setExtraData(bcos::bytes(genesisData.begin(), genesisData.end()));
-        header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
-
         auto block = m_blockFactory->createBlock();
         block->setBlockHeader(header);
         co_await ledger::prewriteBlockToStorage(*this, nullptr, block, true, m_stateStorage);
@@ -2002,25 +2331,41 @@ bool Ledger::buildGenesisBlock(
         // Write default features
         Features features;
         features.setGenesisFeatures(protocol::BlockVersion(versionNumber));
+        // feature_l2_ethereum_compat (if set in genesis.m_features) is handled
+        // by setGenesisFeatures(genesis.m_features, ...) below, which iterates
+        // every featureSet with enable > 0 and calls features.set(flag). No
+        // separate L2-mode set needed here.
 
         // tx count limit
         Entry txLimitEntry;
-        txLimitEntry.setObject(
-            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txCountLimit), 0});
+        txLimitEntry.set(bcos::storage::serialize::encode(
+            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txCountLimit), 0}));
         sysTable->setRow(SYSTEM_KEY_TX_COUNT_LIMIT, std::move(txLimitEntry));
 
         // tx gas limit
         Entry gasLimitEntry;
-        gasLimitEntry.setObject(
-            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txGasLimit), 0});
+        gasLimitEntry.set(bcos::storage::serialize::encode(
+            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txGasLimit), 0}));
         sysTable->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(gasLimitEntry));
 
         // tx gas price
         if (versionCompareTo(versionNumber, BlockVersion::V3_6_VERSION) >= 0)
         {
             Entry gasPriceEntry;
-            gasPriceEntry.setObject(SystemConfigEntry("0x0", 0));
+            gasPriceEntry.set(
+                bcos::storage::serialize::encode(SystemConfigEntry(genesis.m_txGasPrice, 0)));
             sysTable->setRow(SYSTEM_KEY_TX_GAS_PRICE, std::move(gasPriceEntry));
+        }
+
+        // A3: eth-genesis chains keep the FISCO genesis pin here — B0's
+        // extraData carries the artifact bytes, so the restart consistency
+        // check (top of this function) reads the pin back from this row.
+        if (genesis.m_ethGenesisHeader.has_value())
+        {
+            Entry genesisDataEntry;
+            genesisDataEntry.set(
+                bcos::storage::serialize::encode(SystemConfigEntry{genesisData, 0}));
+            sysTable->setRow(INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA, std::move(genesisDataEntry));
         }
 
         if (RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
@@ -2030,17 +2375,17 @@ bool Ledger::buildGenesisBlock(
             features.set(ledger::Features::Flag::feature_rpbft);
 
             Entry epochSealerNumEntry;
-            epochSealerNumEntry.setObject(
-                SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_epochSealerNum), 0});
+            epochSealerNumEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_epochSealerNum), 0}));
             sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, std::move(epochSealerNumEntry));
 
             Entry epochBlockNumEntry;
-            epochBlockNumEntry.setObject(
-                SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_epochBlockNum), 0});
+            epochBlockNumEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_epochBlockNum), 0}));
             sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, std::move(epochBlockNumEntry));
 
             Entry notifyRotateEntry;
-            notifyRotateEntry.setObject(SystemConfigEntry("0", 0));
+            notifyRotateEntry.set(bcos::storage::serialize::encode(SystemConfigEntry("0", 0)));
             sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
         }
 
@@ -2048,27 +2393,47 @@ bool Ledger::buildGenesisBlock(
         co_await importGenesisState(
             genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl());
 
+        // Scenario B (L2): block 1 builds the MPT incrementally on top of the genesis state
+        // root (buildAndCollect with the genesis root as parent) and reads the parent trie
+        // through "/mpt/" state rows, so every genesis trie node — account trie plus each
+        // account's storage sub-trie — must be persisted here, on the same storage the alloc
+        // flat rows above just went to. A missing node aborts block-1 execution loudly
+        // (MPTInvariantViolation). Non-MPT chains never read these rows and get none; scenario
+        // A (feature_mpt_state_root activated mid-chain) starts its first MPT block from
+        // emptyRootHash() and needs no genesis nodes either.
+        if (l2EthereumCompat)
+        {
+            for (auto& [nodeHash, nodeRlp] : ethStateTrie.nodes)
+            {
+                Entry nodeEntry;
+                nodeEntry.set(std::move(nodeRlp));
+                co_await storage2::writeOne(
+                    *m_stateStorage, storage2::mptNodeStateKey(nodeHash), std::move(nodeEntry));
+            }
+        }
+
         // consensus leader period
         Entry leaderPeriodEntry;
-        leaderPeriodEntry.setObject(
-            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_leaderSwitchPeriod), 0});
+        leaderPeriodEntry.set(bcos::storage::serialize::encode(
+            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_leaderSwitchPeriod), 0}));
         sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
         LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
                          << LOG_KV("versionNumber", versionNumber);
         // write compatibility version
         Entry compatibilityVersionEntry;
-        compatibilityVersionEntry.setObject(
+        compatibilityVersionEntry.set(bcos::storage::serialize::encode(
             SystemConfigEntry{tool::fromVersionNumber(static_cast<protocol::BlockVersion>(
                                   genesis.m_compatibilityVersion)),
-                0});
+                0}));
         sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
 
         if (versionCompareTo(versionNumber, BlockVersion::V3_3_VERSION) >= 0)
         {
             // write auth check status
             Entry authCheckStatusEntry;
-            authCheckStatusEntry.setObject(SystemConfigEntry{genesis.m_isAuthCheck ? "1" : "0", 0});
+            authCheckStatusEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{genesis.m_isAuthCheck ? "1" : "0", 0}));
             sysTable->setRow(SYSTEM_KEY_AUTH_CHECK_STATUS, std::move(authCheckStatusEntry));
         }
 
@@ -2076,7 +2441,8 @@ bool Ledger::buildGenesisBlock(
         {
             // write web3 chain id
             Entry chainIdEntry;
-            chainIdEntry.setObject(SystemConfigEntry{genesis.m_web3ChainID, 0});
+            chainIdEntry.set(
+                bcos::storage::serialize::encode(SystemConfigEntry{genesis.m_web3ChainID, 0}));
             sysTable->setRow(SYSTEM_KEY_WEB3_CHAIN_ID, std::move(chainIdEntry));
         }
 
@@ -2084,8 +2450,8 @@ bool Ledger::buildGenesisBlock(
         if (versionNumber >= BlockVersion::V3_15_0_VERSION && genesis.m_executorVersion > 0)
         {
             Entry executorVersion;
-            executorVersion.setObject(
-                SystemConfigEntry{std::to_string(genesis.m_executorVersion), 0});
+            executorVersion.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{std::to_string(genesis.m_executorVersion), 0}));
             co_await storage2::writeOne(*m_stateStorage,
                 executor_v1::StateKey(
                     SYS_CONFIG, magic_enum::enum_name(ledger::SystemConfig::executor_version)),
@@ -2094,11 +2460,36 @@ bool Ledger::buildGenesisBlock(
             // 按会议结论，executor v1默认打开balance_transfer
             // According to the meeting conclusion, executor v1 defaults to open balance_transfer
             Entry balanceTransfer;
-            balanceTransfer.setObject(SystemConfigEntry{"1", 0});
+            balanceTransfer.set(bcos::storage::serialize::encode(SystemConfigEntry{"1", 0}));
             co_await storage2::writeOne(*m_stateStorage,
                 executor_v1::StateKey(
                     SYS_CONFIG, magic_enum::enum_name(ledger::SystemConfig::balance_transfer)),
                 balanceTransfer);
+        }
+
+        // Write EVMC revision config (consumed by ethereum-executor, executor_version=2).
+        // Only written when explicitly configured in the genesis config; otherwise
+        // getLedgerConfig falls back to the latest revision from genesis.
+        if (versionNumber >= BlockVersion::V3_18_0_VERSION &&
+            (genesis.m_evmcRevision || !genesis.m_evmcRevisionForks.empty()))
+        {
+            Entry evmcRevisionEntry;
+            evmcRevisionEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{
+                encodeEVMCRevisionConfig(genesis.m_evmcRevision, genesis.m_evmcRevisionForks), 0}));
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EVMC_REVISION), evmcRevisionEntry);
+        }
+
+        // Write excess blob gas config (consumed by ethereum-executor, executor_version=2,
+        // for EIP-4844 blob base fee). Only written when explicitly configured in the genesis
+        // config; otherwise getLedgerConfig leaves excessBlobGas unset (executor uses 0).
+        if (versionNumber >= BlockVersion::V3_18_0_VERSION && genesis.m_excessBlobGas.has_value())
+        {
+            Entry excessBlobGasEntry;
+            excessBlobGasEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{std::to_string(*genesis.m_excessBlobGas), 0}));
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EXCESS_BLOB_GAS), excessBlobGasEntry);
         }
 
         // write consensus node list
@@ -2154,20 +2545,28 @@ bool Ledger::buildGenesisBlock(
         }
 
         Entry currentNumber;
-        currentNumber.importFields({"0"});
+        currentNumber.set("0");
         stateTable->setRow(SYS_KEY_CURRENT_NUMBER, std::move(currentNumber));
 
         Entry txNumber;
-        txNumber.importFields({"0"});
+        txNumber.set("0");
         stateTable->setRow(SYS_KEY_TOTAL_TRANSACTION_COUNT, std::move(txNumber));
 
         Entry txFailedNumber;
-        txFailedNumber.importFields({"0"});
+        txFailedNumber.set("0");
         stateTable->setRow(SYS_KEY_TOTAL_FAILED_TRANSACTION, std::move(txFailedNumber));
 
         Entry archivedNumber;
-        archivedNumber.importFields({"0"});
+        archivedNumber.set("0");
         stateTable->setRow(SYS_KEY_ARCHIVED_NUMBER, std::move(archivedNumber));
+
+        // The op-geth genesis state root lives in the genesis block header's
+        // stateRoot (set during header construction above), not in a separate
+        // SYS_CURRENT_STATE row: the restart guard reads it back from the header,
+        // and the Engine-API eth-block view serves the header's stateRoot
+        // directly. importGenesisState() above wrote the alloc bytes into
+        // stateStorage in this same genesis commit.
+
         co_return true;
     }());
 }
@@ -2233,7 +2632,7 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
     {
         rootSubMap.insert(std::make_pair(sub, FS_TYPE_DIR));
     }
-    rootSubEntry.importFields({asString(codec::scale::encode(rootSubMap))});
+    rootSubEntry.set(asString(codec::scale::encode(rootSubMap)));
     std::promise<Error::UniquePtr> setPromise;
     m_stateStorage->asyncSetRow(
         bcos::tool::FS_ROOT, FS_KEY_SUB, std::move(rootSubEntry), [&setPromise](auto&& error) {
@@ -2259,7 +2658,7 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
     {
         sysSubMap.insert(std::make_pair(contract, FS_TYPE_CONTRACT));
     }
-    sysSubEntry.importFields({asString(codec::scale::encode(sysSubMap))});
+    sysSubEntry.set(asString(codec::scale::encode(sysSubMap)));
     sysTable->setRow(FS_KEY_SUB, std::move(sysSubEntry));
 }
 
@@ -2289,12 +2688,12 @@ std::optional<storage::Table> Ledger::buildDir(
     Entry aclBEntry;
     Entry extraEntry;
     std::map<std::string, std::string> newSubMap;
-    newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-    tEntry.importFields({std::string(FS_TYPE_DIR)});
-    aclTypeEntry.importFields({"0"});
-    aclWEntry.importFields({""});
-    aclBEntry.importFields({""});
-    extraEntry.importFields({""});
+    newSubEntry.set(asString(codec::scale::encode(newSubMap)));
+    tEntry.set(std::string(FS_TYPE_DIR));
+    aclTypeEntry.set("0");
+    aclWEntry.set("");
+    aclBEntry.set("");
+    extraEntry.set("");
     table->setRow(FS_KEY_TYPE, std::move(tEntry));
     table->setRow(FS_KEY_SUB, std::move(newSubEntry));
     table->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));
@@ -2355,7 +2754,8 @@ task::Task<bcos::ledger::SystemConfigs> Ledger::fetchAllSystemConfigs(
     {
         if (entry)
         {
-            auto [value, enableNumber] = entry->getObject<SystemConfigEntry>();
+            auto [value, enableNumber] =
+                bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
             if (enableNumber <= _blockNumber)
             {
                 configs.set(key, value, enableNumber);
@@ -2370,6 +2770,24 @@ task::Task<bcos::ledger::Features> Ledger::fetchAllFeatures(protocol::BlockNumbe
     bcos::ledger::Features features;
     co_await features.readFromStorage(*m_stateStorage, _blockNumber);
     co_return features;
+}
+
+task::Task<bool> Ledger::fetchFeature(
+    bcos::ledger::Features::Flag _flag, protocol::BlockNumber _blockNumber)
+{
+    // One SYS_CONFIG row instead of fetchAllFeatures' read of every feature key (~61 rows).
+    // A flag is active when its enableNumber <= _blockNumber; absent row / decode failure
+    // means "not enabled" (the honest scenario-A default). Used by the historical
+    // state-read path which needs exactly feature_l2_ethereum_compat.
+    auto const key = std::string(magic_enum::enum_name(_flag));
+    auto const [error, entry] = m_stateStorage->getRow(SYS_CONFIG, key);
+    if (error || !entry)
+    {
+        co_return false;
+    }
+    auto const [value, enableNumber] =
+        bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
+    co_return _blockNumber >= enableNumber;
 }
 bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
 {
@@ -2386,11 +2804,26 @@ bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
         {
             BOOST_THROW_EXCEPTION(BCOS_ERROR(GetStorageError, "Not found compatibilityVersion."));
         }
-        auto [compatibilityVersionStr, _] = entry->template getObject<SystemConfigEntry>();
+        auto [compatibilityVersionStr, _] =
+            bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
         auto const version = bcos::tool::toVersionNumber(compatibilityVersionStr);
         auto stateStorage = stateStorageFactory.createStateStorage(
             m_stateStorage, version, true, false, keyPageIgnoreTables);
         return stateStorage;
     }
     return std::make_shared<bcos::storage::StateStorage>(m_stateStorage, true);
+}
+
+task::Task<void> Ledger::loadL2Config(protocol::BlockNumber blockNumber, ledger::LedgerConfig& cfg)
+{
+    // No loader configured (non-L2 mode, or PBFT short-circuit before the L2
+    // workflow wires one): nothing to refresh.
+    if (!m_l2Loader)
+    {
+        co_return;
+    }
+    // Delegate to the injected loader. A revert / short return / OOG throws out of
+    // here so the caller aborts the current block — we never swallow it.
+    co_await m_l2Loader->loadIntoLedgerConfig(blockNumber, cfg);
+    co_return;
 }

@@ -16,7 +16,6 @@
 # limitations under the License.
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.10)
 
 add_subdirectory(bcos-protocol)
 
@@ -25,7 +24,7 @@ target_include_directories(bcos-protocol INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-protocol>
 )
-target_link_libraries(bcos-protocol INTERFACE ${CODEC_TARGET})
+target_link_libraries(bcos-protocol INTERFACE codec)
 
 if (TESTS)
     # fetch bcos-test
@@ -35,5 +34,5 @@ if (TESTS)
 endif()
 
 include(GNUInstallDirs)
-#install(TARGETS bcos-protocol EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(TARGETS bcos-protocol EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY "bcos-protocol" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")

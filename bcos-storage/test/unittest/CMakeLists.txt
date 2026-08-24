@@ -15,15 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ------------------------------------------------------------------------------
-list(APPEND SOURCES "TestRocksDBStorage.cpp" "TestRocksDBStorage2.cpp" "main.cpp")
+list(APPEND SOURCES "TestRocksDBStorage.cpp" "TestRocksDBStorage2.cpp" "TestKeyPrefixes.cpp" "TestMPTNodeKey.cpp" "TestMPTNodeReadStorage.cpp" "main.cpp")
 # cmake settings
 set(TEST_BINARY_NAME test-storage)
-
-if(WITH_TIKV)
-    list(APPEND SOURCES "TestTiKVStorage.cpp")
-else()
-    set(EXCLUDE_SUITES "TestTiKVStorage")
-endif()
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../src)
@@ -31,7 +25,7 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../src)
 find_package(Boost REQUIRED unit_test_framework log)
 find_package(fmt REQUIRED)
 
-target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${STORAGE_TARGET} Boost::unit_test_framework Boost::log fmt::fmt-header-only)
+target_link_libraries(${TEST_BINARY_NAME} PUBLIC storage Boost::unit_test_framework Boost::log fmt::fmt)
 set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 include(SearchTestCases)

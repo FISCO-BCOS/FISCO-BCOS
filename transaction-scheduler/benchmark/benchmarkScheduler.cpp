@@ -1,3 +1,4 @@
+#include "../tests/TrivialCheckpointStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-executor/src/Common.h"
@@ -15,6 +16,7 @@
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
+#include <bcos-utilities/IOServicePool.h>
 #include "transaction-executor/tests/TestBytecode.h"
 #include <benchmark/benchmark.h>
 #include <boost/throw_exception.hpp>
@@ -34,7 +36,8 @@ constexpr static std::string_view transferMethod{"transfer(address,address,int25
 
 using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
 using BackendStorage = MemoryStorage<StateKey, StateValue, ORDERED | LRU | CONCURRENT>;
-using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, BackendStorage>;
+using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
+using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 
 template <bool parallel>
@@ -47,9 +50,11 @@ struct Fixture
     std::shared_ptr<bcostars::protocol::BlockFactoryImpl> m_blockFactory;
 
     BackendStorage m_backendStorage;
+    CheckpointBackend m_checkpointBackend;
     MultiLayerStorageType m_multiLayerStorage;
     bcos::bytes m_helloworldBytecodeBinary;
 
+    bcos::IOServicePool::Ptr m_ioServicePool;
     PrecompiledManager m_precompiledManager;
     TransactionExecutorImpl m_executor;
     std::variant<std::monostate, SchedulerSerialImpl, SchedulerParallelImpl<MutableStorage>>
@@ -77,7 +82,8 @@ struct Fixture
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(m_cryptoSuite)),
         m_blockFactory(std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             m_cryptoSuite, m_blockHeaderFactory, m_transactionFactory, m_receiptFactory)),
-        m_multiLayerStorage(m_backendStorage),
+        m_checkpointBackend(m_backendStorage),
+        m_multiLayerStorage(m_checkpointBackend),
         m_precompiledManager(m_cryptoSuite->hashImpl()),
         m_executor(*m_receiptFactory, m_cryptoSuite->hashImpl(), m_precompiledManager)
     {
@@ -86,13 +92,15 @@ struct Fixture
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(m_helloworldBytecodeBinary));
 
+        m_ioServicePool = std::make_shared<bcos::IOServicePool>(1, "benchmarkGC");
+
         if constexpr (parallel)
         {
-            m_scheduler.emplace<SchedulerParallelImpl<MutableStorage>>();
+            m_scheduler.emplace<SchedulerParallelImpl<MutableStorage>>(m_ioServicePool);
         }
         else
         {
-            m_scheduler.emplace<SchedulerSerialImpl>();
+            m_scheduler.emplace<SchedulerSerialImpl>(m_ioServicePool);
         }
 
         ledger::Features features;
@@ -508,10 +516,7 @@ static void conflictTransfer(benchmark::State& state)
 
                 task::syncWait([&](benchmark::State& state) -> task::Task<void> {
                     // First issue
-                    bcostars::protocol::BlockHeaderImpl blockHeader(
-                        [inner = bcostars::BlockHeader()]() mutable {
-                            return std::addressof(inner);
-                        });
+                    bcostars::protocol::BlockHeaderImpl blockHeader;
                     blockHeader.setNumber(0);
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
 

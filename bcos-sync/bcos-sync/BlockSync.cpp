@@ -19,15 +19,13 @@
  * @date 2021-05-24
  */
 #include "bcos-sync/BlockSync.h"
-#include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
-#include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include <json/json.h>
-#include <boost/bind/bind.hpp>
+#include <chrono>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/sort.hpp>
 #include <string>
@@ -39,15 +37,17 @@ using namespace bcos::crypto;
 using namespace bcos::ledger;
 using namespace bcos::tool;
 
-BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
-  : Worker("syncWorker", _idleWaitMs),
+BlockSync::BlockSync(BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext,
+    bcos::IOServicePool::Ptr _ioServicePool, unsigned _idleWaitMs)
+  : Worker(_ioContext, "syncWorker", _idleWaitMs),
     m_config(_config),
     m_syncStatus(std::make_shared<SyncPeerStatus>(_config)),
-    m_downloadingQueue(std::make_shared<DownloadingQueue>(_config))
+    m_downloadingQueue(std::make_shared<DownloadingQueue>(_config)),
+    m_downloadStrand(_ioServicePool),
+    m_sendStrand(_ioServicePool)
 {
-    m_downloadBlockProcessor = std::make_shared<bcos::ThreadPool>("Download", 1);
-    m_sendBlockProcessor = std::make_shared<bcos::ThreadPool>("SyncSend", 1);
-    m_downloadingTimer = std::make_shared<Timer>(m_config->downloadTimeout(), "downloadTimer");
+    m_downloadingTimer =
+        std::make_shared<Timer>(_ioContext, m_config->downloadTimeout(), "downloadTimer");
 
     if (m_config->enableSendBlockStatusByTree())
     {
@@ -61,7 +61,7 @@ BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
     m_downloadingQueue->registerApplyFinishedHandler([this](bool _isNotify) {
         if (_isNotify)
         {
-            m_signalled.notify_all();
+            notify();
         }
     });
     initSendResponseHandler();
@@ -161,14 +161,6 @@ void BlockSync::stop()
         return;
     }
     BLKSYNC_LOG(INFO) << LOG_DESC("Stop BlockSync");
-    if (m_downloadBlockProcessor)
-    {
-        m_downloadBlockProcessor->stop();
-    }
-    if (m_sendBlockProcessor)
-    {
-        m_sendBlockProcessor->stop();
-    }
     if (m_downloadingTimer)
     {
         m_downloadingTimer->destroy();
@@ -179,7 +171,6 @@ void BlockSync::stop()
     {
         // stop the worker thread
         stopWorking();
-        terminate();
     }
 }
 
@@ -220,25 +211,31 @@ void BlockSync::executeWorker()
     }
     // maintain the connections between observers/sealers
     maintainPeersConnection();
-    m_downloadBlockProcessor->enqueue([this]() {
+    auto self = weak_from_this();
+    m_downloadStrand.post([self]() {
+        auto sync = self.lock();
+        if (!sync)
+        {
+            return;
+        }
         try
         {
             // flush downloaded buffer into downloading queue
-            maintainDownloadingBuffer();
-            maintainDownloadingQueue();
+            sync->maintainDownloadingBuffer();
+            sync->maintainDownloadingQueue();
 
             // send block-download-request to peers if this node is behind others
-            tryToRequestBlocks();
+            sync->tryToRequestBlocks();
 
-            if (m_config->syncArchivedBlockBody())
+            if (sync->m_config->syncArchivedBlockBody())
             {
-                auto archivedBlockNumber = m_config->archiveBlockNumber();
+                auto archivedBlockNumber = sync->m_config->archiveBlockNumber();
                 if (archivedBlockNumber == 0)
                 {
                     return;
                 }
-                syncArchivedBlockBody(archivedBlockNumber);
-                verifyAndCommitArchivedBlock(archivedBlockNumber);
+                sync->syncArchivedBlockBody(archivedBlockNumber);
+                sync->verifyAndCommitArchivedBlock(archivedBlockNumber);
             }
         }
         catch (std::exception const& e)
@@ -249,10 +246,15 @@ void BlockSync::executeWorker()
         }
     });
     // send block to other nodes
-    m_sendBlockProcessor->enqueue([this]() {
+    m_sendStrand.post([self]() {
+        auto sync = self.lock();
+        if (!sync)
+        {
+            return;
+        }
         try
         {
-            maintainBlockRequest();
+            sync->maintainBlockRequest();
         }
         catch (std::exception const& e)
         {
@@ -260,27 +262,6 @@ void BlockSync::executeWorker()
                                << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
-}
-
-void BlockSync::workerProcessLoop()
-{
-    while (workerState() == WorkerState::Started)
-    {
-        try
-        {
-            executeWorker();
-            if (idleWaitMs() != 0U)
-            {
-                boost::unique_lock<boost::mutex> lock(x_signalled);
-                m_signalled.wait_for(lock, boost::chrono::milliseconds(idleWaitMs()));
-            }
-        }
-        catch (std::exception const& e)
-        {
-            BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync executeWorker exception")
-                               << LOG_KV("message", boost::diagnostic_information(e));
-        }
-    }
 }
 
 bool BlockSync::shouldSyncing()
@@ -534,7 +515,7 @@ void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
                        << LOG_DESC("Receive peer block packet")
                        << LOG_KV("peer", _nodeID->shortHex());
     m_downloadingQueue->push(blockMsg);
-    m_signalled.notify_all();
+    notify();
 }
 
 void BlockSync::onPeerBlocksRequest(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg)
@@ -564,7 +545,7 @@ void BlockSync::onPeerBlocksRequest(NodeIDPtr _nodeID, BlockSyncMsgInterface::Pt
     {
         peerStatus->downloadRequests()->push(blockRequest->number(), blockRequest->size(),
             blockRequest->blockInterval(), blockRequest->blockDataFlag());
-        m_signalled.notify_all();
+        notify();
         return;
     }
     BLKSYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("onPeerBlocksRequest")
@@ -864,7 +845,7 @@ void BlockSync::maintainBlockRequest()
             }
 #endif
         }
-        m_signalled.notify_all();
+        notify();
         return true;
     });
 }
@@ -1200,11 +1181,9 @@ void BlockSync::verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archive
         BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync verify archived block failed")
                            << LOG_KV("number", topBlockNumber)
                            << LOG_KV("transactionRoot", toHex(transactionRoot))
-                           << LOG_KV(
-                                  "localTransactionRoot", toHex(localBlockHeader->txsRoot()))
+                           << LOG_KV("localTransactionRoot", toHex(localBlockHeader->txsRoot()))
                            << LOG_KV("receiptRoot", toHex(receiptRoot))
-                           << LOG_KV("localReceiptRoot",
-                                  toHex(localBlockHeader->receiptsRoot()))
+                           << LOG_KV("localReceiptRoot", toHex(localBlockHeader->receiptsRoot()))
                            << LOG_KV("reason", "transactionRoot or receiptRoot not match");
         WriteGuard lock(x_archivedBlockQueue);
         m_archivedBlockQueue.pop();
@@ -1226,7 +1205,7 @@ void BlockSync::verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archive
     {
         WriteGuard lock(x_archivedBlockQueue);
         for (auto topNumber = m_archivedBlockQueue.top()->blockHeader()->number();
-            topNumber >= topBlockNumber;)
+             topNumber >= topBlockNumber;)
         {
             m_archivedBlockQueue.pop();
             if (!m_archivedBlockQueue.empty())

@@ -62,6 +62,10 @@ public:
         auto myFactory =
             std::make_shared<bcos::rpc::RpcFactory>(chainId, gw, cryptoSuite->keyFactory());
         myFactory->setNodeConfig(nodeConfig);
+        // This fixture builds its own factory (to inject ErrorGateway) instead of using the one
+        // RPCFixture sets up, so it must also inject the shared IOServicePool -- RpcFactory now
+        // requires it and throws from buildWsService without it. Reuse the fixture's pool.
+        myFactory->setIOServicePool(ioServicePool);
         rpc = myFactory->buildLocalRpc(groupInfo, nodeService);
         rpc->groupManager()->updateGroupInfo(groupInfo);
     }

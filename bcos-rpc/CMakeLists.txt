@@ -16,11 +16,11 @@
 # limitations under the License.
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.10)
 
 project(bcos-rpc VERSION ${VERSION})
 
 find_package(jsoncpp CONFIG REQUIRED)
+find_package(jwt-cpp CONFIG REQUIRED)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
@@ -28,9 +28,12 @@ file(GLOB_RECURSE SRCS bcos-rpc/*.cpp)
 
 find_package(tarscpp REQUIRED)
 
-add_library(${RPC_TARGET} ${SRCS} ${HEADERS})
-target_link_libraries(${RPC_TARGET} PUBLIC bcos-boostssl ${LEDGER_TARGET} ${CODEC_TARGET} ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil)
-set_target_properties(${RPC_TARGET} PROPERTIES UNITY_BUILD "ON")
+add_library(rpc ${SRCS} ${HEADERS})
+target_include_directories(rpc PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+target_link_libraries(rpc PUBLIC bcos-boostssl ledger codec bcos-crypto protocol-tars mempool jsoncpp_static jwt-cpp::jwt-cpp tarscpp::tarsservant tarscpp::tarsutil)
+add_dependencies(rpc BuildInfo.h)
+set_target_properties(rpc PROPERTIES UNITY_BUILD "ON")
 
  if (TESTS)
     enable_testing()

@@ -19,15 +19,11 @@
  */
 
 #pragma once
-#include "FrontMessage.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
-#include <oneapi/tbb/concurrent_queue.h>
-#include <oneapi/tbb/task_arena.h>
-#include <oneapi/tbb/task_group.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/asio.hpp>
 #include <atomic>
 #include <functional>
@@ -165,10 +161,6 @@ public:
     void onMessageTimeout(const boost::system::error_code& _error, bcos::crypto::NodeIDPtr _nodeID,
         const std::string& _uuid);
 
-    FrontMessageFactory::Ptr messageFactory() const;
-
-    void setMessageFactory(FrontMessageFactory::Ptr _messageFactory);
-
     bcos::crypto::NodeIDPtr nodeID() const;
     void setNodeID(bcos::crypto::NodeIDPtr _nodeID);
     std::string groupID() const;
@@ -182,6 +174,7 @@ public:
 
     std::shared_ptr<boost::asio::io_context> ioService() const;
     void setIoService(std::shared_ptr<boost::asio::io_context> _ioService);
+    void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool);
 
     // register message _dispatcher for module
     void registerModuleMessageDispatcher(int _moduleID,
@@ -209,7 +202,7 @@ public:
         using Ptr = std::shared_ptr<Callback>;
         uint64_t startTime = utcSteadyTime();
         CallbackFunc callbackFunc;
-        std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
+        std::shared_ptr<boost::asio::steady_timer> timeoutHandler;
     };
     // lock m_callback
     mutable bcos::Mutex x_callback;
@@ -231,22 +224,24 @@ protected:
 
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
-    // FIB-185: hand a send task to the serial queue and return immediately; a single drainer runs
-    // tasks one at a time (FIFO) on m_asyncGroup, so no caller thread runs the gateway send.
+    // FIB-185: hand a send task to the serial send strand and return immediately; tasks run FIFO
+    // on the shared IOServicePool (serialized, never concurrently), so no caller thread runs the
+    // gateway send.
     void enqueueSend(std::function<void()> _sendTask);
-    void drainSendQueue();
 
 private:
-    tbb::task_arena m_taskArena;
-    tbb::task_group m_asyncGroup;
-    // FIB-185: serial async send queue + single-drainer guard (reuses m_asyncGroup, no new thread).
-    tbb::concurrent_queue<std::function<void()>> m_sendQueue;
-    std::atomic_bool m_sendDraining{false};
+    bcos::IOServicePool::Ptr m_ioServicePool;
+    // FIB-185: serial async send strand over the shared IOServicePool + a pending-send counter
+    // that bounds it. The strand provides the FIFO/serialized execution the fix needs (off the
+    // CALLER's thread, no new thread) without the hand-rolled queue + single-drainer CAS. It
+    // exposes no queue depth, so the backpressure below (warn, then shed at the hard cap — the OOM
+    // guard FIB-185 closes) tracks the pending count here instead. See enqueueSend().
+    std::unique_ptr<bcos::Strand> m_sendStrand;
+    std::atomic<size_t> m_pendingSendCount{0};
     // timer
     std::shared_ptr<boost::asio::io_context> m_ioService;
     /// gateway interface
     std::shared_ptr<bcos::gateway::GatewayInterface> m_gatewayInterface;
-    FrontMessageFactory::Ptr m_messageFactory;
 
     std::unordered_map<int,
         std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>>
@@ -255,10 +250,10 @@ private:
     std::unordered_map<int, std::function<void(bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc)>>
         m_module2GroupNodeInfoNotifier;
 
-    // service is running or not
-    bool m_run = false;
-    //
-    std::shared_ptr<std::thread> m_frontServiceThread;
+    // service is running or not. Atomic because the FIB-185 send path reads it from the caller's
+    // thread (enqueueSend's post-stop guard) while stop() clears it from the shutdown thread, and
+    // the drain-at-stop reasoning depends on that store being visible.
+    std::atomic_bool m_run = false;
     // NodeID
     bcos::crypto::NodeIDPtr m_nodeID;
     // GroupID

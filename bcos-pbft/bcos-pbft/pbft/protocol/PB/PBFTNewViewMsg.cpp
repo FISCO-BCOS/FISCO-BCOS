@@ -35,30 +35,44 @@ bytesPointer PBFTNewViewMsg::encode(CryptoSuite::Ptr, KeyPairInterface::Ptr) con
 
 void PBFTNewViewMsg::decode(bytesConstRef _data)
 {
+    // FIB-121: no unsafe_arena_release_message() here. That call belonged to the old ownership
+    // protocol, where the default ctor handed the BaseMessage to the arena via
+    // set_allocated_message and decode had to take it back first. The ctor now installs an
+    // aliasing shared_ptr instead (see below), so the message sub-object is owned by
+    // m_rawNewView throughout and releasing it would hand out a pointer nobody frees.
+    // Matches PBFTViewChangeMsg::decode / PBFTRequest::decode.
     decodePBObject(m_rawNewView, _data);
+
+    // Use an aliasing shared_ptr: points to the arena-allocated sub-message
+    // but shares ownership with m_rawNewView, avoiding a double-free.
     setBaseMessage(std::shared_ptr<BaseMessage>(m_rawNewView, m_rawNewView->mutable_message()));
+
     PBFTNewViewMsg::deserializeToObject();
 }
 
 void PBFTNewViewMsg::deserializeToObject()
 {
     PBFTBaseMessage::deserializeToObject();
+    // decode into m_viewChangeList
     // FIB-121: clear before repopulating so a re-decode does not accumulate duplicate
     // aliasing wrappers (matches PBFTMessage / PBFTViewChangeMsg::deserializeToObject).
     m_viewChangeList->clear();
     m_prePrepareList->clear();
-    // aliasing shared_ptrs share m_rawNewView's control block, so every nested
-    // viewChange / prePrepare wrapper keeps the NewView protobuf alive and owns nothing.
+    // Use aliasing shared_ptrs: sub-messages live in m_rawNewView's arena, so we share
+    // ownership with m_rawNewView rather than taking ownership from the arena (which would
+    // lead to a double-free). Every nested viewChange / prePrepare wrapper keeps the NewView
+    // protobuf alive and owns nothing.
     for (int i = 0; i < m_rawNewView->viewchangemsglist_size(); i++)
     {
-        m_viewChangeList->push_back(
-            std::make_shared<PBFTViewChangeMsg>(std::shared_ptr<RawViewChangeMessage>(
-                m_rawNewView, m_rawNewView->mutable_viewchangemsglist(i))));
+        auto* rawPtr = m_rawNewView->mutable_viewchangemsglist(i);
+        std::shared_ptr<RawViewChangeMessage> pbRawViewChange(m_rawNewView, rawPtr);
+        m_viewChangeList->push_back(std::make_shared<PBFTViewChangeMsg>(pbRawViewChange));
     }
     for (int i = 0; i < m_rawNewView->prepreparelist_size(); i++)
     {
-        m_prePrepareList->push_back(std::make_shared<PBFTMessage>(std::shared_ptr<PBFTRawMessage>(
-            m_rawNewView, m_rawNewView->mutable_prepreparelist(i))));
+        auto* rawPtr = m_rawNewView->mutable_prepreparelist(i);
+        std::shared_ptr<PBFTRawMessage> pbftRawMessage(m_rawNewView, rawPtr);
+        m_prePrepareList->push_back(std::make_shared<PBFTMessage>(pbftRawMessage));
     }
 }
 

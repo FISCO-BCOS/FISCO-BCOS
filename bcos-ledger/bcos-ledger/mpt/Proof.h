@@ -1,0 +1,650 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file Proof.h
+ * @brief EIP-1186 account + storage proof generation over an MPT state root (spec §5.9)
+ */
+#pragma once
+
+#include "Account.h"
+#include "Constants.h"
+#include "Errors.h"
+#include "MPTReadView.h"
+#include "Nibble.h"
+#include "NodeDecoder.h"
+#include "StorageValueCodec.h"
+#include "TrieNode.h"
+// AnyHasher.h defines the free bcos::crypto::hasher::hash(); OpenSSLHasher.h only defines the
+// hasher type. A unity build can mask a missing include of the former, so keep both explicit.
+#include <bcos-crypto/hasher/AnyHasher.h>
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-framework/storage2/Storage.h>
+#include <bcos-task/Task.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <boost/throw_exception.hpp>
+#include <algorithm>
+#include <optional>
+#include <span>
+#include <variant>
+#include <vector>
+
+namespace bcos::ledger::mpt
+{
+
+/// Proof for one storage slot (spec §5.9). For an absent slot under a COMPLETE storage trie
+/// (fullTrie mode), EIP-1186 semantics apply: value is empty (JSON 0x0) and proof holds the nodes
+/// visited until the walk dead-ended (exclusion proof).
+struct StorageProof
+{
+    bcos::h256 key;  ///< the raw 32-byte slot key as requested (NOT keccak-transformed)
+    /// The leaf value exactly as stored in the trie — the RLP encoding of the big-endian-trimmed
+    /// slot value, matching go-ethereum. Empty when the slot is absent.
+    bcos::bytes value;
+    std::vector<bcos::bytes> proof;  ///< raw RLP node encodings, storage root first
+    /// False = SlotNotInMPT (spec §5.9, scenario A): the account has a leaf, but this slot was
+    /// never written after MPT activation, so the (incomplete) storage trie excludes it. The
+    /// exclusion walk proves nothing about the slot's flat-KV value — generateProof leaves value
+    /// and proof EMPTY here, and the RPC layer fills value with the authoritative flat-KV truth.
+    /// Only generateProof(fullTrie=false) produces false.
+    bool inMPT = true;
+};
+
+/// EIP-1186 result: the account fields plus the Merkle paths proving them (spec §5.9).
+struct EIP1186Proof
+{
+    bcos::Address address;
+    bcos::u256 balance;
+    bcos::u256 nonce;
+    bcos::h256 codeHash;
+    bcos::h256 storageHash;  ///< the account's storage trie root
+    /// Raw RLP node encodings from the state root down to the account leaf. Only hash-referenced
+    /// nodes appear; inline children are embedded in their parent's encoding (go-ethereum
+    /// semantics).
+    std::vector<bcos::bytes> accountProof;
+    std::vector<StorageProof> storageProof;  ///< one entry per requested slot, in request order
+};
+
+/// Error outcomes of generateProof (spec §5.9). Returned as a variant alternative rather than
+/// thrown: both cases are expected request-level outcomes (a dormant account under scenario A, an
+/// unknown/uncommitted root), not programming errors — the RPC layer maps them to JSON-RPC error
+/// codes. Genuine storage inconsistencies still throw MPTInvariantViolation, like Trie does.
+enum class ProofErrorCode : uint8_t
+{
+    AccountNotInMPT,    ///< the walk from stateRoot dead-ends before an account leaf (scenario A)
+    BlockNotCommitted,  ///< stateRoot itself is absent from node storage (unknown/uncommitted)
+    /// Flat-path only (generateProofFromFlat): the trie rebuilt from the committed flat state
+    /// roots at a DIFFERENT hash than the requested block's stateRoot — the requested block is
+    /// not the latest committed one (the flat plane serves no history), or the committed state
+    /// diverged from the header. Either way no honest proof exists for this request.
+    RootMismatch,
+};
+
+/// The absent-account result (op-geth GetProof semantics, internal/ethapi/api.go:471-480): the
+/// exclusion walk's nodes as accountProof (empty when there is nothing to walk — an empty state
+/// trie), balance/nonce zero, and codeHash/storageHash the ZERO hash (StateDB's GetCodeHash /
+/// GetStorageRoot on a missing object return common.Hash{} — NOT the empty-code hash or the
+/// empty-trie root). Every requested slot answers value 0x0 with an empty proof: an absent
+/// account has no storage trie, so each slot is a provable zero, hence inMPT=true.
+inline EIP1186Proof absentAccountProof(
+    bcos::Address address, std::span<bcos::h256 const> slots, std::vector<bcos::bytes> accountProof)
+{
+    EIP1186Proof out;
+    out.address = address;
+    out.codeHash = bcos::h256{};
+    out.storageHash = bcos::h256{};
+    out.accountProof = std::move(accountProof);
+    out.storageProof.reserve(slots.size());
+    for (auto const& slot : slots)
+    {
+        out.storageProof.push_back(
+            StorageProof{.key = slot, .value = {}, .proof = {}, .inMPT = true});
+    }
+    return out;
+}
+
+namespace detail
+{
+/// Outcome of one root→leaf proof walk (shared by the account and storage trie passes).
+struct ProofWalk
+{
+    /// Raw RLP encoding of every hash-referenced node visited, root first. Inline children are
+    /// NOT separate items — their bytes are embedded in the parent's encoding.
+    std::vector<bcos::bytes> nodes;
+    std::optional<bcos::bytes> value;  ///< the leaf/branch value when the key is present
+    bool rootMissing{false};           ///< the root hash itself is absent from storage
+};
+
+/// Walk from @p root along @p path (nibble sequence), collecting each hash-referenced node's raw
+/// RLP. Stops at the leaf holding the key, or at the node where the path dead-ends (exclusion
+/// proof — the collected prefix is still returned). This descent intentionally does not reuse
+/// Trie::get(): the proof needs every visited node's raw encoding, which Trie discards.
+/// @throws MPTInvariantViolation when a non-root referenced node is missing from storage.
+template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
+bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::bytes path)
+{
+    ProofWalk out;
+    auto rootRaw = co_await bcos::storage2::readOne(storage, root);
+    if (!rootRaw)
+    {
+        out.rootMissing = true;
+        co_return out;
+    }
+    out.nodes.push_back(std::move(*rootRaw));
+    // decodeNode deep-copies into the TrieNode, so later push_back reallocations are harmless.
+    TrieNode node = decodeNode(bcos::ref(out.nodes.back()));
+    size_t pos = 0;  // nibbles consumed so far
+
+    while (true)
+    {
+        if (std::holds_alternative<EmptyNode>(node))
+        {
+            co_return out;  // dead end
+        }
+        if (auto const* leaf = std::get_if<LeafNode>(&node))
+        {
+            if (path.size() - pos == leaf->keyNibbles.size() &&
+                std::equal(leaf->keyNibbles.begin(), leaf->keyNibbles.end(), path.begin() + pos))
+            {
+                out.value = leaf->value;
+            }
+            co_return out;  // key found, or a diverging leaf: either way the walk stops here
+        }
+        if (auto const* ext = std::get_if<ExtensionNode>(&node))
+        {
+            if (path.size() - pos < ext->sharedNibbles.size() ||
+                !std::equal(
+                    ext->sharedNibbles.begin(), ext->sharedNibbles.end(), path.begin() + pos))
+            {
+                co_return out;  // path diverges inside the extension: dead end
+            }
+            pos += ext->sharedNibbles.size();
+            // The child is a raw RLP ref: EITHER the 33-byte hash string (0xa0 + digest) OR the
+            // inline child's complete RLP encoding (already part of this node's proof item).
+            if (ext->child.size() == HASH_REF_ENCODED_SIZE && ext->child[0] == RLP_HASH_REF_PREFIX)
+            {
+                bcos::h256 const childHash(ext->child.data() + 1, bcos::h256::SIZE);
+                auto childRaw = co_await bcos::storage2::readOne(storage, childHash);
+                if (!childRaw)
+                {
+                    BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                              "proofWalk: storage lacks a referenced trie node"));
+                }
+                out.nodes.push_back(std::move(*childRaw));
+                TrieNode next = decodeNode(bcos::ref(out.nodes.back()));
+                node = std::move(next);
+            }
+            else
+            {
+                // Decode fully into a temporary BEFORE overwriting node: ext->child lives inside
+                // the current alternative.
+                TrieNode next = decodeNode(bcos::ref(ext->child));
+                node = std::move(next);
+            }
+            continue;
+        }
+        // BranchNode
+        auto const& branch = std::get<BranchNode>(node);
+        if (pos == path.size())
+        {
+            // All nibbles consumed at a branch (cannot happen for fixed 64-nibble keccak paths,
+            // handled for shape-completeness like Trie::get).
+            if (!branch.value.empty())
+            {
+                out.value = branch.value;
+            }
+            co_return out;
+        }
+        NodeRef const& child = branch.children.at(path.at(pos));
+        ++pos;
+        if (child.kind() == NodeRef::Kind::Hash)
+        {
+            bcos::h256 const childHash = child.hash();
+            auto childRaw = co_await bcos::storage2::readOne(storage, childHash);
+            if (!childRaw)
+            {
+                BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                          "proofWalk: storage lacks a referenced trie node"));
+            }
+            out.nodes.push_back(std::move(*childRaw));
+            TrieNode next = decodeNode(bcos::ref(out.nodes.back()));
+            node = std::move(next);
+        }
+        else if (child.isAbsent())
+        {
+            co_return out;  // absent child: dead end
+        }
+        else
+        {
+            // Inline child: embedded in this branch's encoding, not a separate proof item.
+            TrieNode next = decodeNode(child.inlineRef());
+            node = std::move(next);
+        }
+    }
+}
+}  // namespace detail
+
+/// Generate an EIP-1186 proof for @p address (and @p slots) against @p stateRoot (spec §5.9).
+/// Walks the state trie from stateRoot along accountKeyHash(address) collecting every
+/// hash-referenced node's raw RLP; decodes the account leaf; then walks the account's storage
+/// trie from Account::storageRoot along slotKeyHash(slot) for each requested slot the same way.
+///
+/// Outcomes:
+///   - stateRoot absent from storage        → ProofErrorCode::BlockNotCommitted
+///   - stateRoot == emptyRootHash(), or the account walk dead-ends:
+///       fullTrie                            → proof of NON-EXISTENCE (absentAccountProof: the
+///                                             dead-end node prefix, zero fields — op-geth shape)
+///       !fullTrie (scenario A)              → ProofErrorCode::AccountNotInMPT (a dormant account
+///                                             may hold flat state the incomplete trie cannot
+///                                             speak to; absence is not a provable zero)
+///   - a requested slot is absent, fullTrie  → StorageProof with empty value and the dead-end
+///                                             prefix as exclusion proof (EIP-1186 value 0x0)
+///   - a requested slot is absent, !fullTrie → StorageProof with inMPT=false, empty value, empty
+///                                             proof (SlotNotInMPT, see @p fullTrie below)
+///
+/// @param fullTrie asserts the storage tries are COMPLETE (scenario B, feature_l2_ethereum_compat:
+/// every live slot has a trie leaf), so an exclusion walk IS a provable zero. Under scenario A
+/// (slot-level weakening, spec §4.4) the trie only commits slots written after MPT activation; an
+/// exclusion walk there looks IDENTICAL to scenario B's but proves nothing about the slot's
+/// flat-KV value, which may be non-zero — the entry is marked inMPT=false with value and proof
+/// left empty instead of lying with a value-0 exclusion proof. The distinction is mode-driven and
+/// cannot be inferred from the trie shape, hence this explicit parameter; the default keeps the
+/// complete-trie semantics of existing callers. This layer stays storage-pure: reading the
+/// Features flag and filling the flat-KV value are the RPC layer's job.
+///
+/// Proof generation is a read-only cold path: instantiate over a Storage without an extra cache
+/// layer (e.g. the RocksDB-backed store directly) to avoid polluting the commit path's cache.
+/// @throws MPTInvariantViolation on storage inconsistency (a committed root referencing a missing
+/// node), MPTDecodeError on a malformed account leaf — programming/data errors, not request
+/// errors.
+///
+/// @tparam HasherT the slot-key hash function (Hasher concept), owned here and reused across the
+/// requested slots; keccak256 by default, SM3 for guomi deployments (same end-to-end caveat as
+/// the builders: accountKeyHash and the trie the proof reads were produced with the chain's
+/// hasher — parameterizing this function alone does not make an SM3 chain, it keeps the door
+/// open for one).
+template <bcos::storage2::ReadableStorage<bcos::h256> Storage,
+    bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
+bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Storage& storage,
+    bcos::h256 stateRoot, bcos::Address address, std::span<bcos::h256 const> slots,
+    bool fullTrie = true)
+{
+    if (stateRoot == emptyRootHash())
+    {
+        // The empty trie holds no accounts: a provable absence under fullTrie (geth's Prove()
+        // on it answers an empty accountProof); scenario A keeps the honest error.
+        if (fullTrie)
+        {
+            co_return absentAccountProof(address, slots, {});
+        }
+        co_return ProofErrorCode::AccountNotInMPT;
+    }
+
+    auto const addressKeyHash = accountKeyHash(address);
+    auto accountWalk =
+        co_await detail::proofWalk(storage, stateRoot, bytesToNibbles(addressKeyHash.ref()));
+    if (accountWalk.rootMissing)
+    {
+        co_return ProofErrorCode::BlockNotCommitted;
+    }
+    if (!accountWalk.value)
+    {
+        // The walk dead-ended before an account leaf. Under fullTrie the trie is complete, so
+        // this IS the account's absence — answer the exclusion proof like op-geth. Under
+        // scenario A the incomplete trie cannot distinguish absence from dormancy: keep the
+        // request-level error for the RPC layer to map.
+        if (fullTrie)
+        {
+            co_return absentAccountProof(address, slots, std::move(accountWalk.nodes));
+        }
+        co_return ProofErrorCode::AccountNotInMPT;
+    }
+    auto const account = Account::decode(bcos::ref(*accountWalk.value));
+
+    EIP1186Proof out;
+    out.address = address;
+    out.balance = account.balance;
+    out.nonce = account.nonce;
+    out.codeHash = account.codeHash;
+    out.storageHash = account.storageRoot;
+    out.accountProof = std::move(accountWalk.nodes);
+
+    out.storageProof.reserve(slots.size());
+    HasherT hasher;  // one hash context, reused for every requested slot's key transform
+    for (auto const& slot : slots)
+    {
+        StorageProof entry;
+        entry.key = slot;
+        if (account.storageRoot != emptyRootHash())
+        {
+            auto const slotHash = slotKeyHash(slot, hasher);
+            auto slotWalk = co_await detail::proofWalk(
+                storage, account.storageRoot, bytesToNibbles(slotHash.ref()));
+            if (slotWalk.rootMissing)
+            {
+                // A committed account leaf references this root; its absence is corruption, not a
+                // request-level outcome.
+                BOOST_THROW_EXCEPTION(
+                    MPTInvariantViolation{} << bcos::errinfo_comment(
+                        "generateProof: account references a storage root absent from storage"));
+            }
+            if (slotWalk.value)
+            {
+                entry.proof = std::move(slotWalk.nodes);
+                entry.value = std::move(*slotWalk.value);
+            }
+            else if (fullTrie)
+            {
+                entry.proof = std::move(slotWalk.nodes);  // exclusion proof: a provable zero
+            }
+            else
+            {
+                // Scenario A cold slot: the exclusion walk proves nothing about the flat-KV
+                // value — discard it and mark the entry SlotNotInMPT (spec §5.9).
+                entry.inMPT = false;
+            }
+        }
+        else if (!fullTrie)
+        {
+            entry.inMPT = false;  // scenario A, empty storage trie: every slot is cold
+        }
+        // else: fullTrie, empty storage trie — every slot provably zero; empty value+proof.
+        out.storageProof.push_back(std::move(entry));
+    }
+    co_return out;
+}
+
+/// Per-slot verification outcome (spec §5.9). Verified/Invalid mirror the storageValid bool; the
+/// third state exists because a SlotNotInMPT entry (inMPT=false) is neither: its value is a
+/// flat-KV assertion with no Merkle backing, so the verifier must not accept it as proven — and
+/// must not fail the response over it either, the honest generator emits exactly this shape.
+enum class SlotProofStatus : uint8_t
+{
+    Verified,      ///< hash chain verified and the recovered value equals the claimed value
+    Invalid,       ///< broken/padded chain, value mismatch, or inMPT=false smuggling proof bytes
+    Unverifiable,  ///< inMPT=false with an empty proof: cryptographically unproven, not disproven
+};
+
+/// Result of independently verifying an EIP1186Proof against a claimed state root (spec §7.1).
+/// The recovered* fields are what the proof bytes actually commit to; they are only filled when
+/// the account chain verified AND matched the proof's claimed top-level fields.
+struct VerifyResult
+{
+    bool accountValid = false;
+    /// True only when accountValid holds via a VALID EXCLUSION chain: the proof establishes the
+    /// account's ABSENCE (zero fields, absentAccountProof's shape) rather than a present leaf.
+    /// recovered* stay zero-valued in that case — there is no account state to recover.
+    bool accountAbsent = false;
+    bcos::u256 recoveredBalance{};
+    bcos::u256 recoveredNonce{};
+    bcos::h256 recoveredCodeHash{};
+    bcos::h256 recoveredStorageRoot{};
+    /// Parallel to proof.storageProof; true iff storageStatus[i] == Verified.
+    std::vector<bool> storageValid;
+    /// Parallel to proof.storageProof; the tri-state behind storageValid (spec §5.9).
+    std::vector<SlotProofStatus> storageStatus;
+    /// Raw leaf value bytes recovered from each slot's chain (empty = proven absent). Filled only
+    /// for slots whose hash chain verified.
+    std::vector<bcos::bytes> recoveredStorageValues;
+};
+
+namespace detail
+{
+/// Verify one root→leaf hash chain using ONLY @p proofNodes — no storage access. Re-derives every
+/// hash link: proofNodes[0] must hash to @p expectedRoot, and each hash reference encountered
+/// along @p path must match the hash of the next consumed proof item. Inline children are decoded
+/// in place without consuming an item, mirroring how generateProof embeds them.
+///
+/// This walk is deliberately independent of proofWalk (spec §7.1 cross-validation): the two share
+/// only the low-level decode helpers (decodeNode, nibble utils), so a traversal bug in one cannot
+/// hide in the other.
+///
+/// @param path the full nibble path of the key being proven (64 nibbles for 32-byte key hashes)
+/// @return nullopt   → the chain is INVALID (hash mismatch, malformed node, dangling hash ref,
+///                     or trailing unused proof items — padded proofs are rejected)
+///         empty     → valid EXCLUSION proof: the walk dead-ends, the key is absent
+///         non-empty → the proven leaf/branch value
+template <bcos::crypto::hasher::Hasher HasherT>
+std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
+    std::span<bcos::bytes const> proofNodes, bcos::bytes const& path, HasherT& hasher)
+{
+    size_t idx = 0;  // next proof item to consume
+    size_t pos = 0;  // nibbles consumed so far
+
+    // A malformed node makes the chain invalid — never an escaping exception.
+    auto decodeChecked = [](bcos::bytesConstRef raw) -> std::optional<TrieNode> {
+        try
+        {
+            return decodeNode(raw);
+        }
+        catch (...)
+        {
+            return std::nullopt;
+        }
+    };
+    // Consume the next proof item; it must hash to the pending reference.
+    auto takeNode = [&](bcos::h256 const& expected) -> std::optional<TrieNode> {
+        if (idx >= proofNodes.size())
+        {
+            return std::nullopt;  // dangling ref: the proof ran out of items
+        }
+        bcos::h256 got;
+        bcos::crypto::hasher::hash(hasher, bcos::ref(proofNodes[idx]), got);
+        if (got != expected)
+        {
+            return std::nullopt;  // broken hash link
+        }
+        return decodeChecked(bcos::ref(proofNodes[idx++]));
+    };
+    // Every terminal exit: the result only stands if the proof was consumed exactly
+    // (trailing items = padded proof, rejected).
+    auto finish = [&](bcos::bytes value) -> std::optional<bcos::bytes> {
+        if (idx != proofNodes.size())
+        {
+            return std::nullopt;
+        }
+        return value;
+    };
+
+    // One loop over a single "current node" state; the loop body only answers "where does
+    // the next node come from" — a hash ref advances via takeNode (consumes a proof item),
+    // an inline child via decodeChecked on the bytes embedded in the current item. Any
+    // failure empties node and the loop exits. Lambda return values materialize before the
+    // assignment overwrites node, so decoding an inline child that lives inside the current
+    // variant is safe by construction (proofWalk needs a comment to enforce the same).
+    auto node = takeNode(expectedRoot);
+    while (node)
+    {
+        if (std::holds_alternative<EmptyNode>(*node))
+        {
+            return finish({});  // dead end: exclusion
+        }
+        if (auto const* leaf = std::get_if<LeafNode>(&*node))
+        {
+            bool const match =
+                path.size() - pos == leaf->keyNibbles.size() &&
+                std::equal(leaf->keyNibbles.begin(), leaf->keyNibbles.end(), path.begin() + pos);
+            return finish(match ? leaf->value : bcos::bytes{});  // value, or a diverging leaf
+        }
+        if (auto const* ext = std::get_if<ExtensionNode>(&*node))
+        {
+            if (path.size() - pos < ext->sharedNibbles.size() ||
+                !std::equal(
+                    ext->sharedNibbles.begin(), ext->sharedNibbles.end(), path.begin() + pos))
+            {
+                return finish({});  // path diverges inside the extension: exclusion
+            }
+            pos += ext->sharedNibbles.size();
+            node = (ext->child.size() == HASH_REF_ENCODED_SIZE &&
+                       ext->child[0] == RLP_HASH_REF_PREFIX) ?
+                       takeNode(bcos::h256(ext->child.data() + 1, bcos::h256::SIZE)) :
+                       decodeChecked(bcos::ref(ext->child));  // inline child: same proof item
+            continue;
+        }
+        auto const& branch = std::get<BranchNode>(*node);
+        if (pos == path.size())
+        {
+            return finish(branch.value);  // path exhausted at a branch (empty = exclusion)
+        }
+        NodeRef const& child = branch.children.at(path.at(pos));
+        ++pos;
+        if (child.kind() == NodeRef::Kind::Hash)
+        {
+            node = takeNode(child.hash());
+        }
+        else if (child.inlineRef().empty())
+        {
+            return finish({});  // absent child: exclusion
+        }
+        else
+        {
+            node = decodeChecked(child.inlineRef());
+        }
+    }
+    return std::nullopt;  // hash mismatch, malformed node, or dangling ref
+}
+}  // namespace detail
+
+/// Independently verify an EIP-1186 proof against @p claimedRoot (spec §7.1). Pure and
+/// synchronous: consumes ONLY the proof byte arrays — never storage — and re-derives every hash
+/// link via detail::verifyProofChain, the deliberate second implementation cross-validating
+/// generateProof's proofWalk.
+///
+/// accountValid requires all of: the account chain anchors at @p claimedRoot, ends at a present
+/// account leaf OR a valid exclusion dead-end, the leaf (when present) decodes, and the decoded
+/// fields EQUAL the proof's claimed nonce/balance/codeHash/storageHash. An exclusion chain is
+/// accepted only in absentAccountProof's shape — accountAbsent then flags that the proof
+/// establishes the account's ABSENCE (every slot a provable zero) rather than a present account.
+/// Malformed leaf bytes yield accountValid=false, never an
+/// exception. On any account-side failure the function returns immediately with every
+/// storageValid false and every storageStatus Invalid (including inMPT=false entries: an
+/// unestablished account leaf makes even "unverifiable" too generous) — slot chains hang off
+/// proof.storageHash, which an invalid account side has not established.
+///
+/// Per slot i, an inMPT=false entry (SlotNotInMPT, spec §5.9) is judged first: it is Unverifiable
+/// when its proof is empty — the value is flat-KV-asserted, deliberately NOT counted as verified
+/// and NOT treated as a response-level failure — and Invalid when it carries proof bytes (a
+/// malformed mix: an unverifiable claim must not dress up as a proof). Otherwise (inMPT=true):
+/// against an empty storage root, valid iff value and proof are both empty (matching
+/// generateProof's empty-trie output); else the slot chain must verify against proof.storageHash
+/// and its recovered value must equal storageProof[i].value (empty = proven absence).
+template <
+    bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
+VerifyResult verifyProof(bcos::h256 claimedRoot, EIP1186Proof const& proof)
+{
+    VerifyResult out;
+    out.storageValid.assign(proof.storageProof.size(), false);
+    out.storageStatus.assign(proof.storageProof.size(), SlotProofStatus::Invalid);
+    out.recoveredStorageValues.assign(proof.storageProof.size(), bcos::bytes{});
+
+    HasherT hasher;  // one hash context, reused for the account chain and every slot
+    auto const accountPath = bytesToNibbles(accountKeyHash(proof.address).ref());
+    auto const acceptAbsence = [&] {
+        // A valid EXCLUSION account chain (or the trivially-empty chain against the empty root):
+        // the claimed fields must be exactly absentAccountProof's shape — a nonzero claim is
+        // something the exclusion chain cannot establish. Every slot then answers a provable
+        // zero: valid iff inMPT with empty value and empty proof.
+        if (proof.nonce != 0 || proof.balance != 0 || proof.codeHash != bcos::h256{} ||
+            proof.storageHash != bcos::h256{})
+        {
+            return;
+        }
+        out.accountValid = true;
+        out.accountAbsent = true;
+        for (size_t i = 0; i < proof.storageProof.size(); ++i)
+        {
+            auto const& entry = proof.storageProof[i];
+            out.storageValid[i] = entry.inMPT && entry.value.empty() && entry.proof.empty();
+            out.storageStatus[i] =
+                out.storageValid[i] ? SlotProofStatus::Verified : SlotProofStatus::Invalid;
+            // recoveredStorageValues[i] stays empty: the slot is proven absent
+        }
+    };
+    if (claimedRoot == emptyRootHash<HasherT>() && proof.accountProof.empty())
+    {
+        // The empty trie proves every account absent with NO nodes at all (generateProof's
+        // empty-root shape); verifyProofChain cannot walk an empty item list, so judge directly.
+        acceptAbsence();
+        return out;
+    }
+    auto const accountLeaf = detail::verifyProofChain(
+        claimedRoot, std::span<bcos::bytes const>(proof.accountProof), accountPath, hasher);
+    if (!accountLeaf)
+    {
+        return out;  // broken hash link, malformed node, dangling ref, or padded proof
+    }
+    if (accountLeaf->empty())
+    {
+        // Valid exclusion chain: the proof's account half establishes absence.
+        acceptAbsence();
+        return out;
+    }
+
+    Account decoded;
+    try
+    {
+        decoded = Account::decode(bcos::ref(*accountLeaf));
+    }
+    catch (...)
+    {
+        return out;  // malformed account leaf: invalid, never an escaping exception
+    }
+    if (decoded.nonce != proof.nonce || decoded.balance != proof.balance ||
+        decoded.codeHash != proof.codeHash || decoded.storageRoot != proof.storageHash)
+    {
+        return out;  // the chain proves a DIFFERENT account state than the proof claims
+    }
+    out.accountValid = true;
+    out.recoveredNonce = decoded.nonce;
+    out.recoveredBalance = decoded.balance;
+    out.recoveredCodeHash = decoded.codeHash;
+    out.recoveredStorageRoot = decoded.storageRoot;
+
+    for (size_t i = 0; i < proof.storageProof.size(); ++i)
+    {
+        auto const& entry = proof.storageProof[i];
+        if (!entry.inMPT)
+        {
+            // SlotNotInMPT (spec §5.9): the value is a flat-KV assertion — Unverifiable, never
+            // Verified. An inMPT=false entry carrying proof bytes is malformed: whatever those
+            // bytes prove, the generator's contract says no proof exists for this slot.
+            out.storageStatus[i] =
+                entry.proof.empty() ? SlotProofStatus::Unverifiable : SlotProofStatus::Invalid;
+            continue;  // storageValid[i] stays false either way
+        }
+        if (proof.storageHash == emptyRootHash<HasherT>())
+        {
+            // Empty storage trie: generateProof emits empty value + empty proof for every slot.
+            out.storageValid[i] = entry.value.empty() && entry.proof.empty();
+            out.storageStatus[i] =
+                out.storageValid[i] ? SlotProofStatus::Verified : SlotProofStatus::Invalid;
+            continue;
+        }
+        auto const slotPath = bytesToNibbles(slotKeyHash(entry.key, hasher).ref());
+        auto recovered = detail::verifyProofChain(
+            proof.storageHash, std::span<bcos::bytes const>(entry.proof), slotPath, hasher);
+        if (!recovered)
+        {
+            continue;  // invalid slot chain: storageValid[i] false, storageStatus[i] Invalid
+        }
+        out.recoveredStorageValues[i] = std::move(*recovered);
+        out.storageValid[i] = (out.recoveredStorageValues[i] == entry.value);
+        out.storageStatus[i] =
+            out.storageValid[i] ? SlotProofStatus::Verified : SlotProofStatus::Invalid;
+    }
+    return out;
+}
+
+}  // namespace bcos::ledger::mpt

@@ -20,38 +20,37 @@
  * @date 2026-07-14
  *
  * Root cause (from code): every inbound P2P message delivery is
- *   Session::doRead -> Session::onMessage -> Host::asyncTo(...)   (Session.cpp: onMessage, ~L694)
- * and every session teardown notification is
- *   Session::drop -> Host::asyncTo(...)                           (Session.cpp: drop, ~L372)
- * Host::asyncTo is `m_asyncGroup.run(...)` (Host.h) -- a single unbounded TBB task_group on the
- * process-global pool. So message delivery and teardown share ONE reactor. A bulk-disconnect of a
- * large established session pool floods that reactor with teardown work (each drop drives
- * onDisconnect -> onRemoveNodeIDs -> syncLatestNodeIDList), so validator PBFT messages are read off
- * the socket but their delivery task is starved behind teardown -- "validators miss each other's
- * messages", the halt CertiK observed. The accept-side admission control cannot touch this: it
- * gates NEW connections before the handshake, whereas D tears down ALREADY-established sessions.
+ *   Session::doRead -> Session::onMessage -> asioInterface()->post(...)  (Session.cpp: onMessage)
+ * and, before the fix, every session teardown notification went to that SAME reactor. So message
+ * delivery and teardown shared ONE pool. A bulk-disconnect of a large established session pool
+ * floods that reactor with teardown work (each drop drives onDisconnect -> onRemoveNodeIDs ->
+ * syncLatestNodeIDList), so validator PBFT messages are read off the socket but their delivery task
+ * is starved behind teardown -- "validators miss each other's messages", the halt CertiK observed.
+ * The accept-side admission control cannot touch this: it gates NEW connections before the
+ * handshake, whereas D tears down ALREADY-established sessions.
  *
- * This is a RED (failing) test on the current merged code: it drives a real Session::drop() flood
- * whose teardown work occupies the shared reactor, then submits a validator-delivery task through
- * the same reactor and asserts it is NOT starved. It fails today (delivery cannot run while
- * teardown occupies the reactor) and is the invariant a fix must satisfy: teardown must not be able
- * to starve consensus-message delivery. Because it drives the real drop() path, a fix that moves
- * teardown off m_asyncGroup (a dedicated executor) turns it green, while leaving delivery where it
- * is; a fix that merely throttles teardown on the same reactor does not.
+ * The fix routes the teardown notification through Host::postTeardown, which owns a dedicated
+ * single-thread IOServicePool, while delivery stays on the shared pool. This test drives a real
+ * Session::drop() flood whose teardown work blocks its executor, then submits a validator-delivery
+ * task through the delivery reactor and asserts it is NOT starved.
+ *
+ * NOTE on the 3.18.0 threading model: the fix originally used a dedicated ThreadPool("p2pTeardown",
+ * 1); that class no longer exists, so it is now a dedicated IOServicePool(1, "p2pTeardown"). Same
+ * property, and the one that matters here: teardown must have its OWN thread, not merely its own
+ * queue. Serializing teardown onto a bcos::Strand over the shared pool would still round-robin onto
+ * the delivery threads and this test would go red again -- which is exactly what it is for.
  */
 
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <oneapi/tbb/global_control.h>
-#include <boost/asio/error.hpp>
+#include <chrono>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
-#include <chrono>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -72,16 +71,20 @@ namespace
 class FakeASIO_Reactor : public bcos::gateway::ASIOInterface
 {
 public:
+    // Two delivery threads: wide enough that a single stuck task cannot explain a starved
+    // delivery, narrow enough that the teardown flood would definitely swamp it if teardown
+    // were still posted here.
+    FakeASIO_Reactor()
+      : ASIOInterface(std::make_shared<bcos::IOServicePool>(2, "FIB186Reactor"), "0.0.0.0", 0)
+    {}
     ~FakeASIO_Reactor() noexcept override = default;
     void asyncReadSome(
         const std::shared_ptr<SocketFace>&, ba::mutable_buffer, ReadWriteHandler) override
     {}
-    void strandPost(Base_Handler) override {}
-    void stop() override {}
 };
 
-// Host subclass that exposes the real Host::asyncTo (== m_asyncGroup.run) with the network marked
-// up, so Session::drop() takes the "post the teardown notification onto m_asyncGroup" path.
+// Host subclass with the network marked up, so Session::drop() takes the "hand the teardown
+// notification to Host::postTeardown" path rather than the shutdown-inline path.
 class FakeHost_Reactor : public bcos::gateway::Host
 {
 public:
@@ -136,10 +139,9 @@ struct ReactorProbe
 // delivery both run on Host::m_asyncGroup, so a teardown flood starves delivery.
 BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
 {
-    // Pin the shared TBB pool to a small, known width so "every reactor worker is occupied by
-    // teardown" is deterministic instead of depending on the host core count.
-    tbb::global_control gc(tbb::global_control::max_allowed_parallelism, 2);
-
+    // The reactor width is pinned by FakeASIO_Reactor's own IOServicePool(2) rather than by a
+    // process-global TBB control, so "the flood would swamp the delivery reactor if it landed
+    // there" is deterministic and independent of the host core count.
     auto hashImpl = std::make_shared<Keccak256>();
     auto messageFactory = std::make_shared<P2PMessageFactory>();
     auto fakeAsio = std::make_shared<FakeASIO_Reactor>();
@@ -169,8 +171,8 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
         sessions.push_back(std::move(session));
     }
 
-    // Bulk-disconnect: each drop() posts its teardown notification onto m_asyncGroup (Session.cpp
-    // drop, ~L372) -- the same reactor message delivery uses.
+    // Bulk-disconnect: each drop() hands its teardown notification to Host::postTeardown
+    // (Session.cpp drop). Before the fix this went to the same reactor message delivery uses.
     for (auto& session : sessions)
     {
         session->drop(DisconnectReason::TCPError);
@@ -184,9 +186,10 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    // A validator PBFT message delivery goes through the same reactor (Session.cpp onMessage,
-    // ~L694). Submit it now, with teardown occupying the reactor.
-    fakeHost->asyncTo([probe]() {
+    // A validator PBFT message delivery goes through the delivery reactor -- exactly what
+    // Session::onMessage does (`m_server.get().asioInterface()->post(...)`). Submit it now, with
+    // the teardown flood still occupying its executor.
+    fakeHost->asioInterface()->post([probe]() {
         probe->delivered.store(true);
         probe->done.fetch_add(1);
     });
@@ -209,9 +212,9 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
 
     BOOST_CHECK_MESSAGE(deliveredDuringFlood,
         "FIB-186 vector D: a PBFT message delivery submitted during a session-teardown flood must "
-        "not be starved. It is today because Session::drop() and Session::onMessage() share the "
-        "unbounded m_asyncGroup reactor -- teardown occupies every worker and delivery never runs, "
-        "halting consensus. A fix must route teardown off the delivery reactor.");
+        "not be starved. If this fails, Session::drop() and Session::onMessage() are back on the "
+        "same reactor -- teardown occupies every worker and delivery never runs, halting "
+        "consensus. Teardown must stay on Host::postTeardown's dedicated executor.");
     BOOST_CHECK_EQUAL(probe->done.load(), floodCount + 1);
 }
 

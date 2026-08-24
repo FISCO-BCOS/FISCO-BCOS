@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "libinitializer/ProtocolInitializer.h"
+#include <boost/asio/io_context.hpp>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
@@ -27,6 +28,7 @@
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <memory>
 
 namespace bcos
@@ -46,7 +48,9 @@ public:
     TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         ProtocolInitializer::Ptr _protocolInitializer,
         bcos::front::FrontServiceInterface::Ptr _frontService,
-        bcos::ledger::LedgerInterface::Ptr _ledger);
+        bcos::ledger::LedgerInterface::Ptr _ledger,
+        boost::asio::io_context& _ioContext,
+        bcos::IOServicePool::Ptr _ioServicePool);
     virtual ~TxPoolInitializer() { stop(); }
 
     virtual void init();
@@ -66,6 +70,7 @@ private:
 
     std::shared_ptr<bcos::txpool::TxPoolFactory> m_txpoolFactory;
     std::shared_ptr<bcos::txpool::TxPool> m_txpool;
+    bcos::IOServicePool::Ptr m_ioServicePool;
     std::atomic_bool m_running = {false};
 };
 }  // namespace initializer

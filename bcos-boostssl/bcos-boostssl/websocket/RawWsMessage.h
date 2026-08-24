@@ -22,17 +22,15 @@
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ObjectCounter.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <memory>
 #include <string>
-#include <utility>
 
 namespace bcos::boostssl::ws
 {
-class RawWsMessage : public boostssl::MessageFace, public bcos::ObjectCounter<RawWsMessage>
+class RawWsMessage : public boostssl::MessageFace
 {
 public:
     using Ptr = std::shared_ptr<RawWsMessage>;
@@ -51,8 +49,8 @@ public:
 
     std::string const& seq() const override;
     void setSeq(std::string _seq) override;
-    std::shared_ptr<bcos::bytes> payload() const override;
-    void setPayload(std::shared_ptr<bcos::bytes> _payload) override;
+    bytesConstRef payload() const override;
+    void setPayload(bcos::bytes _payload) override;
     uint16_t ext() const override;
     void setExt(uint16_t /*unused*/) override;
 
@@ -68,7 +66,7 @@ public:
 private:
     uint16_t m_packetType = WS_RAW_MESSAGE_TYPE;
     std::string m_seq;
-    std::shared_ptr<bcos::bytes> m_payload;
+    bcos::bytes m_payload;
 };
 
 class RawWsMessageFactory : public MessageFaceFactory

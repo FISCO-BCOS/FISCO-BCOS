@@ -93,7 +93,7 @@ void LedgerServiceClient::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber 
           : m_callback(_callback)
         {}
         void callback_asyncGetBlockHashByNumber(
-            const bcostars::Error& ret, const vector<tars::Char>& _blockHash) override
+            const bcostars::Error& ret, const std::vector<tars::Char>& _blockHash) override
         {
             if (_blockHash.size() >= bcos::crypto::HashType::SIZE)
             {
@@ -159,8 +159,8 @@ void LedgerServiceClient::asyncGetBatchTxsByHashList(bcos::crypto::HashListPtr _
         {}
 
         void callback_asyncGetBatchTxsByHashList(const bcostars::Error& ret,
-            const vector<bcostars::Transaction>& _txs,
-            const map<std::string, vector<std::string>>& _merkleProofList) override
+            const std::vector<bcostars::Transaction>& _txs,
+            const std::map<std::string, std::vector<std::string>>& _merkleProofList) override
         {
             // decode the txsList
             auto bcosTxsList = std::make_shared<bcos::protocol::Transactions>();
@@ -196,10 +196,10 @@ void LedgerServiceClient::asyncGetBatchTxsByHashList(bcos::crypto::HashListPtr _
             m_callback;
         bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     };
-    std::vector<vector<tars::Char>> tarsTxsHashList;
+    std::vector<std::vector<tars::Char>> tarsTxsHashList;
     for (auto const& txHash : *_txHashList)
     {
-        tarsTxsHashList.emplace_back(vector<tars::Char>(txHash.begin(), txHash.end()));
+        tarsTxsHashList.emplace_back(txHash.begin(), txHash.end());
     }
     m_prx->async_asyncGetBatchTxsByHashList(
         new Callback(_onGetTx, m_cryptoSuite), tarsTxsHashList, _withProof);
@@ -222,7 +222,7 @@ void LedgerServiceClient::asyncGetTransactionReceiptByHash(bcos::crypto::HashTyp
         {}
         void callback_asyncGetTransactionReceiptByHash(const bcostars::Error& ret,
             const bcostars::TransactionReceipt& _receipt,
-            const vector<std::string>& _proof) override
+            const std::vector<std::string>& _proof) override
         {
             auto bcosReceipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
                 [m_receipt = std::move(_receipt)]() mutable { return &m_receipt; });
@@ -319,8 +319,8 @@ void LedgerServiceClient::asyncGetNodeListByType(std::string_view const& _type,
             bcos::crypto::KeyFactory::Ptr m_keyFactory, bcos::consensus::Type m_type)
           : m_callback(std::move(m_callback)), m_keyFactory(std::move(m_keyFactory)), m_type(m_type)
         {}
-        void callback_asyncGetNodeListByType(
-            const bcostars::Error& ret, const vector<bcostars::ConsensusNode>& _nodeList) override
+        void callback_asyncGetNodeListByType(const bcostars::Error& ret,
+            const std::vector<bcostars::ConsensusNode>& _nodeList) override
         {
             m_callback(toBcosError(ret), toConsensusNodeList(m_keyFactory, m_type, _nodeList));
         }
@@ -351,7 +351,8 @@ bcostars::LedgerServiceClient::~LedgerServiceClient() {}
 void bcostars::LedgerServiceClient::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr,
     bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr,
     std::function<void(std::string, bcos::Error::Ptr&&)>, bool,
-    std::optional<bcos::ledger::Features>)
+    std::optional<bcos::ledger::Features>,
+    std::optional<bcos::crypto::HashType> /*blockHashOverride*/, bool /*writeNonces*/)
 {
     BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPrewriteBlock");
 }

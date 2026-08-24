@@ -23,7 +23,6 @@
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
-#include <bcos-utilities/ThreadPool.h>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -67,7 +66,7 @@ int main(int argc, char** argv)
             _msg->setRespPacket();
             _session->session()->asyncSendMessage(_msg);
             BCOS_LOG(INFO) << LOG_DESC("sendResponse") << LOG_KV("timeCost", (utcTime() - startT))
-                           << LOG_KV("msgSize", (_msg->payload()->size()));
+                           << LOG_KV("msgSize", (_msg->payload().size()));
         });
     while (true)
     {

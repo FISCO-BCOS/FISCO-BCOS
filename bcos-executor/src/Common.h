@@ -29,16 +29,16 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/LogEntry.h"
-#include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
+#include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
-#include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <range/v3/algorithm/copy.hpp>
 #include <range/v3/view/drop.hpp>
@@ -174,11 +174,12 @@ struct VMSchedule
     bool enableLondon = true;
     bool enablePairs = false;
     bool enableCanCun = false;
+    bool enablePrague = false;
+    bool enableOsaka = false;
     unsigned sstoreRefundGas = 15000;
     unsigned suicideRefundGas = 24000;
     unsigned createDataGas = 20;
     unsigned maxEvmCodeSize = 0x40000;
-    unsigned maxWasmCodeSize = 0xF00000;  // 15MB
 };
 
 static const VMSchedule FiscoBcosSchedule = [] {
@@ -189,22 +190,72 @@ static const VMSchedule FiscoBcosSchedule = [] {
 static const VMSchedule FiscoBcosScheduleV320 = [] {
     VMSchedule schedule;
     schedule.enablePairs = true;
-    schedule.maxEvmCodeSize = 0x100000;   // 1MB
-    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
+    schedule.maxEvmCodeSize = 0x100000;  // 1MB
     return schedule;
 }();
 
 static const VMSchedule FiscoBcosScheduleCancun = [] {
     VMSchedule schedule;
     schedule.enableCanCun = true;
-    schedule.maxEvmCodeSize = 0x100000;   // 1MB
-    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
+    schedule.maxEvmCodeSize = 0x100000;  // 1MB
+    return schedule;
+}();
+
+static const VMSchedule FiscoBcosSchedulePrague = [] {
+    VMSchedule schedule;
+    schedule.enablePairs = true;
+    schedule.enableCanCun = true;
+    schedule.enablePrague = true;
+    schedule.maxEvmCodeSize = 0x100000;  // 1MB
+    return schedule;
+}();
+
+static const VMSchedule FiscoBcosScheduleOsaka = [] {
+    VMSchedule schedule;
+    schedule.enablePairs = true;
+    schedule.enableCanCun = true;
+    schedule.enablePrague = true;
+    schedule.enableOsaka = true;
+    schedule.maxEvmCodeSize = 0x100000;  // 1MB
     return schedule;
 }();
 
 constexpr static int64_t BALANCE_TRANSFER_GAS = 21000;
 
-constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
+// EIP-7623: calldata floor cost constants (Prague+)
+// token = 1 for zero byte, TOKENS_PER_NONZERO_BYTE for non-zero byte; floor = tokens * 10
+constexpr static int64_t TOKENS_PER_NONZERO_BYTE = 4;  // EIP-7623 token weight for non-zero byte
+constexpr static int64_t TOTAL_COST_FLOOR_PER_TOKEN = 10;  // EIP-7623 floor cost per token
+
+/// EIP-7623 calldata floor: max(standard calldata gas, tokens * 10).
+inline int64_t calcEip7623CalldataGas(bcos::bytesConstRef data)
+{
+    constexpr auto maxSafeBytes =
+        static_cast<size_t>(std::numeric_limits<int64_t>::max() /
+                            (TOKENS_PER_NONZERO_BYTE * TOTAL_COST_FLOOR_PER_TOKEN));
+    if (data.size() > maxSafeBytes)
+    {
+        return std::numeric_limits<int64_t>::max();
+    }
+
+    int64_t normalDataCost = 0;
+    int64_t numTokens = 0;
+    for (auto byte : data)
+    {
+        if (byte == 0)
+        {
+            normalDataCost += 4;
+            ++numTokens;
+        }
+        else
+        {
+            normalDataCost += 16;
+            numTokens += TOKENS_PER_NONZERO_BYTE;
+        }
+    }
+    return std::max(normalDataCost, numTokens * TOTAL_COST_FLOOR_PER_TOKEN);
+}
+
 
 protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 
@@ -217,9 +268,6 @@ enum ExecutiveType : uint8_t
 
 }  // namespace executor
 
-bool hasWasmPreamble(const std::string_view& _input);
-bool hasWasmPreamble(const bytesConstRef& _input);
-bool hasWasmPreamble(const bytes& _input);
 bool hasPrecompiledPrefix(const std::string_view& _code);
 /**
  * @brief : trans string addess to evm address
@@ -261,6 +309,14 @@ inline evmc_bytes32 toEvmC(h256 const& hash)
     static_assert(sizeof(evmBytes) == h256::SIZE, "Hash size mismatch!");
     ::ranges::copy(hash, evmBytes.bytes);
     return evmBytes;
+}
+/// Convert a 20-byte bcos::Address to evmc_address (binary copy, no hex encoding).
+inline evmc_address toEvmC(bcos::Address const& address)
+{
+    evmc_address out{};
+    static_assert(sizeof(out.bytes) == bcos::Address::SIZE, "Address size mismatch!");
+    ::ranges::copy(address, out.bytes);
+    return out;
 }
 /**
  * @brief : trans uint256 number of evm-represented to u256

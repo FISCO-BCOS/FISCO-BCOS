@@ -21,6 +21,7 @@
 #pragma once
 #include "bcos-framework/rpc/RPCInterface.h"
 #include "libinitializer/ProtocolInitializer.h"
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/election/LeaderElectionInterface.h>
@@ -32,7 +33,6 @@
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-ledger/Ledger.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 
 namespace bcos
@@ -50,6 +50,10 @@ namespace consensus
 class PBFTImpl;
 }
 
+namespace ledger
+{
+class Ledger;
+}
 namespace initializer
 {
 class PBFTInitializer : public std::enable_shared_from_this<PBFTInitializer>
@@ -66,7 +70,8 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::storage::StorageInterface::Ptr _storage,
         bcos::front::FrontServiceInterface::Ptr _frontService,
-        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance);
+        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
+        bcos::IOServicePool::Ptr _ioServicePool);
 
     virtual ~PBFTInitializer() { stop(); }
 
@@ -126,6 +131,7 @@ protected:
     bcos::protocol::MemberFactoryInterface::Ptr m_memberFactory;
     bcos::election::LeaderElectionInterface::Ptr m_leaderElection;
     bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
+    bcos::IOServicePool::Ptr m_ioServicePool;
 };
 }  // namespace initializer
 }  // namespace bcos

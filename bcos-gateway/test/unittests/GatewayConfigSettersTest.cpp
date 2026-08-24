@@ -61,14 +61,15 @@ BOOST_AUTO_TEST_CASE(settersAndGetters)
     // read-only getters should not throw on a freshly constructed config
     BOOST_CHECK_NO_THROW(config->listenIP());
     BOOST_CHECK_NO_THROW(config->listenPort());
-    BOOST_CHECK_NO_THROW(config->threadPoolSize());
+    // threadPoolSize() went away with p2p.thread_count (superseded by the node-wide
+    // thread_pool.io_thread_count).
     BOOST_CHECK_NO_THROW(config->smSSL());
     BOOST_CHECK_NO_THROW(config->sslClientMode());
     BOOST_CHECK_NO_THROW(config->sslServerMode());
     BOOST_CHECK_NO_THROW(config->certConfig());
     BOOST_CHECK_NO_THROW(config->smCertConfig());
     BOOST_CHECK_NO_THROW(config->rateLimiterConfig());
-    BOOST_CHECK_NO_THROW(config->redisConfig());
+    // redisConfig() went away with the distributed-ratelimit redis backend.
     BOOST_CHECK_NO_THROW(config->connectedNodes());
     BOOST_CHECK_NO_THROW(config->enableBlacklist());
     BOOST_CHECK_NO_THROW(config->peerBlacklist());

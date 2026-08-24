@@ -19,11 +19,12 @@
  * @date 2021-05-25
  */
 #pragma once
+#include "../../ledger/Features.h"
 #include "../../ledger/LedgerConfig.h"
 #include "../../ledger/LedgerInterface.h"
 #include "../../protocol/Block.h"
 #include "FakeBlock.h"
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 
 #include <map>
 #include <range/v3/view/concat.hpp>
@@ -46,18 +47,18 @@ public:
     class FakeStorage : public storage::StorageInterface
     {
     public:
-        using Value = storage::Entry;  // 必须的类型别名
+        using Value = storage::Entry;  // required type alias
 
         FakeStorage(FakeLedger* ledger) : m_ledger(ledger) {}
 
-        // 修复 asyncGetRow 方法签名
+        // fixed asyncGetRow method signature
         void asyncGetRow(std::string_view table, std::string_view _key,
             std::function<void(Error::UniquePtr, std::optional<storage::Entry>)> _callback) override
         {
             std::string tableStr(table);
             std::string keyStr(_key);
 
-            // 直接使用 FakeLedger 的 fakeStorageEntryMaps
+            // use FakeLedger's fakeStorageEntryMaps directly
             if (m_ledger->fakeStorageEntryMaps.count(tableStr) &&
                 m_ledger->fakeStorageEntryMaps[tableStr].count(keyStr))
             {
@@ -69,16 +70,16 @@ public:
             }
         }
 
-        // 修复 asyncSetRow 方法签名
+        // fixed asyncSetRow method signature
         void asyncSetRow(std::string_view table, std::string_view key, storage::Entry entry,
             std::function<void(Error::UniquePtr)> callback) override
         {
-            // 直接使用 FakeLedger 的 fakeStorageEntryMaps
+            // use FakeLedger's fakeStorageEntryMaps directly
             m_ledger->fakeStorageEntryMaps[std::string(table)][std::string(key)] = std::move(entry);
             callback(nullptr);
         }
 
-        // 修复 asyncGetRows 方法签名
+        // fixed asyncGetRows method signature
         void asyncGetRows(std::string_view table,
             ::ranges::any_view<std::string_view, ::ranges::category::input |
                                                      ::ranges::category::random_access |
@@ -106,7 +107,7 @@ public:
             _callback(nullptr, std::move(results));
         }
 
-        // 添加其他必需的虚函数实现
+        // implement the other required virtual functions
         void asyncGetPrimaryKeys(std::string_view table,
             const std::optional<storage::Condition const>& _condition,
             std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) override
@@ -135,7 +136,8 @@ public:
         m_sealerList(std::move(std::move(_sealerList)))
     {
         init(_blockNumber, _txsSize, 0);
-        m_worker = std::make_shared<ThreadPool>("ledgerWorker", 1);
+        m_worker = std::make_shared<IOServicePool>(1, "ledgerWorker");
+        m_strand = std::make_unique<Strand>(m_worker);
     }
     ~FakeLedger() override
     {
@@ -148,13 +150,7 @@ public:
         std::map<HashType, bytesConstPtr> emptyTxsData;
         m_txsHashToData.swap(emptyTxsData);
     }
-    void stop()
-    {
-        if (m_worker)
-        {
-            m_worker->stop();
-        }
-    }
+    void stop() { m_worker.reset(); }
 
     FakeLedger(
         BlockFactory::Ptr _blockFactory, size_t _blockNumber, size_t _txsSize, size_t _receiptsSize)
@@ -163,7 +159,8 @@ public:
         auto sigImpl = m_blockFactory->cryptoSuite()->signatureImpl();
         m_sealerList = fakeSealerList(m_keyPairVec, sigImpl, 4);
         init(_blockNumber, _txsSize, _receiptsSize);
-        m_worker = std::make_shared<ThreadPool>("ledgerWorker", 1);
+        m_worker = std::make_shared<IOServicePool>(1, "ledgerWorker");
+        m_strand = std::make_unique<Strand>(m_worker);
     }
 
     void init(size_t _blockNumber, size_t _txsSize, int64_t _timestamp = utcTime())
@@ -193,11 +190,10 @@ public:
         {
             return block;
         }
-        ParentInfoList parentInfo;
+        ParentInfo parentInfo;
         if (_parentBlockHeader != nullptr)
         {
-            ParentInfo info{_parentBlockHeader->number(), _parentBlockHeader->hash()};
-            parentInfo.push_back(info);
+            parentInfo = ParentInfo{_parentBlockHeader->number(), _parentBlockHeader->hash()};
         }
         auto rootHash =
             m_blockFactory->cryptoSuite()->hashImpl()->hash(std::to_string(_blockNumber));
@@ -221,11 +217,10 @@ public:
     {
         auto block = fakeAndCheckBlock(m_blockFactory->cryptoSuite(), m_blockFactory, _txsSize,
             _txsSize, _blockNumber, true, false);
-        ParentInfoList parentInfo;
+        ParentInfo parentInfo;
         if (_parentBlockHeader != nullptr)
         {
-            ParentInfo info{_parentBlockHeader->number(), _parentBlockHeader->hash()};
-            parentInfo.push_back(info);
+            parentInfo = ParentInfo{_parentBlockHeader->number(), _parentBlockHeader->hash()};
         }
         auto rootHash =
             m_blockFactory->cryptoSuite()->hashImpl()->hash(std::to_string(_blockNumber));
@@ -264,10 +259,15 @@ public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features) override
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
     {
         (void)storage;
         (void)block;
+        (void)writeTxsAndReceipts;
+        (void)features;
+        (void)blockHashOverride;
+        (void)writeNonces;
         callback("", nullptr);
     }
 
@@ -305,7 +305,8 @@ public:
         {
             auto tx = blockTxs ? blockTxs->at(i) : block->transactions()[i].toShared();
             auto txHash = tx->hash();
-            std::shared_ptr<bcos::bytes> txData;
+            auto txData =
+                std::make_shared<bcos::bytes>();  // C3: fix null shared_ptr dereference (P4-3)
             tx->encode(*txData);
             m_txsHashToData[txHash] = txData;
         }
@@ -518,7 +519,7 @@ public:
         }
 
         auto self = std::weak_ptr<FakeLedger>(shared_from_this());
-        m_worker->enqueue([nonConstHeader, _onCommitBlock, self]() {
+        m_strand->post([nonConstHeader, _onCommitBlock, self]() {
             auto ledger = self.lock();
             if (!self.lock())
             {
@@ -543,6 +544,21 @@ public:
         const std::string tableName =
             std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) + _address;
         fakeStorageEntryMaps[tableName][_key] = std::move(_data);
+    }
+
+    void setFeatures(bcos::ledger::Features _features) { m_features = _features; }
+
+    task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override
+    {
+        co_return m_features;
+    }
+
+    // Single-flag read mirrors the injected feature set, so the historical state-read path
+    // (ledger::getFeature) agrees with the test's setFeatures() injection.
+    task::Task<bool> fetchFeature(
+        bcos::ledger::Features::Flag _flag, protocol::BlockNumber) override
+    {
+        co_return m_features.get(_flag);
     }
 
     task::Task<std::optional<storage::Entry>> getStorageAt(std::string_view _address,
@@ -579,13 +595,16 @@ private:
 
     std::map<std::string, std::string, std::less<>> m_systemConfig;
     std::vector<bytes> m_sealerList;
-    std::shared_ptr<ThreadPool> m_worker = nullptr;
+    std::shared_ptr<IOServicePool> m_worker = nullptr;
+    std::unique_ptr<Strand> m_strand;
     std::unordered_map<std::string, ledger::StorageState> m_storageState = {};
     std::string eoaInLedger;
     std::string eoaInLedgerNonce;
     std::shared_ptr<FakeStorage> m_fakeStorage;
     std::map<std::string, std::map<std::string, std::optional<storage::Entry>>>
         fakeStorageEntryMaps;
+    // Empty by default, matching LedgerInterface's default fetchAllFeatures.
+    bcos::ledger::Features m_features;
 };
 }  // namespace test
 }  // namespace bcos

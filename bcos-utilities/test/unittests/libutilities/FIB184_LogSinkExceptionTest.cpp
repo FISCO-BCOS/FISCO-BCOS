@@ -9,7 +9,6 @@
  * @file FIB184_LogSinkExceptionTest.cpp
  */
 
-#include <boost/log/core.hpp>
 #include <boost/log/sinks/async_frontend.hpp>
 #include <boost/log/sinks/basic_sink_backend.hpp>
 #include <boost/log/sinks/frontend_requirements.hpp>

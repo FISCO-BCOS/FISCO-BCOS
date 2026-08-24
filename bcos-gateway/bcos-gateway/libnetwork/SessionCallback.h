@@ -8,7 +8,7 @@
 #pragma once
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Message.h"
-#include <boost/asio/deadline_timer.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <array>
 #include <mutex>
 #include <unordered_map>
@@ -24,7 +24,7 @@ struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 
     uint64_t startTime;
     SessionCallbackFunc callback;
-    std::optional<boost::asio::deadline_timer> timeoutHandler;
+    std::optional<boost::asio::steady_timer> timeoutHandler;
 };
 
 using SessionResponseCallback = ResponseCallback;

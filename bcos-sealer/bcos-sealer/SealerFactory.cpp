@@ -29,14 +29,15 @@ using namespace bcos::sealer;
 SealerFactory::SealerFactory(bcos::tool::NodeConfig::Ptr _nodeConfig,
     bcos::protocol::BlockFactory::Ptr _blockFactory, bcos::txpool::TxPoolInterface::Ptr _txpool,
     bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
-    bcos::crypto::KeyPairInterface::Ptr _key)
+    bcos::crypto::KeyPairInterface::Ptr _key, boost::asio::io_context& _ioContext)
   : m_groupId(_nodeConfig->groupId()),
     m_chainId(_nodeConfig->chainId()),
     m_blockFactory(std::move(_blockFactory)),
     m_txpool(std::move(_txpool)),
     m_minSealTime(_nodeConfig->minSealTime()),
     m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance)),
-    m_keyPair(std::move(_key))
+    m_keyPair(std::move(_key)),
+    m_ioContext(&_ioContext)
 {}
 
 Sealer::Ptr SealerFactory::createSealer()
@@ -47,7 +48,7 @@ Sealer::Ptr SealerFactory::createSealer()
     sealerConfig->setKeyPair(m_keyPair);
     sealerConfig->setGroupId(m_groupId);
     sealerConfig->setChainId(m_chainId);
-    return std::make_shared<Sealer>(sealerConfig);
+    return std::make_shared<Sealer>(sealerConfig, *m_ioContext);
 }
 
 VRFBasedSealer::Ptr SealerFactory::createVRFBasedSealer()
@@ -58,5 +59,5 @@ VRFBasedSealer::Ptr SealerFactory::createVRFBasedSealer()
     sealerConfig->setKeyPair(m_keyPair);
     sealerConfig->setGroupId(m_groupId);
     sealerConfig->setChainId(m_chainId);
-    return std::make_shared<VRFBasedSealer>(sealerConfig);
+    return std::make_shared<VRFBasedSealer>(sealerConfig, *m_ioContext);
 }

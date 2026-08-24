@@ -37,12 +37,13 @@ ShardingTransactionExecutor::ShardingTransactionExecutor(bcos::ledger::LedgerInt
     storage::TransactionalStorageInterface::Ptr backendStorage,
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
     storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
-    bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
-    std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name)
+    bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
+    std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name,
+    bcos::IOServicePool::Ptr ioServicePool)
   : TransactionExecutor(std::move(ledger), std::move(txpool), std::move(cachedStorage),
         std::move(backendStorage), std::move(executionMessageFactory),
-        std::move(stateStorageFactory), std::move(hashImpl), isWasm, isAuthCheck,
-        std::move(vmFactory), std::move(keyPageIgnoreTables), std::move(name))
+        std::move(stateStorageFactory), std::move(hashImpl), isAuthCheck, std::move(vmFactory),
+        std::move(keyPageIgnoreTables), std::move(name), std::move(ioServicePool))
 {}
 
 void ShardingTransactionExecutor::executeTransactions(std::string contractAddress,
@@ -213,7 +214,7 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
     {
         auto blockContext = createTmpBlockContext(blockHeader);
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
-            *blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
+            *blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled);
 
         auto txNum = inputs.size();
         auto blockNumber = blockHeader->number();
@@ -432,11 +433,11 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
         {
             if (!isStaticCall)
             {
-                auto executiveFactory = std::make_shared<ShardingExecutiveFactory>(*blockContext,
-                    m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
+                auto executiveFactory = std::make_shared<ShardingExecutiveFactory>(
+                    *blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled);
                 executiveFlow = std::make_shared<ExecutiveDagFlow>(executiveFactory, m_abiCache);
                 blockContext->setExecutiveFlow(codeAddress, executiveFlow);
-                executiveFlow->setThreadPool(m_threadPool);
+                executiveFlow->setThreadPool(m_ioServicePool);
             }
             else
             {

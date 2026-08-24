@@ -30,7 +30,7 @@ bcostars::Error FrontServiceServer::asyncGetGroupNodeInfo(
 }
 
 void FrontServiceServer::asyncSendBroadcastMessage(tars::Int32 _nodeType, tars::Int32 moduleID,
-    const vector<tars::Char>& data, tars::TarsCurrentPtr)
+    const std::vector<tars::Char>& data, tars::TarsCurrentPtr)
 {
     bcos::task::wait([](auto front, auto nodeType, auto moduleID,
                          auto data) -> bcos::task::Task<void> {
@@ -40,9 +40,9 @@ void FrontServiceServer::asyncSendBroadcastMessage(tars::Int32 _nodeType, tars::
 }
 
 bcostars::Error FrontServiceServer::asyncSendMessageByNodeID(tars::Int32 moduleID,
-    const vector<tars::Char>& nodeID, const vector<tars::Char>& data, tars::UInt32 timeout,
-    tars::Bool requireRespCallback, vector<tars::Char>& responseNodeID,
-    vector<tars::Char>& responseData, std::string& seq, tars::TarsCurrentPtr current)
+    const std::vector<tars::Char>& nodeID, const std::vector<tars::Char>& data, tars::UInt32 timeout,
+    tars::Bool requireRespCallback, std::vector<tars::Char>& responseNodeID,
+    std::vector<tars::Char>& responseData, std::string& seq, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
 
@@ -78,7 +78,7 @@ bcostars::Error FrontServiceServer::asyncSendMessageByNodeID(tars::Int32 moduleI
 }
 
 void FrontServiceServer::asyncSendMessageByNodeIDs(tars::Int32 moduleID,
-    const vector<vector<tars::Char>>& nodeIDs, const vector<tars::Char>& data,
+    const std::vector<std::vector<tars::Char>>& nodeIDs, const std::vector<tars::Char>& data,
     tars::TarsCurrentPtr current)
 {
     std::vector<bcos::crypto::NodeIDPtr> bcosNodeIDs;
@@ -94,7 +94,7 @@ void FrontServiceServer::asyncSendMessageByNodeIDs(tars::Int32 moduleID,
 }
 
 bcostars::Error FrontServiceServer::asyncSendResponse(const std::string& id, tars::Int32 moduleID,
-    const vector<tars::Char>& nodeID, const vector<tars::Char>& data, tars::TarsCurrentPtr current)
+    const std::vector<tars::Char>& nodeID, const std::vector<tars::Char>& data, tars::TarsCurrentPtr current)
 {
     FRONTSERVICE_LOG(TRACE) << LOG_DESC("asyncSendResponse server") << LOG_KV("id", id);
     current->setResponse(false);
@@ -109,7 +109,7 @@ bcostars::Error FrontServiceServer::asyncSendResponse(const std::string& id, tar
 }
 
 bcostars::Error FrontServiceServer::onReceiveBroadcastMessage(const std::string& groupID,
-    const vector<tars::Char>& nodeID, const vector<tars::Char>& data, tars::TarsCurrentPtr current)
+    const std::vector<tars::Char>& nodeID, const std::vector<tars::Char>& data, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
 
@@ -125,7 +125,7 @@ bcostars::Error FrontServiceServer::onReceiveBroadcastMessage(const std::string&
 }
 
 bcostars::Error FrontServiceServer::onReceiveMessage(const std::string& groupID,
-    const vector<tars::Char>& nodeID, const vector<tars::Char>& data, tars::TarsCurrentPtr current)
+    const std::vector<tars::Char>& nodeID, const std::vector<tars::Char>& data, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
 

@@ -12,7 +12,7 @@ class TransactionExecutiveFixture : public TransactionFixture
 public:
     TransactionExecutiveFixture()
     {
-        setIsWasm(false);
+        prepareEnv();
         web3Features.set(Features::Flag::feature_balance);
         web3Features.set(Features::Flag::feature_balance_precompiled);
         web3Features.set(Features::Flag::feature_evm_address);
@@ -418,8 +418,8 @@ BOOST_AUTO_TEST_CASE(testMultiNonce)
     auto newBlock = blockNumber++;
     nextBlock(newBlock, protocol::BlockVersion::MAX_VERSION, web3Features);
     // [10000, 10020)
-    rawNewHelloWorld(
-        newBlock, TransactionType::Web3Transaction, address, ::ranges::views::iota(10000, 10020), 0);
+    rawNewHelloWorld(newBlock, TransactionType::Web3Transaction, address,
+        ::ranges::views::iota(10000, 10020), 0);
     commitBlock(newBlock);
 
     auto const sender = keyPair->address(hashImpl);

@@ -60,6 +60,7 @@ public:
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadWithoutTarsFrameworkConfig(boost::property_tree::ptree const& _pt);
 
@@ -83,8 +84,6 @@ public:
 
     // the txpool configurations
     size_t txpoolLimit() const;
-    size_t notifyWorkerNum() const;
-    size_t verifierWorkerNum() const;
     int64_t txsExpirationTime() const;
     bool checkBlockLimit() const;
 
@@ -92,6 +91,12 @@ public:
     std::string const& chainId() const;
     std::string const& groupId() const;
     size_t blockLimit() const;
+
+    /// OP-Stack Jovian fork selection: enabled iff `feature_op_jovian` is set in the genesis
+    /// [features] section (the FISCO-native feature-flag mechanism — replaces the former
+    /// chain.isthmus_time / chain.jovian_time timestamp thresholds). Isthmus is the OP-mode
+    /// baseline; this flag selects Jovian semantics (DA footprint, operator fee ×100).
+    bool opJovianActive() const;
 
     std::string const& privateKeyPath() const;
     std::string const& hsmLibPath() const;
@@ -143,7 +148,6 @@ public:
     std::int64_t epochSealerNum() const;
     std::int64_t epochBlockNum() const;
 
-    bool isWasm() const;
     bool isAuthCheck() const;
     bool isSerialExecute() const;
     size_t vmCacheSize() const;
@@ -165,7 +169,6 @@ public:
     // the rpc configurations
     const std::string& rpcListenIP() const;
     uint16_t rpcListenPort() const;
-    uint32_t rpcThreadPoolSize() const;
     uint32_t rpcFilterTimeout() const;
     uint32_t rpcMaxProcessBlock() const;
     bool rpcSmSsl() const;
@@ -175,7 +178,6 @@ public:
     bool enableWeb3Rpc() const;
     const std::string& web3RpcListenIP() const;
     uint16_t web3RpcListenPort() const;
-    uint32_t web3RpcThreadSize() const;
     uint32_t web3FilterTimeout() const;
     uint32_t web3MaxProcessBlock() const;
     uint32_t web3BatchRequestSizeLimit() const;
@@ -187,6 +189,41 @@ public:
     int32_t web3CorsMaxAge() const;
     bool web3CorsAllowCredentials() const;
     bool web3SyncTransaction() const;
+
+    // blockTag semantics: how many blocks behind "latest" the "safe" / "finalized" tags
+    // point to. Default 0 — PBFT has no finalization window (a committed block is already
+    // final), so safe/finalized equal "latest" unless an operator opts into a lag.
+    uint32_t web3SafeBlockDepth() const;
+    uint32_t web3FinalizedBlockDepth() const;
+
+    // thread pool configuration
+    size_t ioThreadCount() const;
+    size_t tbbThreadCount() const;
+
+    // op engine rpc configurations
+    bool enableOpEngineRpc() const;
+    const std::string& opEngineRpcListenIP() const;
+    uint16_t opEngineRpcListenPort() const;
+    uint32_t opEngineHttpBodySizeLimit() const;
+    uint32_t opEngineBatchRequestSizeLimit() const;
+    const std::string& opEngineJwtSecretFile() const;
+    int32_t opEngineClockSkewSecs() const;
+    // test-only escape hatch: allow [op_engine_rpc] to serve the v1 EngineService on
+    // executor_version < 2 (the v1 Engine API integration harness drives it over this
+    // endpoint); production configs must never set it
+    bool opEngineAllowV1Executor() const;
+
+    // single-node consensus configurations
+    bool enableSingleNodeConsensus() const;
+    // true when block production is driven through the EngineService — by the built-in
+    // single-node driver or by an external op-node over [op_engine_rpc] — and the legacy
+    // txpool/PBFT pipeline must therefore stay dormant (sole-producer discipline)
+    bool engineDrivenBlockProduction() const;
+    uint64_t singleNodeConsensusBlockInterval() const;
+    bool singleNodeConsensusProduceEmptyBlocks() const;
+    const std::string& singleNodeConsensusFeeRecipient() const;
+    const std::string& singleNodeConsensusPrevRandao() const;
+    std::uint64_t singleNodeConsensusFixedTimestamp() const;
 
     // the gateway configurations
     const std::string& p2pListenIP() const;
@@ -259,7 +296,6 @@ public:
     {
         bool parallel = false;
         int grainSize = 0;
-        int maxThread = 0;
     };
     BaselineSchedulerConfig const& baselineSchedulerConfig() const;
 
@@ -267,7 +303,6 @@ public:
     {
         std::string host;
         uint16_t port = 0;
-        uint32_t threadCount = 0;
     };
     TarsRPCConfig const& tarsRPCConfig() const;
 
@@ -284,6 +319,10 @@ public:
     bool preStoreBackpressureEnabled() const;
     size_t preStoreMaxInflight() const;
     int executorVersion() const;
+    /// EVMC revision config (ethereum-executor, executor_version=2): explicit single
+    /// revision applied to all blocks, plus block-height fork transitions.
+    std::optional<evmc_revision> evmcRevision() const;
+    std::map<protocol::BlockNumber, evmc_revision> const& evmcRevisionForks() const;
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
@@ -295,6 +334,7 @@ protected:
     virtual void loadTxPoolConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSealerConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadSingleNodeConsensusConfig(boost::property_tree::ptree const& _pt);
     virtual void loadStorageSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSyncConfig(boost::property_tree::ptree const& _pt);
 
@@ -318,9 +358,17 @@ protected:
         std::string const& _defaultValue = "", bool _require = true);
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
 
-private:
+    // [features] section loader — exposed to the LoaderProbe test harness like the other
+    // per-section loaders (feature_op_jovian drives OP-Stack fork selection).
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
+
+private:
     void loadAlloc(boost::property_tree::ptree const& ptree);
+
+    // A6.5: L2 genesis alloc parsing (L2 mode gated by feature_l2_ethereum_compat)
+    void loadAllocs(boost::property_tree::ptree const& _genesisConfig);
+    void loadEthGenesisHeader(boost::property_tree::ptree const& _genesisConfig);
+    void validateL2Invariants();
 
     bcos::consensus::ConsensusNodeList parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
@@ -333,8 +381,6 @@ private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
     size_t m_txpoolLimit{};
-    size_t m_notifyWorkerNum{};
-    size_t m_verifierWorkerNum{};
     int64_t m_txsExpirationTime{};
     bool m_checkBlockLimit = true;
     // permit txs from free node or not
@@ -439,7 +485,6 @@ private:
     // config for rpc
     std::string m_rpcListenIP;
     uint16_t m_rpcListenPort{};
-    uint32_t m_rpcThreadPoolSize{};
     uint32_t m_rpcFilterTimeout{};
     uint32_t m_rpcMaxProcessBlock{};
     bool m_rpcSmSsl{};
@@ -449,7 +494,6 @@ private:
     bool m_enableWeb3Rpc = false;
     std::string m_web3RpcListenIP;
     uint16_t m_web3RpcListenPort{};
-    uint32_t m_web3RpcThreadSize{};
     uint32_t m_web3FilterTimeout{};
     uint32_t m_web3MaxProcessBlock{};
     uint32_t m_web3BatchRequestSizeLimit{};
@@ -462,6 +506,34 @@ private:
     int32_t m_web3CorsMaxAge = 86400;
     bool m_web3CorsAllowCredentials = true;
     bool m_web3SyncTransaction = false;
+    // blockTag semantics: "safe"/"finalized" point latest - depth blocks behind. Default 0
+    // (= "latest"): PBFT commits are final, so no lag unless the operator configures one.
+    uint32_t m_web3SafeBlockDepth = 0;
+    uint32_t m_web3FinalizedBlockDepth = 0;
+
+    // thread pool configuration
+    size_t m_ioThreadCount{};
+    size_t m_tbbThreadCount{};
+
+    // config for op engine rpc
+    bool m_enableOpEngineRpc = false;
+    std::string m_opEngineRpcListenIP = "127.0.0.1";
+    uint16_t m_opEngineRpcListenPort{};
+    uint32_t m_opEngineHttpBodySizeLimit{};
+    uint32_t m_opEngineBatchRequestSizeLimit{};
+    std::string m_opEngineJwtSecretFile;
+    int32_t m_opEngineClockSkewSecs{60};
+    bool m_opEngineAllowV1Executor = false;
+
+    // config for single-node consensus
+    bool m_enableSingleNodeConsensus = false;
+    uint64_t m_singleNodeConsensusBlockInterval = 1000;
+    bool m_singleNodeConsensusProduceEmptyBlocks = true;
+    std::string m_singleNodeConsensusFeeRecipient = "0x0000000000000000000000000000000000000000";
+    // 32-byte hex prevRandao; empty means derive deterministically from a seed.
+    std::string m_singleNodeConsensusPrevRandao;
+    // fixed block timestamp in seconds; 0 = wall clock.
+    std::uint64_t m_singleNodeConsensusFixedTimestamp = 0;
 
     // config for gateway
     std::string m_p2pListenIP;

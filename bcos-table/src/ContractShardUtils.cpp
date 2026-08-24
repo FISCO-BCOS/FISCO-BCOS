@@ -25,7 +25,7 @@ using namespace bcos::storage;
 
 bool ContractShardUtils::isInherent(std::optional<bcos::storage::Entry> entry)
 {
-    return entry && entry->getField(0).starts_with(INHERENT_PREFIX);
+    return entry && entry->get().starts_with(INHERENT_PREFIX);
 }
 
 void ContractShardUtils::setContractShard(bcos::storage::StorageWrapper& storage,
@@ -74,7 +74,7 @@ void ContractShardUtils::setShard(bcos::storage::StorageWrapper& storage,
     }
 
     Entry shardEntry;
-    shardEntry.importFields({std::string(shard)});
+    shardEntry.set(std::string(shard));
     storage.setRow(contractTableName, ACCOUNT_SHARD, std::move(shardEntry));
     return;
 }
@@ -96,7 +96,7 @@ std::string ContractShardUtils::getContractShard(
     {
         if (entry)
         {
-            tableName = entry->getField(0);
+            tableName = entry->get();
             tableName.remove_prefix(INHERENT_PREFIX.length());
         }
         entry = getShard(storage, tableName);
@@ -105,7 +105,7 @@ std::string ContractShardUtils::getContractShard(
 
     if (entry)
     {
-        auto shardName = entry->getField(0);
+        auto shardName = entry->get();
         shardName.remove_prefix(SHARD_ROOT_PREFIX.length());
         return std::string(shardName);
     }

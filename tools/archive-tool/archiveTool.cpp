@@ -23,7 +23,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/Ledger.h"
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
-#include "bcos-storage/bcos-storage/TiKVStorage.h"
+#include "bcos-storage/TiKVStorage.h"
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "boost/filesystem.hpp"
@@ -169,15 +169,14 @@ createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const s
             option.writeBufferSize = nodeConfig->writeBufferSize();
             option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
             option.blockCacheSize = nodeConfig->blockCacheSize();
+            option.enableDBStatistics = nodeConfig->enableStatistics();
             storage = StorageInitializer::build(
-                StorageInitializer::createRocksDB(
-                    stateDBPath, option, nodeConfig->enableStatistics(), nodeConfig->keyPageSize()),
+                StorageInitializer::createRocksDB(stateDBPath, option, nodeConfig->keyPageSize()),
                 dataEncryption);
             blockStorage = storage;
             if (nodeConfig->enableSeparateBlockAndState())
             {
-                auto blockDB = StorageInitializer::createRocksDB(
-                    nodeConfig->blockDBPath(), option, nodeConfig->enableStatistics());
+                auto blockDB = StorageInitializer::createRocksDB(nodeConfig->blockDBPath(), option);
                 blockStorage = StorageInitializer::build(std::move(blockDB), dataEncryption);
             }
         }
@@ -334,8 +333,7 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                     // read the receipt and store to archive database use json format
                     Json::Value receiptJson;
                     bcos::rpc::toJsonResp(receiptJson, toHex(keys[j], "0x"),
-                        protocol::TransactionStatus::None, *receipt, nodeConfig->isWasm(),
-                        *hashImpl);
+                        protocol::TransactionStatus::None, *receipt, *hashImpl);
                     receiptValues[j] = receiptJson.toStyledString();
                 }
             });
@@ -349,7 +347,8 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                        [](const std::string& str) { return std::string_view{str}; }),
             receiptValues | ::ranges::views::transform(
                                 [](const std::string& str) { return std::string_view{str}; }));
-        std::cout << "\r" << "write block " << i << " size: " << size << std::flush;
+        std::cout << "\r"
+                  << "write block " << i << " size: " << size << std::flush;
     }
     std::cout << std::endl
               << "write to archive database, block range [" << startBlockNumber << ","
@@ -513,7 +512,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                         output = fromHexWithPrefix(outString);
                     }
                     std::string contractAddress;
-                    if (!nodeConfig->isWasm() && jsonValue["contractAddress"].asString().size() > 2)
+                    if (jsonValue["contractAddress"].asString().size() > 2)
                     {
                         auto addressBytes =
                             fromHexWithPrefix(jsonValue["contractAddress"].asString());
@@ -546,8 +545,8 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
             });
         // write receipt to local storage
         localBlockStorage->setRows(ledger::SYS_HASH_2_RECEIPT, txHashes, receiptsView);
-        std::cout << "\r" << "reimport block " << blockNumber << " size: " << txHashes.size()
-                  << std::flush;
+        std::cout << "\r"
+                  << "reimport block " << blockNumber << " size: " << txHashes.size() << std::flush;
     }
     // });
     std::cout << std::endl
@@ -727,9 +726,9 @@ int main(int argc, const char* argv[])
         option.writeBufferSize = nodeConfig->writeBufferSize();
         option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
         option.blockCacheSize = nodeConfig->blockCacheSize();
+        option.enableDBStatistics = nodeConfig->enableStatistics();
         archiveStorage = StorageInitializer::build(
-            StorageInitializer::createRocksDB(archivePath, option, nodeConfig->enableStatistics()),
-            nullptr);
+            StorageInitializer::createRocksDB(archivePath, option), nullptr);
     }
     else if (boost::iequals(archiveType, "TiKV"))
     {  // create archive TiKV storage

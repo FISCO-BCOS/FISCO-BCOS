@@ -22,7 +22,6 @@
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
-#include <boost/lexical_cast.hpp>
 #include <iomanip>
 #include <optional>
 #include <sstream>
@@ -105,7 +104,7 @@ void RateLimiterStat::start()
     }
     m_running = true;
 
-    m_statTimer = std::make_shared<Timer>(m_statInterval, "ratelimiter_reporter");
+    m_statTimer = std::make_shared<Timer>(*m_ioContext, m_statInterval, "ratelimiter_reporter");
 
     auto statInterval = m_statInterval;
     auto statTimer = m_statTimer;

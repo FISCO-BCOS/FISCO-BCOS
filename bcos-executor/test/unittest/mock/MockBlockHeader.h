@@ -13,18 +13,20 @@ public:
     MockBlockHeader(protocol::BlockNumber _number) : m_blockNumber(_number) {}
     ~MockBlockHeader() override = default;
 
-    bcos::crypto::HashType hash() const override { return {}; }
+    bcos::crypto::HashType hash() const override { return m_rlpHash; }
     void calculateHash(const crypto::Hash& hashImpl) override {}
 
     void decode(bytesConstRef _data) override {}
     void encode(bytes& _encodeData) const override {}
     void clear() override {}
     uint32_t version() const override { return 0; }
-    ::ranges::any_view<bcos::protocol::ParentInfo, ::ranges::category::input | ::ranges::category::sized>
-    parentInfo() const override
+    bcos::protocol::EthBlockVersion ethBlockVersion() const override { return m_ethVersion; }
+    void setEthBlockVersion(bcos::protocol::EthBlockVersion _version) override
     {
-        return {};
+        m_ethVersion = _version;
     }
+    void setRLPHash(bcos::crypto::HashType _hash) override { m_rlpHash = _hash; }
+    bcos::protocol::ParentInfo parentInfo() const override { return bcos::protocol::ParentInfo{}; }
     crypto::HashType txsRoot() const override { return {}; }
     crypto::HashType receiptsRoot() const override { return {}; }
     crypto::HashType stateRoot() const override { return {}; }
@@ -38,7 +40,7 @@ public:
     gsl::span<const uint64_t> consensusWeights() const override { return {}; }
 
     void setVersion(uint32_t _version) override {}
-    void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) override {}
+    void setParentInfo(bcos::protocol::ParentInfo parentInfo) override {}
     void setTxsRoot(bcos::crypto::HashType _txsRoot) override {}
     void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) override {}
     void setStateRoot(bcos::crypto::HashType _stateRoot) override {}
@@ -50,13 +52,42 @@ public:
     void setSealerList(std::vector<bytes>&& _sealerList) override {}
     void setConsensusWeights(const gsl::span<const uint64_t>& _weightList) override {}
     void setConsensusWeights(std::vector<uint64_t>&& _weightList) override {}
-    void setExtraData(const bytes& _extraData) override {}
-    void setExtraData(bytes&& _extraData) override {}
+    void setExtraData(bytes _extraData) override {}
     void setSignatureList(const gsl::span<const protocol::Signature>& _signatureList) override {}
     void setSignatureList(protocol::SignatureList&& _signatureList) override {}
     size_t size() const override { return 0; }
 
+    // ---- Ethereum-specific field accessors ----
+    bcos::Address coinbase() const override { return {}; }
+    void setCoinbase(bcos::Address _addr) override {}
+    bcos::bytesConstRef logsBloom() const override { return {}; }
+    void setLogsBloom(bcos::bytesConstRef _bloom) override {}
+    u256 gasLimit() const override { return {}; }
+    void setGasLimit(u256 _limit) override {}
+    bcos::h256 prevRandao() const override { return {}; }
+    void setPrevRandao(bcos::h256 _digest) override {}
+    crypto::HashType uncleHash() const override { return {}; }
+    void setUncleHash(crypto::HashType _hash) override {}
+    u256 difficulty() const override { return {}; }
+    void setDifficulty(u256 _difficulty) override {}
+    bcos::h64 nonce() const override { return {}; }
+    void setNonce(bcos::h64 _nonce) override {}
+    std::optional<u256> baseFee() const override { return std::nullopt; }
+    void setBaseFee(u256 _fee) override {}
+    std::optional<bcos::h256> withdrawalsRoot() const override { return std::nullopt; }
+    void setWithdrawalsRoot(bcos::h256 _hash) override {}
+    std::optional<u256> blobGasUsed() const override { return std::nullopt; }
+    void setBlobGasUsed(u256 _val) override {}
+    std::optional<u256> excessBlobGas() const override { return std::nullopt; }
+    void setExcessBlobGas(u256 _val) override {}
+    std::optional<bcos::h256> parentBeaconBlockRoot() const override { return std::nullopt; }
+    void setParentBeaconBlockRoot(bcos::h256 _root) override {}
+    std::optional<bcos::h256> requestsHash() const override { return std::nullopt; }
+    void setRequestsHash(bcos::h256 _hash) override {}
+
 private:
     protocol::BlockNumber m_blockNumber;
+    bcos::protocol::EthBlockVersion m_ethVersion{bcos::protocol::EthBlockVersion::NON_ETH};
+    bcos::crypto::HashType m_rlpHash;
 };
 }  // namespace bcos::test

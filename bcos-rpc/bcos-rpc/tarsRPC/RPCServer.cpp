@@ -3,7 +3,6 @@
 #include "Config.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
-#include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <memory>

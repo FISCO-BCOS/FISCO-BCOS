@@ -9,6 +9,7 @@
  */
 
 #include <bcos-utilities/ratelimiter/RateReporter.h>
+#include <boost/asio/io_context.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -19,7 +20,11 @@ BOOST_AUTO_TEST_SUITE(RateReporterTest)
 
 BOOST_AUTO_TEST_CASE(updateReportFlushCycle)
 {
-    RateReporter reporter("module-r", 1000);
+    // RateReporter borrows an external io_context now (it used to create its own Timer thread).
+    // Declared first so it outlives the reporter; never run, so the report timer never fires and
+    // the update/report/flush calls below stay deterministic.
+    boost::asio::io_context ioContext;
+    RateReporter reporter(ioContext, "module-r", 1000);
 
     reporter.update(100, true);  // success branch
     reporter.update(200, true);

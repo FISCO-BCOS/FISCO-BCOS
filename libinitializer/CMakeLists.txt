@@ -2,43 +2,68 @@ find_package(Boost REQUIRED program_options)
 find_package(jsoncpp CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
 
-add_library(${COMMAND_HELPER_LIB} CommandHelper.cpp)
-target_link_libraries(${COMMAND_HELPER_LIB} PUBLIC bcos-framework Boost::program_options)
+# --- External-use targets: referenced outside libinitializer, must remain separate ---
 
-add_library(${PROTOCOL_INIT_LIB} ProtocolInitializer.cpp)
-target_link_libraries(${PROTOCOL_INIT_LIB} PUBLIC
-                     ${CRYPTO_TARGET} ${TOOL_TARGET} ${TARS_PROTOCOL_TARGET} ${SECURITY_TARGET})
+# command: used by fisco-bcos-air, tars RpcService/GatewayService/ExecutorService/SchedulerService/NodeService
+add_library(command CommandHelper.cpp)
+target_link_libraries(command PUBLIC bcos-framework Boost::program_options)
+add_dependencies(command BuildInfo.h)
 
-add_library(${FRONTSERVICE_INIT_LIB} FrontServiceInitializer.cpp)
-target_link_libraries(${FRONTSERVICE_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${FRONT_TARGET})
+# protocol_init: used by tars services and lightnode
+add_library(protocol_init ProtocolInitializer.cpp Common.cpp)
+target_link_libraries(protocol_init PUBLIC
+                     bcos-crypto tool protocol-tars security)
 
-add_library(${PBFT_INIT_LIB} PBFTInitializer.cpp ProPBFTInitializer.cpp)
-target_link_libraries(${PBFT_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${LEDGER_TARGET} ${TOOL_TARGET} ${SEALER_TARGET} ${RPBFT_TARGET} ${PBFT_TARGET} ${SYNC_TARGET} ${STORAGE_TARGET})
-set_target_properties(${PBFT_INIT_LIB} PROPERTIES UNITY_BUILD "ON")
+# pbft_init: used by fisco-bcos-air, NodeService, storage-tool, archive-tool, hsm-tool
+add_library(pbft_init PBFTInitializer.cpp ProPBFTInitializer.cpp)
+target_link_libraries(pbft_init PUBLIC protocol_init ledger tool sealer rpbft pbft sync storage)
+set_target_properties(pbft_init PROPERTIES UNITY_BUILD "ON")
+add_dependencies(pbft_init BuildInfo.h)
 if(WITH_LEDGER_ELECTION)
-    target_link_libraries(${PBFT_INIT_LIB} PUBLIC ${LEADER_ELECTION_TARGET})
+    target_link_libraries(pbft_init PUBLIC leader_election)
 endif()
 
-add_library(${TXPOOL_INIT_LIB} TxPoolInitializer.cpp)
-target_link_libraries(${TXPOOL_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${TXPOOL_TARGET})
-
-add_library(ledger_init LedgerInitializer.cpp)
-target_link_libraries(ledger_init PRIVATE ${LEDGER_TARGET})
-
-add_library(baseline_init BaselineSchedulerInitializer.cpp MultiVersionScheduler.cpp)
-target_link_libraries(baseline_init transaction-scheduler transaction-executor ${STORAGE_TARGET})
-
-add_library(${INIT_LIB} Initializer.cpp)
-list(APPEND INIT_LIB_DEPENDS ${PROTOCOL_INIT_LIB} baseline_init ${FRONTSERVICE_INIT_LIB} ${TXPOOL_INIT_LIB} ${SCHEDULER_TARGET} ledger_init ${STORAGE_TARGET} ${EXECUTOR_TARGET} ${RPC_TARGET} bcos-boostssl tomlplusplus::tomlplusplus)
+# --- init: merged from front_init, txpool_init, mempool_init, ledger_init, baseline_init, lightnodeinit ---
+# These intermediate targets had no external consumers and are now folded directly into init.
+add_library(init
+    Initializer.cpp AuthInitializer.cpp
+    FrontServiceInitializer.cpp
+    TxPoolInitializer.cpp
+    MemPoolInitializer.cpp
+    LedgerInitializer.cpp
+    GlobalStateStorageInitializer.cpp MultiVersionScheduler.cpp
+    BaselineSchedulerInst.cpp
+)
+target_link_libraries(init PUBLIC
+    protocol_init
+    tool front
+    txpool
+    mempool
+    single-consensus
+    engine
+    ledger
+    transaction-scheduler transaction-executor
+    bcosevm::opstack
+    opstack-executor
+    ethereum-executor
+    scheduler storage executor rpc
+    bcos-boostssl
+    tomlplusplus::tomlplusplus
+)
 if(WITH_LEDGER_ELECTION)
-    list(APPEND INIT_LIB_DEPENDS ${LEADER_ELECTION_TARGET})
+    target_link_libraries(init PUBLIC leader_election)
 endif()
 if(WITH_LIGHTNODE)
-    add_library(lightnodeinit LightNodeInitializer.cpp LightNodeInitializer.h)
-    target_link_libraries(lightnodeinit PUBLIC bcos-lightnode bcos-concepts ${TARS_PROTOCOL_TARGET})
-    list(APPEND INIT_LIB_DEPENDS lightnodeinit bcos-concepts)
+    target_sources(init PRIVATE LightNodeInitializer.cpp LightNodeInitializer.h)
+    target_link_libraries(init PUBLIC bcos-lightnode bcos-concepts bcos-legacy)
 endif()
-target_link_libraries(${INIT_LIB} PUBLIC ${INIT_LIB_DEPENDS})
+if(WITH_TIKV)
+    target_link_libraries(init PUBLIC storage-tikv bcos-legacy)
+endif()
+set_target_properties(init PROPERTIES UNITY_BUILD "ON")
+add_dependencies(init BuildInfo.h)
 
-set_target_properties(${INIT_LIB} PROPERTIES UNITY_BUILD "ON")
-add_dependencies(${INIT_LIB} BuildInfo.h)
+if(TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

@@ -22,87 +22,62 @@
 
 #include "VMFactory.h"
 #include "VMInstance.h"
-#ifdef WITH_WASM
-#include <BCOS_WASM.h>
-#endif
 #include <boost/program_options.hpp>
 
 namespace po = boost::program_options;
 
 namespace bcos::executor
 {
-
 VMFactory::VMFactory(size_t cache_size) : m_cache(cache_size) {}
-
-/// The pointer to VMInstance create function in DLL VMInstance VM.
-///
-/// This variable is only written once when processing command line arguments,
-/// so access is thread-safe.
-
-// evmc_create_fn g_evmcCreateFn;
 
 VMInstance VMFactory::create(VMKind kind, evmc_revision revision, const crypto::HashType& codeHash,
     bytes_view code, bool isCreate)
 {
     switch (kind)
     {
-#ifdef WITH_WASM
-    case VMKind::BcosWasm:
-        return VMInstance{evmc_create_bcoswasm(), revision, code};
-#endif
-    // case VMKind::DLL:
-    //     return VMInstance{g_evmcCreateFn()};
     case VMKind::evmone:
     default:
     {
         if (isCreate)
         {
+            // CREATE: init code + code deposit — EVMC execute(), no baseline analysis or cache.
             return VMInstance{evmc_create_evmone(), revision, code};
         }
-        std::shared_ptr<evmoneCodeAnalysis> analysis{get(codeHash, revision)};
+
+        // CALL: baseline analyze + LRU cache + baseline::execute (pre-0.21 behavior).
+        bool useCache = (codeHash != crypto::HashType{});
+        EvmCodeCacheKey cacheKey{codeHash, revision};
+        std::shared_ptr<EvmoneCodeAnalysis> analysis{useCache ? get(cacheKey) : nullptr};
         if (!analysis)
         {
-            // analysis =
-            //     std::make_shared<evmoneCodeAnalysis>(evmone::advanced::analyze(revision, code));
-
-            analysis = std::make_shared<evmoneCodeAnalysis>(
-                evmone::baseline::analyze(revision, code));  // baseline
-            put(codeHash, analysis, revision);
+            analysis = std::make_shared<EvmoneCodeAnalysis>(
+                evmone::baseline::analyze(evmone::bytes_view(code.data(), code.size())));
+            if (useCache)
+            {
+                put(cacheKey, analysis);
+            }
         }
         return VMInstance{analysis, revision, code};
     }
     }
 }
 
-std::shared_ptr<evmoneCodeAnalysis> VMFactory::get(
-    const crypto::HashType& key, evmc_revision revision) noexcept
+std::shared_ptr<EvmoneCodeAnalysis> VMFactory::get(EvmCodeCacheKey const& key) noexcept
 {
-    if (revision == m_revision)
+    std::unique_lock lock(m_cacheMutex);
+    auto analysis = m_cache.get(key);
+    if (analysis)
     {
-        m_cacheMutex.lock();
-        auto analysis = m_cache.get(key);
-        m_cacheMutex.unlock();
-        if (analysis)
-        {
-            return analysis.value();
-        }
+        return analysis.value();
     }
     return nullptr;
 }
 
-void VMFactory::put(const crypto::HashType& key,
-    const std::shared_ptr<evmoneCodeAnalysis>& analysis, evmc_revision revision) noexcept
+void VMFactory::put(
+    EvmCodeCacheKey const& key, const std::shared_ptr<EvmoneCodeAnalysis>& analysis) noexcept
 {
-    if (revision != m_revision)
-    {
-        std::unique_lock lock(m_cacheMutex);
-        m_cache.clear();
-    }
-    m_revision = revision;
-    {
-        std::unique_lock lock(m_cacheMutex);
-        m_cache.insert(key, analysis);
-    }
+    std::unique_lock lock(m_cacheMutex);
+    m_cache.insert(key, analysis);
 }
 
 }  // namespace bcos::executor

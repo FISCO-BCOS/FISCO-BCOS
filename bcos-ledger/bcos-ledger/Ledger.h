@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "bcos-framework/ledger/GenesisConfig.h"
+#include "bcos-framework/ledger/IL2ConfigLoader.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockFactory.h"
@@ -29,7 +30,7 @@
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/compute/detail/lru_cache.hpp>
 #include <utility>
 
@@ -37,6 +38,15 @@
 
 namespace bcos::ledger
 {
+
+DERIVE_BCOS_EXCEPTION(NotFoundTransaction);
+DERIVE_BCOS_EXCEPTION(UnexpectedRowIndex);
+DERIVE_BCOS_EXCEPTION(MismatchTransactionCount);
+DERIVE_BCOS_EXCEPTION(MismatchParentHash);
+DERIVE_BCOS_EXCEPTION(NotFoundBlockHeader);
+DERIVE_BCOS_EXCEPTION(GetABIError);
+DERIVE_BCOS_EXCEPTION(GetBlockDataError);
+
 class Ledger : public LedgerInterface
 {
 public:
@@ -45,11 +55,12 @@ public:
 
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::storage::StorageInterface::Ptr _storage, size_t _blockLimit,
-        bcos::storage::StorageInterface::Ptr _blockStorage = nullptr, int merkleTreeCacheSize = 100)
+        bcos::storage::StorageInterface::Ptr _blockStorage = nullptr, int merkleTreeCacheSize = 100,
+        bcos::IOServicePool::Ptr _ioServicePool = nullptr)
       : m_blockFactory(std::move(_blockFactory)),
         m_stateStorage(std::move(_storage)),
         m_blockStorage(std::move(_blockStorage)),
-        m_threadPool(std::make_shared<ThreadPool>("ledgerWrite", 2)),
+        m_ioServicePool(std::move(_ioServicePool)),
         m_blockLimit(_blockLimit),
         m_merkleTreeCacheSize(merkleTreeCacheSize),
         m_txProofMerkleCache(m_merkleTreeCacheSize),
@@ -61,10 +72,12 @@ public:
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) override;
+    // No default arguments here — see LedgerInterface::asyncPrewriteBlock.
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts = true,
-        std::optional<bcos::ledger::Features> features = std::nullopt) override;
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override;
 
     bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
         bcos::protocol::Block::ConstPtr block) override;
@@ -127,7 +140,18 @@ public:
 
     task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override;
 
+    // Single-flag read (round-2 Finding E): one SYS_CONFIG row instead of fetchAllFeatures'
+    // ~61-key scan; used by the historical state-read path for feature_l2_ethereum_compat.
+    task::Task<bool> fetchFeature(
+        bcos::ledger::Features::Flag flag, protocol::BlockNumber blockNumber) override;
+
     storage::StorageInterface::Ptr getStateStorage() override;
+
+    // L2 mode: inject the per-block SystemConfig loader. AIR/MAX wire this only
+    // when running in L2 chain mode; a null loader makes loadL2Config a no-op so
+    // PBFT/non-L2 paths short-circuit without an EVM staticcall.
+    void setL2ConfigLoader(ledger::IL2ConfigLoader::Ptr loader) { m_l2Loader = std::move(loader); }
+    task::Task<void> loadL2Config(protocol::BlockNumber blockNumber, ledger::LedgerConfig& cfg);
 
 private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,
@@ -186,7 +210,7 @@ private:
     bcos::storage::StorageInterface::Ptr m_blockStorage = nullptr;
 
     mutable RecursiveMutex m_mutex;
-    std::shared_ptr<bcos::ThreadPool> m_threadPool;
+    std::shared_ptr<bcos::IOServicePool> m_ioServicePool;
     size_t m_blockLimit;
 
     // Maintain merkle trees of 100 blocks
@@ -196,5 +220,7 @@ private:
     CacheType m_txProofMerkleCache;
     CacheType m_receiptProofMerkleCache;
     size_t m_keyPageSize = 0;
+    // null unless running in L2 chain mode; see setL2ConfigLoader/loadL2Config.
+    ledger::IL2ConfigLoader::Ptr m_l2Loader;
 };
 }  // namespace bcos::ledger

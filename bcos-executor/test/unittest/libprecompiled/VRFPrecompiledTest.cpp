@@ -15,22 +15,18 @@
  */
 #include "../mock/MockLedger.h"
 #include "bcos-codec/abi/ContractABICodec.h"
-#include "bcos-executor/src/executive/BlockContext.h"
-#include "bcos-executor/src/executive/TransactionExecutive.h"
-#include "bcos-executor/src/precompiled/CryptoPrecompiled.h"
-#include "bcos-executor/src/precompiled/common/Common.h"
-#include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "vm/gas_meter/GasInjector.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/hash/SM3.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-crypto/signature/sm2/SM2Crypto.h"
-#include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-executor/src/executive/BlockContext.h"
+#include "bcos-executor/src/executive/TransactionExecutive.h"
+#include "bcos-executor/src/precompiled/CryptoPrecompiled.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <json/json.h>
 #include <wedpr-crypto/WedprCrypto.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -59,9 +55,8 @@ public:
         m_cryptoPrecompiled = std::make_shared<CryptoPrecompiled>(m_cryptoSuite->hashImpl());
         m_ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
         m_blockContext = std::make_shared<BlockContext>(nullptr, m_ledgerCache,
-            m_cryptoSuite->hashImpl(), 0, h256(), utcTime(), _blockVersion, false, false);
-        m_executive =
-            std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0, m_gasInjector);
+            m_cryptoSuite->hashImpl(), 0, h256(), utcTime(), _blockVersion, false);
+        m_executive = std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0);
         m_abi = std::make_shared<bcos::codec::abi::ContractABICodec>(*m_cryptoSuite->hashImpl());
     }
 
@@ -72,7 +67,6 @@ public:
     BlockContext::Ptr m_blockContext;
     TransactionExecutive::Ptr m_executive;
     CryptoPrecompiled::Ptr m_cryptoPrecompiled;
-    wasm::GasInjector m_gasInjector;
     std::string m_vrfVerifyFunction = "curve25519VRFVerify(bytes,bytes,bytes)";
     std::shared_ptr<bcos::codec::abi::ContractABICodec> m_abi;
 };

@@ -82,24 +82,39 @@ public:
         co_return co_await storage2::readOne(m_storage.get(), std::move(key));
     }
 
-    // FIB-100: DIRECT reads are Rollbackable's pre-image snapshots — internal
+    // FIB-100: untracked reads are Rollbackable's pre-image snapshots — internal
     // bookkeeping, not transaction-visible reads. Tracking them would create
     // phantom read dependencies (a chunk that only wrote a key would look
     // like it also read it, triggering false RAW). Rollback correctness is
     // protected instead by WAW detection in hasRAWIntersection: two chunks
     // writing the same key are forced to serialize, so the "read stale
     // pre-image" window cannot open.
-    auto readSome(::ranges::input_range auto keys, storage2::DIRECT_TYPE direct)
-        -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadSome, Storage&,
-            decltype(keys), storage2::DIRECT_TYPE>>>
+    auto readSome(::ranges::input_range auto keys, auto... tags)
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys), decltype(tags)...>>>
     {
-        co_return co_await storage2::readSome(m_storage.get(), std::move(keys), direct);
+        constexpr bool bypassSet =
+            storage2::contains_tag_v<storage2::BYPASS_READ_SET_TYPE, decltype(tags)...>;
+        if constexpr (!bypassSet)
+        {
+            for (auto&& key : keys)
+            {
+                putSet(false, key);
+            }
+        }
+        co_return co_await storage2::readSome(m_storage.get(), std::move(keys), tags...);
     }
 
-    auto readOne(auto key, storage2::DIRECT_TYPE direct) -> task::Task<task::AwaitableReturnType<
-        std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key), storage2::DIRECT_TYPE>>>
+    auto readOne(auto key, auto... tags) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key), decltype(tags)...>>>
     {
-        co_return co_await storage2::readOne(m_storage.get(), std::move(key), direct);
+        constexpr bool bypassSet =
+            storage2::contains_tag_v<storage2::BYPASS_READ_SET_TYPE, decltype(tags)...>;
+        if constexpr (!bypassSet)
+        {
+            putSet(false, key);
+        }
+        co_return co_await storage2::readOne(m_storage.get(), std::move(key), tags...);
     }
 
     auto existsOne(auto key) -> task::Task<task::AwaitableReturnType<

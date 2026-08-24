@@ -20,10 +20,13 @@
  */
 #pragma once
 #include "Exceptions.h"
+#include "Protocol.h"
 #include "ProtocolTypeDef.h"
 #include "bcos-utilities/AnyHolder.h"
+#include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
@@ -50,19 +53,10 @@ public:
     virtual bcos::crypto::HashType hash() const = 0;
     virtual void calculateHash(const crypto::Hash& hashImpl) = 0;
 
-    virtual void populateFromParents(const crypto::Hash& hashImpl,
-        const std::vector<BlockHeader::Ptr>& _parents, BlockNumber _number)
+    virtual void populateFromParents(
+        const crypto::Hash& hashImpl, const BlockHeader& _parent, BlockNumber _number)
     {
-        // set parentInfo
-        ParentInfoList parentInfoList;
-        for (const auto& parentHeader : _parents)
-        {
-            ParentInfo parentInfo;
-            parentInfo.blockNumber = parentHeader->number();
-            parentInfo.blockHash = parentHeader->hash();
-            parentInfoList.emplace_back(parentInfo);
-        }
-        setParentInfo(parentInfoList);
+        setParentInfo(ParentInfo{.blockNumber = _parent.number(), .blockHash = _parent.hash()});
         setNumber(_number);
     }
 
@@ -102,47 +96,93 @@ public:
         setTimestamp(_timestamp);
     }
 
+    // ---- FISCO-BCOS specific methods ----
     virtual uint32_t version() const = 0;
-    virtual ::ranges::any_view<ParentInfo, ::ranges::category::input | ::ranges::category::sized>
-    parentInfo() const = 0;
+    // ethBlockVersion marks the Ethereum fork era of this header (see EthBlockVersion in
+    // Protocol.h). NON_ETH means the header is a native FISCO-BCOS header; values 1..5 select
+    // the mandatory optional fields for the corresponding Ethereum fork.
+    virtual bcos::protocol::EthBlockVersion ethBlockVersion() const = 0;
+    virtual void setEthBlockVersion(bcos::protocol::EthBlockVersion _version) = 0;
+    // Inject a pre-computed Ethereum RLP hash (set by the rlp-protocol layer via
+    // EthBlockHeader::calculateRLPHash). For Eth headers (ethBlockVersion() != NON_ETH)
+    // calculateHash() keeps this value instead of recomputing the FISCO Tars hash.
+    virtual void setRLPHash(bcos::crypto::HashType _hash) = 0;
+    // sealer returns the sealer that generate this block
+    virtual int64_t sealer() const = 0;
+    // sealerList returns the current sealer list
+    virtual gsl::span<const bytes> sealerList() const = 0;
+    virtual gsl::span<const Signature> signatureList() const = 0;
+    virtual gsl::span<const uint64_t> consensusWeights() const = 0;
+
+    virtual void setVersion(uint32_t _version) = 0;
+    virtual void setSealer(int64_t _sealerId) = 0;
+    virtual void setSealerList(gsl::span<const bytes> const& _sealerList) = 0;
+    virtual void setSealerList(std::vector<bytes>&& _sealerList) = 0;
+    virtual void setConsensusWeights(gsl::span<const uint64_t> const& _weightList) = 0;
+    virtual void setConsensusWeights(std::vector<uint64_t>&& _weightList) = 0;
+    virtual void setSignatureList(gsl::span<const Signature> const& _signatureList) = 0;
+    virtual void setSignatureList(SignatureList&& _signatureList) = 0;
+
+    // ---- Shared methods (FISCO ↔ Eth) ----
+    virtual ParentInfo parentInfo() const = 0;
     virtual bcos::crypto::HashType txsRoot() const = 0;
     virtual bcos::crypto::HashType receiptsRoot() const = 0;
     virtual bcos::crypto::HashType stateRoot() const = 0;
     virtual BlockNumber number() const = 0;
     virtual u256 gasUsed() const = 0;
     virtual int64_t timestamp() const = 0;
-    // sealer returns the sealer that generate this block
-    virtual int64_t sealer() const = 0;
-    // sealerList returns the current sealer list
-    virtual gsl::span<const bytes> sealerList() const = 0;
     virtual bytesConstRef extraData() const = 0;
-    virtual gsl::span<const Signature> signatureList() const = 0;
-    virtual gsl::span<const uint64_t> consensusWeights() const = 0;
 
-    virtual void setVersion(uint32_t _version) = 0;
-    virtual void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) = 0;
-
+    virtual void setParentInfo(bcos::protocol::ParentInfo parentInfo) = 0;
     virtual void setTxsRoot(bcos::crypto::HashType _txsRoot) = 0;
     virtual void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) = 0;
     virtual void setStateRoot(bcos::crypto::HashType _stateRoot) = 0;
     virtual void setNumber(BlockNumber _blockNumber) = 0;
     virtual void setGasUsed(u256 _gasUsed) = 0;
     virtual void setTimestamp(int64_t _timestamp) = 0;
-    virtual void setSealer(int64_t _sealerId) = 0;
 
-    virtual void setSealerList(gsl::span<const bytes> const& _sealerList) = 0;
-    virtual void setSealerList(std::vector<bytes>&& _sealerList) = 0;
-
-    virtual void setConsensusWeights(gsl::span<const uint64_t> const& _weightList) = 0;
-    virtual void setConsensusWeights(std::vector<uint64_t>&& _weightList) = 0;
-
-    virtual void setExtraData(bytes const& _extraData) = 0;
-    virtual void setExtraData(bytes&& _extraData) = 0;
-
-    virtual void setSignatureList(gsl::span<const Signature> const& _signatureList) = 0;
-    virtual void setSignatureList(SignatureList&& _signatureList) = 0;
+    virtual void setExtraData(bytes _extraData) = 0;
 
     virtual size_t size() const = 0;
+
+    // ---- Ethereum-specific header field accessors ----
+    virtual bcos::Address coinbase() const = 0;
+    virtual void setCoinbase(bcos::Address _addr) = 0;
+
+    virtual bcos::bytesConstRef logsBloom() const = 0;
+    virtual void setLogsBloom(bcos::bytesConstRef _bloom) = 0;
+
+    virtual u256 gasLimit() const = 0;
+    virtual void setGasLimit(u256 _limit) = 0;
+
+    virtual bcos::h256 prevRandao() const = 0;
+    virtual void setPrevRandao(bcos::h256 _digest) = 0;
+
+    virtual bcos::crypto::HashType uncleHash() const = 0;
+    virtual void setUncleHash(bcos::crypto::HashType _hash) = 0;
+    virtual bcos::u256 difficulty() const = 0;
+    virtual void setDifficulty(bcos::u256 _difficulty) = 0;
+    virtual bcos::h64 nonce() const = 0;
+    virtual void setNonce(bcos::h64 _nonce) = 0;
+
+    // Eth optional fields
+    virtual std::optional<u256> baseFee() const = 0;
+    virtual void setBaseFee(u256 _fee) = 0;
+
+    virtual std::optional<bcos::h256> withdrawalsRoot() const = 0;
+    virtual void setWithdrawalsRoot(bcos::h256 _hash) = 0;
+
+    virtual std::optional<u256> blobGasUsed() const = 0;
+    virtual void setBlobGasUsed(u256 _val) = 0;
+
+    virtual std::optional<u256> excessBlobGas() const = 0;
+    virtual void setExcessBlobGas(u256 _val) = 0;
+
+    virtual std::optional<bcos::h256> parentBeaconBlockRoot() const = 0;
+    virtual void setParentBeaconBlockRoot(bcos::h256 _root) = 0;
+
+    virtual std::optional<bcos::h256> requestsHash() const = 0;
+    virtual void setRequestsHash(bcos::h256 _hash) = 0;
 };
 
 using AnyBlockHeader = AnyHolder<BlockHeader, 72>;  // 多平台BlockHeaderImpl的最大尺寸 (Maximum size

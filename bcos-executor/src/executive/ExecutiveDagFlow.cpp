@@ -3,8 +3,8 @@
 //
 
 #include "ExecutiveDagFlow.h"
+#include "../dag/Abi.h"
 #include "../dag/ClockCache.h"
-#include "../dag/ScaleUtils.h"
 #include "../vm/Precompiled.h"
 #include "TransactionExecutive.h"
 #include <tbb/blocked_range.h>
@@ -269,7 +269,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                             DAGFLOW_LOG(TRACE)
                                 << "generateDags: isParallelPrecompiled " << LOG_KV("address", to);
                             auto criticals = vector<string>(
-                                p->getParallelTag(ref(params->data), blockContext.isWasm()));
+                                p->getParallelTag(ref(params->data)));
                             conflictFields = make_shared<vector<bytes>>();
                             for (string& critical : criticals)
                             {
@@ -347,7 +347,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                                         continue;
                                     }
 
-                                    auto codeHash = entry->getField(0);
+                                    auto codeHash = entry->get();
 
                                     // get abi according to codeHash
                                     auto abiTable =
@@ -367,14 +367,14 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                                         }
                                     }
                                     tmpEntry = std::move(*abiEntry);
-                                    abiStr = tmpEntry.getField(0);
+                                    abiStr = tmpEntry.get();
                                 }
                                 else
                                 {
                                     // old logic
                                     auto entry = table->getRow(ACCOUNT_ABI);
                                     tmpEntry = std::move(*entry);
-                                    abiStr = tmpEntry.getField(0);
+                                    abiStr = tmpEntry.get();
                                 }
                                 bool isSmCrypto = blockContext.hashHandler()->getHashImplType() ==
                                                   crypto::HashImplType::Sm3Hash;
@@ -573,52 +573,14 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
         case Params:
         {
             assert(!conflictField.value.empty());
-            const ParameterAbi* paramAbi = nullptr;
-            const auto* components = &functionAbi.inputs;
-            auto inputData = ref(params.data).getCroppedData(4).toBytes();
-            if (_blockContext.isWasm())
+            auto index = conflictField.value[0];
+            const auto& typeName = functionAbi.flatInputs[index];
+            if (typeName.empty())
             {
-                auto startPos = 0u;
-                for (const auto& segment : conflictField.value)
-                {
-                    if (segment >= components->size())
-                    {
-                        return nullptr;
-                    }
-
-                    for (auto i = 0u; i < segment; ++i)
-                    {
-                        auto length = scaleEncodingLength(components->at(i), inputData, startPos);
-                        if (!length.has_value())
-                        {
-                            return nullptr;
-                        }
-                        startPos += length.value();
-                    }
-                    paramAbi = &components->at(segment);
-                    components = &paramAbi->components;
-                }
-                auto length = scaleEncodingLength(*paramAbi, inputData, startPos);
-                if (!length.has_value())
-                {
-                    return nullptr;
-                }
-                assert(startPos + length.value() <= inputData.size());
-                bytes var(
-                    inputData.begin() + startPos, inputData.begin() + startPos + length.value());
-                criticalKey.insert(criticalKey.end(), var.begin(), var.end());
+                return nullptr;
             }
-            else
-            {  // evm
-                auto index = conflictField.value[0];
-                const auto& typeName = functionAbi.flatInputs[index];
-                if (typeName.empty())
-                {
-                    return nullptr;
-                }
-                auto out = getComponentBytes(index, typeName, ref(params.data).getCroppedData(4));
-                criticalKey.insert(criticalKey.end(), out.begin(), out.end());
-            }
+            auto out = getComponentBytes(index, typeName, ref(params.data).getCroppedData(4));
+            criticalKey.insert(criticalKey.end(), out.begin(), out.end());
             DAGFLOW_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Params`")
                                << LOG_KV("functionName", functionAbi.name)
                                << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));

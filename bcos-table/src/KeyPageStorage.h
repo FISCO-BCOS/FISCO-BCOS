@@ -21,6 +21,7 @@
 #pragma once
 
 #include "StateStorageInterface.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <fmt/format.h>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
@@ -108,9 +109,9 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) override;
 
     void asyncGetRows(std::string_view tableView,
-        ::ranges::any_view<std::string_view,
-            ::ranges::category::input | ::ranges::category::random_access |
-                ::ranges::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::input |
+                                                 ::ranges::category::random_access |
+                                                 ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
         override;
@@ -245,7 +246,7 @@ public:
             }
             boost::iostreams::stream<boost::iostreams::array_source> inputStream(
                 value.data(), value.size());
-            boost::archive::binary_iarchive archive(inputStream, ARCHIVE_FLAG);
+            boost::archive::binary_iarchive archive(inputStream, bcos::storage::serialize::ARCHIVE_FLAG);
             archive >> *this;
         }
         TableMeta(const TableMeta& meta)
@@ -554,7 +555,7 @@ public:
             }
             boost::iostreams::stream<boost::iostreams::array_source> inputStream(
                 value.data(), value.size());
-            boost::archive::binary_iarchive archive(inputStream, ARCHIVE_FLAG);
+            boost::archive::binary_iarchive archive(inputStream, bcos::storage::serialize::ARCHIVE_FLAG);
             archive >> *this;
             if (pageKey != entries.rbegin()->first)
             {
@@ -1044,7 +1045,7 @@ public:
                 auto value = std::make_shared<std::vector<uint8_t>>(len, 0);
                 ar.load_binary(value->data(), value->size());
                 Entry e;
-                e.setPointer(std::move(value));
+                e.set(std::move(value));
                 e.setStatus(Entry::Status::NORMAL);
                 iter = entries.emplace_hint(iter, std::move(key), std::move(e));
             }

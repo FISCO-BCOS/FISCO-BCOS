@@ -14,12 +14,13 @@
  *  limitations under the License.
  *
  * @file FIB98_EarlyAbortTest.cpp
- * @brief Verify that executeStep1 aborts early when m_hasRAW is set (FIB-98)
+ * @brief Verify that createContexts aborts early when m_hasRAW is set (FIB-98)
  */
 
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "TrivialCheckpointStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
@@ -48,11 +49,9 @@ struct CountingExecutor
     template <class Storage>
     struct ExecuteContext
     {
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
-        {
-            co_return {};
-        }
+        task::Task<void> prepare() { co_return; }
+        task::Task<void> execute() { co_return; }
+        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
@@ -82,26 +81,30 @@ public:
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
+    using CheckpointBackend =
+        TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
 
     FIB98Fixture()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         receiptFactory(cryptoSuite),
-        multiLayerStorage(backendStorage)
+        checkpointBackend(backendStorage),
+        multiLayerStorage(checkpointBackend)
     {}
 
-    BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
-    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+    BackendStorage backendStorage;
+    CheckpointBackend checkpointBackend;
+    MultiLayerStorage<MutableStorage, void, CheckpointBackend> multiLayerStorage;
 };
 
 BOOST_FIXTURE_TEST_SUITE(FIB98_EarlyAbortTest, FIB98Fixture)
 
-BOOST_AUTO_TEST_CASE(executeStep1AbortsWhenHasRAWIsSet)
+BOOST_AUTO_TEST_CASE(createContextsAbortsWhenHasRAWIsSet)
 {
     // This test constructs a ChunkStatus directly and verifies that
-    // executeStep1 stops creating ExecuteContext objects once the
+    // createContexts stops creating ExecuteContext objects once the
     // hasRAW flag has been set prior to the call.
 
     task::syncWait([&, this]() -> task::Task<void> {
@@ -128,22 +131,23 @@ BOOST_AUTO_TEST_CASE(executeStep1AbortsWhenHasRAWIsSet)
 
         using ContextIterator = ::ranges::iterator_t<decltype(contexts)>;
         using ContextRange = ::ranges::subrange<ContextIterator>;
-        using ViewType = decltype(view);
-        using ChunkType = ChunkStatus<MutableStorage, ViewType, CountingExecutor, ContextRange>;
+        using BackendStorageType =
+            std::remove_reference_t<decltype(view.backendStorageRef())>;
+        using ChunkType =
+            ChunkStatus<MutableStorage, BackendStorageType, CountingExecutor, ContextRange>;
 
-        // Case 1: hasRAW already set before calling executeStep1 -- expect zero contexts created.
+        // Case 1: hasRAW already set before calling createContexts -- expect zero contexts created.
         {
             boost::atomic_flag hasRAW;
             hasRAW.test_and_set();  // Set the flag BEFORE creating the chunk
 
             ContextRange contextRange(contexts);
             executor.createCount.store(0);
-            ChunkType chunk(0, hasRAW, contextRange, executor, view);
+            ChunkType chunk(0, hasRAW, contextRange, executor, view.backendStorageRef());
 
-            bcostars::protocol::BlockHeaderImpl blockHeader(
-                [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+            bcostars::protocol::BlockHeaderImpl blockHeader;
             ledger::LedgerConfig ledgerConfig;
-            co_await chunk.executeStep1(blockHeader, ledgerConfig);
+            co_await chunk.createContexts(blockHeader, ledgerConfig);
 
             BOOST_CHECK_EQUAL(executor.createCount.load(), 0);
         }
@@ -154,12 +158,11 @@ BOOST_AUTO_TEST_CASE(executeStep1AbortsWhenHasRAWIsSet)
 
             ContextRange contextRange(contexts);
             executor.createCount.store(0);
-            ChunkType chunk(0, hasRAW, contextRange, executor, view);
+            ChunkType chunk(0, hasRAW, contextRange, executor, view.backendStorageRef());
 
-            bcostars::protocol::BlockHeaderImpl blockHeader(
-                [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+            bcostars::protocol::BlockHeaderImpl blockHeader;
             ledger::LedgerConfig ledgerConfig;
-            co_await chunk.executeStep1(blockHeader, ledgerConfig);
+            co_await chunk.createContexts(blockHeader, ledgerConfig);
 
             BOOST_CHECK_EQUAL(executor.createCount.load(), TX_COUNT);
         }

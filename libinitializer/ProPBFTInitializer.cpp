@@ -21,15 +21,10 @@
 #include "ProPBFTInitializer.h"
 #include "Common.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
-#include "bcos-utilities/Exceptions.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
-#include <bcos-pbft/pbft/PBFTImpl.h>
-#include <bcos-sealer/Sealer.h>
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
-#include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
-#include <boost/throw_exception.hpp>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -43,11 +38,13 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::storage::StorageInterface::Ptr _storage,
     std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
-    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
+    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
+    bcos::IOServicePool::Ptr _ioServicePool)
   : PBFTInitializer(_nodeArchType, _nodeConfig, _protocolInitializer, _txpool, _ledger, _scheduler,
-        _storage, _frontService, _nodeTimeMaintenance)
+        _storage, _frontService, _nodeTimeMaintenance, _ioServicePool)
 {
-    m_timer = std::make_shared<Timer>(m_timerSchedulerInterval, "node info report");
+    m_timer = std::make_shared<Timer>(
+        *_ioServicePool->getIOService(), m_timerSchedulerInterval, "node info report");
 
     std::vector<tars::TC_Endpoint> endPoints;
     auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
@@ -135,7 +132,7 @@ void ProPBFTInitializer::onGroupInfoChanged()
 
 void ProPBFTInitializer::init()
 {
-    m_timer->registerTimeoutHandler(boost::bind(&ProPBFTInitializer::scheduledTask, this));
+    m_timer->registerTimeoutHandler([this]() { scheduledTask(); });
     m_blockSync->config()->registerOnNodeTypeChanged([this](bcos::protocol::NodeType _type) {
         INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange") << LOG_KV("type", _type)
                               << LOG_KV("nodeName", m_nodeConfig->nodeName());

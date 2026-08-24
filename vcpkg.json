@@ -34,7 +34,8 @@
     "fakeit",
     "tbb",
     "jsoncpp",
-    "gmp",
+    "jwt-cpp",
+    "evmc",
     "curl",
     "tomlplusplus",
     {
@@ -43,7 +44,6 @@
     },
     "fmt",
     "secp256k1",
-    "evmc",
     {
       "name": "aws-sdk-cpp",
       "features": [
@@ -53,6 +53,7 @@
     "wedprcrypto",
     "range-v3",
     "rapidhash",
+    "proxy",
     "hsm-crypto",
     {
       "name": "tarscpp",
@@ -74,8 +75,18 @@
         },
         "zstd",
         "cryptopp",
-        "redis-plus-plus",
-        "tarscpp"
+        "tarscpp",
+        "blst",
+        "ittapi",
+        "gmp",
+        "group-sig",
+        "paillier"
+      ]
+    },
+    "tikv": {
+      "description": "TiKV storage backend dependencies",
+      "dependencies": [
+        "tikv-client-cpp"
       ]
     },
     "lightnode": {
@@ -88,7 +99,6 @@
             "tbb"
           ]
         },
-        "redis-plus-plus",
         "zstd",
         "tarscpp"
       ]
@@ -100,7 +110,8 @@
         "benchmark",
         "zlib",
         "tarscpp",
-        "hsm-crypto"
+        "hsm-crypto",
+        "ethereum-tests"
       ]
     },
     "etcd": {

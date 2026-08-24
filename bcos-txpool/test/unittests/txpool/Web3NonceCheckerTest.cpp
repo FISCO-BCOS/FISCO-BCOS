@@ -25,10 +25,6 @@
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <memory>
-#include <range/v3/all.hpp>
-#include <range/v3/view/enumerate.hpp>
-#include <range/v3/view/transform.hpp>
-#include <ranges>
 #include <set>
 #include <thread>
 #include <unordered_map>

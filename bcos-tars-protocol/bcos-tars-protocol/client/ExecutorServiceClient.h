@@ -22,7 +22,7 @@
 
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-tars-protocol/tars/ExecutorService.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 
 namespace bcostars
 {
@@ -30,7 +30,7 @@ class ExecutorServiceClient : public bcos::executor::ParallelTransactionExecutor
 {
 public:
     using Ptr = std::shared_ptr<ExecutorServiceClient>;
-    ExecutorServiceClient(ExecutorServicePrx _prx);
+    ExecutorServiceClient(ExecutorServicePrx _prx, bcos::IOServicePool::Ptr ioServicePool = nullptr);
     ~ExecutorServiceClient() override;
 
     void status(
@@ -98,12 +98,12 @@ public:
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override;
-    bcos::task::Task<optional<bcos::storage::Entry>> getPendingStorageAt(std::string_view address,
+    bcos::task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(std::string_view address,
         std::string_view key, bcos::protocol::BlockNumber number) override;
     void updateEoaNonce(std::unordered_map<std::string, bcos::u256> const&) override;
 
 private:
     ExecutorServicePrx m_prx;
-    bcos::ThreadPool::Ptr m_callbackPool;
+    bcos::IOServicePool::Ptr m_callbackPool;
 };
 }  // namespace bcostars

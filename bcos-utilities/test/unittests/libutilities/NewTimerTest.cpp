@@ -31,7 +31,10 @@ BOOST_FIXTURE_TEST_SUITE(TimerTest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(testTimer)
 {
-    timer::TimerFactory timerFactory;
+    auto ioContext = std::make_shared<boost::asio::io_context>();
+    auto workGuard = boost::asio::make_work_guard(*ioContext);
+    std::thread ioThread([&ioContext] { ioContext->run(); });
+    timer::TimerFactory timerFactory(ioContext);
 
     {
         auto timer = timerFactory.createTimer([] {}, 0, 0);
@@ -57,29 +60,33 @@ BOOST_AUTO_TEST_CASE(testTimer)
 
     {
         int count = 0;
-        auto timer = timerFactory.createTimer([&count] { count++; }, 1000, 0);
+        auto timer = timerFactory.createTimer([&count] { count++; }, 100, 0);
         timer->start();
 
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
         BOOST_CHECK_EQUAL(timer->delayMS(), 0);
-        BOOST_CHECK_EQUAL(timer->periodMS(), 1000);
+        BOOST_CHECK_EQUAL(timer->periodMS(), 100);
         BOOST_CHECK_GE(count, 2);
         timer->stop();
     }
 
     {
         int count = 0;
-        auto timer = timerFactory.createTimer([&count] { count++; }, 1000, 10000);
+        auto timer = timerFactory.createTimer([&count] { count++; }, 100, 200);
         timer->start();
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(12000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        BOOST_CHECK_EQUAL(timer->delayMS(), 10000);
-        BOOST_CHECK_EQUAL(timer->periodMS(), 1000);
+        BOOST_CHECK_EQUAL(timer->delayMS(), 200);
+        BOOST_CHECK_EQUAL(timer->periodMS(), 100);
         BOOST_CHECK_GE(count, 1);
         timer->stop();
     }
+
+    workGuard.reset();
+    ioContext->stop();
+    ioThread.join();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

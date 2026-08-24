@@ -17,7 +17,9 @@
  * @file Transaction.h
  */
 #pragma once
+#include "Authorization.h"
 #include "TransactionSubmitResult.h"
+#include "Web3AccessList.h"
 #include "bcos-utilities/AnyHolder.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/Signature.h>
@@ -86,6 +88,28 @@ public:
     virtual bcos::crypto::HashType hash() const = 0;
     virtual bcos::bytesConstRef extraTransactionBytes() const = 0;
 
+    /// EIP-2718 typed tx kind when type()==Web3Transaction (see bcos::rpc::TransactionType). 0 if
+    /// unset.
+    virtual uint8_t web3TypedTxKind() const { return 0; }
+    /// deposit-only (0x7e) tx metadata (OP Stack). Empty/false when not a deposit.
+    virtual std::string_view sourceHash() const { return {}; }
+    virtual u256 mint() const { return {}; }
+    virtual bool isDepositTx() const { return false; }
+    /// deposit-only RLP field (tars field 15). Distinct from systemTx() (the BCOS m_systemTx flag).
+    virtual bool depositIsSystemTransaction() const { return false; }
+    /// Parsed access list when populated at submission (may be empty for non-EIP-2930 Web3 txs).
+    virtual Web3AccessList web3AccessList() const;
+
+    /// EIP-7702 authorization list (Prague+ set_code transactions).
+    /// Returns empty vector for non-set_code transactions.
+    virtual AuthorizationList authorizationList() const;
+
+    /// EIP-4844 blob versioned hashes (Cancun+ blob transactions, type 3).
+    virtual VersionedHashes blobVersionedHashes() const;
+
+    /// EIP-4844 max fee per blob gas (type 3 blob transactions).
+    virtual std::optional<u256> maxFeePerBlobGas() const;
+
     virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl);
 
     virtual int32_t version() const = 0;
@@ -99,11 +123,11 @@ public:
     virtual std::string_view abi() const = 0;
 
     // balance
-    virtual std::string_view value() const = 0;
-    virtual std::string_view gasPrice() const = 0;
+    virtual u256 value() const = 0;
+    virtual std::optional<u256> gasPrice() const = 0;
     virtual int64_t gasLimit() const = 0;
-    virtual std::string_view maxFeePerGas() const = 0;
-    virtual std::string_view maxPriorityFeePerGas() const = 0;
+    virtual std::optional<u256> maxFeePerGas() const = 0;
+    virtual std::optional<u256> maxPriorityFeePerGas() const = 0;
 
     // v2
     virtual bcos::bytesConstRef extension() const = 0;
@@ -197,26 +221,7 @@ private:
 //   pre-EIP-1559 types)
 // - EIP-1559+ web3 txs: gasPrice field is empty, value is in maxFeePerGas
 // Returns 0 when no parseable price is available.
-inline u256 effectiveGasPrice(Transaction const& tx)
-{
-    try
-    {
-        if (const auto price = tx.gasPrice(); !price.empty())
-        {
-            if (auto value = u256(price); value > 0)
-            {
-                return value;
-            }
-        }
-        if (const auto mfg = tx.maxFeePerGas(); !mfg.empty())
-        {
-            return u256(mfg);
-        }
-    }
-    catch (...)
-    {}
-    return u256{0};
-}
+u256 effectiveGasPrice(Transaction const& tx);
 
 using Transactions = std::vector<Transaction::Ptr>;
 using TransactionsPtr = std::shared_ptr<Transactions>;
@@ -224,7 +229,7 @@ using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
 using AnyTransaction =
-    AnyHolder<bcos::protocol::Transaction, 184>;  // 多平台TransactinImpl的最大尺寸 (Maximum size of
+    AnyHolder<bcos::protocol::Transaction, 224>;  // (Maximum size of
                                                   // TransactinImpl across platforms)
 
 std::ostream& operator<<(std::ostream& stream, const Transaction& transaction);

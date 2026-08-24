@@ -28,9 +28,9 @@
 #include "Common.h"
 #include "Entry.h"
 #include <bcos-utilities/Error.h>
-#include <range/v3/view/any_view.hpp>
 #include <memory>
 #include <optional>
+#include <range/v3/view/any_view.hpp>
 #include <string>
 #include <variant>
 
@@ -58,9 +58,9 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) = 0;
 
     virtual void asyncGetRows(std::string_view table,
-        ::ranges::any_view<std::string_view,
-            ::ranges::category::input | ::ranges::category::random_access |
-                ::ranges::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::input |
+                                                 ::ranges::category::random_access |
+                                                 ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) = 0;
 
@@ -105,7 +105,14 @@ public:
         return result;
     };
 
-    virtual void stop() {};
+    /// True when every async* method invokes its callback inline (before returning),
+    /// i.e. the backend is a synchronous local store. The storage2 bridge completes
+    /// co_awaits on such backends without suspension — a suspending round-trip per
+    /// row would nest one resume per sequential operation and overflow the stack on
+    /// large sequential imports (fresh-genesis allocs: ~20k rows deep).
+    virtual bool isSynchronousCompletion() const noexcept { return false; }
+
+    virtual void stop(){};
 };
 
 class TraverseStorageInterface : public virtual StorageInterface

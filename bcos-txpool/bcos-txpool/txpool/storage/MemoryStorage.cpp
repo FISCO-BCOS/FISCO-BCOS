@@ -20,6 +20,7 @@
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-task/Wait.h"
@@ -51,14 +52,14 @@ using namespace bcos::txpool;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
-MemoryStorage::MemoryStorage(
-    TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
+MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, boost::asio::io_context& _ioContext,
+    size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
   : m_config(std::move(_config)),
     m_bcosTransactions(BcosTransactions(BUCKET_SIZE)),
     m_blockNumberUpdatedTime(utcTime()),
     m_txsExpirationTime(_txsExpirationTime),
-    m_cleanUpTimer(std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer")),
-    m_txsSizeNotifierTimer(std::make_shared<Timer>(TXS_SIZE_NOTIFY_TIME, "txsNotifier"))
+    m_cleanUpTimer(std::make_shared<Timer>(_ioContext, TXPOOL_CLEANUP_TIME, "txpoolTimer")),
+    m_txsSizeNotifierTimer(std::make_shared<Timer>(_ioContext, TXS_SIZE_NOTIFY_TIME, "txsNotifier"))
 {
     // Trigger a transaction cleanup operation every 3s
     m_cleanUpTimer->registerTimeoutHandler([this] { cleanUpExpiredTransactions(); });
@@ -387,6 +388,20 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         if (result != TransactionStatus::None)
         {
             return result;
+        }
+    }
+
+    // OP Stack type gate (classic txpool path — p2p sync, tars RPC).
+    // Deposit (0x7E), blob (type-3), and unknown EIP-2718 types are rejected here.
+    // The engine-mode path (MemPoolImpl::add) has its own gate; this is the only admission
+    // point for the classic txpool.
+    if (transaction->type() ==
+        static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        auto kind = bcos::engine::dispatchRawTransaction(transaction->extraTransactionBytes());
+        if (!bcos::engine::isRawTransactionPayloadAdmissible(kind))
+        {
+            return TransactionStatus::Malformed;
         }
     }
 
@@ -967,7 +982,7 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
                     foundInFromMap = true;
                 }
                 else if (TxsMap::ReadAccessor toAccessor;
-                    toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
+                         toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
                 {
                     transaction = toAccessor.value();
                 }

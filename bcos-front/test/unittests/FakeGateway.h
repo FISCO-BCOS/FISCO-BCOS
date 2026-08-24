@@ -24,7 +24,7 @@
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/asio.hpp>
 #include <boost/core/ignore_unused.hpp>
 
@@ -36,7 +36,7 @@ class FakeGateway : public gateway::GatewayInterface,
 public:
     virtual ~FakeGateway() {}
 
-    std::shared_ptr<FrontServiceInterface> m_frontService;
+    std::weak_ptr<FrontServiceInterface> m_frontService;
     void setFrontService(std::shared_ptr<FrontServiceInterface> _frontService)
     {
         m_frontService = _frontService;

@@ -43,7 +43,7 @@ class ServiceInfo:
     executor_service = "BcosExecutorService"
     executor_service_obj = ["ExecutorServiceObj"]
 
-    supported_vm_types = ["evm", "wasm"]
+    supported_vm_types = ["evm"]
     supported_consensus_list = ["pbft"]
     tars_pkg_postfix = ".tgz"
     default_listen_ip = "0.0.0.0"

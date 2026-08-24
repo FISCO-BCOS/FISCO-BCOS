@@ -96,10 +96,12 @@ inline PBFTMessageInterface::Ptr makeExceptionPrePrepare(
 class MinimalPBFTConfig : public PBFTConfig
 {
 public:
-    MinimalPBFTConfig(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr _keyPair,
-        std::shared_ptr<ValidatorInterface> _validator,
+    // PBFTConfig takes the io_context its timers run on as the first argument now (it used to
+    // create its own Timer threads); the test owns it and passes it in.
+    MinimalPBFTConfig(boost::asio::io_context& _ioContext, CryptoSuite::Ptr _cryptoSuite,
+        KeyPairInterface::Ptr _keyPair, std::shared_ptr<ValidatorInterface> _validator,
         std::shared_ptr<FrontServiceInterface> _frontService, BlockFactory::Ptr _blockFactory)
-      : PBFTConfig(std::move(_cryptoSuite), std::move(_keyPair),
+      : PBFTConfig(_ioContext, std::move(_cryptoSuite), std::move(_keyPair),
             std::make_shared<PBFTMessageFactoryImpl>(), nullptr, std::move(_validator),
             std::move(_frontService), nullptr, nullptr, std::move(_blockFactory))
     {}
@@ -120,8 +122,9 @@ BOOST_AUTO_TEST_CASE(adjacent_stale_entries_both_reset)
     auto validator = std::make_shared<CountingValidator>(txPool, blockFactory, txResultFactory);
     auto frontService = std::make_shared<FakeFrontService>(keyPair->publicKey());
 
+    boost::asio::io_context ioContext;
     auto config = std::make_shared<MinimalPBFTConfig>(
-        cryptoSuite, keyPair, validator, frontService, blockFactory);
+        ioContext, cryptoSuite, keyPair, validator, frontService, blockFactory);
 
     auto cache = std::make_shared<PBFTCache>(config, /*index*/ 10);
 

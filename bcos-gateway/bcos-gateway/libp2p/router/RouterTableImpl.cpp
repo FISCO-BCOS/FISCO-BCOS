@@ -19,10 +19,8 @@
  */
 #include "RouterTableImpl.h"
 #include "../Common.h"
-#include "../P2PSession.h"
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-utilities/BoostLog.h"
-#include <boost/algorithm/string/join.hpp>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -137,7 +135,8 @@ RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable()
     return std::make_shared<RouterTable>();
 }
 
-RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable(bcos::bytesConstRef _decodedData)
+RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable(
+    bcos::bytesConstRef _decodedData)
 {
     return std::make_shared<RouterTable>(_decodedData);
 }

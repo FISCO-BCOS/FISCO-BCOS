@@ -23,7 +23,6 @@
 #pragma once
 
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/ObjectCounter.h"
 #include "bcos-utilities/ratelimiter/RateLimiterInterface.h"
 #include <mutex>
 
@@ -31,8 +30,7 @@
 namespace bcos::ratelimiter
 {
 
-class TimeWindowRateLimiter : public RateLimiterInterface,
-                              public bcos::ObjectCounter<TimeWindowRateLimiter>
+class TimeWindowRateLimiter : public RateLimiterInterface
 {
 public:
     using Ptr = std::shared_ptr<TimeWindowRateLimiter>;

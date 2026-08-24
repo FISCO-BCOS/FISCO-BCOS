@@ -28,9 +28,8 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-rpc/validator/CallValidator.h>
-#include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <json/json.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -131,6 +130,9 @@ BOOST_AUTO_TEST_CASE(smVerifyTest)
 }
 
 
+// Historically named for WASM, but this covers CallValidator against a BFS *path*
+// (/sys/status) rather than a hex address. BFS paths outlive WASM removal, so the
+// case is still meaningful on an EVM-only chain.
 BOOST_AUTO_TEST_CASE(wasmTest)
 {
     h256 fixedSec1("bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd");

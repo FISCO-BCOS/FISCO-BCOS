@@ -20,15 +20,11 @@
  */
 
 #include "BlockContext.h"
-#include "../vm/Precompiled.h"
-#include "TransactionExecutive.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-task/Wait.h"
-#include <boost/core/ignore_unused.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/throw_exception.hpp>
+#include <bcos-framework/storage/Serialize.h>
 #include <string>
 #include <utility>
 
@@ -40,16 +36,15 @@ using namespace std;
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
     bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-    uint32_t blockVersion, bool _isWasm, bool _isAuthCheck,
-    storage::StorageInterface::Ptr backendStorage)
+    uint32_t blockVersion, bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage)
   : m_blockNumber(blockNumber),
     m_blockHash(blockHash),
     m_timeStamp(timestamp),
     m_blockVersion(blockVersion),
-    m_isWasm(_isWasm),
     m_isAuthCheck(_isAuthCheck),
     m_storage(std::move(storage)),
     m_transientStorageMap(std::make_shared<transientStorageMap>(10)),
+    m_eip2929AccessMap(std::make_shared<Eip2929AccessMap>(10)),
     m_hashImpl(std::move(_hashImpl)),
     m_ledgerCache(std::move(ledgerCache)),
     m_backendStorage(std::move(backendStorage))
@@ -67,17 +62,15 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl, protocol::BlockHeader const& current,
-    bool _isWasm, bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage,
+    bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage,
     std::shared_ptr<std::set<std::string, std::less<>>> _keyPageIgnoreTables)
   : BlockContext(std::move(storage), std::move(ledgerCache), std::move(_hashImpl), current.number(),
-        current.hash(), current.timestamp(), current.version(), _isWasm, _isAuthCheck,
+        current.hash(), current.timestamp(), current.version(), _isAuthCheck,
         std::move(backendStorage))
 {
-    if (current.number() > 0 && !current.parentInfo().empty())
+    if (current.number() > 0)
     {
-        auto view = current.parentInfo();
-        auto it = view.begin();
-        m_parentHash = (*it).blockHash;
+        m_parentHash = current.parentInfo().blockHash;
     }
 
     m_keyPageIgnoreTables = std::move(_keyPageIgnoreTables);
@@ -90,7 +83,8 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
             auto entry = table->getRow(key);
             if (entry)
             {
-                auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
+                auto [value, enableNumber] =
+                    bcos::storage::serialize::decode<ledger::SystemConfigEntry>(entry->get());
                 if (current.number() >= enableNumber)
                 {
                     m_features.set(key);
@@ -127,7 +121,15 @@ void BlockContext::setExecutiveFlow(
 }
 void BlockContext::setVMSchedule()
 {
-    if (m_features.get(ledger::Features::Flag::feature_evm_cancun))
+    if (m_features.get(ledger::Features::Flag::feature_evm_osaka))
+    {
+        m_schedule = FiscoBcosScheduleOsaka;
+    }
+    else if (m_features.get(ledger::Features::Flag::feature_evm_prague))
+    {
+        m_schedule = FiscoBcosSchedulePrague;
+    }
+    else if (m_features.get(ledger::Features::Flag::feature_evm_cancun))
     {
         m_schedule = FiscoBcosScheduleCancun;
     }
@@ -213,12 +215,12 @@ void BlockContext::killSuicides()
         {
             // set codeHash
             bcos::storage::Entry emptyCodeHashEntry;
-            emptyCodeHashEntry.importFields({emptyCodeHash.asBytes()});
+            emptyCodeHashEntry.set(emptyCodeHash.asBytes());
             contractTable->setRow(ACCOUNT_CODE_HASH, std::move(emptyCodeHashEntry));
 
             // delete binary
             bcos::storage::Entry emptyCodeEntry;
-            emptyCodeEntry.importFields({""});
+            emptyCodeEntry.set("");
             contractTable->setRow(ACCOUNT_CODE, std::move(emptyCodeEntry));
         }
 

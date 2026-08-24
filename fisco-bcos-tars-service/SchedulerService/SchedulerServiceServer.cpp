@@ -51,11 +51,11 @@ bcostars::Error SchedulerServiceServer::call(
 }
 
 bcostars::Error SchedulerServiceServer::getCode(
-    const std::string& contract, vector<tars::Char>& code, tars::TarsCurrentPtr current)
+    const std::string& contract, std::vector<tars::Char>& code, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     m_scheduler->getCode(contract, [current](bcos::Error::Ptr error, bcos::bytes code) {
-        vector<tars::Char> outCode(code.begin(), code.end());
+        std::vector<tars::Char> outCode(code.begin(), code.end());
 
         async_response_getCode(current, toTarsError(error), outCode);
     });
@@ -96,7 +96,7 @@ bcostars::Error SchedulerServiceServer::commitBlock(
 {
     _current->setResponse(false);
     auto bcosHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_header = _header]() mutable { return &m_header; });
+        std::make_shared<bcostars::BlockHeader>(_header));
     m_scheduler->commitBlock(bcosHeader,
         [_current](bcos::Error::Ptr&& _error, bcos::ledger::LedgerConfig::Ptr&& _bcosLedgerConfig) {
             async_response_commitBlock(

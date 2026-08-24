@@ -72,7 +72,7 @@ void Service::start()
             auto service = self.lock();
             if (service)
             {
-                service->onConnect(e, p2pInfo, std::move(session));
+                service->onConnect(std::move(e), p2pInfo, std::move(session));
             }
         });
         m_host->start();

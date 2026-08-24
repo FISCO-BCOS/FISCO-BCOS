@@ -86,9 +86,27 @@ public:
 
     void final(std::span<std::byte> output);
 
+    // One-shot hash: update + final in a single call. Convenience for callers that hash a
+    // self-contained buffer rather than streaming multiple chunks.
+    void hash(auto const& input, auto& output)
+    {
+        update(input);
+        final(output);
+    }
+
     AnyHasher clone() const;
     size_t hashSize() const;
 };
 
 static_assert(Hasher<AnyHasher>, "Not a valid Hasher!");
+
+// Generic one-shot hash helper: update + final in a single call. Works with any type
+// satisfying the Hasher concept (AnyHasher, OpenSSLHasher<...>, mock test hashers, ...).
+template <Hasher H, typename Input, typename Output>
+void hash(H& hasher, Input const& input, Output& output)
+{
+    hasher.update(input);
+    hasher.final(output);
+}
+
 }  // namespace bcos::crypto::hasher

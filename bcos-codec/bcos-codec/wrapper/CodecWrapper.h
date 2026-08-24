@@ -21,8 +21,6 @@
 #pragma once
 
 #include "bcos-codec/abi/ContractABICodec.h"
-#include "bcos-codec/scale/ScaleDecoderStream.h"
-#include "bcos-codec/scale/ScaleEncoderStream.h"
 #include "bcos-utilities/Overloaded.h"
 
 namespace bcos
@@ -33,99 +31,42 @@ class RLPWrapper
 {
 };
 }  // namespace codec::rlp
-enum VMType
-{
-    EVM,
-    WASM,
-    UNDEFINED
-};
 class CodecWrapper
 {
 public:
     using Ptr = std::shared_ptr<CodecWrapper>;
-    CodecWrapper(const crypto::Hash& _hash, bool _isWasm)
-      : m_type(_isWasm ? VMType::WASM : VMType::EVM), m_hash(std::addressof(_hash))
-    {}
-    CodecWrapper(crypto::Hash::Ptr _hash, bool _isWasm)
-      : m_type(_isWasm ? VMType::WASM : VMType::EVM), m_hash(std::move(_hash))
-    {}
+    explicit CodecWrapper(const crypto::Hash& _hash) : m_hash(std::addressof(_hash)) {}
+    explicit CodecWrapper(crypto::Hash::Ptr _hash) : m_hash(std::move(_hash)) {}
     template <typename... Args>
     bytes encode(Args&&... _args) const
     {
-        assert(m_type != VMType::UNDEFINED);
-        if (m_type == VMType::EVM)
-        {
-            // Note: the codec is not thread-safe, so we can't share this object
-            codec::abi::ContractABICodec abi(hash());
-            return abi.abiIn("", _args...);
-        }
-
-        codec::scale::ScaleEncoderStream s;
-        (s << ... << std::forward<Args>(_args));
-        return s.data();
+        // Note: the codec is not thread-safe, so we can't share this object
+        codec::abi::ContractABICodec abi(hash());
+        return abi.abiIn("", _args...);
     }
     template <typename... Args>
     bytes encodeWithSig(const std::string& _sig, Args&&... _args) const
     {
-        assert(m_type != VMType::UNDEFINED);
-        if (m_type == VMType::EVM)
-        {
-            // Note: the codec is not thread-safe, so we can't share this object
-            codec::abi::ContractABICodec abi(hash());
-            return abi.abiIn(_sig, _args...);
-        }
-
-        codec::scale::ScaleEncoderStream s;
-        (s << ... << std::forward<Args>(_args));
-        return hash().hash(_sig).ref().getCroppedData(0, 4).toBytes() + s.data();
+        // Note: the codec is not thread-safe, so we can't share this object
+        codec::abi::ContractABICodec abi(hash());
+        return abi.abiIn(_sig, _args...);
     }
 
     bytes encodeWithSig(const std::string& _sig) const
     {
-        assert(m_type != VMType::UNDEFINED);
-        if (m_type == VMType::EVM)
-        {
-            // Note: the codec is not thread-safe, so we can't share this object
-            codec::abi::ContractABICodec abi(hash());
-            return abi.abiIn(_sig);
-        }
-
-        codec::scale::ScaleEncoderStream s;
-        return hash().hash(_sig).ref().getCroppedData(0, 4).toBytes() + s.data();
+        // Note: the codec is not thread-safe, so we can't share this object
+        codec::abi::ContractABICodec abi(hash());
+        return abi.abiIn(_sig);
     }
 
     template <typename... T>
     void decode(bytesConstRef _data, T&... _t) const
     {
-        assert(m_type != VMType::UNDEFINED);
-        if (m_type == VMType::EVM)
-        {
-            codec::abi::ContractABICodec abi(hash());
-            abi.abiOut(_data, _t...);
-        }
-        else if (m_type == VMType::WASM)
-        {
-            auto&& t = _data.toBytes();
-            codec::scale::ScaleDecoderStream stream(gsl::make_span(t));
-            decodeScale(stream, _t...);
-        }
+        codec::abi::ContractABICodec abi(hash());
+        abi.abiOut(_data, _t...);
     }
-    template <typename T, typename... U>
-    void decodeScale(codec::scale::ScaleDecoderStream& _s, T& _t, U&... _u) const
-    {
-        _s >> _t;
-        decodeScale(_s, _u...);
-    }
-    template <typename T>
-    void decodeScale(codec::scale::ScaleDecoderStream& _s, T& _t) const
-    {
-        _s >> _t;
-    }
-
-    void decodeScale(codec::scale::ScaleDecoderStream&) const {}
 
 private:
-    VMType m_type = VMType::UNDEFINED;
     std::variant<const crypto::Hash*, crypto::Hash::Ptr> m_hash;
 
     const crypto::Hash& hash() const

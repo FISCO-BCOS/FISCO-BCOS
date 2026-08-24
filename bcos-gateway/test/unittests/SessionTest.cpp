@@ -23,7 +23,7 @@
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
-#include "bcos-utilities/ThreadPool.h"
+#include <bcos-utilities/IOServicePool.h>
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -41,7 +41,10 @@ class FakeASIO : public bcos::gateway::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
-    FakeASIO() : m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO", 1)) {};
+    FakeASIO()
+      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
+        m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"))
+    {};
     virtual ~FakeASIO() noexcept override {};
 
     void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers,
@@ -76,7 +79,7 @@ public:
     void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
         boost::asio::mutable_buffer buffers, ReadWriteHandler handler) override
     {
-        m_threadPool->enqueue([this, socket, buffers, handler]() {
+        m_threadPool->post([this, socket, buffers, handler]() {
             if (m_recvPackets.empty())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -86,31 +89,19 @@ public:
             readSome(socket, buffers, handler);
         });
     }
-    void strandPost(Base_Handler handler) override { m_handler = handler; }
-    void stop() override { m_threadPool->stop(); }
+    void stop() { m_threadPool.reset(); }
 
 public:  // for testing
     void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
 
     void asyncAppendRecvPacket(Packet packet)
     {
-        m_threadPool->enqueue([this, packet]() { appendRecvPacket(packet); });
-    }
-
-    void triggerRead()
-    {
-        m_threadPool->enqueue([this]() {
-            if (m_handler)
-            {
-                m_handler();
-            }
-        });
+        m_threadPool->post([this, packet]() { appendRecvPacket(packet); });
     }
 
 protected:
-    Base_Handler m_handler;
     std::queue<Packet> m_recvPackets;
-    bcos::ThreadPool::Ptr m_threadPool;
+    bcos::IOServicePool::Ptr m_threadPool;
 };
 
 class FakeP2PMessage : public P2PMessage
@@ -247,8 +238,19 @@ public:
 class FakeSocket : public SocketFace
 {
 public:
-    FakeSocket() : SocketFace() {};
-    ~FakeSocket() override = default;
+    FakeSocket() : SocketFace(), m_workGuard(boost::asio::make_work_guard(m_ioService))
+    {
+        m_worker = std::thread([this]() { m_ioService.run(); });
+    };
+    ~FakeSocket() override
+    {
+        m_workGuard.reset();
+        m_ioService.stop();
+        if (m_worker.joinable())
+        {
+            m_worker.join();
+        }
+    }
     bool isConnected() const override { return true; }
     void close() override {}
     boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code ec) override
@@ -268,6 +270,8 @@ public:
 private:
     std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
     ba::io_context m_ioService;
+    boost::asio::executor_work_guard<ba::io_context::executor_type> m_workGuard;
+    std::thread m_worker;
     NodeIPEndpoint m_nodeIPEndpoint;
 };
 
@@ -306,8 +310,8 @@ BOOST_AUTO_TEST_CASE(doReadTest)
     std::atomic<size_t> recvPacketCnt = 0;
     std::atomic<size_t> recvBufferSize = 0;
     std::atomic<uint64_t> lastReadTime = utcSteadyTime();
+    auto fakeAsio = std::make_shared<FakeASIO>();
     {
-        auto fakeAsio = std::make_shared<FakeASIO>();
         auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
@@ -335,7 +339,6 @@ BOOST_AUTO_TEST_CASE(doReadTest)
             });
 
         session->start();
-        std::dynamic_pointer_cast<FakeASIO>(fakeHost->asioInterface())->triggerRead();
 
         // send packets
         while (auto packet = messageBuilder.nextPacket())

@@ -25,7 +25,7 @@
 #include "bcos-front/FrontServiceFactory.h"
 #include "bcos-gateway/GatewayFactory.h"
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/ThreadPool.h"
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -36,9 +36,11 @@ inline std::shared_ptr<bcos::front::FrontService> buildFrontService(
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto gatewayFactory = std::make_shared<bcos::gateway::GatewayFactory>("", "");
     auto frontServiceFactory = std::make_shared<bcos::front::FrontServiceFactory>();
-    auto threadPool = std::make_shared<bcos::ThreadPool>("frontServiceTest", 16);
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "frontBuild");
+    auto threadPool = std::make_shared<bcos::IOServicePool>(16, "frontServiceTest");
 
     // build gateway
+    gatewayFactory->setIOServicePool(ioServicePool);
     auto gateway = gatewayFactory->buildGateway(_configPath, true, nullptr, "localGateway");
 
     // create nodeID by nodeID str
@@ -46,6 +48,7 @@ inline std::shared_ptr<bcos::front::FrontService> buildFrontService(
         keyFactory->createKey(bcos::bytesConstRef((bcos::byte*)_nodeID.data(), _nodeID.size()));
 
     frontServiceFactory->setGatewayInterface(gateway);
+    frontServiceFactory->setIOServicePool(ioServicePool);
 
     // create frontService
     auto frontService = frontServiceFactory->buildFrontService(_groupID, nodeIDPtr);

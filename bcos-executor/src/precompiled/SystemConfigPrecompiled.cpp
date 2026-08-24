@@ -29,9 +29,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/VersionConverter.h"
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-#include <algorithm>
+#include <bcos-framework/storage/Serialize.h>
 #include <range/v3/algorithm/find.hpp>
 
 using namespace bcos;
@@ -114,6 +112,13 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
         [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(magic_enum::enum_name(ledger::SystemConfig::executor_version), _value, 0,
                 version, BlockVersion::V3_15_0_VERSION);
+            // NOTE: deliberately no upper bound here. setVersion saturates: >= 2 runs the v2
+            // EthereumExecutor, >= 3 the OP scheduler (index 3), values above that saturate to
+            // the newest. Banning values here would be an unversioned consensus change
+            // (validate() runs inside block execution) that breaks replay/resync of historical
+            // blocks that set executor_version on the old binary. The v2/v3-only guardrails live
+            // in node-local startup (Initializer refuses to boot a v2 chain without an on-chain
+            // evmc_revision), not in this per-block validator.
         });
     // for compatibility
     // Note: the compatibility_version is not compatibility
@@ -198,7 +203,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
 
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
         // setValueByKey(string,string)
@@ -227,7 +232,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 
             auto entry = table->newEntry();
             auto systemConfigEntry = SystemConfigEntry{configValue, blockContext.number() + 1};
-            entry.setObject(systemConfigEntry);
+            entry.set(bcos::storage::serialize::encode(systemConfigEntry));
 
             table->setRow(configKey, std::move(entry));
 
@@ -333,6 +338,16 @@ int64_t SystemConfigPrecompiled::validate(
         BOOST_THROW_EXCEPTION(PrecompiledError{}
                               << errinfo_comment(*boost::get_error_info<bcos::errinfo_comment>(e)));
     }
+
+    catch (boost::exception const& e)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+                              << LOG_DESC("checkValueValid failed") << LOG_KV("key", _key)
+                              << LOG_KV("value", value)
+                              << LOG_KV("info", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                  "The value for " + key + " must be a valid number."));
+    }
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
@@ -358,7 +373,8 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
         auto entry = table->getRow(_key);
         if (entry) [[likely]]
         {
-            auto [value, enableNumber] = entry->getObject<SystemConfigEntry>();
+            auto [value, enableNumber] =
+                bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
             return {value, enableNumber};
         }
 
@@ -402,10 +418,8 @@ void SystemConfigPrecompiled::upgradeChain(
         // rebuild Bfs
         auto input = codec.encodeWithSig(
             "rebuildBfs(uint256,uint256)", blockContext.blockVersion(), toVersion);
-        std::string sender(
-            blockContext.isWasm() ? precompiled::SYS_CONFIG_NAME : precompiled::SYS_CONFIG_ADDRESS);
-        std::string toAddress(
-            blockContext.isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS);
+        std::string sender(precompiled::SYS_CONFIG_ADDRESS);
+        std::string toAddress(precompiled::BFS_ADDRESS);
         auto response = externalRequest(_executive, ref(input), _callParameters->m_origin, sender,
             toAddress, false, false, _callParameters->m_gasLeft);
 
@@ -475,9 +489,7 @@ void SystemConfigPrecompiled::registerGovernorToCaller(
         PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled, registerGovernorToCaller")
                               << LOG_DESC("get governor list failed")
                               << LOG_KV("info", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
-                                  "get governor list failed, maybe current is wasm model, "
-                                  "feature_balance_precompiled is not supported in wasm model."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("get governor list failed."));
     }
     if (governorAddress.empty())
     {
@@ -495,7 +507,7 @@ void SystemConfigPrecompiled::registerGovernorToCaller(
         {
             auto entry = table->newEntry();
             Entry CallerEntry;
-            CallerEntry.importFields({"1"});
+            CallerEntry.set("1");
             _executive->storage().setRow(SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
         }
         return;
@@ -507,7 +519,7 @@ void SystemConfigPrecompiled::registerGovernorToCaller(
         if (!entry)
         {
             Entry CallerEntry;
-            CallerEntry.importFields({"1"});
+            CallerEntry.set("1");
             _executive->storage().setRow(SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
         }
     }

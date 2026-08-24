@@ -31,8 +31,7 @@ class ShardingTransactionExecutive : public PromiseTransactionExecutive
 {
 public:
     ShardingTransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector,
-        ThreadPool::Ptr pool = nullptr, bool usePromise = false);
+        int64_t contextID, int64_t seq, IOServicePool::Ptr pool = nullptr, bool usePromise = false);
 
     ~ShardingTransactionExecutive() override = default;
 
@@ -59,8 +58,7 @@ class ShardingChildTransactionExecutive : public ShardingTransactionExecutive
 public:
     ShardingChildTransactionExecutive(ShardingTransactionExecutive* parent,
         const BlockContext& blockContext, std::string contractAddress, int64_t contextID,
-        int64_t seq, const wasm::GasInjector& gasInjector, ThreadPool::Ptr pool = nullptr,
-        bool usePromise = false);
+        int64_t seq, IOServicePool::Ptr pool = nullptr, bool usePromise = false);
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;
 

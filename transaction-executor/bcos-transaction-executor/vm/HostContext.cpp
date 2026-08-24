@@ -1,10 +1,10 @@
 #include "HostContext.h"
 #include "VMFactory.h"
 #include "bcos-crypto/ChecksumAddress.h"
-#include <fmt/compile.h>
 #include <fmt/format.h>
 
-evmc_bytes32 bcos::executor_v1::hostcontext::evm_hash_fn(const uint8_t* data, size_t size)
+evmc_bytes32 bcos::executor_v1::hostcontext::evm_hash_fn(
+    evmc_host_context* /*context*/, const uint8_t* data, size_t size)
 {
     return toEvmC(executor::GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
@@ -23,15 +23,15 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
         {
             if (!web3Tx)
             {
-                auto address = fmt::format(FMT_COMPILE("{}_{}_{}"), blockNumber, contextID, seq);
+                auto address = fmt::format("{}_{}_{}", blockNumber, contextID, seq);
                 auto hash = hashImpl.hash(address);
                 std::copy_n(
                     hash.data(), sizeof(message.code_address.bytes), message.code_address.bytes);
             }
             else
             {
-                message.code_address =
-                    newLegacyEVMAddress(bytesConstRef(message.sender.bytes), nonce);
+                auto legacyAddr = newLegacyEVMAddress(bytesConstRef(message.sender.bytes), nonce);
+                std::copy(legacyAddr.begin(), legacyAddr.end(), message.code_address.bytes);
             }
         }
         message.recipient = message.code_address;
@@ -79,12 +79,12 @@ bcos::executor_v1::hostcontext::getCacheExecutables()
     return cachedExecutables.m_cachedExecutables;
 }
 
-bcos::executor_v1::hostcontext::Executable::Executable(storage::Entry code, evmc_revision revision)
+bcos::executor_v1::hostcontext::Executable::Executable(storage::Entry code)
   : m_code(std::make_optional(std::move(code))),
     m_vmInstance(VMFactory::create(VMKind::evmone,
-        bytesConstRef(reinterpret_cast<const uint8_t*>(m_code->data()), m_code->size()), revision))
+        bytesConstRef(reinterpret_cast<const uint8_t*>(m_code->data()), m_code->size())))
 {}
 
-bcos::executor_v1::hostcontext::Executable::Executable(bytesConstRef code, evmc_revision revision)
-  : m_vmInstance(VMFactory::create(VMKind::evmone, code, revision))
+bcos::executor_v1::hostcontext::Executable::Executable(bytesConstRef code)
+  : m_vmInstance(VMFactory::create(VMKind::evmone, code))
 {}

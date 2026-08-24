@@ -21,6 +21,7 @@
 
 #pragma once
 #include "../Common.h"
+#include "../vm/Eip2929AccessState.h"
 #include "ExecutiveFactory.h"
 #include "ExecutiveFlowInterface.h"
 #include "LedgerCache.h"
@@ -49,12 +50,12 @@ public:
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        uint32_t blockVersion, bool _isWasm, bool _isAuthCheck,
+        uint32_t blockVersion, bool _isAuthCheck,
         storage::StorageInterface::Ptr backendStorage = nullptr);
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
-        protocol::BlockHeader const& current, bool _isWasm, bool _isAuthCheck,
+        protocol::BlockHeader const& current, bool _isAuthCheck,
         storage::StorageInterface::Ptr backendStorage = nullptr,
         std::shared_ptr<std::set<std::string, std::less<>>> = nullptr);
 
@@ -64,10 +65,13 @@ public:
 
     std::shared_ptr<storage::StateStorageInterface> storage() const { return m_storage; }
     using transientStorageMap = BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
+    using Eip2929AccessMap = BucketMap<int64_t, std::shared_ptr<Eip2929AccessState>>;
     std::shared_ptr<transientStorageMap> getTransientStorageMap() const
     {
         return m_transientStorageMap;
     }
+
+    std::shared_ptr<Eip2929AccessMap> getEip2929AccessMap() const { return m_eip2929AccessMap; }
 
     uint64_t txGasLimit() const { return m_ledgerCache->fetchTxGasLimit(); }
 
@@ -75,7 +79,6 @@ public:
         -> std::shared_ptr<std::vector<std::string>>;
 
     crypto::Hash::Ptr hashHandler() const { return m_hashImpl; }
-    bool isWasm() const { return m_isWasm; }
     bool isAuthCheck() const { return m_isAuthCheck; }
     int64_t number() const { return m_blockNumber; }
     h256 hash() const { return m_blockHash; }
@@ -125,10 +128,10 @@ private:
     uint32_t m_blockVersion;
 
     VMSchedule m_schedule;
-    bool m_isWasm = false;
     bool m_isAuthCheck = false;
     std::shared_ptr<storage::StateStorageInterface> m_storage;
     transientStorageMap::Ptr m_transientStorageMap;
+    Eip2929AccessMap::Ptr m_eip2929AccessMap;
     crypto::Hash::Ptr m_hashImpl;
     std::function<void()> f_onNeedSwitchEvent;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;

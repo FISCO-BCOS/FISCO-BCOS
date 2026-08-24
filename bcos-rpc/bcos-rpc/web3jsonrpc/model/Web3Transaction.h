@@ -39,9 +39,11 @@ namespace rpc
 enum class TransactionType : uint8_t
 {
     Legacy = 0,
-    EIP2930 = 1,  // https://eips.ethereum.org/EIPS/eip-2930
-    EIP1559 = 2,  // https://eips.ethereum.org/EIPS/eip-1559
-    EIP4844 = 3,  // https://eips.ethereum.org/EIPS/eip-4844
+    EIP2930 = 1,     // https://eips.ethereum.org/EIPS/eip-2930
+    EIP1559 = 2,     // https://eips.ethereum.org/EIPS/eip-1559
+    EIP4844 = 3,     // https://eips.ethereum.org/EIPS/eip-4844
+    EIP7702 = 4,     // https://eips.ethereum.org/EIPS/eip-7702
+    Deposit = 0x7e,  // deposit-only system tx (OP Stack)
 };
 
 constexpr auto operator<=>(TransactionType const& ltype, auto rtype)
@@ -64,6 +66,27 @@ struct AccessListEntry
     }
 };
 
+// EIP-7702: authorization entry (set_code transactions, Prague+).
+struct AuthorizationListEntry
+{
+    // chainId is a 256-bit value (EIP-7702). It is part of the signed payload
+    // (encodeForSign) and of the canonical tx hash, so it must NOT be narrowed:
+    // EEST tests chain id 2**256-1 and a truncated uint64 changes the signing
+    // hash -> wrong sender recovery.
+    u256 chainId{0};
+    Address address;  // delegation target
+    uint64_t nonce{0};
+    uint8_t yParity{0};
+    u256 r{0};
+    u256 s{0};
+    friend bool operator==(
+        const AuthorizationListEntry& lhs, const AuthorizationListEntry& rhs) noexcept
+    {
+        return lhs.chainId == rhs.chainId && lhs.address == rhs.address && lhs.nonce == rhs.nonce &&
+               lhs.yParity == rhs.yParity && lhs.r == rhs.r && lhs.s == rhs.s;
+    }
+};
+
 class Web3Transaction
 {
 public:
@@ -76,6 +99,10 @@ public:
 
     // encode for sign, rlp(tx_payload)
     bcos::bytes encodeForSign() const;
+    // full RLP (with type byte) — delegates to handlerFor(type).encode
+    bcos::bytes encode() const;
+    // Decode — delegates to handlerFor(type).decode, propagating decode errors
+    bcos::Error::UniquePtr decode(bcos::bytesRef& in, bool withSig = true);
     // tx hash = keccak256(rlp(tx_payload,v,r,s))
     bcos::crypto::HashType txHash() const;
     // hash for sign = keccak256(rlp(tx_payload))
@@ -100,10 +127,21 @@ public:
     // EIP-4844: Shard Blob Transactions
     u256 maxFeePerBlobGas{0};
     h256s blobVersionedHashes;
+    // deposit-only (0x7e)
+    h256 sourceHash;
+    Address from;
+    u256 mint{0};
+    bool isSystemTx{false};
     // TODO)) blob
+    // EIP-7702: Set Code Transactions (Prague+)
+    std::vector<AuthorizationListEntry> authorizationList;
     bcos::bytes signatureR;
     bcos::bytes signatureS;
     uint64_t signatureV{0};
+    /// Full raw EIP-2718 envelope bytes as received by eth_sendRawTransaction (with type byte +
+    /// signature). Empty when decoded from a block body rather than a client submission; OP block
+    /// building (sequencer) needs it verbatim to reproduce the exact tx the user signed.
+    bcos::bytes rawTransactionBytes;
 };
 }  // namespace rpc
 namespace codec::rlp
@@ -112,12 +150,14 @@ Header header(const rpc::AccessListEntry& entry) noexcept;
 void encode(bcos::bytes& out, const rpc::AccessListEntry&) noexcept;
 size_t length(const rpc::AccessListEntry&) noexcept;
 
+Header header(const rpc::AuthorizationListEntry& entry) noexcept;
+void encode(bcos::bytes& out, const rpc::AuthorizationListEntry&) noexcept;
+size_t length(const rpc::AuthorizationListEntry&) noexcept;
+
 size_t length(const rpc::Web3Transaction&) noexcept;
-Header headerForSign(const rpc::Web3Transaction& tx) noexcept;
-Header headerTxBase(const rpc::Web3Transaction& tx) noexcept;
-Header header(const rpc::Web3Transaction& tx) noexcept;
 void encode(bcos::bytes& out, const rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AccessListEntry&) noexcept;
+bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AuthorizationListEntry&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decodeTransaction(

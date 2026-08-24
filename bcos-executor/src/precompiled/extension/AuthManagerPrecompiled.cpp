@@ -19,14 +19,10 @@
  */
 
 #include "AuthManagerPrecompiled.h"
-#include "../../vm/HostContext.h"
+#include "CommitteeBin.h"
 #include "ContractAuthMgrPrecompiled.h"
 #include "bcos-codec/scale/Scale.h"
-#include "libinitializer/AuthInitializer.h"
 #include "bcos-tool/BfsFileFactory.h"
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/core/ignore_unused.hpp>
 #include <boost/serialization/vector.hpp>
 
 using namespace bcos;
@@ -34,15 +30,6 @@ using namespace bcos::precompiled;
 using namespace bcos::executor;
 using namespace bcos::storage;
 
-/// wasm
-const char* const AUTH_METHOD_GET_ADMIN = "getAdmin(string)";
-const char* const AUTH_METHOD_SET_ADMIN = "resetAdmin(string,string)";
-const char* const AUTH_METHOD_SET_AUTH_TYPE = "setMethodAuthType(string,bytes4,uint8)";
-const char* const AUTH_METHOD_OPEN_AUTH = "openMethodAuth(string,bytes4,string)";
-const char* const AUTH_METHOD_CLOSE_AUTH = "closeMethodAuth(string,bytes4,string)";
-const char* const AUTH_METHOD_CHECK_AUTH = "checkMethodAuth(string,bytes4,string)";
-const char* const AUTH_METHOD_GET_AUTH = "getMethodAuth(string,bytes4)";
-/// evm
 const char* const AUTH_METHOD_GET_ADMIN_ADD = "getAdmin(address)";
 const char* const AUTH_METHOD_SET_ADMIN_ADD = "resetAdmin(address,address)";
 const char* const AUTH_METHOD_SET_AUTH_TYPE_ADD = "setMethodAuthType(address,bytes4,uint8)";
@@ -58,58 +45,44 @@ const char* const AUTH_METHOD_GET_CONTRACT = "contractAvailable(address)";
 /// deploy
 const char* const AUTH_METHOD_GET_DEPLOY_TYPE = "deployType()";
 const char* const AUTH_METHOD_SET_DEPLOY_TYPE = "setDeployAuthType(uint8)";
-/// wasm
-const char* const AUTH_OPEN_DEPLOY_ACCOUNT = "openDeployAuth(string)";
-const char* const AUTH_CLOSE_DEPLOY_ACCOUNT = "closeDeployAuth(string)";
-const char* const AUTH_CHECK_DEPLOY_ACCESS = "hasDeployAuth(string)";
-/// evm
 const char* const AUTH_OPEN_DEPLOY_ACCOUNT_ADD = "openDeployAuth(address)";
 const char* const AUTH_CLOSE_DEPLOY_ACCOUNT_ADD = "closeDeployAuth(address)";
 const char* const AUTH_CHECK_DEPLOY_ACCESS_ADD = "hasDeployAuth(address)";
 const char* const AUTH_INIT = "initAuth(string)";
 
-AuthManagerPrecompiled::AuthManagerPrecompiled(crypto::Hash::Ptr _hashImpl, bool _isWasm)
-  : Precompiled(_hashImpl)
+AuthManagerPrecompiled::AuthManagerPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
-    const auto* getAdminStr = _isWasm ? AUTH_METHOD_GET_ADMIN : AUTH_METHOD_GET_ADMIN_ADD;
-    registerFunc(getAdminStr, [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(AUTH_METHOD_GET_ADMIN_ADD, [this](auto&& _executive, auto&& _callParameters) {
         getAdmin(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
 
-    const auto* resetAdminStr = _isWasm ? AUTH_METHOD_SET_ADMIN : AUTH_METHOD_SET_ADMIN_ADD;
-    registerFunc(resetAdminStr, [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(AUTH_METHOD_SET_ADMIN_ADD, [this](auto&& _executive, auto&& _callParameters) {
         resetAdmin(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
 
-    const auto* setMethodAuthTypeStr =
-        _isWasm ? AUTH_METHOD_SET_AUTH_TYPE : AUTH_METHOD_SET_AUTH_TYPE_ADD;
-    registerFunc(setMethodAuthTypeStr, [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(AUTH_METHOD_SET_AUTH_TYPE_ADD, [this](auto&& _executive, auto&& _callParameters) {
         setMethodAuthType(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
 
-    const auto* openMethodAuthStr = _isWasm ? AUTH_METHOD_OPEN_AUTH : AUTH_METHOD_OPEN_AUTH_ADD;
-    registerFunc(openMethodAuthStr, [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(AUTH_METHOD_OPEN_AUTH_ADD, [this](auto&& _executive, auto&& _callParameters) {
         setMethodAuth(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
 
-    const auto* closeMethodAuthStr = _isWasm ? AUTH_METHOD_CLOSE_AUTH : AUTH_METHOD_CLOSE_AUTH_ADD;
-    registerFunc(closeMethodAuthStr, [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(AUTH_METHOD_CLOSE_AUTH_ADD, [this](auto&& _executive, auto&& _callParameters) {
         setMethodAuth(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
 
-    const auto* checkMethodAuthStr = _isWasm ? AUTH_METHOD_CHECK_AUTH : AUTH_METHOD_CHECK_AUTH_ADD;
-    registerFunc(checkMethodAuthStr, [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(AUTH_METHOD_CHECK_AUTH_ADD, [this](auto&& _executive, auto&& _callParameters) {
         checkMethodAuth(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
 
-    const auto* getMethodAuthStr = _isWasm ? AUTH_METHOD_GET_AUTH : AUTH_METHOD_GET_AUTH_ADD;
-    registerFunc(getMethodAuthStr, [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(AUTH_METHOD_GET_AUTH_ADD, [this](auto&& _executive, auto&& _callParameters) {
         getMethodAuth(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
@@ -140,21 +113,15 @@ AuthManagerPrecompiled::AuthManagerPrecompiled(crypto::Hash::Ptr _hashImpl, bool
         setDeployType(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
-    const auto* openDeployAccountStr =
-        _isWasm ? AUTH_OPEN_DEPLOY_ACCOUNT : AUTH_OPEN_DEPLOY_ACCOUNT_ADD;
-    registerFunc(openDeployAccountStr, [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(AUTH_OPEN_DEPLOY_ACCOUNT_ADD, [this](auto&& _executive, auto&& _callParameters) {
         openDeployAuth(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
-    const auto* closeDeployAccountStr =
-        _isWasm ? AUTH_CLOSE_DEPLOY_ACCOUNT : AUTH_CLOSE_DEPLOY_ACCOUNT_ADD;
-    registerFunc(closeDeployAccountStr, [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(AUTH_CLOSE_DEPLOY_ACCOUNT_ADD, [this](auto&& _executive, auto&& _callParameters) {
         closeDeployAuth(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
-    const auto* checkDeployAuthStr =
-        _isWasm ? AUTH_CHECK_DEPLOY_ACCESS : AUTH_CHECK_DEPLOY_ACCESS_ADD;
-    registerFunc(checkDeployAuthStr, [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(AUTH_CHECK_DEPLOY_ACCESS_ADD, [this](auto&& _executive, auto&& _callParameters) {
         hasDeployAuth(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
@@ -196,8 +163,8 @@ std::shared_ptr<PrecompiledExecResult> AuthManagerPrecompiled::call(
     }
     PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
                           << LOG_DESC("call undefined function") << LOG_KV("func", func);
-    BOOST_THROW_EXCEPTION(
-        bcos::protocol::PrecompiledError{} << errinfo_comment("AuthManagerPrecompiled call undefined function!"));
+    BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError{}
+                          << errinfo_comment("AuthManagerPrecompiled call undefined function!"));
 }
 
 void AuthManagerPrecompiled::getAdmin(
@@ -208,23 +175,15 @@ void AuthManagerPrecompiled::getAdmin(
     bytesConstRef data = getParamData(_callParameters->input());
     std::string path;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    if (blockContext.isWasm())
-    {
-        codec.decode(data, path);
-    }
-    else
-    {
-        Address contractAddress;
-        codec.decode(data, contractAddress);
-        path = contractAddress.hex();
-    }
+    auto codec = CodecWrapper(blockContext.hashHandler());
+    Address contractAddress;
+    codec.decode(data, contractAddress);
+    path = contractAddress.hex();
 
     std::string adminStr = getContractAdmin(_executive, path, _callParameters);
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("getAdmin success")
                            << LOG_KV("contractPath", path) << LOG_KV("admin", adminStr);
-    _callParameters->setExecResult(
-        blockContext.isWasm() ? codec.encode(adminStr) : codec.encode(Address(adminStr)));
+    _callParameters->setExecResult(codec.encode(Address(adminStr)));
 }
 
 void AuthManagerPrecompiled::resetAdmin(
@@ -236,19 +195,12 @@ void AuthManagerPrecompiled::resetAdmin(
     std::string admin;
     bytesConstRef data = getParamData(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    if (!blockContext.isWasm())
-    {
-        Address contractAddress;
-        Address adminAddress;
-        codec.decode(data, contractAddress, adminAddress);
-        path = contractAddress.hex();
-        admin = adminAddress.hex();
-    }
-    else
-    {
-        codec.decode(data, path, admin);
-    }
+    auto codec = CodecWrapper(blockContext.hashHandler());
+    Address contractAddress;
+    Address adminAddress;
+    codec.decode(data, contractAddress, adminAddress);
+    path = contractAddress.hex();
+    admin = adminAddress.hex();
     PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number())
                            << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("resetAdmin")
                            << LOG_KV("path", path) << LOG_KV("admin", admin);
@@ -262,7 +214,7 @@ void AuthManagerPrecompiled::resetAdmin(
     }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
+    std::string authMgrAddress(AUTH_MANAGER_ADDRESS);
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
@@ -279,18 +231,11 @@ void AuthManagerPrecompiled::setMethodAuthType(
     string32 _type;
     bytesConstRef data = getParamData(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     auto beginT = utcTime();
-    if (!blockContext.isWasm())
-    {
-        Address contractAddress;
-        codec.decode(data, contractAddress, _func, _type);
-        path = contractAddress.hex();
-    }
-    else
-    {
-        codec.decode(data, path, _func, _type);
-    }
+    Address contractAddress;
+    codec.decode(data, contractAddress, _func, _type);
+    path = contractAddress.hex();
     auto admin = getContractAdmin(_executive, path, _callParameters);
     if (_callParameters->m_sender != admin)
     {
@@ -303,7 +248,7 @@ void AuthManagerPrecompiled::setMethodAuthType(
     }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
+    std::string authMgrAddress(AUTH_MANAGER_ADDRESS);
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
         _callParameters->m_gasLeft, true);
@@ -322,22 +267,15 @@ void AuthManagerPrecompiled::checkMethodAuth(
     std::string account;
     bytesConstRef data = getParamData(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    if (!blockContext.isWasm())
-    {
-        Address contractAddress;
-        Address accountAddress;
-        codec.decode(data, contractAddress, _func, accountAddress);
-        path = contractAddress.hex();
-        account = accountAddress.hex();
-    }
-    else
-    {
-        codec.decode(data, path, _func, account);
-    }
+    auto codec = CodecWrapper(blockContext.hashHandler());
+    Address contractAddress;
+    Address accountAddress;
+    codec.decode(data, contractAddress, _func, accountAddress);
+    path = contractAddress.hex();
+    account = accountAddress.hex();
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
+    std::string authMgrAddress(AUTH_MANAGER_ADDRESS);
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
@@ -355,20 +293,13 @@ void AuthManagerPrecompiled::getMethodAuth(
     string32 _func;
     bytesConstRef data = getParamData(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    if (!blockContext.isWasm())
-    {
-        Address contractAddress;
-        codec.decode(data, contractAddress, _func);
-        path = contractAddress.hex();
-    }
-    else
-    {
-        codec.decode(data, path, _func);
-    }
+    auto codec = CodecWrapper(blockContext.hashHandler());
+    Address contractAddress;
+    codec.decode(data, contractAddress, _func);
+    path = contractAddress.hex();
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
+    std::string authMgrAddress(AUTH_MANAGER_ADDRESS);
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
@@ -386,21 +317,14 @@ void AuthManagerPrecompiled::setMethodAuth(
     std::string account;
     string32 _func;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     bytesConstRef data = getParamData(_callParameters->input());
     auto recordT = utcTime();
-    if (!blockContext.isWasm())
-    {
-        Address contractAddress;
-        Address accountAddress;
-        codec.decode(data, contractAddress, _func, accountAddress);
-        path = contractAddress.hex();
-        account = accountAddress.hex();
-    }
-    else
-    {
-        codec.decode(data, path, _func, account);
-    }
+    Address contractAddress;
+    Address accountAddress;
+    codec.decode(data, contractAddress, _func, accountAddress);
+    path = contractAddress.hex();
+    account = accountAddress.hex();
     auto admin = getContractAdmin(_executive, path, _callParameters);
     if (_callParameters->m_sender != admin)
     {
@@ -413,7 +337,7 @@ void AuthManagerPrecompiled::setMethodAuth(
     }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
+    std::string authMgrAddress(AUTH_MANAGER_ADDRESS);
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
         _callParameters->m_gasLeft, true);
@@ -432,7 +356,7 @@ void AuthManagerPrecompiled::setContractStatus(
     bytesConstRef data = getParamData(_callParameters->input());
     auto func = getParamFunc(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     if (func == getFuncSelector(AUTH_METHOD_SET_CONTRACT, m_hashImpl))
     {
         Address contractAddress;
@@ -463,7 +387,7 @@ void AuthManagerPrecompiled::setContractStatus(
     }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
+    std::string authMgrAddress(AUTH_MANAGER_ADDRESS);
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, address, _callParameters->m_staticCall, _callParameters->m_create,
@@ -479,23 +403,16 @@ void AuthManagerPrecompiled::contractAvailable(
     std::string address;
     bytesConstRef data = getParamData(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    if (blockContext.isWasm())
-    {
-        codec.decode(data, address);
-    }
-    else
-    {
-        Address contractAddress;
-        codec.decode(data, contractAddress);
-        address = contractAddress.hex();
-    }
+    auto codec = CodecWrapper(blockContext.hashHandler());
+    Address contractAddress;
+    codec.decode(data, contractAddress);
+    address = contractAddress.hex();
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("contractAvailable")
                            << LOG_KV("address", address);
 
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
+    std::string authMgrAddress(AUTH_MANAGER_ADDRESS);
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, address, _callParameters->m_staticCall, _callParameters->m_create,
@@ -509,13 +426,11 @@ std::string AuthManagerPrecompiled::getContractAdmin(
     PrecompiledExecResult::Ptr const& _callParameters)
 {
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
 
-    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
+    std::string authMgrAddress(AUTH_MANAGER_ADDRESS);
 
-    bytes selector = blockContext.isWasm() ?
-                         codec.encodeWithSig(AUTH_METHOD_GET_ADMIN, _to) :
-                         codec.encodeWithSig(AUTH_METHOD_GET_ADMIN_ADD, Address(_to));
+    bytes selector = codec.encodeWithSig(AUTH_METHOD_GET_ADMIN_ADD, Address(_to));
     auto data = codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), selector);
     auto response =
         externalRequest(_executive, ref(data), _callParameters->m_origin, authMgrAddress, _to,
@@ -525,8 +440,8 @@ std::string AuthManagerPrecompiled::getContractAdmin(
     {
         PRECOMPILED_LOG(DEBUG) << "Can't get contract admin, check the contract existence."
                                << LOG_KV("address", _to);
-        BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError{} << errinfo_comment("Please check the existence of contract."));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{}
+                              << errinfo_comment("Please check the existence of contract."));
     }
     std::string admin;
 
@@ -550,7 +465,7 @@ u256 AuthManagerPrecompiled::getDeployAuthType(
                 << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
             return {};
         }
-        auto fields = entry->getObject<std::vector<std::string>>();
+        auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
         typeStr.assign(fields[2]);
     }
     else
@@ -576,7 +491,7 @@ u256 AuthManagerPrecompiled::getDeployAuthType(
                     << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
                 return {};
             }
-            auto fields = entry->getObject<std::vector<std::string>>();
+            auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
             typeStr.assign(fields[2]);
         }
     }
@@ -600,7 +515,7 @@ void AuthManagerPrecompiled::getDeployType(
 
 {
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
 
     u256 type = getDeployAuthType(_executive);
     _callParameters->setExecResult(codec.encode(type));
@@ -614,7 +529,7 @@ void AuthManagerPrecompiled::setDeployType(
     string32 _type;
     bytesConstRef data = getParamData(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(data, _type);
     if (!checkSenderFromAuth(_callParameters->m_sender))
     {
@@ -640,16 +555,16 @@ void AuthManagerPrecompiled::setDeployType(
             PRECOMPILED_LOG(FATAL)
                 << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
         }
-        auto fields = entry->getObject<std::vector<std::string>>();
+        auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
         fields[2] = boost::lexical_cast<std::string>(type);
-        entry->setObject(fields);
+        entry->set(bcos::storage::serialize::encode(fields));
         _executive->storage().setRow(
             tool::FS_ROOT, tool::FS_APPS.substr(1), std::move(entry.value()));
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
         return;
     }
     Entry entry;
-    entry.importFields({boost::lexical_cast<std::string>(type)});
+    entry.set(boost::lexical_cast<std::string>(type));
     _executive->storage().setRow(tool::FS_APPS, tool::FS_ACL_TYPE, std::move(entry));
 
     getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
@@ -663,17 +578,10 @@ void AuthManagerPrecompiled::setDeployAuth(
     std::string account;
     bytesConstRef data = getParamData(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    if (blockContext.isWasm())
-    {
-        codec.decode(data, account);
-    }
-    else
-    {
-        Address accountAddress;
-        codec.decode(data, accountAddress);
-        account = accountAddress.hex();
-    }
+    auto codec = CodecWrapper(blockContext.hashHandler());
+    Address accountAddress;
+    codec.decode(data, accountAddress);
+    account = accountAddress.hex();
     if (!checkSenderFromAuth(_callParameters->m_sender))
     {
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
@@ -695,7 +603,7 @@ void AuthManagerPrecompiled::setDeployAuth(
             PRECOMPILED_LOG(FATAL)
                 << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
         }
-        auto fields = entry->getObject<std::vector<std::string>>();
+        auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
 
         const auto insertIndex = (type == (int)AuthType::WHITE_LIST_MODE) ? 3 : 4;
 
@@ -708,7 +616,7 @@ void AuthManagerPrecompiled::setDeployAuth(
         // covered writing
         aclMap[account] = access;
         fields[insertIndex] = asString(codec::scale::encode(aclMap));
-        entry->setObject(fields);
+        entry->set(bcos::storage::serialize::encode(fields));
 
         _executive->storage().setRow(
             tool::FS_ROOT, tool::FS_APPS.substr(1), std::move(entry.value()));
@@ -719,7 +627,7 @@ void AuthManagerPrecompiled::setDeployAuth(
     auto getAclStr =
         (type == (int)AuthType::BLACK_LIST_MODE) ? tool::FS_ACL_BLACK : tool::FS_ACL_WHITE;
     auto entry = _executive->storage().getRow(tool::FS_APPS, getAclStr);
-    auto mapStr = std::string(entry->getField(0));
+    auto mapStr = std::string(entry->get());
     if (!mapStr.empty())
     {
         auto&& out = asBytes(mapStr);
@@ -727,7 +635,7 @@ void AuthManagerPrecompiled::setDeployAuth(
     }
     // covered writing
     aclMap[account] = access;
-    entry->setField(0, asString(codec::scale::encode(aclMap)));
+    entry->set(asString(codec::scale::encode(aclMap)));
     _executive->storage().setRow(tool::FS_APPS, getAclStr, std::move(entry.value()));
 
     getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
@@ -741,17 +649,10 @@ void AuthManagerPrecompiled::hasDeployAuth(
     std::string account;
     bytesConstRef data = getParamData(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    if (blockContext.isWasm())
-    {
-        codec.decode(data, account);
-    }
-    else
-    {
-        Address accountAddress;
-        codec.decode(data, accountAddress);
-        account = accountAddress.hex();
-    }
+    auto codec = CodecWrapper(blockContext.hashHandler());
+    Address accountAddress;
+    codec.decode(data, accountAddress);
+    account = accountAddress.hex();
     _callParameters->setExecResult(codec.encode(checkDeployAuth(_executive, account)));
 }
 
@@ -776,7 +677,7 @@ bool AuthManagerPrecompiled::checkDeployAuth(
             PRECOMPILED_LOG(FATAL)
                 << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
         }
-        auto fields = entry->getObject<std::vector<std::string>>();
+        auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
         auto getAclIndex = (type == (int)AuthType::WHITE_LIST_MODE) ? 3 : 4;
         aclMapStr.assign(fields.at(getAclIndex));
     }
@@ -821,7 +722,7 @@ void AuthManagerPrecompiled::initAuth(
     std::string account;
     bytesConstRef data = getParamData(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(data, account);
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
@@ -835,17 +736,18 @@ void AuthManagerPrecompiled::initAuth(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
                               << LOG_DESC("Committee exists.");
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Committee contract already exist."));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError{} << errinfo_comment("Committee contract already exist."));
     }
 
-    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
+    std::string authMgrAddress(AUTH_MANAGER_ADDRESS);
 
     std::vector<Address> initGovernors({Address(account)});
     std::vector<string32> weights({bcos::codec::toString32(h256(1))});
     bytes code;
     std::string_view bin = blockContext.hashHandler()->getHashImplType() == crypto::Sm3Hash ?
-                               bcos::initializer::committeeSmBin :
-                               bcos::initializer::committeeBin;
+                               bcos::committeeSmBin :
+                               bcos::committeeBin;
     code.reserve(bin.size() / 2);
     boost::algorithm::unhex(bin, std::back_inserter(code));
     bytes input = code + codec.encode(initGovernors, weights, codec::toString32(h256(0)),
@@ -858,7 +760,8 @@ void AuthManagerPrecompiled::initAuth(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
                               << LOG_DESC("init auth error.");
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Create auth contract error."));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError{} << errinfo_comment("Create auth contract error."));
     }
 
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));

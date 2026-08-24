@@ -1,20 +1,16 @@
 #include "ExecutorManager.h"
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-utilities/Error.h>
-#include <boost/concept_check.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
-#include <mutex>
-#include <thread>
-#include <tuple>
 
 using namespace bcos;
 using namespace bcos::scheduler;
 
-ExecutorManager::ExecutorManager()
+ExecutorManager::ExecutorManager(boost::asio::io_context& _ioService)
 {
-    m_timer = std::make_shared<Timer>(EXECUTOR_MANAGER_CHECK_PERIOD, "executorMgr");
+    m_timer = std::make_shared<Timer>(_ioService, EXECUTOR_MANAGER_CHECK_PERIOD, "executorMgr");
     m_timer->registerTimeoutHandler([this]() { checkExecutorStatus(); });
 }
 
@@ -242,7 +238,8 @@ bool ExecutorManager::removeExecutor(const std::string_view& name)
             auto count = m_contract2ExecutorInfo.unsafe_erase(*contractIt);
             if (count < 1)
             {
-                BOOST_THROW_EXCEPTION(bcos::Exception{} << errinfo_comment("Can't find contract in container"));
+                BOOST_THROW_EXCEPTION(
+                    bcos::Exception{} << errinfo_comment("Can't find contract in container"));
             }
         }
 

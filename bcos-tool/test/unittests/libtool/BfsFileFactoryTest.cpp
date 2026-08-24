@@ -9,9 +9,9 @@
  */
 
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-framework/storage/Serialize.h>
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-tool/BfsFileFactory.h>
-#include <boost/archive/binary_iarchive.hpp>
 #include <boost/serialization/vector.hpp>
 #include <boost/test/unit_test.hpp>
 #include <string>
@@ -34,11 +34,12 @@ Table makeTable(const StateStorage::Ptr& storage, const std::string& name)
     return Table(storage.get(), std::move(info));
 }
 
-// buildLink/buildAuth store rows via importFields (raw single-field entries),
-// so read them back with getField rather than the serialized getObject.
+// buildLink/buildAuth store raw single-value rows (entry.set(std::string)), so read them back
+// with Entry::get() rather than decoding them as a serialized field vector. Entry's getField /
+// getObject accessors went away with the proxy-based buffer facade (#5247).
 std::string firstField(const std::optional<Entry>& entry)
 {
-    return std::string(entry->getField(0));
+    return std::string(entry->get());
 }
 }  // namespace
 
@@ -49,8 +50,9 @@ BOOST_AUTO_TEST_CASE(buildDirEntryTypeDispatch)
     auto typeOf = [](std::variant<FileType, std::string, std::string_view> ft) {
         Entry entry;
         BfsFileFactory::buildDirEntry(entry, std::move(ft));
-        std::vector<std::string> fields;
-        entry.getObject(fields);
+        // buildDirEntry stores serialize::encode<std::vector<std::string>>; decode it back the
+        // same way production does (see BFSPrecompiled.cpp).
+        auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry.get());
         return fields.at(0);
     };
 

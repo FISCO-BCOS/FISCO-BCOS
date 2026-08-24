@@ -16,7 +16,6 @@
 # limitations under the License.
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.10)
 
 project(bcos-sync VERSION ${VERSION})
 
@@ -49,9 +48,12 @@ find_package(jsoncpp CONFIG REQUIRED)
 include_directories(${PROTO_OUTPUT_PATH})
 
 file(GLOB_RECURSE SRCS bcos-sync/*.cpp)
-add_library(${SYNC_TARGET} ${SRCS} ${SYNC_SRCS})
-target_link_libraries(${SYNC_TARGET} PUBLIC ${LEDGER_TARGET} ${STORAGE_TARGET} bcos-framework ${UTILITIES_TARGET} ${CODEC_TARGET} ${TOOL_TARGET} jsoncpp_static)
-set_target_properties(${SYNC_TARGET} PROPERTIES UNITY_BUILD "ON")
+add_library(sync ${SRCS} ${SYNC_SRCS})
+target_include_directories(sync PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${PROTO_OUTPUT_PATH}>)
+target_link_libraries(sync PUBLIC ledger storage bcos-framework bcos-utilities codec tool jsoncpp_static)
+set_target_properties(sync PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()

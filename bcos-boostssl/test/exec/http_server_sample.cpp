@@ -24,7 +24,6 @@
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <memory>
 
 using namespace bcos;
@@ -87,10 +86,12 @@ int main(int argc, char** argv)
     wsInitializer->initWsService(wsService);
 
     auto server = wsService->httpServer();
-    server->setHttpReqHandler(
-        [](const std::string& _req, std::function<void(const std::string& resp)> _callback) {
-            BCOS_LOG(INFO) << LOG_BADGE(" [Main] ===>>>> ") << LOG_KV("request", _req);
-            _callback(_req);
+    server->setHttpReqHandler([](const bcos::boostssl::http::HttpRequest& _req,
+                                  std::function<void(bcos::bytes, boost::beast::http::status)> _callback) {
+        BCOS_LOG(INFO) << LOG_BADGE(" [Main] ===>>>> ") << LOG_KV("request", _req.body())
+                       << LOG_KV("method", std::string(_req.method_string()))
+                       << LOG_KV("target", std::string(_req.target()));
+        _callback(bcos::bytes(_req.begin(), _req.end()), boost::beast::http::status::ok);
         });
     wsService->start();
 

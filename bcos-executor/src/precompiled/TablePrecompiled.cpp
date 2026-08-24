@@ -22,10 +22,6 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/protocol/Exceptions.h"
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
 #include <boost/throw_exception.hpp>
 #include <limits>
 
@@ -63,8 +59,8 @@ static std::string toNumericalOrder(std::string_view lexicographicKey)
         if (std::to_string(number) != lexicographicKey) [[unlikely]]
         {
             PRECOMPILED_LOG(DEBUG) << "The key cannot be converted to a number(int64)";
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError{} << errinfo_comment("The key cannot be converted to a number(int64)"));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                      "The key cannot be converted to a number(int64)"));
         }
         int64_t offset = std::numeric_limits<int64_t>::max();
         // map int64 to uint64 ([INT64_MIN, INT64_MAX] --> [UINT64_MIN, UINT64_MAX])
@@ -78,7 +74,8 @@ static std::string toNumericalOrder(std::string_view lexicographicKey)
     catch (boost::bad_lexical_cast& e)
     {
         PRECOMPILED_LOG(DEBUG) << "The key cannot be converted to a number(int64)";
-        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("The key cannot be converted to a number(int64)"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{}
+                              << errinfo_comment("The key cannot be converted to a number(int64)"));
     }
 }
 
@@ -98,8 +95,8 @@ bool TablePrecompiled::isNumericalOrder(const TableInfoTupleV320& tableInfo)
     if (keyOrder != 0 && keyOrder != 1) [[unlikely]]
     {
         PRECOMPILED_LOG(DEBUG) << std::to_string((int)keyOrder) + " KeyOrder not exist!";
-        BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError{} << errinfo_comment(std::to_string((int)keyOrder) + " KeyOrder not exist!"));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment(
+                                  std::to_string((int)keyOrder) + " KeyOrder not exist!"));
     }
     return keyOrder == 1;
 }
@@ -131,12 +128,13 @@ static size_t selectByValueCond(const std::shared_ptr<executor::TransactionExecu
         // Convert key back to lexicographical order, when the table uses numerical order
         if (toLexicographic)
         {
-            entryTuple = {
-                toLexicographicOrder(key), tableEntry->getObject<std::vector<std::string>>()};
+            entryTuple = {toLexicographicOrder(key),
+                bcos::storage::serialize::decode<std::vector<std::string>>(tableEntry->get())};
         }
         else
         {
-            entryTuple = {key, tableEntry->getObject<std::vector<std::string>>()};
+            entryTuple = {
+                key, bcos::storage::serialize::decode<std::vector<std::string>>(tableEntry->get())};
         }
 
         if (valueCondition->isValid(std::get<1>(entryTuple)))
@@ -243,7 +241,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     PrecompiledExecResult::Ptr _callParameters)
 {
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     // [tableName,keyField,valueFields][actualParams]
     std::vector<std::string> dynamicParams;
     bytes param;
@@ -282,7 +280,8 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     }
 
     PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled") << LOG_DESC("call undefined function!");
-    BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("TablePrecompiled call undefined function!"));
+    BOOST_THROW_EXCEPTION(
+        PrecompiledError{} << errinfo_comment("TablePrecompiled call undefined function!"));
 }
 
 void TablePrecompiled::desc(precompiled::TableInfo& _tableInfo, const std::string& _tableName,
@@ -290,13 +289,12 @@ void TablePrecompiled::desc(precompiled::TableInfo& _tableInfo, const std::strin
     const PrecompiledExecResult::Ptr& _callParameters, bool withKeyOrder) const
 {
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     auto tableName = _tableName.starts_with("u_") ? _tableName.substr(2) : _tableName;
 
     auto input = withKeyOrder ? codec.encodeWithSig("descWithKeyOrder(string)", tableName) :
                                 codec.encodeWithSig("desc(string)", tableName);
-    std::string tableManagerAddress(
-        blockContext.isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
+    std::string tableManagerAddress(TABLE_MANAGER_ADDRESS);
 
     // external call to get desc
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
@@ -348,8 +346,8 @@ void TablePrecompiled::buildKeyCondition(std::shared_ptr<storage::Condition>& ke
             keyCondition->LE(value);
             break;
         default:
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError{} << errinfo_comment(std::to_string(cmp) + " ConditionOP not exist!"));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                      std::to_string(cmp) + " ConditionOP not exist!"));
         }
     }
 
@@ -386,7 +384,8 @@ bool TablePrecompiled::buildConditions(std::optional<precompiled::Condition>& va
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_DESC("Table condition field not found")
                 << LOG_KV("field", field);
-            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table condition fields not found"));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment("Table condition fields not found"));
         }
         if (field != keyField)
         {
@@ -435,7 +434,7 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
     /// select(string)
     std::string key;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(data, key);
 
     std::string originKey = key;
@@ -454,7 +453,7 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
         _callParameters->setExecResult(codec.encode(std::move(emptyEntry)));
         return;
     }
-    auto values = entry->getObject<std::vector<std::string>>();
+    auto values = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
 
     // update the memory gas and the computation gas
     gasPricer->updateMemUsed(values.size());
@@ -479,7 +478,7 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limit;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(data, conditions, limit);
 
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
@@ -500,7 +499,8 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     for (auto& key : tableKeyList)
     {
         auto tableEntry = _executive->storage().getRow(tableName, key);
-        EntryTuple entryTuple = {key, tableEntry->getObject<std::vector<std::string>>()};
+        EntryTuple entryTuple = {
+            key, bcos::storage::serialize::decode<std::vector<std::string>>(tableEntry->get())};
         entries.emplace_back(std::move(entryTuple));
     }
 
@@ -520,7 +520,7 @@ void TablePrecompiled::selectByConditionV32(const std::string& tableName,
     std::vector<precompiled::ConditionTupleV320> conditions;
     precompiled::LimitTuple limit;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     bool _isNumericalOrder = false;
 
     codec.decode(data, conditions, limit);
@@ -570,11 +570,13 @@ void TablePrecompiled::selectByConditionV32(const std::string& tableName,
                 if (_isNumericalOrder)
                 {
                     entryTuple = {toLexicographicOrder(key),
-                        tableEntry->getObject<std::vector<std::string>>()};
+                        bcos::storage::serialize::decode<std::vector<std::string>>(
+                            tableEntry->get())};
                 }
                 else
                 {
-                    entryTuple = {key, tableEntry->getObject<std::vector<std::string>>()};
+                    entryTuple = {key, bcos::storage::serialize::decode<std::vector<std::string>>(
+                                           tableEntry->get())};
                 }
                 entries.emplace_back(std::move(entryTuple));
             }
@@ -595,7 +597,7 @@ void TablePrecompiled::count(const std::string& tableName,
     /// count((uint8,string)[])
     std::vector<precompiled::ConditionTuple> conditions;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(data, conditions);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
                            << LOG_KV("tableName", tableName)
@@ -642,7 +644,7 @@ void TablePrecompiled::countV32(const std::string& tableName,
     /// count((uint8,string,string)[])
     std::vector<precompiled::ConditionTupleV320> conditions;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
 
     codec.decode(data, conditions);
     precompiled::TableInfo tableInfo;
@@ -697,7 +699,7 @@ void TablePrecompiled::insert(const std::string& tableName,
     /// insert((string,string[]))
     precompiled::EntryTuple insertEntry;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(data, insertEntry);
 
     auto& key = std::get<0>(insertEntry);
@@ -735,11 +737,13 @@ void TablePrecompiled::insert(const std::string& tableName,
                                << LOG_DESC("Table insert entry fields number mismatch")
                                << LOG_KV("valueSize", values.size())
                                << LOG_KV("fieldSize", columns.size());
-        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table insert entry fields number mismatch"));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment("Table insert entry fields number mismatch"));
     }
     if (key.empty() && blockContext.blockVersion() >= BlockVersion::V3_3_VERSION) [[unlikely]]
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table insert entry key is empty"));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment("Table insert entry key is empty"));
     }
     checkLengthValidate(key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);
     std::for_each(values.begin(), values.end(), [](std::string_view _v) {
@@ -757,7 +761,7 @@ void TablePrecompiled::insert(const std::string& tableName,
     }
 
     Entry entry;
-    entry.setObject(std::move(values));
+    entry.set(bcos::storage::serialize::encode(std::move(values)));
 
     gasPricer->appendOperation(InterfaceOpcode::Insert);
     gasPricer->updateMemUsed(entry.size());
@@ -773,7 +777,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
     std::string key;
     std::vector<precompiled::UpdateFieldTuple> updateFields;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(data, key, updateFields);
 
     precompiled::TableInfo tableInfo;
@@ -814,7 +818,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
         return;
     }
 
-    auto values = existEntry->getObject<std::vector<std::string>>();
+    auto values = bcos::storage::serialize::decode<std::vector<std::string>>(existEntry->get());
     for (const auto& kv : updateFields)
     {
         auto& field = std::get<0>(kv);
@@ -827,21 +831,22 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table cannot update keyField") << LOG_KV("keyField", keyField);
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError{} << errinfo_comment("Table update fields cannot contains key field"));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                      "Table update fields cannot contains key field"));
         }
         if (it == columns.end())
         {
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table update field not found") << LOG_KV("field", field);
-            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table update fields not found"));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment("Table update fields not found"));
         }
         auto index = std::distance(columns.begin(), it);
         values[index] = value;
     }
     Entry updateEntry;
-    updateEntry.setObject(std::move(values));
+    updateEntry.set(bcos::storage::serialize::encode(std::move(values)));
     _executive->storage().setRow(tableName, key, std::move(updateEntry));
 
     gasPricer->appendOperation(InterfaceOpcode::Update);
@@ -857,7 +862,7 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
     precompiled::LimitTuple limitTuple;
     std::vector<precompiled::UpdateFieldTuple> updateFields;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(data, conditions, limitTuple, updateFields);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                            << LOG_KV("tableName", tableName)
@@ -898,15 +903,16 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table cannot update keyField") << LOG_KV("keyField", keyField);
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError{} << errinfo_comment("Table update fields cannot contains key field"));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                      "Table update fields cannot contains key field"));
         }
         if (it == columns.end())
         {
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table update field not found") << LOG_KV("field", field);
-            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table update fields not found"));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment("Table update fields not found"));
         }
         std::pair<uint32_t, std::string> p = {std::distance(columns.begin(), it), std::move(value)};
         updateValue.emplace_back(std::move(p));
@@ -916,12 +922,12 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
     for (size_t i = 0; i < entries.size(); ++i)
     {
         auto&& entry = entries[i];
-        auto values = entry->getObject<std::vector<std::string>>();
+        auto values = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
         for (auto& kv : updateValue)
         {
             values[kv.first] = kv.second;
         }
-        entry->setObject(std::move(values));
+        entry->set(bcos::storage::serialize::encode(std::move(values)));
         _executive->storage().setRow(tableName, tableKeyList[i], std::move(entry.value()));
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
@@ -941,7 +947,7 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
     precompiled::LimitTuple limitTuple;
     std::vector<precompiled::UpdateFieldTuple> updateFields;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
 
     codec.decode(data, conditions, limitTuple, updateFields);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
@@ -982,8 +988,8 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table cannot update keyField") << LOG_KV("keyField", keyField);
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError{} << errinfo_comment("Table update fields cannot contains key field"));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                      "Table update fields cannot contains key field"));
         }
         auto const it = std::find(columns.begin(), columns.end(), field);
         if (it == columns.end())
@@ -991,7 +997,8 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table update field not found") << LOG_KV("field", field);
-            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table update fields not found"));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment("Table update fields not found"));
         }
         std::pair<uint32_t, std::string> p = {std::distance(columns.begin(), it), std::move(value)};
         updateValue.emplace_back(std::move(p));
@@ -1017,7 +1024,7 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
                         values[kv.first] = kv.second;
                     }
                     storage::Entry entry;
-                    entry.setObject(values);
+                    entry.set(bcos::storage::serialize::encode(values));
                     _executive->storage().setRow(
                         tableName, std::get<0>(entryTuple), std::move(entry));
                 }
@@ -1034,12 +1041,13 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
             for (size_t i = 0; i < entries.size(); ++i)
             {
                 auto&& entry = entries[i];
-                auto values = entry->getObject<std::vector<std::string>>();
+                auto values =
+                    bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
                 for (auto& kv : updateValue)
                 {
                     values[kv.first] = kv.second;
                 }
-                entry->setObject(std::move(values));
+                entry->set(bcos::storage::serialize::encode(std::move(values)));
                 _executive->storage().setRow(tableName, tableKeyList[i], std::move(entry.value()));
             }
             affectedRows = tableKeyList.size();
@@ -1060,7 +1068,7 @@ void TablePrecompiled::removeByKey(const std::string& tableName,
     /// remove(string)
     std::string key;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(data, key);
     auto originKey = key;
 
@@ -1100,7 +1108,7 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limitTuple;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(data, conditions, limitTuple);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
                            << LOG_KV("tableName", tableName)
@@ -1143,7 +1151,7 @@ void TablePrecompiled::removeByConditionV32(const std::string& tableName,
     precompiled::LimitTuple limitTuple;
     const auto& blockContext = _executive->blockContext();
 
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(data, conditions, limitTuple);
     precompiled::TableInfo tableInfo;
     // external call table manager desc

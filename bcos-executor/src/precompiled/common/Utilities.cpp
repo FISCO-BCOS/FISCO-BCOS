@@ -262,7 +262,7 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
         // this may happen when register link in contract constructor
         return ContractStatus::Available;
     }
-    auto codeHashStr = codeHashEntry->getField(0);
+    auto codeHashStr = codeHashEntry->get();
     auto codeHash = HashType(codeHashStr, FixedBytes<32>::FromBinary);
 
     if (codeHash == HashType())
@@ -409,7 +409,7 @@ s256 precompiled::externalTouchNewFile(
     std::string_view _fileType, int64_t gasLeft)
 {
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     auto codecResult =
         codec.encodeWithSig("touch(string,string)", std::string(_filePath), std::string(_fileType));
     auto response =

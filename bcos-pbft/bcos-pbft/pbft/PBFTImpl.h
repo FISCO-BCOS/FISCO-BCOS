@@ -30,9 +30,11 @@ class PBFTImpl : public ConsensusInterface
 {
 public:
     using Ptr = std::shared_ptr<PBFTImpl>;
-    explicit PBFTImpl(PBFTEngine::Ptr _pbftEngine) : m_pbftEngine(std::move(_pbftEngine))
+    explicit PBFTImpl(PBFTEngine::Ptr _pbftEngine, bcos::IOServicePool::Ptr _ioServicePool)
+      : m_pbftEngine(std::move(_pbftEngine))
     {
-        m_blockValidator = std::make_shared<BlockValidator>(m_pbftEngine->pbftConfig());
+        m_blockValidator = std::make_shared<BlockValidator>(
+            m_pbftEngine->pbftConfig(), std::move(_ioServicePool));
     }
     ~PBFTImpl() override { stop(); }
 

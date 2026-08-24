@@ -40,7 +40,8 @@ class PBFTConfig : public ConsensusConfig, public std::enable_shared_from_this<P
 {
 public:
     using Ptr = std::shared_ptr<PBFTConfig>;
-    PBFTConfig(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    PBFTConfig(boost::asio::io_context& _ioService,
+        bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
@@ -48,6 +49,7 @@ public:
         StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage,
         bcos::protocol::BlockFactory::Ptr _blockFactory)
       : ConsensusConfig(std::move(_keyPair)),
+        m_ioService(std::addressof(_ioService)),
         m_cryptoSuite(std::move(_cryptoSuite)),
         m_pbftMessageFactory(std::move(_pbftMessageFactory)),
         m_codec(std::move(_codec)),
@@ -58,7 +60,8 @@ public:
         m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>()),
         m_blockFactory(std::move(_blockFactory))
     {
-        m_pbftTimer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
+        m_pbftTimer =
+            std::make_shared<PBFTTimer>(_ioService, consensusTimeout(), "pbftTimer");
         // Note: the pullTxsTimeout must be smaller than consensusTimeout to fetch txs before
         // viewchange when there has no-synced txs pullTxsTimeout is larger than 3000ms
     }
@@ -147,6 +150,8 @@ public:
     void setLowWaterMark(bcos::protocol::BlockNumber _index) { m_lowWaterMark = _index; }
 
     PBFTTimer::Ptr timer() { return m_pbftTimer; }
+
+    boost::asio::io_context& ioService() { return *m_ioService; }
 
     void setConsensusTimeout(uint64_t _consensusTimeout) override
     {
@@ -442,6 +447,8 @@ protected:
         size_t _maxTxsToSeal, size_t _retryTime = 0);
 
     void tryToSyncTxs();
+
+    boost::asio::io_context* m_ioService;
 
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     // Factory for creating PBFT message package

@@ -1,0 +1,48 @@
+# C2 chain config: real op-deployer base allocs (l2genesis.json from anvil L1 deploy).
+# OP predeploys come from the base; only FISCO self-written predeploys are overlaid.
+# FISCO governance contracts use 0x1000+ (outside the OP reserved 0x0000-0x7FF namespace,
+# which is reserved for future OP predeploys even when specific slots are currently free).
+
+proxy_admin: "0x4200000000000000000000000000000000000018"   # OP ProxyAdmin (base)
+governance_owner: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"  # dev1 — config/validator authority
+proxy_code_source: "0x4200000000000000000000000000000000000015"  # L1Block proxy (universal Proxy runtime)
+
+predeploys:
+  # --- FISCO-BCOS self-written predeploys (proxied: proxy + implementation) ---
+  - name: SystemConfig
+    address: "0x4200000000000000000000000000000000001000"
+    sol_file: SystemConfig.sol
+    proxy:
+      implementation: "0x4200000000000000000000000000000000001002"
+  - name: L2ValidatorSet
+    address: "0x4200000000000000000000000000000000001001"
+    sol_file: L2ValidatorSet.sol
+    proxy:
+      implementation: "0x4200000000000000000000000000000000001003"
+
+expected_predeploys:
+  # --- OP predeploys (must exist in the base allocs from op-deployer) ---
+  - name: L1Block
+    address: "0x4200000000000000000000000000000000000015"
+  - name: L2ToL1MessagePasser
+    address: "0x4200000000000000000000000000000000000016"
+  - name: L2CrossDomainMessenger
+    address: "0x4200000000000000000000000000000000000007"
+  - name: L2StandardBridge
+    address: "0x4200000000000000000000000000000000000010"
+  - name: GasPriceOracle
+    address: "0x420000000000000000000000000000000000000F"
+  - name: WETH9
+    address: "0x4200000000000000000000000000000000000006"
+  - name: ProxyAdmin
+    address: "0x4200000000000000000000000000000000000018"
+  - name: OptimismMintableERC20Factory
+    address: "0x4200000000000000000000000000000000000012"
+  - name: SequencerFeeVault
+    address: "0x4200000000000000000000000000000000000011"
+  - name: BaseFeeVault
+    address: "0x4200000000000000000000000000000000000019"
+  - name: L1FeeVault
+    address: "0x420000000000000000000000000000000000001A"
+
+base_allocs_sha256: "9b33b2433446f67d0efa7e9f2da8e59366ccf9b6ceb4e98f9351f9c8c6da57f8"

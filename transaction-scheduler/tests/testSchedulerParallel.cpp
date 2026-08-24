@@ -1,3 +1,4 @@
+#include "TrivialCheckpointStorage.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
@@ -22,11 +23,9 @@ struct MockExecutorParallel
     template <class Storage>
     struct ExecuteContext
     {
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
-        {
-            co_return {};
-        }
+        task::Task<void> prepare() { co_return; }
+        task::Task<void> execute() { co_return; }
+        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
@@ -53,18 +52,21 @@ public:
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
+    using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
 
     TestSchedulerParallelFixture()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         receiptFactory(cryptoSuite),
-        multiLayerStorage(backendStorage)
+        checkpointBackend(backendStorage),
+        multiLayerStorage(checkpointBackend)
     {}
 
-    BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
-    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+    BackendStorage backendStorage;
+    CheckpointBackend checkpointBackend;
+    MultiLayerStorage<MutableStorage, void, CheckpointBackend> multiLayerStorage;
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 };
 
@@ -74,10 +76,10 @@ BOOST_AUTO_TEST_CASE(simple)
 {
     task::syncWait([&, this]() -> task::Task<void> {
         MockExecutorParallel executor;
-        SchedulerParallelImpl<MutableStorage> scheduler;
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testParallelGC");
+        SchedulerParallelImpl<MutableStorage> scheduler(ioServicePool);
 
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
         auto transactions =
             ::ranges::iota_view<int, int>(0, 100) | ::ranges::views::transform([](int index) {
                 return std::make_unique<bcostars::protocol::TransactionImpl>(
@@ -110,38 +112,36 @@ struct MockConflictExecutor
         std::string fromAddress;
         std::string toAddress;
 
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
+        task::Task<void> prepare()
         {
-            if constexpr (step == 0)
-            {
-                auto input = transaction->input();
-                auto inputNum = boost::lexical_cast<int>(
-                    std::string_view((const char*)input.data(), input.size()));
-                fromAddress = std::to_string(inputNum % MOCK_USER_COUNT);
-                toAddress = std::to_string((inputNum + (MOCK_USER_COUNT / 2)) % MOCK_USER_COUNT);
-            }
-            else if constexpr (step == 1)
-            {
-                StateKey fromKey{"t_test"sv, fromAddress};
-                auto fromEntry = co_await storage2::readOne(*storage, fromKey);
-                fromEntry->set(boost::lexical_cast<std::string>(
-                    boost::lexical_cast<int>(fromEntry->get()) - 1));
-                co_await storage2::writeOne(*storage, fromKey, *fromEntry);
+            auto input = transaction->input();
+            auto inputNum = boost::lexical_cast<int>(
+                std::string_view((const char*)input.data(), input.size()));
+            fromAddress = std::to_string(inputNum % MOCK_USER_COUNT);
+            toAddress = std::to_string((inputNum + (MOCK_USER_COUNT / 2)) % MOCK_USER_COUNT);
+            co_return;
+        }
 
-                // Read toKey and +1
-                StateKey toKey{"t_test"sv, toAddress};
-                auto toEntry = co_await storage2::readOne(*storage, toKey);
-                toEntry->set(
-                    boost::lexical_cast<std::string>(boost::lexical_cast<int>(toEntry->get()) + 1));
-                co_await storage2::writeOne(*storage, toKey, *toEntry);
-            }
-            else if constexpr (step == 2)
-            {
-                co_return std::shared_ptr<bcos::protocol::TransactionReceipt>(
-                    (bcos::protocol::TransactionReceipt*)0x10086, [](auto* p) {});
-            }
-            co_return {};
+        task::Task<void> execute()
+        {
+            StateKey fromKey{"t_test"sv, fromAddress};
+            auto fromEntry = co_await storage2::readOne(*storage, fromKey);
+            fromEntry->set(boost::lexical_cast<std::string>(
+                boost::lexical_cast<int>(fromEntry->get()) - 1));
+            co_await storage2::writeOne(*storage, fromKey, *fromEntry);
+
+            // Read toKey and +1
+            StateKey toKey{"t_test"sv, toAddress};
+            auto toEntry = co_await storage2::readOne(*storage, toKey);
+            toEntry->set(
+                boost::lexical_cast<std::string>(boost::lexical_cast<int>(toEntry->get()) + 1));
+            co_await storage2::writeOne(*storage, toKey, *toEntry);
+        }
+
+        task::Task<protocol::TransactionReceipt::Ptr> finish()
+        {
+            co_return std::shared_ptr<bcos::protocol::TransactionReceipt>(
+                (bcos::protocol::TransactionReceipt*)0x10086, [](auto* p) {});
         }
     };
 
@@ -169,7 +169,8 @@ BOOST_AUTO_TEST_CASE(conflict)
 {
     task::syncWait([&, this]() -> task::Task<void> {
         MockConflictExecutor executor;
-        SchedulerParallelImpl<MutableStorage> scheduler;
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testParallelGC");
+        SchedulerParallelImpl<MutableStorage> scheduler(ioServicePool);
 
         auto view1 = multiLayerStorage.fork();
         view1.newMutable();
@@ -185,8 +186,7 @@ BOOST_AUTO_TEST_CASE(conflict)
             co_await storage2::writeOne(front, key, std::move(entry));
         }
 
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
         constexpr static auto TRANSACTION_COUNT = 1000;
         auto transactions =
             ::ranges::views::iota(0, TRANSACTION_COUNT) | ::ranges::views::transform([](int index) {

@@ -1,0 +1,125 @@
+# Copyright (c) FISCO-BCOS, Apache-2.0
+# chain-config template for build-allocs.py (L2 / OP-Stack genesis).
+# Copy this file, fill in the values, then:
+#   make allocs CONFIG=chain-config.yaml BASE=final-allocs.json
+# or:
+#   python3 build-allocs.py --config chain-config.yaml \
+#       --contracts ../../bcos-l2-contracts \
+#       --base-allocs final-allocs.json --out allocs.ini
+
+# The op-deployer-generated Karst terminal alloc JSON (--base-allocs) is the
+# ONLY source for the OP-Stack side of genesis: every 0x42... predeploy
+# proxy, every 0xc0d3... implementation, ProxyAdmin ownership, prefunded
+# accounts. This config only describes (a) the FISCO self-written predeploy
+# OVERLAY and (b) an existence checklist for the base.
+
+# Self-written predeploys (SystemConfig, L2ValidatorSet) are materialized in
+# their post-deployment terminal state: a Proxy account (EIP-1967 slots +
+# contract storage) plus a separate implementation account.
+
+# SHA-256 of the op-deployer base alloc file (--base-allocs), recorded next to
+# the frozen quintuple in bcos-l2-contracts/op-fork-pin.toml
+# ([karst_pin].base_allocs_sha256). Leave empty during pre-freeze iteration
+# (the tool warns); once the artifact is frozen, set it — a mismatching base
+# file is then rejected.
+base_allocs_sha256: ""
+
+# Two-authority split (the tool REJECTS these being the same entity):
+#   proxy_admin       -> EIP-1967 admin slot: upgrade authority (ProxyAdmin
+#                        predeploy).
+#   governance_owner  -> Ownable.owner (slot 51): config / validator write
+#                        authority (the L2 governance entity).
+proxy_admin: "0x4200000000000000000000000000000000000018"
+# Placeholder — REPLACE with the real governance address before generating
+# allocs (the tool rejects the zero address).
+governance_owner: "0x000000000000000000000000000000000000dEaD"
+
+# Base-alloc proxied predeploy whose Proxy runtime bytecode the overlay
+# proxies reuse — byte-identical to the op-deployer's Proxy, no separate
+# forge build of the OP tree involved. The L1Block proxy is the default pick.
+proxy_code_source: "0x4200000000000000000000000000000000000015"
+
+# FISCO self-written predeploy overlay (proxied, storage seeded).
+# The self-written predeploys use the 0x43... prefix so they stay out of the
+# OP reserved predeploy namespace (0x4200...0000-0x4200...07FF).
+# Implementation addresses mirror the OP code-namespace convention
+# (0xc0d3...<2-byte suffix>) one prefix up (0xc3d3...) so they collide with
+# neither the OP predeploy range nor the OP code namespace.
+predeploys:
+  - name: SystemConfig
+    address: "0x43000000000000000000000000000000000000C0"
+    sol_file: SystemConfig.sol
+    proxy:
+      implementation: "0xc3d3c3d3c3d3c3d3c3d3c3d3c3d3c3d3c3d300c0"
+    # Genesis-seeded config entries, one packed Entry slot per key
+    # (enableNumber = 0). chain_id and gas_limit are genesis-frozen:
+    # SystemConfig.setValueByKey rejects them at runtime (D4 authority
+    # boundary), so these values are final for the life of the chain
+    # (gas_limit authority moves to op-node payload attributes).
+    system_config:
+      chain_id: 20200
+      gas_limit: 30000000
+      block_tx_count_limit: 1000
+      compatibility_version: 0x03120000  # 3.18.0
+      # REQUIRED - must equal EXACTLY the node's Features::toFlagsNumber()
+      # for this chain's genesis feature set (version defaults + explicitly
+      # enabled flags; note an rpbft-consensus chain additionally auto-sets
+      # the feature_rpbft bit at genesis). Any deviation - even a single bit -
+      # makes every node refuse to start at first init. The node VERIFIES this slot at first
+      # start and refuses to build genesis on mismatch; it no longer injects
+      # the value, so the genesis state root commits it on both FISCO and the
+      # op-reth oracle. The example below is a placeholder bitmap - compute
+      # the real one.
+      feature_flags: 0x1
+  - name: L2ValidatorSet
+    address: "0x43000000000000000000000000000000000000C1"
+    sol_file: L2ValidatorSet.sol
+    proxy:
+      implementation: "0xc3d3c3d3c3d3c3d3c3d3c3d3c3d3c3d3c3d300c1"
+    # Initial validator set, written as terminal EnumerableSet + record
+    # storage. fee_address defaults to the validator address; voting_power
+    # defaults to 1. jailed / incoming are Phase-A constants (0).
+    validators: []
+    # validators:
+    #   - address: "0x1111111111111111111111111111111111111111"
+    #     consensus_public_key: "0x<hex>"
+    #     fee_address: "0x1111111111111111111111111111111111111111"
+    #     voting_power: 1
+
+# Existence checklist: OP predeploys the L2 relies on. Their bytecode and
+# storage come from the base allocs; the tool only asserts each address is
+# present there WITH code, and fails the build otherwise (wrong or
+# incomplete op-deployer output).
+expected_predeploys:
+  - name: L1Block
+    address: "0x4200000000000000000000000000000000000015"
+  - name: L2ToL1MessagePasser
+    address: "0x4200000000000000000000000000000000000016"
+  - name: L2CrossDomainMessenger
+    address: "0x4200000000000000000000000000000000000007"
+  - name: L2StandardBridge
+    address: "0x4200000000000000000000000000000000000010"
+  - name: GasPriceOracle
+    address: "0x420000000000000000000000000000000000000F"
+  - name: ProxyAdmin
+    address: "0x4200000000000000000000000000000000000018"
+  - name: SequencerFeeVault
+    address: "0x4200000000000000000000000000000000000011"
+  - name: BaseFeeVault
+    address: "0x4200000000000000000000000000000000000019"
+  - name: L1FeeVault
+    address: "0x420000000000000000000000000000000000001A"
+  - name: WETH
+    address: "0x4200000000000000000000000000000000000006"
+  - name: OptimismMintableERC20Factory
+    address: "0x4200000000000000000000000000000000000012"
+  - name: OperatorFeeVault
+    address: "0x420000000000000000000000000000000000001B"
+  # EIP-4788 beacon-roots system contract (Cancun/Ecotone+): system_call_block_start
+  # writes the parent beacon block root here every block; silently no-op at the EVM
+  # level if missing, but a genesis without it diverges from every OP reference client.
+  - name: BeaconBlockRoot
+    address: "0x000F3DF6D732807Ef1319FB7B8bB8522d0Beac02"
+  # EIP-2935 historical block hashes (Prague/Isthmus-era op-deployer output includes it).
+  - name: HistoryStorage
+    address: "0x0000F90827F1C53A10CB7A02335B175320002935"

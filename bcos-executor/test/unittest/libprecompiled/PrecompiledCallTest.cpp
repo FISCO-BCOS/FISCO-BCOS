@@ -19,9 +19,7 @@
  */
 
 #include "libprecompiled/PreCompiledFixture.h"
-#include "precompiled/ConsensusPrecompiled.h"
-#include "precompiled/SystemConfigPrecompiled.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -35,8 +33,8 @@ class PrecompiledCallTestFixture : public PrecompiledFixture
 public:
     PrecompiledCallTestFixture()
     {
-        codec = std::make_shared<CodecWrapper>(hashImpl, false);
-        setIsWasm(false);
+        codec = std::make_shared<CodecWrapper>(hashImpl);
+        prepareEnv();
         contractAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
     }
 
@@ -58,7 +56,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS));
+        params2->setTo(std::string(TABLE_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);

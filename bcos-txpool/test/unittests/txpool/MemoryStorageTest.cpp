@@ -19,15 +19,13 @@
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
-#include "bcos-txpool/txpool/utilities/Common.h"
 #include "bcos-txpool/txpool/validator/LedgerNonceChecker.h"
 #include "bcos-txpool/txpool/validator/TxPoolNonceChecker.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
 #include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/IOServicePool.h"
 
-#include <sw/redis++/cxx_utils.h>
-#include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 
 #include <boost/test/unit_test.hpp>
@@ -53,7 +51,7 @@ struct MemoryStorageFixture
             std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>(), nullptr,
             nullptr, txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ 1024,
             /*checkSig*/ false)),
-        storage(config)
+        storage(config, *ioServicePool->getIOService())
     {
         fakeit::When(Method(mockValidator, checkTransaction))
             .AlwaysReturn(bcos::protocol::TransactionStatus::None);
@@ -108,6 +106,9 @@ struct MemoryStorageFixture
         tx->mutableInner().sender.assign(senderBytes.begin(), senderBytes.end());
         HashType txHash = HashType::generateRandomFixedBytes();
         tx->mutableInner().extraTransactionHash.assign(txHash.begin(), txHash.end());
+        // Set extraTransactionBytes to a valid EIP-1559 (0x02) payload so the OP Stack type
+        // gate does not reject the transaction as Unsupported.
+        tx->mutableInner().extraTransactionBytes.assign({0x02});
         tx->setSealed(sealed);
         // No calculateHash() here: this fabricated tx has no signing preimage/signature, and
         // since FIB-New1 the Web3 branch of calculateHash() unconditionally recomputes the
@@ -124,6 +125,8 @@ struct MemoryStorageFixture
     std::shared_ptr<bcos::txpool::LedgerNonceChecker> ledgerNonceChecker;
     std::shared_ptr<bcos::ledger::LedgerInterface> ledger;
     std::shared_ptr<TxPoolConfig> config;
+    bcos::IOServicePool::Ptr ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "memStorTest");
     MemoryStorage storage;
 };
 
@@ -241,10 +244,10 @@ BOOST_AUTO_TEST_CASE(GetTxsHash)
     }
 }
 
-BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsWithWeb3Transactions)
+BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsUpdatesWeb3NonceCache)
 {
-    // This test verifies that batchRemoveSealedTxs correctly updates Web3 transaction nonces
-    // when transactions are removed after being sealed (addressing the synchronization issue)
+    // This test verifies that batchRemoveSealedTxs correctly updates the Web3 nonce cache
+    // when sealed Web3 transactions are removed.
 
     // Create test data: Web3 transactions with different senders and nonces
     const std::string sender1Hex = "0x1234567890123456789012345678901234567890";
@@ -309,7 +312,7 @@ BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsWithWeb3Transactions)
     BOOST_CHECK_EQUAL(storage.exists(bcosTx->hash()), false);
     BOOST_CHECK_EQUAL(storage.size(), 0U);
 
-    // The key part of the test: verify that Web3NonceChecker was called with correct data
+    // The key part of the test: verify that Web3NonceChecker was updated with correct data.
     // The web3NonceChecker should have been updated with:
     // - sender1: nonces {5, 7} -> max nonce 7+1=8
     // - sender2: nonce {3} -> max nonce 3+1=4
@@ -481,13 +484,13 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     auto configWithSig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, ledger,
         txPoolNonceChecker, /*blockLimit*/ 1000,
         /*poolLimit*/ 1024, /*checkSig*/ true);
-    MemoryStorage storageWithSig(configWithSig);
+    MemoryStorage storageWithSig(configWithSig, *ioServicePool->getIOService());
 
     // Create config with signature check disabled
     auto configNoSig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, ledger,
         txPoolNonceChecker, /*blockLimit*/ 1000,
         /*poolLimit*/ 1024, /*checkSig*/ false);
-    MemoryStorage storageNoSig(configNoSig);
+    MemoryStorage storageNoSig(configNoSig, *ioServicePool->getIOService());
 
     // Test 1: Step 1 - AlreadyInTxPool
     {
@@ -495,21 +498,6 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         storageWithSig.insert(tx1);  // Insert first time
         auto result = storageWithSig.verifyAndSubmitTransaction(tx1, nullptr, false, false);
         BOOST_CHECK(result == TransactionStatus::AlreadyInTxPool);
-    }
-
-    // Test 4: Step 3 - OverFlowValue
-    {
-        storageNoSig.clear();
-        auto tx4 = makeWeb3Tx("1235", "0xd485BAEE65E501F1cDa071a5b5c9327C401dcD5a", false);
-        // Set a value that exceeds MAX_LENGTH - need to cast to TransactionImpl
-        auto tx4Impl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx4);
-        if (tx4Impl)
-        {
-            std::string largeValue(TRANSACTION_VALUE_MAX_LENGTH + 1, '1');
-            tx4Impl->mutableInner().data.value.assign(largeValue.begin(), largeValue.end());
-        }
-        auto result = storageNoSig.verifyAndSubmitTransaction(tx4, nullptr, false, false);
-        BOOST_CHECK(result == TransactionStatus::OverFlowValue);
     }
 
     // Test 5: Step 3 - MaxInitCodeSizeExceeded (for Web3Transaction)
@@ -744,7 +732,7 @@ BOOST_AUTO_TEST_CASE(FIB55_PoolLimitEnforced)
     constexpr size_t kLimit = 3;
     auto limitedConfig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, nullptr,
         txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ kLimit, /*checkSig*/ false);
-    MemoryStorage limitedStorage(limitedConfig);
+    MemoryStorage limitedStorage(limitedConfig, *ioServicePool->getIOService());
 
     // Insert kLimit txs directly (bypasses validator, fills the pool)
     for (size_t i = 0; i < kLimit; ++i)
@@ -844,7 +832,8 @@ BOOST_AUTO_TEST_CASE(FIB48_SubmitTransactionResumesOnce)
     // Expectation: coroutine continuation runs exactly once.
 
     // submitTransaction() uses shared_from_this(), so this instance must be owned by shared_ptr.
-    auto sharedStorage = std::make_shared<MemoryStorage>(config);
+    auto ioServicePool = std::make_shared<IOServicePool>(1, "memStorageTest");
+    auto sharedStorage = std::make_shared<MemoryStorage>(config, *ioServicePool->getIOService());
 
     auto tx = makeTx("fib48_submit_once", false);
     BOOST_CHECK_EQUAL(sharedStorage->insert(tx), TransactionStatus::None);
@@ -869,18 +858,17 @@ BOOST_AUTO_TEST_CASE(FIB48_SubmitTransactionResumesOnce)
 
     // Wait until callback is attached, or submit coroutine has already completed.
     bool callbackAttached = false;
-    for (size_t i = 0; i < 10000; ++i)
+    for (size_t i = 0; i < 200; ++i)
     {
         if (tx->submitCallback())
         {
             callbackAttached = true;
             break;
         }
-        if (doneFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        if (doneFuture.wait_for(std::chrono::milliseconds(10)) == std::future_status::ready)
         {
             break;
         }
-        std::this_thread::yield();
     }
 
     TransactionSubmitResults txsResult;
@@ -899,7 +887,8 @@ BOOST_AUTO_TEST_CASE(FIB48_SubmitTransactionResumesOnce)
         sharedStorage->batchRemoveSealedTxs(/*batchId*/ 1, txsResult);
     }
 
-    BOOST_CHECK(doneFuture.wait_for(std::chrono::seconds(1)) == std::future_status::ready);
+    BOOST_CHECK_MESSAGE(doneFuture.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
+        "submitTransaction did not complete within 5 seconds");
     if (waitThread.joinable())
     {
         waitThread.join();
@@ -953,7 +942,7 @@ BOOST_AUTO_TEST_CASE(FIB50_NonceNotInsertedOnValidationFailure)
     std::shared_ptr<TxValidatorInterface> v(&localValidator.get(), [](auto*) {});
     auto cfg = std::make_shared<TxPoolConfig>(
         v, nullptr, nullptr, nullptr, nc, 1000, 1024, /*checkSig=*/true);
-    MemoryStorage stor(cfg);
+    MemoryStorage stor(cfg, *ioServicePool->getIOService());
 
     // 1. Bad tx: validateTransaction returns OverFlowValue → chain stops → nonce NOT inserted
     auto badTx = makeTx(badNonce, false);

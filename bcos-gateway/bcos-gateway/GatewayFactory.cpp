@@ -34,7 +34,6 @@
 #include "bcos-utilities/IOServicePool.h"
 #include <openssl/evp.h>
 #include <openssl/x509.h>
-#include <chrono>
 #include <exception>
 #include <optional>
 
@@ -252,12 +251,11 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
     m_sslContextPubHandlerWithoutExtInfo = handler;
 }
 
-std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
+boost::asio::ssl::context GatewayFactory::buildSSLContext(
     bool _server, uint8_t sslMode, const GatewayConfig::CertConfig& _certConfig)
 {
     std::ignore = _server;
-    std::shared_ptr<boost::asio::ssl::context> sslContext =
-        std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+    boost::asio::ssl::context sslContext(boost::asio::ssl::context::tlsv12);
     /*
       std::shared_ptr<EC_KEY> ecdh(EC_KEY_new_by_curve_name(NID_secp384r1),
                                    [](EC_KEY *p) { EC_KEY_free(p); });
@@ -297,12 +295,12 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         }
 
         boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
-        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+        sslContext.use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
     }
     // node.crt
     if (_certConfig.nodeCert)
     {
-        sslContext->use_certificate_chain_file(*_certConfig.nodeCert);
+        sslContext.use_certificate_chain_file(*_certConfig.nodeCert);
     }
     /*if (!SSL_CTX_get0_certificate(sslContext->native_handle())) {
       GATEWAY_FACTORY_LOG(ERROR)
@@ -325,24 +323,24 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
                 InvalidParameter() << errinfo_comment(
                     "buildSSLContext: unable read content of ca: " + *_certConfig.caCert));
         }
-        sslContext->add_certificate_authority(
+        sslContext.add_certificate_authority(
             boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
     }
     std::string caPath = _certConfig.multiCaPath;
     if (!caPath.empty())
     {
-        sslContext->add_verify_path(caPath);
+        sslContext.add_verify_path(caPath);
     }
 
-    sslContext->set_verify_mode(sslMode);
+    sslContext.set_verify_mode(sslMode);
 
     return sslContext;
 }
 
-std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
+boost::asio::ssl::context GatewayFactory::buildSSLContext(
     bool _server, uint8_t sslMode, const GatewayConfig::SMCertConfig& _smCertConfig)
 {
-    SSL_CTX* ctx = NULL;
+    SSL_CTX* ctx = nullptr;
     if (_server)
     {
         const SSL_METHOD* meth = SSLv23_server_method();
@@ -357,16 +355,15 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         ctx = SSL_CTX_new(meth);
     }
 
-    std::shared_ptr<boost::asio::ssl::context> sslContext =
-        std::make_shared<boost::asio::ssl::context>(ctx);
+    boost::asio::ssl::context sslContext(ctx);
 
-    sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
+    sslContext.set_verify_mode(boost::asio::ssl::context_base::verify_none);
 
     if (_smCertConfig.nodeCert)
     {
         /* Load the server certificate into the SSL_CTX structure */
-        if (SSL_CTX_use_certificate_file(sslContext->native_handle(),
-                _smCertConfig.nodeCert->c_str(), SSL_FILETYPE_PEM) <= 0)
+        if (SSL_CTX_use_certificate_file(
+                sslContext.native_handle(), _smCertConfig.nodeCert->c_str(), SSL_FILETYPE_PEM) <= 0)
         {
             ERR_print_errors_fp(stderr);
             BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_certificate_file failed"));
@@ -397,10 +394,10 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         }
         // nodekey
         boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
-        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+        sslContext.use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
         /* Check if the server certificate and private-key matches */
-        if (!SSL_CTX_check_private_key(sslContext->native_handle()))
+        if (!SSL_CTX_check_private_key(sslContext.native_handle()))
         {
             ERR_print_errors_fp(stderr);
             BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key failed"));
@@ -409,7 +406,7 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
     if (_smCertConfig.enNodeCert)
     {
         /* Load the server encrypt certificate into the SSL_CTX structure */
-        if (SSL_CTX_use_enc_certificate_file(sslContext->native_handle(),
+        if (SSL_CTX_use_enc_certificate_file(sslContext.native_handle(),
                 _smCertConfig.enNodeCert->c_str(), SSL_FILETYPE_PEM) <= 0)
         {
             ERR_print_errors_fp(stderr);
@@ -441,7 +438,7 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         }
         std::string enNodeKeyStr((const char*)enNodeKeyContent->data(), enNodeKeyContent->size());
         if (SSL_CTX_use_enc_PrivateKey(
-                sslContext->native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <= 0)
+                sslContext.native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <= 0)
         {
             GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_enc_PrivateKey failed");
             BOOST_THROW_EXCEPTION(
@@ -455,16 +452,16 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         auto caContent = readContentsToString(
             boost::filesystem::path(*_smCertConfig.caCert));  // node.key content
 
-        sslContext->add_certificate_authority(
+        sslContext.add_certificate_authority(
             boost::asio::const_buffer(caContent->data(), caContent->size()));
     }
     std::string caPath = _smCertConfig.multiCaPath;
     if (!caPath.empty())
     {
-        sslContext->add_verify_path(caPath);
+        sslContext.add_verify_path(caPath);
     }
 
-    sslContext->set_verify_mode(sslMode);
+    sslContext.set_verify_mode(sslMode);
 
     return sslContext;
 }
@@ -496,21 +493,14 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
 }
 
 std::shared_ptr<gateway::ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRateLimiter(
-    const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
-    const GatewayConfig::RedisConfig& _redisConfig)
+    const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
 {
-    auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>();
+    auto rateLimiterStat =
+        std::make_shared<ratelimiter::RateLimiterStat>(*m_ioServicePool->getIOService());
     rateLimiterStat->setStatInterval(_rateLimiterConfig.statInterval);
     rateLimiterStat->setEnableConnectDebugInfo(_rateLimiterConfig.enableConnectDebugInfo);
 
-    // redis instance
-    std::shared_ptr<sw::redis::Redis> redis = nullptr;
-    if (_rateLimiterConfig.enableDistributedRatelimit)
-    {  // init redis first
-        redis = initRedis(_redisConfig);
-    }
-
-    auto rateLimiterManager = buildRateLimiterManager(_rateLimiterConfig, redis);
+    auto rateLimiterManager = buildRateLimiterManager(_rateLimiterConfig);
 
     auto gatewayRateLimiter =
         std::make_shared<ratelimiter::GatewayRateLimiter>(rateLimiterManager, rateLimiterStat);
@@ -519,13 +509,13 @@ std::shared_ptr<gateway::ratelimiter::GatewayRateLimiter> GatewayFactory::buildG
 }
 
 std::shared_ptr<gateway::ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimiterManager(
-    const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
-    std::shared_ptr<sw::redis::Redis> _redis)
+    const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
 {
     // rate limiter factory
-    auto rateLimiterFactory = std::make_shared<ratelimiter::RateLimiterFactory>(_redis);
+    auto rateLimiterFactory = std::make_shared<ratelimiter::RateLimiterFactory>();
     // rate limiter manager
-    auto rateLimiterManager = std::make_shared<ratelimiter::RateLimiterManager>(_rateLimiterConfig);
+    auto rateLimiterManager = std::make_shared<ratelimiter::RateLimiterManager>(
+        *m_ioServicePool->getIOService(), _rateLimiterConfig);
 
     int32_t timeWindowS = _rateLimiterConfig.timeWindowSec;
     bool allowExceedMaxPermitSize = _rateLimiterConfig.allowExceedMaxPermitSize;
@@ -558,19 +548,8 @@ std::shared_ptr<gateway::ratelimiter::RateLimiterManager> GatewayFactory::buildR
     {
         for (const auto& [group, bandWidth] : _rateLimiterConfig.group2BwLimit)
         {
-            bcos::ratelimiter::RateLimiterInterface::Ptr rateLimiterInterface = nullptr;
-            if (_rateLimiterConfig.enableDistributedRatelimit)
-            {
-                rateLimiterInterface = rateLimiterFactory->buildDistributedRateLimiter(
-                    rateLimiterFactory->toTokenKey(group), bandWidth * timeWindowS, timeWindowS,
-                    allowExceedMaxPermitSize, _rateLimiterConfig.enableDistributedRateLimitCache,
-                    _rateLimiterConfig.distributedRateLimitCachePercent);
-            }
-            else
-            {
-                rateLimiterInterface = rateLimiterFactory->buildTimeWindowRateLimiter(
-                    bandWidth * timeWindowS, toMillisecond(timeWindowS), allowExceedMaxPermitSize);
-            }
+            auto rateLimiterInterface = rateLimiterFactory->buildTimeWindowRateLimiter(
+                bandWidth * timeWindowS, toMillisecond(timeWindowS), allowExceedMaxPermitSize);
 
             rateLimiterManager->registerRateLimiter(group, rateLimiterInterface);
         }
@@ -601,42 +580,49 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "GatewayFactory::init unable parse myself pub id"));
     }
-    std::shared_ptr<ba::ssl::context> srvCtx =
-        (_config->smSSL() ?
-                buildSSLContext(true, _config->sslServerMode(), _config->smCertConfig()) :
-                buildSSLContext(true, _config->sslServerMode(), _config->certConfig()));
+    auto srvCtx = (_config->smSSL() ?
+                       buildSSLContext(true, _config->sslServerMode(), _config->smCertConfig()) :
+                       buildSSLContext(true, _config->sslServerMode(), _config->certConfig()));
 
-    std::shared_ptr<ba::ssl::context> clientCtx =
+    auto clientCtx =
         (_config->smSSL() ?
                 buildSSLContext(false, _config->sslClientMode(), _config->smCertConfig()) :
                 buildSSLContext(false, _config->sslClientMode(), _config->certConfig()));
 
-    // init ASIOInterface
-    auto asioInterface = std::make_shared<ASIOInterface>();
-    // FIB-186: size the P2P I/O pool from p2p.thread_count (previously ignored: IOServicePool() was
-    // built with no args, always defaulting to hardware_concurrency()+1). A single shared pool
-    // carries the acceptor, inbound + outbound sessions, TLS handshakes and timers.
+    // IOServicePool must be set from outside before init()
     //
-    // We deliberately do NOT add a second, acceptor-only pool to isolate inbound churn. A
-    // boost::asio SSL stream is welded to its io_context for life, so a connection's handshake and
-    // the reads of the session that follows run on the same pool; and an inbound churn connection
-    // is indistinguishable from an inbound validator connection at accept time (identity is known
-    // only after the handshake). So no pool assignment can separate attacker handshakes from
-    // validator consensus reads -- both always land on the same pool. A pool split would only move
-    // which thread the handshake CPU lands on, not off a thread that also carries consensus reads:
-    // thread isolation is not CPU isolation, and once that thread saturates consensus halts anyway
-    // (a split merely delays the onset). What actually prevents the halt is keeping the expensive
+    // FIB-186: the pool that carries the acceptor, inbound + outbound sessions, TLS handshakes and
+    // timers must actually be sized from configuration -- it used to be built as IOServicePool()
+    // with no args, silently pinned to hardware_concurrency()+1 whatever the config said. That is
+    // now handled upstream of this factory: p2p.thread_count is deprecated (see initP2PConfig) in
+    // favour of the node-wide thread_pool.io_thread_count, which NodeConfig reads and the
+    // initializer uses to size the shared pool injected here.
+    //
+    // There is deliberately NO second, acceptor-only pool to isolate inbound churn. A boost::asio
+    // SSL stream is welded to its io_context for life, so a connection's handshake and the reads of
+    // the session that follows run on the same pool; and an inbound churn connection is
+    // indistinguishable from an inbound validator connection at accept time (identity is known only
+    // after the handshake). So no pool assignment can separate attacker handshakes from validator
+    // consensus reads -- both always land on the same pool. A pool split would only move which
+    // thread the handshake CPU lands on, not off a thread that also carries consensus reads: thread
+    // isolation is not CPU isolation, and once that thread saturates consensus halts anyway (a
+    // split merely delays the onset). What actually prevents the halt is keeping the expensive
     // handshake from running at all -- rejecting churn cheaply BEFORE the handshake via the
     // accept-rate limit and the in-flight-handshake cap (Host), tuned small enough that admitted
     // handshake CPU cannot saturate the pool. This was validated on a 3-node churn harness: with
     // those caps on, a dedicated acceptor pool made no measurable difference; with them off, both
     // the single-pool and the split-pool builds halted. See
     // Host::DEFAULT_MAX_CONNECTIONS_PER_SECOND.
-    auto ioServicePool =
-        std::make_shared<IOServicePool>(std::max<uint32_t>(1U, _config->threadPoolSize()));
-    asioInterface->setIOServicePool(ioServicePool);
-    asioInterface->setSrvContext(srvCtx);
-    asioInterface->setClientContext(clientCtx);
+    if (!m_ioServicePool)
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "GatewayFactory: IOServicePool must be provided from outside!"));
+    }
+    auto ioServicePool = m_ioServicePool;
+    auto asioInterface =
+        std::make_shared<ASIOInterface>(ioServicePool, _config->listenIP(), _config->listenPort());
+    asioInterface->setSrvContext(std::move(srvCtx));
+    asioInterface->setClientContext(std::move(clientCtx));
     asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 
     // Message Factory
@@ -682,7 +668,8 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     if (enableRIPProtocol)
     {
         auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
-        service = std::make_shared<ServiceV2>(selfInfo, routerTableFactory);
+        service = std::make_shared<ServiceV2>(
+            selfInfo, routerTableFactory, *ioServicePool->getIOService());
     }
     else
     {
@@ -731,8 +718,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         AMOPImpl::Ptr amop;
         if (_airVersion)
         {
-            gatewayNodeManager =
-                std::make_shared<GatewayNodeManager>(_config->uuid(), pubHex, keyFactory, service);
+            gatewayNodeManager = std::make_shared<GatewayNodeManager>(
+                _config->uuid(), pubHex, keyFactory, service, *m_ioServicePool->getIOService());
             if (!_config->readonly())
             {
                 amop = buildLocalAMOP(service, pubHex);
@@ -744,12 +731,12 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             if (_entryPoint)
             {
                 gatewayNodeManager = std::make_shared<GatewayNodeManager>(
-                    _config->uuid(), pubHex, keyFactory, service);
+                    _config->uuid(), pubHex, keyFactory, service, *m_ioServicePool->getIOService());
             }
             else
             {
                 gatewayNodeManager = std::make_shared<ProGatewayNodeManager>(
-                    _config->uuid(), pubHex, keyFactory, service);
+                    _config->uuid(), pubHex, keyFactory, service, *m_ioServicePool->getIOService());
             }
 
             if (!_config->readonly())
@@ -774,8 +761,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         std::shared_ptr<ratelimiter::GatewayRateLimiter> gatewayRateLimiter;
         if (_config->rateLimiterConfig().enable)
         {
-            gatewayRateLimiter =
-                buildGatewayRateLimiter(_config->rateLimiterConfig(), _config->redisConfig());
+            gatewayRateLimiter = buildGatewayRateLimiter(_config->rateLimiterConfig());
         }
 
         // init Gateway
@@ -894,7 +880,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
     {
         GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("GatewayFactory::init")
                                    << LOG_KV("message", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(e);
+        boost::rethrow_exception(boost::current_exception());
     }
 }
 
@@ -944,99 +930,6 @@ void GatewayFactory::initFailOver(
     GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("initFailOver for gateway success");
 }
 
-/**
- * @brief
- *
- * @param _redisConfig
- * @return std::shared_ptr<sw::redis::Redis>
- */
-std::shared_ptr<sw::redis::Redis> GatewayFactory::initRedis(
-    const GatewayConfig::RedisConfig& _redisConfig)
-{
-    GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_DESC("start connect to redis")
-                              << LOG_KV("host", _redisConfig.host)
-                              << LOG_KV("port", _redisConfig.port) << LOG_KV("db", _redisConfig.db)
-                              << LOG_KV("poolSize", _redisConfig.connectionPoolSize)
-                              << LOG_KV("timeout", _redisConfig.timeout)
-                              << LOG_KV("password", _redisConfig.password);
-
-    sw::redis::ConnectionOptions connection_options;
-    connection_options.host = _redisConfig.host;  // Required.
-    connection_options.port = _redisConfig.port;  // Optional.
-    connection_options.db = _redisConfig.db;      // Optional. Use the 0th database by default.
-    if (!_redisConfig.password.empty())
-    {
-        connection_options.password = _redisConfig.password;  // Optional. No password by default.
-    }
-
-    // Optional. Timeout before we successfully send request to or receive response from redis.
-    // By default, the timeout is 0ms, i.e. never timeout and block until we send or receive
-    // successfully. NOTE: if any command is timed out, we throw a TimeoutError exception.
-    connection_options.socket_timeout = std::chrono::milliseconds(_redisConfig.timeout);
-    // connection_options.connect_timeout = std::chrono::milliseconds(3000);
-    connection_options.keep_alive = true;
-
-    sw::redis::ConnectionPoolOptions pool_options;
-    // Pool size, i.e. max number of connections.
-    pool_options.size = _redisConfig.connectionPoolSize;
-
-    std::shared_ptr<sw::redis::Redis> redis = nullptr;
-    try
-    {
-        // Connect to Redis server with a connection pool.
-        redis = std::make_shared<sw::redis::Redis>(connection_options, pool_options);
-
-        // test whether redis functions properly
-        // 1. set key
-        // 2. get key
-        // 3. del key
-
-        std::string key = "Gateway -> " + std::to_string(utcTime());
-        std::string value = "Hello, FISCO-BCOS 3.0.";
-
-        bool setR = redis->set(key, value);
-        if (setR)
-        {
-            GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_DESC("set ok");
-
-            auto getR = redis->get(key);
-            if (getR)
-            {
-                GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_DESC("get ok")
-                                          << LOG_KV("key", key) << LOG_KV("value", getR.value());
-            }
-            else
-            {
-                GATEWAY_FACTORY_LOG(WARNING)
-                    << LOG_BADGE("initRedis") << LOG_DESC("get failed, why???");
-            }
-
-            redis->del(key);
-        }
-        else
-        {
-            GATEWAY_FACTORY_LOG(WARNING)
-                << LOG_BADGE("initRedis") << LOG_DESC("set failed, why???");
-        }
-    }
-    catch (std::exception& e)
-    {
-        // Note: redis++ exception handling
-        //  https://github.com/sewenew/redis-plus-plus#exception
-        std::exception_ptr ePtr = std::make_exception_ptr(e);
-
-        GATEWAY_FACTORY_LOG(ERROR)
-            << LOG_BADGE("initRedis") << LOG_DESC("initialize redis exception")
-            << LOG_KV("message", e.what());
-
-        std::throw_with_nested(e);
-    }
-
-    GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_DESC("initialize redis completely");
-
-    return redis;
-}
-
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
     P2PInterface::Ptr _network, P2pID const& _p2pNodeID)
 {
@@ -1047,8 +940,8 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
     auto service = std::dynamic_pointer_cast<Service>(_network);
     registerAMOPHandlers(service, topicManager);
 
-    return std::make_shared<AMOPImpl>(
-        topicManager, amopMessageFactory, requestFactory, _network, _p2pNodeID);
+    return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
+        _p2pNodeID, *m_ioServicePool->getIOService(), m_ioServicePool);
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
@@ -1062,8 +955,8 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
     auto service = std::dynamic_pointer_cast<Service>(_network);
     registerAMOPHandlers(service, topicManager);
 
-    return std::make_shared<AMOPImpl>(
-        topicManager, amopMessageFactory, requestFactory, _network, _p2pNodeID);
+    return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
+        _p2pNodeID, *m_ioServicePool->getIOService(), m_ioServicePool);
 }
 
 void GatewayFactory::registerAMOPHandlers(

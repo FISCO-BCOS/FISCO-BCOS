@@ -28,10 +28,12 @@
 #include "bcos-rpc/Rpc.h"
 #include "bcos-rpc/amop/AMOPClient.h"
 #include "bcos-rpc/event/EventSub.h"
+#include "bcos-rpc/filter/FilterSystem.h"
 #include "bcos-rpc/groupmgr/AirGroupManager.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
 #include "bcos-tool/NodeConfig.h"
+#include "bcos-utilities/IOServicePool.h"
 #include "web3jsonrpc/Web3JsonRpcImpl.h"
 #include <utility>
 
@@ -57,7 +59,7 @@ public:
     std::shared_ptr<boostssl::ws::WsConfig> initConfig(
         const bcos::tool::NodeConfig::Ptr& _nodeConfig);
     std::shared_ptr<boostssl::ws::WsConfig> initWeb3RpcServiceConfig(
-        const bcos::tool::NodeConfig::Ptr& _nodeConfig);
+        const bcos::tool::NodeConfig::Ptr& _nodeConfig, bool _enableOPEngine = false);
     std::shared_ptr<boostssl::ws::WsService> buildWsService(
         bcos::boostssl::ws::WsConfig::Ptr _config);
 
@@ -72,6 +74,11 @@ public:
     void setNodeConfig(bcos::tool::NodeConfig::Ptr _nodeConfig)
     {
         m_nodeConfig = std::move(_nodeConfig);
+    }
+
+    void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
+    {
+        m_ioServicePool = std::move(_ioServicePool);
     }
 
 protected:
@@ -92,7 +99,8 @@ protected:
         GroupManager::Ptr _groupManager);
 
     bcos::rpc::Web3JsonRpcImpl::Ptr buildWeb3JsonRpc(int sendTxTimeout,
-        boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager);
+        boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager,
+        bool _enableOPEngine = false);
     bcos::event::EventSub::Ptr buildEventSub(
         const std::shared_ptr<boostssl::ws::WsService>& _wsService,
         GroupManager::Ptr _groupManager);
@@ -103,6 +111,7 @@ private:
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     bcos::security::KeyEncryptInterface::Ptr m_dataEncrypt;
+    bcos::IOServicePool::Ptr m_ioServicePool;
 };
 }  // namespace rpc
 }  // namespace bcos

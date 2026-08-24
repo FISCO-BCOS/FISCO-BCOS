@@ -20,16 +20,13 @@
  */
 #include "TxValidator.h"
 #include "bcos-framework/bcos-framework/ledger/Ledger.h"
-#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/DataConvertUtility.h"
 
-#include <bcos-rpc/jsonrpc/Common.h>
 #include <cctype>
 
 using namespace bcos;
@@ -168,10 +165,6 @@ TransactionStatus TxValidator::validateTransaction(const bcos::protocol::Transac
             << LOG_KV("to", _tx.to()) << LOG_KV("hash", _tx.hash().abridged());
         return TransactionStatus::Malformed;
     }
-    if (_tx.value().length() > TRANSACTION_VALUE_MAX_LENGTH)
-    {
-        return TransactionStatus::OverFlowValue;
-    }
     // EIP-3860: Limit and meter initcode
     if (_tx.type() == TransactionType::Web3Transaction)
     {
@@ -272,7 +265,7 @@ task::Task<TransactionStatus> TxValidator::validateBalance(
             }
         }
 
-        auto txValue = u256(_tx.value());
+        auto txValue = _tx.value();
         if (auto totalRequired = txValue + gasCost;
             balanceValue < totalRequired || balanceValue == 0)
         {

@@ -22,11 +22,10 @@
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace std;
 using namespace bcos;
 using namespace bcos::codec::abi;
@@ -254,7 +253,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_s256)
 BOOST_AUTO_TEST_CASE(ContractABIType_integer)
 {
     auto hashImpl = std::make_shared<Keccak256>();
-    auto codec = CodecWrapper(hashImpl, false);
+    auto codec = CodecWrapper(hashImpl);
 
     // int8
     {

@@ -154,9 +154,10 @@ int main(int argc, char** argv)
 
     std::cout << LOG_DESC(" [HelloPerf] start sdk ... ") << std::endl;
 
+    boost::asio::io_context ioService;
     auto ratelimit = std::make_shared<bcos::ratelimiter::TimeWindowRateLimiter>(qps);
-    auto sendRateReporter = std::make_shared<bcos::RateReporter>("SendRate", 1000);
-    auto recvRateReporter = std::make_shared<bcos::RateReporter>("RecvRate", 1000);
+    auto sendRateReporter = std::make_shared<bcos::RateReporter>(ioService, "SendRate", 1000);
+    auto recvRateReporter = std::make_shared<bcos::RateReporter>(ioService, "RecvRate", 1000);
     sendRateReporter->start();
     recvRateReporter->start();
 
@@ -202,7 +203,7 @@ int main(int argc, char** argv)
     std::promise<bool> p;
     auto f = p.get_future();
     rpcService->sendTransaction(*keyPair, group, "", "", std::move(binBytes), "", 0, "extraData",
-        [&contractAddress, &p](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
+        [&contractAddress, &p](bcos::Error::Ptr _error, bcos::bytes _resp) {
             if (_error && _error->errorCode() != 0)
             {
                 std::cout << LOG_DESC(" [DeployHello] send transaction response failed")
@@ -212,7 +213,7 @@ int main(int argc, char** argv)
             }
             else
             {
-                std::string receipt = std::string(_resp->begin(), _resp->end());
+                std::string receipt = std::string(_resp.begin(), _resp.end());
                 std::cout << LOG_DESC(" [DeployHello] recv response success ")
                           << LOG_KV("transaction receipt", receipt) << std::endl;
 
@@ -253,7 +254,7 @@ int main(int argc, char** argv)
             auto getBytes = fromHex(getData);
             rpcService->sendTransaction(*keyPair, group, "", contractAddress, std::move(getBytes),
                 "", 0, "extraData",
-                [&recvRateReporter](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
+                [&recvRateReporter](bcos::Error::Ptr _error, bcos::bytes _resp) {
                     recvRateReporter->update(1, true);
                     if (_error && _error->errorCode() != 0)
                     {

@@ -24,7 +24,6 @@
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-cpp-sdk/SdkFactory.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <boost/core/ignore_unused.hpp>
 #include <memory>
 #include <set>
@@ -88,15 +87,15 @@ int main(int argc, char** argv)
                     if (_msg->status() != 0)
                     {
                         std::cout << " \t something is wrong" << LOG_KV("msg", _msg->status())
-                                  << LOG_KV("message", std::string(_msg->payload()->begin(),
-                                                           _msg->payload()->end()))
+                                  << LOG_KV("message", std::string(_msg->payload().begin(),
+                                                           _msg->payload().end()))
                                   << std::endl;
                         return;
                     }
 
                     std::cout << " \t recv response message ===>>>> "
                               << LOG_KV("msg",
-                                     std::string(_msg->payload()->begin(), _msg->payload()->end()))
+                                     std::string(_msg->payload().begin(), _msg->payload().end()))
                               << std::endl;
                 }
             });

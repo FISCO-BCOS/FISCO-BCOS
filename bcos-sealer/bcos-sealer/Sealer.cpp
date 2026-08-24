@@ -23,7 +23,6 @@
 #include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-utilities/ITTAPI.h>
-#include <boost/chrono/duration.hpp>
 #include <chrono>
 #include <range/v3/view/transform.hpp>
 #include <utility>
@@ -32,8 +31,8 @@ using namespace bcos;
 using namespace bcos::sealer;
 using namespace bcos::protocol;
 
-bcos::sealer::Sealer::Sealer(SealerConfig::Ptr _sealerConfig)
-  : Worker("Sealer", 0),
+bcos::sealer::Sealer::Sealer(SealerConfig::Ptr _sealerConfig, boost::asio::io_context& _ioContext)
+  : Worker(_ioContext, "Sealer", 100),
     m_sealerConfig(std::move(_sealerConfig)),
     m_lastFetchTimepoint(std::chrono::steady_clock::now())
 {
@@ -77,12 +76,9 @@ void Sealer::stop()
     SEAL_LOG(INFO) << LOG_DESC("stop the sealer");
     m_running = false;
     finishWorker();
-    if (isWorking())
-    {
-        stopWorking();
-        // will not restart worker, so terminate it
-        terminate();
-    }
+    // stopWorking() uses CAS Started→Stopped so it is safe to call
+    // unconditionally; if already stopped the CAS fails harmlessly.
+    stopWorking();
 }
 
 void Sealer::init(bcos::consensus::ConsensusInterface::Ptr _consensus)
@@ -161,8 +157,8 @@ void Sealer::executeWorker()
         }
         else
         {
-            boost::unique_lock<boost::mutex> lock(x_signalled);
-            m_signalled.wait_for(lock, boost::chrono::milliseconds(100));
+            // No proposal to generate; let Worker timer handle the delay.
+            // noteGenerateProposal() will call notify() to wake us early.
         }
     }
     catch (std::exception const& e)
@@ -178,8 +174,28 @@ void Sealer::executeWorker()
             SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw")
                             << LOG_KV("message", boost::diagnostic_information(nested));
         }
-        boost::unique_lock<boost::mutex> lock(x_signalled);
-        m_signalled.wait_for(lock, boost::chrono::milliseconds(100));
+        catch (...)
+        {
+            SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw unknown exception")
+                            << LOG_KV("message", boost::current_exception_diagnostic_information());
+        }
+        // Let Worker timer handle the delay after exception.
+    }
+    catch (...)
+    {
+        SEAL_LOG(ERROR)
+            << LOG_DESC("executeWorker iteration threw unknown exception, resetting sealing state")
+            << LOG_KV("message", boost::current_exception_diagnostic_information());
+        try
+        {
+            m_sealingManager->resetSealing();
+        }
+        catch (...)
+        {
+            SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw unknown exception")
+                            << LOG_KV("message", boost::current_exception_diagnostic_information());
+        }
+        // Let Worker timer handle the delay after exception.
     }
 }
 
@@ -257,6 +273,12 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
                 SEAL_LOG(WARNING) << LOG_DESC("submitProposal failure unseal exception")
                                   << LOG_KV("message", boost::diagnostic_information(e));
             }
+            catch (...)
+            {
+                SEAL_LOG(WARNING) << LOG_DESC("submitProposal failure unseal unknown exception")
+                                  << LOG_KV("message",
+                                         boost::current_exception_diagnostic_information());
+            }
         });
 }
 
@@ -309,5 +331,5 @@ bcos::sealer::SealingManager::Ptr bcos::sealer::Sealer::sealingManager() const
 }
 void bcos::sealer::Sealer::noteGenerateProposal()
 {
-    m_signalled.notify_one();
+    notify();
 }

@@ -26,7 +26,7 @@ public:
         const bcostars::GroupInfo& groupInfo, tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncNotifyAMOPMessage(tars::Int32 _type, const std::string& _topic,
-        const vector<tars::Char>& _requestData, vector<tars::Char>& _responseData,
+        const std::vector<tars::Char>& _requestData, std::vector<tars::Char>& _responseData,
         tars::TarsCurrentPtr current) override;
     bcostars::Error asyncNotifySubscribeTopic(
         std::string& _topicInfo, tars::TarsCurrentPtr current) override;

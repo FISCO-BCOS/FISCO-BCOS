@@ -11,11 +11,9 @@
 #include "bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-utilities/Common.h"
-#include <oneapi/tbb/task_arena.h>
-#include <oneapi/tbb/task_group.h>
 #include <openssl/x509.h>
-#include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/ssl/stream_base.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/system/error_code.hpp>
 #include <atomic>
 #include <chrono>
@@ -23,18 +21,22 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <utility>
 
 
 namespace boost::asio::ssl
 {
 class verify_context;
 }  // namespace boost::asio::ssl
+
 namespace bcos
 {
-class ThreadPool;
+// FIB-186 (vector D): forward-declared so the dedicated teardown executor can be held by value-less
+// pointer here without pulling boost/asio.hpp into every Host.h includer. Host.cpp includes the
+// full definition to construct it.
+class IOServicePool;
+}  // namespace bcos
 
-namespace gateway
+namespace bcos::gateway
 {
 class SessionFactory;
 class SessionFace;
@@ -90,7 +92,7 @@ public:
     virtual void setSessionCallbackManager(
         SessionCallbackManagerInterface::Ptr sessionCallbackManager);
 
-    virtual std::shared_ptr<ASIOInterface> asioInterface() const;
+    virtual const std::shared_ptr<ASIOInterface>& asioInterface() const;
     virtual std::shared_ptr<SessionFactory> sessionFactory() const;
     virtual MessageFactory::Ptr messageFactory() const;
     virtual P2PInfo p2pInfo();
@@ -100,20 +102,19 @@ public:
     virtual void setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist);
     virtual PeerBlackWhitelistInterface::Ptr peerWhitelist();
 
-    template <class F>
-    void asyncTo(F f)
-    {
-        m_asyncGroup.run(std::move(f));
-    }
-
     // FIB-186 (vector D): run a session-teardown notification on the dedicated teardown executor
-    // instead of m_asyncGroup. Teardown of established sessions (Service::onMessage's error path ->
-    // onDisconnect -> onRemoveNodeIDs -> syncLatestNodeIDList) and inbound P2P message delivery
-    // both ran on the shared m_asyncGroup, so a persistent bulk-disconnect flooded that reactor and
+    // instead of the shared I/O pool. Teardown of established sessions (Service::onMessage's error
+    // path -> onDisconnect -> onRemoveNodeIDs -> syncLatestNodeIDList) and inbound P2P message
+    // delivery both ran on the same shared reactor, so a persistent bulk-disconnect flooded it and
     // starved inter-validator consensus-message delivery -- consensus halted and never recovered
     // (CertiK FIB-186 vector D). Keeping teardown on its own single-threaded executor keeps it off
     // the delivery reactor; the single thread also bounds teardown concurrency so a disconnect
     // flood cannot itself swamp the node.
+    //
+    // NOTE: this must stay a DEDICATED executor with its own thread. Serializing teardown onto a
+    // bcos::Strand over the shared IOServicePool would not preserve the fix: a Strand only orders
+    // tasks, it still dispatches them round-robin onto the shared pool's threads -- the very
+    // threads that carry consensus-message delivery.
     void postTeardown(std::function<void()> f);
 
     void setEnableSslVerify(bool _enableSSLVerify);
@@ -243,18 +244,22 @@ protected:
         std::shared_ptr<std::string> endpointPublicKey,
         std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
             callback,
-        NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr);
+        NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::steady_timer> timerPtr);
 
     void erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
     void insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
-    tbb::task_arena m_taskArena;
-    tbb::task_group m_asyncGroup;
     // FIB-186 (vector D): dedicated single-thread executor for session-teardown notifications, kept
-    // separate from m_asyncGroup so a bulk-disconnect flood cannot starve inbound-message delivery.
-    // See postTeardown.
-    std::shared_ptr<ThreadPool> m_teardownPool;
+    // separate from the shared IOServicePool so a bulk-disconnect flood cannot starve
+    // inbound-message delivery. See postTeardown.
+    //
+    // Owned by the Host (rather than injected like the shared pool) because its whole purpose is to
+    // NOT be the shared pool. ~IOServicePool stops its io_context and joins its thread, which is
+    // exactly what the ThreadPool::stop() this replaces did, so the drain guarantee is unchanged;
+    // Session::drop() stops posting here once haveNetwork() goes false, so nothing is enqueued
+    // after Host::stop().
+    std::shared_ptr<bcos::IOServicePool> m_teardownPool;
     std::shared_ptr<SessionCallbackManagerInterface> m_sessionCallbackManager;
 
     bcos::crypto::Hash::Ptr m_hashImpl;
@@ -311,6 +316,4 @@ protected:
     std::chrono::steady_clock::time_point m_lastTokenRefill{std::chrono::steady_clock::now()};
     std::mutex x_connectionRate;
 };
-}  // namespace gateway
-
-}  // namespace bcos
+}  // namespace bcos::gateway

@@ -20,6 +20,7 @@
 #include <bcos-front/FrontService.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -80,6 +81,10 @@ std::shared_ptr<FrontService> buildFrontServiceWith(std::shared_ptr<BlockingGate
 {
     auto factory = std::make_shared<FrontServiceFactory>();
     factory->setGatewayInterface(std::move(_gateway));
+    // FrontServiceFactory now requires the shared IOServicePool to be injected before
+    // buildFrontService (it used to create its own threads); it is also what enqueueSend's
+    // drainer runs on, which is exactly what this test exercises.
+    factory->setIOServicePool(std::make_shared<bcos::IOServicePool>(2, "fib185Test"));
     auto front = factory->buildFrontService("fib185.group", makeNodeID("fib185.src.nodeid"));
     front->start();
     return front;

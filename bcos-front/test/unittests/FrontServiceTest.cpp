@@ -25,8 +25,6 @@
 #include "FakeGateway.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/CommonError.h>
-#include <bcos-front/Common.h>
-#include <bcos-front/FrontMessage.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
@@ -56,9 +54,11 @@ std::shared_ptr<FrontService> buildFrontService()
 {
     auto gateway = std::make_shared<FakeGateway>();
     auto srcNodeID = createKey(g_srcNodeID);
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "frontTest");
 
     auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
     frontServiceFactory->setGatewayInterface(gateway);
+    frontServiceFactory->setIOServicePool(ioServicePool);
     auto frontService = frontServiceFactory->buildFrontService(g_groupID, srcNodeID);
     frontService->start();
 
@@ -75,7 +75,6 @@ BOOST_AUTO_TEST_CASE(testFrontService_buildFrontService)
     BOOST_CHECK_EQUAL(frontService->groupID(), g_groupID);
     // BOOST_CHECK_EQUAL(frontService->nodeID()->hex(), g_srcNodeID);
     BOOST_CHECK(frontService->gatewayInterface());
-    BOOST_CHECK(frontService->messageFactory());
     BOOST_CHECK(frontService->ioService());
     BOOST_CHECK(frontService->callback().empty());
     BOOST_CHECK(frontService->moduleID2MessageDispatcher().empty());
@@ -133,18 +132,24 @@ BOOST_AUTO_TEST_CASE(testFrontService_onRecieveNodeIDsAnd)
             }
         });
 
-    BOOST_CHECK(frontService->module2GroupNodeInfoNotifier().find(moduleID) !=
-                frontService->module2GroupNodeInfoNotifier().end());
-    BOOST_CHECK(frontService->module2GroupNodeInfoNotifier().find(moduleID + 1) ==
-                frontService->module2GroupNodeInfoNotifier().end());
+    auto notifierMap = frontService->module2GroupNodeInfoNotifier();
+    BOOST_CHECK(notifierMap.find(moduleID) != notifierMap.end());
+    BOOST_CHECK(notifierMap.find(moduleID + 1) == notifierMap.end());
 
     auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
     groupNodeInfo->setNodeIDList(std::move(expectedNodeIDList));
     frontService->onReceiveGroupNodeInfo(
         "1", groupNodeInfo, [](Error::Ptr _error) { BOOST_CHECK(_error == nullptr); });
 
-    f.get();
-    BOOST_CHECK(nodeIDs0.size() == orgExpectedNodeIDList.size());
+    // Use wait_for with timeout to avoid hanging indefinitely on CI
+    auto status = f.wait_for(std::chrono::seconds(10));
+    BOOST_CHECK_MESSAGE(
+        status == std::future_status::ready, "Timed out waiting for group node info notification");
+    if (status == std::future_status::ready)
+    {
+        f.get();
+        BOOST_CHECK(nodeIDs0.size() == orgExpectedNodeIDList.size());
+    }
 }
 
 BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeID_callback)
@@ -185,7 +190,6 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeIDcmak_timeout)
 {
     auto frontService = buildFrontService();
     auto gateway = std::static_pointer_cast<FakeGateway>(frontService->gatewayInterface());
-    auto message = frontService->messageFactory()->buildMessage();
 
     int moduleID = 222;
     auto dstNodeID = createKey(g_dstNodeID_0);
@@ -193,26 +197,32 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeIDcmak_timeout)
 
     BOOST_CHECK(frontService->callback().empty());
 
+    // Use shared_ptr for barrier so it stays alive even if the lambda
+    // outlives this scope (defensive against delayed dispatch).
+    auto barrier = std::make_shared<std::promise<void>>();
+    std::future<void> barrier_future = barrier->get_future();
     {
-        std::promise<void> barrier;
-        Error::Ptr _error;
-        auto callback = [&](Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
-                            const std::string& _uuid,
+        auto callback = [barrier](Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
+                            bytesConstRef _data, const std::string& _uuid,
                             std::function<void(bytesConstRef _respData)> _respFunc) {
             (void)_nodeID;
             (void)_data;
             (void)_respFunc;
             (void)_uuid;
             BOOST_CHECK_EQUAL(_error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
-            barrier.set_value();
+            barrier->set_value();
         };
 
         frontService->asyncSendMessageByNodeID(moduleID, dstNodeID,
             bytesConstRef((unsigned char*)data.data(), data.size()), 2000, callback);
 
         BOOST_CHECK(frontService->callback().size() == 1);
-        std::future<void> barrier_future = barrier.get_future();
-        barrier_future.wait();
+        // Use wait_for with a generous timeout (10 s, 5× the msg timeout) so that
+        // a stuck IO thread or a dropped timer does not hang the test indefinitely.
+        // Similar guard already present in testFrontService_onRecieveNodeIDsAnd.
+        auto status = barrier_future.wait_for(std::chrono::seconds(10));
+        BOOST_CHECK_MESSAGE(status == std::future_status::ready,
+            "Timed out waiting for asyncSendMessageByNodeID timeout callback");
         BOOST_CHECK(frontService->callback().empty());
     }
 }
@@ -281,7 +291,6 @@ BOOST_AUTO_TEST_CASE(testFrontService_loopTimeout)
 {
     auto frontService = buildFrontService();
     auto gateway = std::static_pointer_cast<FakeGateway>(frontService->gatewayInterface());
-    auto message = frontService->messageFactory()->buildMessage();
 
     int moduleID = 12345;
     auto dstNodeID = createKey(g_dstNodeID_0);

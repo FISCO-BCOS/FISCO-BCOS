@@ -25,12 +25,19 @@
 #include "TxPoolInitializer.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
+#include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "libinitializer/MultiVersionScheduler.h"
+#include <bcos-framework/engine/DACaps.h>
+#ifdef TOOLS
 #include "tools/archive-tool/ArchiveService.h"
+#endif
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/IOServicePool.h>
+#include <oneapi/tbb/global_control.h>
 #include <memory>
+#include <optional>
 #ifdef WITH_LIGHTNODE
 #include "LightNodeInitializer.h"
 #endif
@@ -50,8 +57,25 @@ namespace scheduler
 {
 class SchedulerInterface;
 }
+namespace engine
+{
+class AnyEngineService;
+}
+namespace single_consensus
+{
+class SingleNodeConsensus;
+}
+namespace storage2
+{
+template <class Key, class ValueT>
+class AnyStorage;
+}
 namespace initializer
 {
+class GlobalStateStorageInitializer;
+class MemPoolInitializer;
+class EngineServiceInitializer;
+
 class Initializer
 {
 public:
@@ -67,11 +91,31 @@ public:
     ProtocolInitializer::Ptr protocolInitializer() { return m_protocolInitializer; }
     PBFTInitializer::Ptr pbftInitializer() { return m_pbftInitializer; }
     TxPoolInitializer::Ptr txPoolInitializer() { return m_txpoolInitializer; }
+    std::shared_ptr<MemPoolInitializer> memPoolInitializer() { return m_memPoolInitializer; }
+    std::shared_ptr<EngineServiceInitializer> engineServiceInitializer()
+    {
+        return m_engineServiceInitializer;
+    }
+    std::shared_ptr<bcos::engine::AnyEngineService> engineService();
+
+    /// The DA throttling caps shared between the OP engine build path and the RPC's
+    /// miner_setMaxDASize (created at the OP composition root; null in non-OP modes).
+    std::shared_ptr<bcos::engine::DACaps> daCaps() const { return m_daCaps; }
+
+    std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> singleNodeConsensus()
+    {
+        return m_singleNodeConsensus;
+    }
 
     bcos::ledger::LedgerInterface::Ptr ledger() { return m_ledger; }
     std::shared_ptr<bcos::scheduler::SchedulerInterface> scheduler() { return m_scheduler; }
 
     FrontServiceInitializer::Ptr frontService() { return m_frontServiceInitializer; }
+
+    void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
+    {
+        m_ioServicePool = std::move(_ioServicePool);
+    }
 
     void initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
         std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, const std::string& _logPath);
@@ -92,6 +136,23 @@ public:
     /// NOTE: this should be last called
     void initSysContract();
     bcos::storage::TransactionalStorageInterface::Ptr storage() { return m_storage; }
+
+    /// Type-erased read handle over the committed MPT node rows for eth_getProof (M8.3
+    /// wiring): each call builds a fresh AnyStorage view over GlobalStateStorage's backend
+    /// (the committed plane node rows merge into at block commit) — the handle owns its
+    /// key-translating adapter, but the backend stays owned by this Initializer's
+    /// GlobalStateStorageInitializer, so the handle must not outlive this Initializer.
+    /// nullptr before initNode() built the global state storage (e.g. config-only usage).
+    std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> mptNodeReader();
+
+    /// Provider for eth_getStorageAt's latest-state path: each call forks a fresh latest view
+    /// of GlobalStateStorage and returns an AnyStorage handle owning it (see
+    /// forkLatestStateView). Captures a shared_ptr to the GlobalStateStorageInitializer, so
+    /// the returned provider stays valid independently of this Initializer's lifetime.
+    /// Empty (default-constructed) before initNode() built the global state storage.
+    std::function<std::shared_ptr<
+        bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
+    stateStorageProvider();
     bcos::Error::Ptr generateSnapshot(const std::string& snapshotPath, bool withTxAndReceipts,
         const tool::NodeConfig::Ptr& nodeConfig);
     bcos::Error::Ptr importSnapshot(
@@ -107,6 +168,7 @@ private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     ProtocolInitializer::Ptr m_protocolInitializer;
     FrontServiceInitializer::Ptr m_frontServiceInitializer;
+    bcos::IOServicePool::Ptr m_ioServicePool;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
 #ifdef WITH_LIGHTNODE
@@ -119,14 +181,43 @@ private:
     std::weak_ptr<bcos::executor::SwitchExecutorManager> m_switchExecutorManager;
     std::string c_consensusStorageDBName = "consensus_log";
     std::string c_fileSeparator = "/";
+#ifdef TOOLS
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
+#endif
+    std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
+    std::shared_ptr<EngineServiceInitializer> m_engineServiceInitializer;
+
+    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
+    std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> m_singleNodeConsensus;
+    std::shared_ptr<executor_v1::PrecompiledManager> m_precompiledManager;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage
     bcos::storage::TransactionalStorageInterface::Ptr m_blockStorage = nullptr;
+    std::shared_ptr<MemPoolInitializer> m_memPoolInitializer;
+    std::optional<oneapi::tbb::global_control> m_tbbGlobalControl;
 
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setBaselineSchedulerBlockNumberNotifier;
+    /// EthereumExecutor (executor_version=2) baseline scheduler holder + notifier setter. Kept
+    /// as members so the holder lambda (which captures the EthereumExecutor shared_ptr) stays
+    /// alive for the whole Initializer lifetime.
+    std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_ethereumSchedulerHolder;
+    std::function<void(std::function<void(protocol::BlockNumber)>)>
+        m_setEthereumSchedulerBlockNumberNotifier;
+    /// OP scheduler (executor_version>=3) for MultiVersionScheduler slot 3. Kept as a member so
+    /// the OpBlockScheduler (which inherits OpSchedulerSeam's evmc::VM and holds the storage ref)
+    /// stays alive for the whole Initializer lifetime.
+    std::shared_ptr<scheduler::SchedulerInterface> m_opScheduler;
+    /// OP-mode RPC block-number push setter: installs the callback into the concrete OpScheduler
+    /// (typed, not the SchedulerInterface base); commitBlock fires it after a VALID OP block
+    /// merges. Only set in OP mode (executor_version>=3).
+    std::function<void(std::function<void(protocol::BlockNumber)>)>
+        m_setOpSchedulerBlockNumberNotifier;
+    /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,
+    /// 2 = EthereumExecutor). Cached during initNode so initSysContract can decide whether the
+    /// FISCO system-contract deployment block applies (it does not for the ethereum executor).
+    int m_executorVersion = 0;
 
     protocol::BlockNumber getCurrentBlockNumber(
         bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr);

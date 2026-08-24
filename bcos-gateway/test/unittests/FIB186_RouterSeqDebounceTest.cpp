@@ -73,8 +73,10 @@ public:
 class CountingServiceV2 : public ServiceV2
 {
 public:
-    CountingServiceV2(P2PInfo const& _info, RouterTableFactory::Ptr _factory)
-      : ServiceV2(_info, std::move(_factory))
+    // ServiceV2 borrows an external io_context now; the test owns it and passes it in.
+    CountingServiceV2(
+        P2PInfo const& _info, RouterTableFactory::Ptr _factory, boost::asio::io_context& _ioContext)
+      : ServiceV2(_info, std::move(_factory), _ioContext)
     {}
     void broadcastRouterSeq() override { ++m_broadcastCount; }
     void callOnNewSession(P2PSession::Ptr _session) { onNewSession(std::move(_session)); }
@@ -89,7 +91,8 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
     selfInfo.rawP2pID = "selfRawP2pID";
     selfInfo.p2pID = "selfP2pID";
     auto factory = std::make_shared<RouterTableFactoryImpl>();
-    auto service = std::make_shared<CountingServiceV2>(selfInfo, factory);
+    boost::asio::io_context ioContext;
+    auto service = std::make_shared<CountingServiceV2>(selfInfo, factory, ioContext);
 
     // A connect/disconnect flood drives many membership changes in quick succession. On the pre-fix
     // code each one called broadcastRouterSeq() -> one broadcast per change (the gossip storm). The

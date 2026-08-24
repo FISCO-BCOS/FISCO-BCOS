@@ -57,8 +57,9 @@ public:
     Web3StatusFixture()
     {
         auto sync = std::make_shared<FakeBlockSync>();
+        // NodeService gained a trailing AnyEngineService argument; not exercised here.
         auto fullNodeService = std::make_shared<rpc::NodeService>(
-            m_ledger, scheduler, txPool, nullptr, sync, m_blockFactory);
+            m_ledger, scheduler, txPool, nullptr, sync, m_blockFactory, nullptr);
         rpc = factory->buildLocalRpc(groupInfo, fullNodeService);
         rpc->groupManager()->updateGroupInfo(groupInfo);
         web3JsonRpc = rpc->web3JsonRpc();
@@ -69,7 +70,9 @@ public:
     {
         std::promise<bcos::bytes> promise;
         web3JsonRpc->onRPCRequest(
-            request, [&promise](bcos::bytes resp) { promise.set_value(std::move(resp)); });
+            request, [&promise](bcos::bytes resp, boost::beast::http::status) {
+                promise.set_value(std::move(resp));
+            });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;
@@ -124,8 +127,12 @@ BOOST_AUTO_TEST_CASE(netListeningIsConstantTrue)
 
 BOOST_AUTO_TEST_CASE(maxPriorityFeePerGasIsConstant)
 {
+    // Pin the current constant: FISCO returns 0x0 (EthEndpoint::maxPriorityFeePerGas);
+    // op-geth's is dynamic (SuggestOptimismPriorityFee >= 1e6 wei) — divergence D-GP-2,
+    // docs/2026-08-18-rpc-parity-gasprice-withdrawals.md.
     auto resp = call(req("eth_maxPriorityFeePerGas"));
-    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_CHECK_EQUAL(resp["result"].asString(), "0x0");
 }
 
 BOOST_AUTO_TEST_CASE(protocolVersionReportsNotImplemented)

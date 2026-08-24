@@ -6,7 +6,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
-set(VERSION "3.17.0")
+set(VERSION "3.18.0")
 set(VERSION_SUFFIX "")
 include(Options)
 configure_project()
@@ -33,9 +33,21 @@ project(FISCO-BCOS VERSION ${VERSION})
 
 include(CompilerSettings)
 include(BuildInfoGenerator)
+include(FixFmtAppleConsteval)
+fisco_patch_fmt_apple_consteval()
 
 include(IncludeDirectories)
-include(TargetSettings)
+
+if(FULLNODE)
+    # evmone + its blst dependency must exist before the first consumer links bcos-framework:
+    # the framework's evmc-header include genex ($<TARGET_PROPERTY:evmone::evmone,...>) is
+    # evaluated at CONFIGURE time through the link interface (bcos-boostssl PUBLICly links
+    # bcos-framework). Creating both here puts them in the root scope, visible to every
+    # subdirectory without any IMPORTED_GLOBAL promotion; evmone's config find_dependency(blst)
+    # is the blst creation site, and blst-config's include_guard(GLOBAL) makes later
+    # find_package(blst) calls no-ops.
+    find_package(evmone CONFIG REQUIRED)
+endif()
 
 add_subdirectory(bcos-boostssl)
 add_subdirectory(concepts)
@@ -46,23 +58,40 @@ add_subdirectory(libtask)
 add_subdirectory(bcos-tars-protocol)
 add_subdirectory(bcos-protocol)
 add_subdirectory(bcos-codec)
+add_subdirectory(bcos-rlp-protocol)
 if(NOT ONLY_CPP_SDK)
-    include(ProjectITTAPI)
+    find_package(ittapi CONFIG REQUIRED)
 endif ()
 
+add_subdirectory(legacy)
+
 if(WITH_LIGHTNODE)
-    add_subdirectory(lightnode)
+    add_subdirectory(legacy/lightnode)
 endif()
 
 if(FULLNODE)
-    if(WITH_WASM)
-        include(ProjectWABT)
-        include(ProjectBCOSWASM)
+    find_package(group-sig CONFIG REQUIRED)
+    find_package(paillier CONFIG REQUIRED)
+    find_package(blst CONFIG REQUIRED)
+    # Ensure vcpkg-installed libs are on the linker search path (fixes bare -lblst
+    # from evmone::precompiles transitive interface link libraries)
+    link_directories(${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib)
+    # Create blst::blst if not already defined (overlay port only creates 'blst')
+    if(NOT TARGET blst::blst)
+        find_library(_blst_lib NAMES blst PATHS
+            "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib"
+            NO_DEFAULT_PATH)
+        if(_blst_lib)
+            add_library(blst::blst STATIC IMPORTED)
+            set_target_properties(blst::blst PROPERTIES IMPORTED_LOCATION "${_blst_lib}")
+        else()
+            message(FATAL_ERROR "blst library not found in vcpkg installed directory")
+        endif()
     endif()
-    include(ProjectGroupSig)
-    include(ProjectPaillier)
-    include(ProjectBLST)
 
+    add_subdirectory(bcos-evm)
+    add_subdirectory(ethereum-executor)
+    add_subdirectory(opstack-executor)
     add_subdirectory(bcos-sealer)
     add_subdirectory(bcos-security)
     add_subdirectory(bcos-scheduler)
@@ -75,6 +104,9 @@ if(FULLNODE)
     add_subdirectory(bcos-rpbft)
     add_subdirectory(bcos-tool)
     add_subdirectory(bcos-table)
+    add_subdirectory(engine)
+    add_subdirectory(mempool)
+    add_subdirectory(bcos-single-consensus)
     add_subdirectory(bcos-txpool)
     add_subdirectory(bcos-sync)
     add_subdirectory(bcos-front)
@@ -110,6 +142,10 @@ endif()
 
 if(TOOLS)
   add_subdirectory(tools)
+endif()
+
+if(WITH_L2_CONTRACTS)
+    add_subdirectory(bcos-l2-contracts)
 endif()
 
 # for code coverage

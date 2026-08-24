@@ -23,6 +23,9 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
+#include <chrono>
+#include <memory>
+#include <thread>
 
 using namespace bcos::crypto;
 
@@ -47,6 +50,19 @@ inline PBFTFixture::Ptr makeConsensusFixture()
     return fixture;
 }
 
+// Timer::start() now dispatches startTimer() onto the io_context instead of flipping the running
+// flag on the caller's thread, so arming is only observable once the pool thread has run it. The
+// assertion is unchanged in meaning -- "the timer ends up armed" -- it just has to wait for the
+// dispatch rather than read the flag in the same breath.
+inline bool waitTimerRunning(const std::shared_ptr<bcos::Timer>& _timer)
+{
+    for (int i = 0; i < 200 && !_timer->running(); ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    return _timer->running();
+}
+
 // FIB-185: the wedge signature is a consensus node sitting in the timeout state whose
 // view-change timer is not running. The watchdog must re-arm the timer.
 BOOST_AUTO_TEST_CASE(WatchdogRearmsStalledTimer)
@@ -64,7 +80,7 @@ BOOST_AUTO_TEST_CASE(WatchdogRearmsStalledTimer)
     fixture->pbftEngine()->checkConsensusTimerWatchdogForTest();
 
     // the watchdog re-armed the timer
-    BOOST_CHECK(config->timer()->running());
+    BOOST_CHECK(waitTimerRunning(config->timer()));
 
     config->timer()->stop();
 }
@@ -97,7 +113,7 @@ BOOST_AUTO_TEST_CASE(WatchdogIsNoopWhenTimerRunning)
 
     config->setTimeoutState(true);
     config->timer()->start();
-    BOOST_CHECK(config->timer()->running());
+    BOOST_CHECK(waitTimerRunning(config->timer()));
 
     fixture->pbftEngine()->checkConsensusTimerWatchdogForTest();
 

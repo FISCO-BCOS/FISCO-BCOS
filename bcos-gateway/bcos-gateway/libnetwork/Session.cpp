@@ -18,16 +18,15 @@
 #include "bcos-utilities/Overloaded.h"
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/post.hpp>
-#include <boost/container/container_fwd.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <functional>
 #include <iterator>
 #include <range/v3/numeric/accumulate.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
-#include <range/v3/view/transform.hpp>
 #include <utility>
 #include <variant>
 
@@ -134,7 +133,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         SESSION_LOG(WARNING) << "Session inactive";
         if (callback)
         {
-            m_server.get().asyncTo([callback = std::move(callback)] {
+            m_server.get().asioInterface()->dispatch([callback = std::move(callback)] {
                 callback(NetworkException(-1, "Session inactive"), Message::Ptr());
             });
         }
@@ -149,7 +148,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                              << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
         if (callback)
         {
-            m_server.get().asyncTo([callback = std::move(callback)] {
+            m_server.get().asioInterface()->dispatch([callback = std::move(callback)] {
                 callback(NetworkException(-1, "Msg size overflow"), Message::Ptr());
             });
         }
@@ -166,8 +165,8 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
             const auto& error = result.value();
             auto errorCode = error.errorCode();
             auto errorMessage = error.errorMessage();
-            m_server.get().asyncTo([callback = std::move(callback), errorCode,
-                                       errorMessage = std::move(errorMessage)] {
+            m_server.get().asioInterface()->dispatch([callback = std::move(callback), errorCode,
+                                                         errorMessage = std::move(errorMessage)] {
                 callback(NetworkException((int64_t)errorCode, errorMessage), Message::Ptr());
             });
         }
@@ -323,7 +322,7 @@ void Session::write()
                     {
                         if (payload.m_callback)
                         {
-                            session->m_server.get().asyncTo(
+                            session->m_server.get().asioInterface()->post(
                                 [callback = std::move(payload.m_callback), error = _error]() {
                                     callback(error);
                                 });
@@ -354,6 +353,12 @@ void Session::drop(DisconnectReason _reason)
         return;
     }
 
+    // Capture m_socket into a local shared_ptr BEFORE setting m_active = false.
+    // The test thread may call setSocket(nullptr) as soon as active() returns false,
+    // which creates a data race on m_socket.  Using a local copy guarantees we
+    // hold a valid reference for the entire teardown sequence.
+    auto socket = m_socket;
+
     m_active = false;
 
     int errorCode = P2PExceptionType::Disconnect;
@@ -364,18 +369,24 @@ void Session::drop(DisconnectReason _reason)
         errorMsg = "DuplicateSession";
     }
 
+    // Guard against null socket (e.g. test sets it to nullptr before destructor)
+    if (!socket)
+    {
+        return;
+    }
+
     SESSION_LOG(INFO) << "drop, call and erase all callback in this session!"
-                      << LOG_KV("this", this) << LOG_KV("endpoint", nodeIPEndpoint());
+                      << LOG_KV("this", this) << LOG_KV("endpoint", socket->nodeIPEndpoint());
 
     if (m_messageHandler)
     {
         // FIB-186 (vector D): run the teardown notification on the dedicated teardown executor, NOT
-        // m_asyncGroup. This handler drives Service::onMessage's error path -> onDisconnect ->
-        // onRemoveNodeIDs -> syncLatestNodeIDList; running it on the shared m_asyncGroup let a
-        // persistent bulk-disconnect flood starve inter-validator message delivery (which also runs
-        // on m_asyncGroup) and permanently halt consensus. postTeardown keeps it off the delivery
-        // reactor. Ordering vs message delivery is unchanged: onDisconnect already ran
-        // asynchronously and unordered relative to delivery.
+        // the shared IOServicePool. This handler drives Service::onMessage's error path ->
+        // onDisconnect -> onRemoveNodeIDs -> syncLatestNodeIDList; running it on the same reactor
+        // that carries inbound message delivery let a persistent bulk-disconnect flood starve
+        // inter-validator message delivery and permanently halt consensus. postTeardown keeps it
+        // off the delivery reactor. Ordering vs message delivery is unchanged: onDisconnect already
+        // ran asynchronously and unordered relative to delivery.
         auto notifyDisconnect = [self = weak_from_this(), errorCode,
                                     errorMsg = std::move(errorMsg)]() {
             auto session = self.lock();
@@ -386,12 +397,26 @@ void Session::drop(DisconnectReason _reason)
             session->m_messageHandler(
                 NetworkException(errorCode, errorMsg), session, Message::Ptr());
         };
-        // FIB-186 (vector D): on shutdown Host::stop() has already stopped the teardown executor
-        // (its io_context is stopped and the worker joined), so a postTeardown() here would enqueue
-        // onto a dead pool and the disconnect notification would be silently dropped. Run it inline
-        // instead, mirroring the socket-teardown path below which also switches to inline on
-        // shutdown. haveNetwork() (== Host::m_run) is cleared at the very start of Host::stop(),
-        // before the pool is stopped, so this branch is taken for every drop during shutdown.
+        // Once haveNetwork() is false the Host is on its way out, so run the notification inline
+        // rather than handing it to an executor whose remaining lifetime we do not control here.
+        //
+        // NOTE, because the surrounding machinery changed under this fix: the teardown executor is
+        // deliberately NOT stopped by Host::stop() (see Host.cpp) -- it lives until ~Host -- and
+        // Host::stop() no longer stops the ASIO interface either, so the shared pool's threads are
+        // still running at this point. In practice this branch is currently unreachable during
+        // shutdown: Service::stop() calls Host::stop() first, which makes Session::active() false,
+        // and P2PSession::stop() only calls disconnect() on an active session. The reachable
+        // shutdown-time callers are socket error paths, which already run on the socket's own
+        // io_context.
+        //
+        // KNOWN HAZARD of this inline branch (recorded, not a reason to keep it): any caller that
+        // reaches drop() while holding x_sessions would self-deadlock here, because the inline
+        // notifyDisconnect re-enters Service::onDisconnect -> getP2PSessionByNodeId, which takes
+        // that same non-reentrant shared_mutex -- and Service::stop() does iterate sessions under
+        // it exclusively. No such caller exists today (see the reachability note above). Making
+        // this branch unconditionally async would remove the hazard outright, since the teardown
+        // thread never holds x_sessions; that is worth doing on its own, with the shutdown-path
+        // verification it deserves, rather than inside a merge.
         if (m_server.get().haveNetwork())
         {
             m_server.get().postTeardown(std::move(notifyDisconnect));
@@ -403,7 +428,7 @@ void Session::drop(DisconnectReason _reason)
     }
 
     // FIB-184: serialize the SSL/socket teardown onto the socket's own (single-threaded)
-    // io_context. drop() can be invoked from a TBB worker (Service-layer teardown, duplicate-peer
+    // io_context. drop() can be invoked from another thread (Service-layer teardown, duplicate-peer
     // handling) while an async_read_some/async_write is still in flight on the socket's io_context
     // thread. Running close()/async_shutdown inline on the caller thread would then touch the same
     // ssl::stream concurrently with those handlers. Posting the teardown to the socket's io_context
@@ -411,29 +436,33 @@ void Session::drop(DisconnectReason _reason)
     // i.e. a per-session strand — so socket operations never overlap. The strong self capture keeps
     // the session (and its socket) alive until the teardown runs.
     //
-    // Shutdown path exception: Service::stop() calls Host::stop() (which stops and joins the
-    // io_context threads via IOServicePool::stop()) BEFORE dropping sessions, so once the network
-    // is down a posted handler would never run — the socket would never be closed and the posted
-    // task would pin this session in a dead io_context queue. With the io_context threads joined
-    // there are no read/write handlers left to race, so close inline instead (matching the old
-    // synchronous teardown behaviour on shutdown).
-    if (m_socket)
+    // Shutdown path exception: Service::stop() calls Host::stop() BEFORE dropping sessions, and the
+    // shared IOServicePool is torn down shortly after by whoever owns it, so once the network is
+    // down a posted handler may never run — the socket would never be closed and the posted task
+    // would pin this session in a dead io_context queue. Close inline instead, matching the old
+    // synchronous teardown behaviour on shutdown.
+    //
+    // Do not read this as "the io_context threads are already joined": Host::stop() only clears
+    // m_run now (it no longer stops the ASIO interface), so the shared pool is still live here.
+    // What makes the inline close safe is the caller, not a quiesced pool — see the note on the
+    // teardown-notification branch above.
+    if (m_server.get().haveNetwork())
     {
-        if (m_server.get().haveNetwork())
-        {
-            boost::asio::post(m_socket->ioService(),
-                [self = shared_from_this(), _reason]() { self->closeSocket(_reason); });
-        }
-        else
-        {
-            closeSocket(_reason);
-        }
+        boost::asio::post(socket->ioService(),
+            [self = shared_from_this(), _reason]() { self->closeSocket(_reason); });
+    }
+    else
+    {
+        closeSocket(_reason);
     }
 }
 
 void Session::closeSocket(DisconnectReason _reason)
 {
-    if (!m_socket || !m_socket->isConnected())
+    // Take a local strong reference before touching the socket, for the same reason drop() does:
+    // a concurrent setSocket(nullptr) must not turn this into a null dereference mid-teardown.
+    auto socket = m_socket;
+    if (!socket || !socket->isConnected())
     {
         return;
     }
@@ -442,25 +471,24 @@ void Session::closeSocket(DisconnectReason _reason)
         if (_reason == DisconnectRequested || _reason == DuplicatePeer || _reason == ClientQuit ||
             _reason == UserReason)
         {
-            SESSION_LOG(DEBUG) << "[drop] closing remote " << m_socket->remoteEndpoint()
+            SESSION_LOG(DEBUG) << "[drop] closing remote " << socket->remoteEndpoint()
                                << LOG_KV("reason", reasonOf(_reason))
-                               << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
+                               << LOG_KV("endpoint", socket->nodeIPEndpoint());
         }
         else
         {
-            SESSION_LOG(INFO) << "[drop] closing remote " << m_socket->remoteEndpoint()
+            SESSION_LOG(INFO) << "[drop] closing remote " << socket->remoteEndpoint()
                               << LOG_KV("reason", reasonOf(_reason))
-                              << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
+                              << LOG_KV("endpoint", socket->nodeIPEndpoint());
         }
 
         /// if get Host object failed, close the socket directly
-        auto socket = m_socket;
         if (socket->isConnected())
         {
             socket->close();
         }
-        auto shutdown_timer = std::make_shared<boost::asio::deadline_timer>(
-            socket->ioService(), boost::posix_time::milliseconds(m_shutDownTimeThres));
+        auto shutdown_timer = std::make_shared<boost::asio::steady_timer>(
+            socket->ioService(), std::chrono::milliseconds(m_shutDownTimeThres));
         /// async wait for shutdown
         shutdown_timer->async_wait([socket](const boost::system::error_code& error) {
             /// drop operation has been aborted
@@ -508,7 +536,8 @@ void Session::closeSocket(DisconnectReason _reason)
     }
     catch (...)
     {
-        SESSION_LOG(ERROR) << LOG_DESC("drop error") << LOG_KV("endpoint", nodeIPEndpoint());
+        SESSION_LOG(ERROR) << LOG_DESC("drop error")
+                           << LOG_KV("endpoint", socket->nodeIPEndpoint());
     }
 }
 
@@ -525,8 +554,7 @@ void Session::start()
         m_active = true;
         m_lastWriteTime.store(utcSteadyTime());
         m_lastReadTime.store(utcSteadyTime());
-        m_server.get().asioInterface()->strandPost(
-            [session = shared_from_this()] { session->doRead(); });
+        doRead();
     }
 
     auto self = weak_from_this();
@@ -668,6 +696,17 @@ void Session::doRead()
                         session->drop(UserReason);
                         break;
                     }
+                    catch (...)
+                    {
+                        SESSION_LOG(ERROR)
+                            << LOG_DESC("Decode message exception")
+                            << LOG_KV("message", boost::current_exception_diagnostic_information());
+                        session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                                               "ProtocolError(decode msg exception)"),
+                            message);
+                        session->drop(UserReason);
+                        break;
+                    }
                 }
             }
         };
@@ -712,65 +751,66 @@ bool Session::checkRead(boost::system::error_code _ec)
 
 void Session::onMessage(NetworkException const& e, Message::Ptr message)
 {
-    m_server.get().asyncTo([self = weak_from_this(), e, message = std::move(message)]() {
-        try
-        {
-            auto session = self.lock();
-            if (!session)
+    m_server.get().asioInterface()->post(
+        [self = weak_from_this(), e, message = std::move(message)]() {
+            try
             {
-                return;
-            }
-            // TODO: move the logic to Service for deal with the forwarding message
-            if (!message->dstP2PNodeID().empty() &&
-                message->dstP2PNodeID() != session->m_hostInfo.p2pID &&
-                message->dstP2PNodeID() != session->m_hostInfo.rawP2pID)
-            {
-                session->m_messageHandler(e, session, message);
-                return;
-            }
-            // in-activate session
-            if (!session->m_active || !session->m_server.get().haveNetwork())
-            {
-                return;
-            }
+                auto session = self.lock();
+                if (!session)
+                {
+                    return;
+                }
+                // TODO: move the logic to Service for deal with the forwarding message
+                if (!message->dstP2PNodeID().empty() &&
+                    message->dstP2PNodeID() != session->m_hostInfo.p2pID &&
+                    message->dstP2PNodeID() != session->m_hostInfo.rawP2pID)
+                {
+                    session->m_messageHandler(e, session, message);
+                    return;
+                }
+                // in-activate session
+                if (!session->m_active || !session->m_server.get().haveNetwork())
+                {
+                    return;
+                }
 
-            if (!message->isRespPacket())
-            {
-                session->m_messageHandler(e, session, message);
-                return;
-            }
+                if (!message->isRespPacket())
+                {
+                    session->m_messageHandler(e, session, message);
+                    return;
+                }
 
-            auto callbackManager = session->sessionCallbackManager();
-            auto callbackPtr = callbackManager->getCallback(message->seq(), true);
-            // without callback, call default handler
-            if (!callbackPtr)
-            {
-                SESSION_LOG(WARNING)
-                    << LOG_BADGE("onMessage")
-                    << LOG_DESC("callback not found, maybe the callback timeout")
-                    << LOG_KV("endpoint", session->nodeIPEndpoint())
-                    << LOG_KV("seq", message->seq()) << LOG_KV("resp", message->isRespPacket());
-                return;
-            }
+                auto callbackManager = session->sessionCallbackManager();
+                auto callbackPtr = callbackManager->getCallback(message->seq(), true);
+                // without callback, call default handler
+                if (!callbackPtr)
+                {
+                    SESSION_LOG(WARNING)
+                        << LOG_BADGE("onMessage")
+                        << LOG_DESC("callback not found, maybe the callback timeout")
+                        << LOG_KV("endpoint", session->nodeIPEndpoint())
+                        << LOG_KV("seq", message->seq()) << LOG_KV("resp", message->isRespPacket());
+                    return;
+                }
 
-            // with callback
-            if (callbackPtr->timeoutHandler)
-            {
-                callbackPtr->timeoutHandler->cancel();
+                // with callback
+                if (callbackPtr->timeoutHandler)
+                {
+                    callbackPtr->timeoutHandler->cancel();
+                }
+                auto& callback = callbackPtr->callback;
+                if (!callback)
+                {
+                    return;
+                }
+                callback(e, message);
             }
-            auto& callback = callbackPtr->callback;
-            if (!callback)
+            catch (std::exception const& e)
             {
-                return;
+                SESSION_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_DESC("onMessage exception")
+                                     << LOG_KV("msg", boost::diagnostic_information(e));
             }
-            callback(e, message);
-        }
-        catch (std::exception const& e)
-        {
-            SESSION_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_DESC("onMessage exception")
-                                 << LOG_KV("msg", boost::diagnostic_information(e));
-        }
-    });
+        });
 }
 
 void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
@@ -786,10 +826,8 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
     {
         return;
     }
-    m_server.get().asyncTo([callback = std::move(callback)]() {
-        NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
-        callback->callback(e, Message::Ptr());
-    });
+    NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
+    callback->callback(e, Message::Ptr());
 }
 
 void Session::checkNetworkStatus()

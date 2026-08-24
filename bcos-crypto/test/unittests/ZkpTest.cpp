@@ -20,8 +20,8 @@
 #include "bcos-crypto/zkp/discretezkp/DiscreteLogarithmZkp.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::crypto;
 
@@ -69,15 +69,13 @@ BOOST_AUTO_TEST_CASE(testVerifyEitherEqualityProof)
         "703d8069b6c3fae2b4406d06f54a46f05c5d321c4ed01f1c72c9a89c3d3ba7adbd807da14148dd4c77b41c07c4"
         "3d026dd14fa7c025ad3a06a9a891149d6a25268b49f79cc016c6c49bafd107";
     auto zkpImpl = std::make_shared<DiscreteLogarithmZkp>();
-    auto result = zkpImpl->verifyEitherEqualityProof(fromHex(c1_point),
-        fromHex(c2_point), fromHex(c3_point), fromHex(proof),
-        fromHex(basepoint), fromHex(blinding_basepoint));
+    auto result = zkpImpl->verifyEitherEqualityProof(fromHex(c1_point), fromHex(c2_point),
+        fromHex(c3_point), fromHex(proof), fromHex(basepoint), fromHex(blinding_basepoint));
     BOOST_CHECK(result == true);
 
     // invalid case
     result = zkpImpl->verifyEitherEqualityProof(fromHex(c2_point), fromHex(c2_point),
-        fromHex(c1_point), fromHex(proof), fromHex(basepoint),
-        fromHex(blinding_basepoint));
+        fromHex(c1_point), fromHex(proof), fromHex(basepoint), fromHex(blinding_basepoint));
     BOOST_CHECK(result == false);
 
     // case equal to zeror
@@ -90,8 +88,7 @@ BOOST_AUTO_TEST_CASE(testVerifyEitherEqualityProof)
         "a04767c24de80b6544577306bf42cc0f703fddfefffc50b88a1f275c31ceed85cbf0de458fc570ddf4ba570185"
         "d6c0a0b18c136fd2fc16e7bdde856e90ab7488b44ed829ca305d861df1e30e";
     result = zkpImpl->verifyEitherEqualityProof(fromHex(c1_point), fromHex(c2_point),
-        fromHex(c3_point), fromHex(proof), fromHex(basepoint),
-        fromHex(blinding_basepoint));
+        fromHex(c3_point), fromHex(proof), fromHex(basepoint), fromHex(blinding_basepoint));
     BOOST_CHECK(result == true);
 }
 
@@ -99,14 +96,12 @@ BOOST_AUTO_TEST_CASE(testVerifyEitherEqualityProof)
 BOOST_AUTO_TEST_CASE(testVerifyKnowledgeProof)
 {
     auto zkpImpl = std::make_shared<DiscreteLogarithmZkp>();
-    bytes point =
-        fromHex("c2e63cef83875e81ea26e00546102cfbbca50ec21a92d077df9100d1bc3a461e");
+    bytes point = fromHex("c2e63cef83875e81ea26e00546102cfbbca50ec21a92d077df9100d1bc3a461e");
     bytes proof = fromHex(
         "5466f3449a00af0d922670b9f80295c6a685c23713349a91a36e4c082a3e282f9aa835448523cfc62b527d7533"
         "0845f4e889c2e70e844c35177a9f0647e3d00b0d17ac6a70acbf14f9a7d838a0b4fe251ba59dc00404cb7d243d"
         "d4cba1832d0f");
-    bytes base_point =
-        fromHex("e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76");
+    bytes base_point = fromHex("e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76");
     bytes blinding_base_point =
         fromHex("625c50529218ebb9f80e296886f4ac5bb55e06416db27b901c552d3e06ec4871");
     auto ret = zkpImpl->verifyKnowledgeProof(point, proof, base_point, blinding_base_point);
@@ -205,10 +200,8 @@ BOOST_AUTO_TEST_CASE(testVerifyEqualityProof)
         "a782e114de54fd1460081bae2b05edfc157b6ff31cb55c85d81c130556fb5b03e2569d3ec8e78be9732e73a6c5"
         "e9c0e231aff1171ae87453747cabaaf2cfdc1de474d1c45b0ac1454e5b3ba860d73d5938b2536f06a13b321fe9"
         "664acfc0c013");
-    bytes basepoint1 =
-        fromHex("e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76");
-    bytes basepoint2 =
-        fromHex("8c9240b456a9e6dc65c377a1048d745f94a08cdb7f44cbcd7b46f34048871134");
+    bytes basepoint1 = fromHex("e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76");
+    bytes basepoint2 = fromHex("8c9240b456a9e6dc65c377a1048d745f94a08cdb7f44cbcd7b46f34048871134");
     auto ret = zkpImpl->verifyEqualityProof(c1, c2, proof, basepoint1, basepoint2);
     BOOST_CHECK(ret == true);
 

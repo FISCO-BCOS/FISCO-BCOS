@@ -23,11 +23,11 @@
 #include "../Common.h"
 #include "VMInstance.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
-#include <evmc/loader.h>
 #include <evmone/evmone.h>
 #include <boost/compute/detail/lru_cache.hpp>
+#include <boost/functional/hash.hpp>
 #include <memory>
-#include <shared_mutex>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -39,8 +39,28 @@ class VMInstance;
 enum class VMKind
 {
     evmone,
-    BcosWasm,
     DLL
+};
+
+/// Cache key pairs runtime code hash with the EVMC revision used at execution time.
+struct EvmCodeCacheKey
+{
+    crypto::HashType codeHash;
+    evmc_revision revision{EVMC_LONDON};
+
+    bool operator==(EvmCodeCacheKey const& other) const noexcept
+    {
+        return codeHash == other.codeHash && revision == other.revision;
+    }
+
+    bool operator<(EvmCodeCacheKey const& other) const noexcept
+    {
+        if (codeHash != other.codeHash)
+        {
+            return codeHash < other.codeHash;
+        }
+        return revision < other.revision;
+    }
 };
 
 class VMFactory
@@ -49,20 +69,32 @@ public:
     VMFactory(size_t cache_size = c_EVMONE_CACHE_SIZE);
 
     /// Creates a VM instance of the kind provided.
+    /// Pass crypto::HashType{} as codeHash to skip the analysis cache (e.g. for CREATE init code).
     VMInstance create(VMKind _kind, evmc_revision revision, const crypto::HashType& codeHash,
         bytes_view code, bool isCreate = false);
 
-    /// @brief Gets an anvanced EVM analysis from the cache. if not found return nullptr
-    std::shared_ptr<evmoneCodeAnalysis> get(
-        const crypto::HashType& key, evmc_revision revision) noexcept;
+    /// @brief Gets baseline analysis from the cache, or nullptr if missing / revision mismatch.
+    std::shared_ptr<EvmoneCodeAnalysis> get(EvmCodeCacheKey const& key) noexcept;
 
-    void put(const crypto::HashType& key, const std::shared_ptr<evmoneCodeAnalysis>& analysis,
-        evmc_revision revision) noexcept;
+    void put(
+        EvmCodeCacheKey const& key, const std::shared_ptr<EvmoneCodeAnalysis>& analysis) noexcept;
 
 private:
-    boost::compute::detail::lru_cache<crypto::HashType, std::shared_ptr<evmoneCodeAnalysis>>
-        m_cache;
-    evmc_revision m_revision = EVMC_PARIS;
+    boost::compute::detail::lru_cache<EvmCodeCacheKey, std::shared_ptr<EvmoneCodeAnalysis>> m_cache;
     std::mutex m_cacheMutex;
 };
 }  // namespace bcos::executor
+
+namespace std
+{
+template <>
+struct hash<bcos::executor::EvmCodeCacheKey>
+{
+    size_t operator()(bcos::executor::EvmCodeCacheKey const& key) const noexcept
+    {
+        size_t seed = std::hash<bcos::crypto::HashType>{}(key.codeHash);
+        boost::hash_combine(seed, static_cast<int>(key.revision));
+        return seed;
+    }
+};
+}  // namespace std

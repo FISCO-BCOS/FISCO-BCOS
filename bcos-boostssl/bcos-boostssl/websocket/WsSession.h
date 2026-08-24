@@ -20,17 +20,15 @@
 #pragma once
 #include "bcos-boostssl/interfaces/MessageFace.h"
 #include "bcos-boostssl/websocket/WsError.h"
-#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsStream.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
-#include <oneapi/tbb/task_arena.h>
-#include <oneapi/tbb/task_group.h>
-#include <boost/asio/deadline_timer.hpp>
+#include <boost/asio/post.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
@@ -47,15 +45,14 @@ namespace bcos::boostssl::ws
 {
 class WsService;
 // The websocket session for connection
-class WsSession : public std::enable_shared_from_this<WsSession>,
-                  public bcos::ObjectCounter<WsSession>
+class WsSession : public std::enable_shared_from_this<WsSession>
 {
 public:
     using Ptr = std::shared_ptr<WsSession>;
     using Ptrs = std::vector<std::shared_ptr<WsSession>>;
 
 public:
-    explicit WsSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup);
+    explicit WsSession(IOServicePool::Ptr ioServicePool);
 
     virtual ~WsSession() noexcept;
 
@@ -121,12 +118,11 @@ public:
     bool needCheckRspPacket() const;
     void setNeedCheckRspPacket(bool _needCheckRespPacket);
 
-public:
-    struct CallBack : public bcos::ObjectCounter<CallBack>
+    struct CallBack
     {
         using Ptr = std::shared_ptr<CallBack>;
         RespCallBack respCallBack;
-        std::shared_ptr<boost::asio::deadline_timer> timer;
+        std::shared_ptr<boost::asio::steady_timer> timer;
     };
     virtual void addRespCallback(const std::string& _seq, CallBack::Ptr _callback);
     CallBack::Ptr getAndRemoveRespCallback(
@@ -144,14 +140,13 @@ public:
     virtual void onReadPacket();
     void onWritePacket();
 
-    struct Message : public bcos::ObjectCounter<Message>
+    struct Message
     {
         std::shared_ptr<bcos::bytes> buffer;
     };
 
 protected:
-    tbb::task_arena& m_taskArena;
-    tbb::task_group& m_taskGroup;
+    IOServicePool::Ptr m_ioServicePool;
 
     // flag for message that need to check respond packet like p2p message
     bool m_needCheckRspPacket = false;
@@ -201,7 +196,7 @@ public:
     virtual ~WsSessionFactory() = default;
 
 public:
-    virtual WsSession::Ptr createSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup);
+    virtual WsSession::Ptr createSession(IOServicePool::Ptr ioServicePool);
 };
 
 }  // namespace bcos::boostssl::ws

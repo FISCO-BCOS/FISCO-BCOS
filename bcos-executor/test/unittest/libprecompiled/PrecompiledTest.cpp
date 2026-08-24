@@ -15,8 +15,8 @@
  */
 
 #include "bcos-executor/src/vm/Precompiled.h"
-#include "bcos-executor/src/vm/kzgPrecompiled.h"
 #include <boost/test/unit_test.hpp>
+#include <intx/intx.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -55,6 +55,13 @@ BOOST_AUTO_TEST_CASE(PointEvaluatePrecompiledTest)
     auto out1 = executor(input_ref1);
     BOOST_CHECK(!out1.first);
     in[0] = 0x1;
+
+    // keep version byte but corrupt the remaining versioned_hash bytes
+    in[1] ^= 0x1;
+    bytesConstRef input_ref1a(in.data(), in.size());
+    auto out1a = executor(input_ref1a);
+    BOOST_CHECK(!out1a.first);
+    in[1] ^= 0x1;
 
     // truncate input
     in.pop_back();

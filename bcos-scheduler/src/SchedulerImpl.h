@@ -11,7 +11,7 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <list>
 
 namespace bcos::scheduler
@@ -46,16 +46,17 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId,
-        size_t keyPageSize);
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, int64_t schedulerTermId,
+        size_t keyPageSize, bcos::IOServicePool::Ptr ioServicePool = nullptr);
 
     SchedulerImpl(ExecutorManager::Ptr executorManager, bcos::ledger::LedgerInterface::Ptr ledger,
         bcos::storage::TransactionalStorageInterface::Ptr storage,
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
-        int64_t schedulerTermId, size_t keyPageSize);
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isSerialExecute,
+        int64_t schedulerTermId, size_t keyPageSize,
+        bcos::IOServicePool::Ptr ioServicePool = nullptr);
 
     SchedulerImpl(const SchedulerImpl&) = delete;
     SchedulerImpl(SchedulerImpl&&) = delete;
@@ -106,7 +107,8 @@ public:
     void start();
     void stop() override;
 
-    void setBlockExecutiveFactory(bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory);
+    void setBlockExecutiveFactory(
+        bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory);
 
     void setOnNeedSwitchEventHandler(std::function<void(int64_t)> onNeedSwitchEvent);
 
@@ -181,7 +183,6 @@ private:
     bcos::txpool::TxPoolInterface::Ptr m_txPool;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
-    bool m_isWasm = false;
 
     std::function<void(protocol::BlockNumber blockNumber)> m_blockNumberReceiver;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
@@ -195,8 +196,8 @@ private:
 
     std::function<void(int64_t)> f_onNeedSwitchEvent;
 
-    bcos::ThreadPool m_preExeWorker;
-    bcos::ThreadPool m_exeWorker;
+    bcos::IOServicePool::Ptr m_ioServicePool;
+    std::unique_ptr<bcos::Strand> m_exeStrand;
     ledger::LedgerConfig::Ptr m_ledgerConfig;
 };
 }  // namespace bcos::scheduler

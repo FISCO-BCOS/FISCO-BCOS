@@ -23,6 +23,7 @@
  * @date 2021-10-14
  */
 #pragma once
+#include "bcos-storage/CheckpointRocksDBStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include <rocksdb/statistics.h>
 #ifdef WITH_TIKV
@@ -37,22 +38,13 @@
 namespace bcos::initializer
 {
 
-struct RocksDBOption
-{
-    int maxWriteBufferNumber = 3;
-    int maxBackgroundJobs = 4;
-    size_t writeBufferSize = 64 << 20;  // 64MB
-    int minWriteBufferNumberToMerge = 1;
-    size_t blockCacheSize = 128 << 20;  // 128MB
-    bool optimizeLevelStyleCompaction = false;
-    bool enable_blob_files = false;
-};
+using RocksDBOption = bcos::storage2::rocksdb::RocksDBCheckpointOption;
 
 class StorageInitializer
 {
 public:
     static auto createRocksDB(const std::string& _path, RocksDBOption& rocksDBOption,
-        bool _enableDBStatistics = false, [[maybe_unused]] size_t keyPageSize = 0)
+        [[maybe_unused]] size_t keyPageSize = 0)
     {
         boost::filesystem::create_directories(_path);
         rocksdb::DB* db = nullptr;
@@ -72,7 +64,7 @@ public:
         options.max_write_buffer_number = rocksDBOption.maxWriteBufferNumber;
         // FIXME: enable blob support when space amplification is acceptable
         // options.enable_blob_files = keyPageSize > 1 ? true : false;
-        options.enable_blob_files = rocksDBOption.enable_blob_files;
+        options.enable_blob_files = rocksDBOption.enableBlobFiles;
         options.bytes_per_sync = 1 << 20;  // 1MB
         // options.level_compaction_dynamic_level_bytes = true;
         // options.compaction_pri = rocksdb::kMinOverlappingRatio;
@@ -88,7 +80,7 @@ public:
         options.max_bytes_for_level_base = 512 << 20;  // 512MB
         options.target_file_size_base = 128 << 20;     // 128MB
 
-        if (_enableDBStatistics)
+        if (rocksDBOption.enableDBStatistics)
         {
             options.statistics = rocksdb::CreateDBStatistics();
         }

@@ -76,16 +76,14 @@ public:
             .depth = 0,
             .gas = 300 * 10000,
             .recipient = {},
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
             .input_size = helloworldBytecodeBinary.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = {}};
+            .code_address = {},
+            .code = nullptr,
+            .code_size = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -117,16 +115,14 @@ public:
             .depth = 0,
             .gas = 5000000,
             .recipient = address,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = sender,
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = address};
+            .code_address = address,
+            .code = nullptr,
+            .code_size = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -167,16 +163,14 @@ public:
             .depth = 0,
             .gas = 1000000,
             .recipient = callAddress,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = callAddress};
+            .code_address = callAddress,
+            .code = nullptr,
+            .code_size = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -277,16 +271,14 @@ BOOST_AUTO_TEST_CASE(emptyCreate)
             .depth = 0,
             .gas = CREATE_GAS,
             .recipient = {},
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = nullptr,
             .input_size = 0,
             .value = {},  // zero value
             .create2_salt = {},
-            .code_address = {}};
+            .code_address = {},
+            .code = nullptr,
+            .code_size = 0};
 
         evmc_address origin{};
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -392,16 +384,14 @@ BOOST_AUTO_TEST_CASE(precompiled)
             .depth = 0,
             .gas = 1000000,
             .recipient = callAddress,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = callAddress};
+            .code_address = callAddress,
+            .code = nullptr,
+            .code_size = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -605,16 +595,14 @@ BOOST_AUTO_TEST_CASE(setStorageStatusWithBugfix)
             .depth = 0,
             .gas = 1000000,
             .recipient = helloworldAddress,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
             .create2_salt = {},
-            .code_address = helloworldAddress};
+            .code_address = helloworldAddress,
+            .code = nullptr,
+            .code_size = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -623,7 +611,8 @@ BOOST_AUTO_TEST_CASE(setStorageStatusWithBugfix)
                 bcos::task::syncWait);
         co_await hostContext.prepare();
 
-        auto* iface = hostContext.interface;
+        auto* iface = hostContext.hostInterface();
+        auto* hostCtx = hostContext.hostCtx();
 
         evmc_bytes32 storageKey{};
         storageKey.bytes[31] = 0x42;
@@ -633,20 +622,17 @@ BOOST_AUTO_TEST_CASE(setStorageStatusWithBugfix)
         anotherNonZeroValue.bytes[31] = 0x02;
         evmc_bytes32 zeroValue{};
 
-        auto status1 =
-            iface->set_storage(&hostContext, &helloworldAddress, &storageKey, &nonZeroValue);
+        auto status1 = iface->set_storage(hostCtx, &helloworldAddress, &storageKey, &nonZeroValue);
         BOOST_CHECK_EQUAL(status1, EVMC_STORAGE_ADDED);
 
         auto status2 =
-            iface->set_storage(&hostContext, &helloworldAddress, &storageKey, &anotherNonZeroValue);
+            iface->set_storage(hostCtx, &helloworldAddress, &storageKey, &anotherNonZeroValue);
         BOOST_CHECK_EQUAL(status2, EVMC_STORAGE_MODIFIED);
 
-        auto status3 =
-            iface->set_storage(&hostContext, &helloworldAddress, &storageKey, &zeroValue);
+        auto status3 = iface->set_storage(hostCtx, &helloworldAddress, &storageKey, &zeroValue);
         BOOST_CHECK_EQUAL(status3, EVMC_STORAGE_DELETED);
 
-        auto status4 =
-            iface->set_storage(&hostContext, &helloworldAddress, &storageKey, &zeroValue);
+        auto status4 = iface->set_storage(hostCtx, &helloworldAddress, &storageKey, &zeroValue);
         BOOST_CHECK_EQUAL(status4, EVMC_STORAGE_ASSIGNED);
 
         co_return;
@@ -668,16 +654,14 @@ BOOST_AUTO_TEST_CASE(setStorageStatusLegacy)
             .depth = 0,
             .gas = 1000000,
             .recipient = helloworldAddress,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
             .create2_salt = {},
-            .code_address = helloworldAddress};
+            .code_address = helloworldAddress,
+            .code = nullptr,
+            .code_size = 0};
         evmc_address origin = {};
 
         evmc_bytes32 storageKey{};
@@ -694,22 +678,20 @@ BOOST_AUTO_TEST_CASE(setStorageStatusLegacy)
                 bcos::task::syncWait);
         co_await hostContext.prepare();
 
-        auto* iface = hostContext.interface;
+        auto* iface = hostContext.hostInterface();
+        auto* hostCtx = hostContext.hostCtx();
 
-        auto status1 =
-            iface->set_storage(&hostContext, &helloworldAddress, &storageKey, &nonZeroValue);
+        auto status1 = iface->set_storage(hostCtx, &helloworldAddress, &storageKey, &nonZeroValue);
         BOOST_CHECK_EQUAL(status1, EVMC_STORAGE_MODIFIED);  // buggy: should be ADDED
 
         auto status2 =
-            iface->set_storage(&hostContext, &helloworldAddress, &storageKey, &anotherNonZeroValue);
+            iface->set_storage(hostCtx, &helloworldAddress, &storageKey, &anotherNonZeroValue);
         BOOST_CHECK_EQUAL(status2, EVMC_STORAGE_MODIFIED);
 
-        auto status3 =
-            iface->set_storage(&hostContext, &helloworldAddress, &storageKey, &zeroValue);
+        auto status3 = iface->set_storage(hostCtx, &helloworldAddress, &storageKey, &zeroValue);
         BOOST_CHECK_EQUAL(status3, EVMC_STORAGE_DELETED);
 
-        auto status4 =
-            iface->set_storage(&hostContext, &helloworldAddress, &storageKey, &zeroValue);
+        auto status4 = iface->set_storage(hostCtx, &helloworldAddress, &storageKey, &zeroValue);
         BOOST_CHECK_EQUAL(status4, EVMC_STORAGE_DELETED);  // buggy: should be ASSIGNED
 
         co_return;

@@ -11,7 +11,7 @@
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
-#include <sw/redis++/redis++.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/asio/ssl.hpp>
 
 namespace bcos::gateway
@@ -59,19 +59,23 @@ public:
     }
 
     // build ssl context
-    std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
+    boost::asio::ssl::context buildSSLContext(
         bool _server, uint8_t sslMode, const GatewayConfig::CertConfig& _certConfig);
     // build sm ssl context
-    std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
+    boost::asio::ssl::context buildSSLContext(
         bool _server, uint8_t sslMode, const GatewayConfig::SMCertConfig& _smCertConfig);
 
     //
     std::shared_ptr<ratelimiter::RateLimiterManager> buildRateLimiterManager(
-        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
-        std::shared_ptr<sw::redis::Redis> _redis);
+        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
 
     // build Service
     std::shared_ptr<Service> buildService(const GatewayConfig::Ptr& _config);
+
+    void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
+    {
+        m_ioServicePool = std::move(_ioServicePool);
+    }
 
     /**
      * @brief construct Gateway for air
@@ -103,20 +107,10 @@ public:
      * @brief
      *
      * @param _rateLimiterConfig
-     * @param _redisConfig
      * @return std::shared_ptr<ratelimiter::GatewayRateLimiter>
      */
     std::shared_ptr<ratelimiter::GatewayRateLimiter> buildGatewayRateLimiter(
-        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
-        const GatewayConfig::RedisConfig& _redisConfig);
-
-    /**
-     * @brief
-     *
-     * @param _redisConfig
-     * @return std::shared_ptr<sw::redis::Redis>
-     */
-    std::shared_ptr<sw::redis::Redis> initRedis(const GatewayConfig::RedisConfig& _redisConfig);
+        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
 
 protected:
     virtual bcos::amop::AMOPImpl::Ptr buildAMOP(
@@ -141,5 +135,6 @@ private:
     std::string m_rpcServiceName;
 
     bcos::security::KeyEncryptInterface::Ptr m_dataEncrypt{nullptr};
+    bcos::IOServicePool::Ptr m_ioServicePool;
 };
 }  // namespace bcos::gateway

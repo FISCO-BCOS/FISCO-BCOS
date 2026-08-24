@@ -9,6 +9,7 @@
  */
 
 #include <bcos-utilities/RateCollector.h>
+#include <boost/asio/io_context.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -19,13 +20,17 @@ BOOST_AUTO_TEST_SUITE(RateCollectorTest)
 
 BOOST_AUTO_TEST_CASE(factoryBuildsCollector)
 {
-    auto collector = RateCollectorFactory::build("module-x", 1000);
+    // RateCollectorFactory::build borrows an external io_context now (it used to create its own
+    // Timer thread); never run here, so the report timer never fires.
+    boost::asio::io_context ioContext;
+    auto collector = RateCollectorFactory::build(ioContext, "module-x", 1000);
     BOOST_REQUIRE(collector);
 }
 
 BOOST_AUTO_TEST_CASE(updateReportFlushCycle)
 {
-    auto collector = RateCollectorFactory::build("module-y", 1000);
+    boost::asio::io_context ioContext;
+    auto collector = RateCollectorFactory::build(ioContext, "module-y", 1000);
     BOOST_REQUIRE(collector);
 
     // enable so report() executes its body (rate calc) rather than early-return.

@@ -28,8 +28,11 @@
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <boost/asio/executor_work_guard.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+#include <thread>
 
 namespace bcos::test
 {
@@ -95,18 +98,29 @@ BOOST_AUTO_TEST_SUITE(FIB164_OnReadyLifecycle)
 
 BOOST_AUTO_TEST_CASE(callback_no_uaf_after_sealer_destroyed)
 {
+    boost::asio::io_context ioContext;
+    auto work = boost::asio::make_work_guard(ioContext);
+    std::thread ioThread([&]() { ioContext.run(); });
+
     auto cfg = makeSealerConfig();
     auto sealingManagerCopy = bcos::sealer::SealingManager::Ptr{};
 
     {
-        auto sealer = std::make_shared<bcos::sealer::Sealer>(cfg);
+        auto sealer = std::make_shared<bcos::sealer::Sealer>(cfg, ioContext);
         sealer->start();
         // Acquire a strong reference to the SealingManager so it outlives the
         // Sealer. The onReady callback (registered in start()) holds a
         // weak_ptr<Sealer>, so it should safely no-op after Sealer destruction.
         sealingManagerCopy = sealer->sealingManager();
         sealer->stop();
-    }
+
+        // Stop io_context BEFORE destroying sealer to ensure the timer's
+        // cancellation handlers are fully processed and the timer queue is
+        // quiesced before the steady_timer destructor runs.
+        work.reset();
+        ioContext.stop();
+        ioThread.join();
+    }  // sealer destroyed here (timer destructor safe)
     // Sealer is now destroyed; sealingManagerCopy is the only owner of the
     // manager. Triggering the onReady callback path must not dereference
     // dangling memory.
@@ -119,11 +133,22 @@ BOOST_AUTO_TEST_CASE(callback_invokes_noteGenerateProposal_while_sealer_alive)
     // Verify the registered callback is non-empty and reachable by triggering
     // resetSealingInfo while Sealer is alive (no crash, callback runs via
     // weak_ptr lock succeeding).
+    boost::asio::io_context ioContext;
+    auto work = boost::asio::make_work_guard(ioContext);
+    std::thread ioThread([&]() { ioContext.run(); });
+
     auto cfg = makeSealerConfig();
-    auto sealer = std::make_shared<bcos::sealer::Sealer>(cfg);
+    auto sealer = std::make_shared<bcos::sealer::Sealer>(cfg, ioContext);
     sealer->start();
     BOOST_CHECK_NO_THROW(sealer->sealingManager()->resetSealingInfo(2, 1000, 1));
     sealer->stop();
+
+    // Manually reset sealer while io_context is alive
+    sealer.reset();
+    // Stop io_context AFTER sealer is destroyed
+    work.reset();
+    ioContext.stop();
+    ioThread.join();
 }
 
 BOOST_AUTO_TEST_CASE(callback_not_registered_until_start)
@@ -131,12 +156,23 @@ BOOST_AUTO_TEST_CASE(callback_not_registered_until_start)
     // Before start(), the SealingManager's onReady callback should NOT be the
     // one capturing this Sealer. Trigger resetSealingInfo before start() and
     // verify no UAF / crash even if the manager exists in isolation.
+    boost::asio::io_context ioContext;
+    auto work = boost::asio::make_work_guard(ioContext);
+    std::thread ioThread([&]() { ioContext.run(); });
+
     auto cfg = makeSealerConfig();
-    auto sealer = std::make_shared<bcos::sealer::Sealer>(cfg);
+    auto sealer = std::make_shared<bcos::sealer::Sealer>(cfg, ioContext);
     auto mgr = sealer->sealingManager();
     BOOST_REQUIRE(mgr);
     // resetSealingInfo without a registered callback must be a no-op.
     BOOST_CHECK_NO_THROW(mgr->resetSealingInfo(2, 1000, 1));
+
+    // Manually reset sealer while io_context is alive
+    sealer.reset();
+    // Stop io_context AFTER sealer is destroyed
+    work.reset();
+    ioContext.stop();
+    ioThread.join();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

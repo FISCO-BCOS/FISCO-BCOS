@@ -24,6 +24,7 @@
 #include "bcos-pbft/core/ConsensusEngine.h"
 #include "bcos-pbft/pbft/utilities/PBFTPipeline.h"
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
 #include <oneapi/tbb/concurrent_queue.h>
 #include <unordered_map>
@@ -57,7 +58,8 @@ class PBFTEngine : public ConsensusEngine, public std::enable_shared_from_this<P
 public:
     using Ptr = std::shared_ptr<PBFTEngine>;
     using SendResponseCallback = std::function<void(bytesConstRef)>;
-    explicit PBFTEngine(std::shared_ptr<PBFTConfig> _config);
+    explicit PBFTEngine(std::shared_ptr<PBFTConfig> _config, boost::asio::io_context& _ioContext,
+        bcos::IOServicePool::Ptr _ioServicePool);
     ~PBFTEngine() override { stop(); }
 
     void start() override;
@@ -228,11 +230,6 @@ protected:
 
 private:
     // utility functions
-    void waitSignal()
-    {
-        boost::unique_lock<boost::mutex> lock(x_signalled);
-        m_signalled.wait_for(lock, boost::chrono::milliseconds(1));
-    }
     void switchToRPBFT(const ledger::LedgerConfig::Ptr& _ledgerConfig);
 
 protected:
@@ -250,8 +247,6 @@ protected:
     std::function<void(std::string const&, int, bcos::crypto::NodeIDPtr, bytesConstRef)>
         m_sendResponseHandler;
 
-    boost::condition_variable m_signalled;
-    boost::mutex x_signalled;
     mutable RecursiveMutex m_mutex;
 
     const unsigned c_PopWaitSeconds = 5;

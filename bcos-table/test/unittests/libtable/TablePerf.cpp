@@ -1,7 +1,5 @@
-#include "Hash.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <future>
@@ -28,7 +26,7 @@ struct TablePerfFixture
         for (size_t i = 0; i < count; ++i)
         {
             auto entry = table.newEntry();
-            entry.setField(0, "value1");
+            entry.set("value1");
 
             entries.emplace_back("key_" + boost::lexical_cast<std::string>(i), std::move(entry));
         }
@@ -62,7 +60,7 @@ BOOST_AUTO_TEST_CASE(syncGet)
         std::string key = "key_" + boost::lexical_cast<std::string>(i);
         auto entry = table->getRow(key);
 
-        BOOST_CHECK_EQUAL(entry->getField(0), "value1");
+        BOOST_CHECK_EQUAL(entry->get(), "value1");
     }
 
     std::cout << "sync cost: " << bcos::utcSteadyTime() - now << "\n";
@@ -89,7 +87,7 @@ BOOST_AUTO_TEST_CASE(asyncGet)
     {
         std::string key = "key_" + boost::lexical_cast<std::string>(i);
         table->asyncGetRow(key, [&total, &finished, &done](auto&&, auto&& entry) {
-            BOOST_CHECK_EQUAL(entry->getField(0), "value1");
+            BOOST_CHECK_EQUAL(entry->get(), "value1");
 
             auto current = done.fetch_add(1);
             if (current + 1 >= total)
@@ -121,7 +119,7 @@ BOOST_AUTO_TEST_CASE(asyncToSyncGet)
         std::string key = "key_" + boost::lexical_cast<std::string>(i);
         std::promise<bool> finished;
         table->asyncGetRow(key, [&finished](auto&&, auto&& entry) {
-            BOOST_CHECK_EQUAL(entry->getField(0), "value1");
+            BOOST_CHECK_EQUAL(entry->get(), "value1");
             finished.set_value(true);
         });
         finished.get_future().get();

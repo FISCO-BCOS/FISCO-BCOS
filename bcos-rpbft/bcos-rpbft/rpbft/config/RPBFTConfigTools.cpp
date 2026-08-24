@@ -20,7 +20,6 @@
 
 #include "RPBFTConfigTools.h"
 #include "../utilities/Common.h"
-#include "bcos-pbft/core/ConsensusConfig.h"
 
 using namespace bcos;
 using namespace bcos::consensus;

@@ -7,16 +7,10 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <boost/exception/diagnostic_information.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/test/tools/old/interface.hpp>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
-#include <future>
 #include <memory>
-#include <optional>
 
 using namespace bcos::storage;
 using namespace std;
@@ -54,6 +48,8 @@ struct TestSealerFactoryFixture
     crypto::Hash::Ptr smHashImpl;
     protocol::BlockFactory::Ptr blockFactory;
     crypto::CryptoSuite::Ptr cryptoSuite = nullptr;
+    bcos::IOServicePool::Ptr m_ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "sealerFactory");
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestSealerFactory, TestSealerFactoryFixture)
@@ -85,7 +81,7 @@ BOOST_AUTO_TEST_CASE(constructor)
     BOOST_TEST(sealerConfig->nodeTimeMaintenance() == nullptr);
     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
     auto factory = std::make_shared<bcos::sealer::SealerFactory>(
-        nodeConfig, blockFactory, nullptr, nullptr, nullptr);
+        nodeConfig, blockFactory, nullptr, nullptr, nullptr, *m_ioServicePool->getIOService());
     auto sealer = factory->createSealer();
 
     consensus::ConsensusInterface::Ptr consensus = std::make_shared<test::FakeConsensus>();

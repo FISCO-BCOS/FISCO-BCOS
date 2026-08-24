@@ -27,9 +27,12 @@
 #include <tup/Tars.h>
 #endif
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/protocol/Authorization.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/Web3AccessList.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-utilities/Common.h"
+#include <memory>
 
 namespace bcostars::protocol
 {
@@ -65,11 +68,11 @@ public:
     std::string_view to() const override;
     std::string_view abi() const override;
 
-    std::string_view value() const override;
-    std::string_view gasPrice() const override;
+    bcos::u256 value() const override;
+    std::optional<bcos::u256> gasPrice() const override;
     int64_t gasLimit() const override;
-    std::string_view maxFeePerGas() const override;
-    std::string_view maxPriorityFeePerGas() const override;
+    std::optional<bcos::u256> maxFeePerGas() const override;
+    std::optional<bcos::u256> maxPriorityFeePerGas() const override;
     bcos::bytesConstRef extension() const override;
 
     bcos::bytesConstRef input() const override;
@@ -89,6 +92,15 @@ public:
 
     uint8_t type() const override;
     bcos::bytesConstRef extraTransactionBytes() const override;
+    uint8_t web3TypedTxKind() const override;
+    std::string_view sourceHash() const override;
+    bcos::u256 mint() const override;
+    bool isDepositTx() const override;
+    bool depositIsSystemTransaction() const override;
+    bcos::protocol::Web3AccessList web3AccessList() const override;
+    bcos::protocol::AuthorizationList authorizationList() const override;
+    bcos::protocol::VersionedHashes blobVersionedHashes() const override;
+    std::optional<bcos::u256> maxFeePerBlobGas() const override;
 
     const bcostars::Transaction& inner() const;
     bcostars::Transaction& mutableInner();
@@ -97,11 +109,14 @@ public:
     size_t size() const override;
 
 private:
-    // FIB-New1: recompute the canonical Web3 txHash = keccak256(rlp(signed tx)) directly from the
-    // signing preimage (extraTransactionBytes) + signature, without rebuilding a Web3Transaction.
-    static bcos::crypto::HashType recomputeWeb3CanonicalHash(
-        bcos::bytesConstRef payload, bcos::bytesConstRef signature);
-
     std::function<bcostars::Transaction*()> m_inner;
 };
+
+// Guard: TransactionImpl must fit inside the AnyTransaction fixed-size buffer.
+// If this assertion fires, update the size constant in
+// bcos-framework/bcos-framework/protocol/Transaction.h  (using AnyTransaction = AnyHolder<..., N>).
+static_assert(sizeof(TransactionImpl) <= 224,
+    "TransactionImpl exceeds AnyTransaction buffer (224 bytes); "
+    "update the size constant in bcos-framework/protocol/Transaction.h");
+
 }  // namespace bcostars::protocol

@@ -1,6 +1,7 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
+#include "../tests/TrivialCheckpointStorage.h"
 #include <bcos-task/Wait.h>
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
@@ -17,7 +18,7 @@ using namespace std::string_view_literals;
 
 struct Fixture
 {
-    Fixture() : multiLayerStorage(m_backendStorage) {};
+    Fixture() : checkpointBackend(m_backendStorage), multiLayerStorage(checkpointBackend) {};
 
     void prepareData(int64_t count, int layer = 0)
     {
@@ -53,9 +54,12 @@ struct Fixture
         Attribute(ORDERED | LOGICAL_DELETION)>;
     using BackendStorage = MemoryStorage<executor_v1::StateKey, executor_v1::StateValue,
         Attribute(ORDERED | CONCURRENT), std::hash<executor_v1::StateKey>>;
+    using CheckpointBackend =
+        TrivialCheckpointStorage<executor_v1::StateKey, executor_v1::StateValue, BackendStorage>;
 
     BackendStorage m_backendStorage;
-    storage2::MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+    CheckpointBackend checkpointBackend;
+    storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend> multiLayerStorage;
     std::vector<bcos::executor_v1::StateKey> allKeys;
 };
 

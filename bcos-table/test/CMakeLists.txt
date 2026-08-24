@@ -25,7 +25,7 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} ${TABLE_TARGET} Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} table Boost::unit_test_framework)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 include(SearchTestCases)

@@ -9,7 +9,8 @@
 
 bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
-    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage)
+    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces)
 {
     struct Awaitable
     {
@@ -18,6 +19,8 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         decltype(block) m_block;
         bool m_withTransactionsAndReceipts{};
         decltype(storage) m_storage;
+        std::optional<bcos::crypto::HashType> m_blockHashOverride;
+        bool m_writeNonces{true};
         Error::Ptr m_error;
 
         constexpr static bool await_ready() noexcept { return false; }
@@ -32,7 +35,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
                     }
                     handle.resume();
                 },
-                m_withTransactionsAndReceipts, std::nullopt);
+                m_withTransactionsAndReceipts, std::nullopt, m_blockHashOverride, m_writeNonces);
         }
         void await_resume()
         {
@@ -48,6 +51,8 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         .m_block = std::move(block),
         .m_withTransactionsAndReceipts = withTransactionsAndReceipts,
         .m_storage = std::move(storage),
+        .m_blockHashOverride = std::move(blockHashOverride),
+        .m_writeNonces = writeNonces,
         .m_error = {}};
     co_await awaitable;
 }
@@ -434,6 +439,15 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     auto gasPrice = sysConfig.getOrDefault(ledger::SystemConfig::tx_gas_price, "0x0");
     ledgerConfig.setGasPrice(std::make_tuple(gasPrice.first, gasPrice.second));
 
+    // Excess blob gas (EIP-4844) — consumed only by the pure-Ethereum EthereumExecutor
+    // (executor_version=2) to derive the blob base fee. Persisted at genesis by
+    // Ledger::buildGenesisBlock from tx.excess_blob_gas; when absent the executor defaults
+    // to an excess of 0 (blob base fee 1).
+    if (auto excessBlobGas = sysConfig.get(ledger::SystemConfig::excess_blob_gas); excessBlobGas)
+    {
+        ledgerConfig.setExcessBlobGas(boost::lexical_cast<uint64_t>(excessBlobGas.value().first));
+    }
+
     // Get block header to retrieve timestamp
     auto block = co_await getBlockData(ledger, blockNumber, HEADER);
     if (block && block->blockHeader())
@@ -476,10 +490,37 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
-    if (auto executorVersion = sysConfig.get(ledger::SystemConfig::executor_version);
-        executorVersion)
+    int executorVersion = 0;
+    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
     {
-        ledgerConfig.setExecutorVersion(boost::lexical_cast<int>(executorVersion.value().first));
+        executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
+        ledgerConfig.setExecutorVersion(executorVersion);
+    }
+
+    // EVMC revision — consumed only by the pure-Ethereum EthereumExecutor
+    // (executor_version=2); v0/v1 schedulers never read evmcRevision()/evmcRevisionForBlock(),
+    // so a non-v2 chain is left untouched (no implicit default injection, which would be an
+    // unnoticed behavior change if a future v0/v1 path started reading it). For v2, an
+    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock);
+    // the fallback here covers a v2 genesis without one (defensive — NodeConfig::loadExecutorConfig
+    // requires an explicit revision for executor_version=2, so this default only fires on
+    // corrupt/legacy state).
+    //
+    // No per-call logging here: getLedgerConfig sits on the per-block / per-RPC hot path.
+    // The effective revision is parsed and logged once at startup (Initializer), which the
+    // CI pins and where a corrupt value becomes a boot refusal.
+    if (executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        if (auto evmcRevision = sysConfig.get(ledger::SystemConfig::evmc_revision); evmcRevision)
+        {
+            // A corrupt persisted value halts loudly (InvalidEVMCRevisionConfig) instead of
+            // silently running a compile-time default that could differ between binaries.
+            ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
+        }
+        else
+        {
+            ledgerConfig.setEVMCRevision(ledger::EVMC_REVISION_DEFAULT);
+        }
     }
 }
 
@@ -499,6 +540,27 @@ bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
     }
 
     co_return features;
+}
+
+bcos::task::Task<bool> bcos::ledger::tag_invoke(ledger::tag_t<getFeature> /*unused*/,
+    LedgerInterface& ledger, ledger::Features::Flag flag, protocol::BlockNumber blockNumber)
+{
+    // Single-flag read: Ledger overrides fetchFeature with one SYS_CONFIG row instead of
+    // fetchAllFeatures' scan of every feature key (~60 rows). Used by the historical
+    // state-read path (feature_l2_ethereum_compat) which needs exactly one flag; degrades
+    // to false (scenario A) on any failure, the same honest default as getFeatures'
+    // empty-set fallback.
+    try
+    {
+        co_return co_await ledger.fetchFeature(flag, blockNumber);
+    }
+    catch (...)
+    {
+        LEDGER2_LOG(DEBUG) << LOG_DESC("fetch feature failed")
+                           << LOG_KV("flag", magic_enum::enum_name(flag))
+                           << LOG_KV("msg", boost::current_exception_diagnostic_information());
+        co_return false;
+    }
 }
 
 bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> bcos::ledger::tag_invoke(

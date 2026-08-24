@@ -29,7 +29,6 @@
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -330,6 +329,66 @@ BOOST_AUTO_TEST_CASE(N1_T11_legacy_malformed_item_count_throws)
         tx->clearSenderAndHash();
         BOOST_CHECK_THROW(tx->verify(hashImpl, signatureImpl), std::exception);
     }
+}
+
+// Wire-form extraTransactionBytes vectors: the canonical envelope each preimage+signature
+// assembles to, independently confirmed by keccak256(wire) == the vector's canonicalHex.
+// clang-format off
+constexpr std::string_view LEGACY_CHAIN1_WIRE_HEX =
+    "f86e07847735940082520894727fc6a68321b754475c668a6abfb6e9e71c169a87038d7ea4c6800084deadbeef"
+    "26a094f5e0158ba372a7b451996ac591fec2055d7ca7d0f72aa6b473d7b84a69d582a062a22960ade9f059d3894"
+    "89fff300213df3ef0e09e7b4ab89508b934530c5661";
+constexpr std::string_view EIP1559_CHAIN5_WIRE_HEX =
+    "02f8750507843b9aca00847735940082520894727fc6a68321b754475c668a6abfb6e9e71c169a87038d7ea4c68"
+    "00084deadbeefc001a03dc2e61019aa7824a7e290f2b097d10a405e989fe4d3348268df2afcf647b408a06e0208"
+    "4295955b070394ea8e604d86b4942e4a1638358dca984e9f6adff46d4a";
+// clang-format on
+
+// N1_T12: sealed OP blocks overwrite extraTransactionBytes with the full wire envelope
+// (buildOpBlock) — reassemble must recognize the wire layout and hash it canonically.
+// Legacy case: the (v, r, s) trailer is adopted after cross-checking r/s against the tars
+// signature.
+BOOST_AUTO_TEST_CASE(N1_T12_legacy_wire_form_hash_canonical)
+{
+    auto const& v = VECTORS[1];
+    auto tars = buildTars(v, /*prewriteCanonicalHash=*/false);
+    auto wire = fromHex(LEGACY_CHAIN1_WIRE_HEX);
+    tars.extraTransactionBytes.assign(wire.begin(), wire.end());
+    auto tx = wrap(std::move(tars));
+    tx->clearSenderAndHash();
+    tx->verify(hashImpl, signatureImpl);
+    BOOST_CHECK_EQUAL(tx->hash(), expectedHash(v));
+}
+
+// N1_T13: typed wire form — the fixed per-type field count (9 for EIP-1559, 12 with the
+// signature items) discriminates it from the 9-item signing preimage; the payload is already
+// the assembled envelope and must hash to the same canonical value verbatim.
+BOOST_AUTO_TEST_CASE(N1_T13_typed_wire_form_hash_canonical)
+{
+    auto const& v = VECTORS[3];
+    auto tars = buildTars(v, /*prewriteCanonicalHash=*/false);
+    auto wire = fromHex(EIP1559_CHAIN5_WIRE_HEX);
+    tars.extraTransactionBytes.assign(wire.begin(), wire.end());
+    auto tx = wrap(std::move(tars));
+    tx->clearSenderAndHash();
+    tx->verify(hashImpl, signatureImpl);
+    BOOST_CHECK_EQUAL(tx->hash(), expectedHash(v));
+}
+
+// N1_T14: a signature-shaped trailer whose r/s do NOT match the tars signature must be
+// rejected, not hashed as if canonical.
+BOOST_AUTO_TEST_CASE(N1_T14_wire_form_signature_mismatch_throws)
+{
+    auto const& v = VECTORS[1];
+    auto wire = fromHex(LEGACY_CHAIN1_WIRE_HEX);
+    // Corrupt one byte inside r (offset: header(2) + fields(43) + v(1) + r-header(1) = 47).
+    BOOST_REQUIRE_GT(wire.size(), 48U);
+    wire[47] ^= 0xff;
+    auto tars = buildTars(v, /*prewriteCanonicalHash=*/false);
+    tars.extraTransactionBytes.assign(wire.begin(), wire.end());
+    auto tx = wrap(std::move(tars));
+    tx->clearSenderAndHash();
+    BOOST_CHECK_THROW(tx->verify(hashImpl, signatureImpl), std::exception);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

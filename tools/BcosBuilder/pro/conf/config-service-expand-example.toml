@@ -26,7 +26,6 @@ enable_storage_security = false
     deploy_ip=["172.25.0.5"]
     listen_ip="0.0.0.0"
     listen_port=10200
-    thread_count=4
 
     [agency.gateway]
     deploy_ip=["172.25.0.5"]

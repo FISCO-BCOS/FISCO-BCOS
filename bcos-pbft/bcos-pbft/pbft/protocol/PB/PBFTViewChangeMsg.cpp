@@ -47,8 +47,15 @@ bytesPointer PBFTViewChangeMsg::encode(CryptoSuite::Ptr, KeyPairInterface::Ptr) 
 void PBFTViewChangeMsg::decode(bytesConstRef _data)
 {
     decodePBObject(m_rawViewChange, _data);
+
+    // Use an aliasing shared_ptr: m_baseMessage points to the arena-allocated
+    // sub-message, but shares ownership with m_rawViewChange.  When the
+    // shared_ptr is destroyed it does NOT call delete (the arena owns the
+    // memory), avoiding the double-free that a non-aliasing shared_ptr would
+    // cause.
     setBaseMessage(
         std::shared_ptr<BaseMessage>(m_rawViewChange, m_rawViewChange->mutable_message()));
+
     PBFTViewChangeMsg::deserializeToObject();
     m_packetType = PacketType::ViewChangePacket;
 }
@@ -96,12 +103,15 @@ void PBFTViewChangeMsg::deserializeToObject()
     validateRepeatedSize(
         m_rawViewChange->preparedproposals(), MAX_PBFT_REPEATED_FIELD_SIZE, "preparedProposals");
 
-    m_committedProposal = std::make_shared<PBFTProposal>(std::shared_ptr<PBFTRawProposal>(
-        m_rawViewChange, m_rawViewChange->mutable_committedproposal()));
+    // Use aliasing shared_ptrs: sub-messages live in m_rawViewChange's arena,
+    // so we share ownership with m_rawViewChange.
+    auto* committedRawPtr = m_rawViewChange->mutable_committedproposal();
+    std::shared_ptr<PBFTRawProposal> rawCommittedProposal(m_rawViewChange, committedRawPtr);
+    m_committedProposal = std::make_shared<PBFTProposal>(rawCommittedProposal);
     for (int i = 0; i < m_rawViewChange->preparedproposals_size(); i++)
     {
-        m_preparedProposalList->push_back(
-            std::make_shared<PBFTMessage>(std::shared_ptr<PBFTRawMessage>(
-                m_rawViewChange, m_rawViewChange->mutable_preparedproposals(i))));
+        auto* rawPtr = m_rawViewChange->mutable_preparedproposals(i);
+        std::shared_ptr<PBFTRawMessage> preparedMsg(m_rawViewChange, rawPtr);
+        m_preparedProposalList->push_back(std::make_shared<PBFTMessage>(preparedMsg));
     }
 }

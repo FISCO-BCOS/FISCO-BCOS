@@ -33,15 +33,20 @@
 using namespace bcos;
 using namespace bcos::event;
 
-EventSub::EventSub(std::shared_ptr<boostssl::ws::WsService> _wsService)
-  : bcos::Worker("t_event_sub"), m_wsService(_wsService)
+EventSub::EventSub(
+    std::shared_ptr<boostssl::ws::WsService> _wsService, boost::asio::io_context& _ioContext)
+  : bcos::Worker(_ioContext, "t_event_sub"), m_wsService(_wsService)
 {
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::EVENT_SUBSCRIBE,
-        boost::bind(&EventSub::onRecvSubscribeEvent, this, boost::placeholders::_1,
-            boost::placeholders::_2));
+        [this](std::shared_ptr<bcos::boostssl::MessageFace> _msg,
+            std::shared_ptr<bcos::boostssl::ws::WsSession> _session) {
+            onRecvSubscribeEvent(std::move(_msg), std::move(_session));
+        });
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::EVENT_UNSUBSCRIBE,
-        boost::bind(&EventSub::onRecvUnsubscribeEvent, this, boost::placeholders::_1,
-            boost::placeholders::_2));
+        [this](std::shared_ptr<bcos::boostssl::MessageFace> _msg,
+            std::shared_ptr<bcos::boostssl::ws::WsSession> _session) {
+            onRecvUnsubscribeEvent(std::move(_msg), std::move(_session));
+        });
 }
 
 void EventSub::start()
@@ -66,10 +71,8 @@ void EventSub::stop()
     }
     m_running.store(false);
 
-    finishWorker();
+    // stopWorking() already calls finishWorker() internally.
     stopWorking();
-    // will not restart worker, so terminate it
-    terminate();
 
     EVENT_SUB(INFO) << LOG_BADGE("stop") << LOG_DESC("stop event sub successfully");
 }
@@ -78,7 +81,7 @@ void EventSub::onRecvSubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace>
     std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
     std::string seq = _msg->seq();
-    std::string request = std::string(_msg->payload()->begin(), _msg->payload()->end());
+    std::string request = std::string(_msg->payload().begin(), _msg->payload().end());
 
     EVENT_SUB(INFO) << LOG_BADGE("onRecvSubscribeEvent") << LOG_KV("endpoint", _session->endPoint())
                     << LOG_KV("seq", seq) << LOG_KV("request", request);
@@ -128,7 +131,7 @@ void EventSub::onRecvUnsubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFac
     std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
     std::string seq = _msg->seq();
-    std::string request = std::string(_msg->payload()->begin(), _msg->payload()->end());
+    std::string request = std::string(_msg->payload().begin(), _msg->payload().end());
 
     EVENT_SUB(INFO) << LOG_BADGE("onRecvUnsubscribeEvent") << LOG_KV("seq", seq)
                     << LOG_KV("endpoint", _session->endPoint()) << LOG_KV("request", request);
@@ -169,8 +172,8 @@ bool EventSub::sendResponse(std::shared_ptr<bcos::boostssl::ws::WsSession> _sess
     esResp->setStatus(_status);
     auto result = esResp->generateJson();
 
-    auto data = std::make_shared<bcos::bytes>(result.begin(), result.end());
-    _msg->setPayload(data);
+    auto data = bcos::bytes(result.begin(), result.end());
+    _msg->setPayload(std::move(data));
 
     _session->asyncSendMessage(_msg);
     return true;
@@ -220,11 +223,11 @@ bool EventSub::sendEvents(std::shared_ptr<bcos::boostssl::ws::WsSession> _sessio
 
     Json::FastWriter writer;
     std::string strEventInfo = writer.write(jResp);
-    auto data = std::make_shared<bcos::bytes>(strEventInfo.begin(), strEventInfo.end());
+    auto data = bcos::bytes(strEventInfo.begin(), strEventInfo.end());
 
     auto msg = m_messageFactory->buildMessage();
     msg->setPacketType(bcos::protocol::MessageType::EVENT_LOG_PUSH);
-    msg->setPayload(data);
+    msg->setPayload(std::move(data));
     _session->asyncSendMessage(msg);
 
     EVENT_SUB(TRACE) << LOG_BADGE("sendEvents") << LOG_DESC("send events to client")

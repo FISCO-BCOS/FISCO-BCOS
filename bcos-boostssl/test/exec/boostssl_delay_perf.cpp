@@ -24,7 +24,6 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
@@ -115,7 +114,7 @@ void workAsClient(
     std::string strMsg(msgSize, 'a');
     auto msg = wsService->messageFactory()->buildMessage();
     msg->setPacketType(DELAY_PERF_MSGTYPE);
-    msg->setPayload(std::make_shared<bytes>(strMsg.begin(), strMsg.end()));
+    msg->setPayload(bytes(strMsg.begin(), strMsg.end()));
     // msg->setSeq(wsService->messageFactory()->newSeq());
 
     uint64_t nSucC = 0;

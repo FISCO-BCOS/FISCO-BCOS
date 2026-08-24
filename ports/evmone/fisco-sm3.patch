@@ -1,0 +1,225 @@
+diff -ruN a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt	2026-04-10 05:51:37
++++ b/CMakeLists.txt	2026-07-24 00:05:28
+@@ -190,4 +190,8 @@
+ install(DIRECTORY ${include_dir}/
+     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+ 
++install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib/evmone/
++    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/evmone
++    FILES_MATCHING PATTERN "*.hpp")
++
+ cable_add_archive_package()
+diff -ruN a/cmake/LibraryTools.cmake b/cmake/LibraryTools.cmake
+--- a/cmake/LibraryTools.cmake	2026-04-10 05:51:37
++++ b/cmake/LibraryTools.cmake	2026-07-24 00:05:28
+@@ -18,14 +18,18 @@
+     if(CMAKE_AR)
+         # Generate ar linker script.
+         set(script_file ${name}.mri)
++        set(standalone_lib $<TARGET_FILE:${name}>)
+         set(script "CREATE $<TARGET_FILE:${name}>\n")
+         string(APPEND script "ADDLIB $<TARGET_FILE:${TARGET}>\n")
+ 
++        list(APPEND combine_lib "$<TARGET_FILE:${TARGET}>")
++
+         get_target_property(link_libraries ${TARGET} LINK_LIBRARIES)
+         foreach(lib ${link_libraries})
+             get_target_property(type ${lib} TYPE)
+             if(NOT type STREQUAL INTERFACE_LIBRARY)
+                 string(APPEND script "ADDLIB $<TARGET_FILE:${lib}>\n")
++                list(APPEND combine_lib "$<TARGET_FILE:${lib}>")
+             endif()
+         endforeach()
+ 
+@@ -33,9 +37,19 @@
+         file(GENERATE OUTPUT ${script_file} CONTENT ${script})
+ 
+         # Add -standalone static library.
+-        add_library(${name} STATIC)
+-        target_sources(${name} PRIVATE ${script_file})
+-        add_custom_command(TARGET ${name} POST_BUILD COMMAND ${CMAKE_AR} -M < ${script_file})
++        if(APPLE)
++            file(GENERATE OUTPUT tmp.cpp CONTENT "")
++            add_library(${name} STATIC tmp.cpp)
++            add_custom_command(
++                TARGET ${name}
++                POST_BUILD
++                COMMAND libtool -static -o ${standalone_lib} ${combine_lib}
++            )
++        else()
++            add_library(${name} STATIC)
++            target_sources(${name} PRIVATE ${script_file})
++            add_custom_command(TARGET ${name} POST_BUILD COMMAND ${CMAKE_AR} -M < ${script_file})
++        endif()
+         add_dependencies(${name} ${TARGET})
+ 
+         get_property(enabled_languages GLOBAL PROPERTY ENABLED_LANGUAGES)
+diff -ruN a/lib/evmone/CMakeLists.txt b/lib/evmone/CMakeLists.txt
+--- a/lib/evmone/CMakeLists.txt	2026-04-10 05:51:37
++++ b/lib/evmone/CMakeLists.txt	2026-07-24 00:08:08
+@@ -46,7 +46,6 @@
+ if(CABLE_COMPILER_GNULIKE)
+     target_compile_options(
+         evmone PRIVATE
+-        -fno-exceptions
+         $<$<CXX_COMPILER_ID:GNU>:-Wstack-usage=2900>
+     )
+     if(NOT SANITIZE MATCHES undefined)
+diff -ruN a/lib/evmone/advanced_execution.cpp b/lib/evmone/advanced_execution.cpp
+--- a/lib/evmone/advanced_execution.cpp	2026-04-10 05:51:37
++++ b/lib/evmone/advanced_execution.cpp	2026-07-24 00:08:22
+@@ -4,11 +4,12 @@
+ 
+ #include "advanced_execution.hpp"
+ #include "advanced_analysis.hpp"
++#include "vm.hpp"
+ #include <memory>
+ 
+ namespace evmone::advanced
+ {
+-evmc_result execute(AdvancedExecutionState& state, const AdvancedCodeAnalysis& analysis) noexcept
++evmc_result execute(AdvancedExecutionState& state, const AdvancedCodeAnalysis& analysis)
+ {
+     state.analysis.advanced = &analysis;  // Allow accessing the analysis by instructions.
+ 
+@@ -25,12 +26,14 @@
+         state.output_size != 0 ? &state.memory[state.output_offset] : nullptr, state.output_size);
+ }
+ 
+-evmc_result execute(evmc_vm* /*unused*/, const evmc_host_interface* host, evmc_host_context* ctx,
+-    evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t code_size) noexcept
++evmc_result execute(evmc_vm* c_vm, const evmc_host_interface* host, evmc_host_context* ctx,
++    evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t code_size)
+ {
+     const bytes_view container{code, code_size};
+     const auto analysis = analyze(rev, container);
+     auto state = std::make_unique<AdvancedExecutionState>(*msg, rev, *host, ctx, container);
++    state->hash_fn = static_cast<evmone::VM*>(c_vm)->hash_fn;
++    state->host_ctx_for_hash = ctx;
+     return execute(*state, analysis);
+ }
+ }  // namespace evmone::advanced
+diff -ruN a/lib/evmone/advanced_execution.hpp b/lib/evmone/advanced_execution.hpp
+--- a/lib/evmone/advanced_execution.hpp	2026-04-10 05:51:37
++++ b/lib/evmone/advanced_execution.hpp	2026-07-24 00:08:22
+@@ -13,9 +13,9 @@
+ 
+ /// Execute the already analyzed code using the provided execution state.
+ EVMC_EXPORT evmc_result execute(
+-    AdvancedExecutionState& state, const AdvancedCodeAnalysis& analysis) noexcept;
++    AdvancedExecutionState& state, const AdvancedCodeAnalysis& analysis);
+ 
+ /// EVMC-compatible execute() function.
+ evmc_result execute(evmc_vm* vm, const evmc_host_interface* host, evmc_host_context* ctx,
+-    evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t code_size) noexcept;
++    evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t code_size);
+ }  // namespace evmone::advanced
+diff -ruN a/lib/evmone/baseline.hpp b/lib/evmone/baseline.hpp
+--- a/lib/evmone/baseline.hpp	2026-04-10 05:51:37
++++ b/lib/evmone/baseline.hpp	2026-07-24 00:08:22
+@@ -99,11 +99,11 @@
+ 
+ /// Executes in Baseline interpreter using EVMC-compatible parameters.
+ evmc_result execute(evmc_vm* vm, const evmc_host_interface* host, evmc_host_context* ctx,
+-    evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t code_size) noexcept;
++    evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t code_size);
+ 
+ /// Executes in Baseline interpreter with the pre-processed code.
+ EVMC_EXPORT evmc_result execute(VM&, const evmc_host_interface& host, evmc_host_context* ctx,
+-    evmc_revision rev, const evmc_message& msg, const CodeAnalysis& analysis) noexcept;
++    evmc_revision rev, const evmc_message& msg, const CodeAnalysis& analysis);
+ 
+ }  // namespace baseline
+ }  // namespace evmone
+diff -ruN a/lib/evmone/baseline_execution.cpp b/lib/evmone/baseline_execution.cpp
+--- a/lib/evmone/baseline_execution.cpp	2026-04-10 05:51:37
++++ b/lib/evmone/baseline_execution.cpp	2026-07-24 00:08:22
+@@ -263,7 +263,7 @@
+ }  // namespace
+ 
+ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* ctx,
+-    evmc_revision rev, const evmc_message& msg, const CodeAnalysis& analysis) noexcept
++    evmc_revision rev, const evmc_message& msg, const CodeAnalysis& analysis)
+ {
+     const auto code = analysis.executable_code();
+     const auto code_begin = code.data();
+@@ -271,6 +271,8 @@
+ 
+     auto& state = vm.get_execution_state(static_cast<size_t>(msg.depth));
+     state.reset(msg, rev, host, ctx, analysis.raw_code());
++    state.hash_fn = vm.hash_fn;
++    state.host_ctx_for_hash = ctx;
+ 
+     state.analysis.baseline = &analysis;  // Assign code analysis for instruction implementations.
+ 
+@@ -306,7 +308,7 @@
+ }
+ 
+ evmc_result execute(evmc_vm* c_vm, const evmc_host_interface* host, evmc_host_context* ctx,
+-    evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t code_size) noexcept
++    evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t code_size)
+ {
+     auto vm = static_cast<VM*>(c_vm);
+     const bytes_view container{code, code_size};
+diff -ruN a/lib/evmone/execution_state.hpp b/lib/evmone/execution_state.hpp
+--- a/lib/evmone/execution_state.hpp	2026-04-10 05:51:37
++++ b/lib/evmone/execution_state.hpp	2026-07-24 00:06:29
+@@ -168,6 +168,12 @@
+     /// This is the last field to make other fields' offsets of reasonable values.
+     StackSpace stack_space;
+ 
++    /// FISCO-BCOS: optional host-provided hash for KECCAK256 (SM3), carried by evmone::VM.
++    /// Assigned by the execute() entry points right after reset()/construction.
++    evmc_bytes32 (*hash_fn)(struct evmc_host_context* context, const uint8_t* data, size_t size) =
++        nullptr;
++    evmc_host_context* host_ctx_for_hash = nullptr;
++
+     ExecutionState() noexcept = default;
+ 
+     ExecutionState(const evmc_message& message, evmc_revision revision,
+@@ -185,6 +191,8 @@
+         memory.clear();
+         msg = &message;
+         host = {host_interface, host_ctx};
++        hash_fn = nullptr;
++        host_ctx_for_hash = nullptr;
+         rev = revision;
+         return_data.clear();
+         original_code = _code;
+diff -ruN a/lib/evmone/instructions.hpp b/lib/evmone/instructions.hpp
+--- a/lib/evmone/instructions.hpp	2026-04-10 05:51:37
++++ b/lib/evmone/instructions.hpp	2026-07-24 00:07:46
+@@ -376,7 +376,16 @@
+         return {EVMC_OUT_OF_GAS, gas_left};
+ 
+     auto data = s != 0 ? &state.memory[i] : nullptr;
+-    size = intx::be::load<uint256>(ethash::keccak256(data, s));
++    if (state.hash_fn != nullptr)
++    {
++        const evmc_bytes32 h = state.hash_fn(state.host_ctx_for_hash, data, s);
++        size = intx::be::load<uint256>(reinterpret_cast<const evmc::bytes32&>(h));
++    }
++    else
++    {
++        size = intx::be::load<uint256>(ethash::keccak256(data, s));
++    }
++
+     return {EVMC_SUCCESS, gas_left};
+ }
+ 
+diff -ruN a/lib/evmone/vm.hpp b/lib/evmone/vm.hpp
+--- a/lib/evmone/vm.hpp	2026-04-10 05:51:37
++++ b/lib/evmone/vm.hpp	2026-07-24 00:05:50
+@@ -22,6 +22,11 @@
+ public:
+     bool cgoto = EVMONE_CGOTO_SUPPORTED;
+ 
++    /// FISCO-BCOS: optional host-provided hash for the KECCAK256 opcode (SM3 support).
++    /// Set by the embedder after evmc_create_evmone(); nullptr keeps upstream keccak256.
++    evmc_bytes32 (*hash_fn)(struct evmc_host_context* context, const uint8_t* data, size_t size) =
++        nullptr;
++
+ private:
+     std::vector<ExecutionState> m_execution_states;
+     std::unique_ptr<Tracer> m_first_tracer;

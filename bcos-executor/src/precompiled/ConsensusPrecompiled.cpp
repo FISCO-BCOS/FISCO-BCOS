@@ -25,9 +25,11 @@
 #include "common/PrecompiledResult.h"
 #include "common/Utilities.h"
 #include "common/WorkingSealerManagerImpl.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/lexical_cast.hpp>
+#include <algorithm>
 #include <utility>
 
 using namespace bcos;
@@ -68,7 +70,7 @@ static bool checkAuthByGovernors(const std::shared_ptr<executor::TransactionExec
                            << LOG_BADGE("BalancePrecompiled") << LOG_DESC("checkOriginAuth")
                            << LOG_KV("governors size", governors.size())
                            << LOG_KV("origin address", origin);
-    if (::ranges::find(governors, Address(origin)) == governors.end())
+    if (std::ranges::find(governors, Address(origin)) == governors.end())
     {
         PRECOMPILED_LOG(TRACE)
             << BLOCK_NUMBER(_executive->blockContext().number()) << LOG_BADGE("BalancePrecompiled")
@@ -227,7 +229,7 @@ static int removeNode(const std::shared_ptr<executor::TransactionExecutive>& _ex
     auto entry = storage.getRow(SYS_CONSENSUS, "key");
     if (entry)
     {
-        consensusList = entry->getObject<ConsensusNodeList>();
+        consensusList = bcos::storage::serialize::decode<ConsensusNodeList>(entry->get());
     }
     else
     {
@@ -253,7 +255,7 @@ static int removeNode(const std::shared_ptr<executor::TransactionExecutive>& _ex
         return CODE_LAST_SEALER;
     }
 
-    entry->setObject(consensusList);
+    entry->set(bcos::storage::serialize::encode(consensusList));
     storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
 
     return 0;
@@ -403,7 +405,7 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     showConsensusTable(_executive);
 
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
 
     if (blockContext.isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender) &&
         (!blockContext.features().get(Features::Flag::feature_rpbft) ||

@@ -22,7 +22,6 @@
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ObjectCounter.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -35,7 +34,7 @@ void CHECK_OFFSET(uint64_t offset, uint64_t length);
 namespace bcos::boostssl::ws
 {
 // the message format for ws protocol
-class WsMessage : public boostssl::MessageFace, public bcos::ObjectCounter<WsMessage>
+class WsMessage : public boostssl::MessageFace
 {
 public:
     // version(2) + type(2) + status(2) + seqLength(2) + ext(2) + payload(N)
@@ -58,8 +57,8 @@ public:
     void setStatus(int16_t _status);
     std::string const& seq() const override;
     void setSeq(std::string _seq) override;
-    std::shared_ptr<bcos::bytes> payload() const override;
-    void setPayload(std::shared_ptr<bcos::bytes> _payload) override;
+    bytesConstRef payload() const override;
+    void setPayload(bcos::bytes _payload) override;
     uint16_t ext() const override;
     void setExt(uint16_t _ext) override;
 
@@ -77,7 +76,7 @@ private:
     uint16_t m_packetType = 0;
     std::string m_seq;
     uint16_t m_ext = 0;
-    std::shared_ptr<bcos::bytes> m_payload;
+    bcos::bytes m_payload;
 
     int16_t m_status = 0;
     uint32_t m_length = 0;

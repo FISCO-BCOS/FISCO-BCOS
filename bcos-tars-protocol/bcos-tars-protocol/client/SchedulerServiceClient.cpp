@@ -72,7 +72,7 @@ void SchedulerServiceClient::getCode(
         {}
         ~Callback() override {}
 
-        void callback_getCode(const bcostars::Error& ret, const vector<tars::Char>& code) override
+        void callback_getCode(const bcostars::Error& ret, const std::vector<tars::Char>& code) override
         {
             bcos::bytes outCode(code.begin(), code.end());
 
@@ -139,7 +139,7 @@ void SchedulerServiceClient::executeBlock(bcos::protocol::Block::Ptr _block, boo
             const bcostars::BlockHeader& _executedHeader, tars::Bool _sysBlock) override
         {
             auto bcosBlockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-                [m_header = _executedHeader]() mutable { return &m_header; });
+                std::make_shared<bcostars::BlockHeader>(_executedHeader));
             m_callback(toBcosError(ret), std::move(bcosBlockHeader), _sysBlock);
         }
 

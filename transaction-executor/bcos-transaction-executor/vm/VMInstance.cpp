@@ -1,32 +1,31 @@
 #include "VMInstance.h"
-#include <evmone/advanced_analysis.hpp>
-#include <evmone/advanced_execution.hpp>
+#include <evmone/evmone.h>
+#include <evmone/vm.hpp>
+
+namespace bcos::executor_v1::hostcontext
+{
+evmc_bytes32 evm_hash_fn(struct evmc_host_context* context, const uint8_t* data, size_t size);
+}  // namespace bcos::executor_v1::hostcontext
 
 bcos::executor_v1::VMInstance::VMInstance(
-    std::shared_ptr<evmone::baseline::CodeAnalysis const> instance) noexcept
-  : m_instance(std::move(instance))
-{}
+    std::shared_ptr<EvmoneCodeAnalysis const> analysis) noexcept
+  : m_analysis(std::move(analysis))
+{
+    assert(m_analysis != nullptr);
+}
 
 bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     const struct evmc_host_interface* host, struct evmc_host_context* context, evmc_revision rev,
     const evmc_message* msg, const uint8_t* code, size_t codeSize)
 {
-    static auto const* evm = evmc_create_evmone();
-    static thread_local std::unique_ptr<evmone::ExecutionState> localExecutionState;
-
-    auto executionState = localExecutionState ? std::move(localExecutionState) :
-                                                std::make_unique<evmone::ExecutionState>();
-    executionState->reset(
-        *msg, rev, *host, context, std::basic_string_view<uint8_t>(code, codeSize), {});
-    auto result = EVMCResult(evmone::baseline::execute(
-        *static_cast<evmone::VM const*>(evm), msg->gas, *executionState, *m_instance));
-    // FIB-96: only cache ExecutionState if memory usage is reasonable
-    constexpr size_t MAX_CACHED_MEMORY = 1024 * 1024;  // 1MB threshold
-    if (!localExecutionState && executionState->memory.size() <= MAX_CACHED_MEMORY)
-    {
-        localExecutionState = std::move(executionState);
-    }
-    return result;
+    (void)code;  // execute uses pre-analyzed m_analysis
+    (void)codeSize;
+    // Fresh VM per execute: evmone 0.21 pools ExecutionState inside VM; thread_local reuse leaves
+    // dirty stack after reset() (EVMC_BAD_JUMP_DESTINATION).
+    evmc::VM evm{evmc_create_evmone()};
+    auto* evmoneVm = static_cast<evmone::VM*>(evm.get_raw_pointer());
+    evmoneVm->hash_fn = hostcontext::evm_hash_fn;
+    return EVMCResult(evmone::baseline::execute(*evmoneVm, *host, context, rev, *msg, *m_analysis));
 }
 
 void bcos::executor_v1::VMInstance::enableDebugOutput() {}

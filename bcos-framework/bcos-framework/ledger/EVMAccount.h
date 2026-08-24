@@ -15,6 +15,13 @@ namespace bcos::ledger::account
 
 DERIVE_BCOS_EXCEPTION(NonceNotInitialized);
 
+/// Tag for the table-name constructor below. A distinct type (not a bool) so it can never be
+/// confused with the `binaryAddress` flag the address-taking constructors carry.
+struct FromTableName
+{
+    explicit FromTableName() = default;
+};
+
 template <class Storage>
 class EVMAccount
 {
@@ -28,6 +35,30 @@ public:
     {
         co_return co_await storage2::existsOne(
             m_storage.get(), executor_v1::StateKeyView(SYS_TABLES, m_tableName));
+    }
+
+    /// Ethereum-style existence (EIP-161 Spurious Dragon+):
+    /// empty accounts (nonce=0, balance=0, code_hash=EMPTY) are treated as non-existent.
+    task::Task<bool> existsEthereum()
+    {
+        if (!co_await exists())
+            co_return false;
+
+        // Check if account is non-empty (EIP-161: empty accounts don't exist)
+        auto nonceVal = co_await nonce();
+        if (nonceVal.has_value() && u256(nonceVal.value()) != 0)
+            co_return true;
+
+        auto bal = co_await balance();
+        if (bal != 0)
+            co_return true;
+
+        auto ch = co_await codeHash();
+        static const h256 EMPTY_CODE_HASH{};
+        if (ch != EMPTY_CODE_HASH)
+            co_return true;
+
+        co_return false;  // empty account → not exist in Ethereum sense
     }
 
     task::Task<void> create()
@@ -192,13 +223,14 @@ public:
         }
     }
 
-    // DIRECT-tagged storage read: bypasses any read-set tracking on the storage
-    // wrapper. Use for metadata-only reads (e.g. computing evmc_storage_status)
-    // that must not register as a semantic read for parallel conflict detection.
-    task::Task<evmc_bytes32> storage(const evmc_bytes32& key, storage2::DIRECT_TYPE direct)
+    // Tag-forwarding storage read: passes all tags through to the underlying
+    // readOneRaw call. Callers compose the exact set of tags they need
+    // (e.g. BYPASS_READ_SET | BYPASS_MULTILAYER for metadata reads that
+    // must skip both conflict tracking and layer resolution).
+    task::Task<evmc_bytes32> storage(const evmc_bytes32& key, auto... tags)
     {
         auto rawValue = co_await m_storage.get().readOneRaw(
-            executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)}, direct);
+            executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)}, tags...);
         evmc_bytes32 value{};
         if (auto* entry = std::get_if<storage::Entry>(std::addressof(rawValue)))
         {
@@ -229,6 +261,22 @@ public:
     EVMAccount(EVMAccount&&) noexcept = default;
     EVMAccount& operator=(const EVMAccount&) = delete;
     EVMAccount& operator=(EVMAccount&&) noexcept = default;
+    /// Construct directly from the account's table name, bypassing address→table-name routing
+    /// entirely. Every method of this class reads nothing but `m_tableName`, so this is the
+    /// primitive the two address-taking constructors below are sugar for; it adds no new
+    /// semantics and changes nothing for existing callers.
+    ///
+    /// It exists for callers that must derive the table name themselves and need the *write*
+    /// side pinned to the exact same string as their own reads. The address-taking constructors
+    /// route the `c_systemTxsAddress` members to `/sys/` (see below); a caller that reads those
+    /// addresses out of `/apps/` — as the Ethereum-compatible state view must, since in Ethereum
+    /// they are ordinary accounts — would otherwise read one table and write another, a silent
+    /// read/write split-brain. Handing over one already-computed table name removes the second,
+    /// independent derivation rather than trying to keep two of them in agreement.
+    EVMAccount(Storage& storage, FromTableName /*tag*/, std::string tableName)
+      : m_storage(storage), m_tableName(std::move(tableName))
+    {}
+
     EVMAccount(Storage& storage, const evmc_address& address, bool binaryAddress)
       : m_storage(storage)
     {

@@ -25,9 +25,15 @@
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/VersionConverter.h"
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <cstdint>
+#include <map>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
 
 
 namespace bcos::ledger
@@ -48,6 +54,41 @@ struct Alloc
     std::string nonce;
     std::string code;
     std::vector<State> storage;
+};
+
+// B0 full Ethereum genesis header, sourced field-by-field from the merged
+// genesis artifact (op-deployer base + FISCO overlay). Parsed from the
+// [eth_genesis_header] section of config.genesis; when the section is present
+// every field is REQUIRED (NodeConfig fail-fasts on the first missing key).
+// m_hash is a checksum, not an input: Ledger::buildGenesisBlock recomputes
+// keccak256(rlp(header)) from the other 21 fields and refuses to start if it
+// differs. m_timestamp is in SECONDS (the Ethereum header domain);
+// Ledger::applyEthGenesisHeader multiplies by 1000 when projecting it onto the
+// internal BlockHeader, which stores milliseconds like every other block.
+struct EthGenesisHeader
+{
+    crypto::HashType m_parentHash;
+    crypto::HashType m_sha3Uncles;
+    Address m_miner;
+    crypto::HashType m_stateRoot;
+    crypto::HashType m_transactionsRoot;
+    crypto::HashType m_receiptsRoot;
+    bytes m_logsBloom;  // exactly 256 bytes
+    u256 m_difficulty;
+    int64_t m_number{};
+    u256 m_gasLimit;
+    u256 m_gasUsed;
+    int64_t m_timestamp{};  // seconds
+    bytes m_extraData;      // artifact extraData (Jovian 17-byte format on our chain)
+    h256 m_mixHash;
+    h64 m_nonce;
+    u256 m_baseFeePerGas;
+    crypto::HashType m_withdrawalsRoot;
+    u256 m_blobGasUsed;
+    u256 m_excessBlobGas;
+    crypto::HashType m_parentBeaconBlockRoot;
+    crypto::HashType m_requestsHash;
+    crypto::HashType m_hash;  // expected keccak256(rlp(header)); checked, never trusted
 };
 
 class GenesisConfig
@@ -73,12 +114,28 @@ public:
 
     // tx config
     uint64_t m_txGasLimit = 3000000000;
+    // tx gas price (base fee per gas); consumed by the v2 Ethereum executor as base_fee
+    // (BCOS2Evmone::blockHeaderToBlockInfo). Seeded into SYS_CONFIG/tx_gas_price at genesis.
+    std::string m_txGasPrice = "0x0";
+    // excess blob gas (EIP-4844); consumed by the v2 Ethereum executor to derive the blob
+    // base fee. Seeded into SYS_CONFIG/excess_blob_gas at genesis when set.
+    std::optional<uint64_t> m_excessBlobGas;
     // executorConfig
+    // WASM support was removed; this field is retained and permanently false because
+    // generateGenesisData() serializes it into the genesis string. Dropping it would
+    // change the genesis data of every existing chain and break node admission.
+    // It is no longer parsed from executor.is_wasm.
     bool m_isWasm{};
     bool m_isAuthCheck = true;
     std::string m_authAdminAccount;
     bool m_isSerialExecute = true;
     int m_executorVersion = 0;
+
+    // EVMC revision config (consumed by ethereum-executor, executor_version=2).
+    // m_evmcRevision: explicit single revision applied to all blocks (when set).
+    // m_evmcRevisionForks: block height -> revision fork transitions.
+    std::optional<evmc_revision> m_evmcRevision;
+    std::map<protocol::BlockNumber, evmc_revision> m_evmcRevisionForks;
 
     // rpbft config
     int64_t m_epochSealerNum = 4;
@@ -86,6 +143,11 @@ public:
 
     std::vector<FeatureSet> m_features;
     std::vector<Alloc> m_allocs;
+
+    // Present iff config.genesis carries an [eth_genesis_header] section
+    // (L2 mode, B0 built as a full Ethereum header). Absent on every legacy
+    // chain — Ledger then keeps the native Tars genesis-header path.
+    std::optional<EthGenesisHeader> m_ethGenesisHeader;
 
 };  // namespace genesisConfig
 }  // namespace bcos::ledger

@@ -5,10 +5,7 @@
       "repository": "https://github.com/FISCO-BCOS/registry",
       "baseline": "44b3bf4c1d9f56fa1888fd24e7763051dd070848",
       "packages": [
-        "evmone",
-        "evmc",
         "ethash",
-        "intx",
         "fiscobcos",
         "wedprcrypto",
         "hsm-crypto"
@@ -20,6 +17,16 @@
     "./ports/tarscpp",
     "./ports/rapidhash",
     "./ports/openssl",
-    "./ports/benchmark"
+    "./ports/evmc",
+    "./ports/evmone",
+    "./ports/intx",
+    "./ports/blst",
+    "./ports/ittapi",
+    "./ports/group-sig",
+    "./ports/gmp",
+    "./ports/paillier",
+    "./ports/tikv-client-cpp",
+    "./ports/benchmark",
+    "./ports-data/ethereum-tests"
   ]
 }

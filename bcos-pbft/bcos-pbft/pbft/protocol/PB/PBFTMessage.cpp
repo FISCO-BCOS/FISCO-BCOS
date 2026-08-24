@@ -58,19 +58,24 @@ void PBFTMessage::deserializeToObject()
     PBFTBaseMessage::decode(baseMessageData);
 
     // decode the proposals
+    // Use aliasing shared_ptrs: sub-messages live in m_pbftRawMessage's arena,
+    // so we share ownership with m_pbftRawMessage rather than taking ownership
+    // from the arena (which would lead to a double-free).
     m_proposals->clear();
     if (m_pbftRawMessage->has_consensusproposal())
     {
-        // FIB-121: aliasing shared_ptr shares m_pbftRawMessage's control block, so the
+        // FIB-121: the aliasing shared_ptr shares m_pbftRawMessage's control block, so the
         // child wrapper keeps the parent protobuf alive and never deletes the submessage
         // itself -- no dual-ownership, no destructor release dance.
-        m_consensusProposal = std::make_shared<PBFTProposal>(std::shared_ptr<PBFTRawProposal>(
-            m_pbftRawMessage, m_pbftRawMessage->mutable_consensusproposal()));
+        auto* rawPtr = m_pbftRawMessage->mutable_consensusproposal();
+        std::shared_ptr<PBFTRawProposal> rawConsensusProposal(m_pbftRawMessage, rawPtr);
+        m_consensusProposal = std::make_shared<PBFTProposal>(rawConsensusProposal);
     }
     for (int i = 0; i < m_pbftRawMessage->proposals_size(); i++)
     {
-        m_proposals->push_back(std::make_shared<PBFTProposal>(std::shared_ptr<PBFTRawProposal>(
-            m_pbftRawMessage, m_pbftRawMessage->mutable_proposals(i))));
+        auto* rawPtr = m_pbftRawMessage->mutable_proposals(i);
+        std::shared_ptr<PBFTRawProposal> rawProposal(m_pbftRawMessage, rawPtr);
+        m_proposals->push_back(std::make_shared<PBFTProposal>(rawProposal));
     }
 }
 

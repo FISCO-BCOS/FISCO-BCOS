@@ -63,7 +63,7 @@ public:
         m_hasRAW(hasRAW),
         m_contexts(std::move(contextRange)),
         m_executor(executor),
-        m_storageView(storage),
+        m_storageView(&storage),
         m_readWriteSetStorage(m_storageView)
     {
         m_storageView.newMutable();
@@ -74,11 +74,11 @@ public:
     auto& storageView() & { return m_storageView; }
     auto& readWriteSetStorage() & { return m_readWriteSetStorage; }
 
-    task::Task<void> executeStep1(
+    task::Task<void> createContexts(
         const protocol::BlockHeader& blockHeader, const ledger::LedgerConfig& ledgerConfig)
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-            ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
+            ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK4);
         m_executeContexts.reserve(::ranges::size(m_contexts));
         for (auto& context : m_contexts)
         {
@@ -92,7 +92,7 @@ public:
         }
     }
 
-    task::Task<void> executeStep2()
+    task::Task<void> prepare()
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK1);
@@ -101,15 +101,15 @@ public:
             if (m_hasRAW.get().test())
             {
                 PARALLEL_SCHEDULER_LOG(DEBUG)
-                    << "Chunk: " << m_chunkIndex << " aborted in step1, executed " << index
+                    << "Chunk: " << m_chunkIndex << " aborted in prepare, executed " << index
                     << " transactions";
                 break;
             }
-            co_await executeContext.template executeStep<0>();
+            co_await executeContext.prepare();
         }
     }
 
-    task::Task<void> executeStep3()
+    task::Task<void> execute()
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK2);
@@ -118,21 +118,21 @@ public:
             if (m_hasRAW.get().test())
             {
                 PARALLEL_SCHEDULER_LOG(DEBUG)
-                    << "Chunk: " << m_chunkIndex << " aborted in step2, executed " << index
+                    << "Chunk: " << m_chunkIndex << " aborted in execute, executed " << index
                     << " transactions";
                 break;
             }
-            co_await executeContext.template executeStep<1>();
+            co_await executeContext.execute();
         }
     }
 
-    task::Task<void> executeStep4()
+    task::Task<void> finish()
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
         for (auto&& [context, executeContext] : ::ranges::views::zip(m_contexts, m_executeContexts))
         {
-            *context.receipt = co_await executeContext.template executeStep<2>();
+            *context.receipt = co_await executeContext.finish();
         }
     }
 };
@@ -143,12 +143,18 @@ constexpr static auto DEFAULT_MAX_CONCURRENCY = 8UL;
 template <class MutableStorageType>
 class SchedulerParallelImpl
 {
+    GC m_gc;
+
 public:
     constexpr static bool isSchedulerParallelImpl = true;
     using MutableStorage = MutableStorageType;
 
     size_t m_grainSize = DEFAULT_GRAIN_SIZE;
     size_t m_maxConcurrency = DEFAULT_MAX_CONCURRENCY;
+
+    explicit SchedulerParallelImpl(bcos::IOServicePool::Ptr ioServicePool)
+      : m_gc(std::move(ioServicePool))
+    {}
 
     task::Task<void> mergeLastStorage(auto& storage, auto& lastStorage)
     {
@@ -208,7 +214,7 @@ public:
                             ittapi::ITT_DOMAINS::instance().STAGE_2);
                         if (chunk && !hasRAW.test())
                         {
-                            task::tbb::syncWait(chunk->executeStep1(blockHeader, ledgerConfig));
+                            task::tbb::syncWait(chunk->createContexts(blockHeader, ledgerConfig));
                         }
 
                         return chunk;
@@ -220,7 +226,7 @@ public:
                             ittapi::ITT_DOMAINS::instance().STAGE_3);
                         if (chunk && !hasRAW.test())
                         {
-                            task::tbb::syncWait(chunk->executeStep2());
+                            task::tbb::syncWait(chunk->prepare());
                         }
 
                         return chunk;
@@ -232,7 +238,7 @@ public:
                             ittapi::ITT_DOMAINS::instance().STAGE_4);
                         if (chunk && !hasRAW.test())
                         {
-                            task::tbb::syncWait(chunk->executeStep3());
+                            task::tbb::syncWait(chunk->execute());
                         }
 
                         return chunk;
@@ -244,7 +250,7 @@ public:
                             ittapi::ITT_DOMAINS::instance().STAGE_5);
                         if (hasRAW.test())
                         {
-                            GC::collect(std::move(chunk));
+                            m_gc.collect(std::move(chunk));
                             return {};
                         }
 
@@ -259,7 +265,7 @@ public:
                                 hasRAW.test_and_set();
                                 PARALLEL_SCHEDULER_LOG(DEBUG)
                                     << "Detected RAW Intersection:" << index;
-                                GC::collect(std::move(chunk));
+                                m_gc.collect(std::move(chunk));
                                 return {};
                             }
                         }
@@ -278,7 +284,7 @@ public:
                             ittapi::ITT_DOMAINS::instance().STAGE_6);
                         if (chunk)
                         {
-                            task::tbb::syncWait(chunk->executeStep4());
+                            task::tbb::syncWait(chunk->finish());
                         }
 
                         return chunk;
@@ -299,7 +305,7 @@ public:
                                 << chunk->count();
                             task::tbb::syncWait(
                                 storage2::merge(lastStorage, mutableStorage(chunk->storageView())));
-                            GC::collect(std::move(chunk));
+                            m_gc.collect(std::move(chunk));
                         }
                         else
                         {
@@ -309,7 +315,7 @@ public:
             context);
 
         task::tbb::syncWait(mergeLastStorage(storage, lastStorage));
-        GC::collect(std::move(writeSet));
+        m_gc.collect(std::move(writeSet));
         if (offset < count)
         {
             PARALLEL_SCHEDULER_LOG(DEBUG)
@@ -345,7 +351,7 @@ public:
         arena.execute([&]() {
             auto retryCount = executeSinglePass(
                 storage, executor, blockHeader, ledgerConfig, contexts, m_grainSize);
-            GC::collect(std::move(contexts));
+            m_gc.collect(std::move(contexts));
             PARALLEL_SCHEDULER_LOG(INFO) << "Parallel execute block retry count: " << retryCount;
         });
 

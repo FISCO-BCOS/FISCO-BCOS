@@ -21,21 +21,19 @@
 
 #include "../common/RPCFixture.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <bcos-codec/wrapper/CodecWrapper.h>
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/testutils/faker/FakeFrontService.h>
+#include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
-#include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-rpc/filter/LogMatcher.h>
-#include <bcos-rpc/tarsRPC/RPCServer.h>
-#include <bcos-rpc/validator/CallValidator.h>
+#include <bcos-rpc/jwtAuth/JwtConfig.h>
+#include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
-#include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <bcos-task/Task.h>
+#include <boost/test/unit_test.hpp>
+#include <atomic>
+#include <chrono>
+#include <filesystem>
+#include <memory>
 #include <ostream>
 #include <string_view>
 
@@ -45,6 +43,65 @@ using namespace bcos::crypto;
 
 namespace bcos::test
 {
+
+class TestEngineService
+{
+public:
+    /// Shared mutable state — both the original TestEngineService and copies
+    /// inside AnyEngineService's proxy share the same state via this pointer.
+    struct State
+    {
+        engine::PayloadStatus payloadStatusResult{.latestValidHash = std::nullopt,
+            .validationError = std::nullopt,
+            .status = engine::PayloadValidationStatus::Valid};
+        engine::GetPayloadResult getPayloadResult = std::make_unique<engine::GetPayloadData>();
+        std::optional<engine::NewPayloadRequest> capturedNewPayloadRequest;
+        std::optional<std::uint32_t> capturedNewPayloadVersion;
+        std::optional<engine::PayloadID> capturedPayloadId;
+        std::optional<std::uint32_t> capturedGetPayloadVersion;
+        std::optional<bcos::protocol::BlockNumber> safeBlockNumber;
+        std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber;
+    };
+    std::shared_ptr<State> m_state = std::make_shared<State>();
+
+    task::Task<std::vector<std::string>> exchangeCapabilities(
+        std::vector<std::string> remoteCapabilities)
+    {
+        co_return remoteCapabilities;
+    }
+
+    task::Task<engine::ForkchoiceUpdatedResult> updateForkchoice(
+        const engine::ForkchoiceState&, const engine::PayloadAttributes*, std::uint32_t)
+    {
+        co_return engine::ForkchoiceUpdatedResult{
+            .payloadStatus = m_state->payloadStatusResult, .payloadId = std::nullopt};
+    }
+
+    task::Task<engine::GetPayloadResult> getPayload(
+        const engine::PayloadID& payloadId, std::uint32_t version)
+    {
+        m_state->capturedPayloadId = payloadId;
+        m_state->capturedGetPayloadVersion = version;
+        co_return std::make_unique<engine::GetPayloadData>(*m_state->getPayloadResult);
+    }
+
+    task::Task<engine::PayloadStatus> newPayload(
+        const engine::NewPayloadRequest& request, std::uint32_t version)
+    {
+        m_state->capturedNewPayloadRequest = request;
+        m_state->capturedNewPayloadVersion = version;
+        co_return m_state->payloadStatusResult;
+    }
+
+    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const
+    {
+        return m_state->safeBlockNumber;
+    }
+    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const
+    {
+        return m_state->finalizedBlockNumber;
+    }
+};
 
 class Web3TestFixture : public RPCFixture
 {
@@ -63,7 +120,9 @@ public:
         {
             std::promise<bcos::bytes> promise;
             web3JsonRpc->onRPCRequest(
-                request, [&promise](bcos::bytes resp) { promise.set_value(std::move(resp)); });
+                request, [&promise](bcos::bytes resp, boost::beast::http::status) {
+                    promise.set_value(std::move(resp));
+                });
             auto jsonBytes = promise.get_future().get();
             std::string_view json(
                 (char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
@@ -153,6 +212,18 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         BOOST_TEST(fromQuantity(response["result"].asString()) == 0);
     }
 
+    // method eth_gasPrice — config absent: no tx_gas_price entry in the (fresh-fixture)
+    // ledger, the handler must fall back to "0x0" (EthEndpoint::gasPrice). op-geth's
+    // gasPrice is head.baseFee + tip (>= 1e6 wei, never 0) — divergence D-GP-1,
+    // docs/2026-08-18-rpc-parity-gasprice-withdrawals.md.
+    {
+        const auto request =
+            R"({"jsonrpc":"2.0","id":541320, "method":"eth_gasPrice","params":[]})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_TEST(response["result"].asString() == "0x0");
+    }
+
     // method eth_gasPrice
     {
         m_ledger->setSystemConfig(SYSTEM_KEY_TX_GAS_PRICE, "0x99e670");
@@ -235,6 +306,34 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         response = onRPCRequestWrapper(request2);
         validRespCheck(response);
     }
+
+    // eth_estimateGas must answer the minimum Viable gas limit, not the raw
+    // consumption measured under the gas-less default cap. Regression (08-24,
+    // C2 devnet): the MessagePasser withdrawal hops through a proxy
+    // DELEGATECALL, which retains 1/64 of the gas at the hop (EIP-150) — the
+    // tx consumed 59186 but reverted on-chain at exactly that limit. The fake
+    // scheduler below reproduces that shape: consumption 59186, viable only
+    // at >= 59926 — the estimate must land on 59926, and a follow-up
+    // at-limit eth_call shape (direct call, always viable) returns the
+    // consumption unchanged.
+    {
+        scheduler->viableGas = 59926;
+        scheduler->consumedGas = 59186;
+        auto request =
+            R"({"jsonrpc":"2.0","method":"eth_estimateGas","params":[{"from":"0x2a09be8823b80f337170650802d1a0f8a99fe2d8","to":"0x4200000000000000000000000000000000000016","data":"0xc2b3e5ac"},"pending"],"id":5})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_TEST(fromQuantity(response["result"].asString()) == 59926);
+
+        // Direct-call shape: every limit is viable, so the estimate is the
+        // consumption itself (fast path — no search needed).
+        scheduler->viableGas = 0;
+        response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_TEST(fromQuantity(response["result"].asString()) == 59186);
+
+        scheduler->viableGas.reset();
+    }
 }
 
 BOOST_AUTO_TEST_CASE(handleWeb3NamespaceValidTest)
@@ -281,7 +380,7 @@ BOOST_AUTO_TEST_CASE(handleLegacyTxTest)
         auto rawTxBytesRef = bcos::ref(rawTxBytes);
         Web3Transaction rawWeb3Tx;
         codec::rlp::decode(rawTxBytesRef, rawWeb3Tx);
-        onRPCRequestWrapper(request, [](auto&&) {});
+        onRPCRequestWrapper(request, [](auto&&, auto&&) {});
         // validRespCheck(response);
         // BOOST_TEST(response["id"].asInt64() == 1132123);
         // BOOST_TEST(response["result"].asString() == expectHash);
@@ -355,7 +454,7 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
         auto rawTxBytesRef = bcos::ref(rawTxBytes);
         Web3Transaction rawWeb3Tx;
         codec::rlp::decode(rawTxBytesRef, rawWeb3Tx);
-        onRPCRequestWrapper(request, [](auto&&) {});
+        onRPCRequestWrapper(request, [](auto&&, auto&&) {});
         // validRespCheck(response);
         // BOOST_TEST(response["id"].asInt64() == 1132123);
         // BOOST_TEST(response["result"].asString() == expectHash);
@@ -408,66 +507,228 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
 
 BOOST_AUTO_TEST_CASE(handleEIP4844TxTest)
 {
-    // method eth_sendRawTransaction
-    auto testEIP4844Tx = [&](std::string const& rawTx, std::string const& expectHash) {
-        // clang-format off
-        const std::string request = R"({"jsonrpc":"2.0","id":1132123, "method":"eth_sendRawTransaction","params":[")" + rawTx + R"("]})";
-        // clang-format on
-        auto rawTxBytes = fromHexWithPrefix(rawTx);
-        auto rawTxBytesRef = bcos::ref(rawTxBytes);
-        Web3Transaction rawWeb3Tx;
-        codec::rlp::decode(rawTxBytesRef, rawWeb3Tx);
-        onRPCRequestWrapper(request, [](auto&&) {});
-        // validRespCheck(response);
-        // BOOST_TEST(response["id"].asInt64() == 1132123);
-        // BOOST_TEST(response["result"].asString() == expectHash);
-        std::vector<crypto::HashType> hashes = {HashType(expectHash)};
-        task::wait([&rawWeb3Tx](
-                       Web3TestFixture* self, decltype(hashes) m_hashes) -> task::Task<void> {
-            auto txs = co_await self->txPool->getTransactions(m_hashes);
-            BOOST_TEST(txs.size() == 1);
-            BOOST_TEST(txs[0]->hash() == m_hashes[0]);
-            BOOST_TEST(txs[0]->type() == 1);
-            BOOST_TEST(!txs[0]->extraTransactionBytes().empty());
-            auto ref = bytesRef(const_cast<unsigned char*>(txs[0]->extraTransactionBytes().data()),
-                txs[0]->extraTransactionBytes().size());
-            Web3Transaction tx;
-            bcos::codec::rlp::decode(ref, tx);
-            BOOST_TEST(tx.type == rawWeb3Tx.type);
-            BOOST_TEST(tx.data == rawWeb3Tx.data);
-            BOOST_TEST(tx.nonce == rawWeb3Tx.nonce);
-            BOOST_CHECK(tx.to == rawWeb3Tx.to);
-            BOOST_TEST(tx.value == rawWeb3Tx.value);
-            BOOST_TEST(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
-            BOOST_TEST(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
-            BOOST_TEST(tx.gasLimit == rawWeb3Tx.gasLimit);
-            BOOST_TEST(tx.accessList == rawWeb3Tx.accessList);
-            BOOST_CHECK(tx.chainId == rawWeb3Tx.chainId);
-            BOOST_TEST(tx.maxFeePerBlobGas == rawWeb3Tx.maxFeePerBlobGas);
-            BOOST_TEST(tx.blobVersionedHashes == rawWeb3Tx.blobVersionedHashes);
-        }(this, std::move(hashes)));
-        return rawWeb3Tx;
-    };
-
+    // L2 (OP Stack, Ecotone onwards) never admits blob transactions:
+    // eth_sendRawTransaction rejects type-3 envelopes before RLP decoding, and the
+    // transaction must not enter the pool. (These three mainnet blob transactions were
+    // previously asserted to be accepted — that acceptance was vestigial: FISCO carries
+    // no KZG/blob-sidecar support.)
     m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, std::to_string(1));
-    std::optional<storage::Entry> balanceOp = storage::Entry();
-    balanceOp->set(asBytes("123456700000000000"));
+    auto testRejectedEIP4844Tx = [&](std::string const& rawTx, std::string const& txHash) {
+        const std::string request =
+            R"({"jsonrpc":"2.0","id":1132123, "method":"eth_sendRawTransaction","params":[")" +
+            rawTx + R"("]})";
+        auto response = onRPCRequestWrapper(request);
+        BOOST_REQUIRE(response.isMember("error"));
+        BOOST_CHECK_NE(response["error"]["message"].asString().find("blob"), std::string::npos);
+        std::vector<crypto::HashType> hashes = {HashType(txHash)};
+        task::wait([](Web3TestFixture* self, decltype(hashes) m_hashes) -> task::Task<void> {
+            auto txs = co_await self->txPool->getTransactions(m_hashes);
+            BOOST_REQUIRE_EQUAL(txs.size(), 1);
+            BOOST_CHECK(!txs[0]);  // rejected transactions never reach the pool
+        }(this, std::move(hashes)));
+    };
     // clang-format off
-    // https://etherscan.io/tx/0x637b7e88d7a0992b62a973acd41736ee2b63be1c86d0ffeb683747964daea892
-    m_ledger->setStorageAt("2c169dfe5fbba12957bdd0ba47d9cedbfe260ca7", std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), balanceOp);
-    testEIP4844Tx(
+    testRejectedEIP4844Tx(
         "0x03f902fd018309a7ee8405f5e1008522ecb25c008353ec6094c662c410c0ecf747543f5ba90660f6abebd9c8c480b90264b72d42a100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000d06ad5334c4498113f3cc1548635e7c32bb72562421fddef1e60d165d8035ebe2031fe8a2addb2bec3c5c43b6168e3dac21f84cddbfae7d9e24977fbee8038772000000000000000000000000000000000000000000000000000000000009a7ed04ef432aa69fe0dd81c5d5d07464120008bbaede9cf73c4ca149f0be56acfbf605ba2078240f1585f96424c2d1ee48211da3b3f9177bf2b9880b4fc91d59e9a200000000000000000000000000000000000000000000000000000000000000010000000000000000df5459e0fefcbcfb5585179c4dfde48bc334f5836ad2821f0000000000000000883e48453eb072b0e184b27522f52d8324ee5d6ee778b05002c8df8c56bb3f47ab53b12be77ca1192abf4821a3e2b32c24d34af793fbcdca00000000000000000000000000000000cf420df13fc18924e41f7b0bd34de6a6000000000000000000000000000000000f389c6a65227d0e916c9670e8398e0d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003088cf8a7c3410fc132c573b94603dd2cf6e25555808a487c925ae595f6e2d1907907ba57a3fb42729eb1de453ebeda6bc00000000000000000000000000000000c08522ecb25c00e1a00131e940049304bb30d0da71fcccc542712238c5e2aa6ad96cf7eb5fa8ef974880a0f9ea6a59f3f160f36e1e2248085ec9d3bc3797462b4e5fd2c53f6753ddc88cc3a06e0aa62f613475a881564eb9269762b466560d4870835a198e12f6d5e05a9eaa",
         "0x637b7e88d7a0992b62a973acd41736ee2b63be1c86d0ffeb683747964daea892");
-    // https://etherscan.io/tx/0x82d366c93c5fb2cbe8f1b6f0f19c260d11a958875560a398d75784ce9f4d6adf
-    m_ledger->setStorageAt("6887246668a3b87f54deb3b94ba47a6f63f32985", std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), balanceOp);
-    testEIP4844Tx("0x03f9013b018310fcdb847735940085041e2a063282520894ff000000000000000000000000000000000000108080c0843b9aca00f8c6a001a74d77682287763fc9a460f1c0a2f686daa8bdbb8757564c0fc05f54bbd6d5a0015d0db22bb787710c9d112373a0a49132646f0813c478d15ed247c148982172a00185ece9183ab795a0bfd3326d5b64848d9839992ac3f3ce4a55afb6e7ba4520a0013d1e438e3fb85830cb49bad9598a1ac720b778796c67a00ed8e20eebde05c5a001ff9dae3fb9320795caa1b474a9f667f2022e0e3d8a678ebfe163d7801908c1a001622f10864730dcd603857f00824ad18e070c64b57f9878738db1f85cfad33880a04539a1636f5c431241be963c898bc59491ed7c01853b75ed9e9e9bc47d0aa9ada031880afe746833518e6ea271ecd6a3943fa6da09ba1f889531729a1c8270e7cc",
+    testRejectedEIP4844Tx(
+        "0x03f9013b018310fcdb847735940085041e2a063282520894ff000000000000000000000000000000000000108080c0843b9aca00f8c6a001a74d77682287763fc9a460f1c0a2f686daa8bdbb8757564c0fc05f54bbd6d5a0015d0db22bb787710c9d112373a0a49132646f0813c478d15ed247c148982172a00185ece9183ab795a0bfd3326d5b64848d9839992ac3f3ce4a55afb6e7ba4520a0013d1e438e3fb85830cb49bad9598a1ac720b778796c67a00ed8e20eebde05c5a001ff9dae3fb9320795caa1b474a9f667f2022e0e3d8a678ebfe163d7801908c1a001622f10864730dcd603857f00824ad18e070c64b57f9878738db1f85cfad33880a04539a1636f5c431241be963c898bc59491ed7c01853b75ed9e9e9bc47d0aa9ada031880afe746833518e6ea271ecd6a3943fa6da09ba1f889531729a1c8270e7cc",
         "0x82d366c93c5fb2cbe8f1b6f0f19c260d11a958875560a398d75784ce9f4d6adf");
-    // https://etherscan.io/tx/0xa8fd95a70b4f2b6cea8c52bcb782b5c3f806a0d5250cf75a1d97a6e899f09979
-    m_ledger->setStorageAt("625726c858dbf78c0125436c943bf4b4be9d9033", std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), balanceOp);
-    testEIP4844Tx("0x03f9013a0182a8f98477359400850432ec4812825208946f54ca6f6ede96662024ffd61bfd18f3f4e34dff8080c0843b9aca00f8c6a001fb60d5b0abeff9e3d47099386a31eed62cd55d54aa146b42d10eb81b0a9b2aa00156b2193030eb7c9496d8586492934a57a5ebd0fac816ef1ea01dc4d09498c5a001bd78704a4b015adec86a654a123045312b083641ababec0e60ef17be4453e7a001b59b9a8b8d35bd6afcff91c6afc56ebcaf4a62f6e83f5e57aac4484f022cc4a00110aac506aff4957e40d4640f0763015b84bbb8c23f50f1b13d501067bea878a001f100a97a70563cd623e588c976155ffe5999d1e9258302d969964d7524bd0280a08c1cff27365c5fe0a6ebfe5e010b3460747489302547f3ba5b181390fad485ada02af2f430e0dfad48ba78853b59486ea7425835c3a7034bb22702234f8994288f",
+    testRejectedEIP4844Tx(
+        "0x03f9013a0182a8f98477359400850432ec4812825208946f54ca6f6ede96662024ffd61bfd18f3f4e34dff8080c0843b9aca00f8c6a001fb60d5b0abeff9e3d47099386a31eed62cd55d54aa146b42d10eb81b0a9b2aa00156b2193030eb7c9496d8586492934a57a5ebd0fac816ef1ea01dc4d09498c5a001bd78704a4b015adec86a654a123045312b083641ababec0e60ef17be4453e7a001b59b9a8b8d35bd6afcff91c6afc56ebcaf4a62f6e83f5e57aac4484f022cc4a00110aac506aff4957e40d4640f0763015b84bbb8c23f50f1b13d501067bea878a001f100a97a70563cd623e588c976155ffe5999d1e9258302d969964d7524bd0280a08c1cff27365c5fe0a6ebfe5e010b3460747489302547f3ba5b181390fad485ada02af2f430e0dfad48ba78853b59486ea7425835c3a7034bb22702234f8994288f",
         "0xa8fd95a70b4f2b6cea8c52bcb782b5c3f806a0d5250cf75a1d97a6e899f09979");
     // clang-format on
 }
+
+BOOST_AUTO_TEST_CASE(handleEngineNotAvailableTest)
+{
+    const auto request =
+        R"({"jsonrpc":"2.0","id":7,"method":"engine_exchangeCapabilities","params":["engine_newPayloadV2"]})";
+    auto response = onRPCRequestWrapper(request);
+    BOOST_TEST(response.isMember("error"));
+    BOOST_TEST(response["error"]["code"].asInt() == MethodNotFound);
+    BOOST_TEST(response["error"]["message"].asString() == "Method not found");
+}
+
+BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
+{
+    TestEngineService testEngineService;
+    nodeService->engineService() =
+        std::make_shared<bcos::engine::AnyEngineService>(testEngineService);
+
+    // Create a separate Web3JsonRpcImpl with OP Engine enabled for engine API tests
+    auto engineRpc =
+        std::make_shared<Web3JsonRpcImpl>(groupId, 8, rpc->groupManager(), nullptr, false, true);
+
+    auto engineRequest = [&](std::string_view req) -> Json::Value {
+        std::promise<bcos::bytes> promise;
+        engineRpc->onRPCRequest(req, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
+        auto jsonBytes = promise.get_future().get();
+        Json::Value val;
+        Json::Reader reader;
+        reader.parse(std::string(jsonBytes.begin(), jsonBytes.end()), val);
+        return val;
+    };
+
+    auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
+        "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100, chainId,
+        groupId, static_cast<int64_t>(utcTime()));
+    bytes encodedTx;
+    tx->encode(encodedTx);
+    auto encodedTxHex = toHexStringWithPrefix(encodedTx);
+
+    auto const largeQuantity = std::string("0x100000000000000000");
+    auto const expectedLargeValue = fromBigQuantity(largeQuantity);
+    auto const logsBloom = "0x" + std::string(BloomBytesSize * 2, '0');
+
+    // Karst surface (B4): the wire dialect is newPayloadV4 (payload with withdrawalsRoot,
+    // plus blob hashes / beacon root / executionRequests params) and getPayloadV5.
+    std::string newPayloadRequest =
+        R"({"jsonrpc":"2.0","id":8,"method":"engine_newPayloadV4","params":[{"parentHash":"0x1111111111111111111111111111111111111111111111111111111111111111","feeRecipient":"0x2222222222222222222222222222222222222222","stateRoot":"0x3333333333333333333333333333333333333333333333333333333333333333","receiptsRoot":"0x4444444444444444444444444444444444444444444444444444444444444444","logsBloom":")";
+    newPayloadRequest += logsBloom;
+    newPayloadRequest +=
+        R"(","prevRandao":"0x5555555555555555555555555555555555555555555555555555555555555555","blockNumber":"0x1","gasLimit":"0x5208","gasUsed":"0x5208","timestamp":"0x1","extraData":"0x1234","baseFeePerGas":"0x1","blockHash":"0x6666666666666666666666666666666666666666666666666666666666666666","withdrawalsRoot":"0x9999999999999999999999999999999999999999999999999999999999999999","transactions":[")";
+    newPayloadRequest += encodedTxHex;
+    newPayloadRequest +=
+        R"("],"withdrawals":[{"index":"0x1","validatorIndex":"0x2","address":"0x7777777777777777777777777777777777777777","amount":")";
+    newPayloadRequest += largeQuantity;
+    newPayloadRequest += R"("}],"blobGasUsed":")";
+    newPayloadRequest += largeQuantity;
+    newPayloadRequest += R"(","excessBlobGas":")";
+    newPayloadRequest += largeQuantity;
+    newPayloadRequest +=
+        R"("},[],"0x169630f535b4a41330164c6e5c92b1224c0c407f582d407d0ac3d206cd32fd52",[]]})";
+
+    auto newPayloadResponse = engineRequest(newPayloadRequest);
+    validRespCheck(newPayloadResponse);
+    BOOST_TEST(newPayloadResponse["result"]["status"].asString() == "VALID");
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest.has_value());
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadVersion.has_value());
+    BOOST_TEST(*testEngineService.m_state->capturedNewPayloadVersion == 4);
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
+                      .withdrawalsRoot.has_value());
+    BOOST_REQUIRE(
+        testEngineService.m_state->capturedNewPayloadRequest->executionRequests.has_value());
+    BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionRequests->empty());
+    BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions
+                   .size() == 1);
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals
+                      .has_value());
+    BOOST_TEST(
+        testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front()
+            .amount == expectedLargeValue);
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed
+                      .has_value());
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
+                      .excessBlobGas.has_value());
+    BOOST_TEST(
+        *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed ==
+        expectedLargeValue);
+    BOOST_TEST(
+        *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.excessBlobGas ==
+        expectedLargeValue);
+
+    // Raw-bytes carrier: newPayload preserves the wire bytes verbatim (no decoding).
+    BOOST_TEST(toHexStringWithPrefix(testEngineService.m_state->capturedNewPayloadRequest
+                                         ->executionPayload.transactions.front()
+                                         .raw) == encodedTxHex);
+
+    testEngineService.m_state->getPayloadResult->executionPayload =
+        testEngineService.m_state->capturedNewPayloadRequest->executionPayload;
+    testEngineService.m_state->getPayloadResult->blockValue = expectedLargeValue;
+
+    const auto getPayloadRequest =
+        R"({"jsonrpc":"2.0","id":9,"method":"engine_getPayloadV5","params":["payload-id-1"]})";
+    auto getPayloadResponse = engineRequest(getPayloadRequest);
+    validRespCheck(getPayloadResponse);
+    BOOST_REQUIRE(testEngineService.m_state->capturedPayloadId.has_value());
+    BOOST_REQUIRE(testEngineService.m_state->capturedGetPayloadVersion.has_value());
+    BOOST_TEST(*testEngineService.m_state->capturedPayloadId == "payload-id-1");
+    BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 5);
+    BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"].size() == 1);
+    BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"][0].asString() ==
+               encodedTxHex);
+    BOOST_TEST(
+        getPayloadResponse["result"]["executionPayload"]["withdrawals"][0]["amount"].asString() ==
+        largeQuantity);
+    BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["withdrawalsRoot"].asString() ==
+               "0x9999999999999999999999999999999999999999999999999999999999999999");
+    BOOST_TEST(getPayloadResponse["result"]["blockValue"].asString() == largeQuantity);
+    BOOST_TEST(getPayloadResponse["result"]["executionRequests"].isArray());
+    BOOST_TEST(getPayloadResponse["result"]["executionRequests"].size() == 0U);
+
+    // Adapting to Karst does not retire the older method versions: getPayloadV2 still
+    // reaches the engine service over the same full RPC path, and answers in the V2 shape
+    // (executionPayload + blockValue, no blobsBundle / executionRequests).
+    const auto oldVersionRequest =
+        R"({"jsonrpc":"2.0","id":10,"method":"engine_getPayloadV2","params":["payload-id-1"]})";
+    auto oldVersionResponse = engineRequest(oldVersionRequest);
+    validRespCheck(oldVersionResponse);
+    BOOST_REQUIRE(testEngineService.m_state->capturedGetPayloadVersion.has_value());
+    BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 2);
+    BOOST_TEST(oldVersionResponse["result"].isMember("executionPayload"));
+    BOOST_TEST(oldVersionResponse["result"].isMember("blockValue"));
+    BOOST_TEST(!oldVersionResponse["result"].isMember("blobsBundle"));
+    BOOST_TEST(!oldVersionResponse["result"].isMember("executionRequests"));
+}
+
+// D2 U3-U6: safe/finalized tag routing at the EthEndpoint layer.
+// - engine service absent (PBFT): tags keep the historical latest aliasing
+// - engine present + untracked: strict op-geth semantics -> null block
+// - engine present + tracked: routes to the tracked number (distinguished from the
+//   latest-fallback by a tracked number the ledger cannot serve -> null)
+BOOST_AUTO_TEST_CASE(safeFinalizedTagRoutingTest)
+{
+    // Self-calibrate: what "latest" resolves to on this fixture.
+    auto latestResp = onRPCRequestWrapper(
+        R"({"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["latest",false]})");
+    BOOST_REQUIRE(!latestResp["result"].isNull());
+    auto const latestNumber = latestResp["result"]["number"].asString();
+    auto const latestNumeric = std::stoll(latestNumber.substr(2), nullptr, 16);
+
+    // U5+U6: no engine service wired (fixture default) -> safe/finalized/pending alias latest
+    for (auto tag : {"safe", "finalized", "pending"})
+    {
+        auto resp = onRPCRequestWrapper(
+            R"({"jsonrpc":"2.0","id":2,"method":"eth_getBlockByNumber","params":[")" +
+            std::string(tag) + R"(",false]})");
+        BOOST_CHECK_MESSAGE(
+            !resp["result"].isNull() && resp["result"]["number"].asString() == latestNumber,
+            tag + std::string(" aliases latest when no engine service is wired"));
+    }
+
+    // Engine wired, untracked -> null block (op-geth "safe head not known" -> NotFound)
+    TestEngineService testEngineService;
+    nodeService->engineService() =
+        std::make_shared<bcos::engine::AnyEngineService>(testEngineService);
+    for (auto tag : {"safe", "finalized"})
+    {
+        auto resp = onRPCRequestWrapper(
+            R"({"jsonrpc":"2.0","id":3,"method":"eth_getBlockByNumber","params":[")" +
+            std::string(tag) + R"(",false]})");
+        BOOST_CHECK_MESSAGE(resp["result"].isNull(),
+            tag + std::string(" returns null when untracked (strict op-geth semantics)"));
+    }
+
+    // Engine wired, tracked to a number the ledger cannot serve (FakeLedger tops out at
+    // 20 blocks; latest+1000 is far beyond) -> null (proves routing: a latest-fallback
+    // would return the latest block instead)
+    testEngineService.m_state->safeBlockNumber = latestNumeric + 1000;
+    auto resp = onRPCRequestWrapper(
+        R"({"jsonrpc":"2.0","id":4,"method":"eth_getBlockByNumber","params":["safe",false]})");
+    BOOST_CHECK(resp["result"].isNull());
+
+    // Positive routing: tracked to a servable number (== latest) -> that block, non-null.
+    // Catches an inverted has_value() regression (an always-throw passes the phases above).
+    testEngineService.m_state->safeBlockNumber = latestNumeric;
+    resp = onRPCRequestWrapper(
+        R"({"jsonrpc":"2.0","id":5,"method":"eth_getBlockByNumber","params":["safe",false]})");
+    BOOST_CHECK(!resp["result"].isNull());
+    BOOST_CHECK(resp["result"]["number"].asString() == latestNumber);
+}
+
 BOOST_AUTO_TEST_CASE(logMatcherTest)
 {
     // clang-format off
@@ -493,11 +754,19 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         protocol::LogEntry log2(address1, {C, D}, bytes());
         auto params1 = std::make_shared<Web3FilterRequest>();
         auto params2 = std::make_shared<Web3FilterRequest>();
+        auto params3 = std::make_shared<Web3FilterRequest>();
         params2->addAddress(toHexStringWithPrefix(address1));
+        params3->addAddress(toHexStringWithPrefix(address2));
         BOOST_TEST(matcher.matches(params1, log1));
         BOOST_TEST(matcher.matches(params1, log2));
-        BOOST_TEST(!matcher.matches(params2, log1));
-        BOOST_TEST(!matcher.matches(params2, log2));
+        // Address filtering: the log side carries the address as raw bytes (OP executor) while
+        // the request side keeps the user's hex string — since the LogMatcher normalization fix
+        // the identical address must MATCH (these two assertions used to pin the pre-fix bug
+        // where a raw-bytes address could never match a hex filter).
+        BOOST_TEST(matcher.matches(params2, log1));
+        BOOST_TEST(matcher.matches(params2, log2));
+        // A different address still must not match.
+        BOOST_TEST(!matcher.matches(params3, log1));
     }
     // 2.[A] "A in first position (and anything after)"
     {
@@ -722,6 +991,109 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
             BOOST_TEST(!matcher.matches(params, log));
         }
     }
+}
+BOOST_AUTO_TEST_CASE(jwtHttpRequestAuthTest)
+{
+    // Build a JwtVerifier with a real secret file, then drive the JWT-protected
+    // onRPCRequest(HttpRequest&, Sender) overload: no header / bad token -> 401,
+    // valid token -> dispatched to the handler.
+    auto secretHex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    auto tempDir = std::filesystem::temp_directory_path();
+    static std::atomic<uint64_t> counter{0};
+    auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch())
+                  .count();
+    auto secretFile = tempDir / ("fisco-bcos-jwt-rpc-test-" + std::to_string(ns) + "-" +
+                                    std::to_string(counter.fetch_add(1)) + ".hex");
+    {
+        std::ofstream ofs(secretFile);
+        ofs << secretHex;
+    }
+
+    auto config = std::make_shared<JwtConfig>();
+    config->setSecretFile(secretFile.string());
+    config->setClockSkewSecs(60);
+    config->setAllowedAlgorithms("HS256");
+
+    auto engineRpc =
+        std::make_shared<Web3JsonRpcImpl>(groupId, 8, rpc->groupManager(), nullptr, false, true);
+    engineRpc->setJwtVerifier(std::make_shared<JwtVerifier>(config));
+
+    auto secretBytes = fromHex(secretHex);
+    std::string secret(reinterpret_cast<const char*>(secretBytes.data()), secretBytes.size());
+    auto validJwt = ::jwt::create()
+                        .set_algorithm("HS256")
+                        .set_type("JWT")
+                        .set_issued_at(std::chrono::system_clock::time_point{
+                            std::chrono::seconds{static_cast<int64_t>(utcTime() / 1000)}})
+                        .sign(::jwt::algorithm::hs256{std::move(secret)});
+
+    // 1) No Authorization header -> HTTP 401 + JSON-RPC error body
+    {
+        std::promise<std::pair<bcos::bytes, boost::beast::http::status>> promise;
+        bcos::boostssl::http::HttpRequest request;
+        request.version(11);
+        request.method(boost::beast::http::verb::post);
+        request.target("/");
+        request.body() = R"({"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]})";
+        request.prepare_payload();
+
+        engineRpc->onRPCRequest(
+            request, [&promise](bcos::bytes resp, boost::beast::http::status status) {
+                promise.set_value({std::move(resp), status});
+            });
+        auto [resp, status] = promise.get_future().get();
+        BOOST_CHECK_EQUAL(status, boost::beast::http::status::unauthorized);
+        Json::Value val;
+        Json::Reader reader;
+        reader.parse(std::string(resp.begin(), resp.end()), val);
+        BOOST_CHECK(val.isMember("error"));
+        BOOST_CHECK_EQUAL(val["error"]["code"].asInt(), bcos::rpc::JwtUnauthorized);
+    }
+
+    // 2) Invalid Bearer token -> HTTP 401
+    {
+        std::promise<std::pair<bcos::bytes, boost::beast::http::status>> promise;
+        bcos::boostssl::http::HttpRequest request;
+        request.version(11);
+        request.method(boost::beast::http::verb::post);
+        request.target("/");
+        request.set(boost::beast::http::field::authorization, "Bearer invalid.token.here");
+        request.body() = R"({"jsonrpc":"2.0","id":2,"method":"eth_chainId","params":[]})";
+        request.prepare_payload();
+
+        engineRpc->onRPCRequest(
+            request, [&promise](bcos::bytes resp, boost::beast::http::status status) {
+                promise.set_value({std::move(resp), status});
+            });
+        auto [resp, status] = promise.get_future().get();
+        BOOST_CHECK_EQUAL(status, boost::beast::http::status::unauthorized);
+    }
+
+    // 3) Valid Bearer token -> dispatched, HTTP 200 + JSON-RPC result
+    {
+        std::promise<std::pair<bcos::bytes, boost::beast::http::status>> promise;
+        bcos::boostssl::http::HttpRequest request;
+        request.version(11);
+        request.method(boost::beast::http::verb::post);
+        request.target("/");
+        request.set(boost::beast::http::field::authorization, "Bearer " + validJwt);
+        request.body() = R"({"jsonrpc":"2.0","id":3,"method":"eth_chainId","params":[]})";
+        request.prepare_payload();
+
+        engineRpc->onRPCRequest(
+            request, [&promise](bcos::bytes resp, boost::beast::http::status status) {
+                promise.set_value({std::move(resp), status});
+            });
+        auto [resp, status] = promise.get_future().get();
+        BOOST_CHECK_EQUAL(status, boost::beast::http::status::ok);
+        Json::Value val;
+        Json::Reader reader;
+        reader.parse(std::string(resp.begin(), resp.end()), val);
+        BOOST_CHECK(val.isMember("result"));
+    }
+
+    std::filesystem::remove(secretFile);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

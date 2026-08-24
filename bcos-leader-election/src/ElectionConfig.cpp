@@ -31,7 +31,7 @@ void ElectionConfig::start()
     {
         return;
     }
-    m_watcherTimer = std::make_shared<Timer>(5000, "watchTimer");
+    m_watcherTimer = std::make_shared<Timer>(*m_ioContext, 5000, "watchTimer");
     auto self = std::weak_ptr<ElectionConfig>(shared_from_this());
     m_watcherTimer->registerTimeoutHandler([self]() {
         auto config = self.lock();

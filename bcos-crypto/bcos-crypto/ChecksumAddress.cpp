@@ -16,13 +16,13 @@
 
 #include <bcos-crypto/ChecksumAddress.h>
 
-#include <bcos-codec/bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <boost/algorithm/string.hpp>
-#include <boost/lexical_cast.hpp>
 #include <fmt/format.h>
+#include <boost/algorithm/hex.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
+#include <boost/lexical_cast.hpp>
 #include <cctype>
 #include <memory>
 #include <span>
@@ -118,7 +118,7 @@ std::string newEVMAddress(
     return newEVMAddress(*_hashImpl, blockNumber, contextID, seq);
 }
 
-evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexcept
+std::array<bcos::byte, 20> newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexcept
 {
     codec::rlp::Header header{.isList = true, .payloadLength = 1 + sender.size()};
     header.payloadLength += codec::rlp::length(nonce);
@@ -127,8 +127,8 @@ evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexce
     codec::rlp::encode(rlp, sender);
     codec::rlp::encode(rlp, nonce);
     auto hash = bcos::crypto::keccak256Hash(ref(rlp));
-    evmc_address address;
-    std::uninitialized_copy(hash.begin() + 12, hash.end(), address.bytes);
+    std::array<bcos::byte, 20> address;
+    std::uninitialized_copy(hash.begin() + 12, hash.end(), address.begin());
 
     return address;
 }
@@ -136,7 +136,7 @@ evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexce
 std::string newLegacyEVMAddressString(bytesConstRef sender, const u256& nonce) noexcept
 {
     auto address = newLegacyEVMAddress(sender, nonce);
-    auto view = std::span{address.bytes};
+    auto view = std::span{address};
     std::string out;
     out.reserve(view.size() * 2);
     boost::algorithm::hex_lower(view.begin(), view.end(), std::back_inserter(out));
@@ -149,11 +149,11 @@ std::string newLegacyEVMAddressString(bytesConstRef sender, std::string const& n
     return newLegacyEVMAddressString(sender, uNonce);
 }
 
-std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl,
-    const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
+std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl, const std::string_view& _sender,
+    bytesConstRef _init, u256 const& _salt)
 {
-    auto hash = _hashImpl->hash(bytes{0xff} + fromHex(_sender) + toBigEndian(_salt) +
-                                _hashImpl->hash(_init));
+    auto hash = _hashImpl->hash(
+        bytes{0xff} + fromHex(_sender) + toBigEndian(_salt) + _hashImpl->hash(_init));
 
     std::string hexAddress;
     hexAddress.reserve(40);

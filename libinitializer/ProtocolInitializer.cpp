@@ -19,7 +19,6 @@
  * @date 2021-06-10
  */
 #include "libinitializer/ProtocolInitializer.h"
-#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "libinitializer/Common.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>
@@ -168,17 +167,17 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
     {
         auto privateKeyData =
             loadPrivateKey(_privateKeyPath, c_hexedPrivateKeySize, m_keyEncryption);
-        if (!privateKeyData)
+        if (privateKeyData.empty())
         {
             INITIALIZER_LOG(ERROR)
                 << LOG_DESC("loadKeyPair failed") << LOG_KV("privateKeyPath", _privateKeyPath);
             throw std::runtime_error("loadKeyPair failed, keyPair path: " + _privateKeyPath);
         }
         INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair from privateKey")
-                              << LOG_KV("privateKeySize", privateKeyData->size())
+                              << LOG_KV("privateKeySize", privateKeyData.size())
                               << LOG_KV("keyEncryptionType",
                                      std::string(magic_enum::enum_name((m_keyEncryptionType))));
-        auto privateKey = m_keyFactory->createKey(*privateKeyData);
+        auto privateKey = m_keyFactory->createKey(privateKeyData);
         m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(privateKey);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from privateKeyPath")
                               << LOG_KV("privateKeyPath", _privateKeyPath);

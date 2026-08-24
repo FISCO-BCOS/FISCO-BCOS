@@ -27,7 +27,6 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
-#include <atomic>
 #include <stdexcept>
 
 using namespace bcos;
@@ -73,7 +72,7 @@ inline std::shared_ptr<FibPromotionPBFTImpl> makePromotionPBFTFib138(
     PBFTFixture::Ptr const& fixture)
 {
     auto pbftEngine = fixture->pbftEngine();
-    auto fakedPbft = std::make_shared<FibPromotionPBFTImpl>(pbftEngine);
+    auto fakedPbft = std::make_shared<FibPromotionPBFTImpl>(pbftEngine, fixture->ioServicePool());
     fakedPbft->setLedger(fixture->ledger());
     return fakedPbft;
 }
@@ -138,7 +137,10 @@ BOOST_AUTO_TEST_CASE(init_failure_rolls_back_master_flag)
     BOOST_REQUIRE(!pbftConfig->asMasterNode());
 
     promotionPbft->m_throwOnInit = true;
-    BOOST_CHECK_THROW(promotionPbft->enableAsMasterNode(true), std::exception);
+    // Use std::runtime_error (the actual throw type) — on Apple libc++,
+    // BOOST_CHECK_THROW(..., std::exception) may not match a derived type
+    // thrown from a different translation unit.
+    BOOST_CHECK_THROW(promotionPbft->enableAsMasterNode(true), std::runtime_error);
 
     // Both flags MUST be FALSE after the failed promotion.
     BOOST_CHECK_MESSAGE(!promotionPbft->masterNode(),

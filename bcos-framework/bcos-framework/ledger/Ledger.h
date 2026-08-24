@@ -32,11 +32,12 @@ inline constexpr struct BuildGenesisBlock
 inline constexpr struct PrewriteBlock
 {
     task::Task<void> operator()(auto& ledger, bcos::protocol::ConstTransactionsPtr transactions,
-        bcos::protocol::Block::ConstPtr block, bool withTransactionsAndReceipts,
-        auto& storage) const
+        bcos::protocol::Block::ConstPtr block, bool withTransactionsAndReceipts, auto& storage,
+        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
+        bool writeNonces = true) const
     {
         co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block),
-            withTransactionsAndReceipts, storage);
+            withTransactionsAndReceipts, storage, blockHashOverride, writeNonces);
     }
 } prewriteBlock{};
 
@@ -52,9 +53,12 @@ inline constexpr struct PrewriteBlock
 inline constexpr struct PrewriteBlockToBuffer
 {
     task::Task<void> operator()(auto& ledger, bcos::protocol::ConstTransactionsPtr transactions,
-        bcos::protocol::Block::ConstPtr block, auto& storage) const
+        bcos::protocol::Block::ConstPtr block, auto& storage,
+        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
+        bool writeNonces = true) const
     {
-        co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block), storage);
+        co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block), storage,
+            blockHashOverride, writeNonces);
     }
 } prewriteBlockToBuffer{};
 
@@ -222,6 +226,18 @@ inline constexpr struct GetFeatures
         co_return co_await tag_invoke(*this, ledger);
     }
 } getFeatures{};
+
+inline constexpr struct GetFeature
+{
+    /// Read ONE feature flag's enabled state at @p blockNumber (single SYS_CONFIG read,
+    /// vs getFeatures' read of every flag). Degrades to false on any read failure, the
+    /// same honest scenario-A default as getFeatures' empty-set fallback.
+    task::Task<bool> operator()(
+        auto& ledger, Features::Flag flag, protocol::BlockNumber blockNumber) const
+    {
+        co_return co_await tag_invoke(*this, ledger, flag, blockNumber);
+    }
+} getFeature{};
 
 inline constexpr struct GetReceipt
 {

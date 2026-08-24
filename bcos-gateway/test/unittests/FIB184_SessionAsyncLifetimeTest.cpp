@@ -34,12 +34,14 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/error.hpp>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
+#include <chrono>
+#include <future>
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::test;
@@ -50,12 +52,14 @@ namespace bi = boost::asio::ip;
 
 BOOST_FIXTURE_TEST_SUITE(FIB184_SessionAsyncLifetimeTest, TestPromptFixture)
 
-// A fake ASIO that captures — but does not invoke — the async read handler and the strandPost
-// callback, so a test can hold a read "in flight" and fire it deterministically.
+// A fake ASIO that captures — but does not invoke — the async read handler, so a test can hold a
+// read "in flight" and fire it deterministically.
 class FakeASIO_Lifetime : public bcos::gateway::ASIOInterface
 {
 public:
-    FakeASIO_Lifetime() = default;
+    FakeASIO_Lifetime()
+      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
+    {}
     ~FakeASIO_Lifetime() noexcept override = default;
 
     void asyncReadSome(
@@ -64,27 +68,19 @@ public:
         m_readHandler = std::move(handler);
     }
 
-    void strandPost(Base_Handler handler) override { m_strandHandler = std::move(handler); }
-    void stop() override {}
-
-    // Run the deferred first-doRead posted by Session::start(). Moving the boost::function out
-    // leaves m_strandHandler empty, so a re-entrant doRead re-arms into a fresh slot.
-    void runStrandPost()
-    {
-        auto handler = std::move(m_strandHandler);
-        if (handler)
-        {
-            handler();
-        }
-    }
-
     bool hasReadHandler() const { return static_cast<bool>(m_readHandler); }
 
-    // Complete the outstanding read, releasing the reference it holds on the session. Moving the
-    // handler out empties m_readHandler first, so a re-armed read lands in the fresh slot.
+    // Complete the outstanding read, releasing the reference it holds on the session. The slot is
+    // cleared EXPLICITLY rather than relying on move-from leaving it empty: a moved-from
+    // std::function is only "valid but unspecified", and libc++ leaves a small-object-optimised
+    // target still engaged, so the moved-from slot kept the handler -- and with it a
+    // shared_ptr<Session> -- alive forever. Real ASIO destroys the handler after invoking it; this
+    // clear is what makes the fake match that. Clearing before the call also means a re-armed read
+    // lands in a fresh slot instead of being overwritten.
     void fireReadHandler(boost::system::error_code error, std::size_t bytes)
     {
         auto handler = std::move(m_readHandler);
+        m_readHandler = ReadWriteHandler();
         if (handler)
         {
             handler(error, bytes);
@@ -93,7 +89,6 @@ public:
 
 private:
     ReadWriteHandler m_readHandler;
-    Base_Handler m_strandHandler;
 };
 
 class FakeHost_Lifetime : public bcos::gateway::Host
@@ -163,8 +158,10 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
         session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
         weakSession = session;
 
-        session->start();           // posts the first doRead via strandPost
-        fakeAsio->runStrandPost();  // runs doRead -> asyncReadSome captures the read handler
+        // start() calls doRead() directly now (it used to defer the first read through
+        // ASIOInterface::strandPost, which no longer exists), so the read handler is armed
+        // synchronously here.
+        session->start();
 
         BOOST_REQUIRE_MESSAGE(fakeAsio->hasReadHandler(),
             "Session::start()/doRead() must arm exactly one async read");
@@ -176,14 +173,40 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
         "alive; pre-fix weak_ptr capture would have destroyed it here");
 
     // Completing the read with EOF drives drop(): no re-arm, so the read handler releases its
-    // reference. drop() defers the socket teardown onto the socket's io_context; mark the socket
-    // disconnected first so closeSocket() early-returns (no real SSL shutdown in the test), then
-    // drain that io_context so the deferred handler releases its reference too.
+    // reference. drop() then hands out TWO deferred pieces of work, on two different executors:
+    //   1. closeSocket(), posted to the socket's own io_context -- drained by poll() below.
+    //      Mark the socket disconnected first so closeSocket() early-returns (no real SSL
+    //      shutdown here).
+    //   2. the teardown notification, posted to Host::m_teardownPool -- a dedicated executor this
+    //      test drains with a sentinel below.
     fakeSocket->m_connected = false;
     fakeAsio->fireReadHandler(boost::asio::error::eof, 0);
     fakeSocket->ioService().poll();
 
-    BOOST_CHECK_MESSAGE(weakSession.lock() == nullptr,
+    // Piece 2 is why the release cannot be asserted the instant fireReadHandler returns: the
+    // notification lambda captures weak_from_this() but calls lock() on the teardown thread, so
+    // while it runs it holds a strong reference (plus the copy it passes to m_messageHandler).
+    // Asserting straight away raced that thread and made this case fail randomly in CI.
+    //
+    // Drain it instead of sleeping on it. m_teardownPool is a ONE-worker IOServicePool -- a single
+    // io_context serviced by a single thread (Host.cpp: IOServicePool(1, "p2pTeardown")) -- so
+    // posted handlers run strictly FIFO, and drop() ran synchronously inside fireReadHandler above,
+    // which means the notification is already queued. A sentinel posted now therefore runs after
+    // it, by which point notifyDisconnect has returned and both of its strong references are gone.
+    // If the pool ever gains a second worker this barrier stops holding and must be revisited.
+    //
+    // The promise is captured by value through a shared_ptr on purpose: should the wait below time
+    // out and BOOST_REQUIRE unwind the stack, the sentinel may still be sitting in the teardown
+    // queue, and a by-reference capture of a dead local would be exactly the use-after-free this
+    // file exists to prevent.
+    auto teardownDone = std::make_shared<std::promise<void>>();
+    auto teardownDrained = teardownDone->get_future();
+    fakeHost->postTeardown([teardownDone]() { teardownDone->set_value(); });
+    BOOST_REQUIRE_MESSAGE(
+        teardownDrained.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
+        "the teardown executor never drained -- the notification was never dispatched");
+
+    BOOST_CHECK_MESSAGE(weakSession.expired(),
         "FIB-184: once the outstanding read and the deferred teardown complete, the Session must "
         "be released (no leak / self-reference cycle)");
 }

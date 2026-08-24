@@ -19,30 +19,26 @@
  * @date: 2021-07-09
  */
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
-#include "bcos-boostssl/websocket/WsMessage.h"
 #include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
-#include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/validator/CallValidator.h"
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
-#include "bcos-utilities/Base64.h"
 #include "bcos-utilities/BoostLog.h"
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/archive/iterators/base64_from_binary.hpp>
-#include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <chrono>
 #include <exception>
 #include <iterator>
 #include <stdexcept>
@@ -78,7 +74,7 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
     auto buffer = _msg->payload();
-    auto req = std::string_view((const char*)buffer->data(), buffer->size());
+    auto req = std::string_view((const char*)buffer.data(), buffer.size());
 
     auto start = std::chrono::high_resolution_clock::now();
     auto seq = _msg->seq();
@@ -88,7 +84,8 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     auto weakptrSession = std::weak_ptr<boostssl::ws::WsSession>(_session);
     auto messageFactory = m_wsService->messageFactory();
 
-    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](bcos::bytes resp) {
+    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](
+                          bcos::bytes resp, boost::beast::http::status) {
         auto session = weakptrSession.lock();
 
         auto end = std::chrono::high_resolution_clock::now();
@@ -105,10 +102,8 @@ void JsonRpcImpl_2_0::handleRpcRequest(
         if (session->isConnected())
         {
             // TODO: no need to copy resp
-            auto buffer = std::make_shared<bcos::bytes>(std::move(resp));
-
             auto msg = messageFactory->buildMessage();
-            msg->setPayload(buffer);
+            msg->setPayload(std::move(resp));
             msg->setVersion(version);
             msg->setSeq(seq);
             msg->setExt(ext);
@@ -233,11 +228,15 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
     jResp["extraData"] = std::string(transaction.extraData());
     if (transaction.version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
     {
-        jResp["value"] = std::string(transaction.value());
-        jResp["gasPrice"] = std::string(transaction.gasPrice());
+        jResp["value"] = toQuantity(transaction.value());
+        // match tars hash: nullopt → "", otherwise hex quantity
+        jResp["gasPrice"] = transaction.gasPrice() ? toQuantity(*transaction.gasPrice()) : "";
         jResp["gasLimit"] = transaction.gasLimit();
-        jResp["maxFeePerGas"] = std::string(transaction.maxFeePerGas());
-        jResp["maxPriorityFeePerGas"] = std::string(transaction.maxPriorityFeePerGas());
+        jResp["maxFeePerGas"] =
+            transaction.maxFeePerGas() ? toQuantity(*transaction.maxFeePerGas()) : "";
+        jResp["maxPriorityFeePerGas"] = transaction.maxPriorityFeePerGas() ?
+                                            toQuantity(*transaction.maxPriorityFeePerGas()) :
+                                            "";
     }
     if (transaction.version() >= (int32_t)bcos::protocol::TransactionVersion::V2_VERSION)
     {
@@ -256,7 +255,9 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
         jResp["value"] = web3Tx.value.str();
         jResp["gasLimit"] = web3Tx.gasLimit;
-        if (web3Tx.type >= TransactionType::EIP1559)
+        // Use explicit range check rather than `>=` so that Deposit (0x7e), which is numerically
+        // larger than all EIP types, is excluded from EIP-1559 field output.
+        if (web3Tx.type >= TransactionType::EIP1559 && web3Tx.type <= TransactionType::EIP4844)
         {
             jResp["maxPriorityFeePerGas"] = web3Tx.maxPriorityFeePerGas.str();
             jResp["maxFeePerGas"] = web3Tx.maxFeePerGas.str();
@@ -271,13 +272,12 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
 
 void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     protocol::TransactionStatus status,
-    bcos::protocol::TransactionReceipt const& transactionReceipt, bool _isWasm,
-    crypto::Hash& hashImpl)
+    bcos::protocol::TransactionReceipt const& transactionReceipt, crypto::Hash& hashImpl)
 {
     jResp["version"] = transactionReceipt.version();
     std::string contractAddress = string(transactionReceipt.contractAddress());
 
-    if (!contractAddress.empty() && !_isWasm)
+    if (!contractAddress.empty())
     {
         std::string checksumContractAddr = contractAddress;
         toChecksumAddress(checksumContractAddr, hashImpl.hash(contractAddress).hex());
@@ -377,11 +377,11 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr 
     }
 
     Json::Value jParentInfo(Json::arrayValue);
-    for (const auto& p : _blockHeaderPtr->parentInfo())
+    if (_blockHeaderPtr->number() > 0)
     {
         Json::Value jp;
-        jp["blockNumber"] = p.blockNumber;
-        jp["blockHash"] = toHexStringWithPrefix(p.blockHash);
+        jp["blockNumber"] = _blockHeaderPtr->parentInfo().blockNumber;
+        jp["blockHash"] = toHexStringWithPrefix(_blockHeaderPtr->parentInfo().blockHash);
         jParentInfo.append(jp);
     }
     jResp["parentInfo"] = jParentInfo;
@@ -499,7 +499,6 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
         Json::Value jResp;
         try
         {
-            auto isWasm = groupInfo->wasm();
             auto transactionData = decodeData(data);
             auto transaction = nodeService->blockFactory()->transactionFactory()->decodeTransaction(
                 bcos::ref(transactionData));
@@ -515,7 +514,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             if (c_fileLogLevel <= TRACE)
             {
                 RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
-                                    << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
+                                    << LOG_KV("node", nodeName);
             }
             // check transaction validator
             if (transaction->chainId() != self->m_groupManager->chainID())
@@ -542,7 +541,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             }
 
             toJsonResp(jResp, hexPreTxHash, (protocol::TransactionStatus)submitResult->status(),
-                *(submitResult->transactionReceipt()), isWasm,
+                *(submitResult->transactionReceipt()),
                 *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
             jResp["to"] = submitResult->to();
             jResp["from"] = toHexStringWithPrefix(submitResult->sender());
@@ -690,13 +689,12 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
             "The group " + std::string(_groupID) + " does not exist!"));
     }
 
-    bool isWasm = groupInfo->wasm();
 
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
     ledger->asyncGetTransactionReceiptByHash(hash, _requireProof,
         [m_group = std::string(_groupID), m_nodeName = std::string(_nodeName),
             m_txHash = std::string(_txHash), hash, _requireProof, m_respFunc = std::move(_respFunc),
-            self, hashImpl, isWasm](Error::Ptr _error,
+            self, hashImpl](Error::Ptr _error,
             protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr,
             ledger::MerkleProofPtr _merkleProofPtr) {
             auto rpc = self.lock();
@@ -718,7 +716,7 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
             }
 
             toJsonResp(jResp, hash.hexPrefixed(), protocol::TransactionStatus::None,
-                *_transactionReceiptPtr, isWasm, *hashImpl);
+                *_transactionReceiptPtr, *hashImpl);
 
             RPC_IMPL_LOG(TRACE) << LOG_DESC("getTransactionReceipt") << LOG_KV("txHash", m_txHash)
                                 << LOG_KV("requireProof", _requireProof)
@@ -898,9 +896,8 @@ void JsonRpcImpl_2_0::getCode(std::string_view _groupID, std::string_view _nodeN
             "The group " + std::string(_groupID) + " does not exist!"));
     }
 
-    auto isWasm = groupInfo->wasm();
     // trim 0x prefix for solidity contract
-    if (!isWasm && (_contractAddress.starts_with("0x") || _contractAddress.starts_with("0X")))
+    if (_contractAddress.starts_with("0x") || _contractAddress.starts_with("0X"))
     {
         _contractAddress = _contractAddress.substr(2);
     }
@@ -947,9 +944,8 @@ void JsonRpcImpl_2_0::getABI(std::string_view _groupID, std::string_view _nodeNa
             "The group " + std::string(_groupID) + " does not exist!"));
     }
 
-    auto isWasm = groupInfo->wasm();
     // trim 0x prefix for solidity contract address
-    if (!isWasm && (_contractAddress.starts_with("0x") || _contractAddress.starts_with("0X")))
+    if (_contractAddress.starts_with("0x") || _contractAddress.starts_with("0X"))
     {
         _contractAddress = _contractAddress.substr(2);
     }
@@ -1495,8 +1491,14 @@ void JsonRpcImpl_2_0::newFilter(
     task::wait([&jParams](JsonRpcImpl_2_0* self, std::string_view groupID,
                    RespFunc respFunc) -> task::Task<void> {
         Json::Value jRes;
+        // Resolve "latest"/"safe"/"finalized" against the real head and the configured
+        // depths, exactly like the Web3 entry — fromJson has no defaults, so a filter's
+        // blockTags cannot silently degrade to block 0 / depth 0 here.
+        auto const nodeService = self->getNodeService(groupID, "", "newFilter");
+        auto const latest = co_await ledger::getCurrentBlockNumber(*nodeService->ledger());
         auto params = self->filterSystem().requestFactory()->create();
-        params->fromJson(jParams);
+        params->fromJson(
+            jParams, latest, nodeService->safeBlockDepth(), nodeService->finalizedBlockDepth());
         jRes = co_await self->filterSystem().newFilter(groupID, std::move(params));
         respFunc(nullptr, jRes);
     }(this, _groupID, std::move(_respFunc)));
@@ -1537,8 +1539,14 @@ void JsonRpcImpl_2_0::getLogs(
 {
     task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, const Json::Value& jParams,
                    RespFunc respFunc) -> task::Task<void> {
+        // Resolve blockTags against the real head + configured depths, exactly like the
+        // Web3 entry (fromJson has no defaults) — otherwise "latest" would silently mean
+        // block 0 here.
+        auto const nodeService = self->getNodeService(groupID, "", "getLogs");
+        auto const latest = co_await ledger::getCurrentBlockNumber(*nodeService->ledger());
         auto params = self->filterSystem().requestFactory()->create();
-        params->fromJson(jParams);
+        params->fromJson(
+            jParams, latest, nodeService->safeBlockDepth(), nodeService->finalizedBlockDepth());
         Json::Value jRes = co_await self->filterSystem().getLogs(groupID, std::move(params));
         respFunc(nullptr, jRes);
     }(this, _groupID, jParams, std::move(_respFunc)));

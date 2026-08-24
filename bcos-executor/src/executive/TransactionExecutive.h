@@ -23,6 +23,7 @@
 
 #include "../Common.h"
 #include "../executor/TransactionExecutor.h"
+#include "../vm/Eip2929AccessState.h"
 #include "BlockContext.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
@@ -52,12 +53,11 @@ class TransactionExecutive : public std::enable_shared_from_this<TransactionExec
 public:
     using Ptr = std::shared_ptr<TransactionExecutive>;
     TransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector)
+        int64_t contextID, int64_t seq)
       : m_blockContext(blockContext),
         m_contractAddress(std::move(contractAddress)),
         m_contextID(contextID),
         m_seq(seq),
-        m_gasInjector(gasInjector),
         m_recoder(std::make_shared<storage::Recoder>()),
         m_transientRecoder(std::make_shared<storage::Recoder>()),
         m_storageWrapperObj(m_blockContext.storage(), m_recoder),
@@ -123,7 +123,6 @@ public:
 
     VMSchedule const& vmSchedule() const { return m_blockContext.vmSchedule(); }
 
-    bool isWasm() const { return m_blockContext.isWasm(); }
 
     bool hasContractTableChanged() const { return m_hasContractTableChanged; }
     void setContractTableChanged() { m_hasContractTableChanged = true; }
@@ -145,12 +144,22 @@ public:
     CallParameters::UniquePtr transferBalance(CallParameters::UniquePtr callParameters,
         int64_t requireGas, std::string_view currentContextAddress);
 
-    std::string getContractTableName(
-        const std::string_view& _address, bool isWasm = false, bool isCreate = false);
+    std::string getContractTableName(const std::string_view& _address);
 
     std::shared_ptr<storage::StateStorageInterface> getTransientStateStorage(int64_t contextID);
 
+    /// EIP-2929 warm sets scoped per transaction (contextID), shared across nested CALL depth.
+    std::shared_ptr<Eip2929AccessState> getEip2929AccessState(int64_t contextID);
+
     std::shared_ptr<storage::Recoder> getRecoder() { return m_recoder; }
+
+    /// Berlin+ EIP-2929: warm origin, callee (unless contract creation tx), precompiles 0x01..0x09.
+    void warmUpEip2929InitialSet(CallParameters const& params);
+
+    /// Berlin+ EIP-2930 (W2): after W1, warm accounts and storage slots from the tx access list.
+    /// EIP-2929 W2 for compat tests / DAG experiments only; production W2 is TE
+    /// HostContext::prepare.
+    void warmUpEip2930AccessList(CallParameters const& params);
 
 protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
@@ -193,8 +202,6 @@ protected:
     int64_t m_contextID;
     int64_t m_seq;
     crypto::Hash::Ptr m_hashImpl;
-
-    const wasm::GasInjector& m_gasInjector;
 
     bcos::storage::Recoder::Ptr m_recoder;
     bcos::storage::Recoder::Ptr m_transientRecoder;

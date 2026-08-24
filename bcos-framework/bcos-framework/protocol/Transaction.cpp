@@ -11,6 +11,26 @@
 
 namespace bcos::protocol
 {
+Web3AccessList Transaction::web3AccessList() const
+{
+    return {};
+}
+
+AuthorizationList Transaction::authorizationList() const
+{
+    return {};
+}
+
+VersionedHashes Transaction::blobVersionedHashes() const
+{
+    return {};
+}
+
+std::optional<u256> Transaction::maxFeePerBlobGas() const
+{
+    return std::nullopt;
+}
+
 Transaction::Transaction(const Transaction& other)
   : m_submitCallback(other.m_submitCallback),
     m_batchHash(other.m_batchHash),
@@ -116,15 +136,20 @@ void Transaction::verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signat
 
 std::ostream& operator<<(std::ostream& stream, const Transaction& transaction)
 {
-    stream << "Transaction{" << "hash=" << transaction.hash() << ", "
-           << "version=" << transaction.version() << ", " << "chainId=" << transaction.chainId()
-           << ", " << "groupId=" << transaction.groupId() << ", "
-           << "blockLimit=" << transaction.blockLimit() << ", " << "nonce=" << transaction.nonce()
-           << ", " << "to=" << transaction.to() << ", " << "abi=" << transaction.abi() << ", "
-           << "value=" << transaction.value() << ", " << "gasPrice=" << transaction.gasPrice()
-           << ", " << "gasLimit=" << transaction.gasLimit() << ", "
-           << "maxFeePerGas=" << transaction.maxFeePerGas() << ", "
-           << "maxPriorityFeePerGas=" << transaction.maxPriorityFeePerGas() << ", "
+    stream << "Transaction{"
+           << "hash=" << transaction.hash() << ", "
+           << "version=" << transaction.version() << ", "
+           << "chainId=" << transaction.chainId() << ", "
+           << "groupId=" << transaction.groupId() << ", "
+           << "blockLimit=" << transaction.blockLimit() << ", "
+           << "nonce=" << transaction.nonce() << ", "
+           << "to=" << transaction.to() << ", "
+           << "abi=" << transaction.abi() << ", "
+           << "value=" << transaction.value() << ", "
+           << "gasPrice=" << transaction.gasPrice().value_or(0) << ", "
+           << "gasLimit=" << transaction.gasLimit() << ", "
+           << "maxFeePerGas=" << transaction.maxFeePerGas().value_or(0) << ", "
+           << "maxPriorityFeePerGas=" << transaction.maxPriorityFeePerGas().value_or(0) << ", "
            << "extension=" << toHex(transaction.extension()) << ", "
            << "extraData=" << transaction.extraData() << ", "
            << "sender=" <<
@@ -139,5 +164,14 @@ std::ostream& operator<<(std::ostream& stream, const Transaction& transaction)
            << "attribute=" << transaction.attribute() << ", "
            << "size=" << transaction.size() << "}";
     return stream;
+}
+
+u256 effectiveGasPrice(Transaction const& tx)
+{
+    if (auto price = tx.gasPrice(); price.has_value() && *price > 0)
+    {
+        return *price;
+    }
+    return tx.maxFeePerGas().value_or(0);
 }
 }  // namespace bcos::protocol

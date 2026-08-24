@@ -52,7 +52,7 @@ public:
         m_listenIP(std::move(_listenIP)),
         m_listenPort(_listenPort)
     {
-        m_ioServicePool = std::make_shared<IOServicePool>();
+        m_ioServicePool = std::make_shared<IOServicePool>(std::thread::hardware_concurrency() + 1, "archive");
         m_httpServer = std::make_shared<bcos::boostssl::http::HttpServer>(
             m_listenIP, m_listenPort, -1, bcos::boostssl::http::CorsConfig());
         auto acceptor =
@@ -154,7 +154,7 @@ public:
                 result["status"] = "success";
                 // update SYS_CURRENT_STATE SYS_KEY_ARCHIVED_NUMBER
                 storage::Entry archivedNumber;
-                archivedNumber.importFields({std::to_string(endBlock)});
+                archivedNumber.set(std::to_string(endBlock));
                 m_storage->asyncSetRow(ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_ARCHIVED_NUMBER,
                     archivedNumber, [](Error::UniquePtr err) {
                         if (err)
@@ -189,15 +189,16 @@ public:
                 }
             }
         };
-        m_httpServer->setHttpReqHandler([this](auto&& PH1, auto&& PH2) {
-            handleHttpRequest(std::forward<decltype(PH1)>(PH1), std::forward<decltype(PH2)>(PH2));
+        m_httpServer->setHttpReqHandler([this](const bcos::boostssl::http::HttpRequest& req, auto sender) {
+            handleHttpRequest(req.body(), [sender = std::move(sender)](bcos::bytes resp) mutable {
+                sender(std::move(resp), boost::beast::http::status::ok);
+            });
         });
     }
 
     // virtual ~ArchiveService() = default;
     virtual void start()
     {
-        m_ioServicePool->start();
         m_httpServer->start();
         ARCHIVE_SERVICE_LOG(INFO) << LOG_BADGE("start") << LOG_KV("listenIP", m_listenIP)
                                   << LOG_KV("listenPort", m_listenPort);
@@ -206,7 +207,6 @@ public:
     virtual void stop()
     {
         ARCHIVE_SERVICE_LOG(INFO) << LOG_BADGE("stop");
-        m_ioServicePool->stop();
         m_httpServer->stop();
     }
 

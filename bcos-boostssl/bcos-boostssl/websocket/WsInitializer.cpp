@@ -18,7 +18,6 @@
  * @date 2021-09-29
  */
 #include <bcos-boostssl/context/ContextBuilder.h>
-#include <bcos-boostssl/context/NodeInfoTools.h>
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsConfig.h>
@@ -30,9 +29,7 @@
 #include <bcos-boostssl/websocket/WsTools.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <boost/system/detail/error_code.hpp>
-#include <cstddef>
 
 using namespace bcos;
 using namespace bcos::boostssl;
@@ -87,7 +84,12 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
     }
 
     auto wsServiceWeakPtr = std::weak_ptr<WsService>(_wsService);
-    auto ioServicePool = std::make_shared<IOServicePool>();
+    if (!m_ioServicePool)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment("IOServicePool must be set in WsInitializer!"));
+    }
+    auto ioServicePool = m_ioServicePool;
     _wsService->setIOServicePool(ioServicePool);
 
     auto resolver =
@@ -132,17 +134,22 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
 
         httpServer->setIOServicePool(ioServicePool);
         httpServer->setDisableSsl(_config->disableSsl());
-        httpServer->setWsUpgradeHandler(
-            [wsServiceWeakPtr](std::shared_ptr<HttpStream> _httpStream, HttpRequest&& _httpRequest,
-                std::shared_ptr<std::string> _nodeId) {
-                auto service = wsServiceWeakPtr.lock();
-                if (service)
-                {
-                    std::string nodeIdString = _nodeId == nullptr ? "" : *_nodeId;
-                    auto session = service->newSession(_httpStream->wsStream(), nodeIdString);
-                    session->startAsServer(std::move(_httpRequest));
-                }
-            });
+        if (_config->enableWebSocket())
+        {
+            httpServer->setWsUpgradeHandler(
+                [wsServiceWeakPtr](std::shared_ptr<HttpStream> _httpStream,
+                    HttpRequest&& _httpRequest, std::shared_ptr<std::string> _nodeId) {
+                    auto service = wsServiceWeakPtr.lock();
+                    if (service)
+                    {
+                        std::string nodeIdString = _nodeId == nullptr ? "" : *_nodeId;
+                        auto session = service->newSession(_httpStream->wsStream(), nodeIdString);
+                        session->startAsServer(std::move(_httpRequest));
+                    }
+                });
+        }
+        // else: WS upgrades are rejected by HttpSession (no wsUpgradeHandler registered),
+        // making this an HTTP-only port.
 
         _wsService->setHttpServer(httpServer);
         _wsService->setHostPort(_config->listenIP(), _config->listenPort());
@@ -195,11 +202,8 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         }
     }
 
-    auto threadPoolSize = _config->threadPoolSize();
-    if (threadPoolSize > 0)
-    {
-        _wsService->initTaskArena(threadPoolSize);
-    }
+    // Note: IOServicePool must be set before starting wsService.
+    // The threadPoolSize was previously used for tbb::task_arena, now IOServicePool handles it.
 
     connector->setCtx(clientCtx);
     connector->setBuilder(builder);

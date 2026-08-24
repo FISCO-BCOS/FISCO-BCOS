@@ -64,7 +64,7 @@ DagTransferPrecompiled::DagTransferPrecompiled(crypto::Hash::Ptr _hashImpl) : Pr
         getFuncSelector(DAG_TRANSFER_METHOD_BAL_STR, _hashImpl);
 }
 
-std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef _param, bool _isWasm)
+std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef _param)
 {
     // parse function name
     uint32_t func = getParamFunc(_param);
@@ -72,7 +72,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef _p
 
     std::vector<std::string> results;
     results.reserve(2);
-    auto codec = CodecWrapper(m_hashImpl, _isWasm);
+    auto codec = CodecWrapper(m_hashImpl);
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT])
     {  // userAdd(string,uint256)
@@ -180,7 +180,7 @@ void DagTransferPrecompiled::userAddCall(std::shared_ptr<executor::TransactionEx
     std::string user;
     u256 amount;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(_data, user, amount);
 
     int ret;
@@ -210,7 +210,7 @@ void DagTransferPrecompiled::userAddCall(std::shared_ptr<executor::TransactionEx
 
         // user not exist, insert user into it.
         auto newEntry = table->newEntry();
-        newEntry.setField(DAG_TRANSFER_FIELD_BALANCE, amount.str());
+        newEntry.set(amount.str());
         table->setRow(user, newEntry);
         ret = 0;
     } while (false);
@@ -230,7 +230,7 @@ void DagTransferPrecompiled::userSaveCall(
     std::string user;
     u256 amount;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(_data, user, amount);
 
     int ret;
@@ -267,12 +267,12 @@ void DagTransferPrecompiled::userSaveCall(
             // If user is not exist, insert it. With this strategy, we can also add user by save
             // operation.
             auto newEntry = table->newEntry();
-            newEntry.setField(DAG_TRANSFER_FIELD_BALANCE, amount.str());
+            newEntry.set(amount.str());
             table->setRow(user, newEntry);
         }
         else
         {
-            balance = u256(entry->getField(DAG_TRANSFER_FIELD_BALANCE));
+            balance = u256(entry->get());
 
             // if overflow
             auto new_balance = balance + amount;
@@ -284,7 +284,7 @@ void DagTransferPrecompiled::userSaveCall(
             }
 
             auto updateEntry = table->newEntry();
-            updateEntry.setField(DAG_TRANSFER_FIELD_BALANCE, new_balance.str());
+            updateEntry.set(new_balance.str());
             table->setRow(user, updateEntry);
         }
 
@@ -305,7 +305,7 @@ void DagTransferPrecompiled::userDrawCall(
     std::string user;
     u256 amount;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(_data, user, amount);
 
     u256 balance;
@@ -342,7 +342,7 @@ void DagTransferPrecompiled::userDrawCall(
         }
 
         // only one record for every user
-        balance = u256(entry->getField(DAG_TRANSFER_FIELD_BALANCE));
+        balance = u256(entry->get());
         if (balance < amount)
         {
             strErrorMsg = "insufficient balance";
@@ -352,7 +352,7 @@ void DagTransferPrecompiled::userDrawCall(
 
         auto new_balance = balance - amount;
         auto newEntry = table->newEntry();
-        newEntry.setField(DAG_TRANSFER_FIELD_BALANCE, new_balance.str());
+        newEntry.set(new_balance.str());
         table->setRow(user, newEntry);
         ret = 0;
     } while (false);
@@ -369,7 +369,7 @@ void DagTransferPrecompiled::userBalanceCall(
 {
     std::string user;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(_data, user);
 
     u256 balance;
@@ -402,7 +402,7 @@ void DagTransferPrecompiled::userBalanceCall(
         }
 
         // only one record for every user
-        balance = u256(entry->getField(DAG_TRANSFER_FIELD_BALANCE));
+        balance = u256(entry->get());
         ret = 0;
     } while (false);
     if (!strErrorMsg.empty())
@@ -418,7 +418,7 @@ void DagTransferPrecompiled::userTransferCall(
     std::string const&, bytes& _out)
 {
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     std::string fromUser, toUser;
     u256 amount;
     codec.decode(_data, fromUser, toUser, amount);
@@ -465,7 +465,7 @@ void DagTransferPrecompiled::userTransferCall(
             break;
         }
 
-        fromUserBalance = u256(entry->getField(DAG_TRANSFER_FIELD_BALANCE));
+        fromUserBalance = u256(entry->get());
         if (fromUserBalance < amount)
         {
             strErrorMsg = "from user insufficient balance";
@@ -478,13 +478,13 @@ void DagTransferPrecompiled::userTransferCall(
         {
             // If to user not exist, add it first.
             auto newEntry = table->newEntry();
-            newEntry.setField(DAG_TRANSFER_FIELD_BALANCE, u256(0).str());
+            newEntry.set(u256(0).str());
             table->setRow(toUser, newEntry);
             toUserBalance = 0;
         }
         else
         {
-            toUserBalance = u256(entry->getField(DAG_TRANSFER_FIELD_BALANCE));
+            toUserBalance = u256(entry->get());
         }
 
         // overflow check
@@ -500,12 +500,12 @@ void DagTransferPrecompiled::userTransferCall(
 
         // update fromUser balance info.
         entry = table->newEntry();
-        entry->setField(DAG_TRANSFER_FIELD_BALANCE, newFromUserBalance.str());
+        entry->set(newFromUserBalance.str());
         table->setRow(fromUser, *entry);
 
         // update toUser balance info.
         entry = table->newEntry();
-        entry->setField(DAG_TRANSFER_FIELD_BALANCE, newToUserBalance.str());
+        entry->set(newToUserBalance.str());
         table->setRow(toUser, *entry);
         // end with success
         ret = 0;

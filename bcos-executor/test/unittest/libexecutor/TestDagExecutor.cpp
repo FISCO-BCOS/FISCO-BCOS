@@ -20,48 +20,30 @@
  */
 #include "bcos-codec/scale/Scale.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
-#include "bcos-tars-protocol/tars/Block.h"
 
-// if wasm ut crash on aarch64 linux check https://github.com/bytecodealliance/wasmtime/issues/4972
-// #if !defined(__aarch64__) && !defined(__linux__)
-
-#include "../liquid/hello_world.h"
-#include "../liquid/transfer.h"
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
-#include "bcos-framework/protocol/Transaction.h"
-#include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageFactory.h"
 #include "executor/TransactionExecutor.h"
 #include "executor/TransactionExecutorFactory.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
-#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
-#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-framework/executor/NativeExecutionMessage.h"
-#include <unistd.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/algorithm/string.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/log/core/core.hpp>
 #include <boost/test/unit_test.hpp>
 #include <cstdio>
-#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <memory>
-#include <set>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -121,12 +103,12 @@ struct DagExecutorFixture
             newSubMap.insert(std::make_pair("apps", FS_TYPE_DIR));
             newSubMap.insert(std::make_pair("/", FS_TYPE_DIR));
             newSubMap.insert(std::make_pair("tables", FS_TYPE_DIR));
-            tEntry.importFields({FS_TYPE_DIR});
-            newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-            aclTypeEntry.importFields({"0"});
-            aclWEntry.importFields({""});
-            aclBEntry.importFields({""});
-            extraEntry.importFields({""});
+            tEntry.set(FS_TYPE_DIR);
+            newSubEntry.set(asString(codec::scale::encode(newSubMap)));
+            aclTypeEntry.set("0");
+            aclWEntry.set("");
+            aclBEntry.set("");
+            extraEntry.set("");
             rootTable->setRow(FS_KEY_TYPE, std::move(tEntry));
             rootTable->setRow(FS_KEY_SUB, std::move(newSubEntry));
             rootTable->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));
@@ -146,12 +128,12 @@ struct DagExecutorFixture
             auto tablesTable = promise3.get_future().get();
             storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
             std::map<std::string, std::string> newSubMap;
-            tEntry.importFields({FS_TYPE_DIR});
-            newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-            aclTypeEntry.importFields({"0"});
-            aclWEntry.importFields({""});
-            aclBEntry.importFields({""});
-            extraEntry.importFields({""});
+            tEntry.set(FS_TYPE_DIR);
+            newSubEntry.set(asString(codec::scale::encode(newSubMap)));
+            aclTypeEntry.set("0");
+            aclWEntry.set("");
+            aclBEntry.set("");
+            extraEntry.set("");
             tablesTable->setRow(FS_KEY_TYPE, std::move(tEntry));
             tablesTable->setRow(FS_KEY_SUB, std::move(newSubEntry));
             tablesTable->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));
@@ -171,12 +153,12 @@ struct DagExecutorFixture
             auto appsTable = promise4.get_future().get();
             storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
             std::map<std::string, std::string> newSubMap;
-            tEntry.importFields({FS_TYPE_DIR});
-            newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-            aclTypeEntry.importFields({"0"});
-            aclWEntry.importFields({""});
-            aclBEntry.importFields({""});
-            extraEntry.importFields({""});
+            tEntry.set(FS_TYPE_DIR);
+            newSubEntry.set(asString(codec::scale::encode(newSubMap)));
+            aclTypeEntry.set("0");
+            aclWEntry.set("");
+            aclBEntry.set("");
+            extraEntry.set("");
             appsTable->setRow(FS_KEY_TYPE, std::move(tEntry));
             appsTable->setRow(FS_KEY_SUB, std::move(newSubEntry));
             appsTable->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));
@@ -196,506 +178,15 @@ struct DagExecutorFixture
 };
 BOOST_FIXTURE_TEST_SUITE(TestDagExecutor, DagExecutorFixture)
 
-BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
-{
-#ifdef WITH_WASM
-    auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
-    auto executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-        backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
-
-    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
-
-    bytes transferBin(transfer_wasm, transfer_wasm + transfer_wasm_len);
-    transferBin = codec->encode(transferBin);
-    auto transferAbi = string(
-        R"([{"inputs":[],"type":"constructor"},{"conflictFields":[{"kind":3,"value":[0],"read_only":false,"slot":0},{"kind":3,"value":[1],"read_only":false,"slot":0}],"constant":false,"inputs":[{"internalType":"string","name":"from","type":"string"},{"internalType":"string","name":"to","type":"string"},{"internalType":"uint32","name":"amount","type":"uint32"}],"name":"transfer","selector":[683988646,0],"outputs":[{"internalType":"bool","type":"bool"}],"type":"function"},{"constant":true,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"query","outputs":[{"internalType":"uint32","type":"uint32"}],"type":"function"}])");
-
-    bytes input;
-    input.insert(input.end(), transferBin.begin(), transferBin.end());
-    input.push_back(0);
-
-    string transferAddress = "usr/alice/transfer";
-
-    auto tx = fakeTransaction(
-        cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", transferAbi);
-    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
-
-    auto hash = tx->hash();
-    txpool->hash2Transaction.emplace(hash, tx);
-
-    auto params = std::make_unique<NativeExecutionMessage>();
-    params->setContextID(99);
-    params->setSeq(1000);
-    params->setDepth(0);
-    params->setOrigin(std::string(sender));
-    params->setFrom(std::string(sender));
-    params->setTo(transferAddress);
-    params->setStaticCall(false);
-    params->setGasAvailable(gas);
-    params->setType(NativeExecutionMessage::TXHASH);
-    params->setTransactionHash(hash);
-    params->setCreate(true);
-
-    NativeExecutionMessage paramsBak = *params;
-
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
-    blockHeader->setNumber(1);
-    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
-    blockHeader->setParentInfo(parentInfos);
-    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
-    blockHeader->calculateHash(*cryptoSuite->hashImpl());
-
-    std::promise<void> nextPromise;
-    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
-        nextPromise.set_value();
-    });
-    auto future1 = nextPromise.get_future();
-    auto status = future1.wait_for(1s);
-    BOOST_CHECK(status == future_status::ready);
-    future1.get();
-
-    // --------------------------------
-    // Create contract transfer
-    // --------------------------------
-    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-    executor->dmcExecuteTransaction(std::move(params),
-        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
-            executePromise.set_value(std::move(result));
-        });
-    auto future2 = executePromise.get_future();
-    BOOST_CHECK(future2.wait_for(1s) == future_status::ready);
-    auto result = future2.get();
-    result->setSeq(1001);
-
-    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
-    executor->dmcExecuteTransaction(std::move(result),
-        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
-            executePromise2.set_value(std::move(result));
-        });
-    auto future3 = executePromise2.get_future();
-    BOOST_CHECK(future3.wait_for(1s) == future_status::ready);
-    auto result2 = future3.get();
-    result2->setSeq(1000);
-
-    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
-    executor->dmcExecuteTransaction(std::move(result2),
-        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
-            executePromise3.set_value(std::move(result));
-        });
-    auto future4 = executePromise3.get_future();
-    BOOST_CHECK(future4.wait_for(1s) == future_status::ready);
-    auto result3 = future4.get();
-
-    BOOST_CHECK_EQUAL(result3->status(), 0);
-    BOOST_CHECK_EQUAL(result3->origin(), sender);
-    BOOST_CHECK_EQUAL(result3->from(), paramsBak.to());
-    BOOST_CHECK_EQUAL(result3->to(), sender);
-
-    BOOST_CHECK(result3->message().empty());
-    BOOST_CHECK(!result3->newEVMContractAddress().empty());
-    BOOST_CHECK_LT(result3->gasAvailable(), gas);
-
-    auto address = result3->newEVMContractAddress();
-
-    bcos::protocol::TwoPCParams commitParams;
-    commitParams.number = 1;
-
-    std::promise<void> preparePromise;
-    executor->prepare(commitParams, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
-        preparePromise.set_value();
-    });
-    auto future5 = preparePromise.get_future();
-    BOOST_CHECK(future5.wait_for(1s) == future_status::ready);
-    future5.get();
-
-    std::promise<void> commitPromise;
-    executor->commit(commitParams, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
-        commitPromise.set_value();
-    });
-    auto future6 = commitPromise.get_future();
-    BOOST_CHECK(future6.wait_for(1s) == future_status::ready);
-    future6.get();
-    auto tableName = std::string("/apps/") + string(address);
-
-    EXECUTOR_LOG(TRACE) << "Checking table: " << tableName;
-    std::promise<Table> tablePromise;
-    backend->asyncOpenTable(tableName, [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(table);
-        tablePromise.set_value(std::move(*table));
-    });
-    auto future7 = tablePromise.get_future();
-    BOOST_CHECK(future7.wait_for(1s) == future_status::ready);
-    auto table = future7.get();
-
-    auto entry = table.getRow("code");
-    BOOST_CHECK(entry);
-    BOOST_CHECK_GT(entry->getField(0).size(), 0);
-
-    entry = table.getRow("abi");
-    BOOST_CHECK(entry);
-    BOOST_CHECK_GT(entry->getField(0).size(), 0);
-
-    std::vector<ExecutionMessage::UniquePtr> requests;
-    auto cases = vector<tuple<string, string, uint32_t>>();
-
-    cases.push_back(make_tuple("alice", "bob", 1000));
-    cases.push_back(make_tuple("charlie", "david", 2000));
-    cases.push_back(make_tuple("bob", "david", 200));
-    cases.push_back(make_tuple("david", "alice", 400));
-
-    for (size_t i = 0; i < cases.size(); ++i)
-    {
-        std::string from = std::get<0>(cases[i]);
-        std::string to = std::get<1>(cases[i]);
-        uint32_t amount = std::get<2>(cases[i]);
-        bytes inputs;
-        auto encodedParams =
-            codec->encodeWithSig("transfer(string,string,uint32)", from, to, amount);
-        inputs.insert(inputs.end(), encodedParams.begin(), encodedParams.end());
-
-        auto tx2 = fakeTransaction(
-            cryptoSuite, keyPair, address, inputs, std::to_string(101 + i), 100001, "1", "1");
-        auto sender2 = boost::algorithm::hex_lower(std::string(tx2->sender()));
-
-        auto hash2 = tx2->hash();
-        txpool->hash2Transaction.emplace(hash2, tx2);
-
-        auto params2 = std::make_unique<NativeExecutionMessage>();
-        params2->setType(bcos::protocol::ExecutionMessage::TXHASH);
-        params2->setContextID(i);
-        params2->setSeq(6000);
-        params2->setDepth(0);
-        params2->setFrom(std::string(sender2));
-        params2->setTo(std::string(address));
-        params2->setOrigin(std::string(sender2));
-        params2->setStaticCall(false);
-        params2->setGasAvailable(gas);
-        params2->setTransactionHash(hash2);
-        params2->setCreate(false);
-
-        requests.emplace_back(std::move(params2));
-    }
-
-    std::promise<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>> dagPromise;
-    executor->dagExecuteTransactions(
-        requests, [&](bcos::Error::UniquePtr error,
-                      std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results) {
-            BOOST_CHECK(!error);
-            dagPromise.set_value(std::move(results));
-        });
-
-    auto future8 = dagPromise.get_future();
-    BOOST_CHECK(future8.wait_for(3s) == future_status::ready);
-    auto results = future8.get();
-
-    vector<pair<string, uint32_t>> expected;
-    expected.push_back({"alice", numeric_limits<uint32_t>::max() - 1000 + 400});
-    expected.push_back({"bob", 1000 - 200});
-    expected.push_back({"charlie", numeric_limits<uint32_t>::max() - 2000});
-    expected.push_back({"david", 2000 + 200 - 400});
-    {
-        for (size_t i = 0; i < results.size(); ++i)
-        {
-            BOOST_CHECK_EQUAL(results[i]->status(), 0);
-            BOOST_CHECK(results[i]->message().empty());
-            bool flag;
-            codec->decode(results[i]->data(), flag);
-            BOOST_CHECK(flag);
-        }
-
-        for (size_t i = 0; i < expected.size(); ++i)
-        {
-            bytes queryBytes;
-            auto encodedParams = codec->encodeWithSig("query(string)", std::get<0>(expected[i]));
-            queryBytes.insert(queryBytes.end(), encodedParams.begin(), encodedParams.end());
-
-            auto paramsR = std::make_unique<NativeExecutionMessage>();
-            paramsR->setContextID(888 + i);
-            paramsR->setSeq(999);
-            paramsR->setDepth(0);
-            paramsR->setFrom(std::string(sender));
-            paramsR->setTo(transferAddress);
-            paramsR->setOrigin(std::string(sender));
-            paramsR->setStaticCall(false);
-            paramsR->setGasAvailable(gas);
-            paramsR->setData(std::move(queryBytes));
-            paramsR->setType(ExecutionMessage::MESSAGE);
-
-            std::promise<ExecutionMessage::UniquePtr> dmcPromise;
-            executor->dmcExecuteTransaction(
-                std::move(paramsR), [&dmcPromise](bcos::Error::UniquePtr&& error,
-                                        ExecutionMessage::UniquePtr&& result) {
-                    BOOST_CHECK(!error);
-                    dmcPromise.set_value(std::move(result));
-                });
-            auto future = dmcPromise.get_future();
-            BOOST_CHECK(future.wait_for(3s) == future_status::ready);
-            result = future.get();
-
-            BOOST_CHECK(result);
-            BOOST_CHECK_EQUAL(result->status(), 0);
-            BOOST_CHECK_EQUAL(result->message(), "");
-            BOOST_CHECK_EQUAL(result->newEVMContractAddress(), "");
-            BOOST_CHECK_LT(result->gasAvailable(), gas);
-
-            uint32_t dept;
-            codec->decode(result->data(), dept);
-            BOOST_CHECK_EQUAL(dept, std::get<1>(expected[i]));
-        }
-    }
-#endif
-}  // namespace test
-
-BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
-{
-#ifdef WITH_WASM
-    auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
-    auto executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-        backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
-
-    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
-
-    bytes helloWorldBin(hello_world_wasm, hello_world_wasm + hello_world_wasm_len);
-    helloWorldBin = codec->encode(helloWorldBin);
-    auto helloWorldAbi = string(
-        R"([{"inputs":[{"internalType":"string","name":"name","type":"string"}],"type":"constructor"},{"conflictFields":[{"kind":0,"value":[],"read_only":false,"slot":0}],"constant":false,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"set","selector":[1322485854,0],"outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"get","outputs":[{"internalType":"string","type":"string"}],"type":"function"}])");
-
-    bytes input;
-    input.insert(input.end(), helloWorldBin.begin(), helloWorldBin.end());
-
-    bytes constructorParam = codec->encode(string("alice"));
-    constructorParam = codec->encode(constructorParam);
-    input.insert(input.end(), constructorParam.begin(), constructorParam.end());
-
-    string helloWorldAddress = "usr/alice/hello_world";
-
-    auto tx = fakeTransaction(
-        cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
-    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
-
-    auto hash = tx->hash();
-    txpool->hash2Transaction.emplace(hash, tx);
-
-    auto params = std::make_unique<NativeExecutionMessage>();
-    params->setContextID(99);
-    params->setSeq(1000);
-    params->setDepth(0);
-    params->setOrigin(std::string(sender));
-    params->setFrom(std::string(sender));
-    params->setTo(helloWorldAddress);
-    params->setStaticCall(false);
-    params->setGasAvailable(gas);
-    params->setType(NativeExecutionMessage::TXHASH);
-    params->setTransactionHash(hash);
-    params->setCreate(true);
-
-    NativeExecutionMessage paramsBak = *params;
-
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
-    blockHeader->setNumber(1);
-    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
-
-    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
-    blockHeader->setParentInfo(parentInfos);
-    blockHeader->calculateHash(*cryptoSuite->hashImpl());
-
-    std::promise<void> nextPromise;
-    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
-        nextPromise.set_value();
-    });
-    nextPromise.get_future().get();
-
-    // --------------------------------
-    // Create contract hello world
-    // --------------------------------
-    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-    executor->dmcExecuteTransaction(std::move(params),
-        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
-            executePromise.set_value(std::move(result));
-        });
-
-    auto result = executePromise.get_future().get();
-
-    result->setSeq(1001);
-
-    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
-    executor->dmcExecuteTransaction(std::move(result),
-        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
-            executePromise2.set_value(std::move(result));
-        });
-
-    auto result2 = executePromise2.get_future().get();
-    result2->setSeq(1000);
-
-    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
-    executor->dmcExecuteTransaction(std::move(result2),
-        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
-            executePromise3.set_value(std::move(result));
-        });
-
-    auto result3 = executePromise3.get_future().get();
-
-    BOOST_CHECK_EQUAL(result3->status(), 0);
-    BOOST_CHECK_EQUAL(result3->origin(), sender);
-    BOOST_CHECK_EQUAL(result3->from(), paramsBak.to());
-    BOOST_CHECK_EQUAL(result3->to(), sender);
-
-    BOOST_CHECK(result3->message().empty());
-    BOOST_CHECK(!result3->newEVMContractAddress().empty());
-    BOOST_CHECK_LT(result3->gasAvailable(), gas);
-
-    auto address = result3->newEVMContractAddress();
-
-    bcos::protocol::TwoPCParams commitParams;
-    commitParams.number = 1;
-
-    std::promise<void> preparePromise;
-    executor->prepare(commitParams, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
-        preparePromise.set_value();
-    });
-    preparePromise.get_future().get();
-
-    std::promise<void> commitPromise;
-    executor->commit(commitParams, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
-        commitPromise.set_value();
-    });
-    commitPromise.get_future().get();
-    auto tableName = std::string("/apps/") + string(address);
-
-    EXECUTOR_LOG(TRACE) << "Checking table: " << tableName;
-    std::promise<Table> tablePromise;
-    backend->asyncOpenTable(tableName, [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(table);
-        tablePromise.set_value(std::move(*table));
-    });
-    auto table = tablePromise.get_future().get();
-
-    auto entry = table.getRow("code");
-    BOOST_CHECK(entry);
-    BOOST_CHECK_GT(entry->getField(0).size(), 0);
-
-    entry = table.getRow("abi");
-    BOOST_CHECK(entry);
-    BOOST_CHECK_GT(entry->getField(0).size(), 0);
-
-    std::vector<ExecutionMessage::UniquePtr> requests;
-    auto cases = vector<string>();
-
-    cases.push_back("alice");
-    cases.push_back("charlie");
-    cases.push_back("bob");
-    cases.push_back("david");
-
-    for (size_t i = 0; i < cases.size(); ++i)
-    {
-        std::string name = cases[i];
-        bytes input;
-
-        auto encodedParams = codec->encodeWithSig("set(string)", name);
-        input.insert(input.end(), encodedParams.begin(), encodedParams.end());
-
-        auto tx = fakeTransaction(
-            cryptoSuite, keyPair, address, input, std::to_string(101 + i), 100001, "1", "1");
-        auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
-
-        auto hash = tx->hash();
-        txpool->hash2Transaction.emplace(hash, tx);
-
-        auto params = std::make_unique<NativeExecutionMessage>();
-        params->setType(bcos::protocol::ExecutionMessage::TXHASH);
-        params->setContextID(i);
-        params->setSeq(6000);
-        params->setDepth(0);
-        params->setFrom(std::string(sender));
-        params->setTo(std::string(address));
-        params->setOrigin(std::string(sender));
-        params->setStaticCall(false);
-        params->setGasAvailable(gas);
-        params->setTransactionHash(hash);
-        params->setCreate(false);
-
-        requests.emplace_back(std::move(params));
-    }
-
-    executor->dagExecuteTransactions(
-        requests, [&](bcos::Error::UniquePtr error,
-                      std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results) {
-            BOOST_CHECK(!error);
-
-            for (size_t i = 0; i < results.size(); ++i)
-            {
-                auto& result = results[i];
-                BOOST_CHECK_EQUAL(result->status(), 0);
-                BOOST_CHECK(result->message().empty());
-                BOOST_CHECK(result->type() == ExecutionMessage::SEND_BACK);
-            }
-
-            bytes getBytes;
-
-            auto encodedParams = codec->encodeWithSig("get()");
-            getBytes.insert(getBytes.end(), encodedParams.begin(), encodedParams.end());
-
-            auto params = std::make_unique<NativeExecutionMessage>();
-            params->setContextID(888);
-            params->setSeq(999);
-            params->setDepth(0);
-            params->setFrom(std::string(sender));
-            params->setTo(helloWorldAddress);
-            params->setOrigin(std::string(sender));
-            params->setStaticCall(false);
-            params->setGasAvailable(gas);
-            params->setData(std::move(getBytes));
-            params->setType(ExecutionMessage::MESSAGE);
-
-            std::promise<ExecutionMessage::UniquePtr> executePromise;
-            executor->dmcExecuteTransaction(
-                std::move(params), [&executePromise](bcos::Error::UniquePtr&& error,
-                                       ExecutionMessage::UniquePtr&& result) {
-                    BOOST_CHECK(!error);
-                    executePromise.set_value(std::move(result));
-                });
-            result = executePromise.get_future().get();
-
-            BOOST_CHECK(result);
-            BOOST_CHECK_EQUAL(result->status(), 0);
-            BOOST_CHECK_EQUAL(result->message(), "");
-            BOOST_CHECK_EQUAL(result->newEVMContractAddress(), "");
-            BOOST_CHECK_LT(result->gasAvailable(), gas);
-
-            string name;
-            codec->decode(result->data(), name);
-            BOOST_CHECK_EQUAL(name, "alice");
-        });
-#endif
-}
-
 BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 {
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-        backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+        backend, executionResultFactory, stateStorageFactory, hashImpl, false);
 
-    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
+    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl);
 
     std::string bin =
         "608060405234801561001057600080fd5b506105db806100206000396000f30060806040526004361061006257"
@@ -769,13 +260,12 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
     blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{0, h256(0)};
+    blockHeader->setParentInfo(parentInfo);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::cout << "Block hash is: " << blockHeader->hash() << std::endl;
 
@@ -943,9 +433,9 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-        backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+        backend, executionResultFactory, stateStorageFactory, hashImpl, false);
 
-    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
+    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl);
 
     std::string bin =
         "608060405234801561001057600080fd5b50610519806100206000396000f30060806040526004361061006157"
@@ -1013,13 +503,12 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
     blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{0, h256(0)};
+    blockHeader->setParentInfo(parentInfo);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;

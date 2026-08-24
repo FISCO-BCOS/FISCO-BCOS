@@ -18,7 +18,6 @@
  * @date 2022.11.04
  * @author lucasli
  */
-#include <bcos-crypto/encrypt/Exceptions.h>
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 

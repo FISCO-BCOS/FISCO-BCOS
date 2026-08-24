@@ -19,9 +19,12 @@
  */
 
 #include "CallRequest.h"
+#include "Web3Transaction.h"
 #include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-task/Wait.h"
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <algorithm>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -30,7 +33,7 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     bcos::protocol::TransactionFactory::Ptr const& factory,
     bcos::scheduler::SchedulerInterface::Ptr const& scheduler) noexcept
 {
-    std::string nonce = "";
+    std::string nonce;
     if (to.empty() && scheduler) [[unlikely]]
     {
         // estimate gas deploy contract
@@ -39,9 +42,93 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
             if (const auto entry = task::syncWait(scheduler->getPendingStorageAt(
                     bcos::precompiled::trimHexPrefix(from.value()), "nonce", 0)))
             {
-                nonce = entry->get();
+                // FISCO stores account nonces as DECIMAL strings (EVMAccount writes
+                // convert_to<std::string>(); StorageStateView reads them unprefixed),
+                // and the transaction nonce is parsed as HEX downstream — both
+                // bcosTransactionToEvmone (safeFromQuantity) and TransactionExecutorImpl
+                // (hex2u) treat it as hex. So the stored decimal must be converted to a
+                // hex quantity here, otherwise a deployment eth_estimateGas at nonce >= 10
+                // gets its decimal "12" misread as hex 0x12 = 18 (NONCE_TOO_HIGH). 0-9
+                // coincide in both bases, which is why only the 11th+ deployment would break.
+                //
+                // The all-digits guard keeps this noexcept-safe: bcos::u256 throws on an
+                // unparseable string (std::terminate out of noexcept), and an empty or
+                // non-numeric stored nonce is left unset (empty nonce string) — a corrupt
+                // row falls back to the executor reading the sender's state nonce rather
+                // than aborting the RPC.
+                if (auto const raw = entry->get();
+                    !raw.empty() && std::all_of(raw.begin(), raw.end(),
+                                        [](char c) { return c >= '0' && c <= '9'; }))
+                {
+                    nonce = toQuantity(bcos::u256(raw));
+                }
             }
         }
+    }
+    // The OP-line call pipeline (OpstackExecutor::m_prepare → opValidate) prices every call
+    // through the transaction's RLP envelope bytes and rejects an empty envelope with EINVAL
+    // ("Invalid argument" at the RPC) — so build the simulation tx via
+    // Web3Transaction::takeToTarsTransaction, which stores the envelope in
+    // extraTransactionBytes. Unsigned legacy shape: chainId stays nullopt (pre-EIP-155
+    // exemption from the node chain-id check), dummy r/s mirror the scheduler-test fixture
+    // (the sender is forced below regardless). gasPrice defaults to 2 gwei when the request
+    // omits pricing so the fee-cap check against a nonzero block base fee (genesis: 1e9)
+    // does not reject pricing-less simulations — op-geth skips fee validation for eth_call
+    // entirely (known divergence).
+    auto quantity = [](std::optional<std::string> const& s) -> std::optional<u256> {
+        if (!s || s->empty())
+        {
+            return std::nullopt;
+        }
+        try
+        {
+            return fromBigQuantity(*s);
+        }
+        catch (...)
+        {
+            return std::nullopt;
+        }
+    };
+    try
+    {
+        Web3Transaction w3{};
+        w3.type = TransactionType::Legacy;
+        w3.chainId = std::nullopt;
+        if (!to.empty())
+        {
+            w3.to = Address(to);
+        }
+        w3.data = data;
+        w3.value = quantity(value).value_or(u256(0));
+        w3.nonce = 0;
+        // op-geth caps a gas-less eth_call at its RPC gas cap; default to the 30M block-gas
+        // convention so a pricing-less simulation passes the intrinsic-gas check.
+        w3.gasLimit = gas.value_or(30'000'000);
+        w3.maxPriorityFeePerGas =
+            quantity(gasPrice).value_or(quantity(maxFeePerGas).value_or(u256(2'000'000'000)));
+        w3.signatureV = 0;
+        w3.signatureR = bcos::bytes(32, 0x01);
+        w3.signatureS = bcos::bytes(32, 0x02);
+        auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
+        // takeToTarsTransaction renders the numeric nonce; restore the passthrough semantics
+        // the RPC contract has (converted hex quantity, or empty when unknown — the executor
+        // then falls back to the sender's state nonce).
+        tarsHolder->data.nonce = nonce;
+        auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
+            [tarsHolder]() { return tarsHolder.get(); });
+        if (from.has_value())
+        {
+            if (auto const sender = safeFromHexWithPrefix(from.value()))
+            {
+                tx->forceSender(sender.value());
+            }
+        }
+        return tx;
+    }
+    catch (...)
+    {
+        // noexcept guard: any conversion surprise falls back to the plain factory tx (the
+        // pre-envelope behavior) rather than aborting the RPC.
     }
     auto tx = factory->createTransaction(1, std::move(this->to), this->data, nonce, 0, {}, {}, 0,
         "", value.value_or(""), gasPrice.value_or(""), gas.value_or(0), maxFeePerGas.value_or(""),

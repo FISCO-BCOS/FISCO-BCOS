@@ -1,0 +1,12 @@
+{
+  "name": "paillier",
+  "version-string": "8c9336a4",
+  "homepage": "https://github.com/FISCO-BCOS/paillier-lib",
+  "description": "FISCO-BCOS Paillier encryption library",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    }
+  ]
+}
