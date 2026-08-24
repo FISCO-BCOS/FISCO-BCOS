@@ -3,15 +3,6 @@
 
 using namespace bcos::boostssl;
 
-namespace
-{
-// endpoint to "ip:port" string
-std::string endpointToString(const boost::asio::ip::tcp::endpoint& _endpoint)
-{
-    return _endpoint.address().to_string() + ":" + std::to_string(_endpoint.port());
-}
-}  // namespace
-
 http::HttpStream::HttpStream(boost::beast::tcp_stream _stream) : m_stream(std::move(_stream))
 {
     HTTP_STREAM(DEBUG) << LOG_KV("[NEWOBJ][HttpStream]", this);
@@ -90,11 +81,14 @@ void http::HttpStream::asyncWrite(const HttpResponse& _httpResp, HttpStreamRWHan
     }
 }
 
-std::string http::HttpStream::localEndpoint()
+// "ip:port" of the local or remote peer, or "" when the stream is not connected
+std::string http::HttpStream::endpoint(bool _local)
 {
     try
     {
-        return endpointToString(stream().socket().local_endpoint());
+        boost::asio::ip::tcp::endpoint ep = _local ? stream().socket().local_endpoint()
+                                                   : stream().socket().remote_endpoint();
+        return ep.address().to_string() + ":" + std::to_string(ep.port());
     }
     catch (...)
     {}
@@ -102,16 +96,14 @@ std::string http::HttpStream::localEndpoint()
     return {};
 }
 
+std::string http::HttpStream::localEndpoint()
+{
+    return endpoint(true);
+}
+
 std::string http::HttpStream::remoteEndpoint()
 {
-    try
-    {
-        return endpointToString(stream().socket().remote_endpoint());
-    }
-    catch (...)
-    {}
-
-    return {};
+    return endpoint(false);
 }
 
 http::HttpStream::Ptr http::HttpStreamFactory::buildHttpStream(

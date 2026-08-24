@@ -20,6 +20,7 @@
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 
@@ -237,13 +238,5 @@ std::string bcos::boostssl::ws::newSeq()
     // thread_local generator: random_generator seeds an mt19937 (entropy read +
     // 624-word state init) per construction, amortize it to ~ns per call
     static thread_local boost::uuids::random_generator gen;
-    auto uuid = gen();
-    static constexpr char HEX[] = "0123456789abcdef";
-    std::string seq(32, '0');
-    for (std::size_t i = 0; i < uuid.size(); ++i)
-    {
-        seq[2 * i] = HEX[uuid.data[i] >> 4];
-        seq[2 * i + 1] = HEX[uuid.data[i] & 0x0F];
-    }
-    return seq;
+    return bcos::toHex(gen());
 }

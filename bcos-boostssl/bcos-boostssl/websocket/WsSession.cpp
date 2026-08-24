@@ -478,18 +478,6 @@ void WsSession::asyncSendMessage(const WsMessage& _msg, Options _options, RespCa
 {
     auto seq = _msg.seq();
 
-    // a message whose raw mode mismatches the session's wire format would silently
-    // corrupt it (e.g. a header-mode message prepends a 10-byte header on a raw ws client)
-    if (_msg.raw() != m_rawMessage)
-    {
-        if (_respFunc)
-        {
-            _respFunc(BCOS_ERROR_PTR(WsError::MessageEncodeError, "message raw mode mismatch"),
-                WsMessage(), nullptr);
-        }
-        return;
-    }
-
     if (!isConnected())
     {
         WEBSOCKET_SESSION(WARNING)

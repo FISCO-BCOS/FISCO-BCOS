@@ -54,6 +54,7 @@ public:
         HttpStreamRWHandler _handler);
 
     void asyncWrite(const HttpResponse& _httpResp, HttpStreamRWHandler _handler);
+    std::string endpoint(bool _local);
     std::string localEndpoint();
     std::string remoteEndpoint();
 
