@@ -185,7 +185,10 @@ BOOST_AUTO_TEST_CASE(GoldenCorpusProvenanceIsPinned)
         {
             continue;
         }
-        auto const& provenance = jAt(doc, "_op_test_vectors", entry.path().filename().string());
+        // By value, not const&: gcc-14's -Werror=dangling-reference cannot see
+        // that jAt's returned reference binds into `doc` (long-lived) rather
+        // than to the temporary string in the same expression.
+        Json::Value provenance = jAt(doc, "_op_test_vectors", entry.path().filename().string());
         if (provenance.isNull())
         {
             continue;
