@@ -37,6 +37,7 @@
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
+#include <bcos-rlp-protocol/Web3TxEnvelope.h>  // isTypedWeb3Envelope (envelope-sourced chainId gate)
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
@@ -46,6 +47,7 @@
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <cstdint>
 #include <span>
@@ -193,7 +195,7 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
     }
-    // Round-2 Finding K: an empty state root (block 0 / empty blocks / pre-MPT blocks) is a
+    // An empty state root (block 0 / empty blocks / pre-MPT blocks) is a
     // legal "no accounts" root, not a missing node row — skip the root-presence check and let
     // MPTReadView (which handles emptyRootHash as "no accounts") plus the scenario flag decide
     // how absence reads: scenario B -> zero; scenario A -> honest dormant-account error.
@@ -284,8 +286,7 @@ static std::string storageValueToData(std::string_view value)
 {
     bcos::bytes word(32, 0);
     auto const copyLen = (std::min)(value.size(), word.size());
-    std::copy_n(
-        value.data(), copyLen, word.end() - static_cast<std::ptrdiff_t>(copyLen));
+    std::copy_n(value.data(), copyLen, word.end() - static_cast<std::ptrdiff_t>(copyLen));
     return toHex(word, "0x");
 }
 
@@ -302,8 +303,7 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     boost::algorithm::to_lower(addressStr);
     auto position = toView(request[1u]);
     std::string positionStr = std::string(
-        (position.starts_with("0x") || position.starts_with("0X")) ? position.substr(2) :
-                                                                    position);
+        (position.starts_with("0x") || position.starts_with("0X")) ? position.substr(2) : position);
     if (position.size() % 2 != 0)
     {
         positionStr.insert(0, "0");
@@ -728,9 +728,11 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto rawTx = toView(request[0U]);
     auto rawTxBytes = fromHexWithPrefix(rawTx);
     auto bytesRef = bcos::ref(rawTxBytes);
-    // Authoritative first-byte dispatch (RawTransactionDispatch.h). L2 never admits blob
-    // (type-3) transactions, and deposits (0x7e) can only be injected by the consensus
-    // layer through the Engine API, never through the public transaction pool.
+    // Authoritative first-byte dispatch (RawTransactionDispatch.h). FISCO's OP policy rejects
+    // blob (type-3) at the gate — op-geth's decodeTyped accepts them, so this is a deliberate
+    // acceptance divergence, not a reference check (see the type-byte gate in OpTransition.h /
+    // OpCommon.h). Deposits (0x7e) can only be injected by the consensus layer through the
+    // Engine API, never through the public transaction pool.
     switch (engine::dispatchRawTransaction(bytesRef))
     {
     case engine::RawTransactionKind::Blob:
@@ -747,7 +749,22 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
     }
+    // Defense-in-depth: the first-byte dispatch above already rejects 0x7e, and decode cannot
+    // produce type==Deposit from any other first byte. op-geth likewise rejects Deposit from
+    // eth_sendRawTransaction (ErrTxTypeNotSupported); deposits only enter via the
+    // derivation/engine path, never from a client RPC submission.
+    if (web3Tx.type == TransactionType::Deposit) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+            "Deposit (0x7e) transactions are not supported via eth_sendRawTransaction"));
+    }
     auto encodeTxHash = web3Tx.txHash();
+    // Capture the chainId decoded from the SIGNED envelope BEFORE takeToTarsTransaction moves
+    // web3Tx away (kyonRay R4 #3): re-walking the raw bytes via web3ChainIdFromEnvelope would
+    // duplicate the decoder and invite drift — the walker is uint64 while the decoder is u256,
+    // so a chainId above 2^64-1 would decode fine here but read as nullopt in the walker. The
+    // walker stays for the P2P/tars path where only a Transaction is available (part 4b).
+    auto const web3ChainId = web3Tx.chainId;
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
@@ -785,17 +802,54 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         // unparseable-nonce transactions). ChainId IS checked because dropping it would
         // disable EIP-155 replay protection: a transaction signed for another chain would
         // execute here and consume the sender's nonce.
-        if (auto chainIdConfig = co_await ledger::getSystemConfig(
-                *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
+        auto chainIdConfig = co_await ledger::getSystemConfig(
+            *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
+        if (!chainIdConfig)
         {
-            auto [chainId, _] = chainIdConfig.value();
-            // Legacy txs carry an empty/"0" chainId and are exempt (matches
-            // TxValidator::validateChainId).
-            if (!tx->chainId().empty() && tx->chainId() != "0" && tx->chainId() != chainId)
+            // Fail closed when web3_chain_id is unconfigured: without a node chainId to
+            // compare against, an EIP-155 tx signed for a foreign chain would execute here
+            // and consume the sender's nonce (EIP-155 replay-protection bypass). op-geth
+            // always has a genesis chainId, so it has no such open default. Only pre-EIP-155
+            // legacy (no chainId in the envelope) is exempt — there is nothing to compare.
+            auto const envelopeChainId = web3ChainId;
+            if (envelopeChainId.has_value() ||
+                bcos::rlp::protocol::isTypedWeb3Envelope(tx->extraTransactionBytes()))
+            {
+                WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction: web3_chain_id not configured")
+                                  << LOG_KV("txChainId", tx->chainId());
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
+            }
+        }
+        else
+        {
+            auto [chainIdStr, _] = chainIdConfig.value();
+            // Validate against the SIGNED envelope; base TxValidator::validateChainId reads the
+            // tars mirror and is migrated to this envelope-keyed form in part 4b (#5477): typed
+            // txs get no "0" exemption (op-geth modernSigner); only pre-EIP-155 legacy (no
+            // chainId in the envelope) is exempt — a deliberate divergence (geth/op-geth
+            // default rejects unprotected txs at the RPC layer; part 5 adds the config gate).
+            // Parse as u256 via the shared helper (ledger::parseWeb3ChainId); a corrupted
+            // config rejects the tx.
+            auto expected = ledger::parseWeb3ChainId(chainIdStr);
+            if (!expected.has_value())
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
+            }
+            auto const envelopeChainId = web3ChainId;
+            if (envelopeChainId.has_value() && *envelopeChainId != *expected)
             {
                 WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction chainId mismatch")
                                   << LOG_KV("txChainId", tx->chainId())
-                                  << LOG_KV("nodeChainId", chainId);
+                                  << LOG_KV("nodeChainId", chainIdStr);
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
+            }
+            // Same typed-envelope guard as TxValidator::validateChainId (mirror→envelope
+            // migration lands in 4b): a typed tx whose
+            // chainId field cannot be parsed (nullopt) gets no "0" exemption — a malformed
+            // typed envelope is rejected here rather than deferring to signature recovery.
+            if (!envelopeChainId.has_value() &&
+                bcos::rlp::protocol::isTypedWeb3Envelope(tx->extraTransactionBytes()))
+            {
                 BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
             }
         }
@@ -1186,8 +1240,8 @@ task::Task<void> EthEndpoint::newFilter(const Json::Value& request, Json::Value&
     auto const ledger = m_nodeService->ledger();
     auto const latest = co_await ledger::getCurrentBlockNumber(*ledger);
     auto params = m_filterSystem->requestFactory()->create();
-    params->fromJson(jParams, latest, m_nodeService->safeBlockDepth(),
-        m_nodeService->finalizedBlockDepth());
+    params->fromJson(
+        jParams, latest, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
     Json::Value result = co_await m_filterSystem->newFilter(params);
     buildJsonContent(result, response);
 }
@@ -1235,8 +1289,8 @@ task::Task<void> EthEndpoint::getLogs(const Json::Value& request, Json::Value& r
     auto const ledger = m_nodeService->ledger();
     auto const latest = co_await ledger::getCurrentBlockNumber(*ledger);
     auto params = m_filterSystem->requestFactory()->create();
-    params->fromJson(jParams, latest, m_nodeService->safeBlockDepth(),
-        m_nodeService->finalizedBlockDepth());
+    params->fromJson(
+        jParams, latest, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
     Json::Value result = co_await m_filterSystem->getLogs(params);
     buildJsonContent(result, response);
 }
@@ -1245,8 +1299,8 @@ task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberB
 {
     auto ledger = m_nodeService->ledger();
     auto latest = co_await ledger::getCurrentBlockNumber(*ledger);
-    auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag,
-        m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
+    auto [number, _] = bcos::rpc::getBlockNumberByTag(
+        latest, blockTag, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
     co_return std::make_tuple(number, std::cmp_equal(latest, number));
 }
 

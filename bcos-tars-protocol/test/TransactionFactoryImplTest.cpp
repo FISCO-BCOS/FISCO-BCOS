@@ -10,6 +10,8 @@
 
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
@@ -341,6 +343,78 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
         static_cast<tars::Char>(bcos::protocol::TransactionType::BCOSTransaction);
     forgedBcos->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
     BOOST_CHECK(!forgedBcos->isDepositTx());
+}
+
+// Deposit hash: the canonical txHash of a 0x7e tx is keccak256 of the full envelope (type byte
+// + RLP fields) — op-geth DepositTx.Hash() / op-reth TxDeposit::tx_hash(). calculateHash must
+// handle the deposit branch (deposits carry no signature, so the normal reassemble path would
+// throw on the missing 65-byte signature). Fill extraTransactionBytes with a real envelope and
+// check extraTransactionHash equals keccak of those bytes verbatim.
+BOOST_AUTO_TEST_CASE(depositHashIsKeccakOfEnvelope)
+{
+    auto suite = makeSuite();
+    auto tx = std::make_shared<TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    // A minimal but well-formed 0x7e envelope: rlp([sourceHash, from, to, mint, value, gas,
+    // isSystemTx, data]) preceded by the type byte.
+    bcos::bytes body;
+    bcos::codec::rlp::encode(body,
+        bcos::h256("0x6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7"),
+        bcos::Address("0xdead000000000000000000000000000000000011"),
+        bcos::Address("0x4200000000000000000000000000000000000022"), bcos::bytes{}, bcos::bytes{},
+        static_cast<uint64_t>(500000), static_cast<uint64_t>(0), bcos::bytes{});
+    bcos::bytes envelope{0x7e};
+    bcos::codec::rlp::encodeHeader(envelope, bcos::codec::rlp::Header{true, body.size()});
+    envelope.insert(envelope.end(), body.begin(), body.end());
+    inner.extraTransactionBytes.assign(envelope.begin(), envelope.end());
+
+    tx->calculateHash(*suite->hashImpl());
+    auto const expect = bcos::crypto::keccak256Hash(bcos::ref(envelope));
+    BOOST_CHECK(tx->hash() == expect);
+    BOOST_CHECK_EQUAL(bcos::toHex(tx->hash().asBytes()), bcos::toHex(expect.asBytes()));
+}
+
+// web3ChainIdFromEnvelope must read the SIGNED envelope (extraTransactionBytes), never the
+// forgeable tars mirror (data.chainID) — a regression swapping to the mirror would pass every
+// other test in this file. Envelope carries a legacy EIP-155 preimage with chainId 42; the
+// mirror is deliberately forged to 999.
+BOOST_AUTO_TEST_CASE(web3ChainIdFromEnvelopeReadsEnvelopeNotTarsMirror)
+{
+    auto suite = makeSuite();
+    namespace rlp = bcos::codec::rlp;
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));   // nonce
+    rlp::encode(items, static_cast<uint64_t>(10));  // gasPrice
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::bytes(20, 0x01));
+    rlp::encode(items, static_cast<uint64_t>(0));   // value
+    rlp::encode(items, bcos::bytes{});              // data
+    rlp::encode(items, static_cast<uint64_t>(42));  // field 7 = EIP-155 chainId
+    rlp::encode(items, static_cast<uint64_t>(0));   // 0 placeholder
+    rlp::encode(items, static_cast<uint64_t>(0));   // 0 placeholder
+    bcos::bytes env;
+    rlp::encodeHeader(env, rlp::Header{true, items.size()});
+    env.insert(env.end(), items.begin(), items.end());
+
+    auto tx = std::make_shared<TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.data.chainID = "999";  // forged string mirror — must NOT be consulted
+    inner.extraTransactionBytes.assign(env.begin(), env.end());
+
+    auto chainId = tx->web3ChainIdFromEnvelope();
+    BOOST_REQUIRE(chainId.has_value());
+    BOOST_CHECK_EQUAL(chainId.value(), 42u);
+
+    // Non-Web3 transactions return nullopt regardless of the envelope content.
+    auto legacy = std::make_shared<TransactionImpl>();
+    auto& legacyInner = legacy->mutableInner();
+    legacyInner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::BCOSTransaction);
+    legacyInner.extraTransactionBytes.assign(env.begin(), env.end());
+    BOOST_CHECK(!legacy->web3ChainIdFromEnvelope().has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

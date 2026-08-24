@@ -72,6 +72,9 @@ static T decode(std::string_view hex, int32_t expectedErrorCode = 0)
     }
     else
     {
+        // A regression where decode fails but error is null would be a null deref below — assert
+        // the error exists first so the failure is readable, not a UB crash.
+        BOOST_REQUIRE(error);
         BOOST_CHECK_EQUAL(error->errorCode(), expectedErrorCode);
     }
     return result;
@@ -91,6 +94,7 @@ static std::tuple<T, T2> decode(std::string_view hex, int32_t expectedErrorCode 
     }
     else
     {
+        BOOST_REQUIRE(error);
         BOOST_CHECK_EQUAL(error->errorCode(), expectedErrorCode);
     }
     return {std::move(r1), std::move(r2)};
@@ -247,7 +251,10 @@ BOOST_AUTO_TEST_CASE(uintDecode)
     decode<uint64_t>("C0", UnexpectedList);
     decode<uint64_t>("8105", NonCanonicalSize);
     decode<uint64_t>("B8020004", NonCanonicalSize);
-    decode<uint64_t>("8AFFFFFFFFFFFFFFFFFF7C", Overflow);
+    // 10-byte payload into uint64: the width gate rejects it (UnexpectedLength). Note the old
+    // "Overflow" expectation was a silent no-op — DecodingError::Overflow == 0, so the helper
+    // treated it as "expect success" and the wide value was silently truncated.
+    decode<uint64_t>("8AFFFFFFFFFFFFFFFFFF7C", UnexpectedLength);
 }
 
 BOOST_AUTO_TEST_CASE(uint256Decode)
@@ -273,8 +280,9 @@ BOOST_AUTO_TEST_CASE(uint256Decode)
     decode<u256>("C0"sv, UnexpectedList);
     decode<u256>("8105"sv, NonCanonicalSize);
     decode<u256>("B8020004"sv, NonCanonicalSize);
+    // 33-byte payload into u256: rejected by the width gate (was silently truncated before).
     decode<u256>(
-        "A101000000000000000000000000000000000000008B000000000000000000000000"sv, Overflow);
+        "A101000000000000000000000000000000000000008B000000000000000000000000"sv, UnexpectedLength);
 }
 
 BOOST_AUTO_TEST_CASE(vectorsDecode)
