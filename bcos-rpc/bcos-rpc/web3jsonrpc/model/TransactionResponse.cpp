@@ -99,6 +99,7 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
             result["nonce"] = "0x0";
             result["type"] = toQuantity(0);
             result["value"] = "0x0";
+            result["chainId"] = toQuantity(0);
             result["v"] = "0x0";
             result["r"] = "0x0";
             result["s"] = "0x0";

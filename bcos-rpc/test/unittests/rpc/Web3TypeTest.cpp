@@ -839,18 +839,20 @@ BOOST_AUTO_TEST_CASE(testRejectPayloadLengthOverflowEIP1559)
         BOOST_REQUIRE(rlp::decode(ref, tx) == nullptr);
     }
     // Shrink the declared payload length by 1: fields now overflow by one byte.
-    // byte 0 = type (0x02), byte 1 = list header (first byte of payload-length encoding).
-    auto declLen = envelope[1];
-    envelope[1] = declLen - 1;
+    // byte 0 = type (0x02), byte 1 = long-list mode byte (0xf8), byte 2 = the actual payload
+    // length. Corrupting byte 2 (NOT byte 1 — decrementing the mode byte 0xf8 -> 0xf7 would
+    // flip the header to short-list mode and misalign the whole field stream, firing the
+    // Address width gate instead) keeps the long-list header intact: all fields decode
+    // cleanly and the ListEnd parity check rejects, mirroring the legacy case.
+    envelope[2] = envelope[2] - 1;
     auto badRef = bcos::ref(envelope);
     Web3Transaction badTx{};
     auto e = rlp::decode(badRef, badTx);
     BOOST_REQUIRE(e != nullptr);
-    // The shortened payload makes the trailing s-field's length prefix exceed the remaining
-    // declared bytes, so the field decode reports UnexpectedLength (unlike the legacy case,
-    // which crosses the list end cleanly and reports UnexpectedListElements).
+    // Fields consume one byte more than the declared payload — the EIP-1559 ListEnd parity
+    // (same op-geth errNotAtEOL parity as the legacy test above).
     BOOST_CHECK_EQUAL(
-        e->errorCode(), static_cast<int64_t>(codec::rlp::DecodingError::UnexpectedLength));
+        e->errorCode(), static_cast<int64_t>(codec::rlp::DecodingError::UnexpectedListElements));
 }
 
 // RLPDecode.h must reject integers wider than the target type (op-geth rlp uint overflow /
@@ -1296,15 +1298,28 @@ BOOST_AUTO_TEST_CASE(testWeb3ChainIdFromEnvelope)
         BOOST_REQUIRE(result.has_value());
         BOOST_CHECK_EQUAL(result.value(), 200u);
     }
+    // (d2) Preimage, chainId 255 (0x81 0xFF): payload first byte is a LONG-list header —
+    // a distinct pre-fix misclassification branch (lenOfLen path), same regression family.
+    {
+        auto env = makePreimage(255);
+        auto result = envelope::web3ChainIdFromEnvelope(bcos::ref(env));
+        BOOST_REQUIRE(result.has_value());
+        BOOST_CHECK_EQUAL(result.value(), 255u);
+    }
     // (e) 6-field pre-EIP-155 preimage (no chainId) → nullopt (unprotected exemption).
     {
         auto env = makeBareSixField();
         auto result = envelope::web3ChainIdFromEnvelope(bcos::ref(env));
         BOOST_CHECK(!result.has_value());
     }
-    // (f) Full envelope v=27 (unprotected) → nullopt.
+    // (f) Full envelope v=27/28 (unprotected) → nullopt. Both arms of the exemption.
     {
         auto env = makeFullEnvelope(27);
+        auto result = envelope::web3ChainIdFromEnvelope(bcos::ref(env));
+        BOOST_CHECK(!result.has_value());
+    }
+    {
+        auto env = makeFullEnvelope(28);
         auto result = envelope::web3ChainIdFromEnvelope(bcos::ref(env));
         BOOST_CHECK(!result.has_value());
     }
