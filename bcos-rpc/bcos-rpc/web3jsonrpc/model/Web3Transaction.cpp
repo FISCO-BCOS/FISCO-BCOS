@@ -352,12 +352,19 @@ size_t length(Web3Transaction const& tx) noexcept
 }
 void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
 {
-    // Delegate to the handler. Move the returned vector into `out` to avoid a double allocation:
-    // the handler returns a complete buffer; copying it into out would allocate a second time.
-    // (Each handler reserves the exact encoded size up front — header() already computes the
-    // payload length, so encode grows into a pre-sized buffer.)
-    // Callers always pass an empty `out`, so move-assign is safe.
-    out = handlerFor(tx.type).encode(tx);
+    // Append semantics like every other codec::rlp::encode(out, x) overload — encodeItems /
+    // list-encoding chains depend on it, and an overwrite would silently drop previously
+    // encoded elements. The handler returns a complete buffer: move it when out is empty
+    // (the current callers) to avoid a copy, otherwise append.
+    auto encoded = handlerFor(tx.type).encode(tx);
+    if (out.empty())
+    {
+        out = std::move(encoded);
+    }
+    else
+    {
+        out.insert(out.end(), encoded.begin(), encoded.end());
+    }
 }
 
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) noexcept
