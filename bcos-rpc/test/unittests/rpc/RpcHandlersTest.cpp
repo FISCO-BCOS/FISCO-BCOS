@@ -211,7 +211,7 @@ BOOST_AUTO_TEST_CASE(sendTransactionTimeoutStatusNotMaskedByEmptyReceipt)
 
     Json::Value jResp;
     toJsonResp(jResp, "0x0000", protocol::TransactionStatus::TransactionPoolTimeout, *emptyReceipt,
-        /*_isWasm=*/false, *hashImpl);
+        *hashImpl);
 
     // The submit status must win over the empty receipt's status.
     BOOST_CHECK_EQUAL(jResp["status"].asInt(),
