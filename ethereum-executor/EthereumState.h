@@ -31,18 +31,24 @@
 #pragma once
 
 #include "EVMSupport.h"
-#include "bcos-framework/storage2/RollbackableStorage.h"
+#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-framework/ledger/EVMAccount.h"
+#include "bcos-framework/storage2/RollbackableStorage.h"
 #include "bcos-task/TBBWait.h"
-#include <cassert>
 #include <evmc/evmc.h>
+#include <boost/lexical_cast.hpp>
+#include <array>
+#include <cassert>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
 #include <limits>
 #include <optional>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/transform.hpp>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -155,7 +161,9 @@ task::Task<void> clearAccountStorage(
         auto const& [k, v] = *kv;
         executor_v1::StateKeyView view(k);
         if (view.m_table != tableName)
+        {
             break;  // Left this account's table.
+        }
         auto key = view.m_key;
         if (key != ACCOUNT_TABLE_FIELDS::NONCE && key != ACCOUNT_TABLE_FIELDS::BALANCE &&
             key != ACCOUNT_TABLE_FIELDS::CODE_HASH && key != ACCOUNT_TABLE_FIELDS::CODE &&
@@ -166,7 +174,9 @@ task::Task<void> clearAccountStorage(
         }
     }
     if (!keysToRemove.empty())
+    {
         co_await storage2::removeSome(storage, keysToRemove);
+    }
 }
 
 /// Ported evmone::state::State, reading/writing BCOS storage directly.
@@ -194,7 +204,7 @@ class EthereumState
     {
         bytes32 key;
         bytes32 prev_value;
-        evmc_access_status prev_access_status;
+        evmc_access_status prev_access_status = EVMC_ACCESS_COLD;
     };
 
     struct JournalTransientStorageChange : JournalBase
@@ -243,29 +253,68 @@ class EthereumState
         EVMAccount<Storage> evmAccount(storage, addr, false);
 
         if (!co_await evmAccount.exists())
+        {
             co_return std::nullopt;
+        }
+
+        // Batch-read the three fixed account fields (nonce/balance/codeHash) in a
+        // single readSome instead of three independent readOne calls against the
+        // same account table. The returned vector matches the key order. The
+        // exists() check above (against SYS_TABLES) is kept: an account may exist
+        // with all its field entries missing, which readSome would report as empty
+        // but must not be conflated with a non-existent account.
+        auto tableName = co_await evmAccount.path();
+        auto fieldValues = co_await storage2::readSome(
+            storage, std::array{
+                         executor_v1::StateKey{tableName, ledger::ACCOUNT_TABLE_FIELDS::NONCE},
+                         executor_v1::StateKey{tableName, ledger::ACCOUNT_TABLE_FIELDS::BALANCE},
+                         executor_v1::StateKey{tableName, ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH},
+                     });
 
         eth_state_detail::ReadAccount acc;
-        auto nonceVal = co_await evmAccount.nonce();
-        if (nonceVal.has_value())
-            acc.nonce = static_cast<uint64_t>(bcos::u256(nonceVal.value()));
-
-        acc.balance = evm::toIntxU256(co_await evmAccount.balance());
-
-        auto codeHashVal = co_await evmAccount.codeHash();
+        if (auto& nonceField = fieldValues[0]; nonceField.has_value())
         {
-            auto const* d = codeHashVal.data();
+            acc.nonce = static_cast<uint64_t>(bcos::u256(std::string(nonceField->get())));
+        }
+
+        {
+            bcos::u256 balance = 0;
+            if (auto& balanceField = fieldValues[1]; balanceField.has_value())
+            {
+                balance = boost::lexical_cast<bcos::u256>(balanceField->get());
+            }
+            acc.balance = evm::toIntxU256(balance);
+        }
+
+        {
+            // A missing, short, or all-zero CODE_HASH entry means the account has
+            // no code (EMPTY_CODE_HASH), matching the previous codeHash() read path.
+            std::string_view codeHashView;
+            if (auto& codeHashField = fieldValues[2]; codeHashField.has_value())
+            {
+                codeHashView = codeHashField->get();
+            }
             bool hasCodeHash = false;
-            for (size_t i = 0; i < 32; ++i)
-                if (d[i] != 0)
+            if (codeHashView.size() >= sizeof(evmc_bytes32))
+            {
+                for (size_t i = 0; i < sizeof(evmc_bytes32); ++i)
                 {
-                    hasCodeHash = true;
-                    break;
+                    if (codeHashView[i] != 0)
+                    {
+                        hasCodeHash = true;
+                        break;
+                    }
                 }
+            }
             if (hasCodeHash)
-                std::copy_n(d, sizeof(evmc_bytes32), acc.code_hash.bytes);
+            {
+                std::copy_n(
+                    codeHashView.begin(), sizeof(evmc_bytes32), std::begin(acc.code_hash.bytes));
+            }
             else
+            {
                 acc.code_hash = EthAccount::EMPTY_CODE_HASH;
+            }
         }
 
         acc.has_storage = co_await hasStorageImpl(evmAccount);
@@ -312,7 +361,9 @@ class EthereumState
             auto const& [k, v] = *kv;
             executor_v1::StateKeyView view(k);
             if (view.m_table != tableName)
+            {
                 break;  // Left this account's table.
+            }
 
             auto key = view.m_key;
             if (key != ACCOUNT_TABLE_FIELDS::NONCE && key != ACCOUNT_TABLE_FIELDS::BALANCE &&
@@ -346,11 +397,15 @@ class EthereumState
         EVMAccount<Storage> evmAccount(storage, addr, false);
 
         if (!co_await evmAccount.exists())
+        {
             co_return {};
+        }
 
         auto codeEntry = co_await evmAccount.code();
         if (!codeEntry.has_value())
+        {
             co_return {};
+        }
 
         auto view = codeEntry->get();
         co_return bytes(view.begin(), view.end());
@@ -464,7 +519,9 @@ template <class Storage>
 EthAccount* EthereumState<Storage>::find(const address& addr) noexcept
 {
     if (const auto it = m_modified.find(addr); it != m_modified.end())
+    {
         return &it->second;
+    }
     if (const auto cacc = readAccount(addr); cacc)
     {
         EthAccount acc;
@@ -489,7 +546,9 @@ template <class Storage>
 EthAccount& EthereumState<Storage>::get_or_insert(const address& addr, EthAccount account)
 {
     if (const auto acc = find(addr); acc != nullptr)
+    {
         return *acc;
+    }
     return insert(addr, std::move(account));
 }
 
@@ -498,11 +557,17 @@ bytes_view EthereumState<Storage>::get_code(const address& addr)
 {
     auto* a = find(addr);
     if (a == nullptr)
+    {
         return {};
+    }
     if (a->code_hash == EthAccount::EMPTY_CODE_HASH)
+    {
         return {};
+    }
     if (a->code.empty())
+    {
         a->code = readCode(addr);
+    }
     return a->code;
 }
 
@@ -653,16 +718,22 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
         // Deleted accounts are handled in phase 2 (they may also be modified —
         // evmone's build_diff reports destructed accounts under deleted_accounts).
         if (acc.destructed)
+        {
             continue;
+        }
         // Match evmone build_diff: an empty touched account is never written in
         // phase 1 — not just_created ones are deleted in phase 2, just_created
         // ones are dropped entirely.
         if (acc.erase_if_empty && rev >= EVMC_SPURIOUS_DRAGON && acc.is_empty())
+        {
             continue;
+        }
 
         EVMAccount<Storage> bcosAcc(m_storage, addr, false);
         if (!co_await bcosAcc.exists())
+        {
             co_await bcosAcc.create();
+        }
         co_await bcosAcc.setNonce(std::to_string(acc.nonce));
         co_await bcosAcc.setBalance(evm::toBcosU256(acc.balance));
         if (acc.code_changed)
@@ -677,16 +748,27 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
             bcos::bytes codeHash(acc.code_hash.bytes, acc.code_hash.bytes + sizeof(evmc_bytes32));
             co_await bcosAcc.setCode(std::move(code), std::string{}, bcos::h256(codeHash));
         }
-        for (auto const& [key, value] : acc.storage)
+        // Batch-write the changed storage slots in one writeSome: a single
+        // pre-image read (readSomeRaw) + one batch write instead of one
+        // readOneRaw + writeOne per slot. The changed-slot selection is a lazy
+        // ranges::filter view, so no temporary vector is materialized here
+        // (Rollbackable::writeSome materializes internally only when needed).
+        // NOTE: a zero value still leaves a zero-valued row (there is no
+        // delete-storage API); such rows are only cleaned on self-destruct via
+        // clearAccountStorage(). This matches evmone's state semantics (a zero
+        // slot reads back as zero).
+        if (!acc.storage.empty())
         {
-            if (value.current == value.original)
-                continue;
-            // NOTE: EVMAccount::setStorage always writes the entry (a zero
-            // value leaves a zero-valued row; there is no delete-storage API).
-            // Such zero rows are only cleaned on self-destruct via
-            // clearAccountStorage(). This matches evmone's state semantics (a
-            // zero slot reads back as zero).
-            co_await bcosAcc.setStorage(key, value.current);
+            auto tableName = co_await bcosAcc.path();
+            auto writes = acc.storage | ::ranges::views::filter([](auto const& slotEntry) {
+                return slotEntry.second.current != slotEntry.second.original;
+            }) | ::ranges::views::transform([&tableName](auto const& slotEntry) {
+                return std::pair<executor_v1::StateKey, storage::Entry>{
+                    executor_v1::StateKey{
+                        tableName, concepts::bytebuffer::toView(slotEntry.first.bytes)},
+                    storage::Entry{concepts::bytebuffer::toView(slotEntry.second.current.bytes)}};
+            });
+            co_await storage2::writeSome(m_storage, writes);
         }
     }
 

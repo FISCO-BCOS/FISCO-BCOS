@@ -215,9 +215,13 @@ inline intx::uint256 compute_blob_gas_price(
             // Ensure the multiplication won't overflow 256 bits.
             if (const auto p = intx::umul(numerator_accum, numerator256);
                 p <= std::numeric_limits<intx::uint256>::max())
+            {
                 numerator_accum = intx::uint256(p) / (denominator * i);
+            }
             else
+            {
                 return std::numeric_limits<intx::uint256>::max();
+            }
             i += 1;
         }
         return output / denominator;
@@ -226,7 +230,9 @@ inline intx::uint256 compute_blob_gas_price(
     static constexpr auto MIN_BLOB_GASPRICE = 1;
     const auto fraction = blob_params.base_fee_update_fraction;
     if (fraction == 0)
+    {
         return std::numeric_limits<intx::uint256>::max();  // degenerate schedule
+    }
     return fake_exponential(MIN_BLOB_GASPRICE, excess_blob_gas, fraction);
 }
 
@@ -256,7 +262,7 @@ inline intx::uint256 compute_blob_gas_price(
     const auto init_code_hash = keccak256(init_code);
     uint8_t buffer[1 + sizeof(sender) + sizeof(salt) + sizeof(init_code_hash)];
     static_assert(std::size(buffer) == 85);
-    auto it = std::begin(buffer);
+    auto* it = std::begin(buffer);
     *it++ = 0xff;
     it = std::copy_n(sender.bytes, sizeof(sender), it);
     it = std::copy_n(salt.bytes, sizeof(salt), it);

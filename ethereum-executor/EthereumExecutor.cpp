@@ -28,13 +28,19 @@ EthBlockInfo buildBlockInfo(
     // field in evmc_tx_context), so for pre-Paris forks we must place the
     // DIFFICULTY value into prev_randao for 0x44 to work.
     if (rev >= EVMC_PARIS)
+    {
         info.prev_randao = config.prevRandao();
+    }
     else
+    {
         info.prev_randao =
             intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(info.difficulty)));
+    }
     auto const& cb = header.coinbase();
     if (cb.size() == sizeof(evmc_address))
+    {
         std::copy_n(cb.begin(), sizeof(evmc_address), info.coinbase.bytes);
+    }
     // base_fee is a hex string that may or may not carry the 0x prefix; parse
     // it the same way as chainId/nonce (bcos::u256), then truncate to uint64.
     auto baseFeeStr = std::get<0>(config.gasPrice());

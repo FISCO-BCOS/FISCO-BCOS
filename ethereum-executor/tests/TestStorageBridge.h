@@ -81,17 +81,21 @@ private:
         evmc_address addr) const
     {
         using namespace bcos::ledger::account;
-        auto& storage = const_cast<Storage&>(m_storage);
+        auto& storage = m_storage;
 
         EVMAccount<Storage> evmAccount(storage, addr, false);
 
         if (!co_await evmAccount.exists())
+        {
             co_return std::nullopt;
+        }
 
         evmone::state::StateView::Account acc;
         auto nonceVal = co_await evmAccount.nonce();
         if (nonceVal.has_value())
+        {
             acc.nonce = static_cast<uint64_t>(bcos::u256(nonceVal.value()));
+        }
 
         acc.balance = bcos::executor_v1::eth::evm::toIntxU256(co_await evmAccount.balance());
 
@@ -100,15 +104,21 @@ private:
             auto const* d = codeHashVal.data();
             bool hasCodeHash = false;
             for (size_t i = 0; i < 32; ++i)
+            {
                 if (d[i] != 0)
                 {
                     hasCodeHash = true;
                     break;
                 }
+            }
             if (hasCodeHash)
+            {
                 std::copy_n(d, sizeof(evmc_bytes32), acc.code_hash.bytes);
+            }
             else
+            {
                 acc.code_hash = evmone::state::Account::EMPTY_CODE_HASH;
+            }
         }
 
         acc.has_storage = co_await hasStorageImpl(evmAccount);
@@ -119,7 +129,7 @@ private:
     {
         using namespace bcos::ledger;
         using namespace bcos::ledger::account;
-        auto& storage = const_cast<Storage&>(m_storage);
+        auto& storage = m_storage;
         auto tableName = co_await evmAccount.path();
 
         bool hasStorage = false;
@@ -131,7 +141,9 @@ private:
             auto const& [k, v] = *kv;
             executor_v1::StateKeyView view(k);
             if (view.m_table != tableName)
+            {
                 break;  // Left this account's table.
+            }
 
             auto key = view.m_key;
             if (key != ACCOUNT_TABLE_FIELDS::NONCE && key != ACCOUNT_TABLE_FIELDS::BALANCE &&
@@ -149,15 +161,19 @@ private:
     task::Task<evmc::bytes> getCodeImpl(evmc_address addr) const
     {
         using namespace bcos::ledger::account;
-        auto& storage = const_cast<Storage&>(m_storage);
+        auto& storage = m_storage;
         EVMAccount<Storage> evmAccount(storage, addr, false);
 
         if (!co_await evmAccount.exists())
+        {
             co_return {};
+        }
 
         auto codeEntry = co_await evmAccount.code();
         if (!codeEntry.has_value())
+        {
             co_return {};
+        }
 
         auto view = codeEntry->get();
         co_return evmc::bytes(view.begin(), view.end());
@@ -166,7 +182,7 @@ private:
     task::Task<evmc::bytes32> getStorageImpl(evmc_address addr, evmc_bytes32 key) const
     {
         using namespace bcos::ledger::account;
-        auto& storage = const_cast<Storage&>(m_storage);
+        auto& storage = m_storage;
         EVMAccount<Storage> evmAccount(storage, addr, false);
 
         // SLOAD on a non-existent account returns 0 per EVM spec.
@@ -191,7 +207,9 @@ task::Task<void> testApplyStateDiff(
     {
         EVMAccount<Storage> acc(storage, m.addr, false);
         if (!co_await acc.exists())
+        {
             co_await acc.create();
+        }
         co_await acc.setNonce(std::to_string(m.nonce));
         co_await acc.setBalance(toBcosU256(m.balance));
         if (m.code.has_value())
@@ -209,7 +227,9 @@ task::Task<void> testApplyStateDiff(
             }
         }
         for (auto const& [key, value] : m.modified_storage)
+        {
             co_await acc.setStorage(key, value);
+        }
     }
 
     // Phase 2: deleted accounts, skipping addresses recreated in Phase 1.
@@ -225,7 +245,9 @@ task::Task<void> testApplyStateDiff(
             }
         }
         if (inModified)
+        {
             continue;
+        }
 
         EVMAccount<Storage> acc(storage, addr, false);
         if (co_await acc.exists())

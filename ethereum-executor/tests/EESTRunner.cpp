@@ -64,10 +64,14 @@ namespace bcos::test
 std::string readHexField(Json::Value const& obj, std::string const& key)
 {
     if (!obj.isMember(key) || obj[key].isNull())
+    {
         return {};
+    }
     auto const& val = obj[key];
     if (val.isString())
+    {
         return val.asString();
+    }
     if (val.isInt64())
     {
         // Small integers: format as hex
@@ -82,17 +86,23 @@ std::string readRequiredHex(Json::Value const& obj, std::string const& key)
 {
     auto val = readHexField(obj, key);
     if (val.empty() && !obj.isMember(key))
+    {
         BOOST_THROW_EXCEPTION(std::runtime_error("Missing required field: " + key));
+    }
     return val;
 }
 
 bcos::bytes hexToBytes(std::string const& hex)
 {
     if (hex.empty() || hex == "0x")
+    {
         return {};
+    }
     std::string cleaned = hex;
     if (cleaned.size() >= 2 && cleaned[0] == '0' && cleaned[1] == 'x')
+    {
         cleaned = cleaned.substr(2);
+    }
     bcos::bytes result;
     boost::algorithm::unhex(cleaned, std::back_inserter(result));
     return result;
@@ -101,21 +111,27 @@ bcos::bytes hexToBytes(std::string const& hex)
 bcos::u256 hexToU256(std::string const& hex)
 {
     if (hex.empty() || hex == "0x")
+    {
         return 0;
+    }
     return bcos::u256(hex);
 }
 
 int64_t hexToInt64(std::string const& hex)
 {
     if (hex.empty() || hex == "0x")
+    {
         return 0;
+    }
     return static_cast<int64_t>(hexToU256(hex));
 }
 
 int64_t hexToTimestamp(std::string const& hex)
 {
     if (hex.empty() || hex == "0x")
+    {
         return 0;
+    }
     // Preserve the low 64 bits exactly, avoid sign-extension issues.
     return static_cast<int64_t>(static_cast<uint64_t>(hexToU256(hex)));
 }
@@ -123,7 +139,9 @@ int64_t hexToTimestamp(std::string const& hex)
 std::string strip0x(std::string const& hex)
 {
     if (hex.size() >= 2 && hex[0] == '0' && hex[1] == 'x')
+    {
         return hex.substr(2);
+    }
     return hex;
 }
 
@@ -131,9 +149,13 @@ std::string detectFixtureFormat(Json::Value const& fixtureJson)
 {
     if (fixtureJson.isMember("env") && fixtureJson["env"].isObject() &&
         fixtureJson.isMember("post") && fixtureJson["post"].isObject())
+    {
         return "state_test";
+    }
     if (fixtureJson.isMember("blocks") && fixtureJson["blocks"].isArray())
+    {
         return "blockchain_test";
+    }
     return "unknown";
 }
 
@@ -145,7 +167,9 @@ EESTEnvironment parseEnvironment(Json::Value const& envJson)
     // fixtures (e.g. blockchain_test_from_state_test) don't cause parse failures.
     env.gasLimit = readHexField(envJson, "currentGasLimit");
     if (env.gasLimit.empty())
+    {
         env.gasLimit = "0x7fffffffffffffff";  // effectively unlimited
+    }
     env.number = readRequiredHex(envJson, "currentNumber");
     env.timestamp = readRequiredHex(envJson, "currentTimestamp");
     env.difficulty = readHexField(envJson, "currentDifficulty");
@@ -211,19 +235,25 @@ EESTTransaction parseTransaction(Json::Value const& txJson)
     if (txJson.isMember("gasLimit") && txJson["gasLimit"].isArray())
     {
         for (auto const& v : txJson["gasLimit"])
+        {
             tx.gasLimit.push_back(v.asString());
+        }
     }
     // value array
     if (txJson.isMember("value") && txJson["value"].isArray())
     {
         for (auto const& v : txJson["value"])
+        {
             tx.value.push_back(v.asString());
+        }
     }
     // data array
     if (txJson.isMember("data") && txJson["data"].isArray())
     {
         for (auto const& v : txJson["data"])
+        {
             tx.data.push_back(v.asString());
+        }
     }
     // accessLists array
     if (txJson.isMember("accessLists") && txJson["accessLists"].isArray())
@@ -232,7 +262,7 @@ EESTTransaction parseTransaction(Json::Value const& txJson)
         {
             if (al.isNull())
             {
-                tx.accessLists.push_back(std::nullopt);
+                tx.accessLists.emplace_back(std::nullopt);
                 continue;
             }
             std::vector<std::pair<std::string, std::vector<std::string>>> entries;
@@ -245,12 +275,14 @@ EESTTransaction parseTransaction(Json::Value const& txJson)
                     if (entry.isMember("storageKeys") && entry["storageKeys"].isArray())
                     {
                         for (auto const& k : entry["storageKeys"])
+                        {
                             keys.push_back(k.asString());
+                        }
                     }
                     entries.emplace_back(std::move(addr), std::move(keys));
                 }
             }
-            tx.accessLists.push_back(std::move(entries));
+            tx.accessLists.emplace_back(std::move(entries));
         }
     }
     // authorizationList
@@ -258,13 +290,17 @@ EESTTransaction parseTransaction(Json::Value const& txJson)
     {
         tx.authorizationList.emplace();
         for (auto const& auth : txJson["authorizationList"])
+        {
             tx.authorizationList->push_back(auth);
+        }
     }
     // blobVersionedHashes (EIP-4844)
     if (txJson.isMember("blobVersionedHashes") && txJson["blobVersionedHashes"].isArray())
     {
         for (auto const& h : txJson["blobVersionedHashes"])
+        {
             tx.blobVersionedHashes.push_back(h.asString());
+        }
     }
     return tx;
 }
@@ -286,15 +322,21 @@ EESTForkPost parseForkPost(Json::Value const& postJson)
     {
         auto const& exc = postJson["expectException"];
         if (exc.isObject() && exc.isMember("type"))
+        {
             post.expectException = exc["type"].asString();
+        }
         else if (exc.isString())
+        {
             post.expectException = exc.asString();
+        }
     }
     if (postJson.isMember("state") && !postJson["state"].isNull())
     {
         auto const& stateJson = postJson["state"];
         for (auto it = stateJson.begin(); it != stateJson.end(); ++it)
+        {
             post.state[it.key().asString()] = parseAccount(*it);
+        }
     }
     return post;
 }
@@ -310,7 +352,9 @@ EESTFixture parseFixture(std::string const& name, Json::Value const& fixtureJson
     {
         auto const& preJson = fixtureJson["pre"];
         for (auto it = preJson.begin(); it != preJson.end(); ++it)
+        {
             fixture.pre[it.key().asString()] = parseAccount(*it);
+        }
     }
 
     // Transaction
@@ -324,7 +368,9 @@ EESTFixture parseFixture(std::string const& name, Json::Value const& fixtureJson
         {
             std::vector<EESTForkPost> posts;
             for (auto const& p : *it)
+            {
                 posts.push_back(parseForkPost(p));
+            }
             fixture.post[it.key().asString()] = std::move(posts);
         }
     }
@@ -335,7 +381,9 @@ EESTFixture parseFixture(std::string const& name, Json::Value const& fixtureJson
         auto chainIdHex = readHexField(fixtureJson["config"], "chainid");
         fixture.chainId = hexToInt64(chainIdHex);
         if (fixture.chainId == 0)
+        {
             fixture.chainId = 1;
+        }
     }
 
     return fixture;
@@ -348,26 +396,34 @@ std::vector<EESTFixture> loadEESTFixtures(std::string const& filePath)
     // Read file
     std::ifstream file(filePath);
     if (!file.is_open())
+    {
         BOOST_THROW_EXCEPTION(std::runtime_error("Cannot open fixture file: " + filePath));
+    }
 
     Json::CharReaderBuilder builder;
     Json::Value root;
     std::string errors;
     if (!Json::parseFromStream(builder, file, &root, &errors))
+    {
         BOOST_THROW_EXCEPTION(
             std::runtime_error("JSON parse error in " + filePath + ": " + errors));
+    }
 
     // The root is a map of test_name → fixture_data
     int skippedBlockchain = 0;
     for (auto it = root.begin(); it != root.end(); ++it)
     {
-        if (it.key().asString().rfind("//", 0) == 0 ||  // comment entry
-            it.key().asString().rfind("_", 0) == 0)     // meta entry like _info
+        if (it.key().asString().starts_with("//") ||  // comment entry
+            it.key().asString().starts_with('_'))
+        {  // meta entry like _info
             continue;
+        }
 
         // Skip non-object values (e.g. metadata files with string/bool/int entries)
         if (!it->isObject())
+        {
             continue;
+        }
 
         // Per-fixture format check: some state_tests directories contain
         // blockchain_test_from_state_test fixtures that lack currentGasLimit.
@@ -385,7 +441,7 @@ std::vector<EESTFixture> loadEESTFixtures(std::string const& filePath)
         catch (std::exception const& e)
         {
             std::cerr << "Warning: Failed to parse fixture '" << it.key().asString()
-                      << "': " << e.what() << std::endl;
+                      << "': " << e.what() << '\n';
         }
     }
 
@@ -410,20 +466,32 @@ EESTTransaction parseBlockchainTransaction(Json::Value const& txJson)
     // blockchain tests have scalar values, wrap in single-element arrays
     auto gasLimit = readHexField(txJson, "gasLimit");
     if (!gasLimit.empty())
+    {
         tx.gasLimit.push_back(gasLimit);
+    }
     else
-        tx.gasLimit.push_back("0x0");
+    {
+        tx.gasLimit.emplace_back("0x0");
+    }
     tx.to = readHexField(txJson, "to");
     auto value = readHexField(txJson, "value");
     if (!value.empty())
+    {
         tx.value.push_back(value);
+    }
     else
-        tx.value.push_back("0x0");
+    {
+        tx.value.emplace_back("0x0");
+    }
     auto data = readHexField(txJson, "data");
     if (!data.empty())
+    {
         tx.data.push_back(data);
+    }
     else
-        tx.data.push_back("0x");
+    {
+        tx.data.emplace_back("0x");
+    }
     tx.sender = readHexField(txJson, "sender");
     tx.secretKey = readHexField(txJson, "secretKey");
     tx.maxFeePerBlobGas = readHexField(txJson, "maxFeePerBlobGas");
@@ -437,11 +505,15 @@ EESTTransaction parseBlockchainTransaction(Json::Value const& txJson)
             std::string addr = readHexField(entry, "address");
             std::vector<std::string> keys;
             if (entry.isMember("storageKeys") && entry["storageKeys"].isArray())
+            {
                 for (auto const& k : entry["storageKeys"])
+                {
                     keys.push_back(k.asString());
+                }
+            }
             entries.emplace_back(std::move(addr), std::move(keys));
         }
-        tx.accessLists.push_back(std::move(entries));
+        tx.accessLists.emplace_back(std::move(entries));
     }
 
     // authorizationList (EIP-7702)
@@ -449,17 +521,19 @@ EESTTransaction parseBlockchainTransaction(Json::Value const& txJson)
     {
         tx.authorizationList.emplace();
         for (auto const& auth : txJson["authorizationList"])
+        {
             tx.authorizationList->push_back(auth);
+        }
     }
 
     // blobVersionedHashes
     if (txJson.isMember("blobVersionedHashes") && txJson["blobVersionedHashes"].isArray())
+    {
         for (auto const& h : txJson["blobVersionedHashes"])
+        {
             tx.blobVersionedHashes.push_back(h.asString());
-
-    // Determine typed tx kind
-    auto type = readHexField(txJson, "type");
-    // type is stored separately from the web3TypedTxKind; we'll set it later
+        }
+    }
 
     return tx;
 }
@@ -471,15 +545,20 @@ EESTBlockchainFixture parseBlockchainFixture(
     fixture.name = name;
 
     // genesisBlockHeader (optional: engine_x format lacks it)
-    if (fixtureJson.isMember("genesisBlockHeader") &&
-        fixtureJson["genesisBlockHeader"].isObject())
+    if (fixtureJson.isMember("genesisBlockHeader") && fixtureJson["genesisBlockHeader"].isObject())
+    {
         fixture.genesisBlockHeader =
             parseBlockHeader(fixtureJson["genesisBlockHeader"]);
+    }
 
     // pre state
     if (fixtureJson.isMember("pre") && !fixtureJson["pre"].isNull())
+    {
         for (auto it = fixtureJson["pre"].begin(); it != fixtureJson["pre"].end(); ++it)
+        {
             fixture.pre[it.key().asString()] = parseAccount(*it);
+        }
+    }
 
     // blocks
     if (fixtureJson.isMember("blocks") && fixtureJson["blocks"].isArray())
@@ -490,8 +569,12 @@ EESTBlockchainFixture parseBlockchainFixture(
             block.blockHeader = parseBlockHeader(blockJson["blockHeader"]);
 
             if (blockJson.isMember("transactions") && blockJson["transactions"].isArray())
+            {
                 for (auto const& txJson : blockJson["transactions"])
+                {
                     block.transactions.push_back(parseBlockchainTransaction(txJson));
+                }
+            }
 
             // Withdrawals (EIP-4895)
             if (blockJson.isMember("withdrawals") && blockJson["withdrawals"].isArray())
@@ -513,9 +596,12 @@ EESTBlockchainFixture parseBlockchainFixture(
 
     // postState
     if (fixtureJson.isMember("postState") && !fixtureJson["postState"].isNull())
-        for (auto it = fixtureJson["postState"].begin();
-             it != fixtureJson["postState"].end(); ++it)
+    {
+        for (auto it = fixtureJson["postState"].begin(); it != fixtureJson["postState"].end(); ++it)
+        {
             fixture.postState[it.key().asString()] = parseAccount(*it);
+        }
+    }
 
     // config
     if (fixtureJson.isMember("config"))
@@ -523,7 +609,9 @@ EESTBlockchainFixture parseBlockchainFixture(
         auto chainIdHex = readHexField(fixtureJson["config"], "chainid");
         fixture.chainId = hexToInt64(chainIdHex);
         if (fixture.chainId == 0)
+        {
             fixture.chainId = 1;
+        }
     }
 
     return fixture;
@@ -535,25 +623,32 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
 
     std::ifstream file(filePath);
     if (!file.is_open())
+    {
         BOOST_THROW_EXCEPTION(
             std::runtime_error("Cannot open fixture file: " + filePath));
+    }
 
     Json::CharReaderBuilder builder;
     Json::Value root;
     std::string errors;
     if (!Json::parseFromStream(builder, file, &root, &errors))
+    {
         BOOST_THROW_EXCEPTION(
             std::runtime_error("JSON parse error in " + filePath + ": " + errors));
+    }
 
     for (auto it = root.begin(); it != root.end(); ++it)
     {
-        if (it.key().asString().rfind("//", 0) == 0 ||
-            it.key().asString().rfind("_", 0) == 0)
+        if (it.key().asString().starts_with("//") || it.key().asString().starts_with('_'))
+        {
             continue;
+        }
 
         // Skip non-object values
         if (!it->isObject())
+        {
             continue;
+        }
 
         try
         {
@@ -562,8 +657,8 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
         }
         catch (std::exception const& e)
         {
-            std::cerr << "Warning: Failed to parse blockchain fixture '"
-                      << it.key().asString() << "': " << e.what() << std::endl;
+            std::cerr << "Warning: Failed to parse blockchain fixture '" << it.key().asString()
+                      << "': " << e.what() << '\n';
         }
     }
 
@@ -577,40 +672,72 @@ evmc_revision forkNameToRevision(std::string const& forkName)
     boost::algorithm::to_lower(lower);
 
     if (lower == "frontier")
+    {
         return EVMC_FRONTIER;
+    }
     if (lower == "homestead")
+    {
         return EVMC_HOMESTEAD;
+    }
     if (lower == "tangerine whistle" || lower == "tangerinewhistle" || lower == "eip150")
+    {
         return EVMC_TANGERINE_WHISTLE;
+    }
     if (lower == "spurious dragon" || lower == "spuriousdragon" || lower == "eip158")
+    {
         return EVMC_SPURIOUS_DRAGON;
+    }
     if (lower == "byzantium")
+    {
         return EVMC_BYZANTIUM;
+    }
     if (lower == "constantinople")
+    {
         return EVMC_CONSTANTINOPLE;
+    }
     if (lower == "constantinoplefix" || lower == "petersburg")
+    {
         return EVMC_PETERSBURG;
+    }
     if (lower == "istanbul")
+    {
         return EVMC_ISTANBUL;
+    }
     // Muir Glacier (EIP-2384) only delays the difficulty bomb; it changes no
     // EVM semantics over Istanbul. Mapping it to Berlin would wrongly activate
     // EIP-2929 access-list gas for MuirGlacier fixtures.
     if (lower == "muir glacier" || lower == "muirglacier")
+    {
         return EVMC_ISTANBUL;
+    }
     if (lower == "berlin")
+    {
         return EVMC_BERLIN;
+    }
     if (lower == "london")
+    {
         return EVMC_LONDON;
+    }
     if (lower == "paris" || lower == "merge")
+    {
         return EVMC_PARIS;
+    }
     if (lower == "shanghai")
+    {
         return EVMC_SHANGHAI;
+    }
     if (lower == "cancun")
+    {
         return EVMC_CANCUN;
+    }
     if (lower == "prague")
+    {
         return EVMC_PRAGUE;
+    }
     if (lower == "osaka")
+    {
         return EVMC_OSAKA;
+    }
 
     // Unknown fork → default to the latest handled revision so a future fork
     // is not silently mis-executed as Cancun (which would produce false
@@ -754,11 +881,11 @@ void parseOptions(int argc, char* argv[])
         {
             g_opts.singleFixture = argv[++i];
         }
-        else if (arg.rfind("--fixture-dir=", 0) == 0)
+        else if (arg.starts_with("--fixture-dir="))
         {
             g_opts.fixtureDir = arg.substr(14);
         }
-        else if (arg.rfind("--fixture=", 0) == 0)
+        else if (arg.starts_with("--fixture="))
         {
             g_opts.singleFixture = arg.substr(10);
         }
@@ -988,18 +1115,11 @@ public:
     bcostars::protocol::BlockHeaderImpl buildBlockHeader(test::EESTEnvironment const& env)
     {
         bcostars::protocol::BlockHeaderImpl header;
-        uint32_t blockVer;
-        if (m_currentRevision >= EVMC_CANCUN)
-        {
-            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
-        }
-        else if (m_currentRevision >= EVMC_PARIS)
+        // Only [Paris, Cancun) maps to V3_2; Cancun+ and pre-Paris use V3_1.
+        auto blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
+        if (m_currentRevision >= EVMC_PARIS && m_currentRevision < EVMC_CANCUN)
         {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_2_VERSION);
-        }
-        else
-        {
-            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
         }
         header.setVersion(blockVer);
         header.setNumber(test::hexToInt64(env.number));
@@ -1052,7 +1172,7 @@ public:
     }
 
     std::shared_ptr<bcostars::protocol::TransactionImpl> buildTransaction(
-        test::EESTTransaction const& tx, int dataIndex, int gasIndex, int valueIndex)
+        test::EESTTransaction const& tx, int dataIndex, int gasIndex, int valueIndex) const
     {
         std::string txData;
         if (dataIndex >= 0 && static_cast<size_t>(dataIndex) < tx.data.size())
@@ -1197,11 +1317,12 @@ public:
     }
 
     /// Verify post-state. Returns a string with mismatch details (empty = all good).
-    std::string verifyPostState(
+    static std::string verifyPostState(
         MutableStorage& storage, std::map<std::string, test::EESTAccount> const& expected)
     {
         std::ostringstream errors;
-        int passed = 0, failed = 0;
+        int passed = 0;
+        int failed = 0;
         (void)passed;  // not used for return, only local tracking
 
         for (auto const& [addrHex, expectedAcc] : expected)
@@ -1494,18 +1615,11 @@ public:
     bcostars::protocol::BlockHeaderImpl buildBlockHeader(test::EESTBlockHeader const& bh)
     {
         bcostars::protocol::BlockHeaderImpl header;
-        uint32_t blockVer;
-        if (m_currentRevision >= EVMC_CANCUN)
-        {
-            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
-        }
-        else if (m_currentRevision >= EVMC_PARIS)
+        // Only [Paris, Cancun) maps to V3_2; Cancun+ and pre-Paris use V3_1.
+        auto blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
+        if (m_currentRevision >= EVMC_PARIS && m_currentRevision < EVMC_CANCUN)
         {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_2_VERSION);
-        }
-        else
-        {
-            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
         }
         header.setVersion(blockVer);
 
@@ -2047,10 +2161,9 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
     {
         for (auto const& [forkName, posts] : fixture.post)
         {
-            for (size_t i = 0; i < posts.size(); ++i)
+            for (const auto& post : posts)
             {
                 ++g_totalTests;
-                auto const& post = posts[i];
                 bool passed = runner.runFixture(fixture, forkName, post);
 
                 if (passed)
@@ -2116,7 +2229,7 @@ int main(int argc, char* argv[])
     if (fixtureDir.empty())
     {
         char const* envDir = std::getenv("EEST_FIXTURE_DIR");
-        if (envDir)
+        if (envDir != nullptr)
         {
             fixtureDir = envDir;
         }
