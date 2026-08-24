@@ -24,6 +24,7 @@
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/engine/AnyEngineService.h>
+#include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/multigroup/ChainNodeInfo.h>
 #include <bcos-framework/multigroup/GroupInfo.h>
@@ -110,6 +111,16 @@ public:
     }
     std::shared_ptr<MPTNodeReader> mptNodeReader() const noexcept { return m_mptNodeReader; }
 
+    /// Shared DA throttling caps (miner_setMaxDASize -> engine build path): ONE
+    /// instance created by the Initializer, read by the engine's OP payload build.
+    /// A tars-built NodeService leaves it unset and miner_setMaxDASize answers
+    /// against a detached local instance (recorded, logged, never consumed).
+    void setDACaps(std::shared_ptr<bcos::engine::DACaps> _caps) noexcept
+    {
+        m_daCaps = std::move(_caps);
+    }
+    std::shared_ptr<bcos::engine::DACaps> daCaps() const noexcept { return m_daCaps; }
+
     /// Type-erased read handle over the LATEST COMMITTED state plane of GlobalStateStorage
     /// (eth_getStorageAt's fork-a-view path): StateKey -> Entry, no MPT types.
     using StateStorage =
@@ -165,6 +176,9 @@ private:
     /// MPT node reader handle (owns its adapter, borrows the underlying storage); see
     /// setMPTNodeReader() for the lifetime contract.
     std::shared_ptr<MPTNodeReader> m_mptNodeReader;
+
+    /// DA throttling caps shared with the engine (see setDACaps for the contract).
+    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
 
     /// Latest-state view provider (owns each forked view, borrows the GlobalStateStorage);
     /// see setStateStorageProvider() for the lifetime contract.

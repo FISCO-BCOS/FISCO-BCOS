@@ -46,6 +46,7 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/engine/OpBaseFee.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
@@ -189,7 +190,8 @@ public:
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
         std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3),
-        bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr)
+        bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
+        std::shared_ptr<bcos::engine::DACaps> daCaps = nullptr)
       : m_memPool(std::ref(memPool)),
         m_globalStateStorage(std::ref(globalStateStorage)),
         m_blockTxCountLimit(blockTxCountLimit),
@@ -198,7 +200,8 @@ public:
         m_blockFactory(std::move(blockFactory)),
         m_maxEngineVersion(maxEngineVersion),
         m_ledger(std::move(ledger)),
-        m_delegate(std::move(delegate))
+        m_delegate(std::move(delegate)),
+        m_daCaps(std::move(daCaps))
     {
         if (!m_blockFactory)
         {
@@ -665,19 +668,10 @@ private:
             sealView.newMutable();
             m_memPool.get().remove(sealView);
             m_memPool.get().seal(m_blockTxCountLimit, sealView, std::back_inserter(sealedTxs));
-            // TODO(miner_setMaxDASize): the OP Stack batcher's DA throttling pushes
-            // miner_setMaxDASize(maxTxSize, maxBlockSize) on every L2 endpoint and treats a
-            // missing method as fatal (op-batcher/batcher/driver.go:621,631). The RPC layer
-            // serves it (EthEndpoint::setMaxDASize records the caps in atomics, 90e7888c0),
-            // but nothing in the build path consumes them yet — under throttle this engine
-            // keeps building at full size while the batcher believes it is being limited.
-            // Consumption points, once the caps are plumbed through NodeService (the RPC
-            // layer and the engine share nothing else):
-            //   - seal: drop pool txs whose serialized EIP-2718 envelope exceeds maxTxSize
-            //     (0 = unset = uncapped, matching the atomics' zero init);
-            //   - block assembly: stop appending envelopes once Σ serialized bytes (deposit
-            //     + forced + sealed) crosses maxBlockSize — op-geth's miner shrinks blocks
-            //     the same way under throttle.
+            // DA throttling (miner_setMaxDASize) is applied downstream at envelope
+            // assembly, where the serialized EIP-2718 byte sizes are known: per-tx
+            // maxTxSize filter + block-level maxBlockSize budget (DACaps.h documents the
+            // full contract).
         }
 
         // Raw envelope list. tx[0] is the synthesized L1-attributes deposit -- OP blocks
@@ -726,6 +720,27 @@ private:
             sealedEnvelopes.emplace_back(sealedTx->hash(),
                 bcostars::protocol::reassembleWeb3RawTransaction(
                     sealedTx->extraTransactionBytes(), sealedTx->signatureData()));
+        }
+        // DA throttle, per-tx half: drop sealed envelopes over maxTxSize (0 = uncapped).
+        // op-geth's miner rejects oversized txs from blocks the same way. Dropped txs STAY
+        // in the pool (they are not invalid, just over the current throttle) — the batcher
+        // lifts the cap on the next push and the next build re-seals them.
+        if (m_daCaps)
+        {
+            auto over = [this](
+                            auto const& entry) { return !m_daCaps->txFits(entry.second.size()); };
+            auto it = std::remove_if(sealedEnvelopes.begin(), sealedEnvelopes.end(), over);
+            if (it != sealedEnvelopes.end())
+            {
+                BCOS_LOG(INFO) << LOG_BADGE("EngineService")
+                               << LOG_DESC(
+                                      "buildOpPayload: DA throttle dropped sealed txs "
+                                      "over maxTxSize")
+                               << LOG_KV("dropped", std::distance(it, sealedEnvelopes.end()))
+                               << LOG_KV("maxTxSize",
+                                      m_daCaps->maxTxSize.load(std::memory_order_relaxed));
+                sealedEnvelopes.erase(it, sealedEnvelopes.end());
+            }
         }
 
         // Ledger config (gasLimit) off a read-only view.
@@ -877,12 +892,30 @@ private:
         while (true)
         {
             std::vector<bytes> candidateEnvelopes = forcedEnvelopes;
+            // DA throttle, block half: forced envelopes are consensus-required (the leading
+            // deposit especially) so they are always included AND their bytes count against
+            // the budget; sealed envelopes are appended only while the budget admits them.
+            std::optional<bcos::engine::DACaps::Budget> budget;
+            if (m_daCaps)
+            {
+                std::uint64_t forcedBytes = 0;
+                for (auto const& env : forcedEnvelopes)
+                {
+                    forcedBytes += env.size();
+                }
+                budget.emplace(*m_daCaps, forcedBytes);
+            }
             for (auto const& [hash, env] : sealedEnvelopes)
             {
-                if (evicted.count(hash) == 0)
+                if (evicted.count(hash) != 0)
                 {
-                    candidateEnvelopes.push_back(env);
+                    continue;
                 }
+                if (budget && !budget->admits(env.size()))
+                {
+                    break;  // size-ordered stop, not a skip: keep the block prefix stable
+                }
+                candidateEnvelopes.push_back(env);
             }
             payload = assemblePayload(std::move(candidateEnvelopes));
 
@@ -2142,6 +2175,7 @@ private:
 
     mutable std::shared_mutex x_state;
     std::reference_wrapper<MemPoolType> m_memPool;
+
     std::reference_wrapper<GlobalStateStorageType> m_globalStateStorage;
     int64_t m_blockTxCountLimit;
     std::reference_wrapper<ExecutorType> m_executor;
@@ -2158,6 +2192,9 @@ private:
     /// the composition root's `OpScheduler` (slot 3). Null for the generic composition root and
     /// for OP fixtures that never drive block execution (ethereum instances).
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
+
+    /// DA throttling caps shared with the RPC's miner_setMaxDASize (null = uncapped).
+    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHeadBlock;
     std::optional<bcos::protocol::BlockNumber> m_safeBlockNumber;

@@ -613,11 +613,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 // Task 4: SchedulerSerialImpl (serial mode) defers context destruction onto this
                 // pool — required, no default.
                 m_ioServicePool);
+        // DA throttling bridge: ONE DACaps instance shared by the engine's build path
+        // (ctor param below) and the RPC's miner_setMaxDASize (NodeService::setDACaps in
+        // AirNodeInitializer, via m_daCaps accessor).
+        m_daCaps = std::make_shared<bcos::engine::DACaps>();
         m_engineServiceInitializer = EngineServiceInitializer::build(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
             transactionExecutor, m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
-            /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4));
+            /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4),
+            m_daCaps);
         // Compile-time proof that this production composition root activates the OP engine branch.
         // ⚠️ 必须用裸类型：decltype(*opScheduler) 是 OpSchedulerSeam<...>&（左值引用），若作
         // SchedulerType 会使 c_opMode 的 requires 表达式对引用类型求值为 false（&T&::...病式），

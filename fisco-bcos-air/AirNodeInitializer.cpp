@@ -92,6 +92,12 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // declared before m_rpc / m_tarsApplication (the NodeService holders), so it is
     // destroyed after them.
     nodeService->setMPTNodeReader(m_nodeInitializer->mptNodeReader());
+    // DA throttling bridge (OP mode): the same DACaps instance the engine build path
+    // received at construction — miner_setMaxDASize lands directly in the engine's view.
+    if (auto daCaps = m_nodeInitializer->daCaps(); daCaps)
+    {
+        nodeService->setDACaps(std::move(daCaps));
+    }
 
     // eth_getStorageAt latest-state path: a provider that forks a fresh latest view of
     // GlobalStateStorage per request (see Initializer::stateStorageProvider for the lifetime

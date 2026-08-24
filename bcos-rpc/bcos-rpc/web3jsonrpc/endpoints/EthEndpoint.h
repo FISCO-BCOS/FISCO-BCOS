@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/ledger/Ledger.h>
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
@@ -89,14 +90,13 @@ private:
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;
 
-    // Last values received via miner_setMaxDASize (the OP Stack batcher's DA throttling
-    // pushes these on every L2 endpoint; 0 = no throttle). Recorded and logged until the
-    // engine's OP build path consumes them — block building is unaffected in the interim.
-    // TODO(miner_setMaxDASize): consumption is unimplemented — see the matching TODO at
-    // EngineServiceImpl::buildOpPayload's mempool seal. Until then this endpoint only ACKs
-    // the batcher (true) without actually throttling block data.
-    std::atomic<uint64_t> m_maxDATxSize{0};
-    std::atomic<uint64_t> m_maxDABlockSize{0};
+    /// Shared DA throttling caps with the engine's OP build path (see NodeService::
+    /// setDACaps). miner_setMaxDASize writes here; the engine's buildOpPayload filters
+    /// oversized sealed txs (maxTxSize) and truncates block assembly (maxBlockSize).
+    /// When NodeService carries no shared instance (tars-built nodes, unit fixtures) a
+    /// detached local instance is created — recorded and logged, never consumed.
+    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
+    bcos::engine::DACaps& daCaps();
 
     task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
 

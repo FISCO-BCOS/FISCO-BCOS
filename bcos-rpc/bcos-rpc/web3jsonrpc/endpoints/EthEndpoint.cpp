@@ -177,11 +177,13 @@ task::Task<void> EthEndpoint::hashrate(const Json::Value&, Json::Value& response
 }
 task::Task<void> EthEndpoint::setMaxDASize(const Json::Value& request, Json::Value& response)
 {
-    // miner_setMaxDASize(maxCanonTxSize, maxBlockGas): the OP Stack batcher's DA throttling
+    // miner_setMaxDASize(maxCanonTxSize, maxBlockSize): the OP Stack batcher's DA throttling
     // calls this on every L2 endpoint and treats "method not found" as fatal ("either enable
-    // it or disable throttling"). op-geth's sequencer shrinks blocks/txs under throttle; the
-    // values are recorded here (see m_maxDATxSize/m_maxDABlockSize) until the engine's OP
-    // build path consumes them (TODO(miner_setMaxDASize), EngineServiceImpl::buildOpPayload).
+    // it or disable throttling"). The caps land in the DACaps instance SHARED with the
+    // engine's OP build path (NodeService::daCaps — one instance, created by the Initializer):
+    // buildOpPayload drops sealed envelopes over maxTxSize and truncates block assembly at
+    // maxBlockSize. Without a shared instance (tars nodes, fixtures) a detached local one
+    // records+logs only.
     if (!request.isArray() || request.size() != 2U)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
@@ -199,10 +201,12 @@ task::Task<void> EthEndpoint::setMaxDASize(const Json::Value& request, Json::Val
         BOOST_THROW_EXCEPTION(JsonRpcException(
             InvalidParams, "miner_setMaxDASize quantities must be 0x-prefixed hex"));
     }
-    m_maxDATxSize.store(maxTxSize, std::memory_order_relaxed);
-    m_maxDABlockSize.store(maxBlockSize, std::memory_order_relaxed);
+    auto& caps = daCaps();
+    caps.maxTxSize.store(maxTxSize, std::memory_order_relaxed);
+    caps.maxBlockSize.store(maxBlockSize, std::memory_order_relaxed);
     WEB3_LOG(INFO) << LOG_BADGE("setMaxDASize") << LOG_KV("maxTxSize", maxTxSize)
-                   << LOG_KV("maxBlockSize", maxBlockSize);
+                   << LOG_KV("maxBlockSize", maxBlockSize)
+                   << LOG_KV("sharedWithEngine", m_nodeService->daCaps() ? "yes" : "no");
     Json::Value result = true;
     buildJsonContent(result, response);
     co_return;
@@ -1839,3 +1843,23 @@ bcos::rpc::EthEndpoint::EthEndpoint(
     m_filterSystem(std::move(filterSystem)),
     m_syncTransaction(syncTransaction)
 {}
+
+// Lazy shared-cap resolution: prefer the engine-shared instance from NodeService;
+// fall back to a detached local one so unset wiring (tars nodes, unit fixtures)
+// still records+logs instead of crashing.
+bcos::engine::DACaps& EthEndpoint::daCaps()
+{
+    if (m_daCaps)
+    {
+        return *m_daCaps;
+    }
+    if (auto shared = m_nodeService->daCaps(); shared)
+    {
+        m_daCaps = std::move(shared);
+    }
+    else
+    {
+        m_daCaps = std::make_shared<bcos::engine::DACaps>();
+    }
+    return *m_daCaps;
+}
