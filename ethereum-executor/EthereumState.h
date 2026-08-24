@@ -135,7 +135,8 @@ struct ReadAccount
 };
 }  // namespace eth_state_detail
 
-/// Remove all storage slots of an account (keeps only the fixed account fields).
+/// Remove ALL storage rows of an account — the storage slots AND the three core
+/// Ethereum fields (nonce/balance/codeHash).
 /// Used when an account self-destructs: its full state (including storage) must
 /// be cleared so that a later CREATE/CREATE2 at the same address is not treated
 /// as an EIP-7610 collision.
@@ -685,6 +686,9 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
         // would fork. setCode() only touches SYS_CODE_BINARY when the hash is
         // absent, so re-writing an unchanged contract's codeHash is a no-op
         // there; for an EOA it (re)creates the row with emptyCodeHash.
+        // (The SYS_CODE_BINARY table is keyed by keccak256(code) — Ethereum
+        // consensus hashing; see the "Known limitation — code hash algorithm"
+        // note at the top of this file.)
         {
             bcos::bytes code(acc.code.begin(), acc.code.end());
             bcos::bytes codeHash(acc.code_hash.bytes, acc.code_hash.bytes + sizeof(evmc_bytes32));

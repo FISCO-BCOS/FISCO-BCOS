@@ -66,7 +66,11 @@ BOOST_AUTO_TEST_CASE(fromBinaryKeepsLeading0xBytes)
     raw.append(reinterpret_cast<const char*>(prefix), sizeof(prefix));
     raw.append(28, static_cast<char>(0x11));
 
-    bcos::FixedBytes<LENGTH> fb(raw, bcos::FixedBytes<32>::FromBinary);
+    // Pass an explicit string_view so the string_view + FromBinary overload is
+    // exercised. (A std::string argument would bind to the std::string const&
+    // overload, which never strips prefixes, so the test would pass even
+    // without the fix.)
+    bcos::FixedBytes<LENGTH> fb(std::string_view(raw), bcos::FixedBytes<32>::FromBinary);
     auto bytes = fb.asBytes();
     BOOST_CHECK_EQUAL(bytes.size(), LENGTH);
     BOOST_CHECK_EQUAL(bytes[0], 0x30);
