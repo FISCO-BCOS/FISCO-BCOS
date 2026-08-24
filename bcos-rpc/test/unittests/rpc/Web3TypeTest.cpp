@@ -78,6 +78,44 @@ BOOST_AUTO_TEST_CASE(testLegacyTransactionDecode)
     BOOST_CHECK_EQUAL(rawTx, rawTx2);
 }
 
+// kyonRay R3 #1: codec::rlp::encode(out, Web3Transaction) must APPEND to a non-empty buffer
+// (the accumulate-into-buffer contract every other encode(out, x) overload provides; part-5
+// rawTransactions list encoding depends on it). A regression to overwrite semantics would
+// silently drop the first element.
+BOOST_AUTO_TEST_CASE(testEncodeAppendsToNonEmptyBuffer)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto makeTx = [&](uint64_t nonce) {
+        Web3Transaction tx;
+        tx.type = rpc::TransactionType::Legacy;
+        tx.chainId = 1;
+        tx.nonce = nonce;
+        tx.maxPriorityFeePerGas = bcos::u256(10);
+        tx.maxFeePerGas = bcos::u256(10);
+        tx.gasLimit = 21000;
+        tx.to.emplace(Address("0x0100000000000000000000000000000000000001"));
+        tx.value = bcos::u256(0);
+        return tx;
+    };
+    auto a = makeTx(0);
+    auto b = makeTx(1);
+
+    bcos::bytes out;
+    rlp::encode(out, a);
+    auto aLen = out.size();
+    rlp::encode(out, b);  // must append after a
+
+    bcos::bytes aloneA;
+    rlp::encode(aloneA, a);
+    BOOST_REQUIRE_EQUAL(aLen, aloneA.size());
+    // The second encode must not clobber the first element's bytes.
+    BOOST_CHECK_EQUAL_COLLECTIONS(out.begin(), out.begin() + aLen, aloneA.begin(), aloneA.end());
+    // And both elements are present (length is the sum).
+    bcos::bytes aloneB;
+    rlp::encode(aloneB, b);
+    BOOST_CHECK_EQUAL(out.size(), aloneA.size() + aloneB.size());
+}
+
 // Legacy v values outside the legal set must be rejected with InvalidVInSignature:
 // v=0/1 (previously silently accepted as a no-op) and v=29-34 (not 27/28, not >=35).
 BOOST_AUTO_TEST_CASE(testLegacyInvalidVRejected)
