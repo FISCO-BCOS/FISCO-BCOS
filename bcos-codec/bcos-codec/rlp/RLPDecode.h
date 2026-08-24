@@ -25,6 +25,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <utility>
 
@@ -229,8 +230,22 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, UnsignedIntegral auto& to) 
     {
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedList, "Unexpected list");
     }
-    to = fromBigEndian<std::decay_t<decltype(to)>, bcos::bytesRef>(
-        from.getCroppedData(0, header.payloadLength));
+    // Fail closed on over-wide payloads (geth: errUintOverflow) and leading zeros
+    // (geth: ErrCanonInt) instead of silently truncating mod 2^64 or accepting a
+    // non-canonical encoding. Otherwise the decoded value and the canonical
+    // re-encoding diverge from what the wire carried, which is exactly the class
+    // of defect that corrupts header/trie hashes.
+    using DecodedT = std::decay_t<decltype(to)>;
+    if (header.payloadLength > std::numeric_limits<DecodedT>::digits / 8)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::Overflow, "Uint overflows target width");
+    }
+    auto payload = from.getCroppedData(0, header.payloadLength);
+    if (payload.size() > 1 && payload[0] == 0)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::LeadingZero, "Uint has leading zero");
+    }
+    to = fromBigEndian<DecodedT, bcos::bytesRef>(payload);
     from = from.getCroppedData(header.payloadLength);
     return nullptr;
 }
