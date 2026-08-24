@@ -23,9 +23,25 @@ cd "$(dirname "$0")"
 # and setup_c2.sh): C2_L1_RPC / C2_L2_WEB3 / C2_L2_CHAIN_ID / C2_DEV_KEY.
 DEV1=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 KEY="${C2_DEV_KEY:-0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d}"  # DEV1
+DEV0_KEY="${C2_DEPLOYER_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
 L1="${C2_L1_RPC:-http://127.0.0.1:8549}"
 L2="${C2_L2_WEB3:-http://127.0.0.1:8555}"
 CHAIN_ID="${C2_L2_CHAIN_ID:-914901}"
+STATE="${C2_STATE:-/tmp/c2/state.json}"
+
+# Fund the portal BEFORE withdrawing. On real chains deposits continuously fund
+# it; a fresh devnet portal holds 0 ETH and finalize's relay does
+# SafeCall.callWithMinGas(target, gasLimit, value, data) whose inner call{value}
+# then FAILS SILENTLY — finalize succeeds, WithdrawalFinalized(wh, false) is
+# emitted, and the 1 ETH never lands (observed 2026-08-24: delta -0.0811 ETH).
+# Plain ETH from DEV0 stands in for a prior deposit's funding; DEV0's balance
+# is not asserted here so it stays out of the delta math.
+PORTAL=$(python3 -c "import json;print(json.load(open('$STATE'))['opChainDeployments'][0]['OptimismPortalProxy'])")
+PORTAL_BAL=$(cast balance "$PORTAL" --rpc-url "$L1")
+if [ "$PORTAL_BAL" -lt 2000000000000000000 ] 2>/dev/null; then
+  cast send "$PORTAL" --value 2ether --private-key "$DEV0_KEY" --rpc-url "$L1" > /dev/null
+  echo "portal funded with 2 ETH (was $PORTAL_BAL wei)"
+fi
 
 L1_BEFORE=$(cast balance "$DEV1" --rpc-url "$L1")
 echo "DEV1 L1 before: $L1_BEFORE"

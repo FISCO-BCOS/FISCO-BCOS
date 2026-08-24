@@ -48,15 +48,17 @@ OP_BATCHER_PORT="${OP_BATCHER_PORT:-8547}"
 # "--p2p.disable" so two devnets never gossip blocks at each other).
 OP_NODE_EXTRA_FLAGS="${OP_NODE_EXTRA_FLAGS:-}"
 
-# Dispute/DA clocks (ephemeral tier-2 instances compress these; defaults = C2).
-# Keep the InvalidClockExtension invariant above when compressing: max(ext*2,
-# ext+PREIMAGE_CHALLENGE_SECONDS) <= FAULT_GAME_MAX_CLOCK.
-ANVIL_BLOCK_TIME="${ANVIL_BLOCK_TIME:-12}"
+# Dispute/DA clocks — devnet defaults are the FAST profile (a full withdrawal
+# claim round in ~2-3 minutes); slow them per-instance via env if a test needs
+# longer horizons. Keep the InvalidClockExtension invariant above when
+# compressing further: max(ext*2, ext+PREIMAGE_CHALLENGE_SECONDS) <=
+# FAULT_GAME_MAX_CLOCK.
+ANVIL_BLOCK_TIME="${ANVIL_BLOCK_TIME:-2}"
 PROOF_MATURITY_SECONDS="${PROOF_MATURITY_SECONDS:-12}"
 DISPUTE_FINALITY_SECONDS="${DISPUTE_FINALITY_SECONDS:-6}"
-FAULT_GAME_MAX_CLOCK="${FAULT_GAME_MAX_CLOCK:-90}"
-PREIMAGE_CHALLENGE_SECONDS="${PREIMAGE_CHALLENGE_SECONDS:-60}"
-BATCHER_MAX_CHANNEL="${BATCHER_MAX_CHANNEL:-10}"
+FAULT_GAME_MAX_CLOCK="${FAULT_GAME_MAX_CLOCK:-45}"
+PREIMAGE_CHALLENGE_SECONDS="${PREIMAGE_CHALLENGE_SECONDS:-30}"
+BATCHER_MAX_CHANNEL="${BATCHER_MAX_CHANNEL:-1}"
 
 # 账户(anvil 标准助记词)
 DEV0=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80   # deployer/owner
