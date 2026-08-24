@@ -47,6 +47,15 @@ OP_BATCHER_PORT="${OP_BATCHER_PORT:-8547}"
 # Appended verbatim to the op-node command line (isolated instances want
 # "--p2p.disable" so two devnets never gossip blocks at each other).
 OP_NODE_EXTRA_FLAGS="${OP_NODE_EXTRA_FLAGS:-}"
+# op-node refreshes its L1 safe/finalized VIEW on this cadence. The upstream
+# default (6m24s) is tuned for production L1 epochs; on a devnet it means the
+# FIRST finalized update lands up to 384s after start and finalized_l2 then
+# advances in 384s jumps — the dominant cost of every withdrawal e2e wait
+# (measured: finalized_l2 == safe_l2 within seconds at 2s polling; anvil's
+# finalized tag itself tracks head-2 with --slots-in-an-epoch 1, so this poll
+# was the only thing holding it back). Devnet launcher default; production
+# nodes keep the upstream default.
+OP_NODE_EPOCH_POLL="${OP_NODE_EPOCH_POLL:-5s}"
 
 # Dispute/DA clocks — devnet defaults are the FAST profile (a full withdrawal
 # claim round in ~2-3 minutes); slow them per-instance via env if a test needs
@@ -429,6 +438,7 @@ if step_run 6; then
     --l2.jwt-secret "$C2/fisco/jwt.hex" \
     --l2.enginekind geth \
     --l1.beacon.ignore \
+    --l1.epoch-poll-interval "$OP_NODE_EPOCH_POLL" \
     --sequencer.enabled \
     --sequencer.l1-confs 1 \
     --p2p.sequencer.key "$(cat "$C2/sequencer.key")" \
