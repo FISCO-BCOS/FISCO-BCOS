@@ -368,6 +368,24 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         return False
     _log_info(f"block timestamp = {block_seconds} (sent {sent_seconds})")
 
+    # The two faces of the same block must agree on withdrawalsRoot. engine_getPayloadV5
+    # serves it out of the built ExecutionPayload; eth_getBlockByNumber reads it off the
+    # persisted header. They only match if buildPayload wrote the computed root onto the
+    # header (and therefore into the blockHash) rather than only onto the payload.
+    if committed_block.get("withdrawalsRoot", "").lower() != payload["withdrawalsRoot"].lower():
+        _log_fail(
+            "eth_getBlockByNumber and engine_getPayloadV5 disagree on withdrawalsRoot for "
+            f"the same block: {committed_block.get('withdrawalsRoot')} vs "
+            f"{payload['withdrawalsRoot']}"
+        )
+        return False
+    # No L2->L1 message path is wired, so the L2ToL1MessagePasser has no storage: the root
+    # is the EMPTY TRIE root. A zero hash here would mean the field is not being computed.
+    if int(payload["withdrawalsRoot"], 16) == 0:
+        _log_fail("withdrawalsRoot is the zero hash, not a trie root")
+        return False
+    _log_info(f"withdrawalsRoot = {payload['withdrawalsRoot']} (agreed on both faces)")
+
     _log_pass()
     return True
 

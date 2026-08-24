@@ -575,15 +575,18 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
     // forged value) and report malformed input as std::invalid_argument, which the RPC
     // entry point would surface as -32603 InternalError.
     //
-    // KNOWN GAP: gasLimit is parsed and carried on PayloadAttributes but buildPayload
-    // IGNORES it — the built block's gas limit always comes from this chain's own
-    // SystemConfig (EngineServiceImpl.h, ledgerConfig.gasLimit()). op-geth does the
-    // opposite: the attribute is mandatory on an OP chain (checkOptimismPayloadAttributes,
-    // eth/catalyst/api_optimism.go:41-43, else -38003) and sets header.GasLimit verbatim
-    // (miner/worker.go:362-363), and op-node always sends it from the L1 SystemConfig
-    // (op-node/rollup/derive/attributes.go:207-215). Honouring it changes what block this
-    // node produces, which belongs to the header-fields work rather than to this
-    // method-surface change.
+    // gasLimit is honoured: buildPayload takes it as the built block's gas limit AND as the
+    // block's execution budget (EngineServiceImpl.h, the ledgerConfig.setGasLimit override).
+    // op-node always sends it from the L1 SystemConfig
+    // (op-node/rollup/derive/attributes.go:207-215) and op-geth writes it verbatim into
+    // header.GasLimit (miner/worker.go:362-363).
+    //
+    // One deliberate difference from op-geth: an ABSENT gasLimit is not rejected here.
+    // op-geth's -38003 (checkOptimismPayloadAttributes, eth/catalyst/api_optimism.go:41-43)
+    // guards attributes that are OP attributes by construction, whereas this same struct
+    // also carries the vanilla V1/V2/V3 attributes that never have the field — including the
+    // ones this node's own built-in single-node CL sends — so buildPayload falls back to the
+    // chain's SystemConfig instead. An out-of-range value IS rejected, below.
     if (pa.isMember("gasLimit") && !pa["gasLimit"].isNull())
     {
         attrs.gasLimit = parseQuantity(pa["gasLimit"], "payloadAttributes.gasLimit");

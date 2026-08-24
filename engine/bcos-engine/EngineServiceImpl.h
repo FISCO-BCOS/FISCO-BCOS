@@ -61,8 +61,12 @@ namespace bcos::engine
 // UnsupportedEngineApiVersion / UnknownPayload / IncompatiblePayloadVersion moved to
 // bcos-framework/engine/Types.h so the RPC endpoint can map them to Engine error codes.
 /// The L2ToL1MessagePasser predeploy. Isthmus defines the block header's withdrawalsRoot as
-/// this account's storage root; mirrors bcos::evm::opstack::OP_L2_TO_L1_MESSAGE_PASSER, spelled
-/// out here because bcos-engine does not link bcos-evm.
+/// this account's storage root. Second spelling of the same consensus-critical address as
+/// bcos::evm::opstack::OP_L2_TO_L1_MESSAGE_PASSER (OpPredeploys.h), duplicated to keep
+/// bcos-engine off the bcos-evm include graph — that header would be includable (it is
+/// header-only over evmc), the separation is a deliberate choice, not a build constraint.
+/// The two must not drift; #5468 wires the validation side that compares roots derived
+/// through both, which is where a cross-assertion belongs.
 inline const bcos::Address c_l2ToL1MessagePasser{
     std::string_view{"4200000000000000000000000000000000000016"}, bcos::Address::FromHex};
 
@@ -765,7 +769,19 @@ private:
         // built-in single-node CL (SingleNodeConsensus::produceBlock) and the V2/V3 cases in
         // tools/engine_integration_test.sh — so rejecting on absence would stop block
         // production on this node's own driver. Making it mandatory belongs with the
-        // OP-only attributes flavour, not with this shared struct.
+        // OP-only attributes flavour, not with this shared struct. An out-of-range value IS
+        // rejected, one layer up in detail::validatePayloadAttributes — the executor narrows
+        // this budget to int64.
+        //
+        // Consequence to carry forward: once the CL dictates the gas limit, the value no
+        // longer lives on the chain's SystemConfig. The built header records it
+        // (BlockHeader::gasLimit), but ledger::getLedgerConfig — where every existing caller
+        // reads a block's gas budget from — still answers from SystemConfig. Any future path
+        // that RE-EXECUTES a block (verification, sync, the OpScheduler rewrite in #5468)
+        // must take the budget from that block's own header rather than from
+        // getLedgerConfig, or the replay runs on a different budget than the build did and
+        // can land on a different stateRoot. No such path exists today: newPayload only
+        // caches an externally submitted payload, it never re-executes one.
         if (payloadAttributes.gasLimit.has_value())
         {
             ledgerConfig.setGasLimit({*payloadAttributes.gasLimit, nextBlockNumber});
@@ -792,12 +808,13 @@ private:
             emptyHeader->setReceiptsRoot(h256{});
             emptyHeader->setTxsRoot(h256{});
             emptyHeader->setGasUsed(0);
+            // Before calculateHash: the root is a header field the block hash commits to.
+            co_await fillWithdrawalsRoot(executionPayload, *emptyHeader, view);
             emptyHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
             executionPayload.stateRoot = emptyHeader->stateRoot();
             executionPayload.receiptsRoot = h256{};
             executionPayload.gasUsed = 0;
             executionPayload.blockHash = emptyHeader->hash();
-            co_await fillWithdrawalsRoot(executionPayload, view);
             co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
                 .header = std::move(emptyHeader),
                 .receipts = {}};
@@ -911,6 +928,8 @@ private:
         blockHeader->setReceiptsRoot(receiptRoot);
         blockHeader->setTxsRoot(txRoot);
         blockHeader->setGasUsed(totalGasUsed);
+        // Before calculateHash: the root is a header field the block hash commits to.
+        co_await fillWithdrawalsRoot(executionPayload, *blockHeader, view);
         blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
         // Step 2i: Fill the execution payload with real values
@@ -920,7 +939,6 @@ private:
         executionPayload.blockHash = blockHeader->hash();
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
         executionPayload.logsBloom = logsBloom;
-        co_await fillWithdrawalsRoot(executionPayload, view);
 
         co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
             .header = std::move(blockHeader),
@@ -933,15 +951,34 @@ private:
     /// transactions so a withdrawal initiated in THIS block is already in the root; @p view
     /// is the executed fork view, so committed slots and this block's writes are both seen.
     ///
+    /// Writes the value into BOTH carriers, and both writes are load-bearing:
+    ///  - @p executionPayload is what getPayload serves to the CL;
+    ///  - @p header is what commits to the value. BlockHeaderImpl::setWithdrawalsRoot fills
+    ///    the tars field the NON_ETH calculateHash() digests, so this MUST run before
+    ///    calculateHash() or the root would be a field the blockHash does not commit to —
+    ///    and it is also the only carrier newPayload persists (handleNewPayload writes
+    ///    PayloadEntry::header, not the ExecutionPayload), so the eth_getBlockBy* answer
+    ///    comes from here too.
+    ///
     /// No-op for a payload whose shape has no such field (V1/V2 builds leave it nullopt),
     /// which is what keeps this one call usable on both return paths of buildPayload.
-    task::Task<void> fillWithdrawalsRoot(ExecutionPayload& executionPayload, ViewType& view) const
+    ///
+    /// Only the BUILD side is covered. handleNewPayload still accepts an externally
+    /// submitted withdrawalsRoot on presence alone — validateExecutionPayload cannot
+    /// re-derive it, because an external payload is never executed here — so a value this
+    /// node did not build carries no guarantee, and no L1 withdrawal proof may be taken
+    /// against one. Re-deriving it belongs with the block re-execution path (#5468).
+    task::Task<void> fillWithdrawalsRoot(ExecutionPayload& executionPayload,
+        bcos::protocol::BlockHeader& header, ViewType& view) const
     {
-        if (executionPayload.withdrawalsRoot.has_value())
+        if (!executionPayload.withdrawalsRoot.has_value())
         {
-            executionPayload.withdrawalsRoot =
-                co_await ledger::mpt::accountStorageRootFromFlat(view, c_l2ToL1MessagePasser);
+            co_return;
         }
+        auto const root =
+            co_await ledger::mpt::accountStorageRootFromFlat(view, c_l2ToL1MessagePasser);
+        executionPayload.withdrawalsRoot = root;
+        header.setWithdrawalsRoot(root);
     }
 
     /// Compute state root by iterating over storage and XOR-ing entry hashes.

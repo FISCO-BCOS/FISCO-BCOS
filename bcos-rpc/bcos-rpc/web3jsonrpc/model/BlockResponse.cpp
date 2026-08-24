@@ -82,8 +82,15 @@ void bcos::rpc::combineBlockResponse(
     result["mixHash"] = crypto::HashType().hexPrefixed();
     result["baseFeePerGas"] = "0x0";
     result["withdrawals"] = Json::Value(Json::arrayValue);
-    // empty withdrawals trie root hash
-    result["withdrawalsRoot"] = crypto::HashType().hexPrefixed();
+    // Isthmus (OP Stack) defines this field as the L2ToL1MessagePasser predeploy's storage
+    // root, NOT a withdrawals trie root — the L1 accounting lives in that account's storage
+    // and there are no withdrawal operations to build a trie over. A header that carries the
+    // computed value (every V3+ payload this node builds — EngineServiceImpl.h
+    // fillWithdrawalsRoot) reports it, so eth_getBlockBy* and engine_getPayload agree on the
+    // same block. Headers without the field — pre-Isthmus blocks and every block produced
+    // outside the Engine path — keep answering the zero hash they always did.
+    result["withdrawalsRoot"] =
+        blockHeader->withdrawalsRoot().value_or(crypto::HashType()).hexPrefixed();
     result["blobGasUsed"] = "0x0";
     result["excessBlobGas"] = "0x0";
     result["parentBeaconBlockRoot"] = crypto::HashType().hexPrefixed();

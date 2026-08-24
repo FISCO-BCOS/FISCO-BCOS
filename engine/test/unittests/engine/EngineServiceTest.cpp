@@ -24,6 +24,8 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 
 using namespace bcos;
 using namespace bcos::engine;
@@ -1116,7 +1118,7 @@ BOOST_AUTO_TEST_CASE(karst_v3_build_v5_get_v4_commit_round_trip)
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
     BOOST_REQUIRE(payload);
     // V5 response shape: executionRequests present-but-empty, blobs bundle three empty
-    // arrays, shouldOverrideBuilder=false, Isthmus withdrawalsRoot placeholder present.
+    // arrays, shouldOverrideBuilder=false, Isthmus withdrawalsRoot present.
     BOOST_REQUIRE(payload->executionRequests.has_value());
     BOOST_CHECK(payload->executionRequests->empty());
     BOOST_REQUIRE(payload->blobsBundle.has_value());
@@ -1241,6 +1243,55 @@ BOOST_AUTO_TEST_CASE(withdrawals_root_is_the_message_passer_storage_root)
     BOOST_CHECK_EQUAL(*payload->executionPayload.withdrawalsRoot, threeSlotsRoot);
     // Not the empty-trie root: this account really has slots, so the two must differ.
     BOOST_CHECK_NE(*payload->executionPayload.withdrawalsRoot, ledger::mpt::emptyRootHash());
+
+    // The root must also be on the built HEADER, which is the carrier that commits to it:
+    // BlockHeaderImpl::setWithdrawalsRoot fills the tars field the NON_ETH calculateHash()
+    // digests, and it is the only carrier newPayload persists to the ledger. Committing the
+    // payload and re-reading the block proves both — the served blockHash was computed with
+    // the root in place, and eth_getBlockBy* (which reads the persisted header) can answer
+    // the same value the CL was given.
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    NewPayloadRequest request;
+    request.executionPayload = payload->executionPayload;
+    request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    request.executionRequests = std::vector<bytes>{};
+    auto status = task::syncWait(engineService.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+}
+
+// The gas limit reaches the executor as an int64 (TransactionExecutorImpl.h:53 narrows it
+// with a bare static_cast), so a Uint64Quantity above INT64_MAX would arrive as a NEGATIVE
+// gas budget. The attribute is the only wire-facing source of that tuple, so it carries the
+// bound; the FCU is answered INVALID rather than building a block on a negative budget.
+BOOST_AUTO_TEST_CASE(attributes_gas_limit_above_int64_is_rejected)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    payloadAttributes.gasLimit =
+        static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) + 1;
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_CHECK(!result.payloadId.has_value());
+    BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
+    BOOST_CHECK(result.payloadStatus.validationError->find("gasLimit") != std::string::npos);
+
+    // The largest value that still fits builds normally — the bound is the executor's width,
+    // not a smaller invented one.
+    payloadAttributes.gasLimit =
+        static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
+    auto accepted =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(accepted.payloadId.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
