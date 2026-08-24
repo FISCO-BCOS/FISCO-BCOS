@@ -26,7 +26,7 @@
 
 namespace bcos::devp2p::rlpx
 {
-using bcos::crypto::AES_BLOCK_SIZE;
+using bcos::crypto::kAesBlockSize;
 
 namespace
 {
@@ -260,7 +260,7 @@ bcos::bytes FramingCipher::encryptFrame(bcos::bytes _frameData)
 size_t FramingCipher::headerSize()
 {
     // 16B ciphertext + 16B MAC.
-    return AES_BLOCK_SIZE * 2;
+    return kAesBlockSize * 2;
 }
 
 size_t FramingCipher::decryptHeader(bytesConstRef _data)
@@ -270,14 +270,14 @@ size_t FramingCipher::decryptHeader(bytesConstRef _data)
         throw std::runtime_error("FramingCipher: header data too short");
     }
     return m_impl->decryptHeader(
-        bytesConstRef(_data.data(), AES_BLOCK_SIZE),
-        bytesConstRef(_data.data() + AES_BLOCK_SIZE, AES_BLOCK_SIZE));
+        bytesConstRef(_data.data(), kAesBlockSize),
+        bytesConstRef(_data.data() + kAesBlockSize, kAesBlockSize));
 }
 
 size_t FramingCipher::frameSize(size_t _headerFrameSize)
 {
     // padded ciphertext + 16B MAC.
-    return bcos::crypto::aesRoundUpToBlockSize(_headerFrameSize) + AES_BLOCK_SIZE;
+    return bcos::crypto::aesRoundUpToBlockSize(_headerFrameSize) + kAesBlockSize;
 }
 
 bcos::bytes FramingCipher::decryptFrame(bytesConstRef _data, size_t _headerFrameSize)
@@ -287,8 +287,8 @@ bcos::bytes FramingCipher::decryptFrame(bytesConstRef _data, size_t _headerFrame
         throw std::runtime_error("FramingCipher: frame data too short");
     }
     return m_impl->decryptFrame(
-        bytesConstRef(_data.data(), _data.size() - AES_BLOCK_SIZE),
-        bytesConstRef(_data.data() + _data.size() - AES_BLOCK_SIZE, AES_BLOCK_SIZE),
+        bytesConstRef(_data.data(), _data.size() - kAesBlockSize),
+        bytesConstRef(_data.data() + _data.size() - kAesBlockSize, kAesBlockSize),
         _headerFrameSize);
 }
 

@@ -34,6 +34,7 @@
     "fakeit",
     "tbb",
     "jsoncpp",
+    "snappy",
     "jwt-cpp",
     "evmc",
     "curl",

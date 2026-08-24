@@ -128,15 +128,21 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
         {
             HeaderWithHash header;
             header.rlp = headers.headers[i];
-            bcos::protocol::EthBlockHeader ethHeader;
-            if (auto err = ethHeader.rlpDecode(bytesConstRef(header.rlp.data(), header.rlp.size())))
-        {
-            throw std::runtime_error("HeaderChain: header RLP decode failed");
-        }
-        header.header = ethHeader.data();
-        // The header hash is keccak of the received wire encoding.
-        header.hash = bcos::crypto::keccak256Hash(
-            bytesConstRef(header.rlp.data(), header.rlp.size()));
+            // Decode directly with the EthBlockHeaderData codec, which works in the WIRE
+            // domain (timestamp in seconds) — the same domain sync uses everywhere else
+            // (SyncPeerServer, HeaderValidator, headerHash). EthBlockHeader::rlpDecode
+            // would convert the timestamp to internal milliseconds, breaking the
+            // round-trip comparison and the fork-time checks.
+            bcos::protocol::EthBlockHeaderData headerData;
+            bcos::bytesRef in(header.rlp.data(), header.rlp.size());
+            if (auto err = bcos::codec::rlp::decode(in, headerData))
+            {
+                throw std::runtime_error("HeaderChain: header RLP decode failed");
+            }
+            header.header = std::move(headerData);
+            // The header hash is keccak of the received wire encoding.
+            header.hash = bcos::crypto::keccak256Hash(
+                bytesConstRef(header.rlp.data(), header.rlp.size()));
 
         // Strictly ascending, contiguous block numbers.
         if (header.number() != m_nextNumber + i)

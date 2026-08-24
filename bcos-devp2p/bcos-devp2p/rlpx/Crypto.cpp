@@ -33,7 +33,7 @@
 
 namespace bcos::devp2p::rlpx
 {
-using bcos::crypto::AES_BLOCK_SIZE;
+using bcos::crypto::kAesBlockSize;
 
 // ---------------------------------------------------------------------------
 // Sha3Hasher — incremental Keccak-256 via OpenSSL EVP (pad-byte hack).
@@ -173,7 +173,7 @@ EciesCipher::Message EciesCipher::encryptMessage(
     bytesConstRef aesKey(sharedSecret.data(), kEciesKeySize);
     bytesConstRef macKey(sharedSecret.data() + kEciesKeySize, kEciesKeySize);
 
-    bcos::bytes iv = bcos::crypto::cryptoRandomBytes(AES_BLOCK_SIZE);
+    bcos::bytes iv = bcos::crypto::cryptoRandomBytes(kAesBlockSize);
 
     bcos::bytes cipherText =
         bcos::crypto::aesCtrCrypt(_plainText, aesKey, bytesConstRef(iv.data(), iv.size()));
@@ -228,7 +228,7 @@ bcos::bytes EciesCipher::serializeMessage(Message const& _message)
 
 EciesCipher::Message EciesCipher::deserializeMessage(bytesConstRef _messageData)
 {
-    const size_t ivSize = AES_BLOCK_SIZE;
+    const size_t ivSize = kAesBlockSize;
     const size_t macSize = kEciesMacSize;
     const size_t minSize = kEciesPubKeySize + ivSize + macSize;
     if (_messageData.size() < minSize)
@@ -269,7 +269,7 @@ size_t EciesCipher::roundUpToBlockSize(size_t _size)
 
 size_t EciesCipher::estimateEncryptedSize(size_t _size)
 {
-    return _size + kEciesPubKeySize + AES_BLOCK_SIZE + kEciesMacSize;
+    return _size + kEciesPubKeySize + kAesBlockSize + kEciesMacSize;
 }
 
 // ---------------------------------------------------------------------------

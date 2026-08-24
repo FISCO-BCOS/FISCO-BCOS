@@ -117,8 +117,8 @@ EstablishedSession exchangeHandshake(
     status.forkId = _config.forkId;
     if (negotiatedEth >= 69)
     {
-        // EIP-8085: advertise our (genesis-only) block range.
-        status.eip8085 = true;
+        // EIP-7642: advertise our (genesis-only) block range. The wire form is
+        // derived from protocolVersion, so no format flag is needed here.
         status.earliestBlock = 0;
         status.latestBlock = 0;
         status.latestBlockHash = _config.genesisHash;
