@@ -29,7 +29,9 @@
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <magic_enum/magic_enum.hpp>
+#include <optional>
 #include <ostream>
+#include <string_view>
 namespace bcos
 {
 namespace rpc

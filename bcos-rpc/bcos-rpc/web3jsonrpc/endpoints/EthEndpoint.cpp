@@ -1039,8 +1039,25 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         // unparseable-nonce transactions). ChainId IS checked because dropping it would
         // disable EIP-155 replay protection: a transaction signed for another chain would
         // execute here and consume the sender's nonce.
-        if (auto chainIdConfig = co_await ledger::getSystemConfig(
-                *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
+        auto chainIdConfig = co_await ledger::getSystemConfig(
+            *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
+        if (!chainIdConfig)
+        {
+            // Fail closed when web3_chain_id is unconfigured: without a node chainId to
+            // compare against, an EIP-155 tx signed for a foreign chain would execute here
+            // and consume the sender's nonce (EIP-155 replay-protection bypass). op-geth
+            // always has a genesis chainId, so it has no such open default. Only pre-EIP-155
+            // legacy (no chainId in the envelope) is exempt — there is nothing to compare.
+            auto const envelopeChainId = tx->web3ChainIdFromEnvelope();
+            if (envelopeChainId.has_value() ||
+                bcos::rlp::protocol::isTypedWeb3Envelope(tx->extraTransactionBytes()))
+            {
+                WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction: web3_chain_id not configured")
+                                  << LOG_KV("txChainId", tx->chainId());
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
+            }
+        }
+        else
         {
             auto [chainIdStr, _] = chainIdConfig.value();
             // Validate against the SIGNED envelope like TxValidator::validateChainId: typed

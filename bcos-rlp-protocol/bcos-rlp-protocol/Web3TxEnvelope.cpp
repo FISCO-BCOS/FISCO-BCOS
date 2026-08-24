@@ -91,6 +91,11 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
     // Only field 8 is checked here — field 9 validation is deferred to
     // reassembleWeb3RawTransaction (which validates the full 0,0 tail). This keeps the
     // walker simple and avoids cursor arithmetic pitfalls with multi-field lookahead.
+    // field7Item keeps the WHOLE field-7 item (header + payload): decodeHeader below advances
+    // walker to the payload start, and decoding that payload as a fresh item mis-reads any
+    // multi-byte chainId/v (e.g. chainId 8453 -> 33) or classifies it as a list header
+    // (chainId 200 -> nullopt -> bogus "unprotected" exemption). Decode from the item start.
+    bcos::bytesRef field7Item = walker;
     auto [field7Error, field7Header] = bcos::codec::rlp::decodeHeader(walker);
     if (field7Error || field7Header.payloadLength > walker.size()) [[unlikely]]
     {
@@ -109,7 +114,7 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
     {
         // preimage form: field 7 is the EIP-155 chainId.
         uint64_t chainId = 0;
-        if (auto e = bcos::codec::rlp::decode(walker, chainId); e != nullptr) [[unlikely]]
+        if (auto e = bcos::codec::rlp::decode(field7Item, chainId); e != nullptr) [[unlikely]]
         {
             return std::nullopt;
         }
@@ -118,7 +123,7 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
     // Full envelope: field 7 is v. 27/28 = pre-EIP-155 unprotected (exempt); >= 35 = EIP-155
     // protected, chainId = (v - 35) >> 1. Anything else (0/1, 29-34) is malformed.
     uint64_t v = 0;
-    if (auto e = bcos::codec::rlp::decode(walker, v); e != nullptr) [[unlikely]]
+    if (auto e = bcos::codec::rlp::decode(field7Item, v); e != nullptr) [[unlikely]]
     {
         return std::nullopt;
     }

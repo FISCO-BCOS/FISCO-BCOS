@@ -476,6 +476,36 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseTypedTxKindType)
         combineReceiptResponse(result, *receipt, *tx, bcos::crypto::HashType{});
         BOOST_CHECK_EQUAL(result["type"].asString(), "0x0");
     }
+    // Divergence pin: a legacy-shaped envelope (first byte is the RLP list header — a byte-sniff
+    // implementation would report Legacy) whose web3TypedTxKind slot is forged to EIP-1559. The
+    // response must follow the kind slot (0x2), not the envelope's first byte (0x0). The three
+    // cases above cannot distinguish the two implementations — typed/deposit envelopes keep their
+    // type byte, so byte-sniffing renders identical output.
+    {
+        bcos::rpc::Web3Transaction legacyTx;
+        legacyTx.type = bcos::rpc::TransactionType::Legacy;
+        legacyTx.chainId = 1;
+        legacyTx.nonce = 0;
+        legacyTx.maxPriorityFeePerGas = bcos::u256(1);
+        legacyTx.maxFeePerGas = bcos::u256(2);
+        legacyTx.gasLimit = 21000;
+        legacyTx.to.emplace(bcos::Address("0x1234567890123456789012345678901234567890"));
+        legacyTx.value = bcos::u256(0);
+        legacyTx.signatureR = bcos::bytes(32, 0x11);
+        legacyTx.signatureS = bcos::bytes(32, 0x22);
+        legacyTx.signatureV = 0;
+        auto tarsTx = legacyTx.takeToTarsTransaction();
+        tarsTx.web3TypedTxKind = static_cast<tars::Char>(bcos::rpc::TransactionType::EIP1559);
+        bcos::h256 arbitraryHash(
+            "0404040404040404040404040404040404040404040404040404040404040404");
+        tarsTx.extraTransactionHash.assign(arbitraryHash.begin(), arbitraryHash.end());
+        auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
+            [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
+        auto receipt = makeReceipt(m_blockFactory);
+        Json::Value result = Json::objectValue;
+        combineReceiptResponse(result, *receipt, *tx, bcos::crypto::HashType{});
+        BOOST_CHECK_EQUAL(result["type"].asString(), "0x2");
+    }
 }
 
 BOOST_AUTO_TEST_CASE(combineReceiptResponseOmitsOpFieldsWhenMetaEmpty)
@@ -664,6 +694,10 @@ BOOST_AUTO_TEST_CASE(combineTxResponseAccessAndAuthLists)
         BOOST_CHECK_EQUAL(auth["yParity"].asString(), "0x1");
         BOOST_CHECK_EQUAL(auth["r"].asString(), "0x101");
         BOOST_CHECK_EQUAL(auth["s"].asString(), "0x202");
+        // Blob fields are EIP-4844-only (== EIP4844 narrowing, TransactionResponse.cpp:136): a
+        // regression to >= EIP4844 would leak maxFeePerBlobGas/blobVersionedHashes onto 7702.
+        BOOST_CHECK(!result.isMember("maxFeePerBlobGas"));
+        BOOST_CHECK(!result.isMember("blobVersionedHashes"));
     }
 }
 

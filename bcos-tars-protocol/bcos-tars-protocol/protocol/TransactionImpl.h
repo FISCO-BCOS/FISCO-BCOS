@@ -33,6 +33,8 @@
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-utilities/Common.h"
 #include <memory>
+#include <optional>
+#include <string_view>
 
 namespace bcostars::protocol
 {

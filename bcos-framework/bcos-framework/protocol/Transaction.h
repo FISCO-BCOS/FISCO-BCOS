@@ -29,6 +29,8 @@
 #include <concepts>
 #include <functional>
 #include <iosfwd>
+#include <optional>
+#include <string_view>
 #include <utility>
 
 namespace bcostars::protocol

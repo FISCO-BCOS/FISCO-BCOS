@@ -3,6 +3,7 @@
 #include "Web3Transaction.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Log.h>
+#include <cstddef>  // std::ptrdiff_t (ListEnd pointer arithmetic)
 #include <cstdint>
 
 // These using-declarations are NOT dead: they are the ADL bridge that lets the generic codec
@@ -271,8 +272,10 @@ struct LegacyTxHandler : Web3TxHandler
                 // r/s placeholders. The tail must be exactly 2 items — a 7/8-field preimage
                 // (chainId without both placeholders) is malformed (op-geth preimages are 6 or 9
                 // fields), so there is no "placeholders optional" leniency.
-                bcos::bytes placeholderR;
-                bcos::bytes placeholderS;
+                // Zero-copy like the deposit isSystemTransaction decode (bcos::bytes would
+                // heap-allocate per decode just to assert emptiness).
+                bcos::bytesRef placeholderR;
+                bcos::bytesRef placeholderS;
                 if (decodeError = codec::rlp::decodeItems(in, placeholderR, placeholderS);
                     decodeError != nullptr)
                 {
