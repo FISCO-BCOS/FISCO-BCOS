@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(encodeAppendsPayloadDecodeRestoresIt)
     bcos::bytes buffer;
     BOOST_REQUIRE(msg.encode(buffer));
     BOOST_CHECK(buffer == data);  // raw message encodes payload verbatim
-    BOOST_CHECK_EQUAL(msg.length(), buffer.size());
+    BOOST_CHECK_EQUAL(msg.payload().size(), buffer.size());
 
     WsMessage decoded(true);
     auto consumed = decoded.decode(bcos::ref(buffer));

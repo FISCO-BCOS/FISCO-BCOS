@@ -68,8 +68,6 @@ public:
     bool isRespPacket() const;
     void setRespPacket();
 
-    uint32_t length() const;
-
 private:
     bool m_raw = false;
     uint16_t m_version = 0;
@@ -79,8 +77,6 @@ private:
     bcos::bytes m_payload;
 
     int16_t m_status = 0;
-    // written by encode()/decode(), hence mutable
-    mutable uint32_t m_length = 0;
 };
 
 // generate a 32-char hex seq string

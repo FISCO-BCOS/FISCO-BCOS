@@ -128,7 +128,6 @@ bool WsMessage::encode(bytes& _buffer) const
 {
     if (m_raw)
     {
-        _buffer.reserve(_buffer.size() + m_payload.size());
         _buffer.insert(_buffer.end(), m_payload.begin(), m_payload.end());
         return true;
     }
@@ -150,7 +149,6 @@ bool WsMessage::encode(bytes& _buffer) const
     _buffer.insert(_buffer.end(), (byte*)&ext, (byte*)&ext + 2);
     _buffer.insert(_buffer.end(), m_payload.begin(), m_payload.end());
 
-    m_length = _buffer.size();
     return true;
 }
 
@@ -212,7 +210,6 @@ int64_t WsMessage::decode(bytesConstRef _buffer)
         m_payload.reserve(length - offset);
         m_payload.insert(m_payload.begin(), p, _buffer.data() + length);
     }
-    m_length = length;
     return length;
 }
 
@@ -227,11 +224,6 @@ void WsMessage::setRespPacket()
     {
         m_ext |= bcos::protocol::MessageExtFieldFlag::RESPONSE;
     }
-}
-
-uint32_t WsMessage::length() const
-{
-    return m_raw ? m_payload.size() : m_length;
 }
 
 std::string bcos::boostssl::ws::newSeq()

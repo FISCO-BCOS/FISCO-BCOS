@@ -1,11 +1,7 @@
 
 ### v3.18.0
 
-**bcos-boostssl / bcos-cpp-sdk 破坏性变更（迁移详见 PR #5464 描述）**
-
-* 删除 `MessageFace` 及工厂类；`WsMessage` 改 move-only，回调改按值传 `WsMessage`
-* `WsSession`/`WsService` 去虚（不可继承覆盖）；移除 `registerHandshakeHandler`/`getMsgHandler` 等
-* 发送路径签名变更：`asyncSendMessage`/`asyncSendMessageByEndPoint`/`broadcastMessage` 改 `const WsMessage&`
+**bcos-boostssl/bcos-cpp-sdk 破坏性变更**：删除 MessageFace 及工厂、WsMessage 改 move-only、回调改按值传 WsMessage、WsSession/WsService 去虚、发送路径签名改 const WsMessage&（迁移详见 PR #5464）
 
 ---
 
