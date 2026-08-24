@@ -195,6 +195,100 @@ BOOST_AUTO_TEST_CASE(roundTrip)
     BOOST_CHECK(decoded.data() == body);
 }
 
+// A real mainnet legacy transaction (Ethereum wiki canonical example): a 9-field
+// RLP list (0xf8...). The body codec must splice it RAW — not re-wrap it as an
+// RLP string — and round-trip it byte-identically.
+BOOST_AUTO_TEST_CASE(legacyTxGolden)
+{
+    auto legacyTx = fromHex(
+        "f86c808504a817c800825208943535353535353535353535353535353535353535880de0b6b3a764000080"
+        "25a028ef61340bd939bc2195fe537567866003e1a15d3c71ff63e1590620aa636276"
+        "a067cbe9d8997f761aecb703304b3800ccf555c9f3dc64214b297fb1966a3b6d83");
+    BOOST_REQUIRE_EQUAL(legacyTx.front(), 0xf8);  // a list, not a string
+
+    EthBlockBodyData body;
+    body.header = makeLondonHeader();
+    body.transactions = {legacyTx};
+    EthBlockBody b(body);
+    bytes out;
+    b.rlpEncode(out);
+
+    EthBlockBody decoded;
+    BOOST_CHECK(!decoded.rlpDecode(ref(out)));
+    BOOST_REQUIRE_EQUAL(decoded.data().transactions.size(), 1u);
+    // Byte-identical: the legacy list header must survive encode+decode untouched.
+    BOOST_CHECK(decoded.data().transactions[0] == legacyTx);
+    BOOST_CHECK(decoded.data() == body);
+}
+
+// Mixed legacy (raw list) + typed (string-wrapped) transactions round-trip.
+BOOST_AUTO_TEST_CASE(legacyAndTypedMixedRoundTrip)
+{
+    auto legacyTx = fromHex(
+        "f86c808504a817c800825208943535353535353535353535353535353535353535880de0b6b3a764000080"
+        "25a028ef61340bd939bc2195fe537567866003e1a15d3c71ff63e1590620aa636276"
+        "a067cbe9d8997f761aecb703304b3800ccf555c9f3dc64214b297fb1966a3b6d83");
+    // Real Sepolia EIP-1559 (type 0x02) transfer.
+    auto typedTx = fromHex(
+        "02f87783aa36a7808459682f00851f71a335b5825208942f14582947e292a2ecd20c430b46f2"
+        "d27cfe213c8901a055690d9db8000080c080a06dd8b58b520530663fa1ce8bbbc3eb9b2e0b79"
+        "70138d781b9d9380e3dbf1f362a0098934613bfad8e42b3d93b26b450d1028c2288e212c8160"
+        "5a54d886028c5746");
+
+    EthBlockBodyData body;
+    body.header = makeShanghaiHeader();
+    body.transactions = {legacyTx, typedTx};
+    body.withdrawals = std::vector<EthWithdrawalData>{};
+    EthBlockBody b(body);
+    bytes out;
+    b.rlpEncode(out);
+    EthBlockBody decoded;
+    BOOST_CHECK(!decoded.rlpDecode(ref(out)));
+    BOOST_REQUIRE_EQUAL(decoded.data().transactions.size(), 2u);
+    BOOST_CHECK(decoded.data().transactions[0] == legacyTx);
+    BOOST_CHECK(decoded.data().transactions[1] == typedTx);
+    BOOST_CHECK(decoded.data() == body);
+}
+
+// A typed transaction whose content starts with the reserved type byte 0x00 must
+// be rejected (geth: errTxTypeNotSupported).
+BOOST_AUTO_TEST_CASE(rejectsReservedTypeByte)
+{
+    EthBlockBodyData body;
+    body.header = makeLondonHeader();
+    body.transactions = {fromHex("0080")};  // 0x00 || rlp(empty payload)
+    EthBlockBody b(body);
+    bytes out;
+    b.rlpEncode(out);
+    EthBlockBody decoded;
+    BOOST_CHECK(decoded.rlpDecode(ref(out)) != nullptr);
+}
+
+// A 5-element body [header, txs, ommers, withdrawals, extra] must be rejected
+// (geth's Block.DecodeRLP calls ListEnd and rejects the surplus).
+BOOST_AUTO_TEST_CASE(rejectsTrailingElements)
+{
+    bytes headerRlp;
+    codec::rlp::encode(headerRlp, makeLondonHeader());
+    bytes const txs = {0xc0};     // empty transactions list
+    bytes const ommers = {0xc0};  // empty ommers list
+    bytes const wd = {0xc0};      // empty withdrawals list
+    bytes const extra = {0xc0};   // surplus element
+
+    bytes wire;
+    codec::rlp::encodeHeader(wire,
+        {.isList = true, .payloadLength = headerRlp.size() + txs.size() + ommers.size() +
+                                           wd.size() + extra.size()});
+    wire.insert(wire.end(), headerRlp.begin(), headerRlp.end());
+    wire.insert(wire.end(), txs.begin(), txs.end());
+    wire.insert(wire.end(), ommers.begin(), ommers.end());
+    wire.insert(wire.end(), wd.begin(), wd.end());
+    wire.insert(wire.end(), extra.begin(), extra.end());
+
+    EthBlockBody decoded;
+    BOOST_CHECK(decoded.rlpDecode(ref(wire)) != nullptr);
+}
+
 // Consistency: EthBlockHeader::rlpEncode and the shared EthBlockHeaderData codec must agree.
 BOOST_AUTO_TEST_CASE(headerBridgeConsistency)
 {

@@ -147,8 +147,24 @@ bcos::Error::UniquePtr decodeTx(bcos::bytesRef& _in, bcos::bytes& _out) noexcept
     if (_in[0] >= BYTES_HEAD_BASE && _in[0] < LIST_HEAD_BASE)
     {
         // Typed tx wrapped as an RLP string — return its content (0xNN||payload)
-        // without the string prefix.
-        return decode(_in, _out);
+        // without the string prefix. The content must be non-empty and its first
+        // byte a valid EIP-2718 type (0x00 is reserved; geth rejects both with
+        // errShortTypedTx / ErrTxTypeNotSupported).
+        if (auto err = decode(_in, _out))
+        {
+            return err;
+        }
+        if (_out.empty())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
+                "empty typed transaction in block body");
+        }
+        if (_out[0] == 0)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
+                "invalid EIP-2718 type byte 0x00 in block body");
+        }
+        return nullptr;
     }
     if (_in[0] >= LIST_HEAD_BASE)
     {
@@ -271,6 +287,14 @@ inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthBlockBody
     else
     {
         _body.withdrawals.reset();
+    }
+    // Fail closed on any trailing element: a 5-element body is malformed (geth's
+    // Block.DecodeRLP rejects it with ListEnd), and silently dropping the extra
+    // element would make the re-encoded form unfaithful to the wire.
+    if (!items.empty())
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedListElements,
+            "block body has trailing elements after withdrawals");
     }
     return nullptr;
 }
