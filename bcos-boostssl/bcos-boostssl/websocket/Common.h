@@ -44,8 +44,9 @@ class WsSession;
 class WsMessage;
 
 // Note: messages are passed by value through the receive pipeline (move-only type,
-// no heap allocation per message); handlers that need to retain a message beyond
-// the synchronous call should move it into their own storage explicitly.
+// no per-message allocation for the message object itself; the seq/payload buffers
+// and the asio post closure still allocate). Handlers that need to retain a message
+// beyond the synchronous call should move it into their own storage explicitly.
 using RespCallBack = std::function<void(bcos::Error::Ptr, WsMessage, std::shared_ptr<WsSession>)>;
 
 using WsConnectHandler = std::function<void(bcos::Error::Ptr, std::shared_ptr<WsSession>)>;

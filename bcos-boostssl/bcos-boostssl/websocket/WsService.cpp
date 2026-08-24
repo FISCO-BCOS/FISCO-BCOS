@@ -617,17 +617,24 @@ void WsService::onRecvMessage(WsMessage message, std::shared_ptr<WsSession> sess
                              << LOG_KV("use_count", session.use_count());
 
     auto type = message.packetType();
-    // dispatch under the read lock: map lookup, no std::function copy.
-    // Note: handlers must NOT call registerMsgHandler()/stop() (i.e. no runtime
-    // re-registration) — all in-tree handlers only register at startup before start().
+    // Look up the handler under the read lock but invoke it OUTSIDE the lock:
+    // a handler (or a transitive callee) may re-register handlers or stop() the
+    // service, both of which upgrade x_msgTypeHandlers and would deadlock if the
+    // handler were invoked under the guard. This also keeps base semantics where
+    // getMsgHandler() copied the handler out and invoked it unlocked.
+    MsgHandler handler;
     {
         ReadGuard l(x_msgTypeHandlers);
         auto it = m_msgType2Method.find(type);
         if (it != m_msgType2Method.end())
         {
-            it->second(std::move(message), std::move(session));
-            return;
+            handler = it->second;
         }
+    }
+    if (handler)
+    {
+        handler(std::move(message), std::move(session));
+        return;
     }
 
     {

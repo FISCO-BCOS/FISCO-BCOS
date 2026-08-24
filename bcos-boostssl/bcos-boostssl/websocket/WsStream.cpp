@@ -96,7 +96,16 @@ void WsStreamDelegate::setVerifyCallback(bool _disableSsl, VerifyCallback callba
         if (auto* sslStream = std::get_if<SslWsStream::Ptr>(&m_stream))
         {
             (*sslStream)->stream().next_layer().set_verify_callback(std::move(callback));
+            return;
         }
+        // fail closed: requesting cert verification on a raw stream silently skips
+        // the callback, which is a fail-open posture (base crashed on this
+        // mismatch); fail hard so the misuse is visible immediately
+        WEBSOCKET_STREAM(ERROR)
+            << LOG_BADGE("setVerifyCallback")
+            << LOG_DESC("verify callback requested on a non-SSL stream, disableSsl mismatch");
+        throw std::runtime_error(
+            "setVerifyCallback requested on a raw stream with _disableSsl=false");
     }
 }
 

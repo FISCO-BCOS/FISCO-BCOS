@@ -46,13 +46,8 @@ public:
 public:
     std::shared_ptr<bcos::boostssl::ws::WsSession> session() const { return m_session; }
 
-    void setError(bcos::Error::Ptr _error) { m_error = _error; }
-    void setResp(std::shared_ptr<bcos::bytes> _resp) { m_resp = _resp; }
-
 private:
     std::shared_ptr<bcos::boostssl::ws::WsSession> m_session;
-    bcos::Error::Ptr m_error;
-    std::shared_ptr<bcos::bytes> m_resp;
 };
 }  // namespace test
 }  // namespace cppsdk

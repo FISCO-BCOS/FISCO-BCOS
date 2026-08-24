@@ -130,4 +130,91 @@ BOOST_AUTO_TEST_CASE(test_newSeq)
     }
     BOOST_CHECK_NE(seq, newSeq());
 }
+
+// Golden-byte tests: lock the exact wire format (big-endian field order,
+// ext-after-seq) so a symmetric codec change cannot silently pass the suite
+// while breaking interop with older nodes / the Java SDK / the console.
+BOOST_AUTO_TEST_CASE(test_encode_golden_header)
+{
+    WsMessage msg;
+    // setVersion is intentionally a no-op, so version stays 0 on the wire
+    msg.setVersion(1);
+    msg.setPacketType(0x1234);
+    msg.setStatus(0x005A);
+    msg.setSeq("abcd");
+    msg.setExt(0x00FF);
+    msg.setPayload(bcos::bytes{0x01, 0x02, 0x03, 0x04});
+
+    bcos::bytes buffer;
+    BOOST_CHECK(msg.encode(buffer));
+
+    // version(2) type(2) status(2) seqLen(2) seq(4) ext(2) payload(4)
+    const bcos::bytes expected = {
+        0x00, 0x00,  // version = 0 (setVersion is a no-op)
+        0x12, 0x34,  // packetType = 0x1234
+        0x00, 0x5A,  // status = 0x5A
+        0x00, 0x04,  // seqLength = 4
+        0x61, 0x62, 0x63, 0x64,  // seq = "abcd"
+        0x00, 0xFF,  // ext = 0xFF
+        0x01, 0x02, 0x03, 0x04   // payload
+    };
+    BOOST_CHECK(buffer == expected);
+
+    // decode of the golden bytes must restore every field
+    WsMessage decoded;
+    auto consumed = decoded.decode(bytesConstRef(expected.data(), expected.size()));
+    BOOST_CHECK_EQUAL(consumed, static_cast<int64_t>(expected.size()));
+    BOOST_CHECK_EQUAL(decoded.version(), 0);
+    BOOST_CHECK_EQUAL(decoded.packetType(), 0x1234);
+    BOOST_CHECK_EQUAL(decoded.status(), 0x005A);
+    BOOST_CHECK_EQUAL(decoded.seq(), "abcd");
+    BOOST_CHECK_EQUAL(decoded.ext(), 0x00FF);
+    const bcos::bytes decodedPayload(
+        decoded.payload().begin(), decoded.payload().end());
+    const bcos::bytes expectedPayload{0x01, 0x02, 0x03, 0x04};
+    BOOST_CHECK(decodedPayload == expectedPayload);
+}
+
+BOOST_AUTO_TEST_CASE(test_encode_golden_raw)
+{
+    // raw mode carries the payload verbatim with no header
+    WsMessage msg(true);
+    msg.setPayload(bcos::bytes{0xDE, 0xAD, 0xBE, 0xEF});
+
+    bcos::bytes buffer;
+    BOOST_CHECK(msg.encode(buffer));
+
+    const bcos::bytes expected = {0xDE, 0xAD, 0xBE, 0xEF};
+    BOOST_CHECK(buffer == expected);
+
+    WsMessage decoded(true);
+    auto consumed = decoded.decode(bytesConstRef(expected.data(), expected.size()));
+    BOOST_CHECK_EQUAL(consumed, 4);
+    const bcos::bytes decodedPayload(decoded.payload().begin(), decoded.payload().end());
+    BOOST_CHECK(decodedPayload == expected);
+}
+
+// move-only semantics: payload/seq must survive move construction/assignment
+// (the bug class the lightnode dangling-payload fix demonstrated)
+BOOST_AUTO_TEST_CASE(test_move_roundtrip)
+{
+    WsMessage src;
+    src.setSeq("seq-1234567890");
+    src.setPacketType(7);
+    src.setPayload(bcos::bytes{1, 2, 3, 4, 5});
+
+    const bcos::bytes payload{1, 2, 3, 4, 5};
+    WsMessage dst(std::move(src));
+    BOOST_CHECK_EQUAL(dst.seq(), "seq-1234567890");
+    BOOST_CHECK_EQUAL(dst.packetType(), 7);
+    const bcos::bytes dstPayload(dst.payload().begin(), dst.payload().end());
+    BOOST_CHECK(dstPayload == payload);
+
+    WsMessage assignTarget;
+    assignTarget = std::move(dst);
+    BOOST_CHECK_EQUAL(assignTarget.seq(), "seq-1234567890");
+    BOOST_CHECK_EQUAL(assignTarget.packetType(), 7);
+    const bcos::bytes assignPayload(assignTarget.payload().begin(), assignTarget.payload().end());
+    BOOST_CHECK(assignPayload == payload);
+}
 BOOST_AUTO_TEST_SUITE_END()

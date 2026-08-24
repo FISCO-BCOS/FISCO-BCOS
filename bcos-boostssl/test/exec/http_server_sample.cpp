@@ -92,7 +92,8 @@ int main(int argc, char** argv)
             BCOS_LOG(INFO) << LOG_BADGE(" [Main] ===>>>> ") << LOG_KV("request", _req.body())
                            << LOG_KV("method", std::string(_req.method_string()))
                            << LOG_KV("target", std::string(_req.target()));
-            _callback(bcos::bytes(_req.begin(), _req.end()), boost::beast::http::status::ok);
+            _callback(bcos::bytes(_req.body().begin(), _req.body().end()),
+                boost::beast::http::status::ok);
         });
     wsService->start();
 

@@ -234,7 +234,10 @@ uint32_t WsMessage::length() const
 
 std::string bcos::boostssl::ws::newSeq()
 {
-    auto uuid = boost::uuids::random_generator()();
+    // thread_local generator: random_generator seeds an mt19937 (entropy read +
+    // 624-word state init) per construction, amortize it to ~ns per call
+    static thread_local boost::uuids::random_generator gen;
+    auto uuid = gen();
     static constexpr char HEX[] = "0123456789abcdef";
     std::string seq(32, '0');
     for (std::size_t i = 0; i < uuid.size(); ++i)

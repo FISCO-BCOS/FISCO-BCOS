@@ -24,7 +24,6 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/RateLimiter.h>
 #include <string>
 
 using namespace bcos;
@@ -45,12 +44,10 @@ void usage()
     std::exit(0);
 }
 
-void sendMessage(WsMessage& _msg, std::shared_ptr<WsService> _wsService,
-    std::shared_ptr<RateLimiter> _rateLimiter)
+void sendMessage(WsMessage& _msg, std::shared_ptr<WsService> _wsService)
 {
     while (true)
     {
-        _rateLimiter->acquire(1, true);
         auto seq = newSeq();
         _msg.setSeq(seq);
         auto startT = utcTime();
@@ -139,7 +136,6 @@ int main(int argc, char** argv)
     msg.setPacketType(999);
     std::string randStr(payLoadSize, 'a');
     msg.setPayload(bytes(randStr.begin(), randStr.end()));
-    auto rateLimiter = std::make_shared<RateLimiter>(packetQPS);
-    sendMessage(msg, wsService, rateLimiter);
+    sendMessage(msg, wsService);
     return EXIT_SUCCESS;
 }

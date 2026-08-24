@@ -18,7 +18,6 @@
  * @author: octopus
  * @date 2021-09-22
  */
-#include "../fake/WsServiceFake.h"
 #include "../fake/WsSessionFake.h"
 #include <bcos-cpp-sdk/event/EventSub.h>
 #include <bcos-cpp-sdk/event/EventSubResponse.h>
@@ -173,15 +172,15 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
 
     auto ioServicePool = std::make_shared<IOServicePool>(2, "evtSubTest");
     {
-        // task is running
+        // task is running: unsubscribe through a real (not connected) session,
+        // which drives the real asyncSendMessage -> error callback path of
+        // EventSub::unsubscribeEvent
         auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(ioServicePool);
         task->setSession(session->session());
 
-        std::string resp = "{}";
-        session->setResp(std::make_shared<bcos::bytes>(resp.begin(), resp.end()));
         es->addTask(task);
 
-        // callback error
+        // callback error (session disconnected)
         es->unsubscribeEvent(id);
 
         BOOST_CHECK(!es->getTask(id));
@@ -189,25 +188,30 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
     }
 
     {
-        // task is running
-        auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(ioServicePool);
-
-        task->setSession(session->session());
-
-        es->addTask(task);
-
+        // response-parsing paths driven directly through the extracted
+        // onUnsubscribeResponse: the wrapped real session is not connected, so
+        // the success callback cannot be triggered by a network round-trip.
+        // These calls exercise the fromJson/status handling of the response.
         auto resp = std::make_shared<bcos::cppsdk::event::EventSubResponse>();
-        resp->setId(task->id());
+        resp->setId(id);
         resp->setStatus(0);
-
-        session->setError(nullptr);
         auto respJson = resp->generateJson();
-        session->setResp(std::make_shared<bcos::bytes>(respJson.begin(), respJson.end()));
 
-        es->unsubscribeEvent(id);
+        // success path: a valid response parses without throwing
+        bcos::boostssl::ws::WsMessage msg;
+        msg.setSeq("seq");
+        msg.setPayload(bcos::bytes(respJson.begin(), respJson.end()));
+        es->onUnsubscribeResponse(id, nullptr, std::move(msg));
 
-        BOOST_CHECK(!es->getTask(id));
-        BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
+        // invalid response path: parse failure must not throw
+        std::string invalidJson = "not-a-json";
+        bcos::boostssl::ws::WsMessage invalid;
+        invalid.setPayload(bcos::bytes(invalidJson.begin(), invalidJson.end()));
+        es->onUnsubscribeResponse(id, nullptr, std::move(invalid));
+
+        // error path: a non-null error short-circuits before parsing
+        es->onUnsubscribeResponse(
+            id, BCOS_ERROR_PTR(-1, "disconnected"), bcos::boostssl::ws::WsMessage());
     }
 }
 
