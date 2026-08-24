@@ -18,7 +18,21 @@ set -euo pipefail
 REPO_ROOT="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 BINARY="${REPO_ROOT}/build/fisco-bcos-air/fisco-bcos"
 BUILDER="${REPO_ROOT}/tools/BcosAirBuilder/build_chain.sh"
-GEN_ROLLUP="${REPO_ROOT}/tools/opstack-genesis/gen_rollup_config.py"
+
+# Genesis tooling lives in FISCO-BCOS/op-stack-e2e-tests (CI symlinks it into
+# the in-tree path). Support that layout, or a local clone via E2E_REPO.
+if [ -d "${REPO_ROOT}/tools/opstack-genesis" ]; then
+  OPGEN_DIR="${REPO_ROOT}/tools/opstack-genesis"
+elif [ -n "${E2E_REPO:-}" ] && [ -d "${E2E_REPO}/tools/opstack-genesis" ]; then
+  OPGEN_DIR="${E2E_REPO}/tools/opstack-genesis"
+else
+  echo "[opnode-ci] ERROR: genesis tooling unavailable (moved to FISCO-BCOS/op-stack-e2e-tests)." >&2
+  echo "  git clone git@github.com:FISCO-BCOS/op-stack-e2e-tests.git /path/to/op-stack-e2e-tests" >&2
+  echo "  ln -s /path/to/op-stack-e2e-tests/tools/opstack-genesis \"${REPO_ROOT}/tools/opstack-genesis\"" >&2
+  echo "  (or set E2E_REPO=/path/to/op-stack-e2e-tests)" >&2
+  exit 2
+fi
+GEN_ROLLUP="${OPGEN_DIR}/gen_rollup_config.py"
 WORK_ROOT="${REPO_ROOT}/tools/opnode-check"
 NODE_DIR="${WORK_ROOT}/nodes/127.0.0.1/node0"
 

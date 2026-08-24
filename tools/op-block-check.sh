@@ -3,12 +3,26 @@ set -euo pipefail
 # op-block-check：跑代码裁决 wrapper（零新 C++，复用现有 Boost 测试）
 REPO="$(git rev-parse --show-toplevel)"
 BLOCK_TESTS="${BLOCK_TESTS:-$REPO/build/opstack-executor/tests/opstack-executor-block-tests}"
-VECTORS_DIR="$REPO/opstack-executor/tests/t8n/vectors"
+
+# t8n vectors live in FISCO-BCOS/op-stack-e2e-tests (CI symlinks them into the
+# in-tree path). Support that layout, or a local clone via E2E_REPO.
+if [ -d "$REPO/opstack-executor/tests/t8n" ]; then
+  T8N_DIR="$REPO/opstack-executor/tests/t8n"
+elif [ -n "${E2E_REPO:-}" ] && [ -d "$E2E_REPO/opstack-executor/tests/t8n" ]; then
+  T8N_DIR="$E2E_REPO/opstack-executor/tests/t8n"
+else
+  echo "ERROR: t8n vectors unavailable (moved to FISCO-BCOS/op-stack-e2e-tests)." >&2
+  echo "  git clone git@github.com:FISCO-BCOS/op-stack-e2e-tests.git /path/to/op-stack-e2e-tests" >&2
+  echo "  ln -s /path/to/op-stack-e2e-tests/opstack-executor/tests/t8n \"$REPO/opstack-executor/tests/t8n\"" >&2
+  echo "  (or set E2E_REPO=/path/to/op-stack-e2e-tests)" >&2
+  exit 2
+fi
+VECTORS_DIR="$T8N_DIR/vectors"
 
 # 前置：向量 json 必须存在（.gitignore'd + CI 现场生成；manifest.txt 是跟踪的，不能当哨兵）
 if ! ls "$VECTORS_DIR"/*.json >/dev/null 2>&1; then
   echo "ERROR: t8n 向量 json 缺失（需 Go 工具链 + op-geth@pin 克隆）。先跑:" >&2
-  echo "  bash opstack-executor/tests/t8n/generator/ensure-vectors.sh" >&2
+  echo "  bash \"$T8N_DIR/generator/ensure-vectors.sh\"" >&2
   exit 2
 fi
 if [ ! -x "$BLOCK_TESTS" ]; then
