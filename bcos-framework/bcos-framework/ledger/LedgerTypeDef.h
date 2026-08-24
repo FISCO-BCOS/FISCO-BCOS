@@ -28,6 +28,7 @@
 #include "bcos-task/Task.h"
 #include <bcos-utilities/Common.h>
 #include <oneapi/tbb/concurrent_unordered_map.h>
+#include <boost/lexical_cast.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
@@ -35,6 +36,26 @@
 namespace bcos::ledger
 {
 using MerkleProof = std::vector<crypto::HashType>;
+
+/// Parse the web3 chain-id system-config string as u256. nullopt on a corrupted value (non
+/// numeric, empty, or an unparsed remainder) — the single shared parse for the three config
+/// consumers (TxValidator::validateChainId, EthEndpoint's chainId gate, LedgerMethods::
+/// loadChainConfig) so width semantics and error behavior cannot drift. Note: boost::
+/// multiprecision's u256 stream-in ACCEPTS a negative sign and wraps modulo 2^256 (probe-
+/// verified: lexical_cast<u256>("-5") returns 2^256-5, no throw) — fail-closed at the gates,
+/// which compare against the node's real chainId, so a wrapped value never matches and the
+/// affected config rejects every tx rather than accepting a wrong-chain one.
+[[nodiscard]] inline std::optional<u256> parseWeb3ChainId(std::string_view chainIdStr)
+{
+    try
+    {
+        return boost::lexical_cast<u256>(chainIdStr);
+    }
+    catch (boost::bad_lexical_cast const&)
+    {
+        return std::nullopt;
+    }
+}
 using MerkleProofPtr = std::shared_ptr<const MerkleProof>;
 
 // get block flag

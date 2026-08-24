@@ -91,16 +91,18 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         result["nonce"] = toQuantity(web3Tx.nonce);
         result["type"] = toQuantity(static_cast<uint8_t>(web3Tx.type));
         result["value"] = toQuantity(web3Tx.value);
-        if (web3Tx.type >= TransactionType::EIP2930)
+        // Use explicit range checks rather than `>=` so that Deposit (0x7e), which is numerically
+        // larger than all EIP types, is excluded from EIP-specific field output. EIP-7702 is a
+        // fee-market type with an access list, so the upper bound is EIP7702 (matching
+        // takeToTarsTransaction on the write side).
+        if (web3Tx.type >= TransactionType::EIP2930 && web3Tx.type <= TransactionType::EIP7702)
         {
             result["accessList"] = Json::arrayValue;
-            result["accessList"].resize(web3Tx.accessList.size());
             for (auto& accessList : web3Tx.accessList)
             {
                 Json::Value access = Json::objectValue;
                 access["address"] = accessList.account.hexPrefixed();
                 access["storageKeys"] = Json::arrayValue;
-                access["storageKeys"].resize(accessList.storageKeys.size());
                 for (const auto& j : accessList.storageKeys)
                 {
                     Json::Value storageKey = j.hexPrefixed();
@@ -109,21 +111,37 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
                 result["accessList"].append(std::move(access));
             }
         }
-        if (web3Tx.type >= TransactionType::EIP1559)
+        if (web3Tx.type >= TransactionType::EIP1559 && web3Tx.type <= TransactionType::EIP7702)
         {
             result["maxPriorityFeePerGas"] = toQuantity(web3Tx.maxPriorityFeePerGas);
             result["maxFeePerGas"] = toQuantity(web3Tx.maxFeePerGas);
         }
         result["chainId"] = toQuantity(web3Tx.chainId.value_or(0));
-        if (web3Tx.type >= TransactionType::EIP4844)
+        if (web3Tx.type == TransactionType::EIP4844)
         {
-            result["maxFeePerBlobGas"] = web3Tx.maxFeePerBlobGas.str();
+            result["maxFeePerBlobGas"] = toQuantity(web3Tx.maxFeePerBlobGas);
             result["blobVersionedHashes"] = Json::arrayValue;
-            result["blobVersionedHashes"].resize(web3Tx.blobVersionedHashes.size());
             for (const auto& blobVersionedHashe : web3Tx.blobVersionedHashes)
             {
                 Json::Value hash = blobVersionedHashe.hexPrefixed();
                 result["blobVersionedHashes"].append(std::move(hash));
+            }
+        }
+        if (web3Tx.type == TransactionType::EIP7702)
+        {
+            // geth parity: each entry serializes as
+            // {chainId, address, nonce, yParity, r, s} with hex-quantity scalars.
+            result["authorizationList"] = Json::arrayValue;
+            for (const auto& auth : web3Tx.authorizationList)
+            {
+                Json::Value entry = Json::objectValue;
+                entry["chainId"] = toQuantity(auth.chainId);
+                entry["address"] = auth.address.hexPrefixed();
+                entry["nonce"] = toQuantity(auth.nonce);
+                entry["yParity"] = toQuantity(auth.yParity);
+                entry["r"] = toQuantity(auth.r);
+                entry["s"] = toQuantity(auth.s);
+                result["authorizationList"].append(std::move(entry));
             }
         }
     }
