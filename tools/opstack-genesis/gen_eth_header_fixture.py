@@ -14,13 +14,21 @@ Field order is the go-ethereum types.Header order (21 items, Prague-era):
   mixHash, nonce, baseFeePerGas, withdrawalsRoot, blobGasUsed, excessBlobGas,
   parentBeaconBlockRoot, requestsHash
 
+state_root: when --allocs is given, the op-geth-compatible secure-MPT root over
+the allocs is computed (mpt_state_root.py, byte-identical to C++
+computeGenesisStateTrie) and fills the field; otherwise the empty-trie root is
+used (the default fixture). The root MUST match what the node derives from the
+merged [alloc.*] sections of config.genesis, or applyEthGenesisHeader refuses
+to start.
+
 Usage:
   python3 gen_eth_header_fixture.py            # prints the default fixture
   python3 gen_eth_header_fixture.py my.json    # fields overridden from JSON
+  python3 gen_eth_header_fixture.py --toml --allocs allocs.ini  # [eth_genesis_header] TOML
 """
+import argparse
 import importlib.util
 import json
-import sys
 from pathlib import Path
 
 _SPEC = importlib.util.spec_from_file_location(
@@ -29,10 +37,17 @@ _build_allocs = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_build_allocs)
 keccak256 = _build_allocs.keccak256
 
+from mpt_state_root import parse_allocs_ini, compute_state_root, compute_storage_root
+
 EMPTY_TRIE_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 EMPTY_OMMERS_HASH = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
 # sha256 of empty input: the Prague empty-requests hash (EIP-7685).
 EMPTY_REQUESTS_HASH = "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+# L2ToL1MessagePasser predeploy. Isthmus+ genesis requires withdrawalsRoot = its
+# storage root (isthmus/exec-engine.md:100-101; op-geth core/genesis.go:711-719),
+# not the empty-trie root.
+PASSER_ADDRESS = "0x4200000000000000000000000000000000000016"
 
 # Default fixture: an empty-alloc post-Karst L2 genesis header. Kept in sync
 # with test_GenesisEthHeader.cpp (bcos-ledger) and
@@ -128,12 +143,59 @@ def encode_header(fields):
     return rlp_encode_list(items)
 
 
+def to_toml_section(fields):
+    """Emit the [eth_genesis_header] section (22 fields + hash) for config.genesis.
+
+    Field order and names match NodeConfig::loadEthGenesisHeader. The hash is the
+    keccak256(rlp(header)) checksum recomputed by Ledger::buildGenesisBlock from the
+    other 21 fields; it must match for the node to start.
+    """
+    encoded = encode_header(fields)
+    digest = keccak256(encoded)
+    order = [
+        "parent_hash", "sha3_uncles", "miner", "state_root", "transactions_root",
+        "receipts_root", "logs_bloom", "difficulty", "number", "gas_limit", "gas_used",
+        "timestamp", "extra_data", "mix_hash", "nonce", "base_fee_per_gas",
+        "withdrawals_root", "blob_gas_used", "excess_blob_gas", "parent_beacon_block_root",
+        "requests_hash",
+    ]
+    lines = ["[eth_genesis_header]"]
+    for key in order:
+        lines.append(f"{key}={fields[key]}")
+    lines.append(f"hash=0x{digest.hex()}")
+    return "\n".join(lines) + "\n"
+
+
 def main(argv=None):
-    argv = sys.argv[1:] if argv is None else argv
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--toml", action="store_true",
+                        help="emit the [eth_genesis_header] TOML section for config.genesis")
+    parser.add_argument("--allocs", metavar="INI",
+                        help="allocs INI path ([alloc.N] sections, plus SENDER etc.); "
+                             "state_root is computed as the op-geth-compatible secure-MPT root "
+                             "over these allocs instead of the empty-trie root")
+    parser.add_argument("json", nargs="?", help="optional JSON file overriding header fields")
+    args = parser.parse_args(argv)
+
     fields = dict(DEFAULT_FIELDS)
-    if argv:
-        with open(argv[0]) as handle:
+    if args.json:
+        with open(args.json) as handle:
             fields.update(json.load(handle))
+    if args.allocs:
+        allocs = parse_allocs_ini(args.allocs)
+        fields["state_root"] = "0x" + compute_state_root(allocs).hex()
+        # Isthmus+ genesis: withdrawalsRoot = L2ToL1MessagePasser storage root
+        # (isthmus/exec-engine.md:100-101; op-geth core/genesis.go:711-719). Phase A deploys
+        # the passer with empty storage -> empty-trie root; a proxied op-deployer layout
+        # carries storage and the tool must track it.
+        for alloc in allocs:
+            if alloc["address"].lower() == PASSER_ADDRESS:
+                fields["withdrawals_root"] = "0x" + compute_storage_root(
+                    alloc.get("storage", [])).hex()
+                break
+    if args.toml:
+        print(to_toml_section(fields), end="")
+        return 0
     encoded = encode_header(fields)
     digest = keccak256(encoded)
     print("rlp    = 0x" + encoded.hex())

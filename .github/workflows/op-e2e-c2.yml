@@ -1,0 +1,469 @@
+name: OP-Stack C2 devnet e2e
+# Full OP-Stack interop loop: anvil L1 + op-deployer deployment + FISCO L2
+# + real op-node sequencer, then deposit→L2 and withdrawal→L2 assertions.
+#
+# Heavier than the B3/B3a gate (builds op-deployer and op-node from the
+# optimism monorepo) and depends on external tooling, so it runs on a
+# schedule + manual dispatch + on op-e2e changes rather than every PR.
+# The B3/B3a gate in workflow.yml remains the per-PR regression floor.
+on:
+  workflow_run:
+    # The name of the main build workflow (workflow.yml's `name:`); a mismatch
+    # here silently never fires. workflow_run only triggers on the default
+    # branch's copy of this file — pre-merge verification uses workflow_dispatch.
+    workflows: ["Github runner"]
+    types: [completed]
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  c2-devnet:
+    name: C2 full loop (deposit/withdraw)
+    runs-on: ubuntu-24.04
+    permissions:
+      # actions:read — `gh run download` pulls the artifact of another run.
+      contents: read
+      actions: read
+    env:
+      C2: /tmp/c2
+      FISCO_BIN: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Check runner architecture
+        run: |
+          ARCH=$(uname -m)
+          if [ "$ARCH" != "x86_64" ]; then
+            echo "::error::C2 requires x86_64 runner (got $ARCH). workflow.yml only uploads x86_64 artifacts."
+            exit 1
+          fi
+          echo "Runner is x86_64 — OK"
+
+      - name: Check workflow_run status
+        if: github.event_name == 'workflow_run'
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "::error::workflow.yml did not succeed (conclusion=${{ github.event.workflow_run.conclusion }})"
+            exit 1
+          fi
+          echo "workflow.yml succeeded — artifact available"
+
+      - name: Cache Foundry
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/forge
+          key: foundry-${{ runner.os }}-${{ runner.arch }}-bin-v1
+
+      - name: Install foundry
+        run: |
+          set -eo pipefail
+          FOUNDRY_VER=$(curl -fsSL "https://api.github.com/repos/foundry-rs/foundry/releases/latest" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")
+          curl -fsSL "https://github.com/foundry-rs/foundry/releases/download/v${FOUNDRY_VER}/foundry_v${FOUNDRY_VER}_linux_amd64.tar.gz" \
+            | tar xz -C /usr/local/bin
+          forge --version && cast --version && anvil --version
+
+      - name: Download fisco-bcos-air from workflow.yml
+        env:
+          # gh on runners does NOT inherit the job token implicitly.
+          GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          # Prefer a workflow.yml build of THIS ref — a pre-merge dispatch must
+          # execute the branch's code, and master's binary predates the OP-stack
+          # work. Only the ubuntu-24.04 leg uploads this artifact, so the ref
+          # lookup is keyed on ARTIFACT EXISTENCE rather than whole-run success:
+          # requiring the full matrix (windows/macos legs) to conclude would
+          # needlessly delay — or, on a flaky non-ubuntu leg, permanently block —
+          # the download. On master itself the first query already is the master
+          # query; other refs fall through to the latest successful master build.
+          RUN_ID=$(gh run list --workflow=workflow.yml \
+            --branch="$REF_NAME" --limit=1 \
+            --json databaseId --jq '.[0].databaseId')
+          ARTIFACT_READY=""
+          if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+            if gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts" \
+              --jq '.artifacts[] | select(.name == "fisco-bcos-ubuntu-24-x86_64" and .expired == false) | .id' \
+              | grep -q .; then
+              ARTIFACT_READY=1
+            fi
+          fi
+          if [ -z "$ARTIFACT_READY" ]; then
+            echo "No usable artifact on ref '$REF_NAME' — falling back to master"
+            RUN_ID=$(gh run list --workflow=workflow.yml --branch=master \
+              --status=success --limit=1 --json databaseId \
+              --jq '.[0].databaseId')
+          fi
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "::error::No workflow.yml build with a usable artifact on '$REF_NAME' or master"
+            exit 1
+          fi
+          echo "Downloading from workflow.yml run $RUN_ID"
+          mkdir -p build/fisco-bcos-air
+          gh run download "$RUN_ID" \
+            -n fisco-bcos-ubuntu-24-x86_64 \
+            -D build/fisco-bcos-air/
+          chmod +x build/fisco-bcos-air/fisco-bcos
+          echo "fisco-bcos-air ready"
+
+      - name: Clone optimism monorepo (pinned commit)
+        # Pinned to the e2e version manifest (tools/op-e2e/versions.json).
+        # setup_c2.sh enforces the manifest at the end of every run, so any
+        # other commit would abort the pipeline.  The commit
+        # 5f90f749caea14398554afb75062f7111b1fc554 is v1.19.2 plus the
+        # op-deployer ABI-alignment fix — the baseline the whole e2e suite
+        # (deposit/withdraw, portal 5.7.0 contract set) is validated against.
+        run: |
+          git clone --filter=blob:none --no-checkout \
+            https://github.com/ethereum-optimism/optimism /tmp/optimism
+          git -C /tmp/optimism fetch --depth 1 origin 5f90f749caea14398554afb75062f7111b1fc554
+          git -C /tmp/optimism checkout FETCH_HEAD
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ runner.arch }}-build-5f90f749
+          restore-keys: |
+            go-${{ runner.os }}-${{ runner.arch }}-build-
+
+      - name: Build op-deployer from optimism monorepo
+        run: |
+          cd /tmp/optimism/op-deployer
+          go build -o "$C2/op-deployer" ./cmd/op-deployer
+
+      - name: Build op-node from optimism monorepo
+        run: |
+          cd /tmp/optimism/op-node
+          go build -o "$C2/op-node" ./cmd
+
+      - name: Install python deps
+        run: |
+          python3 -m pip install --quiet pyyaml 2>/dev/null || \
+          pip3 install --quiet pyyaml 2>/dev/null || \
+          pip3 install --break-system-packages --quiet pyyaml 2>/dev/null || true
+          # withdraw_claim.py deps (eth_getProof verification path)
+          pip3 install --break-system-packages --quiet \
+            rlp 'eth-hash[pycryptodome]' trie 2>/dev/null || \
+          pip3 install --quiet rlp 'eth-hash[pycryptodome]' trie || true
+
+      - name: Run setup_c2.sh (full pipeline)
+        env:
+          MONOREPO: /tmp/optimism
+          L2CONTRACTS: ${{ github.workspace }}/bcos-l2-contracts
+          OPGEN: ${{ github.workspace }}/tools/opstack-genesis
+        run: |
+          bash tools/op-e2e/setup_c2.sh > "/tmp/c2-setup.log" 2>&1
+          tail -60 "/tmp/c2-setup.log"
+
+      - name: Assert C2 devnet producing blocks
+        run: |
+          BN=$(curl -s -m 10 -X POST http://127.0.0.1:8555 \
+            -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+            | python3 -c "import sys,json; print(int(json.load(sys.stdin)['result'],16))")
+          if [ "$BN" -lt 5 ]; then
+            echo "::error::C2 chain not producing blocks (blockNumber=$BN)"
+            exit 1
+          fi
+          echo "C2 producing blocks (blockNumber=$BN)"
+
+      - name: Deposit to L2 assertion
+        # Send 1 ETH via the L1 deposit contract, wait for derivation, assert
+        # the recipient balance on L2 increased beyond the 10000 ETH pre-fund.
+        run: |
+          DEPOSIT=$(python3 -c "import json; print(json.load(open('$C2/rollup.json'))['deposit_contract_address'])")
+          cast send --rpc-url http://127.0.0.1:8549 \
+            --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+            "$DEPOSIT" "depositTransaction(address,uint256,uint64,bool,bytes)" \
+            0x70997970C51812dc3A010C7d01b50e0d17dc79C8 1000000000000000000 100000 false 0x \
+            --value 1000000000000000000 > /dev/null
+          for i in $(seq 1 20); do
+            BAL=$(cast balance 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 \
+              --rpc-url http://127.0.0.1:8555 2>/dev/null || echo "0")
+            # 10000 ETH pre-fund (fundDevAccounts); a deposit pushes above it.
+            if python3 -c "import sys; sys.exit(0 if int('$BAL') > 10000 * 10**18 else 1)"; then
+              echo "DEPOSIT CREDITED"
+              exit 0
+            fi
+            echo "poll $i (waiting)"
+            sleep 3
+          done
+          echo "::error::deposit not credited to L2 within 60s"
+          exit 1
+
+      - name: Withdrawal to L2 assertion
+        # Bridge ETH withdrawal via L2StandardBridge.withdraw (LEGACY_ERC20_ETH
+        # token address), assert the MessagePasser nonce advances.
+        run: |
+          BEFORE=$(cast call --rpc-url http://127.0.0.1:8555 \
+            0x4200000000000000000000000000000000000016 "messageNonce()" 2>/dev/null || echo "0x0")
+          cast send --rpc-url http://127.0.0.1:8555 \
+            --private-key 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d \
+            --legacy --gas-price 1000000000 --gas-limit 500000 \
+            --value 1000000000000000000 \
+            0x4200000000000000000000000000000000000010 \
+            "withdraw(address,uint256,uint32,bytes)" \
+            0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000 1000000000000000000 100000 0x \
+            > /dev/null 2>&1
+          sleep 20
+          AFTER=$(cast call --rpc-url http://127.0.0.1:8555 \
+            0x4200000000000000000000000000000000000016 "messageNonce()" 2>/dev/null || echo "0x0")
+          echo "messageNonce: before=$BEFORE after=$AFTER"
+          if [ "$BEFORE" = "$AFTER" ]; then
+            echo "::error::withdrawal did not advance the MessagePasser nonce"
+            exit 1
+          fi
+          echo "WITHDRAWAL OK (MessagePassed nonce advanced)"
+
+      - name: Full withdrawal claim assertion (compressed timelines, no clock warps)
+        # op-e2e parity (system/bridge/withdrawal.go): deposit->withdraw->prove->
+        # resolve->finalize, then assert the exact L1 balance delta. The setup
+        # intent deploys compressed dispute timelines (game clock 60s, maturity
+        # 12s, finality delay 6s), so the whole claim runs in real time — the
+        # L1 clock is NEVER warped (a warped clock permanently locks the
+        # sequencer into noTxPool catch-up ~30min later).
+        # The fast profile (anvil 2s blocks, slots-in-an-epoch 1) keeps the
+        # finality lag to ~2 blocks, so the whole claim finishes in ~3 minutes;
+        # acceptable for the scheduled/dispatch cadence of this workflow.
+        run: |
+          set -eo pipefail
+          DEV1=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+          KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+          L1_BEFORE=$(cast balance "$DEV1" --rpc-url http://127.0.0.1:8549)
+          echo "DEV1 L1 before: $L1_BEFORE"
+          TX=$(cast send 0x4200000000000000000000000000000000000016 \
+            "initiateWithdrawal(address,uint256,bytes)" "$DEV1" 100000 0x --value 1ether \
+            --private-key "$KEY" --rpc-url http://127.0.0.1:8555 --chain-id 914901 --json \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["transactionHash"])')
+          echo "withdrawal tx: $TX"
+          python3 tools/op-e2e/withdraw_claim.py "$TX" --wait-finalized 2400
+          L1_AFTER=$(cast balance "$DEV1" --rpc-url http://127.0.0.1:8549)
+          echo "DEV1 L1 after:  $L1_AFTER"
+          python3 - "$L1_BEFORE" "$L1_AFTER" <<'PY'
+          import sys
+          before, after = int(sys.argv[1]), int(sys.argv[2])
+          delta = after - before
+          # The claim round includes bond recovery (withdraw_claim.py's two-step
+          # claimCredit after finalize), so the 0.08 ETH create-bond comes back:
+          # the delta is 1 ETH minus only the gas of ~7 L1 transactions. Any
+          # credit-accounting bug shows up as a delta outside [1 - 0.01, 1].
+          assert 10**18 - 10**16 <= delta <= 10**18, f"unexpected L1 delta {delta}"
+          print(f"CLAIM BALANCE ASSERT OK: delta={delta} wei (~1 ETH minus gas, bond recovered)")
+          PY
+          # No clock warps were used, so the sequencer must still accept txs
+          # after the full claim — the failure mode that motivated compressed
+          # timelines (a warped clock locks tx inclusion permanently).
+          cast send "$DEV1" --value 0.001ether --private-key "$KEY" \
+            --rpc-url http://127.0.0.1:8555 --chain-id 914901 > /dev/null
+          echo "POST-CLAIM TX OK — sequencer healthy after claim"
+
+      - name: Operational resilience triad (batcher/FISCO/op-node restarts)
+        # op-e2e actions/ parity: hard-kill each component mid-operation,
+        # restart it correctly, assert the chain self-heals — heads resume
+        # advancing and finalized never regresses. Guards the batcher SIGHUP
+        # trap (restart must survive 70s) and the FISCO same-data-dir restart
+        # contract (a data wipe + op-node restart pins finalized at 0 forever).
+        run: |
+          C2=/tmp/c2 bash tools/op-e2e/resilience_test.sh
+
+      - name: eth_getProof assertion (OP flat-state path)
+        # eth_getProof on the OP path rebuilds the whole trie from the
+        # committed flat state (no persisted MPT nodes) — the endpoint answered
+        # -32004 before that path existed. Deep cryptographic verification
+        # (root anchoring, storage proofs) is covered by
+        # EthGetProofFlatStateTest; here we assert the live endpoint serves a
+        # well-formed proof for the MessagePasser predeploy.
+        run: |
+          PROOF=$(curl -s -m 10 -X POST http://127.0.0.1:8555 \
+            -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","method":"eth_getProof","params":["0x4200000000000000000000000000000000000016",[],"latest"],"id":1}')
+          echo "$PROOF" | head -c 300; echo
+          echo "$PROOF" | python3 -c '
+          import sys, json
+          r = json.load(sys.stdin)
+          if "error" in r:
+              sys.exit("eth_getProof error: " + str(r["error"]))
+          p = r["result"]
+          assert len(p["accountProof"]) > 0, "empty accountProof"
+          assert p["storageHash"] != "0x" + "0" * 64, "zero storageHash"
+          assert p["codeHash"] != "0x" + "0" * 64, "zero codeHash"
+              print("GETPROOF OK: accountProof nodes=%d storageHash=%s" % (len(p["accountProof"]), p["storageHash"]))'
+
+      - name: L2 tx scenarios (contract creation + failed-tx inclusion)
+        # The two coverage gaps every other suite leaves open: contract
+        # DEPLOYMENT via an L2 tx (b3_contracts only runs on the B3
+        # single-node bed) and FAILED-tx inclusion (a reverting call must
+        # land in a block with status 0x0, not vanish). Deploys an embedded
+        # counter, inc()s twice, reverts once, asserts receipts and state.
+        run: |
+          bash tools/op-e2e/l2_tx_scenarios.sh
+
+      - name: Upload diagnostic logs on failure
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: c2-logs-${{ github.run_id }}
+          path: |
+            /tmp/c2-setup.log
+            /tmp/c2/anvil.log
+            /tmp/c2/op-node.log
+            /tmp/c2/fisco/nohup.out
+          retention-days: 7
+
+  ephemeral-e2e:
+    # One-shot compressed devnet in a mktemp workspace running the FULL
+    # cross-domain battery: mode preflight (OP-stack vs eth/PBFT four-surface
+    # evidence), L1->L2 deposit (exact credit + calldata variants), L2->L1
+    # withdraw closed loop, both adversarial dispute scenarios (abandoned ->
+    # DEFENDER_WINS; dishonest -> CHALLENGER_WINS with the fake-root prove
+    # oracle), rpc_matrix tier-1 (61 checks), then unconditional teardown.
+    # Additive to c2-devnet (that job is untouched); prep steps intentionally
+    # duplicated rather than refactored into a composite action to keep this
+    # change conflict-free for concurrent work on this file.
+    name: Ephemeral cross-domain e2e (mode/deposit/withdraw/contest/matrix)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      # actions:read — `gh run download` pulls the artifact of another run.
+      contents: read
+      actions: read
+    env:
+      BIN_DIR: /tmp/eph-bin
+      FISCO_BIN: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Check runner architecture
+        run: |
+          ARCH=$(uname -m)
+          if [ "$ARCH" != "x86_64" ]; then
+            echo "::error::ephemeral-e2e requires x86_64 runner (got $ARCH). workflow.yml only uploads x86_64 artifacts."
+            exit 1
+          fi
+
+      - name: Check workflow_run status
+        if: github.event_name == 'workflow_run'
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "::error::workflow.yml did not succeed (conclusion=${{ github.event.workflow_run.conclusion }})"
+            exit 1
+          fi
+
+      - name: Cache Foundry
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/forge
+          key: foundry-${{ runner.os }}-${{ runner.arch }}-bin-v1
+
+      - name: Install foundry
+        run: |
+          set -eo pipefail
+          FOUNDRY_VER=$(curl -fsSL "https://api.github.com/repos/foundry-rs/foundry/releases/latest" \
+            | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"].lstrip("v"))')
+          curl -fsSL "https://github.com/foundry-rs/foundry/releases/download/v${FOUNDRY_VER}/foundry_v${FOUNDRY_VER}_linux_amd64.tar.gz" \
+            | tar xz -C /usr/local/bin
+          forge --version && cast --version && anvil --version
+
+      - name: Download fisco-bcos-air from workflow.yml
+        env:
+          # gh on runners does NOT inherit the job token implicitly.
+          GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          # Same ref-first, artifact-existence policy as c2-devnet: pre-merge
+          # dispatches must run the branch's binary (master's predates the
+          # OP-stack work), and only the ubuntu-24.04 leg uploads this artifact,
+          # so whole-matrix success is neither necessary nor worth waiting for.
+          RUN_ID=$(gh run list --workflow=workflow.yml \
+            --branch="$REF_NAME" --limit=1 \
+            --json databaseId --jq '.[0].databaseId')
+          ARTIFACT_READY=""
+          if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+            if gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts" \
+              --jq '.artifacts[] | select(.name == "fisco-bcos-ubuntu-24-x86_64" and .expired == false) | .id' \
+              | grep -q .; then
+              ARTIFACT_READY=1
+            fi
+          fi
+          if [ -z "$ARTIFACT_READY" ]; then
+            echo "No usable artifact on ref '$REF_NAME' — falling back to master"
+            RUN_ID=$(gh run list --workflow=workflow.yml --branch=master \
+              --status=success --limit=1 --json databaseId \
+              --jq '.[0].databaseId')
+          fi
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "::error::No workflow.yml build with a usable artifact on '$REF_NAME' or master"
+            exit 1
+          fi
+          echo "Downloading from workflow.yml run $RUN_ID"
+          mkdir -p build/fisco-bcos-air
+          gh run download "$RUN_ID" \
+            -n fisco-bcos-ubuntu-24-x86_64 \
+            -D build/fisco-bcos-air/
+          chmod +x build/fisco-bcos-air/fisco-bcos
+
+      - name: Clone optimism monorepo (pinned commit)
+        run: |
+          git clone --filter=blob:none --no-checkout \
+            https://github.com/ethereum-optimism/optimism /tmp/optimism
+          git -C /tmp/optimism fetch --depth 1 origin 5f90f749caea14398554afb75062f7111b1fc554
+          git -C /tmp/optimism checkout FETCH_HEAD
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ runner.arch }}-build-5f90f749
+          restore-keys: |
+            go-${{ runner.os }}-${{ runner.arch }}-build-
+
+      - name: Build op-deployer / op-node / op-batcher into BIN_DIR
+        run: |
+          mkdir -p "$BIN_DIR"
+          (cd /tmp/optimism/op-deployer && go build -o "$BIN_DIR/op-deployer" ./cmd/op-deployer)
+          (cd /tmp/optimism/op-node && go build -o "$BIN_DIR/op-node" ./cmd)
+          (cd /tmp/optimism/op-batcher && go build -o "$BIN_DIR/op-batcher" ./cmd)
+          ls -la "$BIN_DIR"
+
+      - name: Install python deps
+        run: |
+          python3 -m pip install --quiet pyyaml 2>/dev/null || \
+          pip3 install --quiet pyyaml 2>/dev/null || \
+          pip3 install --break-system-packages --quiet pyyaml 2>/dev/null || true
+          pip3 install --break-system-packages --quiet \
+            rlp 'eth-hash[pycryptodome]' trie 2>/dev/null || \
+          pip3 install --quiet rlp 'eth-hash[pycryptodome]' trie || true
+
+      - name: Run the ephemeral cross-domain e2e
+        env:
+          MONOREPO: /tmp/optimism
+          L2CONTRACTS: ${{ github.workspace }}/bcos-l2-contracts
+          OPGEN: ${{ github.workspace }}/tools/opstack-genesis
+          MATRIX: "1"
+        run: |
+          set -eo pipefail
+          bash tools/op-e2e/withdraw_e2e_ephemeral.sh 2>&1 | tee /tmp/eph-e2e.log
+          grep -q "FISCO OP-STACK CONFIRMED" /tmp/eph-e2e.log
+          grep -q "E2E ALL GREEN" /tmp/eph-e2e.log
+          grep -q "e2e green in" /tmp/eph-e2e.log
+
+      - name: Upload diagnostic log on failure
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ephemeral-e2e-log-${{ github.run_id }}
+          path: /tmp/eph-e2e.log
+          retention-days: 7
+
