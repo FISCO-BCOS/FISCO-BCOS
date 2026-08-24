@@ -62,7 +62,8 @@ struct OpTxProperties
 [[nodiscard]] std::variant<OpTxProperties, std::error_code> opValidate(
     const evmone::state::StateView& view, const evmone::state::BlockInfo& block,
     const evmone::state::Transaction& tx, evmc::bytes_view signedTxEnvelope,
-    const OpForkConfig& cfg, const OpFeeParams& fee, int64_t blockGasLeft);
+    const OpForkConfig& cfg, const OpFeeParams& fee, int64_t blockGasLeft,
+    bool skipBalanceCheck = false);
 
 /// Pairing constraint: the *FromState functions must be used as a pair; they must not be
 /// interleaved with the injection-style ones (opValidate/opTransition).
