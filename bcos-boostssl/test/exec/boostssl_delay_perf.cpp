@@ -198,12 +198,10 @@ void workAsServer(std::string listenIp, uint16_t listenPort, bool disableSsl)
 
     wsService->start();
 
-    int i = 0;
     while (true)
     {
         // std::cerr << " boostssl deplay perf server working ..." << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-        i++;
     }
 }
 
