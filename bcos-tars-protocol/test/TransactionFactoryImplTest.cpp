@@ -376,5 +376,46 @@ BOOST_AUTO_TEST_CASE(depositHashIsKeccakOfEnvelope)
     BOOST_CHECK_EQUAL(bcos::toHex(tx->hash().asBytes()), bcos::toHex(expect.asBytes()));
 }
 
+// web3ChainIdFromEnvelope must read the SIGNED envelope (extraTransactionBytes), never the
+// forgeable tars mirror (data.chainID) — a regression swapping to the mirror would pass every
+// other test in this file. Envelope carries a legacy EIP-155 preimage with chainId 42; the
+// mirror is deliberately forged to 999.
+BOOST_AUTO_TEST_CASE(web3ChainIdFromEnvelopeReadsEnvelopeNotTarsMirror)
+{
+    auto suite = makeSuite();
+    namespace rlp = bcos::codec::rlp;
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));   // nonce
+    rlp::encode(items, static_cast<uint64_t>(10));  // gasPrice
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::bytes(20, 0x01));
+    rlp::encode(items, static_cast<uint64_t>(0));   // value
+    rlp::encode(items, bcos::bytes{});              // data
+    rlp::encode(items, static_cast<uint64_t>(42));  // field 7 = EIP-155 chainId
+    rlp::encode(items, static_cast<uint64_t>(0));   // 0 placeholder
+    rlp::encode(items, static_cast<uint64_t>(0));   // 0 placeholder
+    bcos::bytes env;
+    rlp::encodeHeader(env, rlp::Header{true, items.size()});
+    env.insert(env.end(), items.begin(), items.end());
+
+    auto tx = std::make_shared<TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.data.chainID = "999";  // forged string mirror — must NOT be consulted
+    inner.extraTransactionBytes.assign(env.begin(), env.end());
+
+    auto chainId = tx->web3ChainIdFromEnvelope();
+    BOOST_REQUIRE(chainId.has_value());
+    BOOST_CHECK_EQUAL(chainId.value(), 42u);
+
+    // Non-Web3 transactions return nullopt regardless of the envelope content.
+    auto legacy = std::make_shared<TransactionImpl>();
+    auto& legacyInner = legacy->mutableInner();
+    legacyInner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::BCOSTransaction);
+    legacyInner.extraTransactionBytes.assign(env.begin(), env.end());
+    BOOST_CHECK(!legacy->web3ChainIdFromEnvelope().has_value());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

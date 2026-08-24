@@ -2,6 +2,7 @@
 #include "bcos-rpc/web3jsonrpc/model/DepositTransaction.h"
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-rpc/jsonrpc/Common.h>  // WEB3_LOG
 
 void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
     const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash)
@@ -87,7 +88,22 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         Web3Transaction web3Tx;
         auto extraBytesRef = bcos::bytesRef(const_cast<byte*>(tx.extraTransactionBytes().data()),
             tx.extraTransactionBytes().size());
-        codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
+        if (auto error = codec::rlp::decodeFromPayload(extraBytesRef, web3Tx); error != nullptr)
+        {
+            // Undecodable web3 payload (corrupt extraTransactionBytes, or a tars mirror that
+            // diverged from the envelope): never serialize half-decoded state. Emit zeroed
+            // web3 fields instead (same posture as the deposit fallback above) and log once.
+            WEB3_LOG(WARNING) << LOG_DESC("TransactionResponse: undecodable web3 payload")
+                              << LOG_KV("hash", tx.hash().hexPrefixed())
+                              << LOG_KV("reason", error->errorMessage());
+            result["nonce"] = "0x0";
+            result["type"] = toQuantity(0);
+            result["value"] = "0x0";
+            result["v"] = "0x0";
+            result["r"] = "0x0";
+            result["s"] = "0x0";
+            return;
+        }
         result["nonce"] = toQuantity(web3Tx.nonce);
         result["type"] = toQuantity(static_cast<uint8_t>(web3Tx.type));
         result["value"] = toQuantity(web3Tx.value);

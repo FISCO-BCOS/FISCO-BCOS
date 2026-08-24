@@ -27,6 +27,8 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/Common.h>
+#include <string_view>
+#include <optional>
 #include <oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/lexical_cast.hpp>
 #include <magic_enum/magic_enum.hpp>
@@ -39,8 +41,9 @@ using MerkleProof = std::vector<crypto::HashType>;
 
 /// Parse the web3 chain-id system-config string as u256. nullopt on a corrupted value (non
 /// numeric, empty, or an unparsed remainder) — the single shared parse for the three config
-/// consumers (TxValidator::validateChainId, EthEndpoint's chainId gate, LedgerMethods::
-/// loadChainConfig) so width semantics and error behavior cannot drift. Note: boost::
+/// consumers (TxValidator::validateChainId [lands with part 4b, PR #5477], EthEndpoint's
+/// chainId gate, LedgerMethods::loadChainConfig [part 4b]) so width semantics and error
+/// behavior cannot drift. Note: boost::
 /// multiprecision's u256 stream-in ACCEPTS a negative sign and wraps modulo 2^256 (probe-
 /// verified: lexical_cast<u256>("-5") returns 2^256-5, no throw) — fail-closed at the gates,
 /// which compare against the node's real chainId, so a wrapped value never matches and the
