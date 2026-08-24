@@ -98,3 +98,5 @@ docs/opstack-*
 
 # Local devnet key residue (dfc6cd109 merge) — never track secrets
 opnode_p2p_priv.txt
+opnode_discovery_db/
+opnode_peerstore_db/
