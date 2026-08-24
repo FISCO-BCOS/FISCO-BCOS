@@ -309,6 +309,15 @@ BOOST_AUTO_TEST_CASE(test_contractABIDefinition_nullHashImpl)
 
     // getEventByTopic() should throw std::invalid_argument when _hashImpl is nullptr
     BOOST_CHECK_THROW(abiDef.getEventByTopic("0xabcdef", nullHash), std::invalid_argument);
+
+    // Positive: functions should work normally with a valid hash implementation
+    auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    auto ids = abiDef.methodIDs("transfer", hashImpl);
+    BOOST_CHECK(!ids.empty());
+
+    auto foundMethod = abiDef.getMethodByMethodID(ids[0], hashImpl);
+    BOOST_CHECK(foundMethod != nullptr);
+    BOOST_CHECK_EQUAL(foundMethod->getName(), "transfer");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
