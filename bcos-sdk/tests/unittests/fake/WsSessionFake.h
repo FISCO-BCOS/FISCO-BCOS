@@ -30,40 +30,24 @@ namespace cppsdk
 {
 namespace test
 {
-class WsSessionFake : public bcos::boostssl::ws::WsSession
+class WsSessionFake
 {
 public:
+    using Ptr = std::shared_ptr<WsSessionFake>;
+
+    // WsSession is no longer inheritable for overriding, the fake wraps a real
+    // session and only exposes the methods used by the tests
     WsSessionFake(IOServicePool::Ptr ioServicePool)
-      : bcos::boostssl::ws::WsSession(std::move(ioServicePool))
+      : m_session(std::make_shared<bcos::boostssl::ws::WsSession>(std::move(ioServicePool)))
     {
         WEBSOCKET_SESSION(INFO) << LOG_KV("[NEWOBJ][WSSESSION]", this);
     }
-    using Ptr = std::shared_ptr<WsSessionFake>;
 
 public:
-    virtual void asyncSendMessage(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
-        bcos::boostssl::ws::Options _options = bcos::boostssl::ws::Options(-1),
-        bcos::boostssl::ws::RespCallBack _respCallback =
-            bcos::boostssl::ws::RespCallBack()) override
-    {
-        (void)_msg;
-        (void)_options;
-        auto msg = std::make_shared<bcos::boostssl::ws::WsMessage>();
-        msg->setPayload(*m_resp);
-        auto session = shared_from_this();
-        _respCallback(m_error, msg, session);
-    }
-
-public:
-    virtual bool isConnected() override { return true; }
-
-public:
-    void setError(bcos::Error::Ptr _error) { m_error = _error; }
-    void setResp(std::shared_ptr<bcos::bytes> _resp) { m_resp = _resp; }
+    std::shared_ptr<bcos::boostssl::ws::WsSession> session() const { return m_session; }
 
 private:
-    bcos::Error::Ptr m_error;
-    std::shared_ptr<bcos::bytes> m_resp;
+    std::shared_ptr<bcos::boostssl::ws::WsSession> m_session;
 };
 }  // namespace test
 }  // namespace cppsdk

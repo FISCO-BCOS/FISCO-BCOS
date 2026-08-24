@@ -18,6 +18,9 @@
 file(GLOB_RECURSE SOURCES "unittests/*.cpp" "unittests/*.h" "unittests/*.sol")
 include(SearchTestCases)
 
+# sample / perf binaries under exec/ are built as compile-only smoke checks
+add_subdirectory(exec)
+
 # cmake settings
 set(TEST_BINARY_NAME test-boostssl)
 

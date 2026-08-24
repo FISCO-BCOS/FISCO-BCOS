@@ -8,7 +8,8 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
-#include <bcos-boostssl/websocket/RawWsMessage.h>
+#include <bcos-boostssl/websocket/Common.h>
+#include <bcos-boostssl/websocket/WsMessage.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -18,18 +19,17 @@ namespace bcos::test
 {
 BOOST_AUTO_TEST_SUITE(RawWsMessageTest)
 
-BOOST_AUTO_TEST_CASE(factoryBuildsRawMessage)
+BOOST_AUTO_TEST_CASE(rawModeIsFixedAtConstruction)
 {
-    RawWsMessageFactory factory;
-    auto msg = factory.buildMessage();
-    BOOST_REQUIRE(msg);
+    WsMessage msg(true);
+    BOOST_CHECK(msg.raw());
+    BOOST_CHECK_EQUAL(msg.packetType(), WS_RAW_MESSAGE_TYPE);
 }
 
 BOOST_AUTO_TEST_CASE(accessorsRoundTrip)
 {
-    RawWsMessage msg;
+    WsMessage msg(true);
     // setPayload takes bcos::bytes by value and payload() returns a non-owning bytesConstRef
-    // now (the shared_ptr<bytes> buffer was replaced by a value + view pair).
     msg.setPayload(bcos::bytes{0x01, 0x02, 0x03});
     msg.setSeq("seq-1");
     msg.setPacketType(7);
@@ -49,7 +49,7 @@ BOOST_AUTO_TEST_CASE(accessorsRoundTrip)
 
 BOOST_AUTO_TEST_CASE(respPacketFlag)
 {
-    RawWsMessage msg;
+    WsMessage msg(true);
     // setRespPacket() is a no-op and isRespPacket() is hardcoded false: raw
     // messages carry no response flag, so the call must never report true.
     msg.setRespPacket();
@@ -58,16 +58,16 @@ BOOST_AUTO_TEST_CASE(respPacketFlag)
 
 BOOST_AUTO_TEST_CASE(encodeAppendsPayloadDecodeRestoresIt)
 {
-    RawWsMessage msg;
+    WsMessage msg(true);
     bcos::bytes data{0xDE, 0xAD, 0xBE, 0xEF};
     msg.setPayload(data);
 
     bcos::bytes buffer;
     BOOST_REQUIRE(msg.encode(buffer));
     BOOST_CHECK(buffer == data);  // raw message encodes payload verbatim
-    BOOST_CHECK_EQUAL(msg.length(), buffer.size());
+    BOOST_CHECK_EQUAL(msg.payload().size(), buffer.size());
 
-    RawWsMessage decoded;
+    WsMessage decoded(true);
     auto consumed = decoded.decode(bcos::ref(buffer));
     BOOST_CHECK_EQUAL(consumed, static_cast<int64_t>(buffer.size()));
     BOOST_CHECK(decoded.payload().toBytes() == data);

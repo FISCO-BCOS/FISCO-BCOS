@@ -43,8 +43,8 @@ public:
 
     MockWeb3JsonRpcImpl()
       : Web3JsonRpcImpl("test-group", 1000,
-            std::make_shared<GroupManager>("test-group", "1", nullptr, nullptr), nullptr,
-            false, false)
+            std::make_shared<GroupManager>("test-group", "1", nullptr, nullptr), nullptr, false,
+            false)
     {}
 
     ~MockWeb3JsonRpcImpl() = default;
@@ -53,30 +53,14 @@ public:
     void mockMethod() {}
 };
 
-// Mock WsSession for testing
-class MockWsSession : public WsSession
+// WsSession is no longer polymorphic, so tests use a real session object.
+// Only endPoint()/setEndPoint() are exercised by these tests.
+static WsSession::Ptr makeMockWsSession(IOServicePool::Ptr ioServicePool)
 {
-public:
-    using Ptr = std::shared_ptr<MockWsSession>;
-
-    MockWsSession(IOServicePool::Ptr ioServicePool)
-      : WsSession(std::move(ioServicePool))
-    {
-        setEndPoint("127.0.0.1:8080");
-    }
-
-    ~MockWsSession() override = default;
-
-    bool isConnected() override { return m_connected; }
-    void setConnected(bool connected) { m_connected = connected; }
-
-    std::string getEndpoint() const { return endPoint(); }
-
-    void setEndPoint(const std::string& endpoint) { m_endPoint = endpoint; }
-
-private:
-    bool m_connected = true;
-};
+    auto session = std::make_shared<WsSession>(std::move(ioServicePool));
+    session->setEndPoint("127.0.0.1:8080");
+    return session;
+}
 
 BOOST_FIXTURE_TEST_SUITE(testWeb3Subscribe, RPCFixture)
 
@@ -137,9 +121,9 @@ BOOST_AUTO_TEST_CASE(testOnHttpSubscribeRequest)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
-    auto mockSession = std::make_shared<MockWsSession>(ioServicePool);
+    auto mockSession = makeMockWsSession(ioServicePool);
 
     int id = 111;
     // Test newHeads subscription
@@ -161,7 +145,8 @@ BOOST_AUTO_TEST_CASE(testOnHttpSubscribeRequest)
     BOOST_CHECK(strRequest1 == request.toStyledString());
 
     bcos::bytes respBytes1;
-    auto sender = [&respBytes1](bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
+    auto sender = [&respBytes1](
+                      bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
 
     mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), nullptr, sender);
 
@@ -192,9 +177,9 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeRequest)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
-    auto mockSession = std::make_shared<MockWsSession>(ioServicePool);
+    auto mockSession = makeMockWsSession(ioServicePool);
 
     int id = 111;
     // Test newHeads subscription
@@ -216,7 +201,8 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeRequest)
     BOOST_CHECK(strRequest1 == request.toStyledString());
 
     bcos::bytes respBytes1;
-    auto sender = [&respBytes1](bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
+    auto sender = [&respBytes1](
+                      bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
 
     mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), mockSession, sender);
 
@@ -231,7 +217,7 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeRequest)
     BOOST_CHECK(responseJson.isMember("result"));
     BOOST_CHECK(!responseJson["result"].asString().empty());
 
-    BOOST_CHECK(web3Subscribe->endpoint2SubscriptionIds().contains(mockSession->getEndpoint()));
+    BOOST_CHECK(web3Subscribe->endpoint2SubscriptionIds().contains(mockSession->endPoint()));
     BOOST_CHECK(web3Subscribe->newHeads2Session().contains(responseJson["result"].asString()));
     BOOST_CHECK(web3Subscribe->isSubscriptionIdExists(responseJson["result"].asString()));
 
@@ -244,7 +230,8 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeRequest)
     request2["params"].append("newPendingTransactions");
 
     bcos::bytes respBytes2;
-    auto sender2 = [&respBytes2](bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
+    auto sender2 = [&respBytes2](
+                       bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
 
     mockWeb3JsonRpcImpl->onRPCRequest(request2.toStyledString(), mockSession, sender2);
 
@@ -264,7 +251,7 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeNewHeads)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
     int id = 123;
     Json::Value request;
@@ -275,7 +262,8 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeNewHeads)
     request["params"].append("newHeads");
 
     bcos::bytes respBytes;
-    auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+    auto sender = [&respBytes](
+                      bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
 
     mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), session, sender);
 
@@ -308,11 +296,11 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    // auto session = std::make_shared<MockWsSession>(ioServicePool);
+    // auto session = makeMockWsSession(ioServicePool);
 
-    auto session1 = std::make_shared<MockWsSession>(ioServicePool);
+    auto session1 = makeMockWsSession(ioServicePool);
     session1->setEndPoint("127.0.0.1:8080");
-    auto session2 = std::make_shared<MockWsSession>(ioServicePool);
+    auto session2 = makeMockWsSession(ioServicePool);
     session2->setEndPoint("127.0.0.1:8081");
 
     Json::Reader reader;
@@ -332,7 +320,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         request1["params"].append("newHeads");
 
         bcos::bytes respBytes1;
-        auto sender1 = [&respBytes1](bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
+        auto sender1 = [&respBytes1](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request1.toStyledString(), session1, sender1);
 
         Json::Value responseJson1;
@@ -353,7 +342,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         request2["params"].append("newHeads");
 
         bcos::bytes respBytes2;
-        auto sender2 = [&respBytes2](bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
+        auto sender2 = [&respBytes2](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request2.toStyledString(), session2, sender2);
 
         Json::Value responseJson2;
@@ -373,7 +363,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         request3["params"].append("newHeads");
 
         bcos::bytes respBytes3;
-        auto sender3 = [&respBytes3](bcos::bytes bytes, boost::beast::http::status) { respBytes3 = bytes; };
+        auto sender3 = [&respBytes3](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes3 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request3.toStyledString(), session1, sender3);
         Json::Value responseJson3;
         BOOST_CHECK(reader.parse(std::string(respBytes3.begin(), respBytes3.end()), responseJson3));
@@ -392,7 +383,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         request4["params"].append("newHeads");
 
         bcos::bytes respBytes4;
-        auto sender4 = [&respBytes4](bcos::bytes bytes, boost::beast::http::status) { respBytes4 = bytes; };
+        auto sender4 = [&respBytes4](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes4 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request4.toStyledString(), session2, sender4);
         Json::Value responseJson4;
         BOOST_CHECK(reader.parse(std::string(respBytes4.begin(), respBytes4.end()), responseJson4));
@@ -413,8 +405,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
     BOOST_CHECK(newHeads2Session.contains(subscriptionId4));
 
     BOOST_CHECK(endpoint2SubscriptionIds.size() == 2);
-    BOOST_CHECK(endpoint2SubscriptionIds.contains(session1->getEndpoint()));
-    BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->getEndpoint()));
+    BOOST_CHECK(endpoint2SubscriptionIds.contains(session1->endPoint()));
+    BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->endPoint()));
 
     {
         // unsubscribe subscription1
@@ -426,7 +418,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         unsubscribeRequest["params"].append(subscriptionId1);
 
         bcos::bytes respBytes;
-        auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+        auto sender = [&respBytes](
+                          bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
 
         mockWeb3JsonRpcImpl->onRPCRequest(unsubscribeRequest.toStyledString(), session1, sender);
 
@@ -444,8 +437,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         BOOST_CHECK(newHeads2Session.contains(subscriptionId4));
 
         BOOST_CHECK(endpoint2SubscriptionIds.size() == 2);
-        BOOST_CHECK(endpoint2SubscriptionIds.contains(session1->getEndpoint()));
-        BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->getEndpoint()));
+        BOOST_CHECK(endpoint2SubscriptionIds.contains(session1->endPoint()));
+        BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->endPoint()));
     }
 
     {
@@ -458,7 +451,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         unsubscribeRequest["params"].append(subscriptionId2);
 
         bcos::bytes respBytes;
-        auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+        auto sender = [&respBytes](
+                          bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
 
         mockWeb3JsonRpcImpl->onRPCRequest(unsubscribeRequest.toStyledString(), session2, sender);
 
@@ -476,8 +470,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         BOOST_CHECK(newHeads2Session.contains(subscriptionId4));
 
         BOOST_CHECK(endpoint2SubscriptionIds.size() == 2);
-        BOOST_CHECK(endpoint2SubscriptionIds.contains(session1->getEndpoint()));
-        BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->getEndpoint()));
+        BOOST_CHECK(endpoint2SubscriptionIds.contains(session1->endPoint()));
+        BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->endPoint()));
     }
 
     {
@@ -490,7 +484,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         unsubscribeRequest["params"].append(subscriptionId3);
 
         bcos::bytes respBytes;
-        auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+        auto sender = [&respBytes](
+                          bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
 
         mockWeb3JsonRpcImpl->onRPCRequest(unsubscribeRequest.toStyledString(), session1, sender);
 
@@ -508,8 +503,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         BOOST_CHECK(newHeads2Session.contains(subscriptionId4));
 
         BOOST_CHECK(endpoint2SubscriptionIds.size() == 1);
-        BOOST_CHECK(!endpoint2SubscriptionIds.contains(session1->getEndpoint()));
-        BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->getEndpoint()));
+        BOOST_CHECK(!endpoint2SubscriptionIds.contains(session1->endPoint()));
+        BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->endPoint()));
     }
 
     {
@@ -522,7 +517,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         unsubscribeRequest["params"].append(subscriptionId4);
 
         bcos::bytes respBytes;
-        auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+        auto sender = [&respBytes](
+                          bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
 
         mockWeb3JsonRpcImpl->onRPCRequest(unsubscribeRequest.toStyledString(), session2, sender);
 
@@ -540,8 +536,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         BOOST_CHECK(!newHeads2Session.contains(subscriptionId4));
 
         BOOST_CHECK_EQUAL(endpoint2SubscriptionIds.size(), 0);
-        BOOST_CHECK(!endpoint2SubscriptionIds.contains(session1->getEndpoint()));
-        BOOST_CHECK(!endpoint2SubscriptionIds.contains(session2->getEndpoint()));
+        BOOST_CHECK(!endpoint2SubscriptionIds.contains(session1->endPoint()));
+        BOOST_CHECK(!endpoint2SubscriptionIds.contains(session2->endPoint()));
     }
 
     {
@@ -554,7 +550,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         unsubscribeRequest["params"].append(subscriptionId1);
 
         bcos::bytes respBytes2;
-        auto sender2 = [&respBytes2](bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
+        auto sender2 = [&respBytes2](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
 
         mockWeb3JsonRpcImpl->onRPCRequest(unsubscribeRequest.toStyledString(), session1, sender2);
 
@@ -582,11 +579,11 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    // auto session = std::make_shared<MockWsSession>(ioServicePool);
+    // auto session = makeMockWsSession(ioServicePool);
 
-    auto session1 = std::make_shared<MockWsSession>(ioServicePool);
+    auto session1 = makeMockWsSession(ioServicePool);
     session1->setEndPoint("127.0.0.1:8080");
-    auto session2 = std::make_shared<MockWsSession>(ioServicePool);
+    auto session2 = makeMockWsSession(ioServicePool);
     session2->setEndPoint("127.0.0.1:8081");
 
     Json::Reader reader;
@@ -606,7 +603,8 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
         request1["params"].append("newHeads");
 
         bcos::bytes respBytes1;
-        auto sender1 = [&respBytes1](bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
+        auto sender1 = [&respBytes1](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request1.toStyledString(), session1, sender1);
 
         Json::Value responseJson1;
@@ -627,7 +625,8 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
         request2["params"].append("newHeads");
 
         bcos::bytes respBytes2;
-        auto sender2 = [&respBytes2](bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
+        auto sender2 = [&respBytes2](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request2.toStyledString(), session2, sender2);
 
         Json::Value responseJson2;
@@ -647,7 +646,8 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
         request3["params"].append("newHeads");
 
         bcos::bytes respBytes3;
-        auto sender3 = [&respBytes3](bcos::bytes bytes, boost::beast::http::status) { respBytes3 = bytes; };
+        auto sender3 = [&respBytes3](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes3 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request3.toStyledString(), session1, sender3);
         Json::Value responseJson3;
         BOOST_CHECK(reader.parse(std::string(respBytes3.begin(), respBytes3.end()), responseJson3));
@@ -666,7 +666,8 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
         request4["params"].append("newHeads");
 
         bcos::bytes respBytes4;
-        auto sender4 = [&respBytes4](bcos::bytes bytes, boost::beast::http::status) { respBytes4 = bytes; };
+        auto sender4 = [&respBytes4](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes4 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request4.toStyledString(), session2, sender4);
         Json::Value responseJson4;
         BOOST_CHECK(reader.parse(std::string(respBytes4.begin(), respBytes4.end()), responseJson4));
@@ -688,7 +689,7 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
     BOOST_CHECK(!newHeads2Session.contains(subscriptionId3));
     BOOST_CHECK(!newHeads2Session.contains(subscriptionId1));
     BOOST_CHECK_EQUAL(endpoint2SubscriptionIds.size(), 1);
-    BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->getEndpoint()));
+    BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->endPoint()));
 
     // Remove session2 subscriptions
     web3Subscribe->onRemoveSubscribeBySession(session2);
@@ -711,7 +712,7 @@ BOOST_AUTO_TEST_CASE(testOnNewBlock)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
     Json::Value request;
     request["jsonrpc"] = "2.0";
@@ -721,8 +722,8 @@ BOOST_AUTO_TEST_CASE(testOnNewBlock)
     request["params"].append("newHeads");
 
     bcos::bytes respBytes;
-    auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
-    mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), session, sender);
+    auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes;
+    }; mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), session, sender);
 
     Json::Value responseJson;
     Json::Reader reader;
@@ -750,7 +751,7 @@ BOOST_AUTO_TEST_CASE(testWeb3SubscribeInvalidRequests)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
     // Test with empty request
     Json::Value emptyRequest;
@@ -784,9 +785,9 @@ BOOST_AUTO_TEST_CASE(testConcurrentAccess)
 
     // Create multiple mock sessions
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session1 = std::make_shared<MockWsSession>(ioServicePool);
-    auto session2 = std::make_shared<MockWsSession>(ioServicePool);
-    auto session3 = std::make_shared<MockWsSession>(ioServicePool);
+    auto session1 = makeMockWsSession(ioServicePool);
+    auto session2 = makeMockWsSession(ioServicePool);
+    auto session3 = makeMockWsSession(ioServicePool);
 
     // Create subscription requests
     Json::Value request1, request2, request3;
@@ -810,13 +811,16 @@ BOOST_AUTO_TEST_CASE(testConcurrentAccess)
 
     // Test concurrent subscriptions
     bcos::bytes respBytes1;
-    auto sender1 = [&respBytes1](bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
+    auto sender1 = [&respBytes1](
+                       bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
     mockWeb3JsonRpcImpl->onRPCRequest(request1.toStyledString(), session1, sender1);
     bcos::bytes respBytes2;
-    auto sender2 = [&respBytes2](bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
+    auto sender2 = [&respBytes2](
+                       bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
     mockWeb3JsonRpcImpl->onRPCRequest(request2.toStyledString(), session2, sender2);
     bcos::bytes respBytes3;
-    auto sender3 = [&respBytes3](bcos::bytes bytes, boost::beast::http::status) { respBytes3 = bytes; };
+    auto sender3 = [&respBytes3](
+                       bcos::bytes bytes, boost::beast::http::status) { respBytes3 = bytes; };
     mockWeb3JsonRpcImpl->onRPCRequest(request3.toStyledString(), session3, sender3);
 
     Json::Value responseJson1, responseJson2, responseJson3;
@@ -855,7 +859,7 @@ BOOST_AUTO_TEST_CASE(testMultiSubInOneRequest)
 
     // Create multiple mock sessions
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
 
     Json::Value request;
@@ -886,7 +890,8 @@ BOOST_AUTO_TEST_CASE(testMultiSubInOneRequest)
 
     // Test concurrent subscriptions
     bcos::bytes respBytes;
-    auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+    auto sender = [&respBytes](
+                      bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
     mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), session, sender);
 
     Json::Value responseJson;
@@ -923,7 +928,7 @@ BOOST_AUTO_TEST_CASE(testMultiRequestInOneRequest)
 
     // Create multiple mock sessions
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
 
     Json::Value request;
@@ -951,7 +956,8 @@ BOOST_AUTO_TEST_CASE(testMultiRequestInOneRequest)
 
     // Test concurrent subscriptions
     bcos::bytes respBytes;
-    auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+    auto sender = [&respBytes](
+                      bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
     mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), session, sender);
 
     Json::Value responseJson;

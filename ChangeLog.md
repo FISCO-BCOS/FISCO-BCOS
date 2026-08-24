@@ -1,4 +1,12 @@
 
+### v3.18.0
+
+**bcos-boostssl/bcos-cpp-sdk 破坏性变更**：删除 MessageFace 及工厂、WsMessage 改 move-only、回调改按值传 WsMessage、WsSession/WsService 去虚、发送路径签名改 const WsMessage&（迁移详见 PR #5464）
+
+**后续跟进**：`WsStreamDelegate::setVerifyCallback` fail-closed（raw 流上请求证书校验时抛错）将在独立 PR 落地
+
+---
+
 ### v3.16.2
 
 (2025-10)

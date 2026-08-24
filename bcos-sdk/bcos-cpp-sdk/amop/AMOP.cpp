@@ -17,8 +17,7 @@
  * @author: octopus
  * @date 2021-08-23
  */
-#include <bcos-boostssl/interfaces/MessageFace.h>
-#include <bcos-boostssl/websocket/WsService.h>
+#include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-cpp-sdk/amop/AMOP.h>
 #include <bcos-cpp-sdk/amop/Common.h>
@@ -104,10 +103,10 @@ void AMOP::subscribe(const std::string& _topic, SubCallback _callback)
 void AMOP::sendResponse(
     const std::string& _endPoint, const std::string& _seq, bcos::bytesConstRef _data)
 {
-    auto msg = m_messageFactory->buildMessage();
-    msg->setSeq(_seq);
-    msg->setPayload(bcos::bytes(_data.begin(), _data.end()));
-    msg->setPacketType(bcos::cppsdk::amop::MessageType::AMOP_RESPONSE);
+    WsMessage msg;
+    msg.setSeq(_seq);
+    msg.setPayload(bcos::bytes(_data.begin(), _data.end()));
+    msg.setPacketType(bcos::cppsdk::amop::MessageType::AMOP_RESPONSE);
 
     m_service->asyncSendMessageByEndPoint(_endPoint, msg);
 }
@@ -123,24 +122,20 @@ void AMOP::publish(
     auto buffer = std::make_shared<bytes>();
     request->encode(*buffer);
 
-    auto sendMsg = m_messageFactory->buildMessage();
-    sendMsg->setSeq(m_messageFactory->newSeq());
-    sendMsg->setPacketType(bcos::cppsdk::amop::MessageType::AMOP_REQUEST);
-    sendMsg->setPayload(std::move(*buffer));
-
-    auto sendBuffer = std::make_shared<bytes>();
-    sendMsg->encode(*sendBuffer);
+    WsMessage sendMsg;
+    sendMsg.setSeq(newSeq());
+    sendMsg.setPacketType(bcos::cppsdk::amop::MessageType::AMOP_REQUEST);
+    sendMsg.setPayload(std::move(*buffer));
 
     AMOP_CLIENT(TRACE) << LOG_BADGE("publish") << LOG_DESC("publish message")
                        << LOG_KV("topic", _topic);
     m_service->asyncSendMessage(sendMsg, bcos::boostssl::ws::Options(_timeout),
-        [_callback](Error::Ptr _error, std::shared_ptr<bcos::boostssl::MessageFace> _msg,
-            std::shared_ptr<bcos::boostssl::ws::WsSession> _session) {
-            auto wsMessage = std::dynamic_pointer_cast<WsMessage>(_msg);
-            if (!_error && wsMessage && wsMessage->status() != 0)
+        [_callback](Error::Ptr _error, bcos::boostssl::ws::WsMessage _msg,
+            std::shared_ptr<bcos::boostssl::ws::WsSession> _session) mutable {
+            if (!_error && _msg.status() != 0)
             {
-                auto errorNew = BCOS_ERROR_PTR(wsMessage->status(),
-                    std::string(wsMessage->payload().begin(), wsMessage->payload().end()));
+                auto errorNew = BCOS_ERROR_PTR(
+                    _msg.status(), std::string(_msg.payload().begin(), _msg.payload().end()));
 
                 AMOP_CLIENT(WARNING) << LOG_BADGE("publish") << LOG_DESC("publish response failed")
                                      << LOG_KV("code", errorNew->errorCode())
@@ -149,7 +144,12 @@ void AMOP::publish(
                 _error = errorNew;
             }
 
-            _callback(_error, wsMessage, _session);
+            // Note: the public PubCallback keeps shared_ptr<WsMessage>; on error we pass
+            // nullptr (both transport errors and status!=0 responses map to nullptr here),
+            // converting to shared_ptr only for real success responses
+            _callback(_error,
+                _error ? nullptr : std::make_shared<bcos::boostssl::ws::WsMessage>(std::move(_msg)),
+                _session);
         });
 }
 
@@ -163,13 +163,10 @@ void AMOP::broadcast(const std::string& _topic, bcos::bytesConstRef _data)
     auto buffer = std::make_shared<bytes>();
     request->encode(*buffer);
 
-    auto sendMsg = m_messageFactory->buildMessage();
-    sendMsg->setSeq(m_messageFactory->newSeq());
-    sendMsg->setPacketType(bcos::cppsdk::amop::MessageType::AMOP_BROADCAST);
-    sendMsg->setPayload(std::move(*buffer));
-
-    auto sendBuffer = std::make_shared<bytes>();
-    sendMsg->encode(*sendBuffer);
+    WsMessage sendMsg;
+    sendMsg.setSeq(newSeq());
+    sendMsg.setPacketType(bcos::cppsdk::amop::MessageType::AMOP_BROADCAST);
+    sendMsg.setPayload(std::move(*buffer));
 
     AMOP_CLIENT(TRACE) << LOG_BADGE("broadcast") << LOG_DESC("broadcast message")
                        << LOG_KV("topic", _topic);
@@ -189,10 +186,10 @@ void AMOP::updateTopicsToRemote()
 void AMOP::updateTopicsToRemote(std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
     std::string request = m_topicManager->toJson();
-    auto msg = m_messageFactory->buildMessage();
-    msg->setSeq(m_messageFactory->newSeq());
-    msg->setPacketType(bcos::cppsdk::amop::MessageType::AMOP_SUBTOPIC);
-    msg->setPayload(bcos::bytes(request.begin(), request.end()));
+    WsMessage msg;
+    msg.setSeq(newSeq());
+    msg.setPacketType(bcos::cppsdk::amop::MessageType::AMOP_SUBTOPIC);
+    msg.setPayload(bcos::bytes(request.begin(), request.end()));
 
     _session->asyncSendMessage(msg);
 
@@ -201,13 +198,12 @@ void AMOP::updateTopicsToRemote(std::shared_ptr<bcos::boostssl::ws::WsSession> _
                       << LOG_KV("endpoint", _session->endPoint()) << LOG_KV("topics", request);
 }
 
-void AMOP::onRecvAMOPRequest(std::shared_ptr<boostssl::MessageFace> _msg,
-    std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+void AMOP::onRecvAMOPRequest(
+    boostssl::ws::WsMessage _msg, std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
-    auto seq = _msg->seq();
+    auto seq = _msg.seq();
     auto request = m_requestFactory->buildRequest();
-    auto ret =
-        request->decode(bcos::bytesConstRef(_msg->payload().data(), _msg->payload().size()));
+    auto ret = request->decode(bcos::bytesConstRef(_msg.payload().data(), _msg.payload().size()));
     if (ret < 0)
     {
         AMOP_CLIENT(WARNING) << LOG_BADGE("onRecvAMOPRequest")
@@ -238,22 +234,21 @@ void AMOP::onRecvAMOPRequest(std::shared_ptr<boostssl::MessageFace> _msg,
     }
 }
 
-void AMOP::onRecvAMOPResponse(std::shared_ptr<boostssl::MessageFace> _msg,
-    std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+void AMOP::onRecvAMOPResponse(
+    boostssl::ws::WsMessage _msg, std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
-    auto seq = _msg->seq();
+    auto seq = _msg.seq();
     AMOP_CLIENT(WARNING) << LOG_BADGE("onRecvAMOPResponse")
                          << LOG_DESC("maybe the amop request callback timeout")
                          << LOG_KV("seq", seq) << LOG_KV("endpoint", _session->endPoint());
 }
 
-void AMOP::onRecvAMOPBroadcast(std::shared_ptr<boostssl::MessageFace> _msg,
-    std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+void AMOP::onRecvAMOPBroadcast(
+    boostssl::ws::WsMessage _msg, std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
-    auto seq = _msg->seq();
+    auto seq = _msg.seq();
     auto request = m_requestFactory->buildRequest();
-    auto ret =
-        request->decode(bcos::bytesConstRef(_msg->payload().data(), _msg->payload().size()));
+    auto ret = request->decode(bcos::bytesConstRef(_msg.payload().data(), _msg.payload().size()));
     if (ret < 0)
     {
         AMOP_CLIENT(WARNING) << LOG_BADGE("onRecvAMOPBroadcast")

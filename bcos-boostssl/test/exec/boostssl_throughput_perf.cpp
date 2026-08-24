@@ -109,7 +109,7 @@ void workAsClient(std::string serverIp, uint16_t serverPort, bool disableSsl, ui
         config->setContextConfig(contextConfig);
     }
 
-    auto wsService = std::make_shared<ws::WsService>("boostssl-th-perf-client");
+    auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
     wsInitializer->setConfig(config);
@@ -117,9 +117,9 @@ void workAsClient(std::string serverIp, uint16_t serverPort, bool disableSsl, ui
     wsService->start();
 
     std::string strMsg(msgSize, 'a');
-    auto msg = wsService->messageFactory()->buildMessage();
-    msg->setPacketType(DELAY_PERF_MSGTYPE);
-    msg->setPayload(bytes(strMsg.begin(), strMsg.end()));
+    WsMessage msg;
+    msg.setPacketType(DELAY_PERF_MSGTYPE);
+    msg.setPayload(bytes(strMsg.begin(), strMsg.end()));
 
     std::atomic<uint64_t> nSucC = 0;
     std::atomic<uint64_t> nFailedC = 0;
@@ -143,7 +143,7 @@ void workAsClient(std::string serverIp, uint16_t serverPort, bool disableSsl, ui
                 auto ss = wsService->sessions();
                 if (!ss.empty())
                 {
-                    nQueueSize = ss[0]->msgQueueSize();
+                    nQueueSize = ss[0]->writeQueueSize();
                 }
 
                 std::cerr << " boostssl throughput perf working as client: " << std::endl;
@@ -165,10 +165,10 @@ void workAsClient(std::string serverIp, uint16_t serverPort, bool disableSsl, ui
     {
         nThisSendCount++;
         nLastSendCount++;
-        msg->setSeq(wsService->messageFactory()->newSeq());
+        msg.setSeq(newSeq());
         wsService->asyncSendMessage(msg, Options(-1),
-            [&nFailedC, &nSucC, &nLastFailedC, &nLastSucC](Error::Ptr _error,
-                std::shared_ptr<MessageFace> _msg, std::shared_ptr<WsSession> _session) {
+            [&nFailedC, &nSucC, &nLastFailedC, &nLastSucC](
+                Error::Ptr _error, WsMessage _msg, std::shared_ptr<WsSession> _session) {
                 (void)_error;
                 (void)_session;
                 (void)_msg;
@@ -213,7 +213,7 @@ void workAsServer(std::string listenIp, uint16_t listenPort, bool disableSsl, ui
         config->setContextConfig(contextConfig);
     }
 
-    auto wsService = std::make_shared<ws::WsService>("boostssl-th-perf-server");
+    auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
     wsInitializer->setConfig(config);
@@ -222,11 +222,11 @@ void workAsServer(std::string listenIp, uint16_t listenPort, bool disableSsl, ui
     std::atomic<uint64_t> totalRecvDataSize = {0};
     std::atomic<uint64_t> lastRecvDataCount = {0};
     std::atomic<uint64_t> lastSecTotalRecvDataSize = {0};
-    wsService->registerMsgHandler(DELAY_PERF_MSGTYPE,
-        [&totalRecvDataSize, &lastSecTotalRecvDataSize, &lastRecvDataCount](
-            std::shared_ptr<MessageFace> _msg, std::shared_ptr<WsSession> _session) {
-            totalRecvDataSize += _msg->payload().size();
-            lastSecTotalRecvDataSize += _msg->payload().size();
+    wsService->registerMsgHandler(
+        DELAY_PERF_MSGTYPE, [&totalRecvDataSize, &lastSecTotalRecvDataSize, &lastRecvDataCount](
+                                WsMessage _msg, std::shared_ptr<WsSession> _session) {
+            totalRecvDataSize += _msg.payload().size();
+            lastSecTotalRecvDataSize += _msg.payload().size();
             lastRecvDataCount++;
             _session->asyncSendMessage(_msg);
         });

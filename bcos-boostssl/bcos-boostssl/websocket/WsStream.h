@@ -40,6 +40,7 @@
 #include <functional>
 #include <memory>
 #include <utility>
+#include <variant>
 
 namespace bcos::boostssl::ws
 {
@@ -51,15 +52,15 @@ class WsStream
 {
 public:
     using Ptr = std::shared_ptr<WsStream>;
-    using ConstPtr = std::shared_ptr<const WsStream>;
 
-    WsStream(std::shared_ptr<boost::beast::websocket::stream<STREAM>> _stream) : m_stream(_stream)
+    explicit WsStream(boost::beast::websocket::stream<STREAM> _stream)
+      : m_stream(std::move(_stream))
     {
         initDefaultOpt();
         WEBSOCKET_STREAM(INFO) << LOG_KV("[NEWOBJ][WsStream]", this);
     }
 
-    virtual ~WsStream()
+    ~WsStream()
     {
         WEBSOCKET_STREAM(INFO) << LOG_KV("[DELOBJ][WsStream]", this);
         if (open())
@@ -92,25 +93,16 @@ public:
             // open ping/pong option
             opt.keep_alive_pings = true;
 
-            m_stream->set_option(opt);
-            m_stream->auto_fragment(false);
-            m_stream->secure_prng(false);
-            m_stream->write_buffer_bytes(2 * 1024 * 1024);
+            m_stream.set_option(opt);
+            m_stream.auto_fragment(false);
+            m_stream.secure_prng(false);
+            m_stream.write_buffer_bytes(2 * 1024 * 1024);
         }
     }
 
-    //---------------  set opt params for websocket stream
-    // begin-----------------------------
-    void setMaxReadMsgSize(uint32_t _maxValue) { m_stream->read_message_max(_maxValue); }
+    void setMaxReadMsgSize(uint32_t _maxValue) { m_stream.read_message_max(_maxValue); }
 
-    template <typename OPT>
-    void setOpt(OPT _opt)
-    {
-        m_stream->set_option(_opt);
-    }
-    //---------------  set opt params for websocket stream  end
-    //-------------------------------
-    bool open() { return !m_closed.load() && m_stream->is_open(); }
+    bool open() { return !m_closed.load() && m_stream.is_open(); }
 
     void close()
     {
@@ -120,17 +112,17 @@ public:
         {
             // websocket stream
             boost::beast::error_code ec;
-            m_stream->close(boost::beast::websocket::close_code::normal, ec);
+            m_stream.close(boost::beast::websocket::close_code::normal, ec);
 
             // ssl stream
-            shutdown(m_stream->next_layer());
+            shutdown(m_stream.next_layer());
 
             // tcp stream
             tcpStream().cancel();
             tcpStream().close();
 
             // socket
-            auto& ss = boost::beast::get_lowest_layer(*m_stream);
+            auto& ss = boost::beast::get_lowest_layer(m_stream);
             ws::WsTools::close(ss.socket());
             WEBSOCKET_STREAM(INFO)
                 << LOG_DESC("the real action to close the stream") << LOG_KV("this", this);
@@ -149,35 +141,35 @@ public:
         sslStream.shutdown(ec);
     }
 
-    boost::beast::tcp_stream& tcpStream() { return boost::beast::get_lowest_layer(*m_stream); }
+    boost::beast::tcp_stream& tcpStream() { return boost::beast::get_lowest_layer(m_stream); }
 
-    std::shared_ptr<boost::beast::websocket::stream<STREAM>> stream() const { return m_stream; }
+    boost::beast::websocket::stream<STREAM>& stream() { return m_stream; }
 
 public:
     void asyncWrite(const bcos::bytes& _buffer, WsStreamRWHandler _handler)
     {
-        m_stream->binary(true);
-        m_stream->async_write(boost::asio::buffer(_buffer), _handler);
+        m_stream.binary(true);
+        m_stream.async_write(boost::asio::buffer(_buffer), _handler);
     }
 
     void asyncRead(boost::beast::flat_buffer& _buffer, WsStreamRWHandler _handler)
     {
-        m_stream->async_read(_buffer, _handler);
+        m_stream.async_read(_buffer, _handler);
     }
 
     void asyncHandshake(const std::string& _host, const std::string& _target,
         std::function<void(boost::beast::error_code)> _handler)
     {
-        m_stream->async_handshake(_host, _target, _handler);
+        m_stream.async_handshake(_host, _target, _handler);
     }
 
     void asyncAccept(
         bcos::boostssl::http::HttpRequest _httpRequest, WsStreamHandshakeHandler _handler)
     {
-        m_stream->async_accept(_httpRequest, boost::beast::bind_front_handler(_handler));
+        m_stream.async_accept(_httpRequest, boost::beast::bind_front_handler(_handler));
     }
 
-    virtual std::string localEndpoint()
+    std::string localEndpoint()
     {
         try
         {
@@ -195,7 +187,7 @@ public:
         return std::string("");
     }
 
-    virtual std::string remoteEndpoint()
+    std::string remoteEndpoint()
     {
         try
         {
@@ -215,7 +207,7 @@ public:
 
 private:
     std::atomic<bool> m_closed{false};
-    std::shared_ptr<boost::beast::websocket::stream<STREAM>> m_stream;
+    boost::beast::websocket::stream<STREAM> m_stream;
 };
 
 using RawWsStream = WsStream<boost::beast::tcp_stream>;
@@ -225,11 +217,10 @@ class WsStreamDelegate
 {
 public:
     using Ptr = std::shared_ptr<WsStreamDelegate>;
-    using ConstPtr = std::shared_ptr<const WsStreamDelegate>;
 
 public:
-    WsStreamDelegate(RawWsStream::Ptr _rawStream);
-    WsStreamDelegate(SslWsStream::Ptr _sslStream);
+    explicit WsStreamDelegate(RawWsStream::Ptr _rawStream);
+    explicit WsStreamDelegate(SslWsStream::Ptr _sslStream);
 
 public:
     void setMaxReadMsgSize(uint32_t _maxValue);
@@ -255,23 +246,18 @@ public:
     void setVerifyCallback(bool _disableSsl, VerifyCallback callback, bool = true);
 
 private:
-    bool m_isSsl{false};
-
-    RawWsStream::Ptr m_rawStream;
-    SslWsStream::Ptr m_sslStream;
+    std::variant<RawWsStream::Ptr, SslWsStream::Ptr> m_stream;
 };
 
 class WsStreamDelegateBuilder
 {
 public:
     using Ptr = std::shared_ptr<WsStreamDelegateBuilder>;
-    using ConstPtr = std::shared_ptr<const WsStreamDelegateBuilder>;
 
 public:
-    WsStreamDelegate::Ptr build(std::shared_ptr<boost::beast::tcp_stream> _tcpStream);
+    WsStreamDelegate::Ptr build(boost::beast::tcp_stream _tcpStream);
 
-    WsStreamDelegate::Ptr build(
-        std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _sslStream);
+    WsStreamDelegate::Ptr build(boost::beast::ssl_stream<boost::beast::tcp_stream> _sslStream);
 
     WsStreamDelegate::Ptr build(bool _disableSsl, std::shared_ptr<boost::asio::ssl::context> _ctx,
         std::shared_ptr<boost::beast::tcp_stream> _tcpStream);

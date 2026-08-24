@@ -92,15 +92,13 @@ int main(int argc, char** argv)
     auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
-    auto sessionFactory = std::make_shared<WsSessionFactory>();
-    wsInitializer->setSessionFactory(sessionFactory);
 
     wsInitializer->setConfig(config);
     wsInitializer->initWsService(wsService);
 
-    if (!wsService->registerMsgHandler(999,
-            [](std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session) {
-                _msg->setRespPacket();
+    if (!wsService->registerMsgHandler(
+            999, [](WsMessage _msg, std::shared_ptr<WsSession> _session) {
+                _msg.setRespPacket();
 
                 _session->asyncSendMessage(_msg);
             }))
@@ -109,21 +107,12 @@ int main(int argc, char** argv)
         return EXIT_SUCCESS;
     }
 
-    auto handler = wsService->getMsgHandler(999);
-    if (!handler)
-    {
-        BCOS_LOG(WARNING) << "msg handler not found";
-        return EXIT_SUCCESS;
-    }
-
     wsService->start();
 
-    int i = 0;
     while (true)
     {
         // TEST_SERVER_LOG(INFO, MODULE_NAME) << LOG_BADGE(" [Main] ===>>>> ");
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        i++;
     }
 
     return EXIT_SUCCESS;
