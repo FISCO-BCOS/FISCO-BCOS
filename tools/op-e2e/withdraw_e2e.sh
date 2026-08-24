@@ -59,14 +59,14 @@ python3 - "$L1_BEFORE" "$L1_AFTER" <<'PY'
 import sys
 before, after = int(sys.argv[1]), int(sys.argv[2])
 delta = after - before
-# 1 ETH out MINUS the 0.08 create bond, which stays in the game's credit
-# ledger until claimCredit (DelayedWETH holds it 3.5 days — outside this
-# window), minus L1 gas. This window was never actually reachable before
-# 2026-08-24: a five-field finalize signature in the claim tool's wait loop
-# had been failing every run upstream of this assert.
-assert 10**18 - 9 * 10**16 <= delta <= 10**18 - 7 * 10**16, \
-    f"unexpected L1 delta {delta} (want ~0.92: 1 ETH minus the held 0.08 bond minus gas)"
-print(f"BALANCE ASSERT OK: delta={delta} wei (~1 ETH minus 0.08 held bond minus gas)")
+# The full round now includes bond recovery (withdraw_claim.py's two-step
+# claimCredit after finalize), so the 0.08 create-bond comes BACK: the delta is
+# 1 ETH minus only the gas of ~7 L1 transactions. Before recovery existed the
+# window had to admit the held bond (~0.92); any credit-accounting bug now
+# shows up as a delta outside [1 - 0.01, 1].
+assert 10**18 - 10**16 <= delta <= 10**18, \
+    f"unexpected L1 delta {delta} (want ~1 ETH minus gas; bond must be recovered)"
+print(f"BALANCE ASSERT OK: delta={delta} wei (~1 ETH minus gas, bond recovered)")
 PY
 
 # No clock warps were used, so the sequencer must still accept txs after the

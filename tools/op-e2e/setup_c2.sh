@@ -58,6 +58,11 @@ PROOF_MATURITY_SECONDS="${PROOF_MATURITY_SECONDS:-12}"
 DISPUTE_FINALITY_SECONDS="${DISPUTE_FINALITY_SECONDS:-6}"
 FAULT_GAME_MAX_CLOCK="${FAULT_GAME_MAX_CLOCK:-45}"
 PREIMAGE_CHALLENGE_SECONDS="${PREIMAGE_CHALLENGE_SECONDS:-30}"
+# DelayedWETH unlock delay (immutable in the deployed implementation): the bond
+# recovery is a TWO-STEP claimCredit — the first unlocks (starts this countdown),
+# the second pays the bond out. Standard default is 302400s (3.5 days), which
+# puts recovery outside any e2e window; 10s keeps it testable end-to-end.
+WETH_UNLOCK_SECONDS="${WETH_UNLOCK_SECONDS:-10}"
 BATCHER_MAX_CHANNEL="${BATCHER_MAX_CHANNEL:-1}"
 
 # 账户(anvil 标准助记词)
@@ -167,6 +172,7 @@ disputeGameFinalityDelaySeconds = $DISPUTE_FINALITY_SECONDS
 preimageOracleChallengePeriod = $PREIMAGE_CHALLENGE_SECONDS
 faultGameClockExtension = 1
 faultGameMaxClockDuration = $FAULT_GAME_MAX_CLOCK
+faultGameWithdrawalDelay = $WETH_UNLOCK_SECONDS
 dangerouslyAllowCustomDisputeParameters = true
 EOF
   "$C2/op-deployer" --log.level info apply \

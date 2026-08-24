@@ -607,6 +607,24 @@ def main():
         "--rpc-url", L1)
     print("finalized:", fin.splitlines()[0] if fin else "?")
 
+    # 4. bond recovery: the 0.08 ETH create-bond is claimable via a TWO-STEP
+    #    claimCredit — the first call unlocks (starts the DelayedWETH countdown,
+    #    WETH_UNLOCK_SECONDS from the setup intent), the second pays it out.
+    #    The unlock flag (hasUnlockedCredit) flips on the first SEND, so the
+    #    wait simulates the SECOND call: before the delay expires the inner
+    #    weth.withdraw reverts ("withdrawal delay not met"), after it the whole
+    #    path succeeds and the payout send can follow.
+    cast("send", game, "claimCredit(address)", PROPOSER_ADDR,
+         "--private-key", PROPOSER_KEY, "--rpc-url", L1)
+    print("bond unlocked (DelayedWETH countdown started)")
+    if not wait_until("bond unlock delay", 120,
+                      game, "claimCredit(address)", PROPOSER_ADDR,
+                      "--from", PROPOSER_ADDR, "--rpc-url", L1):
+        raise SystemExit("bond not claimable within 120s")
+    cast("send", game, "claimCredit(address)", PROPOSER_ADDR,
+         "--private-key", PROPOSER_KEY, "--rpc-url", L1)
+    print("bond recovered (0.08 ETH back to the proposer)")
+
 
 if __name__ == "__main__":
     main()
