@@ -32,9 +32,16 @@ enum MessageDecodeStatus
     MESSAGE_INCOMPLETE = 1
 };
 
-// FIB-69: cap legitimate gateway payload size; reject larger frames to prevent resource-
-// exhaustion via 32 MB frames propagating into consensus/sync/txpool.
-constexpr std::size_t MAX_PAYLOAD_LENGTH = 8 * 1024 * 1024;  // 8 MB; << MAX_MESSAGE_LENGTH=32MB
+// FIB-69: cap the payload size accepted from the gateway as a second line of defense.
+// MUST stay equal to gateway MAX_MESSAGE_LENGTH (bcos-gateway/bcos-gateway/Common.h).
+// Honest senders never trip this check: Session::asyncSendMessage rejects messages whose
+// UNCOMPRESSED length exceeds the same 32 MB bound before encoding, so with equal caps a
+// message a peer could legitimately send is always accepted here. The receiver-side
+// P2PMessage::decode() bound only covers the compressed wire bytes (compression is on by
+// default), so this constant is the receiver's only limit on the decompressed payload —
+// which is why the check stays. A smaller cap here silently drops legitimate large
+// messages (e.g. consensus proposals of large blocks) that pass the gateway.
+constexpr std::size_t MAX_PAYLOAD_LENGTH = 32UL * 1024 * 1024;
 
 /// moduleID          :2 bytes
 /// UUID length       :1 bytes

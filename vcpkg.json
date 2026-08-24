@@ -34,7 +34,6 @@
     "fakeit",
     "tbb",
     "jsoncpp",
-    "gmp",
     "curl",
     "tomlplusplus",
     {
@@ -74,6 +73,7 @@
         },
         "zstd",
         "cryptopp",
+        "gmp",
         "redis-plus-plus",
         "tarscpp"
       ]
