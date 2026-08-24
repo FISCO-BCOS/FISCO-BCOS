@@ -100,3 +100,4 @@ docs/opstack-*
 opnode_p2p_priv.txt
 opnode_discovery_db/
 opnode_peerstore_db/
+.claude/plans/
