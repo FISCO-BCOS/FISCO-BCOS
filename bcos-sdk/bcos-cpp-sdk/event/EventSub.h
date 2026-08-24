@@ -66,12 +66,6 @@ public:
     void onRecvEventSubMessage(bcos::boostssl::ws::WsMessage _msg,
         std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
 
-    // handle the response of an unsubscribe request; extracted from the send
-    // callback in unsubscribeEvent() so the response-parsing path is directly
-    // testable (WsSession is no longer subclassable, so tests drive this instead)
-    void onUnsubscribeResponse(
-        const std::string& _id, bcos::Error::Ptr _error, boostssl::ws::WsMessage _msg);
-
 public:
     bool addTask(EventSubTask::Ptr _task);
     EventSubTask::Ptr getTask(const std::string& _id, bool includeSuspendTask = true);

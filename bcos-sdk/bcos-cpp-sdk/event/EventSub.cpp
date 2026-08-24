@@ -483,41 +483,38 @@ void EventSub::unsubscribeEvent(const std::string& _id)
     message.setPayload(bcos::bytes(strReq.begin(), strReq.end()));
 
     session->asyncSendMessage(message, Options(),
-        [this, _id](Error::Ptr _error, boostssl::ws::WsMessage _msg,
-            std::shared_ptr<WsSession>) { onUnsubscribeResponse(_id, std::move(_error), std::move(_msg)); });
-}
+        [_id](Error::Ptr _error, boostssl::ws::WsMessage _msg, std::shared_ptr<WsSession>) {
+            if (_error && _error->errorCode() != 0)
+            {
+                EVENT_SUB(WARNING)
+                    << LOG_BADGE("unsubscribeEvent") << LOG_DESC("callback response failed")
+                    << LOG_KV("id", _id) << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage());
+                return;
+            }
 
-void EventSub::onUnsubscribeResponse(
-    const std::string& _id, Error::Ptr _error, boostssl::ws::WsMessage _msg)
-{
-    if (_error && _error->errorCode() != 0)
-    {
-        EVENT_SUB(WARNING) << LOG_BADGE("unsubscribeEvent") << LOG_DESC("callback response failed")
-                           << LOG_KV("id", _id) << LOG_KV("code", _error->errorCode())
-                           << LOG_KV("message", _error->errorMessage());
-        return;
-    }
+            auto strResp = std::string(_msg.payload().begin(), _msg.payload().end());
+            auto resp = std::make_shared<EventSubResponse>();
+            if (!resp->fromJson(strResp))
+            {
+                EVENT_SUB(WARNING)
+                    << LOG_BADGE("unsubscribeEvent") << LOG_DESC("callback invalid response")
+                    << LOG_KV("id", _id) << LOG_KV("response", strResp);
+                return;
+            }
 
-    auto strResp = std::string(_msg.payload().begin(), _msg.payload().end());
-    auto resp = std::make_shared<EventSubResponse>();
-    if (!resp->fromJson(strResp))
-    {
-        EVENT_SUB(WARNING)
-            << LOG_BADGE("unsubscribeEvent") << LOG_DESC("callback invalid response")
-            << LOG_KV("id", _id) << LOG_KV("response", strResp);
-        return;
-    }
-
-    if (resp->status() != StatusCode::Success)
-    {
-        EVENT_SUB(WARNING)
-            << LOG_BADGE("unsubscribeEvent") << LOG_DESC("callback response failed")
-            << LOG_KV("id", _id) << LOG_KV("status", resp->status()) << LOG_KV("response", strResp);
-    }
-    else
-    {
-        EVENT_SUB(INFO) << LOG_BADGE("unsubscribeEvent") << LOG_DESC("callback response success")
-                        << LOG_KV("id", _id) << LOG_KV("status", resp->status())
-                        << LOG_KV("response", strResp);
-    }
+            if (resp->status() != StatusCode::Success)
+            {
+                EVENT_SUB(WARNING)
+                    << LOG_BADGE("unsubscribeEvent") << LOG_DESC("callback response failed")
+                    << LOG_KV("id", _id) << LOG_KV("status", resp->status())
+                    << LOG_KV("response", strResp);
+            }
+            else
+            {
+                EVENT_SUB(INFO) << LOG_BADGE("unsubscribeEvent")
+                                << LOG_DESC("callback response success") << LOG_KV("id", _id)
+                                << LOG_KV("status", resp->status()) << LOG_KV("response", strResp);
+            }
+        });
 }

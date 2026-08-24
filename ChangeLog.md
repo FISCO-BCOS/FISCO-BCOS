@@ -1,25 +1,4 @@
 
-### v3.18.0
-
-**bcos-boostssl / bcos-cpp-sdk 接口变更（破坏性）**
-
-本版本对 `bcos-boostssl` websocket 消息链路做了系统性性能优化（静态派发、减少堆分配、删除虚接口），并因此移除了部分公共 API。**依赖 bcos-boostssl / bcos-cpp-sdk 头文件的外部工程在升级时需要做如下适配：**
-
-* 删除 `MessageFace` / `MessageFaceFactory` / `WsMessageFactory` / `RawWsMessageFactory` / `WsSessionFactory`；消息构造改为直接 `WsMessage msg;`（header 模式）或 `WsMessage msg(raw);`（raw 模式）
-* `WsMessage` 变为 move-only 类型（拷贝构造/赋值已删除），需留存消息时使用 `std::move`
-* 回调签名变更：`RespCallBack` / `WsRecvMessageHandler` / `MsgHandler` 的消息参数由 `std::shared_ptr<MessageFace>` 改为按值传 `WsMessage`
-* `WsSession` / `WsService` 不再作为可继承覆盖的虚基类（改为组合使用）
-* 移除 `WsService::registerHandshakeHandler` / `getMsgHandler` / `eraseMsgHandler` 及 `newSeq` 从工厂方法改为自由函数 `bcos::boostssl::ws::newSeq()`
-
-**性能优化**
-
-* `WsStreamDelegate` / `HttpStream` 使用 `std::variant` 静态派发，替代逐方法 if-else 与双指针
-* 入站消息经 `post` 按值移动传递，消除每条消息的消息对象堆分配
-* 发送链路同步 `encode`（`const WsMessage&`），消除每次发送的 `make_shared`
-* `WsMessage::encode` 增加 `reserve`，`newSeq` 改为 `thread_local` 生成器
-
----
-
 ### v3.16.2
 
 (2025-10)

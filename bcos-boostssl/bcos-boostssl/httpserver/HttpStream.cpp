@@ -1,25 +1,11 @@
 #include "HttpStream.h"
 #include <bcos-utilities/BoostLog.h>
-#include <type_traits>
 
 using namespace bcos::boostssl;
 
 namespace
 {
-// access the lowest layer tcp stream of either a plain tcp stream or an ssl stream
-template <typename Stream>
-boost::beast::tcp_stream& lowestTcpStream(Stream& _stream)
-{
-    if constexpr (std::is_same_v<std::decay_t<Stream>, boost::beast::tcp_stream>)
-    {
-        return _stream;
-    }
-    else
-    {
-        return _stream.next_layer();
-    }
-}
-
+// endpoint to "ip:port" string
 std::string endpointToString(const boost::asio::ip::tcp::endpoint& _endpoint)
 {
     return _endpoint.address().to_string() + ":" + std::to_string(_endpoint.port());
@@ -45,9 +31,9 @@ http::HttpStream::~HttpStream()
 
 boost::beast::tcp_stream& http::HttpStream::stream()
 {
-    return std::visit(
-        [](auto& _stream) -> boost::beast::tcp_stream& { return lowestTcpStream(_stream); },
-        m_stream);
+    return std::visit([](auto& _stream) -> boost::beast::tcp_stream& {
+        return boost::beast::get_lowest_layer(_stream);
+    }, m_stream);
 }
 
 ws::WsStreamDelegate::Ptr http::HttpStream::wsStream()
@@ -60,9 +46,11 @@ ws::WsStreamDelegate::Ptr http::HttpStream::wsStream()
 
 bool http::HttpStream::open()
 {
-    return !m_closed.test() &&
-           std::visit(
-               [](auto& _stream) { return lowestTcpStream(_stream).socket().is_open(); }, m_stream);
+    return !m_closed.test() && std::visit(
+                                  [](auto& _stream) {
+                                      return boost::beast::get_lowest_layer(_stream).socket().is_open();
+                                  },
+                                  m_stream);
 }
 
 void http::HttpStream::close()
@@ -70,8 +58,9 @@ void http::HttpStream::close()
     if (!m_closed.test_and_set())
     {
         HTTP_STREAM(INFO) << LOG_DESC("close the stream") << LOG_KV("this", this);
-        std::visit(
-            [](auto& _stream) { ws::WsTools::close(lowestTcpStream(_stream).socket()); }, m_stream);
+        std::visit([](auto& _stream) {
+            ws::WsTools::close(boost::beast::get_lowest_layer(_stream).socket());
+        }, m_stream);
     }
 }
 
