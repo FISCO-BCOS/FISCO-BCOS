@@ -132,7 +132,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          ref: 2ef9d0c
+          ref: 2ef9d0cffdd320661ead2db95a19f5aa45d9c39f
           path: e2e-tests
       - name: Symlink e2e assets into in-tree paths
         if: matrix.os != 'windows-2025'
@@ -145,7 +145,7 @@ jobs:
         # from the source tree at runtime; the JSON is git-ignored and regenerated here
         # from pinned op-geth before `ctest`. Windows builds with -DTESTS=OFF, so no tests.
         if: matrix.os != 'windows-2025'
-        uses: FISCO-BCOS/op-stack-e2e-tests/.github/actions/opstack-t8n-regen@2ef9d0c
+        uses: FISCO-BCOS/op-stack-e2e-tests/.github/actions/opstack-t8n-regen@2ef9d0cffdd320661ead2db95a19f5aa45d9c39f
       - name: Test
         if: matrix.os != 'windows-2025'
         run: |
@@ -346,7 +346,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          ref: 2ef9d0c
+          ref: 2ef9d0cffdd320661ead2db95a19f5aa45d9c39f
           path: e2e-tests
       - name: Symlink e2e assets into in-tree paths
         run: |
@@ -356,7 +356,7 @@ jobs:
       - name: Regenerate opstack t8n vectors
         # ctest below includes opstack-executor-block-tests, which needs the t8n vectors
         # in the source tree at runtime (git-ignored, regenerated from pinned op-geth).
-        uses: FISCO-BCOS/op-stack-e2e-tests/.github/actions/opstack-t8n-regen@2ef9d0c
+        uses: FISCO-BCOS/op-stack-e2e-tests/.github/actions/opstack-t8n-regen@2ef9d0cffdd320661ead2db95a19f5aa45d9c39f
       - name: Run tests
         run: |
           cd build
@@ -524,7 +524,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          ref: 2ef9d0c
+          ref: 2ef9d0cffdd320661ead2db95a19f5aa45d9c39f
           path: e2e-tests
       - name: Symlink e2e assets into in-tree paths
         run: |
