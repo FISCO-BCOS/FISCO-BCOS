@@ -73,14 +73,17 @@ constexpr int32_t c_executionReverted = 3;
 
 std::string decodeRevertMessage(std::string_view outputHex)
 {
-    static std::string constexpr kReverted = "execution reverted";
+    // std::string_view for the constexpr (a constexpr std::string is not a constant
+    // expression under gcc-14 -Werror: it refers to a result of operator new); every
+    // use converts explicitly so no compiler's implicit-conversion leniency is relied on.
+    static constexpr std::string_view kReverted = "execution reverted";
     auto bytes = fromHexWithPrefix(outputHex);
     // Error(string): selector(4) || offset==32 (32) || length (32) || payload
     if (bytes.size() < 4U + 32U + 32U ||
         !std::equal(bytes.begin(), bytes.begin() + 4,
             std::array<bcos::byte, 4>{0x08, 0xc3, 0x79, 0xa0}.begin()))
     {
-        return kReverted;
+        return std::string(kReverted);
     }
     auto word = [&bytes](std::size_t offset) {
         std::size_t value = 0;
@@ -96,16 +99,16 @@ std::string decodeRevertMessage(std::string_view outputHex)
     };
     if (word(4) != 32)
     {
-        return kReverted;
+        return std::string(kReverted);
     }
     auto length = word(36);
     if (length > bytes.size() - (4U + 32U + 32U))
     {
-        return kReverted;
+        return std::string(kReverted);
     }
     auto reason = std::string(
         reinterpret_cast<char const*>(bytes.data() + 68), static_cast<std::size_t>(length));
-    return kReverted + ": " + reason;
+    return std::string(kReverted) + ": " + reason;
 }
 }  // namespace
 
