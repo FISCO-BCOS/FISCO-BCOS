@@ -41,7 +41,8 @@ using MerkleProof = std::vector<crypto::HashType>;
 
 /// Parse the web3 chain-id system-config string as u256. nullopt on a corrupted value (non
 /// numeric, empty, negative, or an unparsed remainder) — the single shared parse for the three
-/// config consumers (TxValidator::validateChainId [lands with part 4b, PR #5477], EthEndpoint's
+/// config consumers (TxValidator::validateChainId — exists in base (reads the tars mirror);
+/// its envelope-keyed implementation migrates with part 4b, PR #5477 — EthEndpoint's
 /// chainId gate, LedgerMethods::loadChainConfig [part 4b]) so width semantics and error
 /// behavior cannot drift. Note: the envelope side (web3ChainIdFromEnvelope / Web3TxHandler
 /// decodes) is uint64-capped with the RLP width gate, so in practice chainIds > 2^64-1 are

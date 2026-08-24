@@ -98,8 +98,9 @@ public:
     /// pre-EIP-155 unprotected, v=27/28). Default nullopt keeps the framework core free of
     /// RLP/codec and preserves source compatibility for out-of-tree implementers; the force is
     /// semantic, not structural — Web3-capable impls override (TransactionImpl does). The
-    /// envelope-keyed gates (TxValidator::validateChainId, OpstackExecutor::m_prepare)
-    /// rejecting a typed envelope that yields nullopt land with part 4b (PR #5477); in this
+    /// envelope-keyed gates (TxValidator::validateChainId — the base function reads the tars
+    /// mirror; its envelope-keyed form migrates in part 4b, PR #5477 — and OpstackExecutor::
+    /// m_prepare) rejecting a typed envelope that yields nullopt land with part 4b; in this
     /// tree EthEndpoint's mempool gate is the enforcer.
     virtual std::optional<uint64_t> web3ChainIdFromEnvelope() const { return std::nullopt; }
     /// deposit-only (0x7e) tx metadata (OP Stack). Empty/false when not a deposit.

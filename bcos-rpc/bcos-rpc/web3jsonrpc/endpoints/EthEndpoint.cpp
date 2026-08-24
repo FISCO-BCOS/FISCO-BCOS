@@ -816,7 +816,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         else
         {
             auto [chainIdStr, _] = chainIdConfig.value();
-            // Validate against the SIGNED envelope like TxValidator::validateChainId: typed
+            // Validate against the SIGNED envelope; base TxValidator::validateChainId reads the
+            // tars mirror and is migrated to this envelope-keyed form in part 4b (#5477): typed
             // txs get no "0" exemption (op-geth modernSigner); only pre-EIP-155 legacy (no
             // chainId in the envelope) is exempt — a deliberate divergence (geth/op-geth
             // default rejects unprotected txs at the RPC layer; part 5 adds the config gate).
@@ -835,7 +836,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
                                   << LOG_KV("nodeChainId", chainIdStr);
                 BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
             }
-            // Same typed-envelope guard as TxValidator::validateChainId: a typed tx whose
+            // Same typed-envelope guard as TxValidator::validateChainId (mirror→envelope
+            // migration lands in 4b): a typed tx whose
             // chainId field cannot be parsed (nullopt) gets no "0" exemption — a malformed
             // typed envelope is rejected here rather than deferring to signature recovery.
             if (!envelopeChainId.has_value() &&

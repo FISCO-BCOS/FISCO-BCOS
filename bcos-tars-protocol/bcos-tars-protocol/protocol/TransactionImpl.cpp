@@ -254,9 +254,18 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
         // Deposit (0x7e): unsigned — extraTransactionBytes already IS the full 0x7e envelope
         // (stored by takeToTarsTransaction as encode()), so the hash is keccak of it verbatim;
         // reassembleWeb3RawTransaction cannot be used (it needs a 65-byte signature).
-        if (isDepositTx())
+        // The deposit determination comes from the SIGNED envelope's first byte, NEVER the
+        // forgeable web3TypedTxKind mirror (tars field 12): a peer can rewrite that mirror to
+        // 0x7e on a signed Web3 tx, which would route the hash to this unsigned-deposit form
+        // and skip reassembleWeb3RawTransaction — defeating the "never believe the wire hash"
+        // defense (kyonRay R4 #1). The mirror is display-only; security decisions key on the
+        // envelope.
+        auto const extraBytes = extraTransactionBytes();
+        bool const isDepositEnvelope =
+            (!extraBytes.empty() && extraBytes[0] == static_cast<bcos::byte>(0x7e));
+        if (isDepositEnvelope)
         {
-            auto const depositHash = bcos::crypto::keccak256Hash(extraTransactionBytes());
+            auto const depositHash = bcos::crypto::keccak256Hash(extraBytes);
             m_inner()->extraTransactionHash.assign(depositHash.begin(), depositHash.end());
             return;
         }
