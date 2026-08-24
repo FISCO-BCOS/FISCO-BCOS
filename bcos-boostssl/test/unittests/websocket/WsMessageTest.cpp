@@ -134,6 +134,8 @@ BOOST_AUTO_TEST_CASE(test_newSeq)
 // Golden-byte tests: lock the exact wire format (big-endian field order,
 // ext-after-seq) so a symmetric codec change cannot silently pass the suite
 // while breaking interop with older nodes / the Java SDK / the console.
+// The expected bytes below were verified byte-identical to the pre-PR encoder:
+// treat them as the historical interop contract, do not regenerate from encode.
 BOOST_AUTO_TEST_CASE(test_encode_golden_header)
 {
     WsMessage msg;
@@ -216,5 +218,14 @@ BOOST_AUTO_TEST_CASE(test_move_roundtrip)
     BOOST_CHECK_EQUAL(assignTarget.packetType(), 7);
     const bcos::bytes assignPayload(assignTarget.payload().begin(), assignTarget.payload().end());
     BOOST_CHECK(assignPayload == payload);
+
+    // the raw() flag must survive move construction/assignment
+    WsMessage rawSrc(true);
+    rawSrc.setPayload(bcos::bytes{9, 9});
+    WsMessage rawDst(std::move(rawSrc));
+    BOOST_CHECK(rawDst.raw());
+    const bcos::bytes rawPayload(rawDst.payload().begin(), rawDst.payload().end());
+    const bcos::bytes rawExpected{9, 9};
+    BOOST_CHECK(rawPayload == rawExpected);
 }
 BOOST_AUTO_TEST_SUITE_END()

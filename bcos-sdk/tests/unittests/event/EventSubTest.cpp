@@ -172,9 +172,11 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
 
     auto ioServicePool = std::make_shared<IOServicePool>(2, "evtSubTest");
     {
-        // task is running: unsubscribe through a real (not connected) session,
-        // which drives the real asyncSendMessage -> error callback path of
-        // EventSub::unsubscribeEvent
+        // task is running: unsubscribe through a real (not connected) session. The
+        // assertions below only cover the synchronous task removal inside
+        // unsubscribeEvent; the disconnected-session error callback fires on the
+        // io-pool thread and is not asserted here (the block below covers the
+        // response-parsing path via onRecvEventSubMessage).
         auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(ioServicePool);
         task->setSession(session->session());
 

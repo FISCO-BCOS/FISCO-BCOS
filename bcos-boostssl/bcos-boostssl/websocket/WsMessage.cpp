@@ -65,6 +65,7 @@ uint16_t WsMessage::version() const
     return m_version;
 }
 
+// version is fixed at 0 on the wire (pre-existing no-op, kept for API parity)
 void WsMessage::setVersion(uint16_t) {}
 
 uint16_t WsMessage::packetType() const

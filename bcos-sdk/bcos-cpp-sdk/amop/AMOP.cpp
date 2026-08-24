@@ -144,8 +144,9 @@ void AMOP::publish(
                 _error = errorNew;
             }
 
-            // Note: the public PubCallback keeps shared_ptr<WsMessage> (nullptr on error,
-            // same as before), convert at the boundary only for real responses
+            // Note: the public PubCallback keeps shared_ptr<WsMessage>; on error we pass
+            // nullptr (both transport errors and status!=0 responses map to nullptr here),
+            // converting to shared_ptr only for real success responses
             _callback(_error,
                 _error ? nullptr : std::make_shared<bcos::boostssl::ws::WsMessage>(std::move(_msg)),
                 _session);

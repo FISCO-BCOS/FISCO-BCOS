@@ -74,6 +74,19 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+    // golden check: encode once into a fresh buffer and compare against the
+    // reference before timing, so the per-iteration byte comparison does not
+    // add O(payload) work inside the measured loop
+    {
+        bcos::bytes check;
+        if (!msg.encode(check) || check != reference)
+        {
+            BCOS_LOG(ERROR) << LOG_DESC("Msg Codec Test")
+                            << LOG_DESC("encode output mismatch with reference");
+            return EXIT_FAILURE;
+        }
+    }
+
     auto startPoint = std::chrono::high_resolution_clock::now();
     auto lastReport = std::chrono::high_resolution_clock::now();
     int64_t lastEncodeC = 0;
@@ -84,12 +97,7 @@ int main(int argc, char** argv)
         {
             buffer = std::make_shared<bcos::bytes>();
         }
-        if (!msg.encode(*buffer) || *buffer != reference)
-        {
-            BCOS_LOG(ERROR) << LOG_DESC("Msg Codec Test")
-                            << LOG_DESC("encode output mismatch with reference");
-            return EXIT_FAILURE;
-        }
+        msg.encode(*buffer);
         lastEncodeC++;
 
         auto now = std::chrono::high_resolution_clock::now();
