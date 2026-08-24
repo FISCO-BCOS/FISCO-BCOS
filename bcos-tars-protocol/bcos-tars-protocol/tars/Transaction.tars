@@ -62,5 +62,12 @@ module bcostars {
         13 optional string          sourceHash;          // deposit source hash(hex)
         14 optional string          mint;                // deposit mint(hex string)
         15 optional byte            isSystemTransaction; // bool flag
+        /// Full raw EIP-2718 envelope bytes as received by eth_sendRawTransaction (NOT
+        /// extraTransactionBytes, which is encodeForSign() without the signature). OP block
+        /// building (sequencer) consumes this verbatim as the block's raw transaction list —
+        /// execution must see exactly the bytes the user submitted, so the node re-serializing
+        /// from fields would break the txRoot/blockHash against op-geth. Empty for txs that
+        /// entered via non-web3 paths (never sealed into an OP block).
+        16 optional vector<byte>    rawTransactionBytes;
     };
 };
