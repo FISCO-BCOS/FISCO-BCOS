@@ -20,6 +20,7 @@
  */
 #include "bcos-txpool/sync/TransactionSync.h"
 #include "bcos-task/Wait.h"
+#include "bcos-tx-validator/Normalize.h"
 #include "bcos-txpool/sync/utilities/Common.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -462,6 +463,38 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
                     {
                         tx->setBatchId(_verifiedProposal->blockHeader()->number());
                         tx->setBatchHash(_verifiedProposal->blockHeader()->hash());
+                    }
+                    // Reconcile the tars mirror with the signed envelope BEFORE anything reads
+                    // either the mirror or the wire-supplied hash. Two things depend on the
+                    // position of this call:
+                    //
+                    //  - It must precede exists(tx->hash()). For a Web3 transaction hash()
+                    //    returns extraTransactionHash verbatim, i.e. a value the sending peer
+                    //    chose. Setting it to any hash already in the local pool makes the
+                    //    exists() check below hit and `continue`, skipping signature
+                    //    verification entirely. normalize() recomputes that hash from the
+                    //    envelope first, so exists() now looks up a value the peer cannot pick.
+                    //    Deduplication still works -- transactions genuinely already held are
+                    //    still skipped, they just have to prove their identity first.
+                    //
+                    //  - It must precede clearSenderAndHash(), which zeroes
+                    //    extraTransactionHash. Run after it, normalize()'s hash comparison would
+                    //    be against an empty value and could never fail -- and P2P is the only
+                    //    surface on which a forged hash can arrive.
+                    //
+                    // This is also where the mirror rewrite is caught: normalize() replaces
+                    // data.to / value / input / accessList / ... with the values the signature
+                    // actually covers, so a peer cannot redirect a victim's transaction while
+                    // keeping their signature.
+                    if (auto status = txvalidator::normalize(*tx);
+                        status != bcos::protocol::TransactionStatus::None)
+                    {
+                        tx->setInvalid(true);
+                        SYNC_LOG(WARNING) << LOG_DESC("importDownloadedTxs: normalize tx failed")
+                                          << LOG_KV("status", bcos::protocol::toString(status))
+                                          << LOG_KV("index", i);
+                        verifySuccess = false;
+                        continue;
                     }
                     if (m_config->txpoolStorage()->exists(tx->hash()))
                     {
