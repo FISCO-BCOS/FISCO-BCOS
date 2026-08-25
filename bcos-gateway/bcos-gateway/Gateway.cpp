@@ -182,23 +182,26 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
 
     // Thin shim for the remote path: preserve the synchronous-copy contract for borrowed payloads
     // (the caller may release its buffer as soon as this returns). The actual zero-copy, retrying
-    // send runs as a coroutine that owns the copied payload in its frame.
+    // send runs as a coroutine that owns the copied payload in its frame; the send result is
+    // delivered through _errorRespFunc (nullptr on success).
     auto self = shared_from_this();
     task::wait(
         [](std::shared_ptr<Gateway> _self, std::string _groupID, int _moduleID,
             NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bcos::bytes _payload,
             ErrorRespFunc _errorRespFunc) -> task::Task<void> {
-            co_await _self->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID, _dstNodeID,
-                ::ranges::views::single(bcos::ref(std::as_const(_payload))),
-                std::move(_errorRespFunc));
+            auto error = co_await _self->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID,
+                _dstNodeID, ::ranges::views::single(bcos::ref(std::as_const(_payload))));
+            if (_errorRespFunc)
+            {
+                _errorRespFunc(std::move(error));
+            }
         }(self, std::string(_groupID), _moduleID, std::move(_srcNodeID), std::move(_dstNodeID),
             bcos::bytes(_payload.begin(), _payload.end()), std::move(_errorRespFunc)));
 }
 
-bcos::task::Task<void> bcos::gateway::Gateway::sendMessageByNodeID(const std::string& _groupID,
+bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(const std::string& _groupID,
     int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
-    ErrorRespFunc _errorRespFunc)
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads)
 {
     auto p2pIDs =
         m_gatewayNodeManager->peersRouterTable()->queryP2pIDs(_groupID, _dstNodeID->hex());
@@ -211,25 +214,64 @@ bcos::task::Task<void> bcos::gateway::Gateway::sendMessageByNodeID(const std::st
         {
             buffer.insert(buffer.end(), data.begin(), data.end());
         }
-        if (m_gatewayNodeManager->localRouterTable()->sendMessage(
-                _groupID, _srcNodeID, _dstNodeID, bcos::ref(buffer), _errorRespFunc))
+        // Local delivery is asynchronous (the front's onReceiveMessage completes the callback);
+        // bridge it to the co_await so the delivery result is delivered as the return value.
+        struct LocalSendAwaitable
         {
-            co_return;
-        }
-        GATEWAY_LOG(DEBUG) << LOG_DESC("could not find a gateway to send this message")
+            struct State
+            {
+                std::atomic<bool> done{false};
+                std::coroutine_handle<> handle;
+                Error::Ptr error;
+            };
+
+            LocalRouterTable* m_table;
+            std::string m_groupID;
+            bcos::crypto::NodeIDPtr m_srcNodeID;
+            bcos::crypto::NodeIDPtr m_dstNodeID;
+            std::shared_ptr<bcos::bytes> m_buffer;
+            std::shared_ptr<State> m_state;
+
+            bool await_ready() const noexcept { return false; }
+            void await_suspend(std::coroutine_handle<> h)
+            {
+                m_state->handle = h;
+                auto state = m_state;
+                auto buffer = m_buffer;
+                bool accepted = m_table->sendMessage(m_groupID, m_srcNodeID, m_dstNodeID,
+                    bcos::ref(*buffer),
+                    [state, buffer](Error::Ptr _error) {
+                        // completes exactly once; the buffer is kept alive until after the resume
+                        // (the borrowed front may still be reading it)
+                        if (!state->done.exchange(true))
+                        {
+                            state->error = std::move(_error);
+                            (void)buffer;
+                            state->handle.resume();
+                        }
+                    });
+                if (!accepted)
+                {
+                    // the destination front is not hosted locally: fail immediately
+                    if (!state->done.exchange(true))
+                    {
+                        state->error = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceSendMsg,
+                            "could not find a gateway to send this message, groupID:" + m_groupID +
+                                " ,dstNodeID:" + m_dstNodeID->hex());
+                        state->handle.resume();
+                    }
+                }
+            }
+            Error::Ptr await_resume() { return std::move(m_state->error); }
+        };
+        GATEWAY_LOG(DEBUG) << LOG_DESC("local delivery of sendMessageByNodeID")
                            << LOG_KV("groupID", _groupID)
                            << LOG_KV("srcNodeID", _srcNodeID->hex())
                            << LOG_KV("dstNodeID", _dstNodeID->hex());
-
-        auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceSendMsg,
-            "could not find a gateway to "
-            "send this message, groupID:" +
-                _groupID + " ,dstNodeID:" + _dstNodeID->hex());
-        if (_errorRespFunc)
-        {
-            _errorRespFunc(errorPtr);
-        }
-        co_return;
+        co_return co_await LocalSendAwaitable{
+            m_gatewayNodeManager->localRouterTable().get(), _groupID, std::move(_srcNodeID),
+            std::move(_dstNodeID), std::make_shared<bcos::bytes>(std::move(buffer)),
+            std::make_shared<LocalSendAwaitable::State>()};
     }
 
     // zero-copy: the message (header/options only) and the payload views both live in this frame
@@ -274,11 +316,7 @@ bcos::task::Task<void> bcos::gateway::Gateway::sendMessageByNodeID(const std::st
                 reinterpret_cast<const char*>(payload.data()), payload.size()));
             if (respCode == bcos::protocol::CommonError::SUCCESS)
             {
-                if (_errorRespFunc)
-                {
-                    _errorRespFunc(nullptr);
-                }
-                co_return;
+                co_return nullptr;
             }
             GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
                                << LOG_KV("p2pid", printShortP2pID(p2pID))
@@ -289,23 +327,13 @@ bcos::task::Task<void> bcos::gateway::Gateway::sendMessageByNodeID(const std::st
         {
             if (e.errorCode() == P2PExceptionType::OutBWOverflow)
             {
-                if (_errorRespFunc)
-                {
-                    auto errorPtr = BCOS_ERROR_PTR(
-                        bcos::protocol::CommonError::GatewayBandwidthOverFlow, e.what());
-                    _errorRespFunc(errorPtr);
-                }
-                co_return;
+                co_return BCOS_ERROR_PTR(
+                    bcos::protocol::CommonError::GatewayBandwidthOverFlow, e.what());
             }
             if (e.errorCode() == P2PExceptionType::InQPSOverflow)
             {
-                if (_errorRespFunc)
-                {
-                    auto errorPtr = BCOS_ERROR_PTR(
-                        bcos::protocol::CommonError::GatewayQPSOverFlow, e.what());
-                    _errorRespFunc(errorPtr);
-                }
-                co_return;
+                co_return BCOS_ERROR_PTR(
+                    bcos::protocol::CommonError::GatewayQPSOverFlow, e.what());
             }
             GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
                                << LOG_DESC("network callback")
@@ -323,13 +351,8 @@ bcos::task::Task<void> bcos::gateway::Gateway::sendMessageByNodeID(const std::st
             // try another gateway
         }
     }
-    if (_errorRespFunc)
-    {
-        auto errorPtr = BCOS_ERROR_PTR(
-            bcos::protocol::CommonError::GatewaySendMsgFailed, "unable to send the message");
-        _errorRespFunc(errorPtr);
-    }
-    co_return;
+    co_return BCOS_ERROR_PTR(
+        bcos::protocol::CommonError::GatewaySendMsgFailed, "unable to send the message");
 }
 
 /**

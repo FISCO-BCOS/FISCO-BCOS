@@ -96,12 +96,12 @@ public:
     /**
      * @brief: (coroutine, zero-copy) send message to a single node with retry across candidate
      *         p2p gateways. The payload views must be kept alive by the caller for the duration of
-     *         the co_await; _errorRespFunc is invoked on completion (nullptr on success).
+     *         the co_await; the coroutine resumes with nullptr on success or an Error::Ptr
+     *         describing the failure.
      */
-    task::Task<void> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
+    task::Task<Error::Ptr> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
-        ErrorRespFunc _errorRespFunc) override;
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads) override;
 
     /**
      * @brief: receive p2p message

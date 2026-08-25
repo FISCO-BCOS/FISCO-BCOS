@@ -580,23 +580,17 @@ bcos::task::Task<SendResult> FrontService::sendMessageByNodeID(int _moduleID,
     bytes header;
     message.encodeHeader(header);
 
-    auto nodeID = _nodeID;  // keep a copy for the error callback below
-    co_await m_gatewayInterface->sendMessageByNodeID(m_groupID, _moduleID, m_nodeID,
-        std::move(_nodeID),
+    auto nodeID = _nodeID;  // keep a copy for the gateway-error path below
+    auto gatewayError = co_await m_gatewayInterface->sendMessageByNodeID(m_groupID, _moduleID,
+        m_nodeID, std::move(_nodeID),
         ::ranges::views::concat(
-            ::ranges::views::single(bcos::ref(std::as_const(header))), std::move(_payloads)),
-        [selfWeak = std::weak_ptr<FrontService>(self), _moduleID, nodeID,
-            uuid](Error::Ptr _error) {
-            auto front = selfWeak.lock();
-            if (!front)
-            {
-                return;
-            }
-            if (_error && (_error->errorCode() != CommonError::SUCCESS))
-            {
-                front->handleCallback(_error, bytesConstRef(), uuid, _moduleID, nodeID);
-            }
-        });
+            ::ranges::views::single(bcos::ref(std::as_const(header))), std::move(_payloads)));
+    if (gatewayError && (gatewayError->errorCode() != CommonError::SUCCESS))
+    {
+        // complete the registered response wait with the gateway failure; this runs on the
+        // coroutine's thread (self is alive in this frame), same delivery as the previous callback
+        handleCallback(gatewayError, bytesConstRef(), uuid, _moduleID, nodeID);
+    }
 
     if (_timeout == 0)
     {

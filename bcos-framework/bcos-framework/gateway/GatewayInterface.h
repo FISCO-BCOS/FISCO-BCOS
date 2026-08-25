@@ -122,10 +122,9 @@ public:
      * @param _payloads: message content (views, kept alive by the caller)
      * @param _errorRespFunc: error func
      */
-    virtual task::Task<void> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
+    virtual task::Task<Error::Ptr> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
-        ErrorRespFunc _errorRespFunc)
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads)
     {
         // Both the payload buffer and the completion state are owned by shared_ptrs captured by the
         // completion callback, NOT by this coroutine frame: the borrowed TARS client may keep
@@ -145,6 +144,7 @@ public:
             {
                 std::atomic<bool> completed{false};
                 std::coroutine_handle<> handle;
+                Error::Ptr error;
             };
 
             GatewayInterface* m_self;
@@ -155,7 +155,6 @@ public:
             int m_moduleID;
             bcos::crypto::NodeIDPtr m_srcNodeID;
             bcos::crypto::NodeIDPtr m_dstNodeID;
-            ErrorRespFunc m_respFunc;
             std::shared_ptr<bcos::bytes> m_buffer;
             std::shared_ptr<CompletionState> m_state;
 
@@ -166,7 +165,6 @@ public:
                 auto state = m_state;
                 auto buffer = m_buffer;
                 auto groupID = m_groupID;
-                auto respFunc = std::move(m_respFunc);
                 // Materialize what the call arguments need (groupID / payload) BEFORE the lambda
                 // argument below: the lambda's init-captures move buffer/groupID/state, and C++17
                 // leaves the evaluation order of function arguments unspecified — if the lambda ran
@@ -178,19 +176,15 @@ public:
                 m_self->asyncSendMessageByNodeID(groupIDRef, m_moduleID, m_srcNodeID, m_dstNodeID,
                     payload,
                     [state = std::move(state), buffer = std::move(buffer),
-                        groupID = std::move(groupID),
-                        respFunc = std::move(respFunc)](bcos::Error::Ptr _error) mutable {
-                        // The completion guard protects BOTH the resume and the respFunc: the
-                        // documented contract above says the borrowed TARS client may invoke this
-                        // callback twice (synchronous connection check + async completion) — only
-                        // the first completion may deliver the result, otherwise the caller is
-                        // called back twice.
+                        groupID = std::move(groupID)](bcos::Error::Ptr _error) mutable {
+                        // The completion guard protects both the resume and the result delivery:
+                        // the documented contract above says the borrowed TARS client may invoke
+                        // this callback twice (synchronous connection check + async completion) —
+                        // only the first completion may deliver the result, otherwise the caller
+                        // is called back twice.
                         if (!state->completed.exchange(true))
                         {
-                            if (respFunc)
-                            {
-                                respFunc(std::move(_error));
-                            }
+                            state->error = std::move(_error);
                             // keep the payload buffer and groupID alive until after the resume: the
                             // borrowed caller may still be reading them on this stack
                             (void)buffer;
@@ -199,13 +193,12 @@ public:
                         }
                     });
             }
-            void await_resume() {}
+            Error::Ptr await_resume() { return std::move(m_state->error); }
         };
         SendAwaitable awaitable{this, std::make_shared<std::string>(_groupID), _moduleID,
-            std::move(_srcNodeID), std::move(_dstNodeID), std::move(_errorRespFunc),
-            std::move(buffer), std::make_shared<SendAwaitable::CompletionState>()};
-        co_await awaitable;
-        co_return;
+            std::move(_srcNodeID), std::move(_dstNodeID), std::move(buffer),
+            std::make_shared<SendAwaitable::CompletionState>()};
+        co_return co_await awaitable;
     }
 
     /// multi-group related interfaces
