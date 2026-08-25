@@ -710,6 +710,7 @@ private:
             .baseFeePerGas = 0,
             .blockHash = detail::syntheticHash(payloadId),
             .transactions = std::move(engineTransactions),
+            .rawTransactions = std::nullopt,
             .extraData = {},
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .timestamp = payloadAttributes.timestamp,
