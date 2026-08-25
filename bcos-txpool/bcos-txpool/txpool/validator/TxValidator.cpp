@@ -24,8 +24,10 @@
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-rlp-protocol/Web3TxEnvelope.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-codec/rlp/Common.h>  // BYTES_HEAD_BASE (envelope first-byte classification)
 
 #include <cctype>
 
@@ -60,6 +62,36 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
         _tx.type() != static_cast<uint8_t>(TransactionType::Web3Transaction)) [[unlikely]]
     {
         return TransactionStatus::Malformed;
+    }
+    // Reject 0x7e deposit transactions at admission: deposits are unsigned system txs that must
+    // only enter via the engine newPayload path (op-geth txpool: ErrTxTypeNotSupported). Keyed
+    // on the envelope's first byte — not the tars mirror web3TypedTxKind, which is
+    // unauthenticated and can be rewritten (e.g. to 0x02) to skip a mirror-keyed gate.
+    if (_tx.isDepositTx() || (!_tx.extraTransactionBytes().empty() &&
+                                 static_cast<uint8_t>(_tx.extraTransactionBytes()[0]) == 0x7e))
+        [[unlikely]]
+    {
+        return TransactionStatus::Malformed;
+    }
+    // Reject RESERVED type bytes in the signed envelope for Web3 txs (op-geth decodeTyped:
+    // ErrTxTypeNotSupported). Supported typed set is {0x01 EIP-2930, 0x02 EIP-1559, 0x03
+    // EIP-4844, 0x04 EIP-7702} (the bcos::rpc::TransactionType values); 0x7e deposits are
+    // already rejected above. A self-signed envelope with any other first byte < 0x80
+    // (0x05-0x7d / 0x7f) must not enter the pool — the RPC decode rejects the same bytes
+    // (magic_enum::enum_cast), so this closes the wider P2P accept-set. Legacy (>= 0xc0 list
+    // header) is unaffected. Literals, not the rpc enum: txpool must not depend on bcos-rpc.
+    if (_tx.type() == static_cast<uint8_t>(TransactionType::Web3Transaction) &&
+        !_tx.extraTransactionBytes().empty())
+    {
+        auto const firstByte = static_cast<uint8_t>(_tx.extraTransactionBytes()[0]);
+        // Reject reserved EIP-2718 type bytes (0x00 and 0x05-0x7d, excluding 0x01-0x04
+        // which are valid EIP-2930/1559/4844/7702). 0x7E deposits are caught by the check
+        // above; legacy envelopes (>= 0x80) are excluded by the < 0x80 bound.
+        if (firstByte < bcos::codec::rlp::BYTES_HEAD_BASE && firstByte != 0x01 &&
+            firstByte != 0x02 && firstByte != 0x03 && firstByte != 0x04) [[unlikely]]
+        {
+            return TransactionStatus::Malformed;
+        }
     }
     if (_tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
     {
@@ -290,15 +322,37 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
     }
     if (auto config = co_await ledger::getSystemConfig(*_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
     {
-        auto [chainId, _] = config.value();
-        // if legacy tx, chainId is empty or 0, skip the check
-        if (!_tx.chainId().empty() && _tx.chainId() != "0")
+        auto [chainIdStr, _] = config.value();
+        // Validate against the SIGNED envelope, never the unauthenticated tars mirror
+        // (data.chainID). Typed txs get no "0" exemption (op-geth modernSigner); only
+        // pre-EIP-155 unprotected legacy (v=27/28, no chainId in the envelope) is exempt —
+        // a deliberate divergence: geth/op-geth default rejects unprotected txs at the RPC
+        // layer (AllowUnprotectedTxs=false); accepting them keeps historical-mainnet-tx
+        // fixtures replayable. Part 5 adds the config gate.
+        // Parse as u256 via the shared helper (ledger::parseWeb3ChainId, LedgerTypeDef.h — the
+        // single home for the three chainId-config consumers); a corrupted config rejects txs
+        // instead of throwing out of the coroutine (P2P batchImportTxs has no catch).
+        auto expected = ledger::parseWeb3ChainId(chainIdStr);
+        if (!expected.has_value())
         {
-            // for EIP-155, check chainId
-            if (_tx.chainId() != chainId)
-            {
-                co_return TransactionStatus::InvalidChainId;
-            }
+            co_return TransactionStatus::InvalidChainId;
+        }
+        auto envelopeChainId = _tx.web3ChainIdFromEnvelope();
+        if (envelopeChainId.has_value() && bcos::u256(*envelopeChainId) != *expected)
+        {
+            co_return TransactionStatus::InvalidChainId;
+        }
+        // A typed tx always carries a chainId in the envelope — a missing one means the
+        // preimage is malformed; keep it strict. The typed/legacy decision reads the ENVELOPE
+        // first byte (isTypedWeb3Envelope), never the forgeable mirror web3TypedTxKind(): a
+        // peer can set the mirror kind to 0 to exempt an over-wide/non-integer typed chainId
+        // (web3ChainIdFromEnvelope returns nullopt for it) and defeat the EIP-155 check. The
+        // legacy over-wide case needs no here-gate — verify()'s reassembleWeb3RawTransaction
+        // rejects the same bytes first (throwDecode("legacy chainId") at the width gate).
+        if (!envelopeChainId.has_value() &&
+            bcos::rlp::protocol::isTypedWeb3Envelope(_tx.extraTransactionBytes()))
+        {
+            co_return TransactionStatus::InvalidChainId;
         }
     }
     co_return TransactionStatus::None;

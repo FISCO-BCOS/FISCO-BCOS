@@ -486,7 +486,11 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     auto auth = sysConfig.getOrDefault(ledger::SystemConfig::auth_check_status, "0");
     ledgerConfig.setAuthCheckStatus(boost::lexical_cast<uint32_t>(auth.first));
     auto [chainId, _] = sysConfig.getOrDefault(ledger::SystemConfig::web3_chain_id, "0");
-    ledgerConfig.setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
+    // Shared parse (ledger::parseWeb3ChainId) with the gate consumers; a corrupted config
+    // falls back to chain id 0 rather than throwing out of loadChainConfig (the config is
+    // governed on-chain; 0 keeps the previous "0" default semantics).
+    ledgerConfig.setChainId(
+        bcos::toEvmC(ledger::parseWeb3ChainId(chainId).value_or(bcos::u256{0})));
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 

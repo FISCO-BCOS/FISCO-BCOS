@@ -41,6 +41,7 @@ public:
     bcos::bytes m_extraBytes;
 
     uint8_t web3TypedTxKind() const override { return m_kind; }
+    std::optional<uint64_t> web3ChainIdFromEnvelope() const override { return std::nullopt; }
     bcos::bytesConstRef input() const override
     {
         return bcos::bytesConstRef{m_input.data(), m_input.size()};

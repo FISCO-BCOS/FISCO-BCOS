@@ -6,6 +6,7 @@
 #include <bcos-evm/opstack/OpTransition.h>  // DepositTx
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/BoostLog.h>  // BCOS_LOG (demoted-deposit-check observability)
 #include <bcos-utilities/Common.h>
 #include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / payloadBloomToH2048
@@ -18,7 +19,10 @@
 #include <bcos-evm/eth/state/system_contracts.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <map>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,22 +42,70 @@ inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6
 {
     return dep.to.has_value() && *dep.to == OP_L1_BLOCK && dep.from == OP_DEPOSITOR;
 }
+
+/// One transaction within a block: deposit or normal tx (a normal tx must carry a signed envelope
+/// for L1 fee calculation).
+struct OpBlockTx
+{
+    std::variant<DepositTx, evmone::state::Transaction> tx;
+    evmc::bytes signedEnvelope;  // empty for deposit
+};
+
+/// Block execution result. txTypes[i] is the EIP-2718 type byte for receipts[i] (the FISCO
+/// receipt has no tx-type slot; sealOpBlock's EncodeIndex leaf needs it).
+struct OpBlockResult
+{
+    std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
+    std::vector<uint8_t> txTypes;
+    int64_t gasUsed = 0;
+    evmone::state::StateDiff finalizeDiff;  // end-of-block finalize output
+};
+
+/// Isthmus+ requestsHash = sha256("").
+using evmc::literals::operator""_bytes32;
+inline constexpr auto OP_EMPTY_REQUESTS_HASH =
+    0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855_bytes32;
+
+// ---- block execution / seal surface (definitions in OpBlockExecute.cpp) ----
+// Consensus-level rejections throw engine::OpConsensusError (INVALID), never a bare
+// std::runtime_error (OpCommon.h error-channel contract).
+
+/// Jovian-only block-shape validation of the L1 attributes deposit's calldata.
+void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig& cfg);
+
+/// End-of-block finalize (evmone state finalize + StateDiff sanitize).
+evmone::state::StateDiff finalizeOpBlock(
+    const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase);
+
+/// Block execution: pre-block system call → deposit/normal tx loop → finalize. Admission is
+/// aligned with preBlockOpSteps below (empty block / no leading deposit = hard reject;
+/// non-L1-attributes first deposit and out-of-order deposits = accepted with a warning).
+OpBlockResult processOpBlock(const evmone::state::StateView& view,
+    const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
+    std::span<const OpBlockTx> txs, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,
+    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
+    const std::function<void(const evmone::state::StateDiff&)>& applyDiff);
+
+/// Secure-trie root over a live storage slot map (used for the Isthmus+ withdrawalsRoot).
+evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& storage);
+
+/// Receipt leaf encoding for the receipts-root trie (op-geth receiptRLP / EncodeIndex parity).
+bcos::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, uint8_t txType);
+
+/// Block-header seal: receiptsRoot / logsBloom / withdrawalsRoot / requestsHash / blobGasUsed.
+OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
+    const std::map<evmc::bytes32, evmc::bytes32>& messagePasserStorage);
 }  // namespace bcos::evm::opstack
 
 // ---- block-pre steps for the scheduler execution path ----
-//
-// The block-level seal/finalize surface (processOpBlock / validateJovianBlockShape /
-// finalizeOpBlock / opStorageRoot / sealOpBlock / encodeReceiptForRoot / finalizeOpBlockResult /
-// computeOpTxRoot) is deferred to the part that delivers its definitions (part 4/5).
 
 namespace bcos::evm::engine
 {
-/// Block-pre steps shared by the OpScheduler execution path (and previously the retired
-/// runOpBlockInjection): recent-block-hashes construction → system_call_block_start +
-/// write-back → deposit-first content check + Jovian shape → DA footprint gas scalar. Outputs
-/// hashes (emplaced in place — RecentBlockHashes holds a storage reference, not assignable, hence
-/// the std::optional carrier), hashErr, and daFootprintGasScalar via reference params. Throws
-/// OpConsensusError on shape/validation faults.
+/// Block-pre steps for the OP block execution path: recent-block-hashes construction →
+/// system_call_block_start + write-back → deposit-first content check + Jovian shape → DA footprint
+/// gas scalar. Outputs hashes (emplaced in place — RecentBlockHashes holds a storage reference, not
+/// assignable, hence the std::optional carrier), hashErr, and daFootprintGasScalar via reference
+/// params. Throws OpConsensusError on shape/validation faults.
 template <class Storage, class RawTxRange>
 void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     bcos::evm::opstack::OpForkConfig const& cfg, RawTxRange const& rawTxBytes,
