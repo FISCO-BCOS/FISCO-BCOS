@@ -561,3 +561,62 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
     return nullptr;
 }
 }  // namespace bcos::protocol
+
+namespace bcos::codec::rlp
+{
+// Shared codec overloads for EthBlockHeaderData. The field list below is the
+// single canonical Ethereum header field order (16 required + up to 6 fork-gated
+// optional fields, encoded positionally so the set of present optionals is always
+// a contiguous prefix). Both EthBlockHeader::rlpEncode/rlpDecode and EthBlockBody
+// delegate here. The timestamp is the WIRE value (seconds) — the domain the
+// devp2p sync path uses — so this codec performs no ms conversion.
+size_t length(const protocol::EthBlockHeaderData& _headerData) noexcept
+{
+    return length(_headerData.parentInfo.blockHash, _headerData.uncleHash,
+        _headerData.coinbase, _headerData.stateRoot, _headerData.txsRoot,
+        _headerData.receiptsRoot,
+        bcos::bytesConstRef(_headerData.logsBloom.data(), _headerData.logsBloom.size()),
+        _headerData.difficulty, static_cast<uint64_t>(_headerData.number), _headerData.gasLimit,
+        _headerData.gasUsed, static_cast<uint64_t>(_headerData.timestamp), _headerData.extraData,
+        _headerData.prevRandao, _headerData.nonce, _headerData.baseFee,
+        _headerData.withdrawalsHash, _headerData.blobGasUsed, _headerData.excessBlobGas,
+        _headerData.parentBeaconRoot, _headerData.requestsHash);
+}
+
+void encode(bcos::bytes& _out, const protocol::EthBlockHeaderData& _headerData) noexcept
+{
+    encode(_out, _headerData.parentInfo.blockHash, _headerData.uncleHash,
+        _headerData.coinbase, _headerData.stateRoot, _headerData.txsRoot,
+        _headerData.receiptsRoot,
+        bcos::bytesConstRef(_headerData.logsBloom.data(), _headerData.logsBloom.size()),
+        _headerData.difficulty, static_cast<uint64_t>(_headerData.number), _headerData.gasLimit,
+        _headerData.gasUsed, static_cast<uint64_t>(_headerData.timestamp), _headerData.extraData,
+        _headerData.prevRandao, _headerData.nonce, _headerData.baseFee, _headerData.withdrawalsHash,
+        _headerData.blobGasUsed, _headerData.excessBlobGas, _headerData.parentBeaconRoot,
+        _headerData.requestsHash);
+}
+
+bcos::Error::UniquePtr decode(
+    bcos::bytesRef& _in, protocol::EthBlockHeaderData& _headerData) noexcept
+{
+    // number/timestamp are int64_t in the data struct but uint64_t on the wire
+    // (block numbers and Unix timestamps are non-negative); decode into uint64_t
+    // temporaries then narrow.
+    uint64_t _number = 0;
+    uint64_t _timestamp = 0;
+    if (auto error = decode(_in, _headerData.parentInfo.blockHash, _headerData.uncleHash,
+            _headerData.coinbase, _headerData.stateRoot, _headerData.txsRoot,
+            _headerData.receiptsRoot, _headerData.logsBloom, _headerData.difficulty, _number,
+            _headerData.gasLimit, _headerData.gasUsed, _timestamp, _headerData.extraData,
+            _headerData.prevRandao, _headerData.nonce, _headerData.baseFee,
+            _headerData.withdrawalsHash, _headerData.blobGasUsed, _headerData.excessBlobGas,
+            _headerData.parentBeaconRoot, _headerData.requestsHash);
+        error != nullptr)
+    {
+        return error;
+    }
+    _headerData.number = static_cast<int64_t>(_number);
+    _headerData.timestamp = static_cast<int64_t>(_timestamp);
+    return nullptr;
+}
+}  // namespace bcos::codec::rlp

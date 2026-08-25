@@ -66,6 +66,21 @@ struct EthBlockHeaderData
     std::optional<bcos::u256> excessBlobGas;
     std::optional<bcos::h256> parentBeaconRoot;
     std::optional<bcos::h256> requestsHash;
+
+    bool operator==(const EthBlockHeaderData& rhs) const
+    {
+        return logsBloom == rhs.logsBloom && parentInfo == rhs.parentInfo &&
+               uncleHash == rhs.uncleHash && stateRoot == rhs.stateRoot &&
+               txsRoot == rhs.txsRoot && receiptsRoot == rhs.receiptsRoot &&
+               difficulty == rhs.difficulty && gasLimit == rhs.gasLimit &&
+               gasUsed == rhs.gasUsed && prevRandao == rhs.prevRandao &&
+               extraData == rhs.extraData && coinbase == rhs.coinbase &&
+               nonce == rhs.nonce && number == rhs.number && timestamp == rhs.timestamp &&
+               baseFee == rhs.baseFee && withdrawalsHash == rhs.withdrawalsHash &&
+               blobGasUsed == rhs.blobGasUsed && excessBlobGas == rhs.excessBlobGas &&
+               parentBeaconRoot == rhs.parentBeaconRoot && requestsHash == rhs.requestsHash;
+    }
+    bool operator!=(const EthBlockHeaderData& rhs) const { return !(*this == rhs); }
 };
 
 // Error codes for EthBlockHeader conversion failures.
@@ -133,4 +148,37 @@ private:
     EthBlockVersion m_version{EthBlockVersion::NON_ETH};
 };
 
+}  // namespace bcos::protocol
+
+namespace bcos::codec::rlp
+{
+// Codec overloads for the pure-data header struct, so EthBlockHeaderData can be
+// embedded in larger Ethereum structures (block bodies, uncle lists, ...) with
+// the same canonical field order as EthBlockHeader::rlpEncode/rlpDecode.
+// EthBlockHeader::rlpEncode/rlpDecode delegate here, so the field order lives in
+// exactly one place. The timestamp is the WIRE value (seconds) — the domain the
+// devp2p sync path uses — so this codec performs no ms conversion.
+size_t length(const protocol::EthBlockHeaderData& _headerData) noexcept;
+void encode(bcos::bytes& _out, const protocol::EthBlockHeaderData& _headerData) noexcept;
+bcos::Error::UniquePtr decode(
+    bcos::bytesRef& _in, protocol::EthBlockHeaderData& _headerData) noexcept;
+}  // namespace bcos::codec::rlp
+
+namespace bcos::protocol
+{
+// ADL-visible delegators (see EthLog.h): let EthBlockHeaderData participate in
+// std::vector<EthBlockHeaderData> (ommers) / variadic-list encode/decode.
+inline size_t length(const EthBlockHeaderData& _headerData) noexcept
+{
+    return codec::rlp::length(_headerData);
+}
+inline void encode(bcos::bytes& _out, const EthBlockHeaderData& _headerData) noexcept
+{
+    codec::rlp::encode(_out, _headerData);
+}
+inline bcos::Error::UniquePtr decode(
+    bcos::bytesRef& _in, EthBlockHeaderData& _headerData) noexcept
+{
+    return codec::rlp::decode(_in, _headerData);
+}
 }  // namespace bcos::protocol
