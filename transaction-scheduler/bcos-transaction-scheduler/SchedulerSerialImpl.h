@@ -16,6 +16,7 @@
 #include <range/v3/view/chunk.hpp>
 #include <range/v3/view/iota.hpp>
 #include <type_traits>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::scheduler_v1
 {

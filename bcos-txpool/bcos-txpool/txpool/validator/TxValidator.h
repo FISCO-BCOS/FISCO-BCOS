@@ -29,6 +29,7 @@
 #include <bcos-txpool/txpool/validator/Web3NonceChecker.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
+#include <boost/algorithm/string.hpp>
 
 namespace bcos::txpool
 {

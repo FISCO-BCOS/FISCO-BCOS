@@ -34,6 +34,10 @@ if(NOT BCOS_EVM_STANDALONE)
         opstack/Storage2StateBridgeTest.cpp
         testutils/MemoryState.cpp
     )
+    # Unity build over the 20 header-heavy test TUs; opstack/TestMain.cpp defines
+    # BOOST_TEST_MODULE and stays out of the batch (project convention).
+    set_target_properties(bcos-evm-opstack-tests PROPERTIES UNITY_BUILD "ON")
+    set_source_files_properties(opstack/TestMain.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
     target_include_directories(bcos-evm-opstack-tests PRIVATE
         ${CMAKE_SOURCE_DIR}/opstack-executor)
     target_link_libraries(bcos-evm-opstack-tests PRIVATE

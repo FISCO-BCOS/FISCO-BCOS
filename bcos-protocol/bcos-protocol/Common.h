@@ -25,6 +25,7 @@
 #include <limits>
 #include <algorithm>
 #include <string>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::protocol
 {

@@ -45,6 +45,7 @@
 #include <optional>
 #include <string>
 #include <system_error>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::executor_v1::eth
 {

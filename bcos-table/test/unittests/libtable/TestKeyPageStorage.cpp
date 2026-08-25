@@ -41,6 +41,8 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <list>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::storage;

@@ -21,6 +21,7 @@
 #include "Common.h"
 #include <clocale>
 #include <cstdlib>
+#include <boost/atomic.hpp>
 
 namespace bcos::node
 {

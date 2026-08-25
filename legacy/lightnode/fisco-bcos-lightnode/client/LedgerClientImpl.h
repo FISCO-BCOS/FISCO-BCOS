@@ -21,6 +21,7 @@
 #include <random>
 #include <stdexcept>
 #include <type_traits>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::ledger
 {

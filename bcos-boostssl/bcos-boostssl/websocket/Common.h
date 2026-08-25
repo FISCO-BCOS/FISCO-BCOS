@@ -23,6 +23,7 @@
 #include <bcos-utilities/Error.h>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast/websocket.hpp>
+#include <boost/function.hpp>
 
 #define BOOST_SSL_LOG(LEVEL) BCOS_LOG(LEVEL) << "[BOOSTSSL]"
 #define WEBSOCKET_TOOL(LEVEL) BCOS_LOG(LEVEL) << "[WS][TOOL]"

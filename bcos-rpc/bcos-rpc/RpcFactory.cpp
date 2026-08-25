@@ -41,6 +41,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::rpc;

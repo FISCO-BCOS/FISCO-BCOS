@@ -19,6 +19,7 @@
  */
 #pragma once
 #include <bcos-boostssl/httpserver/Common.h>
+#include <deque>
 
 namespace bcos::boostssl::http
 {

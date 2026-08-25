@@ -12,5 +12,6 @@ aux_source_directory(../../TxPoolService SRC_LIST)
 aux_source_directory(../../PBFTService SRC_LIST)
 
 add_executable(${PRO_NODE_SERVICE_BINARY_NAME} ${SRC_LIST} ${HEADERS})
+set_target_properties(${PRO_NODE_SERVICE_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 
 target_link_libraries(${PRO_NODE_SERVICE_BINARY_NAME} PUBLIC init pbft_init protocol-tars command)

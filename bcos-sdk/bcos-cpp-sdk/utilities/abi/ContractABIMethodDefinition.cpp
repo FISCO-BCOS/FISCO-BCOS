@@ -20,6 +20,7 @@
 
 #include <bcos-cpp-sdk/utilities/abi/ContractABIMethodDefinition.h>
 #include <stdexcept>
+#include <boost/algorithm/string.hpp>
 
 using namespace bcos;
 using namespace bcos::cppsdk;

@@ -32,6 +32,7 @@
 #include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <bcos-utilities/BoostLog.h>
 
 constexpr uint32_t MAX_RETRY_LIMIT = 32;
 

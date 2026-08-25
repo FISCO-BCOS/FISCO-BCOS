@@ -3,6 +3,7 @@
 #include "bcos-utilities/Exceptions.h"
 #include <boost/throw_exception.hpp>
 #include <iterator>
+#include <boost/algorithm/string.hpp>
 
 struct InvalidHostPortStringError : public bcos::Exception
 {

@@ -43,14 +43,6 @@ std::string toJonString(boost::multiprecision::number<boost::multiprecision::cpp
     return "0x" + (hexString[0] == '0' ? (hexString.substr(1)) : hexString);
 }
 
-template <unsigned T>
-std::string toJonString(SecureFixedBytes<T> const& _i)
-{
-    std::stringstream stream;
-    stream << "0x" << _i.makeInsecure().hex();
-    return stream.str();
-}
-
 template <typename T>
 std::string toJonString(T const& _i)
 {

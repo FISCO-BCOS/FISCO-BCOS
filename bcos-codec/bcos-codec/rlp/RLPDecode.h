@@ -234,11 +234,13 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, UnsignedIntegral auto& to) 
     // (geth: ErrCanonInt) instead of silently truncating mod 2^64 or accepting a
     // non-canonical encoding. Otherwise the decoded value and the canonical
     // re-encoding diverge from what the wire carried, which is exactly the class
-    // of defect that corrupts header/trie hashes.
+    // of defect that corrupts header/trie hashes. Use digits/8, NOT sizeof(T):
+    // boost u256 has sizeof 48 but 32 payload bytes.
     using DecodedT = std::decay_t<decltype(to)>;
     if (header.payloadLength > std::numeric_limits<DecodedT>::digits / 8)
     {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::Overflow, "Uint overflows target width");
+        return BCOS_ERROR_UNIQUE_PTR(
+            DecodingError::Overflow, "integer wider than target type");
     }
     auto payload = from.getCroppedData(0, header.payloadLength);
     if (payload.size() > 1 && payload[0] == 0)

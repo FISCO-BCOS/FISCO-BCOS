@@ -27,7 +27,10 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/Common.h>
+#include <string_view>
+#include <optional>
 #include <oneapi/tbb/concurrent_unordered_map.h>
+#include <boost/lexical_cast.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
@@ -35,6 +38,35 @@
 namespace bcos::ledger
 {
 using MerkleProof = std::vector<crypto::HashType>;
+
+/// Parse the web3 chain-id system-config string as u256. nullopt on a corrupted value (non
+/// numeric, empty, negative, or an unparsed remainder) — the single shared parse for the three
+/// config consumers (TxValidator::validateChainId — exists in base (reads the tars mirror);
+/// its envelope-keyed implementation migrates with part 4b, PR #5477 — EthEndpoint's
+/// chainId gate, LedgerMethods::loadChainConfig [part 4b]) so width semantics and error
+/// behavior cannot drift. Note: the envelope side (web3ChainIdFromEnvelope / Web3TxHandler
+/// decodes) is uint64-capped with the RLP width gate, so in practice chainIds > 2^64-1 are
+/// rejected at decode (fail-closed) — the u256 parse here exists so a misconfigured
+/// over-wide value never silently matches; real chains are far below the cap. Also note: boost::
+/// multiprecision's u256 stream-in ACCEPTS a negative sign and wraps modulo 2^256 (probe-
+/// verified: lexical_cast<u256>("-5") returns 2^256-5, no throw); a leading '-' is rejected
+/// explicitly here so a mistyped negative config surfaces as a clear per-config error instead
+/// of a wrapped value that fail-closes confusingly at every tx gate.
+[[nodiscard]] inline std::optional<u256> parseWeb3ChainId(std::string_view chainIdStr)
+{
+    if (!chainIdStr.empty() && chainIdStr[0] == '-') [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    try
+    {
+        return boost::lexical_cast<u256>(chainIdStr);
+    }
+    catch (boost::bad_lexical_cast const&)
+    {
+        return std::nullopt;
+    }
+}
 using MerkleProofPtr = std::shared_ptr<const MerkleProof>;
 
 // get block flag

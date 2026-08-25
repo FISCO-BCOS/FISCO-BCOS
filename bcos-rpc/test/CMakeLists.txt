@@ -34,7 +34,7 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 # exception catching binary-wide (testCallRequest/decode_invalid_gas_string starts
 # reporting "unknown type" for a plain std::invalid_argument). The test file carries a
 # linkage-only definition of unhexAddress instead.
-target_link_libraries(${TEST_BINARY_NAME} txpool ledger rpc tool transaction-scheduler storage Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} txpool mempool ledger rpc tool transaction-scheduler storage Boost::unit_test_framework)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/rpc/RpcReadHandlersTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # FullChainFixture.h pulls RocksDB and testutils headers whose names collide with the

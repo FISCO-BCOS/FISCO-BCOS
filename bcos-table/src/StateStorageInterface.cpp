@@ -4,6 +4,7 @@
  */
 
 #include "StateStorageInterface.h"
+#include <list>
 
 using namespace bcos::storage;
 

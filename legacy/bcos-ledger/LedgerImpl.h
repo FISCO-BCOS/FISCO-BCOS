@@ -24,6 +24,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <type_traits>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::ledger
 {

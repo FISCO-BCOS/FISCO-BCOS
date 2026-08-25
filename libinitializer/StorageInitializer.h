@@ -34,6 +34,7 @@
 #include <bcos-framework/security/StorageEncryptInterface.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <boost/filesystem.hpp>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::initializer
 {

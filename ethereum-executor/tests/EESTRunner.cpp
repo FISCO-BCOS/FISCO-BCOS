@@ -48,6 +48,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <boost/algorithm/string.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2;

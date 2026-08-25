@@ -4,8 +4,8 @@
 // All six tests green -> spike holds (Task 5 entry condition); any failure -> spike does
 // not hold (Phase 1 converges to a pure baseline).
 //
-// Note: this file is an independent TU; blk()/baseTx() are copied from OpValidateTest.cpp
-// and adapted to the OpTransitionTest.cpp pattern (blk() adds coinbase =
+// Note: this file is an independent TU; spikeBlk()/spikeBaseTx() are copied from OpValidateTest.cpp
+// and adapted to the OpTransitionTest.cpp pattern (spikeBlk() adds coinbase =
 // OP_SEQUENCER_FEE_VAULT so the priority tip lands in an assertable named vault).
 #include "OpTestReceiptFactory.h"
 #include "StateDiffWriteback.h"
@@ -28,12 +28,12 @@ using intx::operator""_u256;
 
 namespace
 {
-constexpr auto kSender = 0x1000000000000000000000000000000000000001_address;
+constexpr auto kSpikeSender = 0x1000000000000000000000000000000000000001_address;
 constexpr auto kRecipient = 0x2000000000000000000000000000000000000002_address;
 constexpr auto kSenderBalance =
     1000000000000000000_u256;  // 1 ETH (explicit wei; no _ether literal)
 
-state::BlockInfo blk()
+state::BlockInfo spikeBlk()
 {
     state::BlockInfo b;
     b.number = 1;
@@ -44,11 +44,11 @@ state::BlockInfo blk()
     return b;
 }
 
-state::Transaction baseTx()
+state::Transaction spikeBaseTx()
 {
     state::Transaction tx;
     tx.type = state::Transaction::Type::eip1559;
-    tx.sender = kSender;
+    tx.sender = kSpikeSender;
     tx.gas_limit = 100000;
     tx.max_gas_price = 1000;
     tx.max_priority_gas_price = 10;
@@ -90,12 +90,12 @@ BOOST_AUTO_TEST_CASE(zero_fee_params_produce_zero_costs)
 BOOST_AUTO_TEST_CASE(opValidate_zero_fee_passes_balance_check)
 {
     evmone::test::TestState ts;
-    ts[kSender] = {.balance = kSenderBalance, .storage = {}, .code = {}};
+    ts[kSpikeSender] = {.balance = kSenderBalance, .storage = {}, .code = {}};
     // sender must be inserted; otherwise get_account returns balance=0 and the balance check
     // rejects
     auto isthmus = isthmusConfig();
-    auto block = blk();
-    auto tx = baseTx();
+    auto block = spikeBlk();
+    auto tx = spikeBaseTx();
     evmc::bytes envelope{0x02};  // dummy non-empty suffices; no real signature needed
     auto props = opValidateFromState(ts, block, tx, envelope, isthmus, /*blockGasLeft=*/30000000);
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(props));
@@ -108,8 +108,8 @@ BOOST_AUTO_TEST_CASE(opValidate_zero_balance_sender_rejected)
 {
     evmone::test::TestState ts;  // no sender inserted → get_account balance=0
     auto isthmus = isthmusConfig();
-    auto block = blk();
-    auto tx = baseTx();
+    auto block = spikeBlk();
+    auto tx = spikeBaseTx();
     evmc::bytes envelope{0x02};
     auto props = opValidateFromState(ts, block, tx, envelope, isthmus, /*blockGasLeft=*/30000000);
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(props));
@@ -120,16 +120,16 @@ BOOST_AUTO_TEST_CASE(opValidate_zero_balance_sender_rejected)
 BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
 {
     evmone::test::TestState ts;
-    ts[kSender] = {.balance = kSenderBalance, .storage = {}, .code = {}};
+    ts[kSpikeSender] = {.balance = kSenderBalance, .storage = {}, .code = {}};
     ts[kRecipient] = {};
     auto isthmus = isthmusConfig();
     auto vm = evmc::VM{evmc_create_evmone()};  // opTransition signature takes evmc::VM& (evmone::VM
                                                // is a C struct-derived class, not applicable)
-    auto block = blk();
+    auto block = spikeBlk();
     test::TestBlockHashes hashes;
-    auto tx = baseTx();
-    tx.to = kRecipient;  // makes the "recipient balance +value" assertion meaningful (baseTx has no
-                         // to=CREATE)
+    auto tx = spikeBaseTx();
+    tx.to = kRecipient;  // makes the "recipient balance +value" assertion meaningful (spikeBaseTx
+                         // has no to=CREATE)
     tx.value = intx::uint256{12345};
     evmc::bytes envelope{0x02};
     auto props = opValidateFromState(ts, block, tx, envelope, isthmus, /*blockGasLeft=*/30000000);
@@ -146,8 +146,8 @@ BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, diff);
 
-    // ---- assertion-value derivation (from blk()/baseTx()/OpTransition.cpp:237-323) ----
-    //   blk().base_fee = 7; tx.max_gas_price = 1000, tx.max_priority_gas_price = 10
+    // ---- assertion-value derivation (from spikeBlk()/spikeBaseTx()/OpTransition.cpp:237-323) ----
+    //   spikeBlk().base_fee = 7; tx.max_gas_price = 1000, tx.max_priority_gas_price = 10
     //   priority = min(max_priority, max_gas - base_fee) = min(10, 993) = 10
     //   effective_gas_price = base_fee + priority = 17
     //   plain EOA transfer (empty calldata) -> gas_used = intrinsic = 21000 (EIP-7623 floor also
@@ -162,8 +162,8 @@ BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
 
     // sender net debit = gas_used * effective + value (L1/operator both 0; value is
     // transferred inside host.call).
-    BOOST_CHECK_EQUAL(
-        ts.at(kSender).balance, kSenderBalance - gasUsed * effective - intx::uint256{tx.value});
+    BOOST_CHECK_EQUAL(ts.at(kSpikeSender).balance,
+        kSenderBalance - gasUsed * effective - intx::uint256{tx.value});
     // recipient receives the transferred value.
     BOOST_CHECK_EQUAL(ts.at(kRecipient).balance, intx::uint256{tx.value});
     // the base_fee portion burns into OP_BASE_FEE_VAULT; the tip goes to coinbase (sequencer
@@ -179,19 +179,19 @@ BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
 }
 
 // 4b) base_fee=0 variant: effective gas price collapses to the priority tip (no base-fee burn),
-// and the base-fee vault is never touched. Pins the effective=priority path (blk() fixed
+// and the base-fee vault is never touched. Pins the effective=priority path (spikeBlk() fixed
 // base_fee=7 elsewhere).
 BOOST_AUTO_TEST_CASE(opTransition_zero_base_fee_no_burn)
 {
     evmone::test::TestState ts;
-    ts[kSender] = {.balance = kSenderBalance, .storage = {}, .code = {}};
+    ts[kSpikeSender] = {.balance = kSenderBalance, .storage = {}, .code = {}};
     ts[kRecipient] = {};
     auto isthmus = isthmusConfig();
     auto vm = evmc::VM{evmc_create_evmone()};
-    auto block = blk();
+    auto block = spikeBlk();
     block.base_fee = 0;
     test::TestBlockHashes hashes;
-    auto tx = baseTx();
+    auto tx = spikeBaseTx();
     tx.to = kRecipient;
     tx.value = intx::uint256{12345};
     evmc::bytes envelope{0x02};
@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(opTransition_zero_base_fee_no_burn)
     const auto gasUsed = intx::uint256{static_cast<uint64_t>(txR->gasUsed())};
     BOOST_CHECK_EQUAL(gasUsed, intx::uint256{21000});
     // base_fee=0 -> priority = min(max_priority, max_gas - 0) = 10, effective = 0 + 10 = 10
-    BOOST_CHECK_EQUAL(ts.at(kSender).balance,
+    BOOST_CHECK_EQUAL(ts.at(kSpikeSender).balance,
         kSenderBalance - gasUsed * intx::uint256{10} - intx::uint256{tx.value});
     BOOST_CHECK_EQUAL(ts.at(kRecipient).balance, intx::uint256{tx.value});
     // no base-fee burn: the base-fee vault is never created/touched.

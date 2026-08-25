@@ -26,6 +26,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <bcos-utilities/BoostLog.h>
 
 #define TOPIC_LOG(LEVEL) BCOS_LOG(LEVEL) << "[AMOP][TOPIC]"
 #define AMOP_MSG_LOG(LEVEL) BCOS_LOG(LEVEL) << "[AMOP][MSG]"

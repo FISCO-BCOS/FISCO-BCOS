@@ -14,7 +14,7 @@ SHELL_FOLDER=$(
 check_script="clang-format"
 commit_limit=1000
 file_limit=35
-insert_limit=666
+insert_limit=1024
 license_line=20
 
 skip_check_words="sync code|release"

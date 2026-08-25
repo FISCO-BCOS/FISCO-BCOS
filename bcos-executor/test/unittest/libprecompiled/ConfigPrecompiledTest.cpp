@@ -25,6 +25,7 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/endian/conversion.hpp>
 #include <algorithm>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::precompiled;

@@ -54,8 +54,7 @@ namespace bcos
 {
 namespace test
 {
-using namespace std;
-
+using std::to_string;
 struct DagExecutorFixture
 {
     DagExecutorFixture()

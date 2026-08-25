@@ -32,6 +32,7 @@
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcostars;
 using namespace bcos;

@@ -38,7 +38,7 @@ using intx::operator""_u256;
 namespace
 {
 /// Narrow the FISCO receipt's gasUsed (u256) to the int64 the assertions compare against.
-inline int64_t receiptGasUsed(const bcos::protocol::TransactionReceipt& r)
+inline int64_t floorReceiptGasUsed(const bcos::protocol::TransactionReceipt& r)
 {
     return static_cast<int64_t>(static_cast<uint64_t>(r.gasUsed()));
 }
@@ -92,8 +92,8 @@ BOOST_AUTO_TEST_CASE(UserTxGasUsedRaisedToFloor)
     // 7623 floor 生效：gas_used 恰等于公式推导的 floor，且严格大于 intrinsic
     constexpr int64_t kExpectedFloor3000 = 21000 + 3000 * 10;  // = 51000
     constexpr int64_t kIntrinsic3000 = 21000 + 3000 * 4;       // = 33000
-    BOOST_CHECK_EQUAL(receiptGasUsed(*txR), kExpectedFloor3000);
-    BOOST_CHECK_EQUAL(receiptGasUsed(*txR), props.props.min_gas_cost);
+    BOOST_CHECK_EQUAL(floorReceiptGasUsed(*txR), kExpectedFloor3000);
+    BOOST_CHECK_EQUAL(floorReceiptGasUsed(*txR), props.props.min_gas_cost);
     BOOST_CHECK_GT(props.props.min_gas_cost, kIntrinsic3000);  // floor 51000 > intrinsic 33000
 }
 
@@ -128,7 +128,7 @@ BOOST_AUTO_TEST_CASE(DepositGasUsedRaisedToFloor)
     // deposit 同样吃 7623 floor（op-geth Isthmus 无豁免）：gas_used == floor
     constexpr int64_t kExpectedFloor3000 = 21000 + 3000 * 10;  // = 51000
     constexpr int64_t kExpectedFloorEmpty = 21000;             // empty calldata
-    BOOST_CHECK_EQUAL(receiptGasUsed(*r), kExpectedFloor3000);
+    BOOST_CHECK_EQUAL(floorReceiptGasUsed(*r), kExpectedFloor3000);
 
     // 对照：空 calldata deposit 在独立 state 上运行，避免大 deposit 污染
     DepositTx small = dep;
@@ -140,8 +140,8 @@ BOOST_AUTO_TEST_CASE(DepositGasUsedRaisedToFloor)
     const auto rs = runDeposit(ts2, block, hashes, small, isthmusConfig(), vm, 1234,
         block.gas_limit, kOpTestReceiptFactory, diff2);
     BOOST_REQUIRE_EQUAL(rs->status(), 0);
-    BOOST_CHECK_EQUAL(receiptGasUsed(*rs), kExpectedFloorEmpty);
-    BOOST_CHECK_GT(receiptGasUsed(*r), receiptGasUsed(*rs));
+    BOOST_CHECK_EQUAL(floorReceiptGasUsed(*rs), kExpectedFloorEmpty);
+    BOOST_CHECK_GT(floorReceiptGasUsed(*r), floorReceiptGasUsed(*rs));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

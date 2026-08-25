@@ -24,6 +24,7 @@
 #include <exception>
 #include <string>
 #include <thread>
+#include <boost/atomic.hpp>
 
 std::atomic_long g_blockNumber = 0;
 constexpr static long blockLimit = 900;

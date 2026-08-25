@@ -28,6 +28,7 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
 #include <servant/Application.h>
+#include <bcos-utilities/BoostLog.h>
 
 #define EXECUTOR_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("ExecutorServiceApp")
 

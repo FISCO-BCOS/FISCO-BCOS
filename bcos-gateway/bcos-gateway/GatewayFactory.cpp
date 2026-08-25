@@ -36,6 +36,7 @@
 #include <openssl/x509.h>
 #include <exception>
 #include <optional>
+#include <boost/exception_ptr.hpp>
 
 using namespace bcos::rpc;
 using namespace bcos;

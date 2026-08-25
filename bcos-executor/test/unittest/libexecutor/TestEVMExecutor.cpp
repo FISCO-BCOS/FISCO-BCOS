@@ -61,8 +61,8 @@ namespace bcos
 {
 namespace test
 {
-using namespace std;
-
+using std::string;
+using std::string_view;
 struct TransactionExecutorFixture
 {
     TransactionExecutorFixture()
