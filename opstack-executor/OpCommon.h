@@ -45,7 +45,9 @@ struct OpBlockSeal
 {
     static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
     if (gasUsed > kMaxInt64)
-        throw std::runtime_error("op block: receipt gasUsed exceeds int64_t range");
+        // Classified as OpConsensusError (INVALID), never a bare runtime_error escaping the
+        // INVALID/-32603 boundary (test: NarrowGasUsedRejectsAboveInt64).
+        throw OpConsensusError("op block: receipt gasUsed exceeds int64_t range");
     return static_cast<int64_t>(gasUsed);
 }
 

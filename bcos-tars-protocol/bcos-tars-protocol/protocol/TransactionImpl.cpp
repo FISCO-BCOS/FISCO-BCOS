@@ -201,7 +201,7 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                     {
                         throwDecode("typed trailer");
                     }
-                    last3[n % 3] = tail.getCroppedData(itemHeader.payloadLength);
+                    last3[n % 3] = tail.getCroppedData(0, itemHeader.payloadLength);
                     tail = tail.getCroppedData(itemHeader.payloadLength);
                     ++n;
                 }
