@@ -45,48 +45,43 @@ add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 # return with the web3-model decoupling in the follow-up PR.
 
 
-# Receipts-root leaf encoding (encodeReceiptForRoot / sealOpBlock). Needs evmone's
-# vendored RLP helpers and ledger's computeTrieRootVarKey; kept off the lightweight
-# binary for the same wedprcrypto reason. Both extras are optional: a build without
-# blst or evmone test-utils skips this target instead of failing configure.
+# Receipts-root leaf encoding (encodeReceiptForRoot / sealOpBlock). Needs evmone's packaged RLP
+# helpers and ledger's computeTrieRootVarKey; kept off the lightweight binary for the same
+# wedprcrypto reason. These dependencies are already mandatory for every FULLNODE build:
+# bcos-evm/CMakeLists.txt requires rlp_encode.cpp and evmone's package creates the blst target.
+# Build the consensus golden-vector suite unconditionally so CI cannot silently lose it.
 get_target_property(_evmone_inc_dirs evmone::evmone INTERFACE_INCLUDE_DIRECTORIES)
 list(GET _evmone_inc_dirs 0 _evmone_inc_dir)
 cmake_path(NORMAL_PATH _evmone_inc_dir)
 set(EVMONE_TEST_UTILS_DIR "${_evmone_inc_dir}/test/utils")
-find_library(BLST_LIBRARY NAMES blst PATHS
-    "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib"
-    NO_DEFAULT_PATH)
-if(NOT BLST_LIBRARY)
-    find_library(BLST_LIBRARY NAMES blst)
-endif()
 if(NOT EXISTS "${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp")
-    message(STATUS "opstack-executor: evmone test-utils not found (${EVMONE_TEST_UTILS_DIR}) — "
-        "skipping opstack-executor-receipt-tests")
-elseif(NOT BLST_LIBRARY)
-    message(STATUS "opstack-executor: blst not found — skipping opstack-executor-receipt-tests")
-else()
-    add_executable(opstack-executor-receipt-tests
-        TestMain.cpp
-        OpReceiptEncodeTest.cpp
-        ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
-    )
-    set_target_properties(opstack-executor-receipt-tests PROPERTIES UNITY_BUILD OFF)
-    set_source_files_properties(${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
-        PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
-    target_link_libraries(opstack-executor-receipt-tests PRIVATE
-        opstack-executor
-        protocol-tars
-        bcos-crypto
-        codec
-        ledger
-        evmone::evmone
-        Boost::unit_test_framework
-        ${BLST_LIBRARY}
-    )
-    target_include_directories(opstack-executor-receipt-tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR}/bcos-ledger
-    )
-    add_test(NAME OpstackExecutorReceiptTests COMMAND opstack-executor-receipt-tests)
+    message(FATAL_ERROR "opstack-executor receipt tests require evmone test-utils "
+        "(${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp)")
 endif()
+if(NOT TARGET blst)
+    message(FATAL_ERROR "opstack-executor receipt tests require the blst CMake target")
+endif()
+add_executable(opstack-executor-receipt-tests
+    TestMain.cpp
+    OpReceiptEncodeTest.cpp
+    ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
+)
+set_target_properties(opstack-executor-receipt-tests PROPERTIES UNITY_BUILD OFF)
+set_source_files_properties(${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
+    PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
+target_link_libraries(opstack-executor-receipt-tests PRIVATE
+    opstack-executor
+    protocol-tars
+    bcos-crypto
+    codec
+    ledger
+    evmone::evmone
+    Boost::unit_test_framework
+    blst
+)
+target_include_directories(opstack-executor-receipt-tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/bcos-ledger
+)
+add_test(NAME OpstackExecutorReceiptTests COMMAND opstack-executor-receipt-tests)

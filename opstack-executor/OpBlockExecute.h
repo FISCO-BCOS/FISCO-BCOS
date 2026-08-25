@@ -67,7 +67,8 @@ struct OpBlockResult
 
 /// Execute a whole block (system_call → L1 deposit → fee → per-tx → finalize). **Discard-writes
 /// contract**: on any throw the caller must discard all writes already applied (op-geth Process
-/// semantics). Throws std::runtime_error on block-level errors.
+/// semantics). Throws OpConsensusError on block-level errors, including errors normalized from
+/// runDeposit/opTransition.
 OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     std::span<const OpBlockTx> txs, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,
@@ -83,7 +84,7 @@ inline constexpr std::size_t JovianL1AttributesLen = 178;
 inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6, 0xbe, 0x2b};
 
 /// Validate the Jovian L1-attributes block shape (selector/length + activation deposits-only).
-/// No-op pre-Jovian. Throws std::runtime_error.
+/// No-op pre-Jovian. Throws OpConsensusError.
 void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig& cfg);
 
 // ---- shared per-receipt helpers (one implementation shared with the per-tx loop) ----
@@ -110,14 +111,15 @@ inline constexpr auto OP_EMPTY_REQUESTS_HASH =
 /// Single-account storage root (secure trie: key = keccak256(slot), value = rlp(trimmed)).
 [[nodiscard]] evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& storage);
 
-/// Compute the header commitments; messagePasserStorage = post-finalize MessagePasser snapshot.
+/// Compute the header commitments; messagePasserStorage is the complete, post-finalize live
+/// MessagePasser slot map (not only this block's modified slots).
 [[nodiscard]] OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     const std::map<evmc::bytes32, evmc::bytes32>& messagePasserStorage);
 
 /// Receipts-root leaf, byte-for-byte op-geth `Receipts.EncodeIndex` semantics:
 /// deposit 0x7E || rlp([status, cumGas, bloom, logs, nonce, version]);
 /// normal  typed prefix + rlp([status, cumGas, bloom, logs]).
-[[nodiscard]] evmc::bytes encodeReceiptForRoot(
+[[nodiscard]] bcos::bytes encodeReceiptForRoot(
     const bcos::protocol::TransactionReceipt& r, uint8_t txType);
 }  // namespace bcos::evm::opstack
 
@@ -176,7 +178,10 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
     if (hashErr.has_value())
         throw OpStorageError("block-hash lookup failed: " + *hashErr);
 
-    // Commitments: MessagePasser snapshot → seal → stateRoot → txRoot.
+    // Commitments: MessagePasser snapshot → seal → stateRoot → txRoot. visitAccounts'
+    // AccountView.storage is the complete, tombstone-filtered live slot map built by
+    // fetchAllStorage, so this is consensus-correct for withdrawalsRoot (but currently O(total
+    // historical MessagePasser slots); storage2 has no maintained per-account trie root to query).
     std::map<evmc::bytes32, evmc::bytes32> mpStorage;
     bcos::evm::evmstate::Storage2State<Storage> bridge(view, executor.sharedError());
     bridge.visitAccounts([&](auto const& acc) {

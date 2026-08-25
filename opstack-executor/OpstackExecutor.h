@@ -772,7 +772,8 @@ public:
             {
                 m_receipt = co_await executor.m_execute(*stateView, blockHeader, transaction,
                     ledgerConfig, m_props, m_diff, m_ctx->chainId, m_ctx->blockGasLeft,
-                    m_ctx->blockHashes,  // H3
+                    m_ctx->blockHashes,  // Real block history; only eth_call uses the null
+                                         // fallback.
                     m_blockInfo.has_value() ? &*m_blockInfo : nullptr);
             }
         }
@@ -790,9 +791,10 @@ public:
                 receipt = co_await executor.m_finish(
                     storage, blockHeader, ledgerConfig, m_receipt, m_diff);
             }
-            // H4: sole owner of cumulative-gas backfill + blockGasLeft decrement (narrowGasUsed /
-            // decimalCumulative live in OpCommon.h). Decimal + the block index — the RPC read
-            // path lexical_casts decimal only and serves transactionIndex from the receipt.
+            // This stage solely owns cumulative-gas backfill + blockGasLeft decrement
+            // (narrowGasUsed / decimalCumulative live in OpCommon.h). Decimal + the block index —
+            // the RPC read path lexical_casts decimal only and serves transactionIndex from the
+            // receipt.
             auto gasUsed = op::narrowGasUsed(receipt->gasUsed());
             m_ctx->cumulativeGasUsed += gasUsed;
             receipt->setCumulativeGasUsed(

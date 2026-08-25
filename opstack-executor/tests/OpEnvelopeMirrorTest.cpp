@@ -152,6 +152,17 @@ BOOST_AUTO_TEST_CASE(EnvelopeChainIdMatchesNode)
     BOOST_CHECK(!envelopeChainIdMismatch(tx, 10).has_value());
 }
 
+// Typed envelopes must carry a parseable chainId in field 0. A type byte followed by a malformed
+// list is not a legacy/pre-EIP-155 exemption and must fail closed.
+BOOST_AUTO_TEST_CASE(TypedEnvelopeWithoutParseableChainIdRejected)
+{
+    FakeTx tx;
+    tx.m_extraBytes = {0x02, 0xc0};
+    auto const gate = envelopeChainIdMismatch(tx, 10);
+    BOOST_REQUIRE(gate.has_value());
+    BOOST_CHECK_EQUAL(*gate, "typed tx envelope is missing a parseable chainId");
+}
+
 // A forged mirror value must be rejected by the execution-fields cross-check.
 BOOST_AUTO_TEST_CASE(MirrorValueDivergenceRejected)
 {

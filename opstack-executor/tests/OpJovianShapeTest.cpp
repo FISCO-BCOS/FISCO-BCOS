@@ -21,7 +21,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -97,7 +96,7 @@ BOOST_AUTO_TEST_CASE(ValidateJovianBlockShapeAcceptReject)
         {
             validateJovianBlockShape(txs, jovian);
         }
-        catch (const std::runtime_error& e)
+        catch (const bcos::evm::OpConsensusError& e)
         {
             return std::string{e.what()};
         }

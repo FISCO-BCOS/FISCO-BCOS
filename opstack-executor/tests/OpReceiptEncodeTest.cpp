@@ -5,10 +5,13 @@
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <opstack-executor/OpBlockExecute.h>  // encodeReceiptForRoot (seal merged here)
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
+#include <map>
 #include <sstream>
 #include <test/utils/rlp.hpp>
 #include <test/utils/rlp_encode.hpp>
+#include <utility>
 
 using namespace bcos::evm::opstack;
 using namespace bcos::evm::opstack::testutil;
@@ -16,13 +19,14 @@ using namespace evmc::literals;
 
 namespace
 {
-/// A deposit receipt projected onto the FISCO receipt: cumulative "0x5208" (21000), 256-zero
-/// bloom, deposit_nonce/version in opStackMeta. `status` is the FISCO status (0 = success).
-bcos::protocol::TransactionReceipt::Ptr minimalDepositReceipt(int32_t status = 0)
+/// A deposit receipt projected onto the FISCO receipt: cumulative gas 21000, 256-zero bloom,
+/// deposit_nonce/version in opStackMeta. `status` is the FISCO status (0 = success).
+bcos::protocol::TransactionReceipt::Ptr minimalDepositReceipt(
+    int32_t status = 0, std::string cumulativeGasUsed = "0x5208")
 {
     auto r = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
         std::vector<bcos::protocol::LogEntry>{}, status, bcos::bytesConstRef{}, /*blockNumber=*/1);
-    r->setCumulativeGasUsed("0x5208");
+    r->setCumulativeGasUsed(std::move(cumulativeGasUsed));
     bcos::bytes bloom(256, 0x00);
     r->setLogsBloom(bcos::ref(bloom));
     bcos::protocol::OpStackReceiptMeta meta;
@@ -45,11 +49,22 @@ BOOST_AUTO_TEST_CASE(DepositGoldenBytes)
 {
     const auto enc =
         encodeReceiptForRoot(*minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType));
-    evmc::bytes expected{0x7e, 0xf9, 0x01, 0x0a, 0x01, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
-    expected += evmc::bytes(256, 0x00);
-    expected += evmc::bytes{0xc0, 0x05, 0x01};
+    bcos::bytes expected{0x7e, 0xf9, 0x01, 0x0a, 0x01, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
+    expected.insert(expected.end(), 256, 0x00);
+    expected.insert(expected.end(), {0xc0, 0x05, 0x01});
     BOOST_REQUIRE_EQUAL(enc.size(), 270u);
     BOOST_CHECK_EQUAL(enc, expected);
+}
+
+// Production stores cumulativeGasUsed as decimal, while historical receipts may carry a 0x
+// quantity. Both representations must commit to exactly the same receipt leaf.
+BOOST_AUTO_TEST_CASE(DepositDecimalAndHexCumulativeGasAreEquivalent)
+{
+    const auto decimal = encodeReceiptForRoot(
+        *minimalDepositReceipt(0, "21000"), static_cast<uint8_t>(kDepositTxType));
+    const auto hex = encodeReceiptForRoot(
+        *minimalDepositReceipt(0, "0x5208"), static_cast<uint8_t>(kDepositTxType));
+    BOOST_CHECK_EQUAL(decimal, hex);
 }
 
 // Failed deposit: status item = empty string 0x80 (op-geth statusEncoding failure branch).
@@ -60,9 +75,9 @@ BOOST_AUTO_TEST_CASE(FailedDepositStatusIsEmptyString)
 {
     auto dep = minimalDepositReceipt(/*status=*/1);  // FISCO non-zero = failed
     const auto enc = encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
-    evmc::bytes expected{0x7e, 0xf9, 0x01, 0x0a, 0x80, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
-    expected += evmc::bytes(256, 0x00);
-    expected += evmc::bytes{0xc0, 0x05, 0x01};
+    bcos::bytes expected{0x7e, 0xf9, 0x01, 0x0a, 0x80, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
+    expected.insert(expected.end(), 256, 0x00);
+    expected.insert(expected.end(), {0xc0, 0x05, 0x01});
     BOOST_REQUIRE_EQUAL(enc.size(), 270u);
     BOOST_CHECK_EQUAL(enc, expected);
 }
@@ -101,7 +116,8 @@ BOOST_AUTO_TEST_CASE(DepositWithLogEmbedsEncodedLogsAndNonceTail)
     // evmone's vector<Log> list encoding (independent path) must appear whole — covers the list
     // wrapper bytes
     const auto logsBytes = evmone::rlp::encode(std::vector<evmone::state::Log>{evmoneLog});
-    BOOST_CHECK_NE(enc.find(logsBytes), evmc::bytes::npos);
+    BOOST_CHECK(
+        std::search(enc.begin(), enc.end(), logsBytes.begin(), logsBytes.end()) != enc.end());
     BOOST_REQUIRE_EQUAL(enc.size(), 269u + logsBytes.size());
     BOOST_CHECK_EQUAL(enc[enc.size() - 2], 0x07);  // nonce
     BOOST_CHECK_EQUAL(enc[enc.size() - 1], 0x01);  // version
@@ -129,7 +145,7 @@ BOOST_AUTO_TEST_CASE(NormalReceiptMatchesEvmoneEncoding)
         encodeReceiptForRoot(*r, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
 
     BOOST_CHECK_EQUAL(enc[0], 0x02);  // eip1559 typed prefix
-    BOOST_CHECK_EQUAL(enc, evmc::bytes(expected.begin(), expected.end()));
+    BOOST_CHECK_EQUAL(enc, bcos::bytes(expected.begin(), expected.end()));
 }
 
 // legacy (no typed prefix) + access_list prefixes are also byte-identical to evmone
@@ -152,7 +168,7 @@ BOOST_AUTO_TEST_CASE(NormalReceiptLegacyAndAccessListPrefixes)
         ref.cumulative_gas_used = 42000;
         const auto expected = evmone::state::rlp_encode(ref);
         const auto enc = encodeReceiptForRoot(*fisco, static_cast<uint8_t>(type));
-        BOOST_CHECK_EQUAL(enc, evmc::bytes(expected.begin(), expected.end()));
+        BOOST_CHECK_EQUAL(enc, bcos::bytes(expected.begin(), expected.end()));
     };
 
     auto legacy = makeFisco(42000);
@@ -184,12 +200,12 @@ BOOST_AUTO_TEST_CASE(DepositAndNormalLeavesDiffer)
 // equivalence.
 BOOST_AUTO_TEST_CASE(SealReceiptsRootMatchesEvmoneReferenceTrie)
 {
-    // FISCO receipt #0: deposit (status 0, cumGas 21000, nonce 5, version 1).
-    auto dep = minimalDepositReceipt();
+    // Production-format FISCO receipt #0: decimal cumGas 21000.
+    auto dep = minimalDepositReceipt(0, "21000");
     // FISCO receipt #1: eip1559 (status 0, cumGas 42000).
     auto normal = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
         std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{}, 1);
-    normal->setCumulativeGasUsed("0xa410");  // 42000
+    normal->setCumulativeGasUsed("42000");
     bcos::bytes bloom(256, 0x00);
     normal->setLogsBloom(bcos::ref(bloom));
 
@@ -233,6 +249,24 @@ BOOST_AUTO_TEST_CASE(SealReceiptsRootMatchesEvmoneReferenceTrie)
     bcos::h256 expected;
     std::memcpy(expected.mutableData().data(), refRoot.root.data(), sizeof(expected));
     BOOST_CHECK_EQUAL(actual, expected);
+}
+
+// Independent single-leaf MPT derivation:
+// key = keccak256(32 zero bytes) = 0x290dec...e563;
+// leaf = rlp([hex-prefix(leaf,key), rlp(1)]) =
+// 0xe3a120 || key || 0x01; root = keccak256(leaf).
+BOOST_AUTO_TEST_CASE(OpStorageRootSingleSlotGolden)
+{
+    std::map<evmc::bytes32, evmc::bytes32> storage;
+    evmc::bytes32 key{};
+    evmc::bytes32 value{};
+    value.bytes[sizeof(value.bytes) - 1] = 1;
+    storage.emplace(key, value);
+
+    const auto root = opStorageRoot(storage);
+    const auto expected =
+        0x821e2556a290c86405f8160a2d662042a431ba456b9db265c79bb837c04be5f0_bytes32;
+    BOOST_CHECK_EQUAL(root, expected);
 }
 
 // A receipt whose logsBloom is not exactly 256 bytes must be a consensus rejection — a short

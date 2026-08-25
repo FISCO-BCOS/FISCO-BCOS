@@ -12,14 +12,14 @@
 #include <algorithm>
 #include <bcos-evm/eth/state/state.hpp>  // evmone::state::finalize
 #include <bcos-evm/eth/state/system_contracts.hpp>
+#include <charconv>
 #include <cstring>
 #include <functional>
-#include <iomanip>
 #include <limits>
-#include <sstream>
 #include <stdexcept>
+#include <system_error>
 
-// isL1AttributesTx lives in OpBlockExecute.h; narrowGasUsed / hexCumulative live in OpCommon.h
+// isL1AttributesTx lives in OpBlockExecute.h; narrowGasUsed / decimalCumulative live in OpCommon.h
 // (both shared with the per-tx loop — one implementation, no copy drift).
 
 namespace bcos::evm::opstack
@@ -107,8 +107,22 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 BCOS_LOG(WARNING) << LOG_BADGE("OP_BLOCK_EXEC")
                                   << "deposit after non-deposit in block — accepted";
             evmone::state::StateDiff diff;
-            auto receipt = runDeposit(
-                view, block, hashes, *dep, cfg, vm, chainId, blockGasLeft, receiptFactory, diff);
+            auto receipt = [&]() {
+                try
+                {
+                    return runDeposit(view, block, hashes, *dep, cfg, vm, chainId, blockGasLeft,
+                        receiptFactory, diff);
+                }
+                catch (const OpConsensusError&)
+                {
+                    throw;
+                }
+                catch (const std::runtime_error& e)
+                {
+                    throw OpConsensusError(
+                        std::string("op block: deposit execution failed: ") + e.what());
+                }
+            }();
             applyDiff(diff);
             const auto gasUsed = narrowGasUsed(receipt->gasUsed());
             blockGasLeft -= gasUsed;
@@ -164,8 +178,22 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 throw OpConsensusError("op block: invalid non-deposit tx: " + err->message());
             // opTransition charges from props.fee (the validate-time snapshot — no second read).
             evmone::state::StateDiff diff;
-            auto receipt = opTransition(view, block, hashes, tx, cfg, vm,
-                std::get<OpTxProperties>(v), chainId, receiptFactory, diff);
+            auto receipt = [&]() {
+                try
+                {
+                    return opTransition(view, block, hashes, tx, cfg, vm,
+                        std::get<OpTxProperties>(v), chainId, receiptFactory, diff);
+                }
+                catch (const OpConsensusError&)
+                {
+                    throw;
+                }
+                catch (const std::runtime_error& e)
+                {
+                    throw OpConsensusError(
+                        std::string("op block: transaction execution failed: ") + e.what());
+                }
+            }();
             applyDiff(diff);
             const auto gasUsed = narrowGasUsed(receipt->gasUsed());
             blockGasLeft -= gasUsed;
@@ -190,7 +218,7 @@ namespace
 {
 /// Parse cumulativeGasUsed: 0x-hex via safeFromQuantity, otherwise decimal.
 /// Bare digits must not go to safeFromQuantity (it treats them as hex).
-[[nodiscard]] uint64_t parseHexUint64(std::string_view s)
+[[nodiscard]] uint64_t parseCumulativeGasUsed(std::string_view s)
 {
     if (s.size() > 1 && (s[0] == '0') && (s[1] == 'x' || s[1] == 'X'))
     {
@@ -199,12 +227,12 @@ namespace
     }
     else
     {
-        try
-        {
-            return boost::lexical_cast<uint64_t>(s);
-        }
-        catch (const boost::bad_lexical_cast&)
-        {}
+        uint64_t value = 0;
+        const auto* begin = s.data();
+        const auto* end = begin + s.size();
+        const auto [ptr, ec] = std::from_chars(begin, end, value, 10);
+        if (ec == std::errc{} && ptr == end)
+            return value;
     }
     throw OpConsensusError(
         "op block: invalid cumulativeGasUsed in receipt (not hex or decimal): " + std::string(s));
@@ -257,12 +285,12 @@ evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& stor
     return root;
 }
 
-evmc::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, uint8_t txType)
+bcos::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, uint8_t txType)
 {
     // RLP bool semantics: true → 0x01, false → 0x80 (raw push; the UnsignedByte encode path
     // mis-handles bool). Payload = rlp([status, cumGas, bloom, logs]) + (deposit) [nonce, version].
     const bool success = (r.status() == 0);
-    const uint64_t cumGas = parseHexUint64(r.cumulativeGasUsed());
+    const uint64_t cumGas = parseCumulativeGasUsed(r.cumulativeGasUsed());
     const auto bloom = r.logsBloom();
     if (bloom.size() != 256)
     {
@@ -288,12 +316,13 @@ evmc::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, ui
     }
 
     bcos::bytes out;
+    out.reserve(payload.size() + 4);
+    // Typed raw-byte prefix (legacy has none; deposit's 0x7e is the EIP-2718 type byte).
+    if (txType != static_cast<uint8_t>(evmone::state::Transaction::Type::legacy))
+        out.push_back(txType);
     bcos::codec::rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
     out.insert(out.end(), payload.begin(), payload.end());
-    // typed raw-byte prefix (legacy has none; deposit's 0x7e is the EIP-2718 type byte).
-    if (txType != static_cast<uint8_t>(evmone::state::Transaction::Type::legacy))
-        out.insert(out.begin(), txType);
-    return evmc::bytes(out.begin(), out.end());
+    return out;
 }
 
 OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
@@ -308,8 +337,8 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     {
         bcos::bytes key;
         bcos::codec::rlp::encode(key, static_cast<uint64_t>(i));
-        auto const leaf = encodeReceiptForRoot(*result.receipts[i], result.txTypes[i]);
-        receiptsEntries.emplace_back(std::move(key), bcos::bytes{leaf.begin(), leaf.end()});
+        auto leaf = encodeReceiptForRoot(*result.receipts[i], result.txTypes[i]);
+        receiptsEntries.emplace_back(std::move(key), std::move(leaf));
     }
     auto receiptsResult = bcos::ledger::mpt::computeTrieRootVarKey(receiptsEntries);
     std::memcpy(

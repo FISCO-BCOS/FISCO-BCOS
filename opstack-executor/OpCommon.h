@@ -68,12 +68,6 @@ struct OpBlockSeal
     return static_cast<int64_t>(gasUsed);
 }
 
-/// 0x-hex uint64, op-geth hexutil.Uint64.
-[[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
-{
-    return bcos::toQuantity(cumulative);
-}
-
 /// Decimal string for the tars receipt field. eth_getTransactionReceipt reads this via
 /// `safeCastToU256` (`boost::lexical_cast<u256>`, decimal — not `safeFromQuantity`).
 [[nodiscard]] inline std::string decimalCumulative(uint64_t cumulative)
