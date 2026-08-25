@@ -169,7 +169,7 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             auto const* expected =
                 std::find_if(c_typedFieldCounts.begin(), c_typedFieldCounts.end(),
                     [txType](auto const& entry) { return entry.first == txType; });
-            if (!expected) [[unlikely]]
+            if (expected == c_typedFieldCounts.end()) [[unlikely]]
             {
                 throwDecode("typed unknown type");
             }

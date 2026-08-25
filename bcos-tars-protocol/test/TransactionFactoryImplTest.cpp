@@ -417,5 +417,27 @@ BOOST_AUTO_TEST_CASE(web3ChainIdFromEnvelopeReadsEnvelopeNotTarsMirror)
     BOOST_CHECK(!legacy->web3ChainIdFromEnvelope().has_value());
 }
 
+// Dual-layout typed reassemble: unknown type byte (0x05) must throw, not dereference end().
+// std::array::end() is a non-null pointer; `if (!expected)` never fired.
+BOOST_AUTO_TEST_CASE(typedUnknownTypeReassembleThrows)
+{
+    auto suite = makeSuite();
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));
+    bcos::bytes env;
+    env.push_back(0x05);
+    rlp::encodeHeader(env, rlp::Header{true, items.size()});
+    env.insert(env.end(), items.begin(), items.end());
+
+    auto tx = std::make_shared<TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.web3TypedTxKind = 0x05;
+    inner.extraTransactionBytes.assign(env.begin(), env.end());
+    inner.signature.assign(65, 0);
+    BOOST_CHECK_THROW(tx->calculateHash(*suite->hashImpl()), std::invalid_argument);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

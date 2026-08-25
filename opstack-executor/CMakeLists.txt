@@ -9,6 +9,7 @@ add_library(opstack-executor
 )
 target_include_directories(opstack-executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/opstack-executor>)
 # No direct `ledger` / `rlp-protocol` links: both drag the bcos-crypto→wedprcrypto chain
 # that breaks libc++ typed catch binary-wide (bcos-rpc/test/CMakeLists.txt:29-34).

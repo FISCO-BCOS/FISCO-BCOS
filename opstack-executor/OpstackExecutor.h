@@ -23,7 +23,8 @@
 #include "opstack-executor/Storage2State.h"  // Storage2State / SharedErrorSlot
 #include <bcos-codec/rlp/Common.h>           // BYTES_HEAD_BASE (consensus deposit-envelope decode)
 #include <bcos-codec/rlp/RLPDecode.h>        // decodeHeader / decode / decodeItems
-#include <bcos-utilities/BoostLog.h>         // BCOS_LOG
+#include <bcos-rlp-protocol/Web3TxEnvelope.h>   // isTypedWeb3Envelope (header-only)
+#include <bcos-utilities/BoostLog.h>            // BCOS_LOG
 #include <bcos-utilities/DataConvertUtility.h>  // safeFromHex / safeFromQuantity
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
@@ -504,7 +505,8 @@ public:
         // BlockInfo built once in prepare() and reused by execute() (same inputs, same value).
         std::optional<evmone::state::BlockInfo> m_blockInfo;
 
-        // One Storage2State per tx for prepare + execute so validate-phase cache hits in transition.
+        // One Storage2State per tx for prepare + execute so validate-phase cache hits in
+        // transition.
         std::unique_ptr<bcos::evm::evmstate::Storage2State<Storage>> stateView;
 
         // Shared per-block context; the mutable fields above are written through this const
@@ -554,8 +556,8 @@ public:
                 if (m_ctx->seenNonDeposit)
                     // Deposit after a non-deposit: warn only. op-geth/op-reth accept this
                     // at validation (they enforce deposit-first at the sequencer).
-                    BCOS_LOG(WARNING) << LOG_BADGE("OPSTACK")
-                                      << "deposit after non-deposit in block — accepted";
+                    BCOS_LOG(WARNING)
+                        << LOG_BADGE("OPSTACK") << "deposit after non-deposit in block — accepted";
                 try
                 {
                     m_deposit = OpstackExecutor::depositFromTransaction(transaction);
@@ -569,7 +571,6 @@ public:
                 }
                 co_return;  // deposit has no opValidate
             }
-            m_ctx->seenNonDeposit = true;
             if (!m_ctx->feeLoaded)
             {  // Load fee params after the L1 attributes deposit.
                 namespace op = bcos::evm::opstack;
@@ -596,6 +597,9 @@ public:
                     std::string("OpScheduler: normal tx validation failed: ") + e.what() +
                     " [tx=0x" + transaction.hash().hex() + "]");
             }
+            // Only after a successful prepare: a rejected normal tx must not flip the
+            // deposit-after-non-deposit warn path for a later deposit in the same block.
+            m_ctx->seenNonDeposit = true;
         }
         task::Task<void> execute()
         {
@@ -750,8 +754,8 @@ public:
         }
 
         // eth_call (call=true) simulates without chain binding — op-geth eth_call is lenient about
-        // chainId; block execution (call=false) enforces tx.chainId == node chainId (the op-geth
-        // EIP155Signer/modernSigner ErrInvalidChainId check).
+        // chainId; block execution (call=false) compares the SIGNED envelope to the node (op-geth
+        // EIP155Signer/modernSigner ErrInvalidChainId).
         // Same Storage2State for prepare and execute.
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         auto blockInfo = buildBlockInfo(
@@ -923,17 +927,27 @@ private:
                              buildBlockInfo(blockHeader,
                                  opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         auto evmTx = eth::toEvmoneTransaction(transaction);
-        // Block path: tx.chainId must match the node, like op-geth ErrInvalidChainId.
-        // Exempt only unprotected legacy (v=27/28, chain_id==0). eth_call passes nullopt.
+        // Block path: compare the SIGNED envelope to the node (op-geth ErrInvalidChainId).
+        // Never use tars data.chainID / evmTx.chain_id — the signature does not bind the mirror.
+        // eth_call passes nullopt (lenient, like op-geth eth_call).
         if (chainId.has_value())
         {
-            // Only legacy UNPROTECTED txs (v=27/28, chain_id==0, Homestead) are exempt.
-            bool const exempt =
-                evmTx.type == evmone::state::Transaction::Type::legacy && evmTx.chain_id == 0;
-            if (!exempt && evmTx.chain_id != *chainId)
+            auto const envelopeChainId = transaction.web3ChainIdFromEnvelope();
+            if (envelopeChainId.has_value() && *envelopeChainId != *chainId)
+            {
                 throw engine::OpConsensusError(
-                    "OpScheduler: tx chain_id " + std::to_string(evmTx.chain_id) +
+                    "op block: tx envelope chain_id " + std::to_string(*envelopeChainId) +
                     " does not match node chainId " + std::to_string(*chainId));
+            }
+            // Typed envelopes always carry chainId (RLP field 0). nullopt there is malformed,
+            // not a pre-EIP-155 exemption. Deposits (0x7e) are unsigned and yield nullopt —
+            // they never reach m_prepare.
+            if (!envelopeChainId.has_value() &&
+                bcos::rlp::protocol::isTypedWeb3Envelope(transaction.extraTransactionBytes()))
+            {
+                throw engine::OpConsensusError(
+                    "op block: typed tx envelope is missing a parseable chainId");
+            }
         }
         auto envRef = transaction.extraTransactionBytes();
         evmc::bytes_view env{envRef.data(), envRef.size()};

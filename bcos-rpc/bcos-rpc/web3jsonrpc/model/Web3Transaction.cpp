@@ -131,7 +131,12 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
     // decode path feeding block execution, part 5/5) — so the check covers admission AND block
     // processing, matching op-geth. Deposits (0x7e) are unsigned; the EIP-7702 authorization
     // entries are gated separately (Eip7702Recover.h) and left untouched here.
-    if (err == nullptr && withSig && type != TransactionType::Deposit)
+    // EIP-2 whenever a (y,r,s) trailer was decoded: withSig, or the leftover sealed-envelope
+    // path (withSig=false but r/s/v populated). A signing-preimage leftover leaves r/s empty
+    // and v=0, so it stays exempt. Deposits are unsigned.
+    bool const decodedSigTrailer =
+        withSig || !signatureR.empty() || !signatureS.empty() || signatureV != 0;
+    if (err == nullptr && decodedSigTrailer && type != TransactionType::Deposit)
     {
         err = checkEip2Signature(signatureR, signatureS);
     }

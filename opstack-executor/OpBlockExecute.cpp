@@ -5,6 +5,8 @@
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
+#include <bcos-rlp-protocol/Web3TxEnvelope.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <algorithm>
@@ -74,12 +76,17 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     applyDiff(bcos::evm::sanitizeStateDiff(
         view, evmone::state::system_call_block_start(view, block, hashes, cfg.rev, vm)));
 
-    // Step 2: first tx must be the L1 attributes deposit (stricter-than-spec) + Jovian shape.
+    // Step 2: first tx must be a deposit (hard reject) + L1-attributes content (warn, op-geth
+    // accept-at-validation) + Jovian shape. Same accept set as preBlockOpSteps / ExecuteContext.
     if (txs.empty())
         throw std::runtime_error("op block: missing L1 attributes deposit (empty block)");
     const auto* firstDep = std::get_if<DepositTx>(&txs[0].tx);
-    if (firstDep == nullptr || !isL1AttributesTx(*firstDep))
-        throw std::runtime_error("op block: first tx is not the L1 attributes deposit");
+    if (firstDep == nullptr)
+        throw std::runtime_error("op block: first tx is not a deposit");
+    if (!isL1AttributesTx(*firstDep))
+        BCOS_LOG(WARNING) << LOG_BADGE("OP_BLOCK_EXEC")
+                          << "op block: first tx is a deposit but not the L1 attributes tx — "
+                             "accepted";
     validateJovianBlockShape(txs, cfg);
 
     OpBlockResult result;
@@ -97,7 +104,8 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
         if (const auto* dep = std::get_if<DepositTx>(&btx.tx))
         {
             if (seenNonDeposit)
-                throw std::runtime_error("op block: deposit after non-deposit tx");
+                BCOS_LOG(WARNING) << LOG_BADGE("OP_BLOCK_EXEC")
+                                  << "deposit after non-deposit in block — accepted";
             evmone::state::StateDiff diff;
             auto receipt = runDeposit(
                 view, block, hashes, *dep, cfg, vm, chainId, blockGasLeft, receiptFactory, diff);
@@ -136,6 +144,20 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             }
             const auto& tx = std::get<evmone::state::Transaction>(btx.tx);
             const evmc::bytes_view env{btx.signedEnvelope.data(), btx.signedEnvelope.size()};
+            auto const envRef =
+                bcos::bytesConstRef(btx.signedEnvelope.data(), btx.signedEnvelope.size());
+            auto const envelopeChainId = bcos::rlp::protocol::web3ChainIdFromEnvelope(envRef);
+            if (envelopeChainId.has_value() && *envelopeChainId != chainId)
+            {
+                throw std::runtime_error("op block: tx envelope chain_id " +
+                                         std::to_string(*envelopeChainId) +
+                                         " does not match node chainId " + std::to_string(chainId));
+            }
+            if (!envelopeChainId.has_value() && bcos::rlp::protocol::isTypedWeb3Envelope(envRef))
+            {
+                throw std::runtime_error(
+                    "op block: typed tx envelope is missing a parseable chainId");
+            }
             auto v = opValidate(view, block, tx, env, cfg, fee, blockGasLeft);
             if (const auto* err = std::get_if<std::error_code>(&v))
                 // No failed-receipt mechanism for normal txs: void the whole block (op-geth).

@@ -1093,6 +1093,49 @@ BOOST_AUTO_TEST_CASE(testWideSignatureRejectedAtDecode)
     BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::InvalidVInSignature));
 }
 
+// Leftover sealed-envelope path (decodeFromPayload / withSig=false) must still reject high-s.
+// The leftover consume is what lets sealed blocks decode; skipping EIP-2 there is a fork vs
+// op-geth Sender.
+BOOST_AUTO_TEST_CASE(testNoSigLeftoverHighSRejected)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto make1559 = [](bcos::bytes const& s) {
+        bcos::bytes items;
+        rlp::encode(items, static_cast<uint64_t>(1));
+        rlp::encode(items, static_cast<uint64_t>(0));
+        rlp::encode(items, static_cast<uint64_t>(1000000000));
+        rlp::encode(items, static_cast<uint64_t>(1000000000));
+        rlp::encode(items, static_cast<uint64_t>(21000));
+        rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+        rlp::encode(items, static_cast<uint64_t>(0));
+        rlp::encode(items, bcos::bytes{});
+        items.push_back(rlp::LIST_HEAD_BASE);
+        rlp::encode(items, static_cast<uint64_t>(0));
+        rlp::encode(items, bcos::bytes(32, 0x11));
+        rlp::encode(items, s);
+        bcos::bytes envelope;
+        envelope.push_back(static_cast<byte>(bcos::rpc::TransactionType::EIP1559));
+        rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+        envelope.insert(envelope.end(), items.begin(), items.end());
+        return envelope;
+    };
+    {
+        auto bytes = make1559(bcos::bytes(32, 0xff));
+        auto bRef = bcos::ref(bytes);
+        Web3Transaction tx{};
+        auto err = rlp::decodeFromPayload(bRef, tx);
+        BOOST_REQUIRE(err != nullptr);
+        BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::InvalidVInSignature));
+    }
+    {
+        auto bytes = make1559(bcos::bytes(32, 0x22));
+        auto bRef = bcos::ref(bytes);
+        Web3Transaction tx{};
+        BOOST_REQUIRE(rlp::decodeFromPayload(bRef, tx) == nullptr);
+        BOOST_CHECK(tx.type == rpc::TransactionType::EIP1559);
+    }
+}
+
 // Typed tx with chainId=0 must decode with chainId present (not nullopt).
 // A nullopt here would let the executor's chainId gate pass the tx unchecked (op-geth
 // modernSigner rejects chainId 0 != node-config; the decode layer must preserve the value).

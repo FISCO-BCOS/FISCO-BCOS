@@ -2,7 +2,7 @@
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
+ *  you may use this file except in compliance with the License.
  *  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
@@ -21,25 +21,108 @@
 
 #include "bcos-utilities/Common.h"
 #include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/RLPDecode.h>
 #include <optional>
 
 namespace bcos::rlp::protocol
 {
-/// Chain id from a Web3 transaction's SIGNED envelope (extraTransactionBytes), never the
-/// unauthenticated tars mirror. The signature binds only the envelope bytes, so a mirror field
-/// is forgeable by a malicious peer/proposer; the envelope is authoritative.
-///   typed (first byte < 0x80): chainId = RLP field 0 of the inner list;
-///   legacy: walk the first 6 fields; if a 7th is present it is the EIP-155 chainId.
-/// nullopt = pre-EIP-155 unprotected legacy (6-field, v=27/28, no chainId tail) or a malformed
-/// preimage. A malformed tail is normally rejected upstream by reassembleWeb3RawTransaction /
-/// verify() — keep the walkers' strictness in sync if that ordering ever changes.
-/// @param payload the signed envelope bytes (type byte included for typed txs)
-[[nodiscard]] std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload);
-
 /// True if the envelope's first byte is a typed-transaction marker (EIP-2718: type byte < 0x80).
 /// Used to key typed/legacy decisions on the envelope rather than the forgeable mirror kind.
 [[nodiscard]] inline bool isTypedWeb3Envelope(bcos::bytesConstRef payload) noexcept
 {
     return !payload.empty() && payload[0] > 0 && payload[0] < bcos::codec::rlp::BYTES_HEAD_BASE;
+}
+
+/// Chain id from a Web3 transaction's SIGNED envelope (extraTransactionBytes), never the
+/// unauthenticated tars mirror. Inline so opstack-executor can use it without linking
+/// rlp-protocol (that target pulls bcos-crypto → wedprcrypto and breaks libc++ typed catch).
+///   typed (first byte < 0x80, not 0x7E): chainId = RLP field 0 of the inner list;
+///   legacy: walk the first 6 fields; if a 7th is present it is the EIP-155 chainId or v.
+/// nullopt = pre-EIP-155 unprotected legacy (6-field, v=27/28) or a malformed preimage.
+[[nodiscard]] inline std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
+{
+    if (payload.empty()) [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    auto const firstByte = payload[0];
+    bcos::bytesRef cursor(const_cast<bcos::byte*>(payload.data()), payload.size());
+    // 0x7E (Deposit) has no chainId field — field 0 is sourceHash (h256).
+    if (firstByte == 0x7E) [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    if (firstByte > 0 && firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
+    {
+        cursor = cursor.getCroppedData(1);
+        auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
+        if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
+        {
+            return std::nullopt;
+        }
+        uint64_t chainId = 0;
+        if (auto e = bcos::codec::rlp::decode(cursor, chainId); e != nullptr) [[unlikely]]
+        {
+            return std::nullopt;
+        }
+        return chainId;
+    }
+    auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
+    if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    bcos::bytesRef walker(cursor.data(), header.payloadLength);
+    for (int i = 0; i < 6; ++i)
+    {
+        auto [fieldError, fieldHeader] = bcos::codec::rlp::decodeHeader(walker);
+        if (fieldError || fieldHeader.payloadLength > walker.size()) [[unlikely]]
+        {
+            return std::nullopt;
+        }
+        walker = walker.getCroppedData(fieldHeader.payloadLength);
+    }
+    if (walker.empty())
+    {
+        return std::nullopt;
+    }
+    bcos::bytesRef field7Item = walker;
+    auto [field7Error, field7Header] = bcos::codec::rlp::decodeHeader(walker);
+    if (field7Error || field7Header.payloadLength > walker.size()) [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    bcos::bytesRef afterField7 = walker.getCroppedData(field7Header.payloadLength);
+    bool const isPreimageTail = [&] {
+        if (afterField7.empty()) [[unlikely]]
+        {
+            return false;
+        }
+        auto [field8Error, field8Header] = bcos::codec::rlp::decodeHeader(afterField7);
+        return field8Error == nullptr && !field8Header.isList && field8Header.payloadLength == 0;
+    }();
+    if (isPreimageTail)
+    {
+        uint64_t chainId = 0;
+        if (auto e = bcos::codec::rlp::decode(field7Item, chainId); e != nullptr) [[unlikely]]
+        {
+            return std::nullopt;
+        }
+        return chainId;
+    }
+    uint64_t v = 0;
+    if (auto e = bcos::codec::rlp::decode(field7Item, v); e != nullptr) [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    if (v == 27 || v == 28)
+    {
+        return std::nullopt;
+    }
+    if (v >= 35)
+    {
+        return (v - 35) >> 1;
+    }
+    return std::nullopt;
 }
 }  // namespace bcos::rlp::protocol
