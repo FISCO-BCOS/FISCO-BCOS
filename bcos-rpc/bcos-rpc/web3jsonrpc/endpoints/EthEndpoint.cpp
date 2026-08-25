@@ -1665,7 +1665,6 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         // O(path). Roots without rows (a chain segment produced before ①a landed) report
         // BlockNotCommitted and fall through to the flat rebuild, preserving the latest-only
         // contract for those segments.
-        bool servedFromNodes = false;
         if (auto const mptReader = m_nodeService->mptNodeReader())
         {
             auto const fullTrie = co_await ledger::getFeature(
@@ -1675,13 +1674,15 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
             if (auto* built = std::get_if<ledger::mpt::EIP1186Proof>(&result))
             {
                 proof = std::move(*built);
-                servedFromNodes = true;
             }
-            else if (std::get<ledger::mpt::ProofErrorCode>(result) !=
-                     ledger::mpt::ProofErrorCode::BlockNotCommitted)
+            else
             {
-                BOOST_THROW_EXCEPTION(JsonRpcException(
-                    EthGetProofUnavailable, "Account not in trie (dormant in scenario A)"));
+                // No flat-state fallback in this slice — it lands with the eth_getProof PR.
+                // A root without node rows is an honest "cannot serve" here, not an empty
+                // proof.
+                BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
+                    "Proof unavailable for this block (flat rebuild lands with the "
+                    "eth_getProof PR)"));
             }
         }
     }
