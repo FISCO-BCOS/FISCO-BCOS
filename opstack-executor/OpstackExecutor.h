@@ -913,8 +913,13 @@ public:
         }
         catch (const OpTxValidationFailed& e)
         {
-            throw bcos::evm::OpConsensusError(
+            // Mirror the ExecuteContext::prepare catch: the offending tx's hash rides in a
+            // structured member so the engine's OP build loop can evict the culprit by hash —
+            // never parse the message text.
+            bcos::evm::OpConsensusError err(
                 std::string("OpScheduler: normal tx validation failed: ") + e.what());
+            err.txHash = transaction.hash();
+            throw err;
         }
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(stateView, blockHeader, transaction, ledgerConfig, props,

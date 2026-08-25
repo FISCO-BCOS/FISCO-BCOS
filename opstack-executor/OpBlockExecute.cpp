@@ -77,7 +77,10 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
         view, evmone::state::system_call_block_start(view, block, hashes, cfg.rev, vm)));
 
     // Step 2: first tx must be a deposit (hard reject) + L1-attributes content (warn, op-geth
-    // accept-at-validation) + Jovian shape. Same accept set as preBlockOpSteps / ExecuteContext.
+    // accept-at-validation) + Jovian shape. Same accept set as preBlockOpSteps / ExecuteContext,
+    // though seenNonDeposit is set pre-validation here while ExecuteContext sets it after a
+    // successful prepare — any validation failure aborts the whole block on this path, so the
+    // timing difference has no effect.
     if (txs.empty())
         throw OpConsensusError("op block: missing L1 attributes deposit (empty block)");
     const auto* firstDep = std::get_if<DepositTx>(&txs[0].tx);
