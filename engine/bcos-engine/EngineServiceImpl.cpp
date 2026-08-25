@@ -148,21 +148,86 @@ constexpr std::size_t c_jovianExtraDataBytes = 17;
 /// protocol constants, like the EL does too", using ChainOpConfig
 /// .EIP1559DenominatorCanyon / .EIP1559Elasticity). This node has no rollup config to
 /// read them from, so they are pinned to the OP Stack defaults (250, 6) that our
-/// deployment's rollup.json chain_op_config carries; a deployment configuring different
-/// chain_op_config values would fail op-node's consolidation match.
+/// deployment's rollup.json chain_op_config carries (tools/opstack-genesis/
+/// gen_rollup_config.py defaults, emitted into tools/opnode-check/rollup.json).
+///
+/// DEPLOYMENT CONSTRAINT: a chain whose rollup.json sets different chain_op_config
+/// values would fail op-node's consolidation match and stall. Making these
+/// configurable is deliberately NOT done here: chain_op_config is a chain-level
+/// constant, so a per-node ini key would let two nodes stamp different extraData on
+/// the same height and split the chain. The correct home is a consensus-pinned
+/// value (the genesis config / SYS_CONFIG lane, alongside the eth genesis header),
+/// which changes the genesis artifact and belongs to that lane's PR.
 constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
 constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;
 
-/// Big-endian read of the two u32 halves of the 8-byte eip1559Params
+/// Width of the eip1559Params attribute field and of the parameter half of a
+/// non-empty extraData (op-service/eth/types.go:521 declares it as a Bytes8).
+constexpr std::size_t c_eip1559ParamsBytes = 8;
+
+/// Big-endian read of the two u32 halves of an 8-byte eip1559Params field
 /// (op-core/eip1559/eip1559.go DecodeHolocene1559Params: denominator [0:4],
 /// elasticity [4:8]).
-std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(const bcos::bytes& params)
+///
+/// Precondition: params.size() >= 8. std::span::first / ::subspan state that as a
+/// hard precondition ([span.sub]), so a shorter span is undefined behaviour here,
+/// NOT a std::out_of_range — every caller must establish the length first. The two
+/// callers that take CL-supplied bytes do: validatePayloadAttributes and
+/// validateOptimismExtraDataShape both check the length before decoding, and
+/// encodeOptimismExtraData rejects anything else at its entry.
+std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(std::span<const bcos::byte> params)
 {
-    auto denominator =
-        bcos::fromBigEndian<std::uint32_t>(std::span<const bcos::byte>(params).first(4));
-    auto elasticity =
-        bcos::fromBigEndian<std::uint32_t>(std::span<const bcos::byte>(params).subspan(4, 4));
+    BOOST_ASSERT(params.size() >= c_eip1559ParamsBytes);
+    auto denominator = bcos::fromBigEndian<std::uint32_t>(params.first(4));
+    auto elasticity = bcos::fromBigEndian<std::uint32_t>(params.subspan(4, 4));
     return {denominator, elasticity};
+}
+
+/// OP-Stack header extraData shapes, as op-geth validates them on every block it
+/// imports — including the ones a CL hands back through newPayload
+/// (consensus/beacon/consensus.go:240-243 calls eip1559.ValidateOptimismExtraData,
+/// which picks the rule from the chain's fork schedule and skips only the genesis
+/// block). This service has no fork schedule to pick with, so it accepts any of the
+/// three legal shapes and rejects everything else: empty (pre-Holocene,
+/// eip1559.go:27-28), 9 bytes with version byte 0x00 (ValidateHoloceneExtraData,
+/// eip1559.go:119-127), 17 bytes with version byte 0x01 (ValidateJovianExtraData,
+/// eip1559.go:167-176). Both non-empty forms carry the denominator/elasticity pair
+/// in [1, 9), which must be non-zero on a header — unlike the attribute side, where
+/// 0,0 is legal and gets translated (validateHoloceneExtraDataPart,
+/// eip1559.go:105-113, and the note above ValidateHoloceneExtraData spelling out the
+/// difference).
+std::optional<std::string> validateOptimismExtraDataShape(const bcos::bytes& extraData)
+{
+    if (extraData.empty())
+    {
+        return std::nullopt;
+    }
+    if (extraData.size() != c_holoceneExtraDataBytes && extraData.size() != c_jovianExtraDataBytes)
+    {
+        return "executionPayload.extraData must be empty (pre-Holocene), " +
+               std::to_string(c_holoceneExtraDataBytes) + " bytes (Holocene) or " +
+               std::to_string(c_jovianExtraDataBytes) + " bytes (Jovian), got " +
+               std::to_string(extraData.size());
+    }
+    auto const expectedVersion = extraData.size() == c_jovianExtraDataBytes ?
+                                     c_jovianExtraDataVersion :
+                                     c_holoceneExtraDataVersion;
+    if (extraData[0] != expectedVersion)
+    {
+        return "executionPayload.extraData version byte must be " +
+               std::to_string(static_cast<unsigned>(expectedVersion)) + " for a " +
+               std::to_string(extraData.size()) + "-byte extraData, got " +
+               std::to_string(static_cast<unsigned>(extraData[0]));
+    }
+    auto [denominator, elasticity] = decodeEip1559Params(
+        std::span<const bcos::byte>(extraData).subspan(1, c_eip1559ParamsBytes));
+    if (denominator == 0 || elasticity == 0)
+    {
+        return std::string(
+            "executionPayload.extraData must encode a non-zero EIP-1559 denominator and "
+            "elasticity");
+    }
+    return std::nullopt;
 }
 }  // namespace
 
@@ -173,6 +238,18 @@ bcos::bytes bcos::engine::detail::encodeOptimismExtraData(
     {
         // Pre-Holocene: extraData must be empty (op-core/eip1559/eip1559.go:27-28).
         return {};
+    }
+    if (payloadAttributes.eip1559Params->size() != c_eip1559ParamsBytes)
+    {
+        // A precondition, not a wire error: the RPC parse layer and then
+        // validatePayloadAttributes both reject any other length, so reaching this
+        // means an in-process PayloadAttributes producer bypassed the gate. Fail
+        // loudly rather than read out of bounds (decodeEip1559Params' span
+        // arithmetic is UB on a short span), and rather than return empty, which
+        // would silently stamp pre-Holocene extraData on a Holocene block and stall
+        // op-node at read-back.
+        BOOST_THROW_EXCEPTION(std::invalid_argument{
+            "encodeOptimismExtraData requires exactly 8 bytes of eip1559Params"});
     }
     auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
     if (denominator == 0 && elasticity == 0)
@@ -342,6 +419,25 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
     if (version >= 4 && !executionPayload.withdrawalsRoot.has_value())
     {
         return std::string("withdrawalsRoot is required for ExecutionPayloadV4 and later");
+    }
+    // extraData is a V1-onwards field, so this applies at every newPayload version.
+    // Since this PR makes extraData part of the block hash, an unchecked extraData is
+    // an unchecked block-hash input.
+    if (auto error = validateOptimismExtraDataShape(executionPayload.extraData))
+    {
+        return error;
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> bcos::engine::detail::compareWithBuiltPayload(
+    const ExecutionPayload& submitted, const ExecutionPayload& built)
+{
+    if (submitted.extraData != built.extraData)
+    {
+        return std::string(
+            "executionPayload.extraData does not match the payload this node built under the "
+            "submitted blockHash");
     }
     return std::nullopt;
 }

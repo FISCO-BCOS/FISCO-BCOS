@@ -88,6 +88,29 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
+
+/// Compares a payload the CL submitted through newPayload against the one this node
+/// built and handed out under the same blockHash.
+///
+/// Deliberately narrow: only extraData is compared. Two other candidates are
+/// excluded on purpose.
+///  - Version-specific fields (withdrawalsRoot, the blob-gas pair) are dropped by the
+///    wire dialect on the way back — a V3 newPayload request carries no
+///    withdrawalsRoot even when the build set one — so comparing them would reject
+///    honest CLs.
+///  - The transaction list is NOT compared, even though a differing list under a
+///    blockHash this node minted is equally contradictory. newPayload is currently
+///    specified to REWRITE the cached payload from the request (see
+///    new_payload_round_trips_deposit_raw_bytes and
+///    payload_carries_parent_beacon_block_root_and_withdrawals_root in
+///    EngineServiceTest), and payload bodies are not independently verifiable until
+///    externally supplied payloads are actually executed — tracked as #5468. Closing
+///    the body half belongs with that work.
+///
+/// extraData is in scope here because this change puts it into the block hash, so
+/// leaving it unchecked would leave a hash input unchecked.
+std::optional<std::string> compareWithBuiltPayload(
+    const ExecutionPayload& submitted, const ExecutionPayload& built);
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -541,6 +564,33 @@ private:
         else
         {
             payloadId = payloadIdIt->second;
+            // Local-build hit: the CL is handing back a payload this node built. op-geth
+            // needs no such comparison because it re-derives the block hash from the
+            // payload fields it received and answers INVALID_BLOCK_HASH when the two
+            // disagree (beacon/engine/types.go:287-288, reached from
+            // eth/catalyst/api.go:831). This service cannot re-derive an Ethereum block
+            // hash from an ExecutionPayload, so it compares against what it handed out
+            // instead. Without this a CL could alter the extraData or the transaction
+            // list, keep the blockHash it was given, and have the node commit its own
+            // (different) header while answering VALID — the submitted payload never
+            // checked. A non-null header is what marks an entry as locally built; after
+            // a commit rewrites the entry the header is gone, so an idempotent re-submit
+            // of an already-committed block is not re-compared.
+            //
+            // SCOPE: payloads this node did NOT build (lookup miss) are a separate,
+            // pre-existing gap — they are answered VALID without being executed or
+            // stored at all. That is tracked as #5468 and deliberately not addressed
+            // here.
+            if (auto builtIt = m_payloadCache.find(payloadId);
+                builtIt != m_payloadCache.end() && builtIt->second.header)
+            {
+                if (auto mismatch = detail::compareWithBuiltPayload(
+                        request.executionPayload, builtIt->second.executionPayload))
+                {
+                    co_return makeStatus(
+                        PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
+                }
+            }
         }
 
         PayloadEntry entry{

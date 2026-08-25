@@ -43,6 +43,30 @@ void checkExtraData(const bytes& actual, std::string_view expectedHex)
 {
     BOOST_CHECK_EQUAL(toHexStringWithPrefix(actual), expectedHex);
 }
+
+/// A payload that passes every non-extraData gate of validateExecutionPayload at
+/// version 3, so the cases below isolate the extraData shape check.
+ExecutionPayload makeExecutionPayloadV3(bytes extraData)
+{
+    ExecutionPayload payload;
+    payload.withdrawals = std::vector<WithdrawalV1>{};
+    payload.blobGasUsed = 0;
+    payload.excessBlobGas = 0;
+    payload.extraData = std::move(extraData);
+    return payload;
+}
+
+ExecutionPayload makePayloadWithTransactions(bytes extraData, std::vector<bytes> rawTransactions)
+{
+    auto payload = makeExecutionPayloadV3(std::move(extraData));
+    for (auto& raw : rawTransactions)
+    {
+        EngineTransaction transaction;
+        transaction.raw = std::move(raw);
+        payload.transactions.push_back(std::move(transaction));
+    }
+    return payload;
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(JovianExtraDataTest)
@@ -190,6 +214,87 @@ BOOST_AUTO_TEST_CASE(eip1559_fields_are_rejected_below_version_three)
     BOOST_CHECK(!engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000006"), 7), 3)
             .has_value());
+}
+
+// encodeOptimismExtraData is an exported detail:: entry point reachable from
+// in-process PayloadAttributes producers that never went through
+// validatePayloadAttributes. Its decode does span arithmetic whose precondition is
+// 8 bytes ([span.sub] makes a shorter span undefined behaviour, not an exception),
+// so the entry point enforces the length itself instead of trusting the caller.
+BOOST_AUTO_TEST_CASE(encode_rejects_params_shorter_than_eight_bytes)
+{
+    for (std::size_t size : {std::size_t{0}, std::size_t{1}, std::size_t{7}, std::size_t{9}})
+    {
+        BOOST_CHECK_THROW(
+            engine::detail::encodeOptimismExtraData(makeAttributes(bytes(size, 0), 0)),
+            std::invalid_argument);
+    }
+}
+
+// Commit-side shape check. op-geth validates header extraData on every block it
+// imports (consensus/beacon/consensus.go:240-243 -> eip1559.ValidateOptimismExtraData);
+// this service has no fork schedule, so it accepts the three legal shapes and rejects
+// everything else. Since extraData now feeds the block hash, an unchecked extraData is
+// an unchecked block-hash input.
+BOOST_AUTO_TEST_CASE(execution_payload_extra_data_shape_is_validated)
+{
+    auto accepted = [](bytes extraData) {
+        return !engine::detail::validateExecutionPayload(
+            makeExecutionPayloadV3(std::move(extraData)), 3)
+                    .has_value();
+    };
+
+    // Empty (pre-Holocene), 9-byte Holocene and 17-byte Jovian forms.
+    BOOST_CHECK(accepted({}));
+    BOOST_CHECK(accepted(fromHexWithPrefix("0x00000000fa00000006")));
+    BOOST_CHECK(accepted(fromHexWithPrefix("0x01000000fa000000060000000000000000")));
+
+    // Wrong lengths.
+    BOOST_CHECK(!accepted(bytes(8, 0)));
+    BOOST_CHECK(!accepted(bytes(16, 0)));
+    BOOST_CHECK(!accepted(bytes(32, 0)));
+    // Wrong version byte for the length: Jovian must be 0x01, Holocene 0x00.
+    BOOST_CHECK(!accepted(fromHexWithPrefix("0x00000000fa000000060000000000000000")));
+    BOOST_CHECK(!accepted(fromHexWithPrefix("0x01000000fa00000006")));
+    // A header, unlike attributes, may not encode a zero denominator or elasticity
+    // (validateHoloceneExtraDataPart, op-core/eip1559/eip1559.go:105-113).
+    BOOST_CHECK(!accepted(fromHexWithPrefix("0x000000000000000006")));
+    BOOST_CHECK(!accepted(fromHexWithPrefix("0x000000000000000000")));
+    BOOST_CHECK(!accepted(fromHexWithPrefix("0x00000000fa00000000")));
+}
+
+// A CL returning a payload under a blockHash this node minted must return the same
+// extraData it was handed, since that is a block-hash input from this change onwards.
+BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)
+{
+    auto built = makePayloadWithTransactions(
+        fromHexWithPrefix("0x01000000fa000000060000000000000000"), {{0x7e, 0x01}, {0x02, 0x03}});
+
+    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(built, built).has_value());
+
+    auto alteredExtraData = built;
+    alteredExtraData.extraData = fromHexWithPrefix("0x01000000fa000000060000000000000001");
+    auto extraDataError = engine::detail::compareWithBuiltPayload(alteredExtraData, built);
+    BOOST_REQUIRE(extraDataError.has_value());
+    BOOST_CHECK_NE(extraDataError->find("extraData"), std::string::npos);
+
+    auto strippedExtraData = built;
+    strippedExtraData.extraData.clear();
+    BOOST_CHECK(engine::detail::compareWithBuiltPayload(strippedExtraData, built).has_value());
+
+    // Documented non-goals of this comparison, asserted so the boundary is visible.
+    // withdrawalsRoot is dropped by the V3 wire dialect on the way back
+    // (get_payload_v5_rejects_a_v3_committed_entry_without_withdrawals_root in
+    // EngineServiceTest relies on that staying VALID), and the transaction list is
+    // left to #5468, which is what makes payload bodies verifiable at all.
+    auto withoutWithdrawalsRoot = built;
+    withoutWithdrawalsRoot.withdrawalsRoot = std::nullopt;
+    BOOST_CHECK(
+        !engine::detail::compareWithBuiltPayload(withoutWithdrawalsRoot, built).has_value());
+
+    auto alteredTransaction = built;
+    alteredTransaction.transactions[1].raw = bytes{0x02, 0x04};
+    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(alteredTransaction, built).has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
