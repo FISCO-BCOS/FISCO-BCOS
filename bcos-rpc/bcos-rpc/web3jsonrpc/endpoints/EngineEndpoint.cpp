@@ -21,12 +21,27 @@
 #include "EngineEndpoint.h"
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
+#include <bcos-rpc/web3jsonrpc/utils/EngineErrorMapper.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
 
+namespace
+{
+/// Convert an engine-service exception into the JSON-RPC error the Engine API assigns to the
+/// condition. bcos::Exception-derived engine errors previously escaped to Web3JsonRpcImpl's
+/// catch(...) and came back as -32603; converting at the endpoint keeps Web3JsonRpcImpl generic.
+[[noreturn]] void rethrowAsJsonRpcError(bcos::Exception const& e)
+{
+    // bcos::Error stores its message in errorMessage() (not what()); fall back so a
+    // storage/service fault never surfaces as -32603 with an empty message.
+    auto msg = dynamic_cast<bcos::Error const*>(&e);
+    auto message = msg ? msg->errorMessage() : std::string(e.what());
+    throw JsonRpcException(mapEngineErrorCode(e), std::move(message));
+}
+}  // namespace
 
 EngineEndpoint::EngineEndpoint(NodeService::Ptr nodeService) : m_nodeService(std::move(nodeService))
 {}
@@ -117,11 +132,13 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
     co_await handleForkchoiceUpdated(engine::ApiVersion::V3, request, response);
 }
 
-task::Task<void> EngineEndpoint::forkchoiceUpdatedV4(const Json::Value&, Json::Value& response)
+task::Task<void> EngineEndpoint::forkchoiceUpdatedV4(
+    const Json::Value& request, Json::Value& response)
 {
-    // Prague forkchoiceUpdated shape; not implemented (Karst builds payloads on V3).
-    buildUnimplementedVersionError("engine_forkchoiceUpdatedV4", response);
-    co_return;
+    // Tier-2 (08-19): the OP face is Isthmus+/V4-only — the engine's attribute-driven build and
+    // the newPayload path both gate on V4, so the RPC surface serves it (Prague payload shape;
+    // executionRequests stays empty on this chain).
+    co_await handleForkchoiceUpdated(engine::ApiVersion::V4, request, response);
 }
 
 task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
@@ -136,13 +153,16 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
 
     auto forkchoiceState = parseForkchoiceState(request);
     auto payloadAttrs = parsePayloadAttributes(request, version);
-    // TODO: engineService->updateForkchoice() MUST throw JsonRpcException in these cases:
-    //   -38002 InvalidForkchoiceState: headBlockHash is VALID but finalizedBlockHash/safeBlockHash
-    //   not in chain -38003 InvalidPayloadAttributes: payloadAttributes.timestamp <=
-    //   headBlockHash.timestamp -38005 UnsupportedFork: timestamp out of fork window (V2/V3
-    //   specific) -38006 TooDeepReorg: reorg depth exceeds limitation
-    auto engineResult = co_await engineService->updateForkchoice(forkchoiceState,
-        payloadAttrs.has_value() ? &*payloadAttrs : nullptr, static_cast<uint32_t>(version));
+    bcos::engine::ForkchoiceUpdatedResult engineResult;
+    try
+    {
+        engineResult = co_await engineService->updateForkchoice(forkchoiceState,
+            payloadAttrs.has_value() ? &*payloadAttrs : nullptr, static_cast<uint32_t>(version));
+    }
+    catch (bcos::Exception const& e)
+    {
+        rethrowAsJsonRpcError(e);
+    }
     auto jsonResult = combineForkchoiceUpdatedResult(engineResult, version);
     buildJsonContent(jsonResult, response);
 }
@@ -194,30 +214,15 @@ task::Task<void> EngineEndpoint::handleGetPayload(
             JsonRpcException(InvalidParams, "engine_getPayload expects [payloadId]"));
     }
     engine::PayloadID payloadId = request[0u].asString();
-    engine::GetPayloadResult engineResult;
+    bcos::engine::GetPayloadResult engineResult;
     try
     {
         engineResult =
             co_await engineService->getPayload(payloadId, static_cast<uint32_t>(version));
     }
-    catch (engine::UnknownPayload const&)
+    catch (bcos::Exception const& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnknownPayload,
-            "Unknown payload: no build process identified by the given payloadId"));
-    }
-    catch (engine::IncompatiblePayloadVersion const&)
-    {
-        // The build behind this payloadId is outside the requested method's version
-        // window: either a version mismatch between the forkchoiceUpdated that built it
-        // and the getPayload asking for it, or a re-query AFTER the payload was committed
-        // through newPayload (a commit rewrites the cache entry with the newPayload
-        // version — PayloadEntry::version, EngineServiceImpl.h — so it no longer matches
-        // getPayloadV5's V3-build window). The mapping is -38005 to match op-geth, whose
-        // getPayload helper answers engine.UnsupportedFork when the payloadId's encoded
-        // build version is outside the method's allowed set (eth/catalyst/api.go:531-533,
-        // GetPayloadV5 allowing only PayloadV3).
-        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
-            "Unsupported fork: payload was built by a different method version"));
+        rethrowAsJsonRpcError(e);
     }
     if (!engineResult)
     {
@@ -261,11 +266,16 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     }
 
     auto newPayloadReq = parseNewPayloadRequest(request, version);
-    // TODO: engineService->newPayload() MUST throw JsonRpcException in these cases:
-    //   -32602 InvalidParams: wrong version of ExecutionPayload structure (V2)
-    //   -38005 UnsupportedFork: timestamp out of fork window (V2/V3)
-    auto engineResult =
-        co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
+    bcos::engine::PayloadStatus engineResult;
+    try
+    {
+        engineResult =
+            co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
+    }
+    catch (bcos::Exception const& e)
+    {
+        rethrowAsJsonRpcError(e);
+    }
     auto result = serializePayloadStatus(engineResult, version);
     buildJsonContent(result, response);
 }

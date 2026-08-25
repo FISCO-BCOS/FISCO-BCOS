@@ -257,34 +257,48 @@ struct LegacyTxHandler : Web3TxHandler
             }
             else
             {
-                // chainId is decoded as uint64 (narrower than EIP-155's u256) — the shared
-                // RLP UnsignedIntegral width gate (RLPDecode.h) rejects payloads >8 bytes, so
-                // chainIds >2^64-1 are rejected at decode rather than silently truncated. This
-                // narrower accept set covers all production chains; op-geth uses uint256.Int.
-                uint64_t chainId = 0;
-                decodeError = codec::rlp::decode(in, chainId);
-                if (decodeError != nullptr)
-                {
-                    return decodeError;
-                }
-                out.chainId.emplace(chainId);
-                // An EIP-155 signing preimage ends with (chainId, 0, 0): consume the two empty
-                // r/s placeholders. The tail must be exactly 2 items — a 7/8-field preimage
-                // (chainId without both placeholders) is malformed (op-geth preimages are 6 or 9
-                // fields), so there is no "placeholders optional" leniency.
-                // Zero-copy like the deposit isSystemTransaction decode (bcos::bytes would
-                // heap-allocate per decode just to assert emptiness).
-                bcos::bytesRef placeholderR;
-                bcos::bytesRef placeholderS;
-                if (decodeError = codec::rlp::decodeItems(in, placeholderR, placeholderS);
+                // The tail is either the signing preimage's (chainId, 0, 0) — the txpool
+                // stage stores encodeForSign() — or the sealed-block wire envelope's (v, r, s)
+                // (buildOpBlock, SEV-8, overwrites extraTransactionBytes with the full
+                // envelope). Discriminate by the two trailer items: empty-empty is the
+                // preimage; anything else is a wire envelope whose item7 is the EIP-155 v
+                // (27/28 pre-EIP-155, >= 35 EIP-155). A 7/8-field preimage (chainId without
+                // both placeholders) is malformed (op-geth preimages are 6 or 9 fields) — no
+                // "placeholders optional" leniency — and dies with InputTooShort below.
+                // Zero-copy trailer views (bcos::bytes would heap-allocate per decode).
+                // chainId is width-gated to uint64 by the shared RLP UnsignedIntegral gate
+                // (RLPDecode.h) — chainIds >2^64-1 are rejected rather than truncated.
+                uint64_t item7 = 0;
+                bcos::bytesRef item8;
+                bcos::bytesRef item9;
+                if (decodeError = codec::rlp::decodeItems(in, item7, item8, item9);
                     decodeError != nullptr)
                 {
                     return decodeError;
                 }
-                if (!placeholderR.empty() || !placeholderS.empty())
+                if (item8.empty() && item9.empty())
                 {
-                    return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
-                        "legacy signing preimage: non-empty r/s placeholders in EIP-155 tail");
+                    // EIP-155 signing preimage tail: chainId with the two r/s placeholders.
+                    out.chainId.emplace(item7);
+                }
+                else
+                {
+                    // Wire envelope: item7 is v; the signed chainId field exists only in the
+                    // preimage layout, so derive it from v. r/s are consumed above as scratch
+                    // for no-sig readers, which source the signature from the tars blob.
+                    if (item7 == 27 || item7 == 28)
+                    {
+                        out.chainId = std::nullopt;  // pre-EIP-155 wire envelope
+                    }
+                    else if (item7 < 35)
+                    {
+                        return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
+                            "Invalid V in signature");
+                    }
+                    else
+                    {
+                        out.chainId.emplace((item7 - 35) >> 1);  // EIP-155 wire envelope
+                    }
                 }
             }
         }
@@ -466,8 +480,14 @@ struct EIP2930TxHandler : Web3TxHandler
         }
 
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (withSig)
+        if (withSig || !in.empty())
         {
+            // withSig decodes the wire envelope's trailing (yParity, r, s). The no-sig decode
+            // may meet them too: sealed OP blocks overwrite extraTransactionBytes with the
+            // full envelope (buildOpBlock, SEV-8) while the txpool stage stores the signing
+            // preimage — consuming the optional trailer lets both layouts pass the trailing-
+            // bytes check. The consumed values are scratch for no-sig readers, which source
+            // the signature from the tars signature blob.
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
@@ -663,8 +683,14 @@ struct EIP1559TxHandler : Web3TxHandler
         }
 
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (withSig)
+        if (withSig || !in.empty())
         {
+            // withSig decodes the wire envelope's trailing (yParity, r, s). The no-sig decode
+            // may meet them too: sealed OP blocks overwrite extraTransactionBytes with the
+            // full envelope (buildOpBlock, SEV-8) while the txpool stage stores the signing
+            // preimage — consuming the optional trailer lets both layouts pass the trailing-
+            // bytes check. The consumed values are scratch for no-sig readers, which source
+            // the signature from the tars signature blob.
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
@@ -1028,8 +1054,14 @@ struct EIP4844TxHandler : Web3TxHandler
         }
 
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (withSig)
+        if (withSig || !in.empty())
         {
+            // withSig decodes the wire envelope's trailing (yParity, r, s). The no-sig decode
+            // may meet them too: sealed OP blocks overwrite extraTransactionBytes with the
+            // full envelope (buildOpBlock, SEV-8) while the txpool stage stores the signing
+            // preimage — consuming the optional trailer lets both layouts pass the trailing-
+            // bytes check. The consumed values are scratch for no-sig readers, which source
+            // the signature from the tars signature blob.
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
@@ -1233,8 +1265,14 @@ struct EIP7702TxHandler : Web3TxHandler
         }
 
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (withSig)
+        if (withSig || !in.empty())
         {
+            // withSig decodes the wire envelope's trailing (yParity, r, s). The no-sig decode
+            // may meet them too: sealed OP blocks overwrite extraTransactionBytes with the
+            // full envelope (buildOpBlock, SEV-8) while the txpool stage stores the signing
+            // preimage — consuming the optional trailer lets both layouts pass the trailing-
+            // bytes check. The consumed values are scratch for no-sig readers, which source
+            // the signature from the tars signature blob.
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid

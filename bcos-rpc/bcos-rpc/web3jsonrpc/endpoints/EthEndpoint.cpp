@@ -28,12 +28,15 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
+
 #include <bcos-executor/src/Common.h>
+#include <bcos-framework/engine/OpBaseFee.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/storage/LegacyStorageMethods.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-ledger/mpt/FlatProof.h>
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
@@ -49,15 +52,67 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
+#include <array>
 #include <cstdint>
+#include <limits>
+#include <optional>
 #include <span>
 #include <string>
 #include <variant>
 #include <vector>
-#include <boost/algorithm/string.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;
+
+namespace
+{
+// op-geth eth_call revert semantics (internal/ethapi): a reverted call is a JSON-RPC
+// error with code 3 and message "execution reverted"; when the revert data carries a
+// solidity Error(string) (selector 0x08c379a0) the decoded reason is appended.
+// A bare receipt status as the code and an empty message is unusable by clients.
+constexpr int32_t c_executionReverted = 3;
+
+std::string decodeRevertMessage(std::string_view outputHex)
+{
+    // std::string_view for the constexpr (a constexpr std::string is not a constant
+    // expression under gcc-14 -Werror: it refers to a result of operator new); every
+    // use converts explicitly so no compiler's implicit-conversion leniency is relied on.
+    static constexpr std::string_view kReverted = "execution reverted";
+    auto bytes = fromHexWithPrefix(outputHex);
+    // Error(string): selector(4) || offset==32 (32) || length (32) || payload
+    if (bytes.size() < 4U + 32U + 32U ||
+        !std::equal(bytes.begin(), bytes.begin() + 4,
+            std::array<bcos::byte, 4>{0x08, 0xc3, 0x79, 0xa0}.begin()))
+    {
+        return std::string(kReverted);
+    }
+    auto word = [&bytes](std::size_t offset) {
+        std::size_t value = 0;
+        for (std::size_t i = 0; i < 32; ++i)
+        {
+            if (value > (std::numeric_limits<std::size_t>::max() >> 8))
+            {
+                return std::numeric_limits<std::size_t>::max();
+            }
+            value = (value << 8) | static_cast<std::uint8_t>(bytes[offset + i]);
+        }
+        return value;
+    };
+    if (word(4) != 32)
+    {
+        return std::string(kReverted);
+    }
+    auto length = word(36);
+    if (length > bytes.size() - (4U + 32U + 32U))
+    {
+        return std::string(kReverted);
+    }
+    auto reason = std::string(
+        reinterpret_cast<char const*>(bytes.data() + 68), static_cast<std::size_t>(length));
+    return std::string(kReverted) + ": " + reason;
+}
+}  // namespace
 
 task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
 {
@@ -125,11 +180,72 @@ task::Task<void> EthEndpoint::hashrate(const Json::Value&, Json::Value& response
     buildJsonContent(result, response);
     co_return;
 }
+task::Task<void> EthEndpoint::setMaxDASize(const Json::Value& request, Json::Value& response)
+{
+    // miner_setMaxDASize(maxCanonTxSize, maxBlockSize): the OP Stack batcher's DA throttling
+    // calls this on every L2 endpoint and treats "method not found" as fatal ("either enable
+    // it or disable throttling"). The caps land in the DACaps instance SHARED with the
+    // engine's OP build path (NodeService::daCaps — one instance, created by the Initializer):
+    // buildOpPayload drops sealed envelopes over maxTxSize and truncates block assembly at
+    // maxBlockSize. Without a shared instance (tars nodes, fixtures) a detached local one
+    // records+logs only.
+    if (!request.isArray() || request.size() != 2U)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+            "miner_setMaxDASize expects exactly two quantities: maxTxSize, maxBlockSize"));
+    }
+    uint64_t maxTxSize = 0;
+    uint64_t maxBlockSize = 0;
+    try
+    {
+        maxTxSize = fromQuantity(std::string(toView(request[0U])));
+        maxBlockSize = fromQuantity(std::string(toView(request[1U])));
+    }
+    catch (...)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "miner_setMaxDASize quantities must be 0x-prefixed hex"));
+    }
+    auto& caps = daCaps();
+    caps.maxTxSize.store(maxTxSize, std::memory_order_relaxed);
+    caps.maxBlockSize.store(maxBlockSize, std::memory_order_relaxed);
+    WEB3_LOG(INFO) << LOG_BADGE("setMaxDASize") << LOG_KV("maxTxSize", maxTxSize)
+                   << LOG_KV("maxBlockSize", maxBlockSize)
+                   << LOG_KV("sharedWithEngine", m_nodeService->daCaps() ? "yes" : "no");
+    Json::Value result = true;
+    buildJsonContent(result, response);
+    co_return;
+}
 task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response)
 {
-    // result: gasPrice(QTY)
+    // eth_gasPrice is a SUGGESTION for pricing legacy (type 0) transactions, not a chain
+    // parameter. op-geth (internal/ethapi/api.go GasPrice) computes it as suggested-tip +
+    // current-head-baseFee, and mainstream clients rely on the implicit contract that the
+    // value is >= the head baseFee: foundry's `cast send --legacy` signs with whatever
+    // this returns, and a below-baseFee legacy tx is silently rejected at seal time and
+    // evicted from the pool ("broadcast accepted, never confirmed").
+    //
+    // Chain-mode dispatch is intrinsic rather than configured: EIP-1559 chains (the OP
+    // path) always carry baseFee on the header, PBFT headers never write the tars field.
+    // The suggested tip reuses this node's eth_maxPriorityFeePerGas value (currently 0) —
+    // a single source of truth, and honest for our inert tip market: op-geth's OP-mode
+    // oracle likewise serves a constant floor (0.001 gwei) because with a single block
+    // builder tips do not affect inclusion while blocks have capacity. Its
+    // capacity-heuristic escalation (median-tip * 1.1 when the last block was full) is a
+    // deliberate omission here, to be revisited if this chain ever runs congested.
     auto const ledger = m_nodeService->ledger();
-    // TODO)): gas price can wrap in a class
+    if (auto const latest = co_await ledger::getCurrentBlockNumber(*ledger); latest >= 0)
+    {
+        auto block = co_await ledger::getBlockData(*ledger, latest, bcos::ledger::HEADER);
+        if (auto const& baseFee = block->blockHeader()->baseFee(); baseFee.has_value())
+        {
+            Json::Value result = toQuantity(*baseFee);
+            buildJsonContent(result, response);
+            co_return;
+        }
+    }
+    // Legacy PBFT path (headers without baseFee): keep serving the static
+    // SYSTEM_KEY_TX_GAS_PRICE knob so those chains' output stays byte-identical.
     auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
     Json::Value result;
     if (config.has_value())
@@ -143,6 +259,133 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
         result = "0x0";
     }
     buildJsonContent(result, response);
+    co_return;
+}
+
+namespace
+{
+// OP-stack Holocene/Jovian next-baseFee prediction for eth_feeHistory's trailing entry.
+// predictNextBaseFee was a hand-mirrored port of the engine's calcOpBaseFee;
+// both layers now share ONE implementation: bcos-framework/engine/OpBaseFee.h
+// (linked by both bcos-engine and bcos-rpc). The RPC's fork detection stays
+// local — extraData length sniffing (>= 17 bytes => Jovian tail) — and feeds
+// the shared formula's parentIsJovian parameter.
+
+bool jovianFromExtraData(bcos::protocol::BlockHeader const& parent)
+{
+    return parent.extraData().size() >= 17;
+}
+}  // namespace
+
+task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value& response)
+{
+    // params: [blockCount(QTY), newestBlock(QTY|TAG), rewardPercentiles?(array of numbers)]
+    // result: {oldestBlock(QTY), baseFeePerGas(QTY[], resolved+1 entries with the trailing
+    //          predicted next base fee), gasUsedRatio(number[]), reward?(QTY[][])}
+    // (execution-apis fee_history). Foundry/alloy's EIP-1559 fee suggestion calls this on
+    // every send, so its absence breaks every default-fee cast send against the node.
+    uint64_t blockCount = 0;
+    try
+    {
+        blockCount = fromQuantity(std::string(toView(request[0U])));
+    }
+    catch (...)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid blockCount"));
+    }
+    if (blockCount < 1 || blockCount > 1024)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "blockCount must be between 1 and 1024"));
+    }
+    std::vector<double> percentiles;
+    if (request.size() > 2 && !request[2U].isNull())
+    {
+        if (!request[2U].isArray())
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "rewardPercentiles must be an array"));
+        }
+        for (auto const& p : request[2U])
+        {
+            if (!p.isNumeric())
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "rewardPercentiles entries must be numbers"));
+            }
+            percentiles.push_back(p.asDouble());
+        }
+    }
+    auto const [newestNumber, _] = co_await getBlockNumberByTag(toView(request[1U]));
+    auto const newest = static_cast<uint64_t>(newestNumber);
+    auto const oldest = newest >= blockCount - 1 ? newest - (blockCount - 1) : 0;
+
+    auto const ledger = m_nodeService->ledger();
+    Json::Value result;
+    result["oldestBlock"] = toQuantity(oldest);
+    result["baseFeePerGas"] = Json::arrayValue;
+    result["gasUsedRatio"] = Json::arrayValue;
+    auto const wantReward = !percentiles.empty();
+    if (wantReward)
+    {
+        result["reward"] = Json::arrayValue;
+    }
+    protocol::BlockHeader::Ptr newestHeader;
+    for (auto n = oldest; n <= newest; ++n)
+    {
+        auto block = co_await ledger::getBlockData(
+            *ledger, static_cast<protocol::BlockNumber>(n), bcos::ledger::HEADER);
+        auto const& header = block->blockHeader();
+        auto const baseFee = header->baseFee().value_or(bcos::u256(0));
+        auto const gasLimit = static_cast<uint64_t>(header->gasLimit());
+        auto const gasUsed = static_cast<uint64_t>(header->gasUsed());
+        result["baseFeePerGas"].append(toQuantity(baseFee));
+        result["gasUsedRatio"].append(
+            gasLimit > 0 ? Json::Value(double(gasUsed) / double(gasLimit)) : Json::Value(0.0));
+        if (wantReward)
+        {
+            // Per-tx priority fee = effectiveGasPrice - baseFee (0 for legacy txs paying
+            // exactly baseFee); the percentile entry selects from the sorted list the way
+            // geth's feeHistory does (floor index, clamped).
+            auto receiptsBlock = co_await ledger::getBlockData(
+                *ledger, static_cast<protocol::BlockNumber>(n), bcos::ledger::RECEIPTS);
+            std::vector<bcos::u256> priorities;
+            for (auto const& receipt : receiptsBlock->receipts())
+            {
+                auto const& effective = receipt->effectiveGasPrice();
+                if (effective.empty())
+                {
+                    continue;
+                }
+                bcos::u256 effectiveFee{std::string(effective)};
+                priorities.push_back(
+                    effectiveFee > baseFee ? effectiveFee - baseFee : bcos::u256(0));
+            }
+            std::sort(priorities.begin(), priorities.end());
+            Json::Value rewards(Json::arrayValue);
+            for (auto const p : percentiles)
+            {
+                auto index = priorities.empty() ?
+                                 std::size_t(0) :
+                                 static_cast<std::size_t>(priorities.size() * p / 100.0);
+                if (index >= priorities.size())
+                {
+                    index = priorities.size() - 1;
+                }
+                rewards.append(toQuantity(priorities.empty() ? bcos::u256(0) : priorities[index]));
+            }
+            result["reward"].append(std::move(rewards));
+        }
+        newestHeader = header;
+    }
+    // Trailing entry: the predicted base fee of newest+1 from newest's own header.
+    if (newestHeader)
+    {
+        result["baseFeePerGas"].append(toQuantity(
+            bcos::engine::calcOpBaseFee(*newestHeader, jovianFromExtraData(*newestHeader))));
+    }
+    buildJsonContent(result, response);
+    co_return;
 }
 task::Task<void> EthEndpoint::accounts(const Json::Value&, Json::Value& response)
 {
@@ -730,9 +973,9 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto bytesRef = bcos::ref(rawTxBytes);
     // Authoritative first-byte dispatch (RawTransactionDispatch.h). FISCO's OP policy rejects
     // blob (type-3) at the gate — op-geth's decodeTyped accepts them, so this is a deliberate
-    // acceptance divergence, not a reference check (see the type-byte gate in OpTransition.h /
-    // OpCommon.h). Deposits (0x7e) can only be injected by the consensus layer through the
-    // Engine API, never through the public transaction pool.
+    // acceptance divergence, not a reference check (see the blob-rejection note in
+    // RawTransactionDispatch.h). Deposits (0x7e) can only be injected by the consensus layer
+    // through the Engine API, never through the public transaction pool.
     switch (engine::dispatchRawTransaction(bytesRef))
     {
     case engine::RawTransactionKind::Blob:
@@ -759,12 +1002,6 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             "Deposit (0x7e) transactions are not supported via eth_sendRawTransaction"));
     }
     auto encodeTxHash = web3Tx.txHash();
-    // Capture the chainId decoded from the SIGNED envelope BEFORE takeToTarsTransaction moves
-    // web3Tx away (kyonRay R4 #3): re-walking the raw bytes via web3ChainIdFromEnvelope would
-    // duplicate the decoder and invite drift — the walker is uint64 while the decoder is u256,
-    // so a chainId above 2^64-1 would decode fine here but read as nullopt in the walker. The
-    // walker stays for the P2P/tars path where only a Transaction is available (part 4b).
-    auto const web3ChainId = web3Tx.chainId;
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
@@ -811,7 +1048,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             // and consume the sender's nonce (EIP-155 replay-protection bypass). op-geth
             // always has a genesis chainId, so it has no such open default. Only pre-EIP-155
             // legacy (no chainId in the envelope) is exempt — there is nothing to compare.
-            auto const envelopeChainId = web3ChainId;
+            auto const envelopeChainId = tx->web3ChainIdFromEnvelope();
             if (envelopeChainId.has_value() ||
                 bcos::rlp::protocol::isTypedWeb3Envelope(tx->extraTransactionBytes()))
             {
@@ -823,8 +1060,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         else
         {
             auto [chainIdStr, _] = chainIdConfig.value();
-            // Validate against the SIGNED envelope; base TxValidator::validateChainId reads the
-            // tars mirror and is migrated to this envelope-keyed form in part 4b (#5477): typed
+            // Validate against the SIGNED envelope like TxValidator::validateChainId: typed
             // txs get no "0" exemption (op-geth modernSigner); only pre-EIP-155 legacy (no
             // chainId in the envelope) is exempt — a deliberate divergence (geth/op-geth
             // default rejects unprotected txs at the RPC layer; part 5 adds the config gate).
@@ -835,16 +1071,15 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             {
                 BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
             }
-            auto const envelopeChainId = web3ChainId;
-            if (envelopeChainId.has_value() && *envelopeChainId != *expected)
+            auto const envelopeChainId = tx->web3ChainIdFromEnvelope();
+            if (envelopeChainId.has_value() && bcos::u256(*envelopeChainId) != *expected)
             {
                 WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction chainId mismatch")
                                   << LOG_KV("txChainId", tx->chainId())
                                   << LOG_KV("nodeChainId", chainIdStr);
                 BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
             }
-            // Same typed-envelope guard as TxValidator::validateChainId (mirror→envelope
-            // migration lands in 4b): a typed tx whose
+            // Same typed-envelope guard as TxValidator::validateChainId: a typed tx whose
             // chainId field cannot be parsed (nullopt) gets no "0" exemption — a malformed
             // typed envelope is rejected here rather than deferring to signature recovery.
             if (!envelopeChainId.has_value() &&
@@ -968,9 +1203,11 @@ task::Task<void> EthEndpoint::call(
                     else
                     {
                         // https://docs.infura.io/api/networks/ethereum/json-rpc-methods/eth_call#returns
+                        // Reverted call -> op-geth style error: code 3 "execution reverted"
+                        // with the Error(string) reason decoded into the message.
                         Json::Value jsonResult = Json::objectValue;
-                        jsonResult["code"] = result->status();
-                        jsonResult["message"] = result->message();
+                        jsonResult["code"] = c_executionReverted;
+                        jsonResult["message"] = decodeRevertMessage(output);
                         jsonResult["data"] = output;
                         m_response["jsonrpc"] = "2.0";
                         m_response["error"] = std::move(jsonResult);
@@ -1021,19 +1258,76 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
 
+    // op-geth's estimator answers the smallest gas limit at which the call still
+    // succeeds, found by simulating at candidate limits. The run below executes
+    // at the gas-less default cap (CallRequest defaults an absent gas field to
+    // 30M), so its gasUsed is mere consumption. A tx that hops through a proxy
+    // DELEGATECALL or any internal CALL retains 1/64 of the available gas at
+    // each hop (EIP-150), making the minimum viable limit strictly greater than
+    // the consumed gas — measured on the C2 devnet, the MessagePasser withdrawal
+    // (proxy predeploy) consumed 59186 but reverted on-chain at exactly that
+    // limit, while direct (non-proxy) calls are exact. So re-simulate at
+    // gasUsed first, and when that fails binary-search upward for the smallest
+    // viable limit, mirroring op-geth. Only object-form params carry an
+    // overridable gas field; a raw signed tx embeds its own.
+    auto const objectForm = tx.isObject();
+    auto const effectiveFirstRunLimit = [&]() -> u256 {
+        if (objectForm && tx.isMember("gas"))
+        {
+            try
+            {
+                return u256(fromQuantity(tx["gas"].asString()));
+            }
+            catch (...)
+            {}
+        }
+        return u256(30'000'000);
+    }();
+
     u256 gasUsed;
     Json::Value callResponse;
     co_await call(request, callResponse, std::addressof(gasUsed), true);
 
-    if (!callResponse.isMember("error"))
-    {
-        Json::Value result = toQuantity(gasUsed);
-        buildJsonContent(result, response);
-    }
-    else
+    if (callResponse.isMember("error"))
     {
         response = std::move(callResponse);
+        co_return;
     }
+
+    auto estimate = gasUsed;
+    if (objectForm && !co_await simulateAtGasLimit(request, estimate))
+    {
+        auto lowerBound = estimate;  // known-bad
+        auto upperBound = effectiveFirstRunLimit > lowerBound ?
+                              effectiveFirstRunLimit :
+                              lowerBound + 1;  // the first run succeeded at its own limit
+        while (upperBound - lowerBound > 1)
+        {
+            auto const mid = lowerBound + (upperBound - lowerBound) / 2;
+            if (co_await simulateAtGasLimit(request, mid))
+            {
+                upperBound = mid;
+            }
+            else
+            {
+                lowerBound = mid;
+            }
+        }
+        estimate = upperBound;
+    }
+
+    Json::Value result = toQuantity(estimate);
+    buildJsonContent(result, response);
+}
+
+task::Task<bool> EthEndpoint::simulateAtGasLimit(const Json::Value& request, u256 limit)
+{
+    Json::Value bounded = request;
+    bounded[0U]["gas"] = toQuantity(limit);
+    Json::Value callResponse;
+    u256 gasUsed;
+    co_await call(bounded, callResponse, std::addressof(gasUsed), true);
+    co_return !callResponse.isMember("error");
 }
 task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::Value& response)
 {
@@ -1051,6 +1345,13 @@ task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::V
         flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
         auto block = co_await ledger::getBlockData(*ledger, number, flag);
         combineBlockResponse(result, *block, fullTransaction);
+        // Same canonical-hash override as getBlockByNumber: OP blocks' hash is the announced
+        // (registered) one, not the stored tars header's own derivation.
+        if (auto canonicalHash = co_await ledger::getBlockHash(*ledger, number);
+            canonicalHash != crypto::HashType{})
+        {
+            result["hash"] = canonicalHash.hexPrefixed();
+        }
     }
     catch (std::exception const& e)
     {
@@ -1075,6 +1376,14 @@ task::Task<void> EthEndpoint::getBlockByNumber(const Json::Value& request, Json:
         flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
         auto block = co_await ledger::getBlockData(*ledger, blockNumber, flag);
         combineBlockResponse(result, *block, fullTransaction);
+        // OP blocks' canonical hash is the announced one (keccak of the 21-field RLP header)
+        // registered in s_number_2_hash; the stored tars header's hash() is a different
+        // derivation and would break parentHash chains and byHash round-trips at the RPC.
+        if (auto canonicalHash = co_await ledger::getBlockHash(*ledger, blockNumber);
+            canonicalHash != crypto::HashType{})
+        {
+            result["hash"] = canonicalHash.hexPrefixed();
+        }
     }
     catch (std::exception const& e)
     {
@@ -1176,7 +1485,9 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
         auto receipt = co_await ledger::getReceipt(*ledger, txHash);
-        auto blockHash = block->blockHeader()->hash();
+        // OP headers hash as keccak(encodeOpHeader), not the tars dataHash fallback — same fix
+        // as combineBlockResponse (R1).
+        auto blockHash = bcos::rpc::opAwareBlockHash(*block->blockHeader());
         combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
     }
     catch (std::exception const& e)
@@ -1299,6 +1610,26 @@ task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberB
 {
     auto ledger = m_nodeService->ledger();
     auto latest = co_await ledger::getCurrentBlockNumber(*ledger);
+    // D2: safe/finalized route to the engine's FCU-tracked numbers (op-node
+    // L2BlockRefByLabel contract). With an engine service present but nothing tracked yet,
+    // op-geth semantics are "not found": getBlockByNumber's catch turns the throw into a
+    // JSON null result, while tag-taking state endpoints surface it as a JSON-RPC error.
+    // Nodes without an engine service (PBFT) keep the historical latest aliasing.
+    if (blockTag == SafeBlock || blockTag == FinalizedBlock)
+    {
+        auto& engineService = m_nodeService->engineService();
+        if (engineService)
+        {
+            auto tracked = (blockTag == SafeBlock) ? engineService->getSafeBlockNumber() :
+                                                     engineService->getFinalizedBlockNumber();
+            if (tracked.has_value())
+            {
+                co_return std::make_tuple(*tracked, *tracked == latest);
+            }
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                Web3DefaultError, std::string(blockTag) + " block head is not tracked yet"));
+        }
+    }
     auto [number, _] = bcos::rpc::getBlockNumberByTag(
         latest, blockTag, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
     co_return std::make_tuple(number, std::cmp_equal(latest, number));
@@ -1348,7 +1679,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         }
     }
     auto const blockTag = toView(request[2U]);
-    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getProof" << LOG_KV("address", address.hexPrefixed())
@@ -1363,37 +1694,117 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
-    auto const stateRoot = block->blockHeader()->stateRoot();
+    auto stateRoot = block->blockHeader()->stateRoot();
 
-    // The MPT node reader is wired by the AIR initializer (AirNodeInitializer); unset means
-    // this node has no local path to MPT node rows (e.g. a tars-built NodeService) — a
-    // deployment matter, hence -32603 rather than -32004.
-    auto const mptReader = m_nodeService->mptNodeReader();
-    if (!mptReader) [[unlikely]]
+    ledger::mpt::EIP1186Proof proof;
+    if (block->blockHeader()->baseFee().has_value())
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
+        // OP-stack execution path: its headers always carry baseFee (PBFT headers never write
+        // the tars field — the same discriminator gasPrice/feeHistory use). Pre-①a that path
+        // computed each block's stateRoot from the flat state at seal time and persisted no
+        // MPT node rows. With ①a (feature_l2_ethereum_compat: OpScheduler's incremental
+        // buildAndCollect at commit + the l2EthereumCompat genesis import) runtime blocks DO
+        // persist their trie nodes, so try the node-backed proof FIRST — it serves ANY height
+        // (historical tags included, which the one-version flat plane below cannot) and is
+        // O(path). Roots without rows (a chain segment produced before ①a landed) report
+        // BlockNotCommitted and fall through to the flat rebuild, preserving the latest-only
+        // contract for those segments.
+        bool servedFromNodes = false;
+        if (auto const mptReader = m_nodeService->mptNodeReader())
+        {
+            auto const fullTrie = co_await ledger::getFeature(
+                *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber);
+            auto result = co_await ledger::mpt::generateProof(
+                *mptReader, stateRoot, address, std::span<h256 const>(slots), fullTrie);
+            if (auto* built = std::get_if<ledger::mpt::EIP1186Proof>(&result))
+            {
+                proof = std::move(*built);
+                servedFromNodes = true;
+            }
+            else if (std::get<ledger::mpt::ProofErrorCode>(result) !=
+                     ledger::mpt::ProofErrorCode::BlockNotCommitted)
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    EthGetProofUnavailable, "Account not in trie (dormant in scenario A)"));
+            }
+        }
+        if (!servedFromNodes)
+        {
+            // Flat-state fallback: rebuild the trie from the committed flat plane, gated on the
+            // requested block's root (generateProofFromFlat's RootMismatch check).
+            auto const& stateProvider = m_nodeService->stateStorageProvider();
+            if (!stateProvider) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InternalError, "Flat state reader not wired on this node"));
+            }
+            for (int attempt = 0;; ++attempt)
+            {
+                auto view = stateProvider();
+                auto opResult = co_await ledger::mpt::generateProofFromFlat(
+                    *view, stateRoot, address, std::span<h256 const>(slots));
+                if (auto* built = std::get_if<ledger::mpt::EIP1186Proof>(&opResult))
+                {
+                    proof = std::move(*built);
+                    break;
+                }
+                auto const code = std::get<ledger::mpt::ProofErrorCode>(opResult);
+                if (code == ledger::mpt::ProofErrorCode::RootMismatch && isLatest && attempt < 2)
+                {
+                    // A block committed between the tag resolution and the view fork makes the
+                    // header and the flat plane disagree by one version. Re-resolve and rebuild;
+                    // an explicit older block/tag keeps failing — the flat plane holds exactly one
+                    // state version (latest committed), and a mismatch there is the honest answer.
+                    std::tie(blockNumber, isLatest) = co_await getBlockNumberByTag(blockTag);
+                    auto reblock =
+                        co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER);
+                    if (!reblock || !reblock->blockHeader()) [[unlikely]]
+                    {
+                        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+                    }
+                    stateRoot = reblock->blockHeader()->stateRoot();
+                    continue;
+                }
+                BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
+                    code == ledger::mpt::ProofErrorCode::RootMismatch ?
+                        "Requested block state is not available (OP path serves the latest "
+                        "committed state only)" :
+                        "Account not in trie (dormant in scenario A)"));
+            }
+        }
     }
-
-    // The exclusion-vs-cold-slot distinction is mode-driven (spec §5.9): only under
-    // feature_l2_ethereum_compat (scenario B) are the storage tries complete, making an
-    // exclusion walk a provable zero. Otherwise (scenario A) the trie omits slots never
-    // written after MPT activation, and generateProof marks such slots inMPT=false instead
-    // of emitting a lying value-0 exclusion proof. Single-flag read (one SYS_CONFIG row,
-    // same helper as resolveHistoricalMptContext); degrades to false (honest scenario-A
-    // behavior) on fetch failure.
-    auto const fullTrie = co_await ledger::getFeature(
-        *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber);
-
-    auto result = co_await ledger::mpt::generateProof(
-        *mptReader, stateRoot, address, std::span<h256 const>(slots), fullTrie);
-    if (auto const* errorCode = std::get_if<ledger::mpt::ProofErrorCode>(&result))
+    else
     {
-        auto const* message = (*errorCode == ledger::mpt::ProofErrorCode::AccountNotInMPT) ?
-                                  "Account not in trie (dormant in scenario A)" :
-                                  "Block stateRoot not in MPT node storage";
-        BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable, message));
+        // The MPT node reader is wired by the AIR initializer (AirNodeInitializer); unset means
+        // this node has no local path to MPT node rows (e.g. a tars-built NodeService) — a
+        // deployment matter, hence -32603 rather than -32004.
+        auto const mptReader = m_nodeService->mptNodeReader();
+        if (!mptReader) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
+        }
+
+        // The exclusion-vs-cold-slot distinction is mode-driven (spec §5.9): only under
+        // feature_l2_ethereum_compat (scenario B) are the storage tries complete, making an
+        // exclusion walk a provable zero. Otherwise (scenario A) the trie omits slots never
+        // written after MPT activation, and generateProof marks such slots inMPT=false instead
+        // of emitting a lying value-0 exclusion proof. Single-flag read (one SYS_CONFIG row,
+        // same helper as resolveHistoricalMptContext); degrades to false (honest scenario-A
+        // behavior) on fetch failure.
+        auto const fullTrie = co_await ledger::getFeature(
+            *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber);
+
+        auto result = co_await ledger::mpt::generateProof(
+            *mptReader, stateRoot, address, std::span<h256 const>(slots), fullTrie);
+        if (auto const* errorCode = std::get_if<ledger::mpt::ProofErrorCode>(&result))
+        {
+            auto const* message = (*errorCode == ledger::mpt::ProofErrorCode::AccountNotInMPT) ?
+                                      "Account not in trie (dormant in scenario A)" :
+                                      "Block stateRoot not in MPT node storage";
+            BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable, message));
+        }
+        proof = std::move(std::get<ledger::mpt::EIP1186Proof>(result));
     }
-    auto& proof = std::get<ledger::mpt::EIP1186Proof>(result);
 
     Json::Value output = Json::objectValue;
     output["address"] = address.hexPrefixed();
@@ -1469,3 +1880,23 @@ bcos::rpc::EthEndpoint::EthEndpoint(
     m_filterSystem(std::move(filterSystem)),
     m_syncTransaction(syncTransaction)
 {}
+
+// Lazy shared-cap resolution: prefer the engine-shared instance from NodeService;
+// fall back to a detached local one so unset wiring (tars nodes, unit fixtures)
+// still records+logs instead of crashing.
+bcos::engine::DACaps& EthEndpoint::daCaps()
+{
+    if (m_daCaps)
+    {
+        return *m_daCaps;
+    }
+    if (auto shared = m_nodeService->daCaps(); shared)
+    {
+        m_daCaps = std::move(shared);
+    }
+    else
+    {
+        m_daCaps = std::make_shared<bcos::engine::DACaps>();
+    }
+    return *m_daCaps;
+}

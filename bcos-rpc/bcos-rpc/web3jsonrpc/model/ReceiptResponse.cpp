@@ -18,7 +18,14 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     result["status"] = toQuantity(status);
     auto txHashHex = tx.hash().hexPrefixed();
     result["transactionHash"] = txHashHex;
-    auto cumulativeGasUsed = safeCastToU256(receipt.cumulativeGasUsed());
+    // OP receipts store cumulativeGasUsed as "0x" + lowercase hex (op-geth hexutil.Uint64,
+    // hexCumulative in OpBlockExecute.cpp). safeCastToU256's boost::lexical_cast parses in
+    // decimal and rejects the 0x prefix, yielding 0 — so parse via direct u256 construction,
+    // which auto-detects the base (0x → hex, otherwise decimal) for both OP and ethereum receipts.
+    bcos::u256 cumulativeGasUsed{};
+    auto const& cgs = receipt.cumulativeGasUsed();
+    if (!cgs.empty())
+        cumulativeGasUsed = bcos::u256(std::string(cgs));
     size_t logIndex = receipt.logIndex();
     auto transactionIndex = toQuantity(receipt.transactionIndex());
     result["transactionIndex"] = transactionIndex;
@@ -64,7 +71,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     for (size_t i = 0; i < receiptLog.size(); i++)
     {
         Json::Value log;
-        auto address = std::string(receiptLog[i].address());
+        auto address = toLogAddressHex(receiptLog[i].address());
         toChecksumAddress(address, bcos::crypto::keccak256Hash(bcos::bytesConstRef(address)).hex());
         log["address"] = "0x" + std::move(address);
         log["topics"] = Json::arrayValue;
@@ -76,7 +83,10 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         log["logIndex"] = toQuantity(logIndex + i);
         log["blockNumber"] = toQuantity(blockNumber);
         log["blockHash"] = blockHashHex;
-        log["transactionIndex"] = toQuantity(transactionIndex);
+        // transactionIndex is already the quantity string computed above; re-running it
+        // through toQuantity would hit the Binary overload (string is a contiguous range)
+        // and hex-encode the ASCII bytes ("0x1" -> "0x307831").
+        log["transactionIndex"] = transactionIndex;
         log["transactionHash"] = txHashHex;
         log["removed"] = false;
         result["logs"].append(std::move(log));

@@ -140,6 +140,10 @@ public:
     bcos::bytes signatureR;
     bcos::bytes signatureS;
     uint64_t signatureV{0};
+    /// Full raw EIP-2718 envelope bytes as received by eth_sendRawTransaction (with type byte +
+    /// signature). Empty when decoded from a block body rather than a client submission; OP block
+    /// building (sequencer) needs it verbatim to reproduce the exact tx the user signed.
+    bcos::bytes rawTransactionBytes;
 };
 }  // namespace rpc
 namespace codec::rlp
