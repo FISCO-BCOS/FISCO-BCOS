@@ -70,47 +70,9 @@ namespace
 // error with code 3 and message "execution reverted"; when the revert data carries a
 // solidity Error(string) (selector 0x08c379a0) the decoded reason is appended.
 // A bare receipt status as the code and an empty message is unusable by clients.
+// The message decoding lives in web3jsonrpc/utils/util.h (decodeRevertMessage), shared
+// with the unit test that pins its accepted/rejected payload shapes.
 constexpr int32_t c_executionReverted = 3;
-
-std::string decodeRevertMessage(std::string_view outputHex)
-{
-    // std::string_view for the constexpr (a constexpr std::string is not a constant
-    // expression under gcc-14 -Werror: it refers to a result of operator new); every
-    // use converts explicitly so no compiler's implicit-conversion leniency is relied on.
-    static constexpr std::string_view kReverted = "execution reverted";
-    auto bytes = fromHexWithPrefix(outputHex);
-    // Error(string): selector(4) || offset==32 (32) || length (32) || payload
-    if (bytes.size() < 4U + 32U + 32U ||
-        !std::equal(bytes.begin(), bytes.begin() + 4,
-            std::array<bcos::byte, 4>{0x08, 0xc3, 0x79, 0xa0}.begin()))
-    {
-        return std::string(kReverted);
-    }
-    auto word = [&bytes](std::size_t offset) {
-        std::size_t value = 0;
-        for (std::size_t i = 0; i < 32; ++i)
-        {
-            if (value > (std::numeric_limits<std::size_t>::max() >> 8))
-            {
-                return std::numeric_limits<std::size_t>::max();
-            }
-            value = (value << 8) | static_cast<std::uint8_t>(bytes[offset + i]);
-        }
-        return value;
-    };
-    if (word(4) != 32)
-    {
-        return std::string(kReverted);
-    }
-    auto length = word(36);
-    if (length > bytes.size() - (4U + 32U + 32U))
-    {
-        return std::string(kReverted);
-    }
-    auto reason = std::string(
-        reinterpret_cast<char const*>(bytes.data() + 68), static_cast<std::size_t>(length));
-    return std::string(kReverted) + ": " + reason;
-}
 }  // namespace
 
 task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
