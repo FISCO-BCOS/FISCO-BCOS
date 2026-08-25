@@ -258,8 +258,11 @@ namespace engine = bcos::evm::engine;
 /// forged code/caller/value. Returns a mismatch description, or nullopt when consistent.
 /// Consensus-critical: field indices and RLP decoding must mirror op-geth's UnmarshalBinary
 /// (legacy = bare list; typed 0x01..0x04 = type byte + list, field order per EIP-2718/2930/1559).
+/// BOUND COVERAGE: type byte, nonce, gasLimit, to, value, data. NOT bound: sender (needs
+/// ecrecover), the fee fields, accessList, blobVersionedHashes, authorizationList — part-5
+/// wiring must close those before this gate is the sole trust boundary.
 [[nodiscard]] inline std::optional<std::string> envelopeExecutionFieldsMismatch(
-    bcos::protocol::Transaction const& tx)
+    bcos::protocol::Transaction const& tx, evmone::state::Transaction const& evmTx)
 {
     namespace rlp = bcos::codec::rlp;
     auto const extraBytes = tx.extraTransactionBytes();
@@ -268,6 +271,12 @@ namespace engine = bcos::evm::engine;
 
     bcos::bytesRef cursor(const_cast<bcos::byte*>(extraBytes.data()), extraBytes.size());
     bool const typed = bcos::rlp::protocol::isTypedWeb3Envelope(extraBytes);
+    // The type byte comes from the ENVELOPE, never the forgeable mirror; the mirror-derived
+    // evmTx.type must agree with it (a 0x02 envelope with a legacy mirror would otherwise pass
+    // the field checks yet execute with legacy fee semantics and a divergent receipts-root leaf).
+    uint8_t const envelopeKind = typed ? static_cast<uint8_t>(extraBytes[0]) : uint8_t{0};
+    if (envelopeKind != static_cast<uint8_t>(evmTx.type))
+        return "tx type mismatch (envelope vs mirror)";
     if (typed)
     {
         cursor = cursor.getCroppedData(1);  // drop the EIP-2718 type byte
@@ -281,16 +290,17 @@ namespace engine = bcos::evm::engine;
     //   legacy:       [nonce, gasPrice, gasLimit, to, value, data, ...]
     //   0x01 (2930):  [chainId, nonce, gasPrice, gasLimit, to, value, data, accessList]
     //   0x02/03/04:   [chainId, nonce, prio, maxFee, gasLimit, to, value, data, ...]
-    uint8_t const kind = tx.web3TypedTxKind();
     size_t const nonceIdx = typed ? 1 : 0;
-    size_t const gasIdx = typed ? (kind == 0x01 ? 3 : 4) : 2;
-    size_t const toIdx = typed ? (kind == 0x01 ? 4 : 5) : 3;
-    size_t const valueIdx = typed ? (kind == 0x01 ? 5 : 6) : 4;
-    size_t const dataIdx = typed ? (kind == 0x01 ? 6 : 7) : 5;
+    size_t const gasIdx = typed ? (envelopeKind == 0x01 ? 3 : 4) : 2;
+    size_t const toIdx = typed ? (envelopeKind == 0x01 ? 4 : 5) : 3;
+    size_t const valueIdx = typed ? (envelopeKind == 0x01 ? 5 : 6) : 4;
+    size_t const dataIdx = typed ? (envelopeKind == 0x01 ? 6 : 7) : 5;
 
     // Walk once, capturing each target item: whole item (header + payload) for the uint
-    // fields, bare payload for the byte fields.
+    // fields (with the payload width, to reject over-wide integers that rlp::decode would
+    // silently truncate), bare payload for the byte fields.
     std::optional<bcos::bytesRef> nonceItem, gasItem, valueItem;
+    std::optional<size_t> noncePlen, gasPlen, valuePlen;
     std::optional<bcos::bytesRef> toPayload, dataPayload;
     size_t idx = 0;
     while (!walker.empty())
@@ -303,11 +313,20 @@ namespace engine = bcos::evm::engine;
         bcos::bytesRef const wholeItem(itemStart.data(), headerLen + itemHeader.payloadLength);
         bcos::bytesRef const payload = walker.getCroppedData(0, itemHeader.payloadLength);
         if (idx == nonceIdx)
+        {
             nonceItem = wholeItem;
+            noncePlen = itemHeader.payloadLength;
+        }
         if (idx == gasIdx)
+        {
             gasItem = wholeItem;
+            gasPlen = itemHeader.payloadLength;
+        }
         if (idx == valueIdx)
+        {
             valueItem = wholeItem;
+            valuePlen = itemHeader.payloadLength;
+        }
         if (idx == toIdx)
             toPayload = payload;
         if (idx == dataIdx)
@@ -318,52 +337,52 @@ namespace engine = bcos::evm::engine;
     if (!nonceItem || !gasItem || !valueItem || !toPayload || !dataPayload)
         return "envelope has fewer fields than the type requires";
 
-    // nonce
+    // nonce (uint64: over-wide payloads would truncate — reject instead)
     {
+        if (*noncePlen > sizeof(uint64_t))
+            return "nonce over-wide";
         uint64_t envNonce = 0;
         if (auto e = rlp::decode(*nonceItem, envNonce); e != nullptr)
             return "nonce decode failed";
-        bcos::u256 mirrorNonce{};
-        try
-        {
-            mirrorNonce = bcos::u256(std::string{tx.nonce()});
-        }
-        catch (...)
-        {
-            return "mirror nonce unparseable";
-        }
-        if (bcos::u256{envNonce} != mirrorNonce)
-            return "nonce mismatch (envelope " + std::to_string(envNonce) + " vs mirror)";
+        if (evmTx.nonce != envNonce)
+            return "nonce mismatch";
     }
-    // gasLimit
+    // gasLimit (uint64)
     {
+        if (*gasPlen > sizeof(uint64_t))
+            return "gasLimit over-wide";
         uint64_t envGas = 0;
         if (auto e = rlp::decode(*gasItem, envGas); e != nullptr)
             return "gasLimit decode failed";
-        if (static_cast<uint64_t>(tx.gasLimit()) != envGas)
+        if (static_cast<uint64_t>(evmTx.gas_limit) != envGas)
             return "gasLimit mismatch";
     }
-    // to
+    // to (20-byte address, or empty for contract creation)
     {
-        std::string mirrorTo{tx.to()};
-        if (mirrorTo.rfind("0x", 0) == 0)
-            mirrorTo.erase(0, 2);
-        auto const mirrorBytes = bcos::fromHex(mirrorTo);
-        if (mirrorBytes.size() != toPayload->size() ||
-            !std::equal(mirrorBytes.begin(), mirrorBytes.end(), toPayload->begin()))
+        if (evmTx.to.has_value())
+        {
+            if (toPayload->size() != sizeof(evmc_address) ||
+                !std::equal(toPayload->begin(), toPayload->end(), evmTx.to->bytes))
+                return "to mismatch";
+        }
+        else if (!toPayload->empty())
+        {
             return "to mismatch";
+        }
     }
-    // value
+    // value (uint256: over-wide payloads would truncate — reject instead)
     {
+        if (*valuePlen > sizeof(intx::uint256))
+            return "value over-wide";
         bcos::u256 envValue{};
         if (auto e = rlp::decode(*valueItem, envValue); e != nullptr)
             return "value decode failed";
-        if (envValue != tx.value())
+        if (eth::evm::toIntxU256(envValue) != evmTx.value)
             return "value mismatch";
     }
     // data
     {
-        auto const mirrorData = tx.input();
+        auto const mirrorData = evmTx.data;
         if (mirrorData.size() != dataPayload->size() ||
             !std::equal(mirrorData.begin(), mirrorData.end(), dataPayload->begin()))
             return "data mismatch";
@@ -1103,7 +1122,7 @@ private:
             }
             // Fail-closed mirror↔envelope cross-check: execution fields (nonce/gasLimit/
             // to/value/data) must match the SIGNED envelope, never the forgeable mirror.
-            if (auto mismatch = envelopeExecutionFieldsMismatch(transaction))
+            if (auto mismatch = envelopeExecutionFieldsMismatch(transaction, evmTx))
             {
                 throw bcos::evm::OpConsensusError(
                     "op block: tx execution fields diverge from the signed envelope: " + *mismatch);

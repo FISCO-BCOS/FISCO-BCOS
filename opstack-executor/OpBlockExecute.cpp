@@ -77,9 +77,11 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
         view, evmone::state::system_call_block_start(view, block, hashes, cfg.rev, vm)));
 
     // Step 2: first tx must be a deposit (hard reject) + L1-attributes content (warn, op-geth
-    // accept-at-validation) + Jovian shape. Same accept set as preBlockOpSteps / ExecuteContext,
-    // though seenNonDeposit is set pre-validation here while ExecuteContext sets it after a
-    // successful prepare — any validation failure aborts the whole block on this path, so the
+    // accept-at-validation) + Jovian shape. Accept set mirrors preBlockOpSteps / ExecuteContext
+    // (minus ExecuteContext's envelope↔mirror execution-fields cross-check, which lives in
+    // m_prepare and is not run on this test-only path), though seenNonDeposit is set
+    // pre-validation here while ExecuteContext sets it after a successful prepare — any
+    // validation failure aborts the whole block on this path, so the
     // timing difference has no effect.
     if (txs.empty())
         throw OpConsensusError("op block: missing L1 attributes deposit (empty block)");
@@ -241,26 +243,50 @@ namespace
         "op block: invalid cumulativeGasUsed in receipt (not hex or decimal): " + std::string(s));
 }
 
+/// Patch a placeholder list-header byte at headerPos with the canonical header for payloadLen
+/// (short form for < 56 bytes, long form otherwise — the long form inserts the length bytes,
+/// shifting the already-written payload once per list, not once per field).
+inline void patchRlpListHeader(bcos::bytes& buf, size_t headerPos, size_t payloadLen)
+{
+    if (payloadLen < 56)
+    {
+        buf[headerPos] = static_cast<bcos::byte>(0xc0 + payloadLen);
+        return;
+    }
+    bcos::bytes lenBytes;
+    auto v = payloadLen;
+    while (v > 0)
+    {
+        lenBytes.insert(lenBytes.begin(), static_cast<bcos::byte>(v & 0xff));
+        v >>= 8;
+    }
+    buf[headerPos] = static_cast<bcos::byte>(0xf7 + lenBytes.size());
+    buf.insert(
+        buf.begin() + static_cast<ptrdiff_t>(headerPos) + 1, lenBytes.begin(), lenBytes.end());
+}
+
 /// RLP list of logs: [address, [topics...], data] each, whole collection wrapped in a list
-/// (byte-identical to evmone's rlp::encode_container over vector<Log>).
+/// (byte-identical to evmone's rlp::encode_container over vector<Log>). Writes each log's
+/// bytes once, with header backfill — no per-log intermediate buffers.
 inline void encodeLogsList(bcos::bytes& to, gsl::span<const bcos::protocol::LogEntry> logs)
 {
-    bcos::bytes content;
+    auto const listStart = to.size();
+    to.push_back(0xc0);  // placeholder (patched below)
+    auto const payloadStart = to.size();
     for (const auto& log : logs)
     {
-        bcos::bytes entry;
-        bcos::codec::rlp::encode(entry, log.address());
-        bcos::bytes topics;
+        auto const logStart = to.size();
+        to.push_back(0xc0);  // placeholder for this log's list header
+        bcos::codec::rlp::encode(to, log.address());
+        auto const topicsStart = to.size();
+        to.push_back(0xc0);  // placeholder for the topics list header
         for (const auto& topic : log.topics())
-            bcos::codec::rlp::encode(topics, topic);
-        bcos::codec::rlp::encodeHeader(entry, {.isList = true, .payloadLength = topics.size()});
-        entry.insert(entry.end(), topics.begin(), topics.end());
-        bcos::codec::rlp::encode(entry, log.data());
-        bcos::codec::rlp::encodeHeader(content, {.isList = true, .payloadLength = entry.size()});
-        content.insert(content.end(), entry.begin(), entry.end());
+            bcos::codec::rlp::encode(to, topic);
+        patchRlpListHeader(to, topicsStart, to.size() - topicsStart - 1);
+        bcos::codec::rlp::encode(to, log.data());
+        patchRlpListHeader(to, logStart, to.size() - logStart - 1);
     }
-    bcos::codec::rlp::encodeHeader(to, {.isList = true, .payloadLength = content.size()});
-    to.insert(to.end(), content.begin(), content.end());
+    patchRlpListHeader(to, listStart, to.size() - payloadStart);
 }
 }  // namespace
 

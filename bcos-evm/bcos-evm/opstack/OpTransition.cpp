@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <bcos-evm/eth/state/errors.hpp>
-#include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/host.hpp>
 #include <cassert>
 // TODO(eth-utils-removal): several sections of this file are copied verbatim from

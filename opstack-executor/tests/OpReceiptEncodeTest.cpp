@@ -277,8 +277,19 @@ BOOST_AUTO_TEST_CASE(ShortLogsBloomIsConsensusReject)
     bcos::bytes shortBloom(128, 0xab);
     dep->setLogsBloom(bcos::ref(shortBloom));
 
-    BOOST_CHECK_THROW((void)encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType)),
-        bcos::evm::OpConsensusError);
+    // This target links protocol-tars/bcos-crypto/ledger — the chain the lightweight suite's
+    // own comment marks as breaking libc++ typed catch binary-wide. Catch std::exception and
+    // pin the message instead of relying on the exact type binding.
+    bool rejected = false;
+    try
+    {
+        (void)encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
+    }
+    catch (const std::exception& e)
+    {
+        rejected = std::string(e.what()).find("logsBloom must be 256 bytes") != std::string::npos;
+    }
+    BOOST_CHECK(rejected);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -17,9 +17,17 @@
 #include <optional>
 #include <string>
 
+using bcos::executor_v1::eth::toEvmoneTransaction;
 using bcos::executor_v1::opstack::envelopeChainIdMismatch;
 using bcos::executor_v1::opstack::envelopeExecutionFieldsMismatch;
 namespace rlp = bcos::codec::rlp;
+
+/// The cross-check compares the envelope against the values the executor will actually use
+/// (evmTx, built by toEvmoneTransaction from the mirror) — never the raw mirror strings.
+inline auto evmTxOf(bcos::protocol::Transaction const& tx)
+{
+    return toEvmoneTransaction(tx);
+}
 
 namespace
 {
@@ -173,7 +181,7 @@ BOOST_AUTO_TEST_CASE(MirrorValueDivergenceRejected)
     tx.m_nonce = "0x7";
     tx.m_gasLimit = 5000000;
     tx.m_value = bcos::u256{999};  // mirror forged (everything else consistent)
-    auto const mismatch = envelopeExecutionFieldsMismatch(tx);
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
     BOOST_REQUIRE(mismatch.has_value());
     BOOST_CHECK(std::string(*mismatch).find("value mismatch") != std::string::npos);
 }
@@ -185,7 +193,21 @@ BOOST_AUTO_TEST_CASE(MirrorToDivergenceRejected)
     tx.m_extraBytes = eip1559Envelope(
         10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
     tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d8";  // last byte flipped
-    BOOST_CHECK(envelopeExecutionFieldsMismatch(tx).has_value());
+    BOOST_CHECK(envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
+}
+
+// A forged mirror tx TYPE must be rejected: 0x02 envelope but mirror kind=0 (legacy) —
+// the field indices would coincidentally align, yet execution would use legacy fee
+// semantics and the receipts-root leaf would diverge between the two block paths.
+BOOST_AUTO_TEST_CASE(MirrorKindDivergenceRejected)
+{
+    FakeTx tx;
+    tx.m_extraBytes = eip1559Envelope(
+        10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_kind = 0;  // mirror claims legacy
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("tx type mismatch") != std::string::npos);
 }
 
 // Consistent mirror + envelope passes the cross-check.
@@ -199,13 +221,7 @@ BOOST_AUTO_TEST_CASE(ConsistentMirrorPasses)
     tx.m_nonce = "0x7";
     tx.m_gasLimit = 5000000;
     tx.m_input = {0xde, 0xad};
-    auto const m = envelopeExecutionFieldsMismatch(tx);
-    if (m)
-    {
-        std::fprintf(stderr, "DEBUG consistent mismatch: %s\n", m->c_str());
-        std::fprintf(stderr, "DEBUG envelope hex: %s\n", bcos::toHex(tx.m_extraBytes).c_str());
-    }
-    BOOST_CHECK(!m.has_value());
+    BOOST_CHECK(!envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

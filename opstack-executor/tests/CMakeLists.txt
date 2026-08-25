@@ -51,12 +51,19 @@ add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 # bcos-evm/CMakeLists.txt requires rlp_encode.cpp and evmone's package creates the blst target.
 # Build the consensus golden-vector suite unconditionally so CI cannot silently lose it.
 get_target_property(_evmone_inc_dirs evmone::evmone INTERFACE_INCLUDE_DIRECTORIES)
-list(GET _evmone_inc_dirs 0 _evmone_inc_dir)
-cmake_path(NORMAL_PATH _evmone_inc_dir)
-set(EVMONE_TEST_UTILS_DIR "${_evmone_inc_dir}/test/utils")
-if(NOT EXISTS "${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp")
+# Find the first include dir that actually contains the vendored test utils, instead of
+# assuming list order (list(GET ... 0) would misdiagnose a reordered include list).
+set(EVMONE_TEST_UTILS_DIR)
+foreach(_dir IN LISTS _evmone_inc_dirs)
+    cmake_path(NORMAL_PATH _dir)
+    if(EXISTS "${_dir}/test/utils/rlp_encode.cpp")
+        set(EVMONE_TEST_UTILS_DIR "${_dir}/test/utils")
+        break()
+    endif()
+endforeach()
+if(NOT EVMONE_TEST_UTILS_DIR)
     message(FATAL_ERROR "opstack-executor receipt tests require evmone test-utils "
-        "(${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp)")
+        "(rlp_encode.cpp not found under any of: ${_evmone_inc_dirs})")
 endif()
 if(NOT TARGET blst)
     message(FATAL_ERROR "opstack-executor receipt tests require the blst CMake target")
