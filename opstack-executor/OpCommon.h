@@ -85,7 +85,7 @@ struct OpBlockSeal
 /// path that consumes a mirror-derived type; the deposit loop needs no binding (0x7e comes
 /// from the unsigned deposit decode, whose raw IS the envelope). Maps a raw type byte to the
 /// value stored in OpBlockResult.txTypes: OP deposit 0x7e (kDepositTxType, OpTransition.h) →
-/// itself; legacy (>= 0xc0 RLP list prefix) → 0; typed (0x01/0x02/0x04) → its own type byte.
+/// itself; legacy (>= 0xc0 RLP list prefix) → 0; typed (0x01/0x02/0x03/0x04) → its own type byte.
 /// Unknown bytes (< 0xc0, not deposit) pass through unchanged — callers that must reject them
 /// (the deposit loop) keep their own guard.
 [[nodiscard]] constexpr uint8_t classifyTxType(uint8_t typeByte) noexcept
@@ -100,7 +100,7 @@ struct OpBlockSeal
     {
         return 0;  // legacy
     }
-    return typeByte;  // typed 0x01/0x02/0x04 — stored as the type byte itself
+    return typeByte;  // typed 0x01/0x02/0x03/0x04 — stored as the type byte itself
 }
 }  // namespace bcos::evm::opstack
 

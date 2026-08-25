@@ -9,15 +9,15 @@ add_library(opstack-executor
 )
 target_include_directories(opstack-executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    # Public headers use repository-root-qualified includes such as
+    # <opstack-executor/...>, <ethereum-executor/...>, and <bcos-evm/...>.
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/opstack-executor>)
-# No direct `ledger` / `rlp-protocol` links: both drag the bcos-crypto→wedprcrypto chain
-# that breaks libc++ typed catch binary-wide (bcos-rpc/test/CMakeLists.txt:29-34).
-# `ledger` still arrives transitively via bcos-evm-eth. ①a's new headers (mpt/MPTBuilder.h,
-# transaction-scheduler/HistoricalCallStorage.h) follow the same rule — include paths and
-# buildAndCollect symbols arrive transitively (SchedulerSerialImpl.h precedent).
+# `ledger` is explicit because OpBlockExecute.h exposes HashBuilder-backed templates and
+# OpBlockExecute.cpp calls the trie builders directly; do not rely on bcos-evm-eth's PUBLIC
+# closure. Web3TxEnvelope is header-only here, so no rlp-protocol link is required.
 target_link_libraries(opstack-executor PUBLIC
-    bcos-evm-opstack ethereum-executor bcos-framework bcos-protocol
+    bcos-evm-opstack ethereum-executor bcos-framework bcos-protocol ledger
     evmone::evmone intx::intx TBB::tbb)
 set_target_properties(opstack-executor PROPERTIES UNITY_BUILD OFF)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")

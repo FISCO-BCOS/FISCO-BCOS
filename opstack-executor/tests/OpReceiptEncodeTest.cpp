@@ -369,4 +369,31 @@ BOOST_AUTO_TEST_CASE(ShortLogsBloomIsConsensusReject)
         "logsBloom must be 256 bytes"));
 }
 
+// Isthmus+ deposit receipts always carry both tail fields. A lost optional must reject instead
+// of silently committing a different leaf with a substituted zero.
+BOOST_AUTO_TEST_CASE(DepositMissingNonceOrVersionIsConsensusReject)
+{
+    auto makeReceipt = [] {
+        auto receipt = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
+            std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{}, 1);
+        receipt->setCumulativeGasUsed("21000");
+        bcos::bytes bloom(256, 0x00);
+        receipt->setLogsBloom(bcos::ref(bloom));
+        return receipt;
+    };
+
+    auto missingMeta = makeReceipt();
+    BOOST_CHECK(consensusRejectPins(
+        [&] { (void)encodeReceiptForRoot(*missingMeta, static_cast<uint8_t>(kDepositTxType)); },
+        "missing deposit nonce/receipt version"));
+
+    auto missingVersion = makeReceipt();
+    bcos::protocol::OpStackReceiptMeta partialMeta;
+    partialMeta.deposit_nonce = 5;
+    missingVersion->setOpStackMeta(std::move(partialMeta));
+    BOOST_CHECK(consensusRejectPins(
+        [&] { (void)encodeReceiptForRoot(*missingVersion, static_cast<uint8_t>(kDepositTxType)); },
+        "missing deposit nonce/receipt version"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

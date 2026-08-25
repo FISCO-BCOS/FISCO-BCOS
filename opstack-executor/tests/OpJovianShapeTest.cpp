@@ -1,13 +1,13 @@
 // OpJovianShapeTest — DA 矩阵 Task 7: A 层单测增补（锚定快照值）。
 //
 // 锁定 validateJovianBlockShape(std::span<const OpBlockTx>, const OpForkConfig&)
-// (OpBlockExecute.h:76) 的 shape 校验矩阵（三代理 T4/Item7 修正：它只做 shape 校验，
+// 的 shape 校验矩阵（三代理 T4/Item7 修正：它只做 shape 校验，
 // 不提取 da_footprint —— 提取在 processOpBlock 内，da_footprint 的数值断言由 C 层
 // t8n 覆盖，故本文件不建「提取」测试名）：
-//   - 178B + selector 0x3db6be2b（Jovian，取自 OpBlockExecute.h:67 / rollup_cost.go:65）
+//   - 178B + JovianL1AttributesSelector 0x3db6be2b（对照 op-geth rollup_cost.go）
 //     的 attributes tx → no-throw；
 //   - 176B 分支只查长度 + deposits-only，**不校验 0x098999be selector**
-//     （OpBlockExecute.cpp:69-79）——测试注明；
+//     （validateJovianBlockShape 的 activation-block 分支）——测试注明；
 //   - 非 176/178 长度 → throw("too short")；错 selector → throw("does not have Jovian
 //     selector")；含非 deposit tx 的激活块 → throw("unexpected non-deposit transactions")；
 //   - pre-Jovian 配置（cfg.has_da_footprint==false）恒 no-op。

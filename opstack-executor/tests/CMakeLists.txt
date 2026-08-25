@@ -46,11 +46,15 @@ add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 
 
 # Receipts-root leaf encoding (encodeReceiptForRoot / sealOpBlock). Needs evmone's packaged RLP
-# helpers and ledger's computeTrieRootVarKey; kept off the lightweight binary for the same
-# wedprcrypto reason. These dependencies are already mandatory for every FULLNODE build:
-# bcos-evm/CMakeLists.txt requires rlp_encode.cpp and evmone's package creates the blst target.
-# Build the consensus golden-vector suite unconditionally so CI cannot silently lose it.
+# helpers and ledger's computeTrieRootVarKey; kept off the lightweight binary to isolate the
+# larger protocol/crypto dependency closure. The repository-owned evmone port deliberately
+# installs test/utils/rlp_encode.{hpp,cpp} (ports/evmone/portfile.cmake §4d), and its generated
+# package config calls find_dependency(blst). Build the consensus golden-vector suite
+# unconditionally so a broken package contract fails configure instead of silently losing tests.
 get_target_property(_evmone_inc_dirs evmone::evmone INTERFACE_INCLUDE_DIRECTORIES)
+if(NOT _evmone_inc_dirs OR _evmone_inc_dirs MATCHES "-NOTFOUND$")
+    message(FATAL_ERROR "the repository evmone package must export INTERFACE_INCLUDE_DIRECTORIES")
+endif()
 # Find the first include dir that actually contains the vendored test utils, instead of
 # assuming list order (list(GET ... 0) would misdiagnose a reordered include list).
 set(EVMONE_TEST_UTILS_DIR)

@@ -208,4 +208,24 @@ BOOST_AUTO_TEST_CASE(ValueSenderAndInputPassThrough)
     BOOST_CHECK_EQUAL(evmTx.data[0], 0xde);
 }
 
+BOOST_AUTO_TEST_CASE(SenderLengthRejectsPartialAddressButAllowsCallDefault)
+{
+    {
+        FakeTransaction tx;
+        tx.m_sender.clear();  // eth_call without `from`: intentional address(0)
+        auto const evmTx = toEvmoneTransaction(tx);
+        BOOST_CHECK(evmc::is_zero(evmTx.sender));
+    }
+    {
+        FakeTransaction tx;
+        tx.m_sender.resize(sizeof(evmc_address) - 1);
+        BOOST_CHECK_THROW(toEvmoneTransaction(tx), OpConsensusError);
+    }
+    {
+        FakeTransaction tx;
+        tx.m_sender.resize(sizeof(evmc_address) + 1);
+        BOOST_CHECK_THROW(toEvmoneTransaction(tx), OpConsensusError);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

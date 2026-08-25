@@ -47,6 +47,7 @@ public:
     std::string m_chainId = "10";  // DECIMAL string (mirror)
     std::string m_nonce = "0x7";   // hex quantity
     bcos::bytes m_extraBytes;
+    std::optional<uint64_t> m_reportedEnvelopeChainId;
 
     uint8_t web3TypedTxKind() const override { return m_kind; }
     bcos::bytesConstRef input() const override
@@ -72,6 +73,8 @@ public:
     }
     std::optional<uint64_t> web3ChainIdFromEnvelope() const override
     {
+        if (m_reportedEnvelopeChainId.has_value())
+            return m_reportedEnvelopeChainId;
         return bcos::rlp::protocol::web3ChainIdFromEnvelope(extraTransactionBytes());
     }
 
@@ -100,7 +103,8 @@ public:
 /// Build a canonical EIP-1559 (0x02) envelope: 0x02 || rlp([chainId, nonce, prio, maxFee,
 /// gasLimit, to, value, data, accessList]).
 bcos::bytes eip1559Envelope(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
-    std::string_view toHex, bcos::u256 value, bcos::bytes const& data)
+    std::string_view toHex, bcos::u256 value, bcos::bytes const& data, bool toIsList = false,
+    bool dataIsList = false)
 {
     auto item = [](bcos::bytes const& payload) {
         bcos::bytes out;
@@ -121,10 +125,16 @@ bcos::bytes eip1559Envelope(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
     append(intItem(30000000000));
     append(intItem(gasLimit));
     auto toBytes = bcos::fromHex(toHex.substr(2));
-    append(item(toBytes));
+    if (toIsList)
+        payload.push_back(0xc0);
+    else
+        append(item(toBytes));
     // Test values are small; encode the u256 as an RLP integer via its low 64 bits.
     append(intItem(static_cast<uint64_t>(value)));
-    append(item(data));
+    if (dataIsList)
+        payload.push_back(0xc0);
+    else
+        append(item(data));
     payload.push_back(0xc0);  // empty accessList
 
     bcos::bytes out{static_cast<bcos::byte>(0x02)};
@@ -159,8 +169,8 @@ bcos::bytes legacyEnvelope(uint64_t nonce, uint64_t gasLimit, std::string_view t
     append(intItem(static_cast<uint64_t>(value)));
     append(item(data));
     append(intItem(27));  // v (unprotected legacy)
-    append(intItem(0));   // r
-    append(intItem(0));   // s
+    append(intItem(1));   // non-empty r: full signed-envelope shape, not an EIP-155 preimage
+    append(intItem(2));   // non-empty s
 
     bcos::bytes out;
     rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
@@ -204,8 +214,8 @@ bcos::bytes accessListEnvelope(uint64_t chainId, uint64_t nonce, uint64_t gasLim
 
 /// Build a 0x03 (blob) or 0x04 (7702) envelope. The first 8 fields are identical to 0x02
 /// (chainId, nonce, prio, maxFee, gasLimit, to, value, data), followed by accessList and a
-/// per-type tail (blobVersionedHashes / authorizationList). The gate reads only through data,
-/// so both shapes exercise the shared typed (envelopeKind != 0x01) index layout [1,4,5,6,7].
+/// real per-type tail. The gate reads only through data, so both shapes exercise the shared
+/// typed (envelopeKind != 0x01) index layout [1,4,5,6,7].
 bcos::bytes blobOrAuthEnvelope(uint8_t typeByte, uint64_t chainId, uint64_t nonce,
     uint64_t gasLimit, std::string_view toHex, bcos::u256 value, bcos::bytes const& data)
 {
@@ -232,7 +242,15 @@ bcos::bytes blobOrAuthEnvelope(uint8_t typeByte, uint64_t chainId, uint64_t nonc
     append(intItem(static_cast<uint64_t>(value)));
     append(item(data));
     payload.push_back(0xc0);  // empty accessList
-    payload.push_back(0xc0);  // empty per-type tail
+    if (typeByte == 0x03)
+    {
+        append(intItem(1));       // maxFeePerBlobGas
+        payload.push_back(0xc0);  // empty blobVersionedHashes
+    }
+    else
+    {
+        payload.push_back(0xc0);  // empty authorizationList
+    }
 
     bcos::bytes out{static_cast<bcos::byte>(typeByte)};
     rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
@@ -265,6 +283,19 @@ BOOST_AUTO_TEST_CASE(EnvelopeChainIdMatchesNode)
         10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
     tx.m_chainId = "999";  // mirror is wrong but irrelevant
     BOOST_CHECK(!envelopeChainIdMismatch(tx, 10).has_value());
+}
+
+// The convenience overload must derive chainId from the same envelope-byte parser as the block
+// path. A polymorphic override must not create a second consensus interpretation.
+BOOST_AUTO_TEST_CASE(EnvelopeChainIdGateIgnoresDivergentVirtualOverride)
+{
+    FakeTx tx;
+    tx.m_extraBytes = eip1559Envelope(
+        9, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_reportedEnvelopeChainId = 10;
+    auto const gate = envelopeChainIdMismatch(tx, 10);
+    BOOST_REQUIRE(gate.has_value());
+    BOOST_CHECK_EQUAL(*gate, "tx envelope chain_id 9 does not match node chainId 10");
 }
 
 // Typed envelopes must carry a parseable chainId in field 0. A type byte followed by a malformed
@@ -440,6 +471,33 @@ BOOST_AUTO_TEST_CASE(ContractCreationEnvelopeToDivergenceRejected)
     auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
     BOOST_REQUIRE(mismatch.has_value());
     BOOST_CHECK(std::string(*mismatch).find("to mismatch") != std::string::npos);
+}
+
+// Ethereum transaction `to` and `data` are byte strings, never RLP lists. Empty-list payloads
+// must not be mistaken for empty byte strings and pass the mirror gate.
+BOOST_AUTO_TEST_CASE(ListShapedToAndDataAreRejected)
+{
+    FakeTx tx;
+    tx.m_extraBytes = eip1559Envelope(10, 7, 5000000, "0x", bcos::u256{5}, {}, /*toIsList=*/true);
+    tx.m_value = bcos::u256{5};
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    auto mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK_EQUAL(*mismatch, "to field is an RLP list");
+
+    tx.m_extraBytes = eip1559Envelope(
+        10, 7, 5000000, "0x", bcos::u256{5}, {}, /*toIsList=*/false, /*dataIsList=*/true);
+    mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK_EQUAL(*mismatch, "data field is an RLP list");
+}
+
+BOOST_AUTO_TEST_CASE(LegacyFixtureIsAFullUnprotectedSignedEnvelope)
+{
+    auto const envelope =
+        legacyEnvelope(7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    BOOST_CHECK(!bcos::rlp::protocol::web3ChainIdFromEnvelope(bcos::ref(envelope)).has_value());
 }
 
 // The 0x03 (blob) and 0x04 (7702) shapes share the typed (envelopeKind != 0x01) index layout

@@ -164,17 +164,10 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             const evmc::bytes_view env{btx.signedEnvelope.data(), btx.signedEnvelope.size()};
             auto const envRef =
                 bcos::bytesConstRef(btx.signedEnvelope.data(), btx.signedEnvelope.size());
-            auto const envelopeChainId = bcos::rlp::protocol::web3ChainIdFromEnvelope(envRef);
-            if (envelopeChainId.has_value() && *envelopeChainId != chainId)
+            if (auto mismatch =
+                    bcos::executor_v1::opstack::envelopeChainIdMismatch(envRef, chainId))
             {
-                throw OpConsensusError("op block: tx envelope chain_id " +
-                                       std::to_string(*envelopeChainId) +
-                                       " does not match node chainId " + std::to_string(chainId));
-            }
-            if (!envelopeChainId.has_value() && bcos::rlp::protocol::isTypedWeb3Envelope(envRef))
-            {
-                throw OpConsensusError(
-                    "op block: typed tx envelope is missing a parseable chainId");
+                throw OpConsensusError("op block: " + *mismatch);
             }
             // Fail-closed mirror↔envelope cross-check — the SAME gate the per-tx path runs in
             // m_prepare (OpstackExecutor.h): execution fields (nonce/gasLimit/to/value/data)
@@ -347,11 +340,11 @@ bcos::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, ui
     if (txType == static_cast<uint8_t>(kDepositTxType))
     {
         const auto& meta = r.opStackMeta();
-        const uint64_t nonce = (meta && meta->deposit_nonce) ? *meta->deposit_nonce : uint64_t{0};
-        const uint64_t version =
-            (meta && meta->deposit_receipt_version) ? *meta->deposit_receipt_version : uint64_t{0};
-        bcos::codec::rlp::encode(payload, nonce);
-        bcos::codec::rlp::encode(payload, version);
+        if (!meta || !meta->deposit_nonce || !meta->deposit_receipt_version)
+            throw OpConsensusError(
+                "op block: deposit receipt missing deposit nonce/receipt version");
+        bcos::codec::rlp::encode(payload, *meta->deposit_nonce);
+        bcos::codec::rlp::encode(payload, *meta->deposit_receipt_version);
     }
 
     bcos::bytes out;

@@ -104,7 +104,13 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
         evmTx.max_priority_gas_price == 0)
         evmTx.max_priority_gas_price = evmTx.max_gas_price;
     auto const& sb = tx.sender();
-    if (sb.size() >= sizeof(evmc_address))
+    // An omitted sender is intentional for eth_call/estimateGas and means address(0). Any
+    // non-empty representation must be exactly one address; truncating an over-wide value or
+    // silently zeroing a short value would fabricate the execution sender.
+    if (!sb.empty() && sb.size() != sizeof(evmc_address))
+        throw bcos::evm::OpConsensusError(
+            "toEvmoneTransaction: sender must be empty or exactly 20 bytes");
+    if (!sb.empty())
         std::copy_n(sb.begin(), sizeof(evmc_address), evmTx.sender.bytes);
     auto const& tb = tx.to();
     if (!tb.empty())
@@ -303,6 +309,8 @@ namespace engine = bcos::evm::engine;
     std::optional<bcos::bytesRef> nonceItem, gasItem, valueItem;
     std::optional<size_t> noncePlen, gasPlen, valuePlen;
     std::optional<bcos::bytesRef> toPayload, dataPayload;
+    bool toIsList = false;
+    bool dataIsList = false;
     size_t idx = 0;
     while (!walker.empty())
     {
@@ -329,9 +337,15 @@ namespace engine = bcos::evm::engine;
             valuePlen = itemHeader.payloadLength;
         }
         if (idx == toIdx)
+        {
             toPayload = payload;
+            toIsList = itemHeader.isList;
+        }
         if (idx == dataIdx)
+        {
             dataPayload = payload;
+            dataIsList = itemHeader.isList;
+        }
         walker = walker.getCroppedData(itemHeader.payloadLength);
         ++idx;
     }
@@ -360,6 +374,8 @@ namespace engine = bcos::evm::engine;
     }
     // to (20-byte address, or empty for contract creation)
     {
+        if (toIsList)
+            return "to field is an RLP list";
         if (evmTx.to.has_value())
         {
             if (toPayload->size() != sizeof(evmc_address) ||
@@ -383,6 +399,8 @@ namespace engine = bcos::evm::engine;
     }
     // data
     {
+        if (dataIsList)
+            return "data field is an RLP list";
         auto const& mirrorData = evmTx.data;
         if (mirrorData.size() != dataPayload->size() ||
             !std::equal(mirrorData.begin(), mirrorData.end(), dataPayload->begin()))
@@ -399,25 +417,32 @@ namespace engine = bcos::evm::engine;
     return envelopeExecutionFieldsMismatch(tx.extraTransactionBytes(), evmTx);
 }
 
-/// Block-path chainId gate (review finding C): the SIGNED envelope's chainId must equal the
-/// node chainId — never the forgeable tars mirror. Typed envelopes always carry chainId (RLP
-/// field 0); nullopt there is malformed, not a pre-EIP-155 exemption. Returns the rejection
-/// reason, or nullopt when the tx passes the gate.
+/// Shared chainId gate (review finding C): the SIGNED envelope's chainId must equal the node
+/// chainId — never the forgeable tars mirror. Typed envelopes always carry chainId (RLP field 0);
+/// nullopt there is malformed, not a pre-EIP-155 exemption. Both execution paths call this
+/// envelope-bytes core so parser semantics and rejection text cannot drift.
 [[nodiscard]] inline std::optional<std::string> envelopeChainIdMismatch(
-    bcos::protocol::Transaction const& tx, uint64_t nodeChainId)
+    bcos::bytesConstRef envelope, uint64_t nodeChainId)
 {
-    auto const envelopeChainId = tx.web3ChainIdFromEnvelope();
+    auto const envelopeChainId = bcos::rlp::protocol::web3ChainIdFromEnvelope(envelope);
     if (envelopeChainId.has_value() && *envelopeChainId != nodeChainId)
     {
         return "tx envelope chain_id " + std::to_string(*envelopeChainId) +
                " does not match node chainId " + std::to_string(nodeChainId);
     }
-    if (!envelopeChainId.has_value() &&
-        bcos::rlp::protocol::isTypedWeb3Envelope(tx.extraTransactionBytes()))
+    if (!envelopeChainId.has_value() && bcos::rlp::protocol::isTypedWeb3Envelope(envelope))
     {
         return "typed tx envelope is missing a parseable chainId";
     }
     return std::nullopt;
+}
+
+/// Transaction convenience overload: deliberately forwards bytes instead of calling the virtual
+/// parser, keeping the per-tx path identical to processOpBlock.
+[[nodiscard]] inline std::optional<std::string> envelopeChainIdMismatch(
+    bcos::protocol::Transaction const& tx, uint64_t nodeChainId)
+{
+    return envelopeChainIdMismatch(tx.extraTransactionBytes(), nodeChainId);
 }
 
 /// BlockHashes that answers zero for every block number — the eth_call / standalone-tx paths
