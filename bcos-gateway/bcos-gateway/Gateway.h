@@ -100,7 +100,8 @@ public:
      */
     task::Task<void> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        ::ranges::any_view<bytesConstRef> _payloads, ErrorRespFunc _errorRespFunc) override;
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
+        ErrorRespFunc _errorRespFunc) override;
 
     /**
      * @brief: receive p2p message

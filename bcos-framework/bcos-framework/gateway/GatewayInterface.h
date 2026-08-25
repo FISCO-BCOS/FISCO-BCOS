@@ -124,7 +124,8 @@ public:
      */
     virtual task::Task<void> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        ::ranges::any_view<bytesConstRef> _payloads, ErrorRespFunc _errorRespFunc)
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
+        ErrorRespFunc _errorRespFunc)
     {
         // Both the payload buffer and the completion state are owned by shared_ptrs captured by the
         // completion callback, NOT by this coroutine frame: the borrowed TARS client may keep

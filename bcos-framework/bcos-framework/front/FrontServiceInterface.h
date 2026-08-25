@@ -141,19 +141,38 @@ public:
      *         is delivered to _callback; _callback is also invoked with an error if the
      *         gateway-level send fails.
      *
-     * Default implementation: joins the payload views into a buffer and bridges to the borrowed
-     * asyncSendMessageByNodeID (correct for the tars client and test fakes).
+     * The payloads must be at least forward ranges: the default bridge joins them into one buffer
+     * (single pass), but overrides may iterate them multiple times (e.g. a retry loop).
+     *
+     * Default implementation: joins the payload views into a buffer owned by the completion
+     * callback (NOT this coroutine frame) and bridges to the borrowed asyncSendMessageByNodeID —
+     * the TARS/MAX front client may keep reading the payload after the callback returns (e.g. a
+     * synchronous connection-check error followed by an async send setup), so the buffer must
+     * outlive the frame. This mirrors the GatewayInterface default bridge, which the gateway-side
+     * review rounds established against the same TARS client contract.
      */
     virtual task::Task<void> sendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
-        ::ranges::any_view<bytesConstRef> _payloads, uint32_t _timeout, CallbackFunc _callback)
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads, uint32_t _timeout,
+        CallbackFunc _callback)
     {
-        bcos::bytes buffer;
+        auto buffer = std::make_shared<bcos::bytes>();
         for (auto const& data : _payloads)
         {
-            buffer.insert(buffer.end(), data.begin(), data.end());
+            buffer->insert(buffer->end(), data.begin(), data.end());
         }
-        asyncSendMessageByNodeID(_moduleID, std::move(_nodeID), bcos::ref(buffer), _timeout,
-            std::move(_callback));
+        auto payload = bcos::ref(*buffer);
+        asyncSendMessageByNodeID(_moduleID, std::move(_nodeID), payload, _timeout,
+            [buffer = std::move(buffer), callback = std::move(_callback)](bcos::Error::Ptr _error,
+                bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data, const std::string& _id,
+                ResponseFunc _resp) mutable {
+                // keep the payload buffer alive until after the callback returns: the borrowed
+                // caller may still be reading it on this stack
+                (void)buffer;
+                if (callback)
+                {
+                    callback(std::move(_error), std::move(_nodeID), _data, _id, std::move(_resp));
+                }
+            });
         co_return;
     }
 

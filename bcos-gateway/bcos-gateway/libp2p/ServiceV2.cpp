@@ -433,8 +433,21 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
     auto self = std::static_pointer_cast<ServiceV2>(shared_from_this());
     task::wait([](std::shared_ptr<ServiceV2> _self,
                    std::shared_ptr<P2PMessageV2> _p2pMsg) -> task::Task<void> {
-        co_await _self->forwardMessageByNodeID(_p2pMsg->dstP2PNodeID(), *_p2pMsg,
-            ::ranges::views::single(_p2pMsg->payload()), Options{});
+        try
+        {
+            co_await _self->forwardMessageByNodeID(_p2pMsg->dstP2PNodeID(), *_p2pMsg,
+                ::ranges::views::single(_p2pMsg->payload()), Options{});
+        }
+        catch (std::exception const& e)
+        {
+            // A synchronous pre-send rejection (rate limit / max size) or an async write failure
+            // on the relay path is expected during bandwidth saturation — log the next hop so a
+            // "peer not receiving relayed messages" investigation keeps the routing dimension.
+            SERVICE2_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_DESC("forwardMessage failed")
+                                  << LOG_KV("dst", _p2pMsg->dstP2PNodeID())
+                                  << LOG_KV("seq", _p2pMsg->seq())
+                                  << LOG_KV("what", boost::diagnostic_information(e));
+        }
     }(self, p2pMsg));
 }
 
@@ -534,22 +547,35 @@ void ServiceV2::sendRespMessageBySession(
     task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession,
                    bcos::bytes _payload, uint32_t _seq, std::string _dstP2PNodeID,
                    P2pID _p2pid) -> task::Task<void> {
-        P2PMessageV2 respMessage;
-        respMessage.setDstP2PNodeID(_dstP2PNodeID);
-        respMessage.setSrcP2PNodeID(_self->m_nodeID);
-        respMessage.setSeq(_seq);
-        respMessage.setRespPacket();
-        respMessage.setPayload(std::move(_payload));
-        // Note: send response directly with the original session (zero-copy view of frame payload)
-        co_await _p2pSession->fastSendP2PMessage(
-            respMessage, ::ranges::views::single(respMessage.payload()), Options{});
-        if (c_fileLogLevel <= TRACE) [[unlikely]]
+        try
         {
-            SERVICE2_LOG(TRACE) << LOG_BADGE("sendRespMessageBySession")
-                                << LOG_KV("seq", _seq)
-                                << LOG_KV("from", respMessage.printSrcP2PNodeID())
-                                << LOG_KV("dst", respMessage.printDstP2PNodeID())
-                                << LOG_KV("payload size", respMessage.payload().size());
+            P2PMessageV2 respMessage;
+            respMessage.setDstP2PNodeID(_dstP2PNodeID);
+            respMessage.setSrcP2PNodeID(_self->m_nodeID);
+            respMessage.setSeq(_seq);
+            respMessage.setRespPacket();
+            respMessage.setPayload(std::move(_payload));
+            // Note: send response directly with the original session (zero-copy view of frame payload)
+            co_await _p2pSession->fastSendP2PMessage(
+                respMessage, ::ranges::views::single(respMessage.payload()), Options{});
+            if (c_fileLogLevel <= TRACE) [[unlikely]]
+            {
+                SERVICE2_LOG(TRACE) << LOG_BADGE("sendRespMessageBySession")
+                                    << LOG_KV("seq", _seq)
+                                    << LOG_KV("from", respMessage.printSrcP2PNodeID())
+                                    << LOG_KV("dst", respMessage.printDstP2PNodeID())
+                                    << LOG_KV("payload size", respMessage.payload().size());
+            }
+        }
+        catch (std::exception const& e)
+        {
+            // A synchronous pre-send rejection (rate limit / max size) on the response path is
+            // expected during bandwidth saturation — log the request seq and target so the
+            // response-loss investigation keeps the routing dimension.
+            SERVICE2_LOG(WARNING) << LOG_BADGE("sendRespMessageBySession")
+                                  << LOG_DESC("send response failed") << LOG_KV("seq", _seq)
+                                  << LOG_KV("dst", _dstP2PNodeID)
+                                  << LOG_KV("what", boost::diagnostic_information(e));
         }
     }(self, _p2pSession, bcos::bytes(_payload.begin(), _payload.end()), seq, dstP2PNodeID,
         p2pid));

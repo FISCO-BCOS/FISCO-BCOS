@@ -132,6 +132,28 @@ static void send(Session& session, ::ranges::input_range auto payloads,
     }
 
     session.m_writeQueue.push(std::move(payload));
+    // FIB-185 (review): re-check the session state AFTER the push. drop() may have drained the
+    // queue (CAS won) between the active() check above and this push, in which case this
+    // payload's callback would never fire and the whole task::wait chain would leak (it pins the
+    // session/socket/service forever). Either drop()'s drain already popped our payload (its
+    // callback then fires with operation_aborted), or this re-check sees an inactive session and
+    // drains it here. Both paths complete the callback exactly once through the same posted
+    // channel used by the early-return branch above.
+    if (!session.active())
+    {
+        Payload pending;
+        while (session.m_writeQueue.try_pop(pending))
+        {
+            if (pending.m_callback)
+            {
+                session.m_server.get().asioInterface()->post(
+                    [callback = std::move(pending.m_callback)]() {
+                        callback(boost::asio::error::not_connected);
+                    });
+            }
+        }
+        return;
+    }
     session.write();
 }
 
@@ -261,6 +283,38 @@ void Session::write()
     {
         SESSION_LOG(ERROR) << LOG_DESC("write error") << LOG_KV("endpoint", nodeIPEndpoint())
                            << LOG_KV("what", boost::diagnostic_information(e));
+        // FIB-185 (review): when asyncWrite throws, the payloads have already been moved into
+        // m_writings->payloads and the completion handler was never registered, so their callbacks
+        // would never fire (drop() only drains m_writeQueue, and this catch runs before any
+        // completion handler exists). Fail them here — posted rather than inline, for the same
+        // reason as drop()'s drain: this catch runs on the caller's stack, which may still be
+        // inside an await_suspend.
+        for (auto& p : m_writings->payloads)
+        {
+            if (p.m_callback)
+            {
+                auto cb = std::move(p.m_callback);
+                if (m_server.get().haveNetwork())
+                {
+                    m_server.get().asioInterface()->post(
+                        [callback = std::move(cb)]() { callback(boost::asio::error::operation_aborted); });
+                }
+                else
+                {
+                    try
+                    {
+                        cb(boost::asio::error::operation_aborted);
+                    }
+                    catch (std::exception const& e2)
+                    {
+                        SESSION_LOG(WARNING)
+                            << LOG_DESC("write callback exception")
+                            << LOG_KV("what", boost::diagnostic_information(e2));
+                    }
+                }
+            }
+        }
+        m_writings->payloads.clear();
         drop(TCPError);
         return;
     }
@@ -293,19 +347,37 @@ void Session::drop(DisconnectReason _reason)
     // already invokes their callbacks with the error when the socket close cancels the write.
     // Also covers Session::write()'s early returns: they call drop(TCPError) right after the
     // payload has been pushed into m_writeQueue.
+    //
+    // FIB-185 (review): complete these callbacks OFF the caller's stack. drop() is reachable from
+    // Session::write()'s early-return path, which runs on the stack of a sender that is still
+    // inside its own await_suspend — calling the callback inline there would resume that coroutine
+    // from inside its own await_suspend (the exact hazard send()'s early-return branch avoids by
+    // posting). Post to the shared pool; when the host is already gone there is no live executor
+    // to hand it to, so fall back to inline — the same shape as the notifyDisconnect / closeSocket
+    // branches below.
     Payload payload;
     while (m_writeQueue.try_pop(payload))
     {
         if (payload.m_callback)
         {
-            try
+            if (m_server.get().haveNetwork())
             {
-                payload.m_callback(boost::asio::error::operation_aborted);
+                m_server.get().asioInterface()->post(
+                    [callback = std::move(payload.m_callback)]() {
+                        callback(boost::asio::error::operation_aborted);
+                    });
             }
-            catch (std::exception const& e)
+            else
             {
-                SESSION_LOG(WARNING) << LOG_DESC("write callback exception during drop")
-                                     << LOG_KV("what", boost::diagnostic_information(e));
+                try
+                {
+                    payload.m_callback(boost::asio::error::operation_aborted);
+                }
+                catch (std::exception const& e)
+                {
+                    SESSION_LOG(WARNING) << LOG_DESC("write callback exception during drop")
+                                         << LOG_KV("what", boost::diagnostic_information(e));
+                }
             }
         }
     }
@@ -1014,9 +1086,14 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
         boost::asio::detail::socket_ops::host_to_network_long(totalLength);
 
     // The pre-send checks run in the same order as the removed asyncSendMessage path (active →
-    // allowMaxMsgSize → beforeMessageHandler). The outgoing rate-limit handler receives the ACTUAL
-    // wire bytes (totalLength including the payload views) explicitly — a zero-copy message does
-    // not carry its payload, so message.length() alone would under-count the outgoing traffic.
+    // allowMaxMsgSize → beforeMessageHandler), but the size limit is judged on the COMPRESSED wire
+    // bytes (totalLength, computed above after compression) rather than the pre-compression
+    // estimate the old path used: the peer's read side (Session::doRead) rejects frames by the
+    // on-the-wire length too, so a message that only fits after compression is accepted here and
+    // decodes on the peer — this is an intentional, documented divergence from asyncSendMessage.
+    // The outgoing rate-limit handler receives the ACTUAL wire bytes (totalLength including the
+    // payload views) explicitly — a zero-copy message does not carry its payload, so
+    // message.length() alone would under-count the outgoing traffic.
     if (totalLength > allowMaxMsgSize())
     {
         SESSION_LOG(WARNING) << LOG_BADGE("fastSendMessage") << LOG_DESC("msg size overflow")

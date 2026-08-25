@@ -197,7 +197,8 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
 
 bcos::task::Task<void> bcos::gateway::Gateway::sendMessageByNodeID(const std::string& _groupID,
     int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-    ::ranges::any_view<bytesConstRef> _payloads, ErrorRespFunc _errorRespFunc)
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
+    ErrorRespFunc _errorRespFunc)
 {
     auto p2pIDs =
         m_gatewayNodeManager->peersRouterTable()->queryP2pIDs(_groupID, _dstNodeID->hex());

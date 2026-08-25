@@ -545,7 +545,7 @@ void FrontService::asyncSendMessageByNodeIDByOwnedPayload(
 }
 
 bcos::task::Task<void> FrontService::sendMessageByNodeID(int _moduleID,
-    bcos::crypto::NodeIDPtr _nodeID, ::ranges::any_view<bytesConstRef> _payloads,
+    bcos::crypto::NodeIDPtr _nodeID, ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
     uint32_t _timeout, CallbackFunc _callback)
 {
     // keep the service alive for the whole (possibly deferred) send

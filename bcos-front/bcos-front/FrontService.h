@@ -100,7 +100,7 @@ public:
      *         delivered through _callbackFunc if the gateway-level send fails.
      */
     task::Task<void> sendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
-        ::ranges::any_view<bytesConstRef> _payloads, uint32_t _timeout,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads, uint32_t _timeout,
         CallbackFunc _callbackFunc) override;
 
     // FIB-185: dispatch the gateway broadcast onto a serial send queue (off the caller thread) so a
