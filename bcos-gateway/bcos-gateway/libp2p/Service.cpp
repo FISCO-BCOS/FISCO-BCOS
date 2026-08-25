@@ -589,21 +589,25 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
         // behind it (base enqueued every peer and returned immediately).
         for (auto const& nodeID : nodeIDs)
         {
-            try
-            {
-                task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID,
-                               P2PMessage::Ptr _message, Options _options) mutable
-                               -> task::Task<void> {
+            task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID,
+                           P2PMessage::Ptr _message, Options _options) mutable
+                           -> task::Task<void> {
+                // catch both the synchronous pre-send rejection (rate limit / max size, thrown
+                // before the first suspension) and the asynchronous write failure (NetworkException
+                // from fastSendMessageWithoutResponse's await_resume): the latter would otherwise
+                // fall through to Session::write's generic post-handler without the target node id
+                try
+                {
                     co_await _self->sendMessageByNodeID(_nodeID, *_message,
                         ::ranges::views::single(_message->payload()), _options);
-                }(self, nodeID, message, options));
-            }
-            catch (std::exception const& e)
-            {
-                SERVICE_LOG(WARNING) << LOG_DESC("asyncBroadcastMessage send failed")
-                                     << LOG_KV("nodeid", printShortP2pID(nodeID))
-                                     << LOG_KV("what", boost::diagnostic_information(e));
-            }
+                }
+                catch (std::exception const& e)
+                {
+                    SERVICE_LOG(WARNING) << LOG_DESC("asyncBroadcastMessage send failed")
+                                         << LOG_KV("nodeid", printShortP2pID(_nodeID))
+                                         << LOG_KV("what", boost::diagnostic_information(e));
+                }
+            }(self, nodeID, message, options));
         }
     }
     catch (std::exception& e)
@@ -632,21 +636,21 @@ bcos::task::Task<void> Service::broadcastMessageToAll(
     // race on the shared header and no head-of-line blocking on a stalled peer's socket.
     for (auto const& nodeID : nodeIDs)
     {
-        try
-        {
-            task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID, P2PMessage::Ptr _message,
-                           ::ranges::any_view<bytesConstRef> _payloads,
-                           Options _options) mutable -> task::Task<void> {
+        task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID, P2PMessage::Ptr _message,
+                       ::ranges::any_view<bytesConstRef> _payloads,
+                       Options _options) mutable -> task::Task<void> {
+            try
+            {
                 co_await _self->sendMessageByNodeID(
                     _nodeID, *_message, std::move(_payloads), std::move(_options));
-            }(self, nodeID, message, payloads, options));
-        }
-        catch (std::exception const& e)
-        {
-            SERVICE_LOG(WARNING) << LOG_DESC("broadcastMessageToAll failed")
-                                 << LOG_KV("nodeid", printShortP2pID(nodeID))
-                                 << LOG_KV("what", boost::diagnostic_information(e));
-        }
+            }
+            catch (std::exception const& e)
+            {
+                SERVICE_LOG(WARNING) << LOG_DESC("broadcastMessageToAll failed")
+                                     << LOG_KV("nodeid", printShortP2pID(_nodeID))
+                                     << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }(self, nodeID, message, payloads, options));
     }
     co_return;
 }
@@ -673,21 +677,21 @@ bcos::task::Task<void> Service::broadcastMessageToNeighbors(
     // race on the shared header and no head-of-line blocking on a stalled peer's socket.
     for (auto const& nodeID : nodeIDs)
     {
-        try
-        {
-            task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID, P2PMessage::Ptr _message,
-                           ::ranges::any_view<bytesConstRef> _payloads,
-                           Options _options) mutable -> task::Task<void> {
+        task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID, P2PMessage::Ptr _message,
+                       ::ranges::any_view<bytesConstRef> _payloads,
+                       Options _options) mutable -> task::Task<void> {
+            try
+            {
                 co_await _self->sendMessageByNodeID(
                     _nodeID, *_message, std::move(_payloads), std::move(_options));
-            }(self, nodeID, message, payloads, options));
-        }
-        catch (std::exception const& e)
-        {
-            SERVICE_LOG(WARNING) << LOG_DESC("broadcastMessageToNeighbors failed")
-                                 << LOG_KV("nodeid", printShortP2pID(nodeID))
-                                 << LOG_KV("what", boost::diagnostic_information(e));
-        }
+            }
+            catch (std::exception const& e)
+            {
+                SERVICE_LOG(WARNING) << LOG_DESC("broadcastMessageToNeighbors failed")
+                                     << LOG_KV("nodeid", printShortP2pID(_nodeID))
+                                     << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }(self, nodeID, message, payloads, options));
     }
     co_return;
 }

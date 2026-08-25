@@ -179,16 +179,21 @@ public:
                     [state = std::move(state), buffer = std::move(buffer),
                         groupID = std::move(groupID),
                         respFunc = std::move(respFunc)](bcos::Error::Ptr _error) mutable {
-                        if (respFunc)
-                        {
-                            respFunc(std::move(_error));
-                        }
-                        // keep the payload buffer and groupID alive until after the resume: the
-                        // borrowed caller may still be reading them on this stack
-                        (void)buffer;
-                        (void)groupID;
+                        // The completion guard protects BOTH the resume and the respFunc: the
+                        // documented contract above says the borrowed TARS client may invoke this
+                        // callback twice (synchronous connection check + async completion) — only
+                        // the first completion may deliver the result, otherwise the caller is
+                        // called back twice.
                         if (!state->completed.exchange(true))
                         {
+                            if (respFunc)
+                            {
+                                respFunc(std::move(_error));
+                            }
+                            // keep the payload buffer and groupID alive until after the resume: the
+                            // borrowed caller may still be reading them on this stack
+                            (void)buffer;
+                            (void)groupID;
                             state->handle.resume();
                         }
                     });

@@ -106,6 +106,17 @@ static void send(Session& session, ::ranges::input_range auto payloads,
 {
     if (!session.active() || !session.m_socket->isConnected())
     {
+        // The zero-copy fast path's completion callback must still fire (once) so the suspended
+        // coroutine (fastSendMessageWithoutResponse) is resumed with an error instead of leaking
+        // the whole task::wait chain — which would pin the session/socket/service forever. Post to
+        // the io thread rather than call inline: await_suspend has not returned yet, and a
+        // synchronous resume would re-enter the awaiting coroutine from inside its own await_suspend.
+        if (callback)
+        {
+            session.m_server.get().asioInterface()->post([callback = std::move(callback)]() {
+                callback(boost::asio::error::not_connected);
+            });
+        }
         return;
     }
 
@@ -273,6 +284,31 @@ void Session::drop(DisconnectReason _reason)
     auto socket = m_socket;
 
     m_active = false;
+
+    // Fail any queued zero-copy sends: their completion callbacks resume suspended coroutine
+    // chains (fastSendMessageWithoutResponse). Without this, a session that disappears before the
+    // write completes would leak the whole task::wait chain — including the strong refs to the
+    // session/socket/service it captured (a broadcast fan-out multiplies this by the peer count).
+    // In-flight writes (m_writings) are covered by the asyncWrite completion handler, which
+    // already invokes their callbacks with the error when the socket close cancels the write.
+    // Also covers Session::write()'s early returns: they call drop(TCPError) right after the
+    // payload has been pushed into m_writeQueue.
+    Payload payload;
+    while (m_writeQueue.try_pop(payload))
+    {
+        if (payload.m_callback)
+        {
+            try
+            {
+                payload.m_callback(boost::asio::error::operation_aborted);
+            }
+            catch (std::exception const& e)
+            {
+                SESSION_LOG(WARNING) << LOG_DESC("write callback exception during drop")
+                                     << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }
+    }
 
     int errorCode = P2PExceptionType::Disconnect;
     std::string errorMsg = "Disconnect";

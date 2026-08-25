@@ -19,10 +19,14 @@
  * @date 2023-02-23
  */
 #include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include "bcos-gateway/libp2p/P2PSession.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
@@ -443,6 +447,18 @@ private:
     NodeIPEndpoint m_nodeIPEndpoint;
 };
 
+// Service::m_sessions is protected; expose insertion for the fan-out test below.
+class FanoutProbeService : public bcos::gateway::Service
+{
+public:
+    explicit FanoutProbeService(P2PInfo const& _info) : Service(_info) {}
+    void addSession(P2pID const& _nodeID, P2PSession::Ptr _session)
+    {
+        std::unique_lock lock(x_sessions);
+        m_sessions[_nodeID] = std::move(_session);
+    }
+};
+
 BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
 {
     // The COMPRESS ext flag is stamped only onto the encoded wire header inside fastSendMessage:
@@ -532,6 +548,169 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     BOOST_REQUIRE(received.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
     uint16_t frameExt = (static_cast<uint16_t>(received[12]) << 8) | static_cast<uint16_t>(received[13]);
     BOOST_CHECK(frameExt & bcos::protocol::MessageExtFieldFlag::COMPRESS);
+}
+
+BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
+{
+    // Round-4 review finding 2: the per-peer fan-out invariant — "each task's per-session
+    // src/dst/version stamping runs synchronously before its first suspension, so the tasks never
+    // race on the shared header" — is only documented in comments. This drives the real
+    // Service::broadcastMessageToNeighbors over two real loopback sockets whose sessions
+    // negotiated different protocol versions (V2 and V0) and asserts each peer receives a frame
+    // carrying its OWN negotiated version: the shared message is stamped per-peer before each
+    // header encode and the parallel fan-out tasks never cross-contaminate each other's wire
+    // header.
+    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeAsio = std::make_shared<FakeASIO>();
+
+    auto io = std::make_shared<ba::io_context>();
+    boost::asio::executor_work_guard<ba::io_context::executor_type> workGuard(io->get_executor());
+    std::thread ioThread([io] { io->run(); });
+
+    ba::ip::tcp::acceptor acceptorV2(*io, ba::ip::tcp::endpoint(ba::ip::tcp::v4(), 0));
+    ba::ip::tcp::acceptor acceptorV0(*io, ba::ip::tcp::endpoint(ba::ip::tcp::v4(), 0));
+    auto listenV2 = acceptorV2.local_endpoint();
+    auto listenV0 = acceptorV0.local_endpoint();
+
+    std::vector<uint8_t> receivedV2;
+    std::vector<uint8_t> receivedV0;
+    std::mutex recvMutex;
+    // Read exactly one wire frame: [length:4][payload...]. The length field counts the whole
+    // frame including itself, so after reading the 4 length bytes we read len-4 more.
+    auto readExactFrame = [](ba::ip::tcp::socket& _peer) -> std::vector<uint8_t> {
+        std::array<uint8_t, 4> lenBuf;
+        boost::system::error_code ec;
+        std::size_t n = boost::asio::read(_peer, ba::buffer(lenBuf), ec);
+        if (ec || n != lenBuf.size())
+        {
+            return {};
+        }
+        uint32_t len = (uint32_t(lenBuf[0]) << 24) | (uint32_t(lenBuf[1]) << 16) |
+                       (uint32_t(lenBuf[2]) << 8) | lenBuf[3];
+        if (len < lenBuf.size() || len > 4096)
+        {
+            return {};
+        }
+        std::vector<uint8_t> frame(len);
+        std::copy(lenBuf.begin(), lenBuf.end(), frame.begin());
+        n = boost::asio::read(_peer, ba::buffer(frame.data() + 4, len - 4), ec);
+        if (ec || n != len - 4)
+        {
+            return {};
+        }
+        return frame;
+    };
+    std::thread peerV2([&] {
+        ba::ip::tcp::socket peer(*io);
+        boost::system::error_code ec;
+        acceptorV2.accept(peer, ec);
+        if (ec)
+        {
+            return;
+        }
+        // Service is not run in this test, so P2PSession::start()'s initial heartbeat is skipped
+        // (heartBeat only sends when service->active()) — the broadcast frame is the first one.
+        auto frame = readExactFrame(peer);
+        std::lock_guard<std::mutex> lock(recvMutex);
+        receivedV2 = std::move(frame);
+    });
+    std::thread peerV0([&] {
+        ba::ip::tcp::socket peer(*io);
+        boost::system::error_code ec;
+        acceptorV0.accept(peer, ec);
+        if (ec)
+        {
+            return;
+        }
+        auto frame = readExactFrame(peer);
+        std::lock_guard<std::mutex> lock(recvMutex);
+        receivedV0 = std::move(frame);
+    });
+
+    ba::ip::tcp::socket clientV2(*io);
+    ba::ip::tcp::socket clientV0(*io);
+    {
+        boost::system::error_code connectError;
+        clientV2.connect(listenV2, connectError);
+        BOOST_REQUIRE(!connectError);
+        clientV0.connect(listenV0, connectError);
+        BOOST_REQUIRE(!connectError);
+    }
+
+    P2PInfo selfInfo;
+    selfInfo.rawP2pID = "selfRawP2pID";
+    selfInfo.p2pID = "selfP2pID";
+    auto service = std::make_shared<FanoutProbeService>(selfInfo);
+    service->setMessageFactory(fakeMessageFactory);
+    // P2PSession::start() -> heartBeat() arms a timer on service->host()->asioInterface().
+    service->setHost(std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory));
+
+    // The FakeHosts must outlive the sessions (Session holds a reference_wrapper<Host>).
+    std::vector<std::shared_ptr<FakeHost>> hosts;
+    std::vector<std::shared_ptr<Session>> sessions;
+    auto makePeerSession = [&](ba::ip::tcp::socket _client, P2pID _nodeID, uint32_t _version) {
+        auto host = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+        hosts.push_back(host);
+        auto session = std::make_shared<Session>(
+            std::make_shared<RealLoopbackSocket>(io, std::move(_client)), *host, 2, true);
+        session->setMessageFactory(fakeMessageFactory);
+        session->start();
+        sessions.push_back(session);
+
+        auto p2pSession = std::make_shared<P2PSession>();
+        p2pSession->setSession(session);
+        p2pSession->setService(service);
+        auto protocolInfo = std::make_shared<bcos::protocol::ProtocolInfo>(
+            bcos::protocol::ProtocolModuleID::GatewayService, 0, 2);
+        protocolInfo->setVersion(_version);
+        p2pSession->setProtocolInfo(protocolInfo);
+        P2PInfo peerInfo;
+        peerInfo.rawP2pID = _nodeID;
+        peerInfo.p2pID = _nodeID;
+        p2pSession->setP2PInfo(peerInfo);
+        // marks the session active (m_run) and sends an initial heartbeat (discarded by the peer)
+        p2pSession->start();
+        service->addSession(_nodeID, std::move(p2pSession));
+    };
+    makePeerSession(std::move(clientV2), "peerV2", 2);
+    makePeerSession(std::move(clientV0), "peerV0", 0);
+
+    // One shared message broadcast to both sessions: each per-peer fan-out task stamps the
+    // negotiated version synchronously before its own header encode. SyncNodeSeq (rather than
+    // PeerToPeerMessage) avoids the P2PMessageOptions path, which would require a non-empty
+    // srcNodeID — the version-stamping invariant under test does not involve options.
+    auto message = std::make_shared<P2PMessageV2>();
+    message->setPacketType(GatewayMessageType::SyncNodeSeq);
+    message->setSeq(0x1234);
+    bytes payload(32, 'a');
+    task::syncWait(service->broadcastMessageToNeighbors(
+        message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{}));
+
+    peerV2.join();
+    peerV0.join();
+
+    for (auto& session : sessions)
+    {
+        session->disconnect(DisconnectReason::DisconnectRequested);
+    }
+    workGuard.reset();
+    {
+        boost::system::error_code ec;
+        acceptorV2.close(ec);
+        acceptorV0.close(ec);
+    }
+    io->stop();
+    ioThread.join();
+
+    // Each frame must carry its OWN negotiated version: the version field is bytes [4..6) of the
+    // fixed base header [length:4][version:2][packetType:2][seq:4][ext:2].
+    BOOST_REQUIRE(receivedV2.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
+    BOOST_REQUIRE(receivedV0.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
+    uint16_t versionV2 = (static_cast<uint16_t>(receivedV2[4]) << 8) | receivedV2[5];
+    uint16_t versionV0 = (static_cast<uint16_t>(receivedV0[4]) << 8) | receivedV0[5];
+    BOOST_CHECK_EQUAL(versionV2, 2);
+    BOOST_CHECK_EQUAL(versionV0, 0);
 }
 
 BOOST_AUTO_TEST_CASE(SessionRecvBufferTest)

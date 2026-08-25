@@ -140,7 +140,7 @@ public:
     virtual void setSeq(uint32_t seq);
 
     uint16_t ext() const override;
-    void setExt(uint16_t _ext);
+    virtual void setExt(uint16_t _ext);
 
     const P2PMessageOptions& options() const;
     void setOptions(P2PMessageOptions _options);

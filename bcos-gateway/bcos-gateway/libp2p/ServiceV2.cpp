@@ -450,20 +450,21 @@ void ServiceV2::asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Optio
         // behind it.
         for (auto const& node : reachableNodes)
         {
-            try
-            {
-                task::wait([](std::shared_ptr<ServiceV2> _self, P2pID _node,
-                               std::shared_ptr<P2PMessage> _message,
-                               Options _options) mutable -> task::Task<void> {
+            task::wait([](std::shared_ptr<ServiceV2> _self, P2pID _node,
+                           std::shared_ptr<P2PMessage> _message,
+                           Options _options) mutable -> task::Task<void> {
+                try
+                {
                     co_await _self->sendMessageByNodeID(_node, *_message,
                         ::ranges::views::single(_message->payload()), _options);
-                }(selfV2, node, message, options));
-            }
-            catch (std::exception const& e)
-            {
-                SERVICE2_LOG(WARNING) << LOG_BADGE("asyncBroadcastMessage")
-                                      << LOG_KV("what", boost::diagnostic_information(e));
-            }
+                }
+                catch (std::exception const& e)
+                {
+                    SERVICE2_LOG(WARNING) << LOG_BADGE("asyncBroadcastMessage")
+                                          << LOG_KV("node", printShortP2pID(_node))
+                                          << LOG_KV("what", boost::diagnostic_information(e));
+                }
+            }(selfV2, node, message, options));
         }
     }
     catch (std::exception& e)
@@ -481,21 +482,21 @@ bcos::task::Task<void> ServiceV2::broadcastMessageToAll(
     // Fan out one independent coroutine per peer (see Service::broadcastMessageToAll).
     for (auto const& node : reachableNodes)
     {
-        try
-        {
-            task::wait([](std::shared_ptr<ServiceV2> _self, P2pID _node, P2PMessage::Ptr _message,
-                           ::ranges::any_view<bytesConstRef> _payloads,
-                           Options _options) mutable -> task::Task<void> {
+        task::wait([](std::shared_ptr<ServiceV2> _self, P2pID _node, P2PMessage::Ptr _message,
+                       ::ranges::any_view<bytesConstRef> _payloads,
+                       Options _options) mutable -> task::Task<void> {
+            try
+            {
                 co_await _self->sendMessageByNodeID(
                     _node, *_message, std::move(_payloads), std::move(_options));
-            }(selfV2, node, message, payloads, options));
-        }
-        catch (std::exception const& e)
-        {
-            SERVICE2_LOG(WARNING) << LOG_BADGE("broadcastMessageToAll")
-                                  << LOG_KV("node", printShortP2pID(node))
-                                  << LOG_KV("what", boost::diagnostic_information(e));
-        }
+            }
+            catch (std::exception const& e)
+            {
+                SERVICE2_LOG(WARNING) << LOG_BADGE("broadcastMessageToAll")
+                                      << LOG_KV("node", printShortP2pID(_node))
+                                      << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }(selfV2, node, message, payloads, options));
     }
     co_return;
 }
