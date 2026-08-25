@@ -81,7 +81,7 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
         // Fail closed: web3TypedTxKind() is a tars wire field (untrusted input). Folding an
         // unknown kind into legacy would bypass opValidate's type whitelist; op-geth's
         // UnmarshalBinary rejects with ErrTxTypeNotSupported.
-        throw bcos::evm::engine::OpConsensusError(
+        throw bcos::evm::OpConsensusError(
             "toEvmoneTransaction: unsupported web3TypedTxKind: " +
             std::to_string(tx.web3TypedTxKind()));
     }
@@ -161,7 +161,7 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
     {
         evmc_address addr{};
         if (entry.account.size() < sizeof(evmc_address))
-            throw bcos::evm::engine::OpConsensusError(
+            throw bcos::evm::OpConsensusError(
                 "toEvmoneTransaction: access-list account address too short");
         std::copy_n(entry.account.begin(), sizeof(evmc_address), addr.bytes);
         std::vector<evmc::bytes32> keys;
@@ -169,7 +169,7 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
         {
             evmc_bytes32 key{};
             if (sk.size() < sizeof(evmc_bytes32))
-                throw bcos::evm::engine::OpConsensusError(
+                throw bcos::evm::OpConsensusError(
                     "toEvmoneTransaction: access-list storage key too short");
             std::copy_n(sk.begin(), sizeof(evmc_bytes32), key.bytes);
             keys.push_back(key);
@@ -180,7 +180,7 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
     {
         evmc_bytes32 hash{};
         if (h.size() < sizeof(evmc_bytes32))
-            throw bcos::evm::engine::OpConsensusError(
+            throw bcos::evm::OpConsensusError(
                 "toEvmoneTransaction: blob versioned hash too short");
         std::copy_n(h.begin(), sizeof(evmc_bytes32), hash.bytes);
         evmTx.blob_hashes.push_back(hash);
@@ -222,7 +222,7 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
         // AuthorizationEntry: all fields are numeric (uint64_t, u256, Address, uint8_t)
         ea.chain_id = toIntxU256(bcos::u256(auth.chainId));
         if (auth.address.size() < sizeof(evmc_address))
-            throw bcos::evm::engine::OpConsensusError(
+            throw bcos::evm::OpConsensusError(
                 "toEvmoneTransaction: authorization entry address too short");
         std::copy_n(auth.address.begin(), sizeof(evmc_address), ea.addr.bytes);
         ea.nonce = auth.nonce;
@@ -543,7 +543,7 @@ public:
         void requireBlockContext() const
         {
             if (m_ctx == nullptr)
-                throw engine::OpConsensusError(
+                throw bcos::evm::OpConsensusError(
                     "OpstackExecutor: createExecuteContext called without a BlockContext (the "
                     "6-arg form is unsupported for OP execution)");
         }
@@ -565,7 +565,7 @@ public:
                 catch (const OpTxValidationFailed& e)
                 {
                     // Bad deposit envelope is a consensus reject, not an internal error.
-                    throw engine::OpConsensusError(
+                    throw bcos::evm::OpConsensusError(
                         std::string("OpScheduler: deposit envelope validation failed: ") +
                         e.what());
                 }
@@ -593,7 +593,7 @@ public:
                 // The offending tx's hash rides in the message (bcos::Error carries a string
                 // only across the delegate boundary): the engine's OP build loop parses it to
                 // evict the culprit from the pool instead of failing every subsequent build.
-                throw engine::OpConsensusError(
+                throw bcos::evm::OpConsensusError(
                     std::string("OpScheduler: normal tx validation failed: ") + e.what() +
                     " [tx=0x" + transaction.hash().hex() + "]");
             }
@@ -608,7 +608,7 @@ public:
             // to zeros (NullBlockHashes is the documented eth_call/standalone fallback) — fail
             // loud instead of executing a deterministic-but-wrong state transition.
             if (m_ctx->blockHashes == nullptr && !call)
-                throw engine::OpConsensusError(
+                throw bcos::evm::OpConsensusError(
                     "OpstackExecutor: block execution requires wired RecentBlockHashes");
             if (transaction.isDepositTx())
             {
@@ -708,7 +708,7 @@ public:
         protocol::BlockHeader const& /*blockHeader*/, protocol::Transaction const& /*transaction*/,
         int /*contextID*/, ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
     {
-        throw engine::OpConsensusError(
+        throw bcos::evm::OpConsensusError(
             "OpstackExecutor: executeTransaction 6-arg form is unsupported for OP execution "
             "(use createExecuteContext + prepare/execute/finish instead)");
     }
@@ -738,7 +738,7 @@ public:
             {
                 // Same error normalization as ExecuteContext::prepare: a malformed deposit
                 // envelope is a CONSENSUS rejection (INVALID), not an internal error.
-                throw engine::OpConsensusError(
+                throw bcos::evm::OpConsensusError(
                     std::string("OpScheduler: deposit envelope validation failed: ") + e.what());
             }
             try
@@ -768,7 +768,7 @@ public:
         }
         catch (const OpTxValidationFailed& e)
         {
-            throw engine::OpConsensusError(
+            throw bcos::evm::OpConsensusError(
                 std::string("OpScheduler: normal tx validation failed: ") + e.what());
         }
         evmone::state::StateDiff diff;
@@ -864,7 +864,7 @@ private:
         {
             throw;
         }
-        catch (const engine::OpConsensusError&)
+        catch (const bcos::evm::OpConsensusError&)
         {
             throw;
         }
@@ -882,11 +882,11 @@ private:
         }
         catch (const std::exception& e)
         {
-            throw engine::OpConsensusError("OpScheduler: " + what + " failed: " + e.what());
+            throw bcos::evm::OpConsensusError("OpScheduler: " + what + " failed: " + e.what());
         }
         catch (...)
         {
-            throw engine::OpConsensusError("OpScheduler: " + what + " failed: unknown exception");
+            throw bcos::evm::OpConsensusError("OpScheduler: " + what + " failed: unknown exception");
         }
     }
 
@@ -935,7 +935,7 @@ private:
             auto const envelopeChainId = transaction.web3ChainIdFromEnvelope();
             if (envelopeChainId.has_value() && *envelopeChainId != *chainId)
             {
-                throw engine::OpConsensusError(
+                throw bcos::evm::OpConsensusError(
                     "op block: tx envelope chain_id " + std::to_string(*envelopeChainId) +
                     " does not match node chainId " + std::to_string(*chainId));
             }
@@ -945,7 +945,7 @@ private:
             if (!envelopeChainId.has_value() &&
                 bcos::rlp::protocol::isTypedWeb3Envelope(transaction.extraTransactionBytes()))
             {
-                throw engine::OpConsensusError(
+                throw bcos::evm::OpConsensusError(
                     "op block: typed tx envelope is missing a parseable chainId");
             }
         }

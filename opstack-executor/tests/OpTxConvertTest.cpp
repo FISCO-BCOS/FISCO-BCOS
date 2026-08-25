@@ -17,7 +17,7 @@
 #include <optional>
 #include <string>
 
-using bcos::evm::engine::OpConsensusError;
+using bcos::evm::OpConsensusError;
 using bcos::executor_v1::eth::toEvmoneTransaction;
 
 namespace

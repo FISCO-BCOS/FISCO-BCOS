@@ -29,7 +29,7 @@
 #include <string>
 #include <vector>
 
-using bcos::evm::engine::OpConsensusError;
+using bcos::evm::OpConsensusError;
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
 namespace memory_storage = bcos::storage2::memory_storage;
