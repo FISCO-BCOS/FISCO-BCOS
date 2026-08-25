@@ -100,6 +100,62 @@ public:
     virtual task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) = 0;
 
+    /**
+     * @brief: (coroutine) send message to a single node, zero-copy. The payload is passed as views
+     *         that the caller must keep alive for the duration of the co_await. The coroutine
+     *         completes once the peer gateway acknowledges the message (or the retries are
+     *         exhausted / a terminal error occurred), at which point _errorRespFunc has already
+     *         been invoked (nullptr on success).
+     *
+     * Default implementation: joins the payload views into a buffer and bridges to the borrowed
+     * asyncSendMessageByNodeID. This is correct for the tars client and test fakes (which cross a
+     * process boundary or are synchronous anyway); the production Gateway overrides it with a
+     * zero-copy coroutine implementation.
+     *
+     * @param _groupID: groupID
+     * @param _moduleID: moduleID
+     * @param _srcNodeID: the sender nodeID
+     * @param _dstNodeID: the receiver nodeID
+     * @param _payloads: message content (views, kept alive by the caller)
+     * @param _errorRespFunc: error func
+     */
+    virtual task::Task<void> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
+        ::ranges::any_view<bytesConstRef> _payloads, ErrorRespFunc _errorRespFunc)
+    {
+        bcos::bytes buffer;
+        for (auto const& data : _payloads)
+        {
+            buffer.insert(buffer.end(), data.begin(), data.end());
+        }
+        struct SendAwaitable
+        {
+            GatewayInterface* m_self;
+            std::string m_groupID;
+            int m_moduleID;
+            bcos::crypto::NodeIDPtr m_srcNodeID;
+            bcos::crypto::NodeIDPtr m_dstNodeID;
+            bcos::bytes m_buffer;
+            ErrorRespFunc m_respFunc;
+
+            constexpr static bool await_ready() noexcept { return false; }
+            void await_suspend(std::coroutine_handle<> _handle)
+            {
+                m_self->asyncSendMessageByNodeID(m_groupID, m_moduleID, m_srcNodeID, m_dstNodeID,
+                    bcos::ref(m_buffer),
+                    [_handle, respFunc = std::move(m_respFunc)](bcos::Error::Ptr _error) mutable {
+                        respFunc(std::move(_error));
+                        _handle.resume();
+                    });
+            }
+            void await_resume() {}
+        };
+        SendAwaitable awaitable{this, std::string(_groupID), _moduleID, std::move(_srcNodeID),
+            std::move(_dstNodeID), std::move(buffer), std::move(_errorRespFunc)};
+        co_await awaitable;
+        co_return;
+    }
+
     /// multi-group related interfaces
 
     /**

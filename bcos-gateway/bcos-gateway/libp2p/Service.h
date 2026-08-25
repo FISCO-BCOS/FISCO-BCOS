@@ -60,6 +60,13 @@ public:
 
     void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
 
+    /**
+     * @brief: (coroutine) broadcast a message to all connected sessions. The message and the
+     *         payload views must be kept alive by the caller for the duration of the co_await.
+     */
+    virtual task::Task<void> broadcastMessageToAll(P2PMessage& message,
+        ::ranges::any_view<bytesConstRef> payloads, Options options = Options());
+
     virtual std::map<NodeIPEndpoint, P2pID> staticNodes();
     virtual void setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes);
 

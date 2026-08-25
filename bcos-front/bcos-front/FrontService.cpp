@@ -520,11 +520,86 @@ void FrontService::asyncSendMessageByNodeIDByOwnedPayload(
 {
     // FIB-185: enqueue the point-to-point send onto the serial queue and return immediately, so the
     // caller (PBFT under m_mutex, via sendViewChange / sendRecoverResponse) never runs the
-    // gateway-session-lock-acquiring send on its own thread. The owned payload is captured to keep
-    // it alive for the (synchronous) wire-frame encode inside asyncSendMessageByNodeID.
+    // gateway-session-lock-acquiring send on its own thread. The owned payload is captured by the
+    // launched coroutine -> the message body is sent as a view (zero-copy).
     enqueueSend([this, moduleID, nodeID = std::move(nodeID), payload = std::move(payload)]() {
-        asyncSendMessageByNodeID(moduleID, nodeID, bcos::ref(*payload), 0, nullptr);
+        auto self = shared_from_this();
+        task::wait(
+            [](FrontService::Ptr _self, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+                bytesPointer _payload) -> task::Task<void> {
+                co_await _self->sendMessageByNodeID(_moduleID, _nodeID,
+                    ::ranges::views::single(bcos::ref(*_payload)), 0, nullptr);
+            }(self, moduleID, nodeID, payload));
     });
+}
+
+bcos::task::Task<void> FrontService::sendMessageByNodeID(int _moduleID,
+    bcos::crypto::NodeIDPtr _nodeID, ::ranges::any_view<bytesConstRef> _payloads,
+    uint32_t _timeout, CallbackFunc _callback)
+{
+    // keep the service alive for the whole (possibly deferred) send
+    auto self = shared_from_this();
+
+    static thread_local auto uuid_gen =
+        boost::uuids::basic_random_generator<std::random_device>();
+    std::string uuid = boost::uuids::to_string(uuid_gen());
+    if (_callback)
+    {
+        auto callback = std::make_shared<Callback>();
+        callback->callbackFunc = _callback;
+
+        if (_timeout > 0)
+        {
+            // create new timer to handle timeout
+            auto timeoutHandler = std::make_shared<boost::asio::steady_timer>(
+                *m_ioService, std::chrono::milliseconds(_timeout));
+
+            callback->timeoutHandler = timeoutHandler;
+            auto frontServiceWeakPtr = std::weak_ptr<FrontService>(shared_from_this());
+            // callback->startTime = utcSteadyTime();
+            timeoutHandler->async_wait([frontServiceWeakPtr, _nodeID, uuid](
+                                           const boost::system::error_code& e) {
+                auto frontService = frontServiceWeakPtr.lock();
+                if (frontService)
+                {
+                    frontService->onMessageTimeout(e, _nodeID, uuid);
+                }
+            });
+        }
+
+        addCallback(uuid, callback);
+
+        FRONT_LOG(DEBUG) << LOG_DESC("sendMessageByNodeID") << LOG_KV("groupID", m_groupID)
+                         << LOG_KV("moduleID", _moduleID) << LOG_KV("uuid", uuid)
+                         << LOG_KV("nodeID", _nodeID->hex());
+    }
+
+    // zero-copy: only the FrontMessage header (moduleID + uuid + ext) is encoded into this frame;
+    // the payload rides as views that the caller keeps alive for the duration of the co_await.
+    FrontMessage message;
+    message.setModuleID(_moduleID);
+    message.setUuid(bytesConstRef(reinterpret_cast<const bcos::byte*>(uuid.data()), uuid.size()));
+    bytes header;
+    message.encodeHeader(header);
+
+    auto nodeID = _nodeID;  // keep a copy for the error callback below
+    co_await m_gatewayInterface->sendMessageByNodeID(m_groupID, _moduleID, m_nodeID,
+        std::move(_nodeID),
+        ::ranges::views::concat(
+            ::ranges::views::single(bcos::ref(std::as_const(header))), std::move(_payloads)),
+        [selfWeak = std::weak_ptr<FrontService>(self), _moduleID, nodeID,
+            uuid](Error::Ptr _error) {
+            auto front = selfWeak.lock();
+            if (!front)
+            {
+                return;
+            }
+            if (_error && (_error->errorCode() != CommonError::SUCCESS))
+            {
+                front->handleCallback(_error, bytesConstRef(), uuid, _moduleID, nodeID);
+            }
+        });
+    co_return;
 }
 
 void FrontService::enqueueSend(std::function<void()> _sendTask)

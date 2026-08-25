@@ -93,6 +93,16 @@ public:
     task::Task<void> broadcastMessage(
         uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override;
 
+    /**
+     * @brief: (coroutine, zero-copy) send message to one node. The payload rides as views that the
+     *         caller keeps alive for the duration of the co_await; the module-level response is
+     *         delivered to _callbackFunc via the receive path (uuid-matched), and an error is also
+     *         delivered through _callbackFunc if the gateway-level send fails.
+     */
+    task::Task<void> sendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+        ::ranges::any_view<bytesConstRef> _payloads, uint32_t _timeout,
+        CallbackFunc _callbackFunc) override;
+
     // FIB-185: dispatch the gateway broadcast onto a serial send queue (off the caller thread) so a
     // caller holding a lock (PBFT under m_mutex) is not coupled to gateway session-lock contention.
     // The owned payload is captured by the queued task -> the message body is never copied.

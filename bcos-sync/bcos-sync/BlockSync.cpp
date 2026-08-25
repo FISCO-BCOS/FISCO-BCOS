@@ -669,8 +669,9 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to, int32_t blockD
                     blockRequest->setBlockInterval(interval);
                 }
                 auto encodedData = blockRequest->encode();
-                m_config->frontService()->asyncSendMessageByNodeID(
-                    ModuleID::BlockSync, _p->nodeId(), ref(*encodedData), 0, nullptr);
+                // owned payload -> zero-copy through the front/gateway coroutine fast path
+                m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+                    ModuleID::BlockSync, _p->nodeId(), std::move(encodedData));
 
                 m_maxRequestNumber = std::max(m_maxRequestNumber.load(), to);
 
@@ -882,8 +883,8 @@ void BlockSync::fetchAndSendBlock(
                 _block->encode(blockData);
                 blocksReq->appendBlockData(std::move(blockData));
                 blocksReq->setNumber(_number);
-                config->frontService()->asyncSendMessageByNodeID(
-                    ModuleID::BlockSync, _peer, ref(*(blocksReq->encode())), 0, nullptr);
+                config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+                    ModuleID::BlockSync, _peer, blocksReq->encode());
                 BLKSYNC_LOG(DEBUG)
                     << BLOCK_NUMBER(_number) << LOG_DESC("fetchAndSendBlock: response block")
                     << LOG_KV("toPeer", _peer->shortHex())
@@ -960,12 +961,16 @@ void BlockSync::sendSyncStatusByTree()
     // Note: connectedNodeSet() cannot be used directly here, because connectedNodeSet()
     // contains light nodes, but the nodes in groupNodeList() are not necessarily connected to this
     // node, so take the intersection of the two.
+    auto front = m_config->frontService();
     auto const& groupNodeList =
         m_syncTreeTopology->selectNodesForBlockSync(m_config->connectedGroupNodeList());
     for (auto const& nodeID : *groupNodeList)
     {
-        m_config->frontService()->asyncSendMessageByNodeID(
-            ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
+        // per-node coroutine keeps the shared encodedData alive and sends it as a view (zero-copy)
+        task::wait([front, nodeID, encodedData]() mutable -> task::Task<void> {
+            co_await front->sendMessageByNodeID(ModuleID::BlockSync, nodeID,
+                ::ranges::views::single(ref(*encodedData)), 0, nullptr);
+        }());
     }
 }
 
@@ -995,11 +1000,15 @@ void BlockSync::broadcastSyncStatus()
     }
     else
     {
+        auto front = m_config->frontService();
         auto const& groupNodeList = m_config->groupNodeList();
         for (auto const& nodeID : groupNodeList)
         {
-            m_config->frontService()->asyncSendMessageByNodeID(
-                ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
+            // per-node coroutine keeps the shared encodedData alive and sends it as a view
+            task::wait([front, nodeID, encodedData]() mutable -> task::Task<void> {
+                co_await front->sendMessageByNodeID(ModuleID::BlockSync, nodeID,
+                    ::ranges::views::single(ref(*encodedData)), 0, nullptr);
+            }());
         }
     }
 }

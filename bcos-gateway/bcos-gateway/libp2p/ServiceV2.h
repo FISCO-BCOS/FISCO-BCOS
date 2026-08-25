@@ -52,6 +52,10 @@ public:
     void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
     bool isReachable(P2pID const& _nodeID) const override;
 
+    // (coroutine) broadcast to all reachable nodes through the router table
+    task::Task<void> broadcastMessageToAll(P2PMessage& message,
+        ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
+
     // handlers called when the node is unreachable
     void registerUnreachableHandler(std::function<void(std::string)> _handler) override;
 

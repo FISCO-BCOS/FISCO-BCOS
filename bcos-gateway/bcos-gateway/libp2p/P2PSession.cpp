@@ -7,8 +7,10 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/Common.h"
+#include <bcos-task/Wait.h>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -117,16 +119,20 @@ void P2PSession::heartBeat()
     {
         if (m_session && m_session->active())
         {
-            auto message =
-                std::dynamic_pointer_cast<P2PMessage>(service->messageFactory()->buildMessage());
-            message->setPacketType(GatewayMessageType::Heartbeat);
             if (c_fileLogLevel <= TRACE) [[unlikely]]
             {
                 P2PSESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
                                       << LOG_KV("p2pid", printShortP2pID(m_p2pInfo->p2pID))
                                       << LOG_KV("endpoint", m_session->nodeIPEndpoint());
             }
-            asyncSendP2PMessage(message, Options());
+            // value message in frame, sent through the fast path (zero-copy)
+            auto self = shared_from_this();
+            task::wait([self]() -> task::Task<void> {
+                P2PMessageV2 message;
+                message.setPacketType(GatewayMessageType::Heartbeat);
+                ::ranges::any_view<bytesConstRef> emptyPayloads;
+                co_await self->fastSendP2PMessage(message, std::move(emptyPayloads), Options{});
+            }());
         }
 
         auto self = std::weak_ptr<P2PSession>(shared_from_this());
@@ -165,7 +171,28 @@ void P2PSession::asyncSendP2PMessage(
     // reset message using original long nodeID or short nodeID according to the protocol version
     // Note: m_protocolInfo be setted when create P2PSession
     service->resetP2pID(*message, (ProtocolVersion)m_protocolInfo->version());
-    m_session->asyncSendMessage(message, options, callback);
+    // route through the coroutine fast path: the message (shared_ptr) is captured in the frame and
+    // its payload is sent as a view (zero-copy); response/error is delivered to callback
+    auto self = shared_from_this();
+    task::wait([self, message, options, callback]() mutable -> task::Task<void> {
+        Options sendOptions{options.timeout, callback ? true : false};
+        try
+        {
+            auto resp = co_await self->fastSendP2PMessage(
+                *message, ::ranges::views::single(message->payload()), sendOptions);
+            if (callback)
+            {
+                callback(NetworkException(), resp);
+            }
+        }
+        catch (NetworkException const& e)
+        {
+            if (callback)
+            {
+                callback(e, nullptr);
+            }
+        }
+    }());
 }
 
 bcos::task::Task<Message::Ptr> P2PSession::fastSendP2PMessage(

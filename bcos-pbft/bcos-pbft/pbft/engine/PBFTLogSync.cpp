@@ -20,6 +20,7 @@
  */
 #include "PBFTLogSync.h"
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-task/Wait.h>
 #include <utility>
 
 using namespace bcos;
@@ -95,9 +96,15 @@ void PBFTLogSync::requestPBFTData(
             // encode
             auto encodedData =
                 config->codec()->encode(_pbftRequest, config->pbftMsgDefaultVersion());
-            // send the request
-            config->frontService()->asyncSendMessageByNodeID(ModuleID::PBFT, _from,
-                ref(*encodedData), config->networkTimeoutInterval(), _callback);
+            // owned payload + coroutine fast path -> zero-copy; the module-level response is
+            // delivered to _callback through the front receive path (uuid-matched)
+            auto front = config->frontService();
+            auto networkTimeout = config->networkTimeoutInterval();
+            task::wait([front, _from, encodedData = std::move(encodedData), networkTimeout,
+                           _callback]() mutable -> task::Task<void> {
+                co_await front->sendMessageByNodeID(ModuleID::PBFT, _from,
+                    ::ranges::views::single(ref(*encodedData)), networkTimeout, _callback);
+            }());
             PBFT_LOG(INFO) << LOG_DESC("request the missed precommit proposal")
                            << LOG_KV("peer", _from->shortHex())
                            << LOG_KV("index", _pbftRequest->index())

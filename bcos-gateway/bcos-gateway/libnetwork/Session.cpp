@@ -92,17 +92,6 @@ bool Session::active(Host& server) const
     return m_active && server.haveNetwork() && m_socket && m_socket->isConnected();
 }
 
-static void send(Session& session, EncodedMessage encodedMsg)
-{
-    if (!session.active() || !session.m_socket->isConnected())
-    {
-        return;
-    }
-
-    session.m_writeQueue.push({.m_data = std::move(encodedMsg), .m_callback = {}});
-    session.write();
-}
-
 static void send(Session& session, ::ranges::input_range auto payloads,
     std::function<void(boost::system::error_code)> callback)
 {
@@ -111,8 +100,8 @@ static void send(Session& session, ::ranges::input_range auto payloads,
         return;
     }
 
-    Payload payload{.m_data{Payload::MessageList{}}, .m_callback = std::move(callback)};
-    auto& vec = std::get<1>(payload.m_data);
+    Payload payload{.m_data = Payload::MessageList{}, .m_callback = std::move(callback)};
+    auto& vec = payload.m_data;
     if constexpr (::ranges::sized_range<decltype(payloads)>)
     {
         vec.reserve(::ranges::size(payloads));
@@ -124,104 +113,6 @@ static void send(Session& session, ::ranges::input_range auto payloads,
 
     session.m_writeQueue.push(std::move(payload));
     session.write();
-}
-
-void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCallbackFunc callback)
-{
-    if (!active(m_server))
-    {
-        SESSION_LOG(WARNING) << "Session inactive";
-        if (callback)
-        {
-            m_server.get().asioInterface()->dispatch([callback = std::move(callback)] {
-                callback(NetworkException(-1, "Session inactive"), Message::Ptr());
-            });
-        }
-        return;
-    }
-
-    // Notice: check message size overflow, if msg->length() > allowMaxMsgSize()
-    if (message->length() > allowMaxMsgSize())
-    {
-        SESSION_LOG(WARNING) << LOG_BADGE("asyncSendMessage") << LOG_DESC("msg size overflow")
-                             << LOG_KV("msgSize", message->length())
-                             << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
-        if (callback)
-        {
-            m_server.get().asioInterface()->dispatch([callback = std::move(callback)] {
-                callback(NetworkException(-1, "Msg size overflow"), Message::Ptr());
-            });
-        }
-        return;
-    }
-
-    auto session = shared_from_this();
-
-    if (auto result =
-            (m_beforeMessageHandler ? m_beforeMessageHandler(*session, *message) : std::nullopt))
-    {
-        if (callback && result.has_value())
-        {
-            const auto& error = result.value();
-            auto errorCode = error.errorCode();
-            auto errorMessage = error.errorMessage();
-            m_server.get().asioInterface()->dispatch([callback = std::move(callback), errorCode,
-                                                         errorMessage = std::move(errorMessage)] {
-                callback(NetworkException((int64_t)errorCode, errorMessage), Message::Ptr());
-            });
-        }
-        return;
-    }
-
-    if (callback)
-    {
-        auto handler = std::make_shared<ResponseCallback>();
-        handler->callback = callback;
-        if (options.timeout > 0)
-        {
-            handler->timeoutHandler.emplace(
-                m_server.get().asioInterface()->newTimer(options.timeout));
-            auto seq = message->seq();
-            handler->timeoutHandler->async_wait(
-                [sessionWeak = std::weak_ptr<Session>(shared_from_this()), seq](
-                    const boost::system::error_code& _error) {
-                    try
-                    {
-                        auto session = sessionWeak.lock();
-                        if (!session)
-                        {
-                            return;
-                        }
-                        session->onTimeout(_error, seq);
-                    }
-                    catch (std::exception const& e)
-                    {
-                        SESSION_LOG(WARNING) << LOG_DESC("async_wait exception")
-                                             << LOG_KV("message", boost::diagnostic_information(e));
-                    }
-                });
-            handler->startTime = utcSteadyTime();
-        }
-
-        m_sessionCallbackManager->addCallback(message->seq(), handler);
-    }
-
-    EncodedMessage encodedMessage;
-    encodedMessage.compress = m_enableCompress;
-    message->encode(encodedMessage);
-
-    if (c_fileLogLevel <= LogLevel::TRACE)
-    {
-        SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
-                           << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message->seq())
-                           << LOG_KV("packetType", message->packetType())
-                           << LOG_KV("ext", message->ext())
-                           << LOG_KV("src", printShortP2pID(message->srcP2PNodeID()))
-                           << LOG_KV("dst", printShortP2pID(message->dstP2PNodeID()))
-                           << LOG_KV("this", this);
-    }
-
-    send(*this, encodedMessage);
 }
 
 std::size_t Session::writeQueueSize()
@@ -866,13 +757,13 @@ void Session::checkNetworkStatus()
 
 template <typename View>
 task::Task<Message::Ptr> fastSendMessageWithResponse(
-    Session& session, const Message& message, View& view, Options& options)
+    Session& session, Message& message, View& view, Options& options)
 {
     struct Awaitable
     {
         std::reference_wrapper<Options> m_options;
         std::reference_wrapper<Host> m_host;
-        std::reference_wrapper<const Message> m_message;
+        std::reference_wrapper<Message> m_message;
         std::weak_ptr<Session> m_self;
         std::reference_wrapper<SessionCallbackManagerInterface> m_sessionCallbackManager;
         std::reference_wrapper<View> m_view;
@@ -973,12 +864,23 @@ task::Task<void> fastSendMessageWithoutResponse(Session& session, View view)
 }
 
 bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
-    const Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+    Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     if (!active())
     {
         SESSION_LOG(WARNING) << "Session inactive";
         co_return {};
+    }
+
+    // The fast path must honour the same pre-send (outgoing rate-limit) check that the callback
+    // path (asyncSendMessage) enforces; otherwise routing sends through fastSendMessage would
+    // silently bypass outgoing bandwidth/QPS limiting. A rejection surfaces as a thrown
+    // NetworkException (e.g. OutBWOverflow / InQPSOverflow) so coroutine retry loops can stop.
+    if (auto result =
+            (m_beforeMessageHandler ? m_beforeMessageHandler(*this, message) : std::nullopt))
+    {
+        const auto& error = result.value();
+        BOOST_THROW_EXCEPTION(NetworkException((int64_t)error.errorCode(), error.errorMessage()));
     }
 
     bytes headerBuffer;
@@ -1014,16 +916,8 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
 
 size_t bcos::gateway::Payload::size() const
 {
-    return std::visit(
-        bcos::overloaded(
-            [](const EncodedMessage& encodedMessage) -> size_t {
-                return encodedMessage.header.size() + encodedMessage.payload.size();
-            },
-            [](const boost::container::small_vector<bytesConstRef, 3>& refs) {
-                return ::ranges::accumulate(refs, size_t(0),
-                    [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
-            }),
-        m_data);
+    return ::ranges::accumulate(m_data, size_t(0),
+        [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
 }
 std::size_t bcos::gateway::SessionRecvBuffer::readPos() const
 {

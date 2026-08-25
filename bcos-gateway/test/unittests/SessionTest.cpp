@@ -23,11 +23,13 @@
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <queue>
+#include <range/v3/view/single.hpp>
 
 using namespace bcos;
 using namespace gateway;
@@ -361,6 +363,38 @@ BOOST_AUTO_TEST_CASE(doReadTest)
         session->setSocket(nullptr);
     }
 
+    fakeSocket->close();
+}
+
+BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
+{
+    // The fast path must honour the same pre-send (outgoing rate-limit) check the removed callback
+    // path (asyncSendMessage) enforced: a beforeMessageHandler rejection surfaces as a thrown
+    // NetworkException (e.g. OutBWOverflow) so coroutine retry loops can stop.
+    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeSocket = std::make_shared<FakeSocket>();
+    auto fakeAsio = std::make_shared<FakeASIO>();
+    {
+        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        session->setMessageFactory(fakeHost->messageFactory());
+        session->setBeforeMessageHandler([](SessionFace&, Message&) -> std::optional<bcos::Error> {
+            return bcos::Error::buildError(
+                "", P2PExceptionType::OutBWOverflow, "outgoing bandwidth overflow");
+        });
+        session->start();
+
+        P2PMessage message;
+        message.setSeq(1);
+        bytes payload{1, 2, 3, 4};
+        BOOST_CHECK_THROW(
+            task::syncWait(session->fastSendMessage(
+                message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{})),
+            NetworkException);
+
+        session->setSocket(nullptr);
+    }
     fakeSocket->close();
 }
 

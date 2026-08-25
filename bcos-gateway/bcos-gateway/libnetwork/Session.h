@@ -74,24 +74,16 @@ private:
 struct Payload
 {
     using MessageList = boost::container::small_vector<bytesConstRef, 3>;
-    std::variant<EncodedMessage, MessageList> m_data;
+    MessageList m_data;
     std::function<void(boost::system::error_code)> m_callback;
 
     size_t size() const;
     void toConstBuffer(std::output_iterator<boost::asio::const_buffer> auto output) const
     {
-        std::visit(bcos::overloaded(
-                       [&](const EncodedMessage& encodedMessage) {
-                           *output = {encodedMessage.header.data(), encodedMessage.header.size()};
-                           *output = {encodedMessage.payload.data(), encodedMessage.payload.size()};
-                       },
-                       [&](const MessageList& refs) {
-                           for (const auto& ref : refs)
-                           {
-                               *output = {ref.data(), ref.size()};
-                           }
-                       }),
-            m_data);
+        for (const auto& ref : m_data)
+        {
+            *output = {ref.data(), ref.size()};
+        }
     }
 };
 
@@ -122,10 +114,7 @@ public:
     void start() override;
     void disconnect(DisconnectReason _reason) override;
 
-    void asyncSendMessage(Message::Ptr message, Options options,
-        SessionCallbackFunc callback = SessionCallbackFunc()) override;
-
-    task::Task<Message::Ptr> fastSendMessage(const Message& message,
+    task::Task<Message::Ptr> fastSendMessage(Message& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options) override;
 
     NodeIPEndpoint nodeIPEndpoint() const override;

@@ -257,6 +257,35 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendBroadcastMessage)
     f.get();
 }
 
+BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine)
+{
+    // Zero-copy coroutine point-to-point: the front encodes only the FrontMessage header into its
+    // frame and passes the payload as a view; the (fake) gateway receives the joined wire bytes and
+    // delivers them back through the receive loop to the module dispatcher.
+    auto frontService = buildFrontService();
+    auto dstNodeID = createKey(g_dstNodeID_0);
+    std::string data(1000, 'y');
+
+    std::promise<bool> p;
+    auto f = p.get_future();
+    auto moduleCallback = [&p, dstNodeID, data](bcos::crypto::NodeIDPtr _nodeID,
+                              const std::string& _id, bytesConstRef _data) {
+        BOOST_CHECK(!_id.empty());
+        BOOST_CHECK_EQUAL(dstNodeID->hex(), _nodeID->hex());
+        BOOST_CHECK_EQUAL(std::string(_data.begin(), _data.end()), data);
+        p.set_value(true);
+    };
+
+    int moduleID = 222;
+    frontService->registerModuleMessageDispatcher(moduleID, moduleCallback);
+
+    task::syncWait(frontService->sendMessageByNodeID(moduleID, dstNodeID,
+        ::ranges::views::single(bytesConstRef(
+            reinterpret_cast<const bcos::byte*>(data.data()), data.size())),
+        0, CallbackFunc()));
+    f.get();
+}
+
 BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeIDs)
 {
     auto frontService = buildFrontService();

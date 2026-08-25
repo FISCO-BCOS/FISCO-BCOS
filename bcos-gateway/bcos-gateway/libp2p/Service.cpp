@@ -11,9 +11,11 @@
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"  // for SessionCallbackFunc...
 #include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/P2PSession.h"  // for P2PSession
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
+#include <bcos-task/Wait.h>
 #include <boost/random.hpp>
 #include <boost/throw_exception.hpp>
 #include <range/v3/view/map.hpp>
@@ -333,40 +335,65 @@ void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr 
     auto protocolVersion = _p2pSession->protocolInfo()->version();
     // Note: p2pMessage version is binded to the protocol version
     _msg->setVersion(protocolVersion);
-    if (!_callback)
-    {
-        _p2pSession->asyncSendP2PMessage(_msg, _options, nullptr);
-        return;
-    }
-    auto weakSession = std::weak_ptr<P2PSession>(_p2pSession);
-    _p2pSession->asyncSendP2PMessage(
-        _msg, _options, [weakSession, _callback](NetworkException e, Message::Ptr message) {
-            auto session = weakSession.lock();
-            if (!session)
-            {
-                return;
-            }
-            P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+    auto self = shared_from_this();
+    // route through the coroutine fast path: the message (shared_ptr) is captured in the frame and
+    // its payload is sent as a view (zero-copy); the response (if requested) resumes the coroutine
+    // and is delivered to _callback.
+    task::wait([self, _p2pSession, _msg, _options, _callback]() mutable -> task::Task<void> {
+        Options sendOptions{_options.timeout, _callback ? true : false};
+        try
+        {
+            auto resp = co_await _p2pSession->fastSendP2PMessage(
+                *_msg, ::ranges::views::single(_msg->payload()), sendOptions);
             if (_callback)
             {
-                _callback(e, session, p2pMessage);
+                P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(resp);
+                _callback(NetworkException(), _p2pSession, p2pMessage);
             }
-        });
+        }
+        catch (NetworkException const& e)
+        {
+            if (_callback)
+            {
+                _callback(e, _p2pSession, nullptr);
+            }
+        }
+        catch (std::exception const& e)
+        {
+            SERVICE_LOG(WARNING) << LOG_DESC("sendMessageToSession exception")
+                                 << LOG_KV("what", boost::diagnostic_information(e));
+            if (_callback)
+            {
+                _callback(
+                    NetworkException(-1, boost::diagnostic_information(e)), _p2pSession, nullptr);
+            }
+        }
+    }());
 }
 
 void Service::sendRespMessageBySession(
     bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession)
 {
-    auto respMessage = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
-
-    respMessage->setSeq(_p2pMessage->seq());
-    respMessage->setRespPacket();
-    respMessage->setPayload({_payload.begin(), _payload.end()});
-
-    sendMessageToSession(_p2pSession, respMessage);
-    SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _p2pMessage->seq())
-                       << LOG_KV("p2pid", _p2pSession->printP2pID())
-                       << LOG_KV("payload size", _payload.size());
+    auto self = shared_from_this();
+    auto seq = _p2pMessage->seq();
+    auto p2pid = _p2pSession->p2pID();
+    // value message in frame; the (borrowed) response payload is copied into the frame because the
+    // receive callback that passed it does not outlive the deferred send.
+    task::wait([self, _p2pSession, _payload = bcos::bytes(_payload.begin(), _payload.end()), seq,
+                   p2pid]() -> task::Task<void> {
+        P2PMessageV2 respMessage;
+        respMessage.setSeq(seq);
+        respMessage.setRespPacket();
+        respMessage.setPayload(std::move(_payload));
+        co_await _p2pSession->fastSendP2PMessage(
+            respMessage, ::ranges::views::single(respMessage.payload()), Options{});
+        if (c_fileLogLevel <= TRACE) [[unlikely]]
+        {
+            SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", seq)
+                               << LOG_KV("p2pid", printShortP2pID(p2pid))
+                               << LOG_KV("payload size", respMessage.payload().size());
+        }
+    }());
 }
 
 std::optional<bcos::Error> Service::onBeforeMessage(SessionFace& _session, Message& _message)
@@ -534,12 +561,12 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
     try
     {
         // FIB-186 (vector D): snapshot the session keys under x_sessions and release it BEFORE the
-        // per-session asyncSendMessageByNodeID(), which re-acquires x_sessions(shared) via
-        // getP2PSessionByNodeId. Holding x_sessions across that re-acquisition is a recursive
-        // shared lock: once an onConnect thread is waiting for x_sessions(W), libc++
-        // writer-priority blocks the second lock_shared(), so this thread can neither finish nor
-        // release its first shared lock and every session operation (including all PBFT delivery)
-        // stalls -> consensus halts under connection churn.
+        // per-session send, which re-acquires x_sessions(shared) via sendMessageByNodeID. Holding
+        // x_sessions across that re-acquisition is a recursive shared lock: once an onConnect
+        // thread is waiting for x_sessions(W), libc++ writer-priority blocks the second
+        // lock_shared(), so this thread can neither finish nor release its first shared lock and
+        // every session operation (including all PBFT delivery) stalls -> consensus halts under
+        // connection churn.
         std::vector<P2pID> nodeIDs;
         {
             std::shared_lock lock(x_sessions);
@@ -549,16 +576,58 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
                 nodeIDs.push_back(session.first);
             }
         }
-        for (auto const& nodeID : nodeIDs)
-        {
-            asyncSendMessageByNodeID(nodeID, message, {}, options);
-        }
+        auto self = shared_from_this();
+        task::wait([self, nodeIDs = std::move(nodeIDs), message = std::move(message),
+                       options]() mutable -> task::Task<void> {
+            for (auto const& nodeID : nodeIDs)
+            {
+                try
+                {
+                    co_await self->sendMessageByNodeID(
+                        nodeID, *message, ::ranges::views::single(message->payload()), options);
+                }
+                catch (std::exception const& e)
+                {
+                    SERVICE_LOG(WARNING) << LOG_DESC("asyncBroadcastMessage send failed")
+                                         << LOG_KV("nodeid", printShortP2pID(nodeID))
+                                         << LOG_KV("what", boost::diagnostic_information(e));
+                }
+            }
+        }());
     }
     catch (std::exception& e)
     {
         SERVICE_LOG(WARNING) << LOG_DESC("asyncBroadcastMessage")
                              << LOG_KV("what", boost::diagnostic_information(e));
     }
+}
+
+bcos::task::Task<void> Service::broadcastMessageToAll(
+    P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+{
+    std::vector<P2pID> nodeIDs;
+    {
+        std::shared_lock lock(x_sessions);
+        nodeIDs.reserve(m_sessions.size());
+        for (auto const& session : m_sessions)
+        {
+            nodeIDs.push_back(session.first);
+        }
+    }
+    for (auto const& nodeID : nodeIDs)
+    {
+        try
+        {
+            co_await sendMessageByNodeID(nodeID, message, payloads, options);
+        }
+        catch (std::exception const& e)
+        {
+            SERVICE_LOG(WARNING) << LOG_DESC("broadcastMessageToAll failed")
+                                 << LOG_KV("nodeid", printShortP2pID(nodeID))
+                                 << LOG_KV("what", boost::diagnostic_information(e));
+        }
+    }
+    co_return;
 }
 
 P2PInfos Service::sessionInfos()
@@ -598,45 +667,51 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
         }
         return;
     }
-    auto p2pMessage = newP2PMessage(_type, _payload);
-
-    if (!_callback)
-    {
-        asyncSendMessageByNodeID(_dstNodeID, p2pMessage, nullptr);
-        return;
-    }
-
-    asyncSendMessageByNodeID(
-        _dstNodeID, p2pMessage,
-        [_dstNodeID, _callback](NetworkException _e, std::shared_ptr<P2PSession>,
-            std::shared_ptr<P2PMessage> _p2pMessage) {
-            auto packetType = _p2pMessage ? _p2pMessage->packetType() : (uint16_t)0;
-            if (_e.errorCode() != 0)
-            {
-                SERVICE_LOG(INFO) << LOG_DESC("asyncSendMessageByP2PNodeID failed")
-                                  << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what())
-                                  << LOG_KV("type", packetType)
-                                  << LOG_KV("dst", printShortP2pID(_dstNodeID));
-                if (_callback)
-                {
-                    _callback(_e.toError(), packetType,
-                        _p2pMessage ? _p2pMessage->payload() : bytesConstRef{});
-                }
-                return;
-            }
-            if (_callback)
-            {
-                _callback(nullptr, packetType, _p2pMessage->payload());
-            }
-        },
-        _options);
+    auto self = shared_from_this();
+    // value message in frame; payload owned by the frame and sent as a view (zero-copy)
+    task::wait([self, _type, _dstNodeID = std::move(_dstNodeID),
+                   _payload = bcos::bytes(_payload.begin(), _payload.end()), _options,
+                   _callback]() mutable -> task::Task<void> {
+        P2PMessageV2 message;
+        message.setPacketType(_type);
+        message.setSeq(self->messageFactory()->newSeq());
+        message.setPayload(std::move(_payload));
+        if (!_callback)
+        {
+            co_await self->sendMessageByNodeID(_dstNodeID, message,
+                ::ranges::views::single(message.payload()), Options{_options.timeout, false});
+            co_return;
+        }
+        try
+        {
+            auto resp = co_await self->sendMessageByNodeID(_dstNodeID, message,
+                ::ranges::views::single(message.payload()), Options{_options.timeout, true});
+            auto respMessage = std::dynamic_pointer_cast<P2PMessage>(resp);
+            auto packetType = respMessage ? respMessage->packetType() : (uint16_t)0;
+            _callback(nullptr, packetType,
+                respMessage ? respMessage->payload() : bytesConstRef{});
+        }
+        catch (NetworkException& e)
+        {
+            _callback(e.toError(), 0, bytesConstRef{});
+        }
+    }());
 }
 
 void Service::asyncBroadcastMessageToP2PNodes(
     uint16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options)
 {
-    auto p2pMessage = newP2PMessage(_type, _payload);
-    asyncBroadcastMessage(p2pMessage, _options);
+    auto self = shared_from_this();
+    // value message in frame; payload owned by the frame and sent as a view (zero-copy)
+    task::wait([self, _type, moduleID, _payload = bcos::bytes(_payload.begin(), _payload.end()),
+                   _options]() mutable -> task::Task<void> {
+        P2PMessageV2 message;
+        message.setPacketType(_type);
+        message.setSeq(self->messageFactory()->newSeq());
+        message.setPayload(std::move(_payload));
+        co_await self->broadcastMessageToAll(
+            message, ::ranges::views::single(message.payload()), _options);
+    }());
 }
 
 void Service::asyncSendMessageByP2PNodeIDs(
@@ -651,17 +726,21 @@ void Service::asyncSendMessageByP2PNodeIDs(
 // send the protocolInfo
 void Service::asyncSendProtocol(P2PSession::Ptr _session)
 {
-    auto payload = bytes();
-    m_codec->encode(m_localProtocol, payload);
-    auto message = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
-    message->setPacketType(GatewayMessageType::Handshake);
-    auto seq = messageFactory()->newSeq();
-    message->setSeq(seq);
-    message->setPayload(payload);
-
-    SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload.size())
-                      << LOG_KV("seq", seq);
-    sendMessageToSession(_session, message, Options(), nullptr);
+    auto self = shared_from_this();
+    // value message in frame; payload owned by the frame
+    task::wait([self, _session]() -> task::Task<void> {
+        auto payload = bytes();
+        self->m_codec->encode(self->m_localProtocol, payload);
+        P2PMessageV2 message;
+        message.setPacketType(GatewayMessageType::Handshake);
+        message.setSeq(self->messageFactory()->newSeq());
+        message.setPayload(std::move(payload));
+        SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol")
+                          << LOG_KV("payload", message.payload().size())
+                          << LOG_KV("seq", message.seq());
+        co_await _session->fastSendP2PMessage(
+            message, ::ranges::views::single(message.payload()), Options{});
+    }());
 }
 
 // receive the heartbeat msg

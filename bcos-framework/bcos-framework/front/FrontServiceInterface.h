@@ -135,6 +135,29 @@ public:
         uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) = 0;
 
     /**
+     * @brief: (coroutine, zero-copy) send message to one node. The payload is passed as views that
+     *         the caller must keep alive for the duration of the co_await. The module-level
+     *         response (matched by the generated uuid) still arrives through the receive path and
+     *         is delivered to _callback; _callback is also invoked with an error if the
+     *         gateway-level send fails.
+     *
+     * Default implementation: joins the payload views into a buffer and bridges to the borrowed
+     * asyncSendMessageByNodeID (correct for the tars client and test fakes).
+     */
+    virtual task::Task<void> sendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+        ::ranges::any_view<bytesConstRef> _payloads, uint32_t _timeout, CallbackFunc _callback)
+    {
+        bcos::bytes buffer;
+        for (auto const& data : _payloads)
+        {
+            buffer.insert(buffer.end(), data.begin(), data.end());
+        }
+        asyncSendMessageByNodeID(_moduleID, std::move(_nodeID), bcos::ref(buffer), _timeout,
+            std::move(_callback));
+        co_return;
+    }
+
+    /**
      * @brief broadcast an already-encoded message, taking ownership of the payload so the send can
      *        be deferred without copying the message body.
      *
