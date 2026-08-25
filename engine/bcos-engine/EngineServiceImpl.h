@@ -76,8 +76,42 @@ bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payl
 std::optional<std::string> validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version);
 
+/// Encodes the OP-Stack block-header extraData from the CL-supplied payload attributes.
+/// Attribute presence is the fork signal (op-node sends eip1559Params iff Holocene is
+/// active, and minBaseFee iff Jovian is active — op-node/rollup/attributes/
+/// engine_consolidate.go checkExtraDataParamsMatch): no eip1559Params -> empty
+/// (pre-Holocene), eip1559Params only -> 9-byte Holocene form, eip1559Params +
+/// minBaseFee -> 17-byte Jovian form (op-core/eip1559/eip1559.go
+/// EncodeHoloceneExtraData / EncodeJovianExtraData). Requires attributes that passed
+/// validatePayloadAttributes (8-byte params, valid zero-pairing).
+bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
+
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
+
+/// Compares a payload the CL submitted through newPayload against the one this node
+/// built and handed out under the same blockHash.
+///
+/// Deliberately narrow: only extraData is compared. Two other candidates are
+/// excluded on purpose.
+///  - Version-specific fields (withdrawalsRoot, the blob-gas pair) are dropped by the
+///    wire dialect on the way back — a V3 newPayload request carries no
+///    withdrawalsRoot even when the build set one — so comparing them would reject
+///    honest CLs.
+///  - The transaction list is NOT compared, even though a differing list under a
+///    blockHash this node minted is equally contradictory — and, on this branch, it
+///    would be perfectly comparable, since the built payload is right here. The
+///    blocker is a contract, not a capability: newPayload is currently specified to
+///    REWRITE the cached payload body from the request, which
+///    new_payload_round_trips_deposit_raw_bytes pins by appending transactions to a
+///    locally built payload and asserting VALID. Tightening the body half means
+///    changing that contract first, which belongs with #5468 (the work that makes
+///    externally supplied payload bodies verifiable at all).
+///
+/// extraData is in scope here because this change puts it into the block hash, so
+/// leaving it unchecked would leave a hash input unchecked.
+std::optional<std::string> compareWithBuiltPayload(
+    const ExecutionPayload& submitted, const ExecutionPayload& built);
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -531,6 +565,38 @@ private:
         else
         {
             payloadId = payloadIdIt->second;
+            // Local-build hit: the CL is handing back a payload this node built. op-geth
+            // needs no such comparison because it re-derives the block hash from the
+            // payload fields it received and answers INVALID_BLOCK_HASH when the two
+            // disagree (beacon/engine/types.go:287-288, reached from
+            // eth/catalyst/api.go:831). This service cannot re-derive an Ethereum block
+            // hash from an ExecutionPayload, so it compares against what it handed out
+            // instead. Without this a CL could alter the extraData, keep the blockHash it
+            // was given, and have the node commit its own (different) header while
+            // answering VALID — the submitted payload never checked. Only extraData is
+            // compared; the transaction list stays out of scope for the contract reason
+            // spelled out on compareWithBuiltPayload.
+            //
+            // Every cache hit is compared, including a re-submission of an already
+            // committed block (whose entry no longer carries a header). An honest
+            // idempotent re-submit is byte-identical and passes; gating on the header
+            // would let a second, altered submission of the same blockHash overwrite the
+            // cached payload and still be answered VALID. op-geth likewise re-derives the
+            // hash on every newPayload, committed or not.
+            //
+            // SCOPE: payloads this node did NOT build (lookup miss) are a separate,
+            // pre-existing gap — they are answered VALID without being executed or
+            // stored at all. That is tracked as #5468 and deliberately not addressed
+            // here.
+            if (auto builtIt = m_payloadCache.find(payloadId); builtIt != m_payloadCache.end())
+            {
+                if (auto mismatch = detail::compareWithBuiltPayload(
+                        request.executionPayload, builtIt->second.executionPayload))
+                {
+                    co_return makeStatus(
+                        PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
+                }
+            }
         }
 
         PayloadEntry entry{
@@ -699,6 +765,14 @@ private:
             });
         }
 
+        // OP-Stack extraData derived from the attributes' eip1559Params / minBaseFee
+        // (Jovian 17-byte form on our chains). Stamped identically on the returned
+        // payload AND on the persisted block header below — op-node re-reads the header
+        // via eth_getBlockByNumber (BlockResponse serves blockHeader->extraData()) and
+        // re-validates it (op-core/eip1559/eip1559.go ValidateJovianExtraData), so the
+        // two must match byte for byte.
+        bytes extraData = detail::encodeOptimismExtraData(payloadAttributes);
+
         ExecutionPayload executionPayload{
             .logsBloom = Bloom{},
             .parentHash = forkchoiceState.headBlockHash,
@@ -710,7 +784,7 @@ private:
             .baseFeePerGas = 0,
             .blockHash = detail::syntheticHash(payloadId),
             .transactions = std::move(engineTransactions),
-            .extraData = {},
+            .extraData = extraData,
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .timestamp = payloadAttributes.timestamp,
             .blockNumber = nextBlockNumber,
@@ -779,6 +853,9 @@ private:
             emptyHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
             emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
             emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
+            // Must precede calculateHash: extraData is part of the Tars header hash
+            // (bcos-tars-protocol/impl/TarsHashable.h).
+            emptyHeader->setExtraData(std::move(extraData));
             emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
             emptyHeader->setReceiptsRoot(h256{});
             emptyHeader->setTxsRoot(h256{});
@@ -804,6 +881,9 @@ private:
         blockHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
         blockHeader->setPrevRandao(payloadAttributes.prevRandao);
         blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
+        // Must precede calculateHash: extraData is part of the Tars header hash
+        // (bcos-tars-protocol/impl/TarsHashable.h).
+        blockHeader->setExtraData(std::move(extraData));
 
         // Step 2c: Execute transactions via the scheduler, over the decoded executable
         // forms. Raw-only entries (forced transactions from the OP attributes list) have

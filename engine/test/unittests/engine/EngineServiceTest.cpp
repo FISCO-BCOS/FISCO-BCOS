@@ -17,10 +17,12 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/Ledger.h>
 #include <bcos-mempool/MemPoolImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
@@ -251,16 +253,37 @@ struct BloomScheduler
     }
 };
 
+bcos::protocol::BlockFactory::Ptr testBlockFactory()
+{
+    static auto blockFactory =
+        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    return blockFactory;
+}
+
+/// EngineServiceImpl stores the executor and scheduler BY REFERENCE (std::ref, see its
+/// constructor), so a function-local stub would dangle the moment a factory returns. The
+/// stubs are stateless, which is why that went unnoticed; keep one long-lived instance of
+/// each so it stays true no matter what a stub grows later.
+StubExecutor& sharedStubExecutor()
+{
+    static StubExecutor executor;
+    return executor;
+}
+
+StubScheduler& sharedStubScheduler()
+{
+    static StubScheduler scheduler;
+    return scheduler;
+}
+
 using BloomEngineServiceImpl =
     EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, BloomScheduler>;
 
 BloomEngineServiceImpl makeBloomEngineServiceImpl(
     MemPoolImpl& memPool, RealGlobalStateStorage& storage, BloomScheduler& scheduler)
 {
-    StubExecutor executor;
-    static auto blockFactory =
-        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
-    return BloomEngineServiceImpl(memPool, storage, executor, scheduler, blockFactory);
+    return BloomEngineServiceImpl(
+        memPool, storage, sharedStubExecutor(), scheduler, testBlockFactory());
 }
 
 using TestEngineServiceImpl =
@@ -268,11 +291,51 @@ using TestEngineServiceImpl =
 
 TestEngineServiceImpl makeEngineServiceImpl(MemPoolImpl& memPool, RealGlobalStateStorage& storage)
 {
-    StubExecutor executor;
-    StubScheduler scheduler;
-    static auto blockFactory =
-        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
-    return TestEngineServiceImpl(memPool, storage, executor, scheduler, blockFactory);
+    return TestEngineServiceImpl(
+        memPool, storage, sharedStubExecutor(), sharedStubScheduler(), testBlockFactory());
+}
+
+/// The production ledger with its one state-storage dependency short-circuited:
+/// Ledger::asyncPrewriteBlock self-calls asyncGetTotalTransactionCount, which opens
+/// SYS_CURRENT_STATE and fails the whole prewrite when that table is unknown
+/// (Ledger.cpp:396 -> :1051). Everything asserted below — the
+/// SYS_NUMBER_2_BLOCK_HEADER row — is written by the real header encode path above
+/// that call, so this keeps the commit exercising production code rather than a fake.
+class CommitLedger : public bcos::ledger::Ledger
+{
+public:
+    using bcos::ledger::Ledger::Ledger;
+    void asyncGetTotalTransactionCount(
+        std::function<void(bcos::Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)>
+            callback) override
+    {
+        callback(nullptr, 0, 0, 0);
+    }
+};
+
+TestEngineServiceImpl makeCommittingEngineServiceImpl(MemPoolImpl& memPool,
+    RealGlobalStateStorage& storage, bcos::ledger::LedgerInterface::Ptr ledger)
+{
+    return TestEngineServiceImpl(memPool, storage, sharedStubExecutor(), sharedStubScheduler(),
+        testBlockFactory(), std::move(ledger));
+}
+
+/// Reads the block header the commit persisted, the way eth_getBlockByNumber reaches it
+/// (SYS_NUMBER_2_BLOCK_HEADER keyed by the decimal block number; decode pattern from
+/// bcos-ledger/bcos-ledger/LedgerMethods.h:204-215).
+bcos::protocol::BlockHeader::Ptr readPersistedHeader(
+    RealGlobalStateBackendStorage& backendStorage, bcos::protocol::BlockNumber blockNumber)
+{
+    auto entry = task::syncWait(bcos::storage2::readOne(
+        backendStorage, bcos::executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER,
+                            boost::lexical_cast<std::string>(blockNumber)}));
+    if (!entry)
+    {
+        return nullptr;
+    }
+    auto field = entry->get();
+    return testBlockFactory()->blockHeaderFactory()->createBlockHeader(
+        bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(field.data()), field.size()));
 }
 
 ForkchoiceState makeForkchoiceState()
@@ -1126,6 +1189,155 @@ BOOST_AUTO_TEST_CASE(karst_v3_build_v5_get_v4_commit_round_trip)
     auto status = task::syncWait(engineService.newPayload(request, 4));
     BOOST_CHECK_EQUAL(
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+}
+
+// Round-5 op-node breakpoint: a Jovian CL sends eip1559Params + minBaseFee and expects
+// the built block to carry the 17-byte Jovian extraData, re-validated when it reads the
+// header back (op-core/eip1559/eip1559.go ValidateJovianExtraData). The payload and the
+// header the block hash was computed over must agree: buildPayload stamps the same bytes
+// on both before calculateHash.
+BOOST_AUTO_TEST_CASE(build_payload_stamps_jovian_extra_data_on_payload)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    // What op-node actually sent in round 5: all-zero params (SystemConfig defaults),
+    // minBaseFee 0. The EL must translate 0,0 to the Canyon constants (250, 6).
+    payloadAttributes.eip1559Params = bytes(8, 0);
+    payloadAttributes.minBaseFee = 0;
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE(payload);
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(payload->executionPayload.extraData),
+        "0x01000000fa000000060000000000000000");
+
+    // minBaseFee absent -> Holocene 9-byte form, version byte 0x00.
+    auto holoceneAttributes = makeKarstPayloadAttributes();
+    holoceneAttributes.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
+    auto holoceneResult =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &holoceneAttributes, 3));
+    BOOST_REQUIRE(holoceneResult.payloadId.has_value());
+    auto holocenePayload = task::syncWait(engineService.getPayload(*holoceneResult.payloadId, 3));
+    BOOST_REQUIRE(holocenePayload);
+    BOOST_CHECK_EQUAL(
+        toHexStringWithPrefix(holocenePayload->executionPayload.extraData), "0x00000000fa00000006");
+}
+
+// The invariant op-node actually depends on is the PERSISTED HEADER's extraData: after
+// the CL commits a block it re-reads the header over eth_getBlockByNumber and runs
+// ValidateJovianExtraData on it (op-core/eip1559/eip1559.go:167-176, reached from
+// op-node/rollup/derive/payload_util.go PayloadToSystemConfig and
+// engine_consolidate.go). Asserting only the getPayload response would stay green if
+// buildPayload ever stamped the payload but not the header — and op-node would reject
+// every block. So commit the payload and read the header back out of storage.
+BOOST_AUTO_TEST_CASE(committed_header_carries_the_same_jovian_extra_data_as_the_payload)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    payloadAttributes.eip1559Params = bytes(8, 0);
+    payloadAttributes.minBaseFee = 0;
+
+    auto ledger = std::make_shared<CommitLedger>(testBlockFactory(), nullptr, /*blockLimit=*/100);
+    auto engineService =
+        makeCommittingEngineServiceImpl(memPool, globalStateStorageFixture.storage, ledger);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE(payload);
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_REQUIRE_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    auto persisted =
+        readPersistedHeader(globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1);
+    BOOST_REQUIRE(persisted);
+    // Byte-for-byte with the payload the CL was handed, and equal to the Jovian vector.
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(persisted->extraData()),
+        toHexStringWithPrefix(payload->executionPayload.extraData));
+    BOOST_CHECK_EQUAL(
+        toHexStringWithPrefix(persisted->extraData()), "0x01000000fa000000060000000000000000");
+}
+
+// A CL that alters the extraData of a payload this node built, while keeping the
+// blockHash it was handed, must not get VALID: the node would otherwise commit its own
+// (different) header and leave the CL believing its version was taken.
+BOOST_AUTO_TEST_CASE(new_payload_rejects_altered_extra_data_under_a_built_block_hash)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    payloadAttributes.eip1559Params = bytes(8, 0);
+    payloadAttributes.minBaseFee = 0;
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE(payload);
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    // Same blockHash, different extraData: a well-formed Jovian shape, so this is the
+    // local-build comparison talking, not the shape gate.
+    request.executionPayload.extraData = fromHexWithPrefix("0x01000000fa000000060000000000000009");
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+
+    // The untouched payload still commits.
+    auto honest = makeNewPayloadRequestV3(payload->executionPayload);
+    BOOST_CHECK_EQUAL(static_cast<int>(task::syncWait(engineService.newPayload(honest, 3)).status),
+        static_cast<int>(PayloadValidationStatus::Valid));
+}
+
+// A malformed extraData shape is rejected on the commit side regardless of whether the
+// node built the block, mirroring op-geth's header verification
+// (consensus/beacon/consensus.go:240-243 -> eip1559.ValidateOptimismExtraData).
+BOOST_AUTO_TEST_CASE(new_payload_rejects_malformed_extra_data_shape)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE(payload);
+
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    // 17 bytes carrying the Holocene version byte: neither shape accepts it.
+    request.executionPayload.extraData = fromHexWithPrefix("0x00000000fa000000060000000000000000");
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Invalid));
 }
 
 BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
