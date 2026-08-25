@@ -22,6 +22,7 @@
 #include <bcos-framework/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <memory>
+#include <bcos-utilities/BoostLog.h>
 
 #define GROUP_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("GROUP")
 

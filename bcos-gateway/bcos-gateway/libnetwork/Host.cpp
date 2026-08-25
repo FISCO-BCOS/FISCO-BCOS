@@ -30,6 +30,7 @@
 #include <memory>
 #include <set>
 #include <utility>
+#include <bcos-utilities/BoostLog.h>
 
 
 using namespace bcos;

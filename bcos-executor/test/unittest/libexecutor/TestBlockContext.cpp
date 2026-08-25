@@ -10,8 +10,6 @@ namespace bcos
 {
 namespace test
 {
-using namespace std;
-
 BOOST_AUTO_TEST_SUITE(TestBlockContext)
 
 BOOST_AUTO_TEST_CASE(BlockContextTest)

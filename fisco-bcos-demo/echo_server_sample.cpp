@@ -23,6 +23,7 @@
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::gateway;

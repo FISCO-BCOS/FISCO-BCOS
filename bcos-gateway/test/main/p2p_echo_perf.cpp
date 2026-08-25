@@ -31,6 +31,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace std;
 using namespace bcos;

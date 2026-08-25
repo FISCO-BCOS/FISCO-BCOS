@@ -28,6 +28,7 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <bcos-utilities/BoostLog.h>
 
 namespace Json
 {

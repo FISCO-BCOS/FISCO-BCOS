@@ -20,7 +20,6 @@
 
 #pragma once
 
-#include "BoostLog.h"
 #include "DataConvertUtility.h"
 #include "Exceptions.h"
 #include <boost/algorithm/hex.hpp>
@@ -435,11 +434,9 @@ private:
         {
             if (_bytesData.size() != N)
             {
-                BCOS_LOG(WARNING) << LOG_DESC("ConstructFixedBytesFailed")
-                                  << LOG_KV("requiredLen", N)
-                                  << LOG_KV("dataLen", _bytesData.size());
                 BOOST_THROW_EXCEPTION(ConstructFixedBytesFailed() << errinfo_comment(
-                                          "Require " + std::to_string(N) + " length input data"));
+                                          "Require " + std::to_string(N) + " length input data, got " +
+                                          std::to_string(_bytesData.size())));
             }
             memcpy(m_data.data(), _bytesData.data(), N);
             break;
@@ -448,177 +445,6 @@ private:
     }
 
     std::array<byte, N> m_data;  ///< The binary data.
-};
-
-template <unsigned T>
-class SecureFixedBytes : private FixedBytes<T>
-{
-public:
-    using DataAlignType = typename FixedBytes<T>::DataAlignType;
-    using StringDataType = typename FixedBytes<T>::StringDataType;
-    using ConstructorType = typename FixedBytes<T>::ConstructorType;
-    SecureFixedBytes() = default;
-    explicit SecureFixedBytes(
-        bytesConstRef _fixedBytesRef, DataAlignType _alignType = DataAlignType::AlignRight)
-      : FixedBytes<T>(_fixedBytesRef, _alignType)
-    {}
-
-    template <unsigned M>
-    explicit SecureFixedBytes(
-        FixedBytes<M> const& _fixedBytes, DataAlignType _alignType = DataAlignType::AlignLeft)
-      : FixedBytes<T>(_fixedBytes, _alignType)
-    {}
-    template <unsigned M>
-    explicit SecureFixedBytes(SecureFixedBytes<M> const& _secureFixedBytes,
-        DataAlignType _alignType = DataAlignType::AlignLeft)
-      : FixedBytes<T>(_secureFixedBytes.makeInsecure(), _alignType)
-    {}
-    explicit SecureFixedBytes(byte const* _bytesPtr, ConstructorType _type)
-      : FixedBytes<T>(_bytesPtr, _type)
-    {}
-    explicit SecureFixedBytes(std::string const& _stringData,
-        StringDataType _stringType = FixedBytes<T>::FromHex,
-        DataAlignType _alignType = DataAlignType::AlignRight)
-      : FixedBytes<T>(_stringData, _stringType, _alignType)
-    {}
-    SecureFixedBytes(SecureFixedBytes<T> const& _c) = default;
-    ~SecureFixedBytes() { ref().cleanMemory(); }
-    SecureFixedBytes<T>& operator=(SecureFixedBytes<T> const& _secureFixedBytes)
-    {
-        if (&_secureFixedBytes == this)
-        {
-            return *this;
-        }
-        ref().cleanMemory();
-        FixedBytes<T>::operator=(static_cast<FixedBytes<T> const&>(_secureFixedBytes));
-        return *this;
-    }
-    using FixedBytes<T>::size;
-
-    FixedBytes<T> const& makeInsecure() const { return static_cast<FixedBytes<T> const&>(*this); }
-    FixedBytes<T>& writable()
-    {
-        clear();
-        return static_cast<FixedBytes<T>&>(*this);
-    }
-
-    using FixedBytes<T>::operator bool;
-
-    // The obvious comparison operators.
-    bool operator==(SecureFixedBytes const& _c) const
-    {
-        return static_cast<FixedBytes<T> const&>(*this).operator==(
-            static_cast<FixedBytes<T> const&>(_c));
-    }
-    bool operator!=(SecureFixedBytes const& _c) const
-    {
-        return static_cast<FixedBytes<T> const&>(*this).operator!=(
-            static_cast<FixedBytes<T> const&>(_c));
-    }
-    bool operator<(SecureFixedBytes const& _c) const
-    {
-        return static_cast<FixedBytes<T> const&>(*this).operator<(
-            static_cast<FixedBytes<T> const&>(_c));
-    }
-    bool operator>=(SecureFixedBytes const& _c) const
-    {
-        return static_cast<FixedBytes<T> const&>(*this).operator>=(
-            static_cast<FixedBytes<T> const&>(_c));
-    }
-    bool operator<=(SecureFixedBytes const& _c) const
-    {
-        return static_cast<FixedBytes<T> const&>(*this).operator<=(
-            static_cast<FixedBytes<T> const&>(_c));
-    }
-    bool operator>(SecureFixedBytes const& _c) const
-    {
-        return static_cast<FixedBytes<T> const&>(*this).operator>(
-            static_cast<FixedBytes<T> const&>(_c));
-    }
-
-    using FixedBytes<T>::operator==;
-    using FixedBytes<T>::operator!=;
-    using FixedBytes<T>::operator<;
-    using FixedBytes<T>::operator>=;
-    using FixedBytes<T>::operator<=;
-    using FixedBytes<T>::operator>;
-
-    // The obvious binary operators.
-    SecureFixedBytes& operator^=(FixedBytes<T> const& _c)
-    {
-        static_cast<FixedBytes<T>&>(*this).operator^=(_c);
-        return *this;
-    }
-    SecureFixedBytes operator^(FixedBytes<T> const& _c) const
-    {
-        return SecureFixedBytes(*this) ^= _c;
-    }
-    SecureFixedBytes& operator|=(FixedBytes<T> const& _c)
-    {
-        static_cast<FixedBytes<T>&>(*this).operator^=(_c);
-        return *this;
-    }
-    SecureFixedBytes operator|(FixedBytes<T> const& _c) const
-    {
-        return SecureFixedBytes(*this) |= _c;
-    }
-    SecureFixedBytes& operator&=(FixedBytes<T> const& _c)
-    {
-        static_cast<FixedBytes<T>&>(*this).operator^=(_c);
-        return *this;
-    }
-    SecureFixedBytes operator&(FixedBytes<T> const& _c) const
-    {
-        return SecureFixedBytes(*this) &= _c;
-    }
-
-    SecureFixedBytes& operator^=(SecureFixedBytes const& _c)
-    {
-        static_cast<FixedBytes<T>&>(*this).operator^=(static_cast<FixedBytes<T> const&>(_c));
-        return *this;
-    }
-    SecureFixedBytes operator^(SecureFixedBytes const& _c) const
-    {
-        return SecureFixedBytes(*this) ^= _c;
-    }
-    SecureFixedBytes& operator|=(SecureFixedBytes const& _c)
-    {
-        static_cast<FixedBytes<T>&>(*this).operator^=(static_cast<FixedBytes<T> const&>(_c));
-        return *this;
-    }
-    SecureFixedBytes operator|(SecureFixedBytes const& _c) const
-    {
-        return SecureFixedBytes(*this) |= _c;
-    }
-    SecureFixedBytes& operator&=(SecureFixedBytes const& _c)
-    {
-        static_cast<FixedBytes<T>&>(*this).operator^=(static_cast<FixedBytes<T> const&>(_c));
-        return *this;
-    }
-    SecureFixedBytes operator&(SecureFixedBytes const& _c) const
-    {
-        return SecureFixedBytes(*this) &= _c;
-    }
-    SecureFixedBytes operator~() const
-    {
-        auto r = ~static_cast<FixedBytes<T> const&>(*this);
-        return static_cast<SecureFixedBytes const&>(r);
-    }
-
-    using FixedBytes<T>::abridged;
-
-    bytesConstRef ref() const { return FixedBytes<T>::ref(); }
-    byte const* data() const { return FixedBytes<T>::data(); }
-
-    static SecureFixedBytes<T> generateRandomFixedBytes()
-    {
-        SecureFixedBytes<T> randomFixedBytes;
-        randomFixedBytes.generateRandomFixedBytesByEngine(s_fixedBytesEngine);
-        return randomFixedBytes;
-    }
-    using FixedBytes<T>::firstBitSet;
-
-    void clear() { ref().cleanMemory(); }
 };
 
 /// Fast equality operator for h256.
@@ -654,15 +480,6 @@ inline std::istream& operator>>(std::istream& _in, FixedBytes<N>& o_h)
     _in >> s;
     o_h = FixedBytes<N>(s, FixedBytes<N>::FromHex, FixedBytes<N>::AlignRight);
     return _in;
-}
-
-/// Stream I/O for the SecureFixedBytes class.
-template <unsigned N>
-inline std::ostream& operator<<(std::ostream& _out, SecureFixedBytes<N> const& _h)
-{
-    _out << "SecureFixedBytes#" << std::hex << typename FixedBytes<N>::hash()(_h.makeInsecure())
-         << std::dec;
-    return _out;
 }
 
 // Common types of FixedBytes.

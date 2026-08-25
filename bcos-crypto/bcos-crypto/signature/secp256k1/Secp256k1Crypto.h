@@ -30,6 +30,14 @@ constexpr int SECP256K1_SIGNATURE_LEN = 65;
 constexpr int SECP256K1_UNCOMPRESS_PUBLICKEY_LEN = 65;
 constexpr int SECP256K1_PUBLICKEY_LEN = 64;
 constexpr int SECP256K1_SIGNATURE_V = 64;
+
+// secp256k1 group order n and n/2 (boost-u256 form) — single home for the EIP-2 low-s gates
+// (RPC decode in Web3Transaction.cpp; the P2P verify gate in Transaction.cpp lands with part
+// 4b, PR #5477) so the two thresholds cannot drift apart.
+inline const u256 c_secp256k1n(
+    "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
+inline const u256 c_secp256k1nOver2 = c_secp256k1n / 2;
+
 std::shared_ptr<bytes> secp256k1Sign(const KeyPairInterface& _keyPair, const HashType& _hash);
 bool secp256k1Verify(const PublicPtr& _pubKey, const HashType& _hash, bytesConstRef _signatureData);
 std::unique_ptr<KeyPairInterface> secp256k1GenerateKeyPair();

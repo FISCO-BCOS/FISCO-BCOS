@@ -23,6 +23,10 @@ add_executable(opstack-executor-tests
     Storage2StatePoisonTest.cpp
     support/SeedPreStateTest.cpp
 )
+# Unity build: header-heavy Boost.Test TUs share a large common preamble (catch.hpp, evmone,
+# op-rlp headers). TestMain.cpp defines BOOST_TEST_MODULE and stays out of the batch.
+set_target_properties(opstack-executor-tests PROPERTIES UNITY_BUILD "ON")
+set_source_files_properties(TestMain.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_link_libraries(opstack-executor-tests PRIVATE
     opstack-executor
     jsoncpp_static

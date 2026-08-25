@@ -22,6 +22,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::lightnode
 {

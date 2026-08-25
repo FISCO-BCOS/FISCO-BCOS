@@ -6,6 +6,7 @@
 #include <bcos-concepts/Serialize.h>
 #include "../../../concepts/bcos-concepts/scheduler/Scheduler.h"
 #include <bcos-tars-protocol/tars/LightNode.h>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::scheduler
 {

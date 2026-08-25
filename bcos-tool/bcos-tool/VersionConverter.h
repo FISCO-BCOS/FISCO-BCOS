@@ -22,6 +22,7 @@
 #pragma once
 #include "Exceptions.h"
 #include <bcos-framework/protocol/Protocol.h>
+#include <boost/algorithm/string.hpp>
 #include <string>
 #include <vector>
 

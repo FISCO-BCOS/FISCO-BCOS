@@ -19,7 +19,9 @@
  * @date 2021-04-01
  */
 #pragma once
-#include <bcos-utilities/BoostLog.h>
+// NOTE: CRYPTO_LOG expands to BCOS_LOG, which requires <bcos-utilities/BoostLog.h> at
+// the expansion site — including it here would force the log headers onto every TU
+// that only needs the type aliases below.
 #include <bcos-utilities/FixedBytes.h>
 #include <range/v3/view/any_view.hpp>
 

@@ -25,6 +25,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <bcos-utilities/BoostLog.h>
 namespace bcos
 {
 namespace protocol

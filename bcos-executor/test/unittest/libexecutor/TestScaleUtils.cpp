@@ -27,7 +27,8 @@
 #include <utility>
 #include <vector>
 
-using namespace std;
+using std::pair;
+using std::vector;
 using namespace bcos;
 using namespace bcos::executor;
 

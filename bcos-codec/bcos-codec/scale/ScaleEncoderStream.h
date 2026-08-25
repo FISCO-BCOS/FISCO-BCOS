@@ -24,6 +24,7 @@
 #include <deque>
 #include <gsl/span>
 #include <type_traits>
+#include <list>
 
 namespace bcos
 {

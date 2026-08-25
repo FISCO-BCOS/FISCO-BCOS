@@ -23,6 +23,7 @@
 #include "bcos-sync/interfaces/BlocksMsgInterface.h"
 #include <bcos-framework/protocol/Block.h>
 #include <queue>
+#include <list>
 namespace bcos::sync
 {
 // increase order

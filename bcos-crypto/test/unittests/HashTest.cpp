@@ -26,6 +26,7 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace crypto;

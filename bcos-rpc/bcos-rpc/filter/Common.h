@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bcos-framework/Common.h"
+#include <bcos-utilities/BoostLog.h>
 
 // The largest number of topic in one event log
 #define EVENT_LOG_TOPICS_MAX_INDEX (4)

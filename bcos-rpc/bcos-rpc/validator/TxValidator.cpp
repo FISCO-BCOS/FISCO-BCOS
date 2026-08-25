@@ -23,6 +23,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include <bcos-framework/ledger/Ledger.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::rpc
 {

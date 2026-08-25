@@ -32,6 +32,7 @@
 #include <optional>
 #include <shared_mutex>
 #include <type_traits>
+#include <list>
 
 namespace bcos::storage
 {
