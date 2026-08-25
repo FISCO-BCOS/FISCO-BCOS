@@ -23,13 +23,19 @@
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <boost/asio/ip/tcp.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <array>
+#include <cstdint>
+#include <mutex>
 #include <queue>
 #include <range/v3/view/single.hpp>
+#include <thread>
 
 using namespace bcos;
 using namespace gateway;
@@ -396,6 +402,135 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
         session->setSocket(nullptr);
     }
     fakeSocket->close();
+}
+
+// A SocketFace backed by a real connected TCP socket so the (non-virtual)
+// ASIOInterface::asyncWrite path actually completes on the wire — the FakeSocket above cannot
+// reach the compression branch because its write path is inert.
+class RealLoopbackSocket : public SocketFace
+{
+public:
+    RealLoopbackSocket(std::shared_ptr<ba::io_context> _ioContext, bi::tcp::socket _socket)
+      : m_ioContext(std::move(_ioContext)),
+        m_sslContext(ba::ssl::context::tlsv12),
+        m_sslSocket(std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*m_ioContext, m_sslContext))
+    {
+        m_sslSocket->next_layer() = std::move(_socket);
+    }
+
+    bool isConnected() const override { return m_sslSocket->next_layer().is_open(); }
+    void close() override
+    {
+        boost::system::error_code ec;
+        m_sslSocket->next_layer().close(ec);
+    }
+    bi::tcp::endpoint remoteEndpoint(boost::system::error_code) override { return {}; }
+    bi::tcp::endpoint localEndpoint(boost::system::error_code) override { return {}; }
+    bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
+    ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
+    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
+    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override
+    {
+        m_nodeIPEndpoint = std::move(_nodeIPEndpoint);
+    }
+    ba::io_context& ioService() override { return *m_ioContext; }
+
+private:
+    std::shared_ptr<ba::io_context> m_ioContext;
+    ba::ssl::context m_sslContext;
+    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
+    NodeIPEndpoint m_nodeIPEndpoint;
+};
+
+BOOST_AUTO_TEST_CASE(fastSendMessageCompressionTransientExt)
+{
+    // Regression for the second-round review finding: the COMPRESS ext flag must be applied only
+    // TRANSIENTLY inside fastSendMessage. A reused message object (broadcast fan-out / retry loop)
+    // that compresses for one peer must not leak the flag to a later peer that receives an
+    // uncompressed frame (which would fail to decompress and drop the connection). Also exercises
+    // the compression branch itself, which the FakeSocket-based tests cannot reach.
+    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeAsio = std::make_shared<FakeASIO>();
+
+    auto io = std::make_shared<ba::io_context>();
+    boost::asio::executor_work_guard<ba::io_context::executor_type> workGuard(io->get_executor());
+    std::thread ioThread([io] { io->run(); });
+
+    ba::ip::tcp::acceptor acceptor(*io, ba::ip::tcp::endpoint(ba::ip::tcp::v4(), 0));
+    auto listenEndpoint = acceptor.local_endpoint();
+
+    std::vector<uint8_t> received;
+    std::mutex recvMutex;
+    std::thread peerThread([&] {
+        ba::ip::tcp::socket peer(*io);
+        boost::system::error_code ec;
+        acceptor.accept(peer, ec);
+        if (ec)
+        {
+            return;
+        }
+        // Read one chunk: loopback delivers the whole (small, compressed) frame in a single
+        // read_some. A single read also avoids blocking this thread forever if the session never
+        // closes the socket.
+        std::array<uint8_t, 4096> buf;
+        std::size_t n = peer.read_some(ba::buffer(buf), ec);
+        if (!ec && n > 0)
+        {
+            std::lock_guard<std::mutex> lock(recvMutex);
+            received.assign(buf.begin(), buf.begin() + n);
+        }
+    });
+
+    ba::ip::tcp::socket client(*io);
+    boost::system::error_code connectError;
+    client.connect(listenEndpoint, connectError);
+    BOOST_REQUIRE(!connectError);
+
+    {
+        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+        auto sessionSocket = std::make_shared<RealLoopbackSocket>(io, std::move(client));
+        auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
+        session->setMessageFactory(fakeHost->messageFactory());
+        session->start();
+
+        // V2 wire format + payload well above the 1KB compress threshold -> compression must run
+        P2PMessage message;
+        message.setVersion((uint16_t)bcos::protocol::ProtocolVersion::V2);
+        message.setSeq(1);
+        bytes payload(2000, 'x');
+        auto originalExt = message.ext();
+
+        task::syncWait(session->fastSendMessage(
+            message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{}));
+
+        // The caller's message must NOT keep the COMPRESS flag (transient ext restore), otherwise a
+        // reused message would leak it to an uncompressed peer.
+        BOOST_CHECK_EQUAL(message.ext(), originalExt);
+
+        // Clean teardown: disconnect closes the socket and stops the read loop. Do NOT null the
+        // socket while the io thread may still run the session's idle timer (checkNetworkStatus
+        // would dereference a null m_socket).
+        session->disconnect(DisconnectReason::DisconnectRequested);
+    }
+
+    peerThread.join();
+    workGuard.reset();
+    // Stop the io explicitly: drop()'s ssl-shutdown path can leave the session socket open (the
+    // failed SSL shutdown cancels the force-close timer), and an open socket/acceptor would keep
+    // io_context::run() from returning.
+    {
+        boost::system::error_code ec;
+        acceptor.close(ec);
+    }
+    io->stop();
+    ioThread.join();
+
+    // The wire frame must actually be compressed: parse the header
+    // [length:4][version:2][packetType:2][seq:4][ext:2] (P2PMessage::MESSAGE_HEADER_LENGTH = 14).
+    BOOST_REQUIRE(received.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
+    uint16_t frameExt = (static_cast<uint16_t>(received[12]) << 8) | static_cast<uint16_t>(received[13]);
+    BOOST_CHECK(frameExt & bcos::protocol::MessageExtFieldFlag::COMPRESS);
 }
 
 BOOST_AUTO_TEST_CASE(SessionRecvBufferTest)

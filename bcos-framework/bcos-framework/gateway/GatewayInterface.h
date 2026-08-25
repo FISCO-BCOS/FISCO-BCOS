@@ -147,7 +147,10 @@ public:
             };
 
             GatewayInterface* m_self;
-            std::string m_groupID;
+            // owned by the completion callback so it outlives this frame: asyncSendMessageByNodeID
+            // takes the groupID by const-ref, and a synchronous completion (TARS connection check)
+            // resumes (and destroys) the frame while the borrowed client is still using it
+            std::shared_ptr<std::string> m_groupID;
             int m_moduleID;
             bcos::crypto::NodeIDPtr m_srcNodeID;
             bcos::crypto::NodeIDPtr m_dstNodeID;
@@ -161,18 +164,21 @@ public:
                 m_state->handle = _handle;
                 auto state = m_state;
                 auto buffer = m_buffer;
+                auto groupID = m_groupID;
                 auto respFunc = std::move(m_respFunc);
-                m_self->asyncSendMessageByNodeID(m_groupID, m_moduleID, m_srcNodeID, m_dstNodeID,
+                m_self->asyncSendMessageByNodeID(*groupID, m_moduleID, m_srcNodeID, m_dstNodeID,
                     bcos::ref(*buffer),
                     [state = std::move(state), buffer = std::move(buffer),
+                        groupID = std::move(groupID),
                         respFunc = std::move(respFunc)](bcos::Error::Ptr _error) mutable {
                         if (respFunc)
                         {
                             respFunc(std::move(_error));
                         }
-                        // keep the payload buffer alive until after the resume: the borrowed caller
-                        // may still be reading it on this stack
+                        // keep the payload buffer and groupID alive until after the resume: the
+                        // borrowed caller may still be reading them on this stack
                         (void)buffer;
+                        (void)groupID;
                         if (!state->completed.exchange(true))
                         {
                             state->handle.resume();
@@ -181,9 +187,9 @@ public:
             }
             void await_resume() {}
         };
-        SendAwaitable awaitable{this, std::string(_groupID), _moduleID, std::move(_srcNodeID),
-            std::move(_dstNodeID), std::move(_errorRespFunc), std::move(buffer),
-            std::make_shared<SendAwaitable::CompletionState>()};
+        SendAwaitable awaitable{this, std::make_shared<std::string>(_groupID), _moduleID,
+            std::move(_srcNodeID), std::move(_dstNodeID), std::move(_errorRespFunc),
+            std::move(buffer), std::make_shared<SendAwaitable::CompletionState>()};
         co_await awaitable;
         co_return;
     }

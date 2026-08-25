@@ -714,8 +714,22 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
         message.setPayload(std::move(_payload));
         if (!_callback)
         {
-            co_await _self->sendMessageByNodeID(_dstNodeID, message,
-                ::ranges::views::single(message.payload()), Options{_options.timeout, false});
+            // fire-and-forget: an unreachable peer (session dropped between the isReachable check
+            // and the send) is an expected, recoverable state — log and continue, matching the old
+            // asyncSendMessageByNodeID "Node inactive" behaviour, instead of throwing out of
+            // task::wait and aborting the remaining nodes in asyncSendMessageByP2PNodeIDs.
+            try
+            {
+                co_await _self->sendMessageByNodeID(_dstNodeID, message,
+                    ::ranges::views::single(message.payload()), Options{_options.timeout, false});
+            }
+            catch (NetworkException const& e)
+            {
+                SERVICE_LOG(INFO) << LOG_DESC("asyncSendMessageByP2PNodeID send failed")
+                                  << LOG_KV("nodeid", printShortP2pID(_dstNodeID))
+                                  << LOG_KV("code", e.errorCode())
+                                  << LOG_KV("message", e.what());
+            }
             co_return;
         }
         try

@@ -28,6 +28,7 @@
 #include <functional>
 #include <iterator>
 #include <range/v3/numeric/accumulate.hpp>
+#include <range/v3/view/all.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
 #include <utility>
@@ -888,39 +889,57 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
         co_return {};
     }
 
+    // Materialize the payload views once: the incoming any_view is category::input (single-pass),
+    // while the compression/join and the length passes below each iterate the payloads. Copying
+    // the (cheap) views into a forward container makes every later pass multi-pass safe without
+    // changing the interface contract.
+    boost::container::small_vector<bytesConstRef, 3> payloadRefs;
+    for (auto const& ref : payloads)
+    {
+        payloadRefs.push_back(ref);
+    }
+
     // Encode the header first: when compression (below) applies it sets the COMPRESS ext flag and
     // the header must be re-encoded to carry it.
     bytes headerBuffer;
     message.encodeHeader(headerBuffer);
 
     // Zero-copy send by default. When compression is enabled and the payload is large enough (and
-    // the wire format is V2+, same rule as the removed asyncSendMessage path), the payload views
-    // are joined into a frame-owned buffer and compressed; the wire then carries header + the
-    // compressed payload. Both buffers live in this coroutine frame for the whole (deferred) send.
+    // the wire format is V2+ — the same rule as the removed asyncSendMessage path, P2PMessage::
+    // tryToCompressPayload also requires V2), the payload views are joined into a frame-owned
+    // buffer and compressed; the wire then carries header + the compressed payload. Both buffers
+    // live in this coroutine frame for the whole (deferred) send. The COMPRESS ext flag is set
+    // TRANSIENTLY: it is restored right after the header re-encode, so a reused message object
+    // (broadcast fan-out / retry loop) never leaks the flag to a peer that receives an
+    // uncompressed frame — which would make that peer fail to decompress and drop the connection.
     bcos::bytes joinedPayload;
     bcos::bytes compressedPayload;
-    ::ranges::any_view<bytesConstRef> wirePayloads = std::move(payloads);
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> wirePayloads =
+        ::ranges::views::all(payloadRefs);
     if (m_enableCompress &&
         message.version() >= (uint16_t)bcos::protocol::ProtocolVersion::V2)
     {
         uint32_t payloadSize = 0;
-        for (auto const& ref : wirePayloads)
+        for (auto const& ref : payloadRefs)
         {
             payloadSize += ref.size();
         }
         if (payloadSize > c_compressThreshold)
         {
             joinedPayload.reserve(payloadSize);
-            for (auto const& ref : wirePayloads)
+            for (auto const& ref : payloadRefs)
             {
                 joinedPayload.insert(joinedPayload.end(), ref.begin(), ref.end());
             }
             if (ZstdCompress::compress(
                     ref(joinedPayload), compressedPayload, (int)c_zstdCompressLevel))
             {
-                message.setExt(message.ext() | bcos::protocol::MessageExtFieldFlag::COMPRESS);
+                const auto originalExt = message.ext();
+                message.setExt(originalExt | bcos::protocol::MessageExtFieldFlag::COMPRESS);
                 headerBuffer.clear();
                 message.encodeHeader(headerBuffer);
+                // transient: restore the caller's ext — the flag only rides on this frame's header
+                message.setExt(originalExt);
                 wirePayloads =
                     ::ranges::views::single(bcos::ref(std::as_const(compressedPayload)));
             }
@@ -941,20 +960,19 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     *(uint32_t*)headerBuffer.data() =
         boost::asio::detail::socket_ops::host_to_network_long(totalLength);
 
-    // The fast path must honour the same pre-send (outgoing rate-limit) check that the callback
-    // path (asyncSendMessage) enforces; otherwise routing sends through fastSendMessage would
-    // silently bypass outgoing bandwidth/QPS limiting. The check is charged on the ACTUAL wire
-    // bytes (totalLength including the payload views) — a zero-copy message does not carry its
-    // payload, so message.length() alone would under-count the outgoing traffic. A rejection
-    // surfaces as a thrown NetworkException (e.g. OutBWOverflow / InQPSOverflow) so coroutine
-    // retry loops can stop.
-    message.setLength(totalLength);
-    if (auto result =
-            (m_beforeMessageHandler ? m_beforeMessageHandler(*this, message) : std::nullopt))
+    // The pre-send checks run in the same order as the removed asyncSendMessage path (active →
+    // allowMaxMsgSize → beforeMessageHandler). The message length is set TRANSIENTLY so the
+    // rate-limit handler can charge the actual wire bytes (a zero-copy message does not carry its
+    // payload, so message.length() alone would under-count); the guard restores the caller's
+    // length on both the normal and the throw paths, before the first suspension, so a reused
+    // message object is never left with a stale length.
+    struct MessageLengthGuard
     {
-        const auto& error = result.value();
-        BOOST_THROW_EXCEPTION(NetworkException((int64_t)error.errorCode(), error.errorMessage()));
-    }
+        Message& m_message;
+        uint32_t m_original;
+        ~MessageLengthGuard() { m_message.setLength(m_original); }
+    } lengthGuard{message, message.lengthDirect()};
+    message.setLength(totalLength);
 
     // Restores the allowMaxMsgSize check from the removed asyncSendMessage path: a frame that
     // exceeds the limit would otherwise be written to the wire and dropped by the peer (breaking
@@ -965,6 +983,17 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
                              << LOG_KV("msgSize", totalLength)
                              << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
         BOOST_THROW_EXCEPTION(NetworkException(-1, "Msg size overflow"));
+    }
+
+    // The fast path must honour the same pre-send (outgoing rate-limit) check that the callback
+    // path (asyncSendMessage) enforces; otherwise routing sends through fastSendMessage would
+    // silently bypass outgoing bandwidth/QPS limiting. A rejection surfaces as a thrown
+    // NetworkException (e.g. OutBWOverflow / InQPSOverflow) so coroutine retry loops can stop.
+    if (auto result =
+            (m_beforeMessageHandler ? m_beforeMessageHandler(*this, message) : std::nullopt))
+    {
+        const auto& error = result.value();
+        BOOST_THROW_EXCEPTION(NetworkException((int64_t)error.errorCode(), error.errorMessage()));
     }
 
     if (c_fileLogLevel <= LogLevel::TRACE)

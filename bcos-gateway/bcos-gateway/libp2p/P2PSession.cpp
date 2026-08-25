@@ -127,14 +127,27 @@ void P2PSession::heartBeat()
             }
             // value message in frame, sent through the fast path (zero-copy). The service shared_ptr
             // is passed as a coroutine parameter so it is copied into the frame and kept alive for
-            // the whole (possibly deferred) send.
+            // the whole (possibly deferred) send. The pre-send checks (outgoing rate limit / max
+            // size) run synchronously on the caller thread and may throw — catch so the heartbeat
+            // timer below is always re-armed (otherwise this session would be dropped by the peer's
+            // idle timeout).
             auto self = shared_from_this();
-            task::wait([](std::shared_ptr<P2PSession> _self) -> task::Task<void> {
-                P2PMessageV2 message;
-                message.setPacketType(GatewayMessageType::Heartbeat);
-                ::ranges::any_view<bytesConstRef> emptyPayloads;
-                co_await _self->fastSendP2PMessage(message, std::move(emptyPayloads), Options{});
-            }(self));
+            try
+            {
+                task::wait([](std::shared_ptr<P2PSession> _self) -> task::Task<void> {
+                    P2PMessageV2 message;
+                    message.setPacketType(GatewayMessageType::Heartbeat);
+                    ::ranges::any_view<bytesConstRef> emptyPayloads;
+                    co_await _self->fastSendP2PMessage(
+                        message, std::move(emptyPayloads), Options{});
+                }(self));
+            }
+            catch (std::exception const& e)
+            {
+                P2PSESSION_LOG(WARNING) << LOG_DESC("heartBeat send exception")
+                                        << LOG_KV("p2pid", printShortP2pID(m_p2pInfo->p2pID))
+                                        << LOG_KV("what", boost::diagnostic_information(e));
+            }
         }
 
         auto self = std::weak_ptr<P2PSession>(shared_from_this());

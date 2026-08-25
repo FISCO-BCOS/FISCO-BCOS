@@ -535,7 +535,10 @@ uint16_t bcos::gateway::P2PMessage::ext() const
 }
 void bcos::gateway::P2PMessage::setExt(uint16_t _ext)
 {
-    m_ext |= _ext;
+    // Assignment (not OR): a "set"ter must overwrite the field so callers can clear bits (e.g.
+    // fastSendMessage temporarily sets the COMPRESS flag and restores the original ext afterwards;
+    // FrontMessage::setExt already has assignment semantics).
+    m_ext = _ext;
 }
 const bcos::gateway::P2PMessageOptions& bcos::gateway::P2PMessage::options() const
 {
