@@ -62,19 +62,20 @@ public:
     void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
 
     /**
-     * @brief: (coroutine) broadcast a message to all connected sessions. The message and the
-     *         payload views must be kept alive by the caller for the duration of the co_await.
+     * @brief: (coroutine) broadcast a message to all connected sessions. The message is handed
+     *         over as a shared_ptr: broadcastMessageToAll fans out one coroutine per peer and each
+     *         task keeps the message alive (the payload rides as a view, zero-copy).
      */
-    task::Task<void> broadcastMessageToAll(P2PMessage& message,
+    task::Task<void> broadcastMessageToAll(P2PMessage::Ptr message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
     /**
      * @brief: (coroutine) broadcast a message to the directly connected sessions only (m_sessions),
      *         without going through the router table. Used for router-table seq gossip which must
-     *         only be exchanged between neighbors and propagated hop-by-hop. The message and the
-     *         payload views must be kept alive by the caller for the duration of the co_await.
+     *         only be exchanged between neighbors and propagated hop-by-hop. The message is handed
+     *         over as a shared_ptr and kept alive by the per-peer fan-out tasks.
      */
-    virtual task::Task<void> broadcastMessageToNeighbors(P2PMessage& message,
+    virtual task::Task<void> broadcastMessageToNeighbors(P2PMessage::Ptr message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options());
 
     virtual std::map<NodeIPEndpoint, P2pID> staticNodes();

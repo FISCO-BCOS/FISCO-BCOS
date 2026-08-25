@@ -44,9 +44,10 @@ public:
         ::ranges::any_view<bytesConstRef> payloads, Options options = {}) = 0;
     virtual void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) = 0;
 
-    // (coroutine) broadcast a message to all connected/reachable nodes. The message and the payload
-    // views must be kept alive by the caller for the duration of the co_await.
-    virtual task::Task<void> broadcastMessageToAll(P2PMessage& message,
+    // (coroutine) broadcast a message to all connected/reachable nodes. The message is handed over
+    // as a shared_ptr: the per-peer fan-out tasks keep it alive (the payload rides as a view,
+    // zero-copy).
+    virtual task::Task<void> broadcastMessageToAll(P2PMessage::Ptr message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = {}) = 0;
 
     virtual P2PInfos sessionInfos() = 0;

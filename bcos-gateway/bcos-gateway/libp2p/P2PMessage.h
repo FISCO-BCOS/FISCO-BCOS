@@ -140,7 +140,7 @@ public:
     virtual void setSeq(uint32_t seq);
 
     uint16_t ext() const override;
-    void setExt(uint16_t _ext) override;
+    void setExt(uint16_t _ext);
 
     const P2PMessageOptions& options() const;
     void setOptions(P2PMessageOptions _options);
@@ -150,7 +150,6 @@ public:
 
     void setRespPacket();
     bool encode(bytes& _buffer) override;
-    bool encode(EncodedMessage& _buffer) const override;
     int32_t decode(const bytesConstRef& _buffer) override;
     bool isRespPacket() const override;
 

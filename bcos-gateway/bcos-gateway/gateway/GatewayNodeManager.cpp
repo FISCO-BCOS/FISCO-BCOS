@@ -377,16 +377,16 @@ void GatewayNodeManager::broadcastStatusSeq()
     payload.insert(payload.end(), (byte*)&statusSeq, (byte*)&statusSeq + 4);
     NODE_MANAGER_LOG(TRACE) << LOG_DESC("broadcastStatusSeq") << LOG_KV("seq", seq);
     auto p2p = m_p2pInterface;
-    // value message in frame; the 4-byte seq payload is owned by the frame (zero-copy view send).
-    // The p2p interface is passed as a coroutine parameter so it is copied into the frame and stays
-    // alive for the whole (possibly deferred) send.
+    // value message held by shared_ptr; the 4-byte seq payload is owned by it (zero-copy view
+    // send). The p2p interface is passed as a coroutine parameter so it is copied into the frame
+    // and stays alive for the whole (possibly deferred) send.
     task::wait([](P2PInterface::Ptr _p2p, bcos::bytes _payload) mutable
                    -> task::Task<void> {
-        P2PMessageV2 message;
-        message.setPacketType(GatewayMessageType::SyncNodeSeq);
-        message.setPayload(std::move(_payload));
+        auto message = std::make_shared<P2PMessageV2>();
+        message->setPacketType(GatewayMessageType::SyncNodeSeq);
+        message->setPayload(std::move(_payload));
         co_await _p2p->broadcastMessageToAll(
-            message, ::ranges::views::single(message.payload()), Options{});
+            message, ::ranges::views::single(message->payload()), Options{});
     }(p2p, std::move(payload)));
 }
 

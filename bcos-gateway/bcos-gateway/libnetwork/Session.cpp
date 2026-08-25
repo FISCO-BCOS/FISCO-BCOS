@@ -909,7 +909,20 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     // const), so a reused message object (broadcast fan-out / retry loop) can never leak the flag
     // to a peer that receives an uncompressed frame.
     bytes headerBuffer;
-    message.encodeHeader(headerBuffer);
+    if (!message.encodeHeader(headerBuffer))
+    {
+        // e.g. P2PMessageOptions::encode failed (empty/oversized src/dst IDs). Sending a frame
+        // whose header claims "has options" while the options are missing would make the peer
+        // drop the connection instead of the message.
+        BOOST_THROW_EXCEPTION(NetworkException(-1, "encode header failed"));
+    }
+    // encodeHeader always emits the fixed 14-byte base header (options are appended after it, and
+    // option-encoding failures above are already rejected); guard the two fixed-offset writes
+    // below defensively anyway.
+    if (headerBuffer.size() < c_p2pHeaderExtOffset + sizeof(uint16_t))
+    {
+        BOOST_THROW_EXCEPTION(NetworkException(-1, "encode header failed: header too short"));
+    }
 
     // Zero-copy send by default. When compression is enabled and the payload is large enough (and
     // the wire format is V2+ — the same rule as the removed asyncSendMessage path, P2PMessage::
@@ -990,10 +1003,15 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
 
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
+        // Log the ext actually on the wire (the header's ext field), not the caller's ext: when
+        // compression applied, the wire header carries the COMPRESS bit that message.ext() does
+        // not have — a future "peer failed to decompress" investigation must read the wire value.
+        const uint16_t wireExt = boost::asio::detail::socket_ops::network_to_host_short(
+            *reinterpret_cast<uint16_t const*>(headerBuffer.data() + c_p2pHeaderExtOffset));
         SESSION_LOG(TRACE) << LOG_DESC("Session fastSendMessage")
                            << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message.seq())
-                           << LOG_KV("packetType", message.packetType())
-                           << LOG_KV("ext", message.ext()) << LOG_KV("this", this);
+                           << LOG_KV("packetType", message.packetType()) << LOG_KV("ext", wireExt)
+                           << LOG_KV("this", this);
     }
     if (options.response)
     {

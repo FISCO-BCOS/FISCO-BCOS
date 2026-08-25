@@ -21,6 +21,7 @@
 #include "Common.h"
 #include "P2PMessageV2.h"
 #include "bcos-utilities/BoostLog.h"
+#include <bcos-task/Wait.h>
 #include <cstring>
 #include <utility>
 
@@ -193,17 +194,17 @@ void ServiceV2::broadcastRouterSeq()
     bytes payload;
     payload.insert(payload.end(), (byte*)&statusSeq, (byte*)&statusSeq + 4);
     auto self = std::static_pointer_cast<ServiceV2>(shared_from_this());
-    // value message in frame; the 4-byte seq payload is owned by the frame (zero-copy view send).
-    // The router table should only be exchanged between neighbours and propagated hop-by-hop, so
-    // broadcast to the directly connected sessions only (not all reachable nodes). All state is
-    // passed as coroutine parameters so it is copied into the frame and stays alive.
+    // value message held by shared_ptr; the 4-byte seq payload is owned by it (zero-copy view
+    // send). The router table should only be exchanged between neighbours and propagated
+    // hop-by-hop, so broadcast to the directly connected sessions only (not all reachable nodes).
+    // All state is passed as coroutine parameters so it is copied into the frame and stays alive.
     task::wait([](std::shared_ptr<ServiceV2> _self, bcos::bytes _payload) mutable
                    -> task::Task<void> {
-        P2PMessageV2 message;
-        message.setPacketType(GatewayMessageType::RouterTableSyncSeq);
-        message.setPayload(std::move(_payload));
+        auto message = std::make_shared<P2PMessageV2>();
+        message->setPacketType(GatewayMessageType::RouterTableSyncSeq);
+        message->setPayload(std::move(_payload));
         co_await _self->broadcastMessageToNeighbors(
-            message, ::ranges::views::single(message.payload()), Options{});
+            message, ::ranges::views::single(message->payload()), Options{});
     }(self, std::move(payload)));
 }
 
@@ -439,28 +440,31 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
 
 void ServiceV2::asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options)
 {
-    auto reachableNodes = m_routerTable->getAllReachableNode();
-    auto self = shared_from_this();
     try
     {
-        auto selfV2 = std::static_pointer_cast<ServiceV2>(self);
-        task::wait([](std::shared_ptr<ServiceV2> _self, std::set<P2pID> _reachableNodes,
-                       std::shared_ptr<P2PMessage> _message,
-                       Options _options) mutable -> task::Task<void> {
-            for (auto const& node : _reachableNodes)
+        auto reachableNodes = m_routerTable->getAllReachableNode();
+        auto selfV2 = std::static_pointer_cast<ServiceV2>(shared_from_this());
+        // Fan out one independent coroutine per peer (see Service::asyncBroadcastMessage): each
+        // task holds the shared message, its per-session src/dst/version stamping runs
+        // synchronously before its first suspension, and no peer's socket-write blocks the peers
+        // behind it.
+        for (auto const& node : reachableNodes)
+        {
+            try
             {
-                try
-                {
-                    co_await _self->sendMessageByNodeID(
-                        node, *_message, ::ranges::views::single(_message->payload()), _options);
-                }
-                catch (std::exception const& e)
-                {
-                    SERVICE2_LOG(WARNING) << LOG_BADGE("asyncBroadcastMessage")
-                                          << LOG_KV("what", boost::diagnostic_information(e));
-                }
+                task::wait([](std::shared_ptr<ServiceV2> _self, P2pID _node,
+                               std::shared_ptr<P2PMessage> _message,
+                               Options _options) mutable -> task::Task<void> {
+                    co_await _self->sendMessageByNodeID(_node, *_message,
+                        ::ranges::views::single(_message->payload()), _options);
+                }(selfV2, node, message, options));
             }
-        }(selfV2, std::move(reachableNodes), std::move(message), options));
+            catch (std::exception const& e)
+            {
+                SERVICE2_LOG(WARNING) << LOG_BADGE("asyncBroadcastMessage")
+                                      << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }
     }
     catch (std::exception& e)
     {
@@ -470,14 +474,21 @@ void ServiceV2::asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Optio
 }
 
 bcos::task::Task<void> ServiceV2::broadcastMessageToAll(
-    P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+    P2PMessage::Ptr message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     auto reachableNodes = m_routerTable->getAllReachableNode();
+    auto selfV2 = std::static_pointer_cast<ServiceV2>(shared_from_this());
+    // Fan out one independent coroutine per peer (see Service::broadcastMessageToAll).
     for (auto const& node : reachableNodes)
     {
         try
         {
-            co_await sendMessageByNodeID(node, message, payloads, options);
+            task::wait([](std::shared_ptr<ServiceV2> _self, P2pID _node, P2PMessage::Ptr _message,
+                           ::ranges::any_view<bytesConstRef> _payloads,
+                           Options _options) mutable -> task::Task<void> {
+                co_await _self->sendMessageByNodeID(
+                    _node, *_message, std::move(_payloads), std::move(_options));
+            }(selfV2, node, message, payloads, options));
         }
         catch (std::exception const& e)
         {

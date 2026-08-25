@@ -583,23 +583,28 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
             }
         }
         auto self = shared_from_this();
-        task::wait([](std::shared_ptr<Service> _self, std::vector<P2pID> _nodeIDs,
-                       P2PMessage::Ptr _message, Options _options) mutable -> task::Task<void> {
-            for (auto const& nodeID : _nodeIDs)
+        // Fan out one independent coroutine per peer: each task holds the shared message, and its
+        // per-session src/dst/version stamping runs synchronously before its first suspension, so
+        // the tasks never race on the shared header and no peer's socket-write blocks the peers
+        // behind it (base enqueued every peer and returned immediately).
+        for (auto const& nodeID : nodeIDs)
+        {
+            try
             {
-                try
-                {
-                    co_await _self->sendMessageByNodeID(
-                        nodeID, *_message, ::ranges::views::single(_message->payload()), _options);
-                }
-                catch (std::exception const& e)
-                {
-                    SERVICE_LOG(WARNING) << LOG_DESC("asyncBroadcastMessage send failed")
-                                         << LOG_KV("nodeid", printShortP2pID(nodeID))
-                                         << LOG_KV("what", boost::diagnostic_information(e));
-                }
+                task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID,
+                               P2PMessage::Ptr _message, Options _options) mutable
+                               -> task::Task<void> {
+                    co_await _self->sendMessageByNodeID(_nodeID, *_message,
+                        ::ranges::views::single(_message->payload()), _options);
+                }(self, nodeID, message, options));
             }
-        }(self, std::move(nodeIDs), std::move(message), options));
+            catch (std::exception const& e)
+            {
+                SERVICE_LOG(WARNING) << LOG_DESC("asyncBroadcastMessage send failed")
+                                     << LOG_KV("nodeid", printShortP2pID(nodeID))
+                                     << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }
     }
     catch (std::exception& e)
     {
@@ -609,7 +614,7 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 }
 
 bcos::task::Task<void> Service::broadcastMessageToAll(
-    P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+    P2PMessage::Ptr message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     std::vector<P2pID> nodeIDs;
     {
@@ -620,11 +625,21 @@ bcos::task::Task<void> Service::broadcastMessageToAll(
             nodeIDs.push_back(session.first);
         }
     }
+    auto self = shared_from_this();
+    // Fan out one independent coroutine per peer (see asyncBroadcastMessage): the caller's message
+    // is handed over as a shared_ptr so every per-peer task keeps it alive; each task's
+    // per-session src/dst/version stamping runs synchronously before its first suspension, so no
+    // race on the shared header and no head-of-line blocking on a stalled peer's socket.
     for (auto const& nodeID : nodeIDs)
     {
         try
         {
-            co_await sendMessageByNodeID(nodeID, message, payloads, options);
+            task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID, P2PMessage::Ptr _message,
+                           ::ranges::any_view<bytesConstRef> _payloads,
+                           Options _options) mutable -> task::Task<void> {
+                co_await _self->sendMessageByNodeID(
+                    _nodeID, *_message, std::move(_payloads), std::move(_options));
+            }(self, nodeID, message, payloads, options));
         }
         catch (std::exception const& e)
         {
@@ -637,7 +652,7 @@ bcos::task::Task<void> Service::broadcastMessageToAll(
 }
 
 bcos::task::Task<void> Service::broadcastMessageToNeighbors(
-    P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+    P2PMessage::Ptr message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     // Only directly connected sessions (m_sessions), unlike broadcastMessageToAll which may fan out
     // through the ServiceV2 router table. This preserves the "router table sync only between
@@ -651,11 +666,21 @@ bcos::task::Task<void> Service::broadcastMessageToNeighbors(
             nodeIDs.push_back(session.first);
         }
     }
+    auto self = shared_from_this();
+    // Fan out one independent coroutine per peer (see asyncBroadcastMessage): the caller's message
+    // is handed over as a shared_ptr so every per-peer task keeps it alive; each task's
+    // per-session src/dst/version stamping runs synchronously before its first suspension, so no
+    // race on the shared header and no head-of-line blocking on a stalled peer's socket.
     for (auto const& nodeID : nodeIDs)
     {
         try
         {
-            co_await sendMessageByNodeID(nodeID, message, payloads, options);
+            task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID, P2PMessage::Ptr _message,
+                           ::ranges::any_view<bytesConstRef> _payloads,
+                           Options _options) mutable -> task::Task<void> {
+                co_await _self->sendMessageByNodeID(
+                    _nodeID, *_message, std::move(_payloads), std::move(_options));
+            }(self, nodeID, message, payloads, options));
         }
         catch (std::exception const& e)
         {
@@ -755,16 +780,17 @@ void Service::asyncBroadcastMessageToP2PNodes(
     uint16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options)
 {
     auto self = shared_from_this();
-    // value message in frame; payload owned by the frame and sent as a view (zero-copy). All state
-    // is passed as coroutine parameters so it is copied into the frame and stays alive.
+    // value message held by shared_ptr: broadcastMessageToAll fans out one coroutine per peer and
+    // each task keeps the message alive (zero-copy: the payload rides as a view). All state is
+    // passed as coroutine parameters so it is copied into the frame and stays alive.
     task::wait([](std::shared_ptr<Service> _self, uint16_t _type, bcos::bytes _payload,
                    Options _options) mutable -> task::Task<void> {
-        P2PMessageV2 message;
-        message.setPacketType(_type);
-        message.setSeq(_self->messageFactory()->newSeq());
-        message.setPayload(std::move(_payload));
+        auto message = std::make_shared<P2PMessageV2>();
+        message->setPacketType(_type);
+        message->setSeq(_self->messageFactory()->newSeq());
+        message->setPayload(std::move(_payload));
         co_await _self->broadcastMessageToAll(
-            message, ::ranges::views::single(message.payload()), _options);
+            message, ::ranges::views::single(message->payload()), _options);
     }(self, _type, bcos::bytes(_payload.begin(), _payload.end()), _options));
 }
 
@@ -782,19 +808,32 @@ void Service::asyncSendProtocol(P2PSession::Ptr _session)
 {
     auto self = shared_from_this();
     // value message in frame; payload owned by the frame. All state is passed as coroutine
-    // parameters so it is copied into the frame and stays alive.
+    // parameters so it is copied into the frame and stays alive. The pre-send checks (outgoing
+    // rate limit / max size) run synchronously on the caller thread inside fastSendP2PMessage and
+    // may throw — catch so a handshake rejection cannot escape task::wait and abort onConnect's
+    // session-registration tail (the session would stay live-but-unregistered, silently hidden
+    // from the routing layer). A failed handshake is recoverable: the peer retries.
     task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _session) -> task::Task<void> {
-        auto payload = bytes();
-        _self->m_codec->encode(_self->m_localProtocol, payload);
-        P2PMessageV2 message;
-        message.setPacketType(GatewayMessageType::Handshake);
-        message.setSeq(_self->messageFactory()->newSeq());
-        message.setPayload(std::move(payload));
-        SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol")
-                          << LOG_KV("payload", message.payload().size())
-                          << LOG_KV("seq", message.seq());
-        co_await _session->fastSendP2PMessage(
-            message, ::ranges::views::single(message.payload()), Options{});
+        try
+        {
+            auto payload = bytes();
+            _self->m_codec->encode(_self->m_localProtocol, payload);
+            P2PMessageV2 message;
+            message.setPacketType(GatewayMessageType::Handshake);
+            message.setSeq(_self->messageFactory()->newSeq());
+            message.setPayload(std::move(payload));
+            SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol")
+                              << LOG_KV("payload", message.payload().size())
+                              << LOG_KV("seq", message.seq());
+            co_await _session->fastSendP2PMessage(
+                message, ::ranges::views::single(message.payload()), Options{});
+        }
+        catch (std::exception const& e)
+        {
+            SERVICE_LOG(WARNING) << LOG_DESC("asyncSendProtocol send exception")
+                                 << LOG_KV("p2pid", printShortP2pID(_session->p2pID()))
+                                 << LOG_KV("what", boost::diagnostic_information(e));
+        }
     }(self, _session));
 }
 

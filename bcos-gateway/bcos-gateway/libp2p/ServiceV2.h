@@ -53,7 +53,7 @@ public:
     bool isReachable(P2pID const& _nodeID) const override;
 
     // (coroutine) broadcast to all reachable nodes through the router table
-    task::Task<void> broadcastMessageToAll(P2PMessage& message,
+    task::Task<void> broadcastMessageToAll(P2PMessage::Ptr message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
     // handlers called when the node is unreachable

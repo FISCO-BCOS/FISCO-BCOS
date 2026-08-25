@@ -166,8 +166,16 @@ public:
                 auto buffer = m_buffer;
                 auto groupID = m_groupID;
                 auto respFunc = std::move(m_respFunc);
-                m_self->asyncSendMessageByNodeID(*groupID, m_moduleID, m_srcNodeID, m_dstNodeID,
-                    bcos::ref(*buffer),
+                // Materialize what the call arguments need (groupID / payload) BEFORE the lambda
+                // argument below: the lambda's init-captures move buffer/groupID/state, and C++17
+                // leaves the evaluation order of function arguments unspecified — if the lambda ran
+                // first, *groupID / bcos::ref(*buffer) would dereference the moved-from (null)
+                // shared_ptrs. The string stays alive because the lambda's captured shared_ptr
+                // keeps it alive.
+                std::string const& groupIDRef = *groupID;
+                auto payload = bcos::ref(*buffer);
+                m_self->asyncSendMessageByNodeID(groupIDRef, m_moduleID, m_srcNodeID, m_dstNodeID,
+                    payload,
                     [state = std::move(state), buffer = std::move(buffer),
                         groupID = std::move(groupID),
                         respFunc = std::move(respFunc)](bcos::Error::Ptr _error) mutable {
