@@ -59,10 +59,4 @@ intx::uint256 computeOperatorCost(
     const OpFeeParams& params, uint64_t gas, bool jovianFormula) noexcept;
 intx::uint256 computeOperatorCost(
     const OpFeeParams& params, uint64_t gas, const OpForkConfig& cfg) noexcept;
-
-/// Charged operator fee, mirroring the block-transition gate (OpTransition.cpp:395):
-/// has_operator_fee ? computeOperatorCost(...) : 0. The fork-level 0-gate lives here for
-/// callers (runners / tests) that must not re-implement the block-transition decision.
-intx::uint256 computeChargedOperatorCost(
-    const OpFeeParams& params, uint64_t gas, const OpForkConfig& cfg) noexcept;
 }  // namespace bcos::evm::opstack

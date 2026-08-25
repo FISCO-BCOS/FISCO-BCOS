@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <bcos-evm/eth/state/errors.hpp>
-#include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/host.hpp>
 #include <cassert>
 // TODO(eth-utils-removal): several sections of this file are copied verbatim from
@@ -372,7 +371,7 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
 std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::Transaction& tx,
     evmc::bytes_view signedTxEnvelope, const OpForkConfig& cfg, const OpFeeParams& fee,
-    int64_t blockGasLeft, bool skipBalanceCheck)
+    int64_t blockGasLeft)
 {
     // Whitelist, not a blacklist. Transaction::Type has uint8_t as its underlying type and
     // validate_transaction's type switch (state.cpp:365-383) carries no default label, so EVERY
@@ -422,11 +421,7 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     maxCost += tx.value;
     maxCost += l1Cost;
     maxCost += opCost;
-    // Balance cap for real transactions. Simulations (eth_call/estimateGas) skip it: op-geth
-    // never balance-validates a call — its simulated sender (the request's `from`, or the
-    // dummy-signature recovery when absent) routinely carries no funds, and the check would
-    // reject read-only contract probes the chain should answer.
-    if (!skipBalanceCheck && intx::uint512{balance} < maxCost)
+    if (intx::uint512{balance} < maxCost)
         return make_error_code(std::errc::result_out_of_range);
 
     OpTxProperties props{std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee,

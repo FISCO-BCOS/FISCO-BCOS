@@ -224,10 +224,4 @@ intx::uint256 computeOperatorCost(
 {
     return computeOperatorCost(params, gas, cfg.has_jovian_operator_formula);
 }
-
-intx::uint256 computeChargedOperatorCost(
-    const OpFeeParams& params, uint64_t gas, const OpForkConfig& cfg) noexcept
-{
-    return cfg.has_operator_fee ? computeOperatorCost(params, gas, cfg) : intx::uint256{0};
-}
 }  // namespace bcos::evm::opstack

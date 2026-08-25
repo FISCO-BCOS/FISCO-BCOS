@@ -62,8 +62,7 @@ struct OpTxProperties
 [[nodiscard]] std::variant<OpTxProperties, std::error_code> opValidate(
     const evmone::state::StateView& view, const evmone::state::BlockInfo& block,
     const evmone::state::Transaction& tx, evmc::bytes_view signedTxEnvelope,
-    const OpForkConfig& cfg, const OpFeeParams& fee, int64_t blockGasLeft,
-    bool skipBalanceCheck = false);
+    const OpForkConfig& cfg, const OpFeeParams& fee, int64_t blockGasLeft);
 
 /// Pairing constraint: the *FromState functions must be used as a pair; they must not be
 /// interleaved with the injection-style ones (opValidate/opTransition).
@@ -126,7 +125,9 @@ struct OpReceiptMeta
 /// validate and transition straddle a fork boundary — which is exactly the bug this signature
 /// now makes unrepresentable.
 ///
-/// Pass the snapshot, not loose bools. fill_operator_scalars is caller policy.
+/// Takes the whole snapshot rather than its booleans: three adjacent bool parameters would let a
+/// caller swap has_operator_fee and has_da_footprint with a clean compile and nothing visible in
+/// review. fill_operator_scalars stays separate because it is caller policy, not a snapshot fact.
 OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 operator_fee_at_used,
     bool fill_operator_scalars) noexcept;
 

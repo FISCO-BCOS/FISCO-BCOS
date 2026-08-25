@@ -96,9 +96,7 @@ evmc_tx_context OpHost::get_tx_context() const noexcept
         m_block.prev_randao,
         intx::be::store<evmc::uint256be>(intx::uint256{m_chain_id}),
         intx::be::store<evmc::uint256be>(intx::uint256{m_block.base_fee}),
-        // OP Stack Ecotone+: the L2 serves no blobs, so BLOBBASEFEE (0x4a) must always push 1
-        // (EIP-4844 MIN_BLOB_GASPRICE) — never the L1 blob market price, and never 0.
-        intx::be::store<evmc::uint256be>(m_block.blob_base_fee.value_or(1)),
+        intx::be::store<evmc::uint256be>(m_block.blob_base_fee.value_or(0)),
         m_tx.blob_hashes.data(),
         m_tx.blob_hashes.size(),
         nullptr,

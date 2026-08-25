@@ -104,10 +104,6 @@ public:
         {
             poison(e.what());
         }
-        catch (const std::logic_error& e)
-        {
-            poison(e.what());
-        }
         catch (const std::exception& e)
         {
             poison(e.what());
@@ -132,10 +128,6 @@ public:
         }
         // Exception-matching ladder; see get_account's comment.
         catch (const std::runtime_error& e)
-        {
-            poison(e.what());
-        }
-        catch (const std::logic_error& e)
         {
             poison(e.what());
         }
@@ -165,10 +157,6 @@ public:
         }
         // Exception-matching ladder; see get_account's comment.
         catch (const std::runtime_error& e)
-        {
-            poison(e.what());
-        }
-        catch (const std::logic_error& e)
         {
             poison(e.what());
         }
@@ -268,11 +256,6 @@ public:
             poison(e.what());
             throw;
         }
-        catch (const std::logic_error& e)
-        {
-            poison(e.what());
-            throw;
-        }
         catch (const std::exception& e)
         {
             poison(e.what());
@@ -324,10 +307,6 @@ public:
         // four read methods: visitAccounts is on the mandatory stateRootOf path — its poison
         // message is the only clue for triaging a -32603.
         catch (const std::runtime_error& e)
-        {
-            poison(e.what());
-        }
-        catch (const std::logic_error& e)
         {
             poison(e.what());
         }
