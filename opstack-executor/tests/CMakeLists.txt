@@ -19,6 +19,7 @@ add_executable(opstack-executor-tests
     PreBlockOpStepsTest.cpp
     Storage2StateHelpersTest.cpp
     Storage2StatePoisonTest.cpp
+    OpEnvelopeMirrorTest.cpp
     support/SeedPreStateTest.cpp
     OpJovianShapeTest.cpp
     OpSchedulerSeamSmokeTest.cpp
