@@ -210,9 +210,9 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 3);
 }
 
-// The one method version this node really does not implement: the service-layer forkchoice
-// window tops out at V3 (isForkchoiceVersionSupported), so V4 answers -38005 without
-// reaching the engine service.
+// V4 is the OP-stack Isthmus+ forkchoice version and IS implemented (the forkchoice
+// window was raised to V4 for the OP engine path) — the request must reach the engine
+// service and answer VALID with the version captured.
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
 {
     Json::Value params(Json::arrayValue);
@@ -225,9 +225,11 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
     Json::Value response;
     CALL_ENGINE(forkchoiceUpdatedV4, params, response);
 
-    BOOST_CHECK(response.isMember("error"));
-    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
-    BOOST_CHECK(!mockService.m_state->capturedForkchoiceVersion.has_value());
+    BOOST_CHECK(response["result"].isMember("payloadStatus"));
+    BOOST_CHECK_EQUAL(response["result"]["payloadStatus"]["status"].asString(), "VALID");
+
+    BOOST_REQUIRE(mockService.m_state->capturedForkchoiceVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 4);
 }
 
 BOOST_AUTO_TEST_CASE(getPayloadV1)
