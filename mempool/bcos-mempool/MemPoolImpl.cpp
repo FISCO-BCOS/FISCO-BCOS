@@ -49,7 +49,26 @@ void bcos::txpool::MemPoolImpl::add(protocol::Transaction::Ptr transaction)
     {
         return;
     }
+    addImpl(std::move(transaction), /*replaceOnNonceConflict=*/true);
+}
 
+bcos::protocol::TransactionStatus bcos::txpool::MemPoolImpl::tryAdd(
+    protocol::Transaction::Ptr transaction)
+{
+    std::unique_lock lock(m_mutex);
+    if (!transaction) [[unlikely]]
+    {
+        // Unlike add(), which returns silently, this is reported: a caller that hands the pool
+        // a null pointer has a bug, and swallowing it here makes that bug look like a rejected
+        // transaction.
+        bcos::throwTrace(NullTransaction{});
+    }
+    return addImpl(std::move(transaction), /*replaceOnNonceConflict=*/false);
+}
+
+bcos::protocol::TransactionStatus bcos::txpool::MemPoolImpl::addImpl(
+    protocol::Transaction::Ptr transaction, bool replaceOnNonceConflict)
+{
     if (transaction->tainted()) [[unlikely]]
     {
         bcos::throwTrace(InvalidTaintedTransaction{});
@@ -79,12 +98,12 @@ void bcos::txpool::MemPoolImpl::add(protocol::Transaction::Ptr transaction)
     {
         MEMPOOL_LOG(WARNING) << LOG_DESC("MemPoolImpl::add: get hash failed, skip")
                              << LOG_KV("reason", boost::diagnostic_information(e));
-        return;
+        return protocol::TransactionStatus::Malformed;
     }
 
     if (auto it = hashIndex.find(hash); it != hashIndex.end())
     {
-        return;
+        return protocol::TransactionStatus::AlreadyInTxPool;
     }
 
     try
@@ -95,6 +114,10 @@ void bcos::txpool::MemPoolImpl::add(protocol::Transaction::Ptr transaction)
             it != nonceIndex.end() && it->sender() == transactionData.sender() &&
             it->nonce() == transactionData.nonce())
         {
+            if (!replaceOnNonceConflict)
+            {
+                return protocol::TransactionStatus::NonceCheckFail;
+            }
             nonceIndex.replace(it, std::move(transactionData));
         }
         else
@@ -106,5 +129,7 @@ void bcos::txpool::MemPoolImpl::add(protocol::Transaction::Ptr transaction)
     {
         MEMPOOL_LOG(WARNING) << LOG_DESC("MemPoolImpl::add: invalid nonce, skip")
                              << LOG_KV("reason", boost::diagnostic_information(e));
+        return protocol::TransactionStatus::NonceCheckFail;
     }
+    return protocol::TransactionStatus::None;
 }
