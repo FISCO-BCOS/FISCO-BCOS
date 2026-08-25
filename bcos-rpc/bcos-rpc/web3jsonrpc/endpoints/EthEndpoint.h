@@ -25,6 +25,8 @@
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <json/json.h>
 
+#include <atomic>
+
 namespace bcos::rpc
 {
 
@@ -44,6 +46,7 @@ public:
     task::Task<void> mining(const Json::Value&, Json::Value&);
     task::Task<void> hashrate(const Json::Value&, Json::Value&);
     task::Task<void> gasPrice(const Json::Value&, Json::Value&);
+    task::Task<void> feeHistory(const Json::Value&, Json::Value&);
     task::Task<void> accounts(const Json::Value&, Json::Value&);
     task::Task<void> blockNumber(const Json::Value&, Json::Value&);
     task::Task<void> getBalance(const Json::Value&, Json::Value&);
@@ -85,7 +88,12 @@ private:
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;
 
+
     task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
+
+    // Runs an eth_call with the gas field pinned to @p limit; true when the
+    // simulation succeeds (estimateGas' minimum-viable-limit search).
+    task::Task<bool> simulateAtGasLimit(const Json::Value& request, u256 limit);
 };
 
 }  // namespace bcos::rpc

@@ -32,9 +32,12 @@
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>
 #include <bcos-utilities/BoostLog.h>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
+#include <array>
 #include <cstring>
 #include <exception>
 #include <set>
+#include <utility>
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 
@@ -151,6 +154,88 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         {
             throwDecode("typed body");
         }
+        // Dual layout: the stored bytes are the signing preimage (type || fields) or — for
+        // sealed OP blocks, whose extraTransactionBytes the engine overwrote with the full
+        // envelope — the wire form (type || fields || yParity,r,s). The per-type field
+        // count is fixed, so counting the list items discriminates unambiguously; a wire
+        // payload is already the assembled form and is returned verbatim.
+        {
+            static constexpr std::array<std::pair<uint8_t, std::size_t>, 4> c_typedFieldCounts{{
+                {0x01, 8},   // EIP-2930
+                {0x02, 9},   // EIP-1559
+                {0x03, 11},  // EIP-4844 (.., maxFeePerBlobGas, blobVersionedHashes)
+                {0x04, 10},  // EIP-7702 (.., authorizationList)
+            }};
+            auto const* expected =
+                std::find_if(c_typedFieldCounts.begin(), c_typedFieldCounts.end(),
+                    [txType](auto const& entry) { return entry.first == txType; });
+            if (expected == c_typedFieldCounts.end()) [[unlikely]]
+            {
+                throwDecode("typed unknown type");
+            }
+            std::size_t itemCount = 0;
+            bcos::bytesRef counter(cursor.data(), header.payloadLength);
+            while (!counter.empty())
+            {
+                auto [countError, itemHeader] = bcos::codec::rlp::decodeHeader(counter);
+                if (countError || itemHeader.payloadLength > counter.size()) [[unlikely]]
+                {
+                    throwDecode("typed item count");
+                }
+                counter = counter.getCroppedData(itemHeader.payloadLength);
+                ++itemCount;
+            }
+            if (itemCount == expected->second + 3) [[unlikely]]
+            {
+                // wire form: already signed. Cross-check the trailer (yParity, r, s)
+                // against the tars signature before adopting it verbatim — same rule as
+                // the legacy wire form below — so a tampered envelope cannot produce a
+                // txHash inconsistent with the stored signature.
+                bcos::bytesRef tail(cursor.data(), header.payloadLength);
+                bcos::bytesRef last3[3]{};
+                size_t n = 0;
+                while (!tail.empty())
+                {
+                    auto [tailError, itemHeader] = bcos::codec::rlp::decodeHeader(tail);
+                    if (tailError || itemHeader.payloadLength > tail.size()) [[unlikely]]
+                    {
+                        throwDecode("typed trailer");
+                    }
+                    last3[n % 3] = tail.getCroppedData(0, itemHeader.payloadLength);
+                    tail = tail.getCroppedData(itemHeader.payloadLength);
+                    ++n;
+                }
+                // yParity is a single byte 0/1; RLP encodes 0 as the empty payload 0x80, so
+                // decode() on the payload-only ref would fail InputTooShort — read it directly.
+                auto const ypRef = last3[(n - 3) % 3];
+                uint64_t wireYParity = 0;
+                if (ypRef.size() == 0)
+                {
+                    wireYParity = 0;  // 0x80
+                }
+                else if (ypRef.size() == 1)
+                {
+                    wireYParity = ypRef[0];
+                }
+                else [[unlikely]]
+                {
+                    throwDecode("typed yParity");
+                }
+                bcos::bytes wireR(last3[(n - 2) % 3].begin(), last3[(n - 2) % 3].end());
+                bcos::bytes wireS(last3[(n - 1) % 3].begin(), last3[(n - 1) % 3].end());
+                if (wireYParity != yParity || !std::equal(wireR.begin(), wireR.end(), r.begin(),
+                                                    r.end()) ||
+                    !std::equal(wireS.begin(), wireS.end(), s.begin(), s.end())) [[unlikely]]
+                {
+                    throwDecode("typed signature mismatch");
+                }
+                return buffer;
+            }
+            if (itemCount != expected->second) [[unlikely]]
+            {
+                throwDecode("typed item count");
+            }
+        }
         bcos::bytesConstRef fields(cursor.data(), header.payloadLength);
 
         bcos::bytes sig;
@@ -202,30 +287,42 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         }
         else
         {
-            // EIP-155: item 7 is the signed chainId (items 8,9 are the 0,0 placeholders). Read
-            // chainId from the preimage itself -- that is the value the sender actually signed, so
-            // it is authoritative even though the whole tx arrived from an untrusted peer.
-            uint64_t chainId = 0;
-            if (auto chainIdError = bcos::codec::rlp::decode(walker, chainId)) [[unlikely]]
+            // Dual layout: the trailer is either the preimage's (chainId, 0, 0) or — for
+            // sealed OP blocks, whose extraTransactionBytes the engine overwrote with the
+            // full envelope — the wire (v, r, s). RLP encodes the integer 0 as an empty
+            // payload while secp256k1 r/s never are, so emptiness of items 8/9
+            // discriminates the two shapes unambiguously.
+            uint64_t item7 = 0;
+            bcos::bytes item8, item9;
+            if (auto trailerError = bcos::codec::rlp::decodeItems(walker, item7, item8, item9);
+                trailerError) [[unlikely]]
             {
-                throwDecode("legacy chainId");
-            }
-            // The preimage must end with exactly chainId,0,0 -- reject 7/8-item lists and
-            // non-zero trailers rather than misreading item 7 of some other shape as a chainId.
-            for (int i = 0; i < 2; ++i)
-            {
-                uint64_t zero = 0;
-                if (auto zeroError = bcos::codec::rlp::decode(walker, zero); zeroError || zero != 0)
-                    [[unlikely]]
-                {
-                    throwDecode("legacy trailing zeros");
-                }
+                throwDecode("legacy trailer");
             }
             if (!walker.empty()) [[unlikely]]
             {
                 throwDecode("legacy trailing garbage");
             }
-            v = chainId * 2 + 35 + yParity;
+            if (item8.empty() && item9.empty())
+            {
+                // preimage: item7 is the signed chainId (items 8,9 are the 0,0
+                // placeholders). It is what the sender actually signed, so it is
+                // authoritative even though the whole tx arrived from an untrusted peer.
+                v = item7 * 2 + 35 + yParity;
+            }
+            else
+            {
+                // wire: item7 is the EIP-155 v. Cross-check the trailer's r/s against the
+                // tars signature before adopting its v — the reassembled form must be the
+                // canonical assembly of (fields, tars signature), not just any stored
+                // bytes that happen to end in a signature-shaped trailer.
+                if (!std::equal(item8.begin(), item8.end(), r.begin(), r.end()) ||
+                    !std::equal(item9.begin(), item9.end(), s.begin(), s.end())) [[unlikely]]
+                {
+                    throwDecode("legacy signature mismatch");
+                }
+                v = item7;
+            }
         }
 
         bcos::bytes sig;
@@ -254,18 +351,9 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
         // Deposit (0x7e): unsigned — extraTransactionBytes already IS the full 0x7e envelope
         // (stored by takeToTarsTransaction as encode()), so the hash is keccak of it verbatim;
         // reassembleWeb3RawTransaction cannot be used (it needs a 65-byte signature).
-        // The deposit determination comes from the SIGNED envelope's first byte, NEVER the
-        // forgeable web3TypedTxKind mirror (tars field 12): a peer can rewrite that mirror to
-        // 0x7e on a signed Web3 tx, which would route the hash to this unsigned-deposit form
-        // and skip reassembleWeb3RawTransaction — defeating the "never believe the wire hash"
-        // defense (kyonRay R4 #1). The mirror is display-only; security decisions key on the
-        // envelope.
-        auto const extraBytes = extraTransactionBytes();
-        bool const isDepositEnvelope =
-            (!extraBytes.empty() && extraBytes[0] == static_cast<bcos::byte>(0x7e));
-        if (isDepositEnvelope)
+        if (isDepositTx())
         {
-            auto const depositHash = bcos::crypto::keccak256Hash(extraBytes);
+            auto const depositHash = bcos::crypto::keccak256Hash(extraTransactionBytes());
             m_inner()->extraTransactionHash.assign(depositHash.begin(), depositHash.end());
             return;
         }
@@ -466,7 +554,7 @@ bcos::u256 bcostars::protocol::TransactionImpl::mint() const
     // may lack the prefix. bcos::u256("100") without 0x-parses as decimal 100, not 0x100=256
     // (a silent value error for a value-bearing field). Always force a 0x prefix so the
     // identity "mint stored = mint parsed" holds regardless of input form.
-    // Invalid hex from corrupt data must not throw through the const getter — the length
+    // Invalid hex from corrupt data must not throw through the const getter -- the length
     // guard handles over-wide values (u256 uses boost unchecked backend which silently
     // truncates >256 bits), and try/catch handles remaining corrupt/non-hex input; both
     // fall back to 0, consistent with the empty-string case.
@@ -477,7 +565,7 @@ bcos::u256 bcostars::protocol::TransactionImpl::mint() const
     {
         auto const& s = m_inner()->mint;
         // bcos::u256 (boost unchecked backend) silently truncates >256-bit values rather
-        // than throwing — catch over-wide hex explicitly before the parse: with a 0x/0X
+        // than throwing -- catch over-wide hex explicitly before the parse: with a 0x/0X
         // prefix, valid is at most 66 chars (2 prefix + 64 hex digits); without, at most 64.
         auto const hasPrefix = s.starts_with("0x") || s.starts_with("0X");
         auto const hexLen = hasPrefix ? s.size() - 2 : s.size();
