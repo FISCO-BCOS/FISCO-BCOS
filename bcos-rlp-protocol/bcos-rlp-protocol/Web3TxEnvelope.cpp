@@ -87,14 +87,14 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
         // op-geth HomesteadSigner.
         return std::nullopt;
     }
-    // Peek field 8 (without consuming field 7 yet) to classify preimage vs full envelope.
-    // Only field 8 is checked here — field 9 validation is deferred to
-    // reassembleWeb3RawTransaction (which validates the full 0,0 tail). This keeps the
-    // walker simple and avoids cursor arithmetic pitfalls with multi-field lookahead.
-    // field7Item keeps the WHOLE field-7 item (header + payload): decodeHeader below advances
-    // walker to the payload start, and decoding that payload as a fresh item mis-reads any
-    // multi-byte chainId/v (e.g. chainId 8453 -> 33) or classifies it as a list header
-    // (chainId 200 -> nullopt -> bogus "unprotected" exemption). Decode from the item start.
+    // Peek fields 8/9 (without consuming field 7 yet) to classify preimage vs full envelope
+    // via the shared isLegacyPreimageTail rule — the same rule the decode path
+    // (Web3TxHandler) and the reassemble path (TransactionImpl) apply, so the three walk
+    // sites can never classify the same trailer differently. field7Item keeps the WHOLE
+    // field-7 item (header + payload): decodeHeader below advances walker to the payload
+    // start, and decoding that payload as a fresh item mis-reads any multi-byte chainId/v
+    // (e.g. chainId 8453 -> 33) or classifies it as a list header (chainId 200 -> nullopt ->
+    // bogus "unprotected" exemption). Decode from the item start.
     bcos::bytesRef field7Item = walker;
     auto [field7Error, field7Header] = bcos::codec::rlp::decodeHeader(walker);
     if (field7Error || field7Header.payloadLength > walker.size()) [[unlikely]]
@@ -102,38 +102,45 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
         return std::nullopt;
     }
     bcos::bytesRef afterField7 = walker.getCroppedData(field7Header.payloadLength);
+    uint64_t field7 = 0;
+    if (auto e = bcos::codec::rlp::decode(field7Item, field7); e != nullptr) [[unlikely]]
+    {
+        return std::nullopt;
+    }
     bool const isPreimageTail = [&] {
         if (afterField7.empty()) [[unlikely]]
         {
             return false;  // no 0,0 placeholders — treat as full form (or malformed)
         }
+        // decodeHeader advances afterField7 past field 8's header to its payload; for the
+        // empty 0x80 placeholder that lands exactly on field 9's header byte.
         auto [field8Error, field8Header] = bcos::codec::rlp::decodeHeader(afterField7);
-        return field8Error == nullptr && !field8Header.isList && field8Header.payloadLength == 0;
+        if (field8Error != nullptr || field8Header.isList || field8Header.payloadLength != 0)
+        {
+            return false;
+        }
+        if (afterField7.empty()) [[unlikely]]
+        {
+            return false;
+        }
+        auto [field9Error, field9Header] = bcos::codec::rlp::decodeHeader(afterField7);
+        return field9Error == nullptr && !field9Header.isList && field9Header.payloadLength == 0 &&
+               isLegacyPreimageTail(field7, true, true);
     }();
     if (isPreimageTail)
     {
         // preimage form: field 7 is the EIP-155 chainId.
-        uint64_t chainId = 0;
-        if (auto e = bcos::codec::rlp::decode(field7Item, chainId); e != nullptr) [[unlikely]]
-        {
-            return std::nullopt;
-        }
-        return chainId;
+        return field7;
     }
     // Full envelope: field 7 is v. 27/28 = pre-EIP-155 unprotected (exempt); >= 35 = EIP-155
     // protected, chainId = (v - 35) >> 1. Anything else (0/1, 29-34) is malformed.
-    uint64_t v = 0;
-    if (auto e = bcos::codec::rlp::decode(field7Item, v); e != nullptr) [[unlikely]]
+    if (field7 == 27 || field7 == 28)
     {
         return std::nullopt;
     }
-    if (v == 27 || v == 28)
+    if (field7 >= 35)
     {
-        return std::nullopt;
-    }
-    if (v >= 35)
-    {
-        return (v - 35) >> 1;
+        return (field7 - 35) >> 1;
     }
     return std::nullopt;
 }

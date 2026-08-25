@@ -302,7 +302,7 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             {
                 throwDecode("legacy trailing garbage");
             }
-            if (item8.empty() && item9.empty() && item7 != 27 && item7 != 28)
+            if (bcos::rlp::protocol::isLegacyPreimageTail(item7, item8.empty(), item9.empty()))
             {
                 // preimage: item7 is the signed chainId (items 8,9 are the 0,0
                 // placeholders). Homestead v (27/28) with emptied r/s is a crafted wire,
@@ -316,11 +316,21 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                 // wire: item7 is the EIP-155 v. Cross-check the trailer's r/s against the
                 // tars signature before adopting its v — the reassembled form must be the
                 // canonical assembly of (fields, tars signature), not just any stored
-                // bytes that happen to end in a signature-shaped trailer.
+                // bytes that happen to end in a signature-shaped trailer. v itself is part
+                // of the signature: it must match the tars yParity (27+yParity unprotected,
+                // chainId*2+35+yParity protected) or the same signature would hash to two
+                // different txs — a relabeled v slips past chainId admission yet changes
+                // the reassembled txHash (kyonRay #5496 R1-2).
                 if (!std::equal(item8.begin(), item8.end(), r.begin(), r.end()) ||
                     !std::equal(item9.begin(), item9.end(), s.begin(), s.end())) [[unlikely]]
                 {
                     throwDecode("legacy signature mismatch");
+                }
+                bool const vMatchesParity =
+                    (item7 == 27 + yParity) || (item7 >= 35 && ((item7 - 35) & 1) == yParity);
+                if (!vMatchesParity) [[unlikely]]
+                {
+                    throwDecode("legacy v mismatch");
                 }
                 v = item7;
             }

@@ -15,11 +15,11 @@ bcos::crypto::HashType bcos::rpc::opAwareBlockHash(const bcos::protocol::BlockHe
     return bcos::protocol::EthBlockHeader::computeHash(header);
 }
 
-void bcos::rpc::combineBlockResponse(
-    Json::Value& result, const bcos::protocol::Block& block, bool fullTxs)
+void bcos::rpc::combineBlockResponse(Json::Value& result, const bcos::protocol::Block& block,
+    bool fullTxs, std::optional<bcos::crypto::HashType> canonicalHash)
 {
     auto blockHeader = block.blockHeader();
-    auto blockHash = opAwareBlockHash(*blockHeader);
+    auto blockHash = canonicalHash.value_or(opAwareBlockHash(*blockHeader));
     auto blockNumber = blockHeader->number();
     result["number"] = toQuantity(blockNumber);
     result["hash"] = blockHash.hexPrefixed();

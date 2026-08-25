@@ -162,8 +162,10 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         // reconstructed from the stored parity byte — the storage layer keeps only the parity.
         if (web3Tx.type == TransactionType::Legacy)
         {
-            // signatureData() is unchecked on this read path — a corrupt/peer-crafted tars
-            // signature shorter than 65 bytes would read OOB at [64]. Fail to "0x0" instead.
+            // sig[64] is an unchecked operator[] read — a corrupt/peer-crafted tars
+            // signature shorter than 65 bytes would read OOB. Fail to "0x0" instead.
+            // (The getCroppedData calls further down ARE bounds-checked — they yield an
+            // empty view on OOB — so no guard is needed there, kyonRay #5496 R1-13.)
             auto const sig = tx.signatureData();
             uint64_t const parity = (sig.size() >= 65) ? static_cast<uint64_t>(sig[64]) : 0;
             if (web3Tx.chainId.has_value() && web3Tx.chainId.value() != 0)

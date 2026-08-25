@@ -22,11 +22,23 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     // finish(), e.g. "21000"); pre-existing hex receipts ("0x5208") stay on chain in the old
     // format. safeCastToU256's boost::lexical_cast parses decimal only and rejects the 0x
     // prefix — so parse via direct u256 construction, which auto-detects the base (0x → hex,
-    // otherwise decimal) for both formats.
+    // otherwise decimal) for both formats. The string ctor THROWS on unparseable input; a
+    // corrupt receipt must degrade to 0x0 + a warning, never -32603 the whole
+    // eth_getTransactionReceipt (same posture as TransactionImpl::mint, kyonRay #5496 R1-12).
     bcos::u256 cumulativeGasUsed{};
     auto const& cgs = receipt.cumulativeGasUsed();
     if (!cgs.empty())
-        cumulativeGasUsed = bcos::u256(std::string(cgs));
+    {
+        try
+        {
+            cumulativeGasUsed = bcos::u256(std::string(cgs));
+        }
+        catch (std::exception const& e)
+        {
+            WEB3_LOG(WARNING) << LOG_DESC("ReceiptResponse: unparseable cumulativeGasUsed")
+                              << LOG_KV("value", cgs) << LOG_KV("msg", e.what());
+        }
+    }
     size_t logIndex = receipt.logIndex();
     auto transactionIndex = toQuantity(receipt.transactionIndex());
     result["transactionIndex"] = transactionIndex;

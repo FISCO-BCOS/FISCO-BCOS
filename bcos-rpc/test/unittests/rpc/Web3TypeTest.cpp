@@ -1134,6 +1134,41 @@ BOOST_AUTO_TEST_CASE(testNoSigLeftoverHighSRejected)
         BOOST_REQUIRE(rlp::decodeFromPayload(bRef, tx) == nullptr);
         BOOST_CHECK(tx.type == rpc::TransactionType::EIP1559);
     }
+    // Legacy sealed envelope (6 fields + v,r,s): the no-sig branch must land the trailer's
+    // r/s in signature* so the same EIP-2 gate fires — before the R1-3 fix the legacy
+    // leftover was consumed as scratch and the gate was silently skipped (a fork vs
+    // op-geth Sender, exactly the shape the typed case above pins).
+    {
+        auto makeLegacy = [](bcos::bytes const& s) {
+            bcos::bytes items;
+            rlp::encode(items, static_cast<uint64_t>(0));           // nonce
+            rlp::encode(items, static_cast<uint64_t>(1000000000));  // gasPrice
+            rlp::encode(items, static_cast<uint64_t>(21000));       // gasLimit
+            rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+            rlp::encode(items, static_cast<uint64_t>(0));   // value
+            rlp::encode(items, bcos::bytes{});              // data
+            rlp::encode(items, static_cast<uint64_t>(38));  // v = chainId 1 * 2 + 35 + parity 1
+            rlp::encode(items, bcos::bytes(32, 0x11));      // r
+            rlp::encode(items, s);                          // s
+            // Legacy has no type byte: the RLP list itself IS the envelope.
+            bcos::bytes envelope;
+            rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+            envelope.insert(envelope.end(), items.begin(), items.end());
+            return envelope;
+        };
+        auto highBytes = makeLegacy(bcos::bytes(32, 0xff));
+        auto bRef = bcos::ref(highBytes);
+        Web3Transaction tx{};
+        auto err = rlp::decodeFromPayload(bRef, tx);
+        BOOST_REQUIRE(err != nullptr);
+        BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::InvalidVInSignature));
+
+        auto lowBytes = makeLegacy(bcos::bytes(32, 0x22));
+        auto lowRef = bcos::ref(lowBytes);
+        Web3Transaction lowTx{};
+        BOOST_REQUIRE(rlp::decodeFromPayload(lowRef, lowTx) == nullptr);
+        BOOST_CHECK_EQUAL(lowTx.chainId.value_or(0), 1);
+    }
 }
 
 // Typed tx with chainId=0 must decode with chainId present (not nullopt).

@@ -1029,6 +1029,10 @@ BOOST_AUTO_TEST_CASE(engineErrorMapperOutOfWindowVersion)
         EngineError::UnsupportedFork);
     BOOST_CHECK_EQUAL(
         bcos::rpc::mapEngineErrorCode(bcos::engine::UnknownPayload{}), EngineError::UnknownPayload);
+    // Errors.h groups UnknownForkchoiceHeadBlock with InvalidForkchoiceState under -38002;
+    // the mapper must not drop it to -32603 — part-5's forkchoice path throws it.
+    BOOST_CHECK_EQUAL(bcos::rpc::mapEngineErrorCode(bcos::engine::UnknownForkchoiceHeadBlock{}),
+        EngineError::InvalidForkchoiceState);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

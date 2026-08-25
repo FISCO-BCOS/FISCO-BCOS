@@ -68,16 +68,19 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     }
     // The OP-line call pipeline (OpstackExecutor::m_prepare → opValidate) prices every call
     // through the transaction's RLP envelope bytes and rejects an empty envelope with EINVAL
-    // ("Invalid argument" at the RPC) — so build the simulation tx via
-    // Web3Transaction::takeToTarsTransaction, which stores the envelope in
-    // extraTransactionBytes. Unsigned legacy shape: chainId stays nullopt (pre-EIP-155
-    // exemption from the node chain-id check), dummy r/s mirror the scheduler-test fixture
-    // (the sender is forced below regardless).
+    // ("Invalid argument" at the RPC) — so on OP headers (blockBaseFee present — the same
+    // baseFee discriminator gasPrice/feeHistory use; PBFT headers never write the tars field)
+    // build the simulation tx via Web3Transaction::takeToTarsTransaction, which stores the
+    // envelope in extraTransactionBytes. On PBFT headers the plain BCOS factory tx below is
+    // the unchanged pre-envelope behavior — an unconditional rewrite would hand PBFT chains a
+    // dummy-signed envelope with a 1-ether/gas default price and break every read-only call
+    // whose sender cannot cover it (kyonRay #5496 R1-1). Unsigned legacy shape: chainId stays
+    // nullopt (pre-EIP-155 exemption from the node chain-id check), dummy r/s mirror the
+    // scheduler-test fixture (the sender is forced below regardless).
     //
     // Pricing-less eth_call: op-geth skips the fee-cap check. We cannot skip it here, so
-    // default max_gas_price to max(head.baseFee*2, 2 gwei) when the caller passed a block
-    // base fee, or 1 ether/gas when the header is unknown — a fixed 2 gwei loses after a
-    // few Holocene full blocks.
+    // default max_gas_price to max(head.baseFee*2, 2 gwei) — a fixed 2 gwei loses after a
+    // few Holocene full blocks. The head baseFee is always available on this path.
     auto quantity = [](std::optional<std::string> const& s) -> std::optional<u256> {
         if (!s || s->empty())
         {
@@ -92,51 +95,56 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
             return std::nullopt;
         }
     };
-    try
+    if (blockBaseFee.has_value())
     {
-        Web3Transaction w3{};
-        w3.type = TransactionType::Legacy;
-        w3.chainId = std::nullopt;
-        if (!to.empty())
+        try
         {
-            w3.to = Address(to);
-        }
-        w3.data = data;
-        w3.value = quantity(value).value_or(u256(0));
-        w3.nonce = 0;
-        // op-geth caps a gas-less eth_call at its RPC gas cap; default to the 30M block-gas
-        // convention so a pricing-less simulation passes the intrinsic-gas check.
-        w3.gasLimit = gas.value_or(30'000'000);
-        u256 defaultFee = u256(1'000'000'000'000'000'000);  // 1 ether/gas if header unknown
-        if (blockBaseFee)
-        {
-            defaultFee = std::max(*blockBaseFee * 2, u256(2'000'000'000));
-        }
-        w3.maxPriorityFeePerGas =
-            quantity(gasPrice).value_or(quantity(maxFeePerGas).value_or(defaultFee));
-        w3.signatureV = 0;
-        w3.signatureR = bcos::bytes(32, 0x01);
-        w3.signatureS = bcos::bytes(32, 0x02);
-        auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
-        // takeToTarsTransaction renders the numeric nonce; restore the passthrough semantics
-        // the RPC contract has (converted hex quantity, or empty when unknown — the executor
-        // then falls back to the sender's state nonce).
-        tarsHolder->data.nonce = nonce;
-        auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-            [tarsHolder]() { return tarsHolder.get(); });
-        if (from.has_value())
-        {
-            if (auto const sender = safeFromHexWithPrefix(from.value()))
+            Web3Transaction w3{};
+            w3.type = TransactionType::Legacy;
+            w3.chainId = std::nullopt;
+            if (!to.empty())
             {
-                tx->forceSender(sender.value());
+                w3.to = Address(to);
             }
+            w3.data = data;
+            w3.value = quantity(value).value_or(u256(0));
+            // Envelope and mirror must agree (the cross-check's premise): the parsed nonce
+            // goes INTO the envelope, not just the mirror — an envelope nonce of 0 next to a
+            // real mirror nonce is exactly the divergence the PR's trust-boundary narrative
+            // rejects, and it makes the deployment nonce fix above moot for anything that
+            // reads the envelope (kyonRay #5496 R1-11). Unknown stays 0 (the mirror keeps
+            // the empty string; the executor falls back to the sender's state nonce).
+            w3.nonce = safeFromQuantity(nonce).value_or(0);
+            // op-geth caps a gas-less eth_call at its RPC gas cap; default to the 30M block-gas
+            // convention so a pricing-less simulation passes the intrinsic-gas check.
+            w3.gasLimit = gas.value_or(30'000'000);
+            u256 const defaultFee = std::max(*blockBaseFee * 2, u256(2'000'000'000));
+            w3.maxPriorityFeePerGas =
+                quantity(gasPrice).value_or(quantity(maxFeePerGas).value_or(defaultFee));
+            w3.signatureV = 0;
+            w3.signatureR = bcos::bytes(32, 0x01);
+            w3.signatureS = bcos::bytes(32, 0x02);
+            auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
+            // takeToTarsTransaction renders the numeric nonce; restore the passthrough semantics
+            // the RPC contract has (converted hex quantity, or empty when unknown — the executor
+            // then falls back to the sender's state nonce).
+            tarsHolder->data.nonce = nonce;
+            auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
+                [tarsHolder]() { return tarsHolder.get(); });
+            if (from.has_value())
+            {
+                if (auto const sender = safeFromHexWithPrefix(from.value()))
+                {
+                    tx->forceSender(sender.value());
+                }
+            }
+            return tx;
         }
-        return tx;
-    }
-    catch (...)
-    {
-        // noexcept guard: any conversion surprise falls back to the plain factory tx (the
-        // pre-envelope behavior) rather than aborting the RPC.
+        catch (...)
+        {
+            // noexcept guard: any conversion surprise falls back to the plain factory tx (the
+            // pre-envelope behavior) rather than aborting the RPC.
+        }
     }
     auto tx = factory->createTransaction(1, std::move(this->to), this->data, nonce, 0, {}, {}, 0,
         "", value.value_or(""), gasPrice.value_or(""), gas.value_or(0), maxFeePerGas.value_or(""),

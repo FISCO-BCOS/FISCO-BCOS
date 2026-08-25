@@ -301,16 +301,16 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
     if (auto config = co_await ledger::getSystemConfig(*_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
     {
         auto [chainId, _] = config.value();
-        uint64_t nodeChainId = 0;
-        try
-        {
-            nodeChainId = boost::lexical_cast<uint64_t>(chainId);
-        }
-        catch (boost::bad_lexical_cast const&)
+        // SAME parser as EthEndpoint::sendRawTransaction (ledger::parseWeb3ChainId): a config
+        // written as hex ("0x539") or wider than uint64 must parse identically on both
+        // admission points — two different parsers would admit on the RPC and reject every
+        // Web3 tx in the txpool with a misleading "InvalidChainId" (kyonRay #5496 R1-7).
+        auto expected = ledger::parseWeb3ChainId(chainId);
+        if (!expected.has_value())
         {
             co_return TransactionStatus::InvalidChainId;
         }
-        if (envelopeChainId.has_value() && *envelopeChainId != nodeChainId)
+        if (envelopeChainId.has_value() && bcos::u256(*envelopeChainId) != *expected)
         {
             co_return TransactionStatus::InvalidChainId;
         }

@@ -255,14 +255,21 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "newestBlock not found"));
     }
     auto const newest = static_cast<uint64_t>(newestNumber);
-    auto const oldest = newest >= blockCount - 1 ? newest - (blockCount - 1) : 0;
+    auto const wantReward = !percentiles.empty();
+    // Amplification bound: a rewardPercentiles request loads the FULL receipts set of every
+    // block in the range (each load is a storage read + a per-block sort of all priorities).
+    // geth serves 1024 too but behind a fee-history cache; this endpoint hits storage every
+    // time, so when rewards are wanted the effective range is clamped to a practical window
+    // (geth's commonly used 128). All response arrays share the loop below, so the clamp
+    // keeps them consistent (kyonRay #5496 R1-6).
+    auto const resolvedBlockCount = wantReward ? (std::min)(blockCount, uint64_t(128)) : blockCount;
+    auto const oldest = newest >= resolvedBlockCount - 1 ? newest - (resolvedBlockCount - 1) : 0;
 
     auto const ledger = m_nodeService->ledger();
     Json::Value result;
     result["oldestBlock"] = toQuantity(oldest);
     result["baseFeePerGas"] = Json::arrayValue;
     result["gasUsedRatio"] = Json::arrayValue;
-    auto const wantReward = !percentiles.empty();
     if (wantReward)
     {
         result["reward"] = Json::arrayValue;
@@ -1095,8 +1102,8 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
 {
     co_await call(request, response, nullptr, false);
 }
-task::Task<void> EthEndpoint::call(
-    const Json::Value& request, Json::Value& response, u256* gasUsed, bool isEstimate)
+task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& response, u256* gasUsed,
+    bool isEstimate, std::optional<u256> preResolvedBaseFee)
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: data(DATA)
@@ -1118,14 +1125,18 @@ task::Task<void> EthEndpoint::call(
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
-    std::optional<u256> blockBaseFee;
-    if (auto const ledger = m_nodeService->ledger())
+    std::optional<u256> blockBaseFee = preResolvedBaseFee;
+    if (!blockBaseFee.has_value())
     {
-        if (auto block = co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
+        if (auto const ledger = m_nodeService->ledger())
         {
-            if (auto const& header = block->blockHeader(); header && header->baseFee())
+            if (auto block =
+                    co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
             {
-                blockBaseFee = *header->baseFee();
+                if (auto const& header = block->blockHeader(); header && header->baseFee())
+                {
+                    blockBaseFee = *header->baseFee();
+                }
             }
         }
     }
@@ -1242,9 +1253,23 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         return u256(30'000'000);
     }();
 
+    // Resolve the head base fee ONCE: every call() below would otherwise re-read the header
+    // (one storage read per EVM execution — up to 18 reads for a single request).
+    std::optional<u256> blockBaseFee;
+    if (auto const ledger = m_nodeService->ledger())
+    {
+        if (auto block = co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
+        {
+            if (auto const& header = block->blockHeader(); header && header->baseFee())
+            {
+                blockBaseFee = *header->baseFee();
+            }
+        }
+    }
+
     u256 gasUsed;
     Json::Value callResponse;
-    co_await call(request, callResponse, std::addressof(gasUsed), true);
+    co_await call(request, callResponse, std::addressof(gasUsed), true, blockBaseFee);
 
     if (callResponse.isMember("error"))
     {
@@ -1252,21 +1277,37 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         co_return;
     }
 
+    // ONE deep copy of the request for the whole search (the data field can be MBs); only
+    // the gas field is rewritten per iteration.
+    Json::Value bounded = request;
     auto estimate = gasUsed;
-    if (objectForm && !co_await simulateAtGasLimit(request, estimate))
+    if (objectForm && !co_await simulateAtGasLimit(bounded, estimate, blockBaseFee))
     {
         auto lowerBound = estimate;  // known-bad
-        auto upperBound = effectiveFirstRunLimit > lowerBound ?
-                              effectiveFirstRunLimit :
-                              lowerBound + 1;  // the first run succeeded at its own limit
-        // Each iteration is a full EVM re-execution: cap the search so an adversarial
-        // estimateGas flood cannot multiply node CPU unboundedly (log2(30M) ~= 25; cap at 16
-        // keeps the estimate within one gas step of the exact value for realistic ranges).
+        // op-geth starts the upward search at gasUsed*2 and doubles until viable
+        // (eth/api.go DoEstimateGas); the 30M first-run limit is only the known-good
+        // ceiling. Starting at gasUsed*2 instead of 30M shrinks the search range from
+        // 30M to ~gasUsed: typical estimates converge to the exact limit within the
+        // 16-round cap (log2(gasUsed) ≈ 15 for 60k gas) instead of stopping at the
+        // cap with a ~458-gas residual on the old 30M range.
+        auto upperBound = effectiveFirstRunLimit;
+        auto candidate = std::max(gasUsed * 2, lowerBound + 1);
+        while (candidate < upperBound)
+        {
+            if (co_await simulateAtGasLimit(bounded, candidate, blockBaseFee))
+            {
+                upperBound = candidate;
+                break;
+            }
+            candidate = std::min(candidate * 2, upperBound);
+        }
+        // else: effectiveFirstRunLimit stays the upper bound — the first run already
+        // proved it viable, no re-simulation needed.
         size_t iterations = 0;
         while (upperBound - lowerBound > 1 && iterations < 16)
         {
             auto const mid = lowerBound + (upperBound - lowerBound) / 2;
-            if (co_await simulateAtGasLimit(request, mid))
+            if (co_await simulateAtGasLimit(bounded, mid, blockBaseFee))
             {
                 upperBound = mid;
             }
@@ -1283,13 +1324,12 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     buildJsonContent(result, response);
 }
 
-task::Task<bool> EthEndpoint::simulateAtGasLimit(const Json::Value& request, u256 limit)
+task::Task<bool> EthEndpoint::simulateAtGasLimit(
+    Json::Value& bounded, u256 limit, std::optional<u256> blockBaseFee)
 {
-    Json::Value bounded = request;
     bounded[0U]["gas"] = toQuantity(limit);
     Json::Value callResponse;
-    u256 gasUsed;
-    co_await call(bounded, callResponse, std::addressof(gasUsed), true);
+    co_await call(bounded, callResponse, nullptr, true, blockBaseFee);
     co_return !callResponse.isMember("error");
 }
 task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::Value& response)
@@ -1307,14 +1347,15 @@ task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::V
         auto flag = bcos::ledger::HEADER | bcos::ledger::RECEIPTS;
         flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
         auto block = co_await ledger::getBlockData(*ledger, number, flag);
-        combineBlockResponse(result, *block, fullTransaction);
-        // Same canonical-hash override as getBlockByNumber: OP blocks' hash is the announced
-        // (registered) one, not the stored tars header's own derivation.
-        if (auto canonicalHash = co_await ledger::getBlockHash(*ledger, number);
-            canonicalHash != crypto::HashType{})
+        // Single authoritative hash for the whole response: OP blocks' hash is the announced
+        // (registered) one, not the stored tars header's own derivation; per-tx blockHash
+        // entries must use the SAME value or clients see two hashes for one block (R1-4).
+        auto blockHash = co_await ledger::getBlockHash(*ledger, number);
+        if (blockHash == crypto::HashType{})
         {
-            result["hash"] = canonicalHash.hexPrefixed();
+            blockHash = bcos::rpc::opAwareBlockHash(*block->blockHeader());
         }
+        combineBlockResponse(result, *block, fullTransaction, blockHash);
     }
     catch (std::exception const& e)
     {
@@ -1338,15 +1379,17 @@ task::Task<void> EthEndpoint::getBlockByNumber(const Json::Value& request, Json:
         auto flag = bcos::ledger::HEADER | bcos::ledger::RECEIPTS;
         flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
         auto block = co_await ledger::getBlockData(*ledger, blockNumber, flag);
-        combineBlockResponse(result, *block, fullTransaction);
-        // OP blocks' canonical hash is the announced one (keccak of the 21-field RLP header)
-        // registered in s_number_2_hash; the stored tars header's hash() is a different
-        // derivation and would break parentHash chains and byHash round-trips at the RPC.
-        if (auto canonicalHash = co_await ledger::getBlockHash(*ledger, blockNumber);
-            canonicalHash != crypto::HashType{})
+        // Single authoritative hash for the whole response: OP blocks' canonical hash is the
+        // announced one (keccak of the 21-field RLP header) registered in s_number_2_hash;
+        // the stored tars header's hash() is a different derivation and would break
+        // parentHash chains and byHash round-trips. Per-tx blockHash entries must use the
+        // SAME value or clients see two hashes for one block (R1-4).
+        auto blockHash = co_await ledger::getBlockHash(*ledger, blockNumber);
+        if (blockHash == crypto::HashType{})
         {
-            result["hash"] = canonicalHash.hexPrefixed();
+            blockHash = bcos::rpc::opAwareBlockHash(*block->blockHeader());
         }
+        combineBlockResponse(result, *block, fullTransaction, blockHash);
     }
     catch (std::exception const& e)
     {
@@ -1448,9 +1491,14 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
         auto receipt = co_await ledger::getReceipt(*ledger, txHash);
-        // OP headers hash as keccak(encodeOpHeader), not the tars dataHash fallback — same fix
-        // as combineBlockResponse (R1).
-        auto blockHash = bcos::rpc::opAwareBlockHash(*block->blockHeader());
+        // Single authoritative hash, same resolution as getBlockByHash/getBlockByNumber:
+        // the announced (registered) OP hash when present, else the OP-aware header
+        // derivation — never a third source for the same block (R1-4).
+        auto blockHash = co_await ledger::getBlockHash(*ledger, blockNumber);
+        if (blockHash == crypto::HashType{})
+        {
+            blockHash = bcos::rpc::opAwareBlockHash(*block->blockHeader());
+        }
         combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
     }
     catch (std::exception const& e)

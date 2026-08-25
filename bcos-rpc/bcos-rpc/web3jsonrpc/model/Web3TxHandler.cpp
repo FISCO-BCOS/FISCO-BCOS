@@ -1,6 +1,7 @@
 // bcos-rpc/bcos-rpc/web3jsonrpc/model/Web3TxHandler.cpp
 #include "Web3TxHandler.h"
 #include "Web3Transaction.h"
+#include <bcos-rlp-protocol/Web3TxEnvelope.h>  // isLegacyPreimageTail (shared discriminator)
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Log.h>
 #include <cstddef>  // std::ptrdiff_t (ListEnd pointer arithmetic)
@@ -253,9 +254,9 @@ struct LegacyTxHandler : Web3TxHandler
             else
             {
                 // Tail is either the signing preimage (chainId, 0, 0) or a sealed-block
-                // wire envelope (v, r, s). Empty-empty trailers mark the preimage; otherwise
-                // item7 is EIP-155 v (27/28 unprotected, >=35 protected). 7/8-field
-                // preimages are invalid (op-geth uses 6 or 9 fields).
+                // wire envelope (v, r, s). The shared discriminator (isLegacyPreimageTail)
+                // also excludes Homestead v 27/28 with emptied r/s — a crafted wire that a
+                // naive "empty-empty = preimage" rule would read as chainId 27/28.
                 uint64_t item7 = 0;
                 bcos::bytesRef item8;
                 bcos::bytesRef item9;
@@ -264,7 +265,7 @@ struct LegacyTxHandler : Web3TxHandler
                 {
                     return decodeError;
                 }
-                if (item8.empty() && item9.empty())
+                if (bcos::rlp::protocol::isLegacyPreimageTail(item7, item8.empty(), item9.empty()))
                 {
                     // EIP-155 signing preimage tail: chainId with the two r/s placeholders.
                     out.chainId.emplace(item7);
@@ -272,11 +273,16 @@ struct LegacyTxHandler : Web3TxHandler
                 else
                 {
                     // Wire envelope: item7 is v; the signed chainId field exists only in the
-                    // preimage layout, so derive it from v. r/s are consumed above as scratch
-                    // for no-sig readers, which source the signature from the tars blob.
+                    // preimage layout, so derive it from v. The r/s ARE the signature: land
+                    // them (plus the normalized yParity) in out.signature* so the shared
+                    // EIP-2 low-s gate in Web3Transaction::decode fires for legacy sealed
+                    // envelopes too — a no-sig reader must not silently skip the check that
+                    // op-geth's Sender applies to every legacy tx (kyonRay #5496 R1-3).
+                    uint64_t normalizedV = 0;
                     if (item7 == 27 || item7 == 28)
                     {
                         out.chainId = std::nullopt;  // pre-EIP-155 wire envelope
+                        normalizedV = item7 - 27;
                     }
                     else if (item7 < 35)
                     {
@@ -286,7 +292,11 @@ struct LegacyTxHandler : Web3TxHandler
                     else
                     {
                         out.chainId.emplace((item7 - 35) >> 1);  // EIP-155 wire envelope
+                        normalizedV = (item7 - 35) & 1;
                     }
+                    out.signatureV = normalizedV;
+                    out.signatureR = bcos::bytes(item8.begin(), item8.end());
+                    out.signatureS = bcos::bytes(item9.begin(), item9.end());
                 }
             }
         }
