@@ -289,6 +289,56 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine)
     f.get();
 }
 
+BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine_withResponse)
+{
+    // Round-6 review finding 2 (test gap): the response-waiting coroutine path (_timeout > 0) was
+    // never covered — the existing coroutine test passes _timeout == 0, which returns before the
+    // SendResponseAwaitable is even constructed. This drives the real response path end-to-end:
+    // the module dispatcher receives the request and replies via sendMessage(isResponse=true), the
+    // fake gateway loops the response back, and handleCallback completes the registered
+    // SendResponseAwaitable, which resumes the suspended coroutine with the SendResult.
+    auto frontService = buildFrontService();
+    auto dstNodeID = createKey(g_dstNodeID_0);
+    std::string data(1000, 'z');
+    std::string responsePayload(64, 'R');
+
+    std::promise<SendResult> resultPromise;
+    auto resultFuture = resultPromise.get_future();
+
+    int moduleID = 333;
+    frontService->registerModuleMessageDispatcher(moduleID,
+        [&](bcos::crypto::NodeIDPtr _nodeID, const std::string& _id, bytesConstRef _data) {
+            BOOST_CHECK_EQUAL(dstNodeID->hex(), _nodeID->hex());
+            BOOST_CHECK_EQUAL(std::string(_data.begin(), _data.end()), data);
+            // reply with an isResponse=true frame carrying the same uuid; the fake gateway loops
+            // it back to onReceiveMessage, where message.isResponse() triggers handleCallback ->
+            // SendResponseAwaitable::complete
+            frontService->sendMessage(moduleID, dstNodeID, _id,
+                bytesConstRef(reinterpret_cast<const bcos::byte*>(responsePayload.data()),
+                    responsePayload.size()),
+                true, nullptr);
+        });
+
+    auto self = frontService;
+    task::wait(
+        [](decltype(self) _self, decltype(dstNodeID) _dstNodeID, int _moduleID, std::string _data,
+            std::promise<SendResult>* _resultPromise) -> task::Task<void> {
+            auto result = co_await _self->sendMessageByNodeID(_moduleID, _dstNodeID,
+                ::ranges::views::single(bytesConstRef(
+                    reinterpret_cast<const bcos::byte*>(_data.data()), _data.size())),
+                5000);
+            _resultPromise->set_value(std::move(result));
+        }(self, dstNodeID, moduleID, data, &resultPromise));
+
+    auto status = resultFuture.wait_for(std::chrono::seconds(10));
+    BOOST_REQUIRE(status == std::future_status::ready);
+    auto result = resultFuture.get();
+    BOOST_CHECK(!result.error);
+    BOOST_CHECK(!result.uuid.empty());
+    BOOST_CHECK_EQUAL(std::string(result.payload.begin(), result.payload.end()), responsePayload);
+    BOOST_CHECK(result.respond);
+}
+
 BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeIDs)
 {
     auto frontService = buildFrontService();

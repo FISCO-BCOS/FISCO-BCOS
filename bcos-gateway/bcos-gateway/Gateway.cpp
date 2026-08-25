@@ -23,6 +23,7 @@
 #include "bcos-front/FrontMessage.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/gateway/GatewayMessageExtAttributes.h"
+#include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
@@ -231,6 +232,12 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(const s
             bcos::crypto::NodeIDPtr m_dstNodeID;
             std::shared_ptr<bcos::bytes> m_buffer;
             std::shared_ptr<State> m_state;
+            // the io pool used to complete the coroutine OFF the caller's stack: the completion
+            // callback may run synchronously on the caller's own io thread (IOServicePool::dispatch
+            // executes inline when the current thread already belongs to the pool), and resuming
+            // the suspended coroutine from inside its own await_suspend is the exact hazard
+            // send()/drop() avoid by posting (FIB-185).
+            std::shared_ptr<ASIOInterface> m_asioInterface;
 
             bool await_ready() const noexcept { return false; }
             void await_suspend(std::coroutine_handle<> h)
@@ -238,16 +245,18 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(const s
                 m_state->handle = h;
                 auto state = m_state;
                 auto buffer = m_buffer;
+                auto asioInterface = m_asioInterface;
                 bool accepted = m_table->sendMessage(m_groupID, m_srcNodeID, m_dstNodeID,
                     bcos::ref(*buffer),
-                    [state, buffer](Error::Ptr _error) {
+                    [state, buffer, asioInterface](Error::Ptr _error) {
                         // completes exactly once; the buffer is kept alive until after the resume
-                        // (the borrowed front may still be reading it)
+                        // (the borrowed front may still be reading it). Post the resume off this
+                        // stack — the callback may run inline on the caller's io thread.
                         if (!state->done.exchange(true))
                         {
                             state->error = std::move(_error);
                             (void)buffer;
-                            state->handle.resume();
+                            asioInterface->post([state]() { state->handle.resume(); });
                         }
                     });
                 if (!accepted)
@@ -258,7 +267,7 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(const s
                         state->error = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceSendMsg,
                             "could not find a gateway to send this message, groupID:" + m_groupID +
                                 " ,dstNodeID:" + m_dstNodeID->hex());
-                        state->handle.resume();
+                        asioInterface->post([state]() { state->handle.resume(); });
                     }
                 }
             }
@@ -271,7 +280,8 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(const s
         co_return co_await LocalSendAwaitable{
             m_gatewayNodeManager->localRouterTable().get(), _groupID, std::move(_srcNodeID),
             std::move(_dstNodeID), std::make_shared<bcos::bytes>(std::move(buffer)),
-            std::make_shared<LocalSendAwaitable::State>()};
+            std::make_shared<LocalSendAwaitable::State>(),
+            m_p2pInterface->host()->asioInterface()};
     }
 
     // zero-copy: the message (header/options only) and the payload views both live in this frame
@@ -641,7 +651,7 @@ void bcos::gateway::Gateway::enableReadOnlyMode()
 
 bcos::task::Task<void> bcos::gateway::Gateway::broadcastMessage(uint16_t type,
     std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
-    ::ranges::any_view<bytesConstRef> payloads)
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads)
 {
     // zero-copy: the message (header/options only) lives in this frame; payload rides as views
     P2PMessageV2 message;

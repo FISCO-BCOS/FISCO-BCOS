@@ -266,7 +266,8 @@ public:
         bytesConstRef _payload) override
     {}
     task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
-        const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) override
+        const bcos::crypto::NodeID& srcNodeID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override
     {
         co_return;
     };
@@ -326,7 +327,8 @@ public:
     }
 
     bcos::task::Task<void> broadcastMessage(
-        uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override
+        uint16_t type, int moduleID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override
     {
         for (const auto& node : m_nodeIDList)
         {

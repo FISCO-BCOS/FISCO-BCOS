@@ -78,14 +78,21 @@ public:
 
     void await_suspend(std::coroutine_handle<> handle)
     {
-        std::lock_guard lock(m_state->mutex);
-        if (m_state->done.load(std::memory_order_acquire))
+        // Take a local reference to the state before touching it: the coroutine chain resumed
+        // below may destroy the last State reference (this awaitable's m_state), so the mutex must
+        // stay alive until after the unlock. This mirrors complete()'s "take handle under the
+        // lock, resume outside it" shape.
+        auto state = m_state;
         {
-            // the callback already completed before we suspended: resume immediately
-            handle.resume();
-            return;
+            std::lock_guard lock(state->mutex);
+            if (!state->done.load(std::memory_order_acquire))
+            {
+                state->handle = handle;
+                return;
+            }
         }
-        m_state->handle = handle;
+        // the callback already completed before we suspended: resume outside the lock
+        handle.resume();
     }
 
     SendResult await_resume() { return std::move(m_state->result); }
@@ -211,7 +218,8 @@ public:
         const std::vector<bcos::crypto::NodeIDPtr>& _nodeIDs, bytesConstRef _data) = 0;
 
     virtual task::Task<void> broadcastMessage(
-        uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) = 0;
+        uint16_t type, int moduleID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) = 0;
 
     /**
      * @brief: (coroutine, zero-copy) send message to one node and await the module-level response.
@@ -227,21 +235,24 @@ public:
      * The payloads must be at least forward ranges: the default bridge joins them into one buffer
      * (single pass), but overrides may iterate them multiple times (e.g. a retry loop).
      *
-     * Default implementation: joins the payload views into a buffer owned by the completion
-     * callback (NOT this coroutine frame) and bridges to the borrowed asyncSendMessageByNodeID —
-     * the TARS/MAX front client may keep reading the payload after the callback returns (e.g. a
-     * synchronous connection-check error followed by an async send setup), so the buffer must
-     * outlive the frame. This mirrors the GatewayInterface default bridge, which the gateway-side
-     * review rounds established against the same TARS client contract.
+     * Default implementation: joins the payload views into one contiguous buffer and bridges to
+     * the borrowed asyncSendMessageByNodeID. The front client (FrontServiceClient) copies the
+     * payload synchronously in the call arguments, so the buffer only needs to stay alive until
+     * asyncSendMessageByNodeID returns; with _timeout == 0 the bridge passes a null callback so
+     * the client forwards requireRespCallback = false (no response entry is registered on the
+     * peer). The _timeout > 0 bridge captures the buffer in the completion callback, which runs
+     * on another thread and must copy the borrowed payload view into the SendResult before the
+     * frame is gone.
      */
     virtual task::Task<SendResult> sendMessageByNodeID(int _moduleID,
         bcos::crypto::NodeIDPtr _nodeID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
         uint32_t _timeout)
     {
-        // The payload views are joined into a buffer owned by a shared_ptr captured by the
-        // completion callback, NOT this coroutine frame: the borrowed TARS/MAX front client may
-        // keep reading the payload after the callback returns.
+        // The payload views are joined into one contiguous buffer. For the response-waiting
+        // (_timeout > 0) path the buffer is captured by the completion callback so it stays alive
+        // while the callback (possibly on another thread) copies the borrowed payload view into
+        // the SendResult.
         auto buffer = std::make_shared<bcos::bytes>();
         for (auto const& data : _payloads)
         {
@@ -251,12 +262,13 @@ public:
 
         if (_timeout == 0)
         {
-            // fire-and-forget: no module-level response is expected. Keep the buffer owned by an
-            // empty completion callback until the borrowed client is done with it, and return
-            // once the send is dispatched.
-            asyncSendMessageByNodeID(_moduleID, std::move(_nodeID), payload, 0,
-                [buffer = std::move(buffer)](bcos::Error::Ptr, bcos::crypto::NodeIDPtr,
-                    bytesConstRef, const std::string&, ResponseFunc) mutable { (void)buffer; });
+            // fire-and-forget: no module-level response is expected. Pass a null callback so the
+            // borrowed client forwards requireRespCallback = false (the peer registers no response
+            // entry and the tars request completes normally instead of hanging until
+            // c_frontServiceTimeout). The front client copies the payload synchronously in the
+            // call arguments, so the frame-local buffer only needs to stay alive until
+            // asyncSendMessageByNodeID returns.
+            asyncSendMessageByNodeID(_moduleID, std::move(_nodeID), payload, 0, nullptr);
             co_return SendResult{};
         }
 

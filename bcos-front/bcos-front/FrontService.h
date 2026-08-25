@@ -91,7 +91,8 @@ public:
         int _moduleID, const crypto::NodeIDs& _nodeIDs, bytesConstRef _data) override;
 
     task::Task<void> broadcastMessage(
-        uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override;
+        uint16_t type, int moduleID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override;
 
     /**
      * @brief: (coroutine, zero-copy) send message to one node and await the module-level response.

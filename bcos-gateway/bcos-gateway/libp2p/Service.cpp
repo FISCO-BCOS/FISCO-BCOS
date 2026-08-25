@@ -618,7 +618,8 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 }
 
 bcos::task::Task<void> Service::broadcastMessageToAll(
-    P2PMessage::Ptr message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+    P2PMessage::Ptr message, ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
+    Options options)
 {
     std::vector<P2pID> nodeIDs;
     {
@@ -637,7 +638,7 @@ bcos::task::Task<void> Service::broadcastMessageToAll(
     for (auto const& nodeID : nodeIDs)
     {
         task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID, P2PMessage::Ptr _message,
-                       ::ranges::any_view<bytesConstRef> _payloads,
+                       ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
                        Options _options) mutable -> task::Task<void> {
             try
             {
@@ -656,7 +657,8 @@ bcos::task::Task<void> Service::broadcastMessageToAll(
 }
 
 bcos::task::Task<void> Service::broadcastMessageToNeighbors(
-    P2PMessage::Ptr message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+    P2PMessage::Ptr message, ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
+    Options options)
 {
     // Only directly connected sessions (m_sessions), unlike broadcastMessageToAll which may fan out
     // through the ServiceV2 router table. This preserves the "router table sync only between
@@ -678,7 +680,7 @@ bcos::task::Task<void> Service::broadcastMessageToNeighbors(
     for (auto const& nodeID : nodeIDs)
     {
         task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID, P2PMessage::Ptr _message,
-                       ::ranges::any_view<bytesConstRef> _payloads,
+                       ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
                        Options _options) mutable -> task::Task<void> {
             try
             {

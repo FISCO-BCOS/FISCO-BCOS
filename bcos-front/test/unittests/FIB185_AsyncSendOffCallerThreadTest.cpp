@@ -56,7 +56,7 @@ public:
     std::atomic_bool m_p2pCaptured{false};
 
     task::Task<void> broadcastMessage(uint16_t, std::string_view, int, const bcos::crypto::NodeID&,
-        ::ranges::any_view<bytesConstRef>) override
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward>) override
     {
         if (!m_bcastCaptured.exchange(true))
         {

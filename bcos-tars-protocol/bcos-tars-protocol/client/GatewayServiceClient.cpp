@@ -165,7 +165,7 @@ void bcostars::GatewayServiceClient::asyncSendMessageByNodeIDs(const std::string
 }
 bcos::task::Task<void> bcostars::GatewayServiceClient::broadcastMessage(uint16_t type,
     std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
-    ::ranges::any_view<bcos::bytesConstRef> payloads)
+    ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads)
 {
     auto shouldBlockCall = shouldStopCall();
     auto ret =

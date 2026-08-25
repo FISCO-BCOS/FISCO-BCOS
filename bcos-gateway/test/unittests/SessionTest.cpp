@@ -677,12 +677,16 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     makePeerSession(std::move(clientV0), "peerV0", 0);
 
     // One shared message broadcast to both sessions: each per-peer fan-out task stamps the
-    // negotiated version synchronously before its own header encode. SyncNodeSeq (rather than
-    // PeerToPeerMessage) avoids the P2PMessageOptions path, which would require a non-empty
-    // srcNodeID — the version-stamping invariant under test does not involve options.
+    // negotiated version synchronously before its own header encode. Round-6 review: stamp
+    // non-empty routing fields as well, so the V2 wire frame carries a real ttl/src/dst extension
+    // that the V2-peer decode below asserts — a regression that encodes a V2 frame through the
+    // base-class header (e.g. an object-sliced message, which writes no ttl/src/dst extension)
+    // would fail that decode immediately.
     auto message = std::make_shared<P2PMessageV2>();
     message->setPacketType(GatewayMessageType::SyncNodeSeq);
     message->setSeq(0x1234);
+    message->setSrcP2PNodeID("srcNodeID");
+    message->setDstP2PNodeID("dstNodeID");
     bytes payload(32, 'a');
     task::syncWait(service->broadcastMessageToNeighbors(
         message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{}));
@@ -703,14 +707,24 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     io->stop();
     ioThread.join();
 
-    // Each frame must carry its OWN negotiated version: the version field is bytes [4..6) of the
-    // fixed base header [length:4][version:2][packetType:2][seq:4][ext:2].
-    BOOST_REQUIRE(receivedV2.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
+    // The V0 frame must carry the negotiated V0 version (base header only): the version field is
+    // bytes [4..6) of the fixed base header [length:4][version:2][packetType:2][seq:4][ext:2].
     BOOST_REQUIRE(receivedV0.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
-    uint16_t versionV2 = (static_cast<uint16_t>(receivedV2[4]) << 8) | receivedV2[5];
     uint16_t versionV0 = (static_cast<uint16_t>(receivedV0[4]) << 8) | receivedV0[5];
-    BOOST_CHECK_EQUAL(versionV2, 2);
     BOOST_CHECK_EQUAL(versionV0, 0);
+
+    // The V2 frame must decode as a real V2 message carrying the full routing extension. Round-6
+    // review: decode the whole frame with P2PMessageV2::decode (instead of hand-reading the
+    // version bytes) and assert src/dst/ttl, so "V2 version written but ttl/src/dst missing" (the
+    // exact shape of the round-2..5 object-slicing defect) fails here.
+    BOOST_REQUIRE(receivedV2.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
+    P2PMessageV2 decodedV2;
+    int32_t decodedOffset = decodedV2.decode(bcos::ref(receivedV2));
+    BOOST_REQUIRE(decodedOffset > 0);
+    BOOST_CHECK_EQUAL(decodedV2.version(), 2);
+    BOOST_CHECK_EQUAL(decodedV2.srcP2PNodeID(), "srcNodeID");
+    BOOST_CHECK_EQUAL(decodedV2.dstP2PNodeID(), "dstNodeID");
+    BOOST_CHECK_EQUAL(decodedV2.ttl(), 10);
 }
 
 BOOST_AUTO_TEST_CASE(SessionRecvBufferTest)

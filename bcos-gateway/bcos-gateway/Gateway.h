@@ -91,7 +91,8 @@ public:
         bytesConstRef _payload) override;
 
     task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
-        const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) override;
+        const bcos::crypto::NodeID& srcNodeID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override;
 
     /**
      * @brief: (coroutine, zero-copy) send message to a single node with retry across candidate

@@ -488,7 +488,8 @@ void ServiceV2::asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Optio
 }
 
 bcos::task::Task<void> ServiceV2::broadcastMessageToAll(
-    P2PMessage::Ptr message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+    P2PMessage::Ptr message, ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
+    Options options)
 {
     auto reachableNodes = m_routerTable->getAllReachableNode();
     auto selfV2 = std::static_pointer_cast<ServiceV2>(shared_from_this());
@@ -496,7 +497,7 @@ bcos::task::Task<void> ServiceV2::broadcastMessageToAll(
     for (auto const& node : reachableNodes)
     {
         task::wait([](std::shared_ptr<ServiceV2> _self, P2pID _node, P2PMessage::Ptr _message,
-                       ::ranges::any_view<bytesConstRef> _payloads,
+                       ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
                        Options _options) mutable -> task::Task<void> {
             try
             {

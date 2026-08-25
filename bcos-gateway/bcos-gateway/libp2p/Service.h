@@ -67,7 +67,8 @@ public:
      *         task keeps the message alive (the payload rides as a view, zero-copy).
      */
     task::Task<void> broadcastMessageToAll(P2PMessage::Ptr message,
-        ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
+        Options options = Options()) override;
 
     /**
      * @brief: (coroutine) broadcast a message to the directly connected sessions only (m_sessions),
@@ -76,7 +77,8 @@ public:
      *         over as a shared_ptr and kept alive by the per-peer fan-out tasks.
      */
     virtual task::Task<void> broadcastMessageToNeighbors(P2PMessage::Ptr message,
-        ::ranges::any_view<bytesConstRef> payloads, Options options = Options());
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
+        Options options = Options());
 
     virtual std::map<NodeIPEndpoint, P2pID> staticNodes();
     virtual void setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes);

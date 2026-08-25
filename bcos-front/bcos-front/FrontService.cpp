@@ -491,7 +491,8 @@ void FrontService::asyncSendMessageByNodeIDs(
 }
 
 task::Task<void> FrontService::broadcastMessage(
-    uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads)
+    uint16_t type, int moduleID,
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads)
 {
     FrontMessage message;
     message.setModuleID(moduleID);

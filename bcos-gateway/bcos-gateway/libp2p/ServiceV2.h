@@ -54,7 +54,8 @@ public:
 
     // (coroutine) broadcast to all reachable nodes through the router table
     task::Task<void> broadcastMessageToAll(P2PMessage::Ptr message,
-        ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
+        Options options = Options()) override;
 
     // handlers called when the node is unreachable
     void registerUnreachableHandler(std::function<void(std::string)> _handler) override;

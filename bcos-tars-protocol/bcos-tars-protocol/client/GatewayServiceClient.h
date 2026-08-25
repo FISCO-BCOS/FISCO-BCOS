@@ -55,7 +55,7 @@ public:
 
     bcos::task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID,
-        ::ranges::any_view<bcos::bytesConstRef> payloads) override;
+        ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads) override;
 
     void asyncGetGroupNodeInfo(const std::string& _groupID,
         bcos::gateway::GetGroupNodeInfoFunc _onGetGroupNodeInfo) override;

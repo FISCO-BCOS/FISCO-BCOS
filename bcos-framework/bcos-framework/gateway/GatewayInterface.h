@@ -101,26 +101,28 @@ public:
         bytesConstRef _payload) = 0;
 
     virtual task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
-        const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) = 0;
+        const bcos::crypto::NodeID& srcNodeID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) = 0;
 
     /**
      * @brief: (coroutine) send message to a single node, zero-copy. The payload is passed as views
      *         that the caller must keep alive for the duration of the co_await. The coroutine
      *         completes once the peer gateway acknowledges the message (or the retries are
-     *         exhausted / a terminal error occurred), at which point _errorRespFunc has already
-     *         been invoked (nullptr on success).
+     *         exhausted / a terminal error occurred); it returns nullptr on success or an
+     *         Error::Ptr describing the failure.
      *
      * Default implementation: joins the payload views into a buffer and bridges to the borrowed
-     * asyncSendMessageByNodeID. This is correct for the tars client and test fakes (which cross a
-     * process boundary or are synchronous anyway); the production Gateway overrides it with a
-     * zero-copy coroutine implementation.
+     * asyncSendMessageByNodeID. The completion state and the payload buffer are owned by the
+     * completion callback (see the implementation below): the borrowed TARS client may keep
+     * reading the payload after the callback returns, and it may even invoke the callback twice —
+     * the implementation guards the resume/result delivery accordingly. The production Gateway
+     * overrides it with a zero-copy coroutine implementation.
      *
      * @param _groupID: groupID
      * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
      * @param _dstNodeID: the receiver nodeID
      * @param _payloads: message content (views, kept alive by the caller)
-     * @param _errorRespFunc: error func
      */
     virtual task::Task<Error::Ptr> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
