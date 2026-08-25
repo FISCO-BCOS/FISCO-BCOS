@@ -394,6 +394,33 @@ BOOST_AUTO_TEST_CASE(DepositMissingNonceOrVersionIsConsensusReject)
     BOOST_CHECK(consensusRejectPins(
         [&] { (void)encodeReceiptForRoot(*missingVersion, static_cast<uint8_t>(kDepositTxType)); },
         "missing deposit nonce/receipt version"));
+
+    auto missingNonce = makeReceipt();
+    bcos::protocol::OpStackReceiptMeta versionOnly;
+    versionOnly.deposit_receipt_version = 1;
+    missingNonce->setOpStackMeta(std::move(versionOnly));
+    BOOST_CHECK(consensusRejectPins(
+        [&] { (void)encodeReceiptForRoot(*missingNonce, static_cast<uint8_t>(kDepositTxType)); },
+        "missing deposit nonce/receipt version"));
+}
+
+// Engaged optional 0 is present, not absent: RLP integer 0 is the empty item 0x80 (not 0x00),
+// version 1 stays 0x01. Same 266-byte payload / 270-byte leaf as DepositGoldenBytes, only the
+// nonce tail byte changes 0x05 -> 0x80.
+BOOST_AUTO_TEST_CASE(DepositExplicitZeroNonceEncodesEmptyRlpItem)
+{
+    auto dep = minimalDepositReceipt();
+    BOOST_REQUIRE(dep->opStackMeta().has_value());
+    auto meta = *dep->opStackMeta();
+    meta.deposit_nonce = uint64_t{0};
+    dep->setOpStackMeta(std::move(meta));
+
+    const auto enc = encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
+    bcos::bytes expected{0x7e, 0xf9, 0x01, 0x0a, 0x01, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
+    expected.insert(expected.end(), 256, 0x00);
+    expected.insert(expected.end(), {0xc0, 0x80, 0x01});
+    BOOST_REQUIRE_EQUAL(enc.size(), 270u);
+    BOOST_CHECK_EQUAL(enc, expected);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
