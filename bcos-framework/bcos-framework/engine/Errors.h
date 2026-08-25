@@ -26,15 +26,12 @@ namespace bcos::engine
 /// engine library) so opstack-executor can throw it without depending on bcos-engine.
 DERIVE_BCOS_EXCEPTION(OpExecutionInternalError);
 
-// Engine-API error classes mapped by EngineErrorMapper (execution-apis error codes):
-// UnknownForkchoiceHeadBlock -38002, InvalidForkchoiceState -38002, UnknownPayload -38001,
-// IncompatiblePayloadVersion -38005, UnsupportedFork -38005, UnsupportedOpPayloadAttributes
-// -38003. Living in bcos-framework lets the RPC error mapper (bcos-rpc) catch them by type
-// without depending on the engine library.
+// Engine-API error classes mapped by EngineErrorMapper. UnknownPayload / IncompatiblePayloadVersion
+// already live in Types.h — do not redeclare them here.
+// UnknownForkchoiceHeadBlock / InvalidForkchoiceState -38002, UnsupportedFork -38005,
+// UnsupportedOpPayloadAttributes -38003.
 DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
 DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
-DERIVE_BCOS_EXCEPTION(UnknownPayload);
-DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 DERIVE_BCOS_EXCEPTION(UnsupportedFork);
 DERIVE_BCOS_EXCEPTION(UnsupportedOpPayloadAttributes);
 }  // namespace bcos::engine

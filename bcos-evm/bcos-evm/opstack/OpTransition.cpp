@@ -393,8 +393,7 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     if (signedTxEnvelope.empty())
         return make_error_code(std::errc::invalid_argument);
 
-    auto base = evmone::state::validate_transaction(
-        view, block, tx, cfg.rev, blockGasLeft, 0, skipBalanceCheck);
+    auto base = evmone::state::validate_transaction(view, block, tx, cfg.rev, blockGasLeft, 0);
     if (auto* err = std::get_if<std::error_code>(&base))
         return *err;
 

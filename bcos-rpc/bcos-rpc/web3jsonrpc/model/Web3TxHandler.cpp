@@ -6,19 +6,14 @@
 #include <cstddef>  // std::ptrdiff_t (ListEnd pointer arithmetic)
 #include <cstdint>
 
-// These using-declarations are NOT dead: they are the ADL bridge that lets the generic codec
-// templates (RLPEncode.h encodeItems / Common.h lengthOfItems / RLPDecode.h decodeItems) find the
-// AccessListEntry overloads defined at the bottom of this file. Those overloads live in namespace
-// codec::rlp, which is not an associated namespace of bcos::rpc::AccessListEntry; without the
-// using-declaration a standalone TU (or a unity-batch reorder) fails with "neither visible in the
-// template definition nor found by argument-dependent lookup". Keep the three in sync with the
-// overloads.
+namespace bcos::rpc
+{
+// ADL bridge: AccessListEntry's associated namespace is bcos::rpc, but the overloads live in
+// codec::rlp. File-scope using-declarations are invisible to two-phase lookup; these must sit
+// in this namespace so a standalone TU (AppleClang) can find them at the template POI.
 using bcos::codec::rlp::decode;
 using bcos::codec::rlp::encode;
 using bcos::codec::rlp::length;
-
-namespace bcos::rpc
-{
 namespace
 {
 // Strip leading zero bytes from signature data (R/S) to keep RLP encoding canonical.

@@ -454,15 +454,15 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireFormCrossChecksSignature)
     auto buildWire = [&](bcos::bytes const& rSig, bcos::bytes const& sSig, uint64_t yp) {
         // EIP-1559 fields (9) + trailer (yParity, r, s).
         bcos::bytes items;
-        rlp::encode(items, static_cast<uint64_t>(1));     // chainId
-        rlp::encode(items, static_cast<uint64_t>(0));     // nonce
-        rlp::encode(items, static_cast<uint64_t>(1));     // maxPriorityFeePerGas
-        rlp::encode(items, static_cast<uint64_t>(1));     // maxFeePerGas
-        rlp::encode(items, static_cast<uint64_t>(21000)); // gasLimit
+        rlp::encode(items, static_cast<uint64_t>(1));      // chainId
+        rlp::encode(items, static_cast<uint64_t>(0));      // nonce
+        rlp::encode(items, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
+        rlp::encode(items, static_cast<uint64_t>(1));      // maxFeePerGas
+        rlp::encode(items, static_cast<uint64_t>(21000));  // gasLimit
         rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
-        rlp::encode(items, static_cast<uint64_t>(0));     // value
-        rlp::encode(items, bcos::bytes{});                // data
-        rlp::encode(items, bcos::bytes{});                // accessList
+        rlp::encode(items, static_cast<uint64_t>(0));  // value
+        rlp::encode(items, bcos::bytes{});             // data
+        rlp::encode(items, bcos::bytes{});             // accessList
         rlp::encode(items, yp);
         rlp::encode(items, rSig);
         rlp::encode(items, sSig);
