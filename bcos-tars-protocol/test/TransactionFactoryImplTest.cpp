@@ -491,5 +491,84 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireFormCrossChecksSignature)
         std::invalid_argument);
 }
 
+// yParity=0 (RLP-encoded as the empty payload 0x80) must be read directly, not RLP-decoded —
+// decode() on 0x80 would fail InputTooShort. The reassembly must adopt the wire verbatim.
+BOOST_AUTO_TEST_CASE(reassembleTypedWireFormYParityZero)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+    uint8_t const yParity = 0;
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));      // chainId
+    rlp::encode(items, static_cast<uint64_t>(0));      // nonce
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(21000));  // gasLimit
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));        // value
+    rlp::encode(items, bcos::bytes{});                   // data
+    rlp::encode(items, bcos::bytes{});                   // accessList
+    rlp::encode(items, static_cast<uint64_t>(yParity));  // 0 -> RLP 0x80 (empty payload)
+    rlp::encode(items, r);
+    rlp::encode(items, s);
+    bcos::bytes wire{0x02};
+    rlp::encodeHeader(wire, rlp::Header{true, items.size()});
+    wire.insert(wire.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = yParity;
+
+    auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(wire), bcos::bytesConstRef(sig.data(), sig.size()));
+    BOOST_CHECK(reassembled == wire);  // verbatim adoption, parity 0 preserved
+}
+
+// Legacy sealed-block wire form: rlp([6 fields, v, r, s]). Matching trailer adopted verbatim;
+// a tampered r or s rejected ("legacy signature mismatch") — the legacy twin of the typed check.
+BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+    uint64_t const v = 37;  // chainId 1, parity 0
+
+    auto buildWire = [&](bcos::bytes const& rSig, bcos::bytes const& sSig) {
+        bcos::bytes items;
+        rlp::encode(items, static_cast<uint64_t>(0));  // nonce
+        rlp::encode(items, static_cast<uint64_t>(1));  // gasPrice
+        rlp::encode(items, static_cast<uint64_t>(21000));
+        rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+        rlp::encode(items, static_cast<uint64_t>(0));  // value
+        rlp::encode(items, bcos::bytes{});             // data
+        rlp::encode(items, v);
+        rlp::encode(items, rSig);
+        rlp::encode(items, sSig);
+        bcos::bytes env;
+        rlp::encodeHeader(env, rlp::Header{true, items.size()});
+        env.insert(env.end(), items.begin(), items.end());
+        return env;
+    };
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = 0;  // parity 0
+
+    auto wire = buildWire(r, s);
+    auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(wire), bcos::bytesConstRef(sig.data(), sig.size()));
+    BOOST_CHECK(reassembled == wire);
+
+    // Tampered r -> rejected.
+    auto tamperedR = buildWire(bcos::bytes(32, 0x33), s);
+    BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
+                          bcos::ref(tamperedR), bcos::bytesConstRef(sig.data(), sig.size())),
+        std::invalid_argument);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
