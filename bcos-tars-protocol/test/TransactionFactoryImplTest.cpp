@@ -536,7 +536,7 @@ BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
     auto const s = bcos::bytes(32, 0x22);
     uint64_t const v = 37;  // chainId 1, parity 0
 
-    auto buildWire = [&](bcos::bytes const& rSig, bcos::bytes const& sSig) {
+    auto buildWire = [&](bcos::bytes const& rSig, bcos::bytes const& sSig, uint64_t vParam = v) {
         bcos::bytes items;
         rlp::encode(items, static_cast<uint64_t>(0));  // nonce
         rlp::encode(items, static_cast<uint64_t>(1));  // gasPrice
@@ -544,7 +544,7 @@ BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
         rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
         rlp::encode(items, static_cast<uint64_t>(0));  // value
         rlp::encode(items, bcos::bytes{});             // data
-        rlp::encode(items, v);
+        rlp::encode(items, vParam);
         rlp::encode(items, rSig);
         rlp::encode(items, sSig);
         bcos::bytes env;
@@ -567,6 +567,14 @@ BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
     auto tamperedR = buildWire(bcos::bytes(32, 0x33), s);
     BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
                           bcos::ref(tamperedR), bcos::bytesConstRef(sig.data(), sig.size())),
+        std::invalid_argument);
+
+    // v relabeled from 37 (parity 0) to 38 (parity 1) with r/s unchanged -> rejected: v is
+    // part of the signature, and adopting a relabeled v would reassemble a SECOND txHash for
+    // the same signature (kyonRay #5496 R1-2).
+    auto relabeledV = buildWire(r, s, /*v=*/38);  // parity 1 vs tars parity 0
+    BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
+                          bcos::ref(relabeledV), bcos::bytesConstRef(sig.data(), sig.size())),
         std::invalid_argument);
 }
 
