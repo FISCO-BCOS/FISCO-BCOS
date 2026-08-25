@@ -261,13 +261,8 @@ public:
     evmc::bytes32 get_block_hash(int64_t) const noexcept override { return {}; }
 };
 
-/// Strict 0x7E deposit envelope decode (consensus-grade, kyonRay review #5429 K3).
-/// `0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx, data])`. Deposit fields fed
-/// to execution are re-derived HERE from the signed envelope — never from the unauthenticated tars
-/// mirrors (Transaction.tars field 8+) — because a peer-controlled mirror can mint arbitrary value
-/// (deposits are unsigned by design; authenticity comes from the L1-derived envelope). Unlike the
-/// RPC display-grade decoder, this rejects a non-0x7e type byte, malformed RLP, trailing bytes
-/// after the list and over-wide fields. One RLP decode per deposit (blocks carry one or two).
+/// Decode `0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx, data])`.
+/// Execution fields come from the envelope, never tars mirrors (deposits are unsigned).
 [[nodiscard]] inline bcos::evm::opstack::DepositTx decodeDepositEnvelope(bcos::bytesConstRef env)
 {
     namespace op = bcos::evm::opstack;
@@ -275,16 +270,8 @@ public:
     auto fail = [](std::string const& msg) {
         BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(msg));
     };
-    // Gate an integer RLP item for width AND canonicality (kyonRay review #5429 round 3):
-    // rlp::decode(UnsignedIntegral) does not check the payload length against the target width —
-    // fromBigEndian folds excess high bytes, so a 33-byte mint would silently truncate to its low
-    // 32 bytes — and of the non-canonical forms it only rejects a single-byte payload < 0x80 (via
-    // decodeHeader). op-geth's Stream.uint / decodeBigInt additionally return ErrCanonInt /
-    // ErrCanonSize for the single Byte 0x00 (integer zero must be the empty item 0x80) and for any
-    // multi-byte payload with a leading zero byte. Return the payload length of the integer at
-    // `ref`'s front, or nullopt if it is not a canonical well-formed integer (RLP list / truncated
-    // length prefix / non-canonical). FISCO's own RLPEncode always writes minimal encodings, so
-    // only externally-supplied bytes are affected.
+    // Integer RLP width + canonicality. rlp::decode does not reject over-wide payloads
+    // (they truncate). Match op-geth: reject 0x00 for zero and leading-zero multi-byte ints.
     auto integerPayloadLength = [&](bcos::bytesConstRef const& ref) -> std::optional<size_t> {
         if (ref.empty())
             return std::nullopt;
@@ -388,20 +375,15 @@ public:
         fail("deposit envelope: value non-canonical or over-wide (>32 bytes)");
     if (auto e = rlp::decode(items, value); e != nullptr)
         fail("deposit envelope: value decode failed");
-    // gas (uint64): width + canonicality check, then int64 range. A uint64 that exceeds
-    // INT64_MAX would silently wrap dep.gas_limit's static_cast<int64_t>(gas) to -1 — reject at
-    // the decoder, not downstream (kyonRay review #5429 round 3).
+    // gas: width + canonicality, then int64 range. Over-range would wrap to -1.
     if (auto pl = integerPayloadLength(items); !pl || *pl > 8)
         fail("deposit envelope: gas non-canonical or over-wide (>8 bytes)");
     if (auto e = rlp::decode(items, gas); e != nullptr)
         fail("deposit envelope: gas decode failed");
     if (gas > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
         fail("deposit envelope: gas exceeds int64 range");
-    // isSystemTx (uint64): width + canonicality check, then a 0/1 value check. op-geth's
-    // decodeBool accepts only the empty item (false) and 0x01 (true) and errors on any other
-    // value ("rlp: invalid boolean"). Decoded as uint64 — the FISCO bool overload demands
-    // payloadLength == 1 and would reject the empty-item false — so the 0/1 check is explicit
-    // (kyonRay review #5429 round 3).
+    // isSystemTx: 0 or 1 only, matching op-geth decodeBool. Decoded as uint64 because
+    // the bool overload rejects the empty-item false.
     if (auto pl = integerPayloadLength(items); !pl || *pl > 8)
         fail("deposit envelope: isSystemTx non-canonical or over-wide (>8 bytes)");
     if (auto e = rlp::decode(items, isSystemTxValue); e != nullptr)
@@ -437,15 +419,15 @@ public:
 /// Correctness relies on a serial driver (SchedulerSerialImpl).
 struct OpBlockExecutionContext
 {
-    mutable bcos::evm::opstack::OpFeeParams fee;        // lazy-load + DA scalar override (H1/H1c)
-    mutable bool feeLoaded = false;                     // fee lazy-load flag (H1)
-    mutable int64_t blockGasLeft = 0;                   // decremented per tx
-    mutable int64_t cumulativeGasUsed = 0;              // accumulated across txs (H4)
-    mutable size_t transactionIndex = 0;                // per-tx receipt index (Tier-2 Phase B)
-    mutable bool seenNonDeposit = false;                // deposit-after-non-deposit gate (M2)
-    evmone::state::BlockHashes* blockHashes = nullptr;  // built once at block level (H3)
-    uint64_t chainId = 0;                               // constant (H3)
-    std::optional<uint16_t> daFootprintGasScalar;       // Jovian DA scalar (H1c)
+    mutable bcos::evm::opstack::OpFeeParams fee;
+    mutable bool feeLoaded = false;
+    mutable int64_t blockGasLeft = 0;
+    mutable int64_t cumulativeGasUsed = 0;
+    mutable size_t transactionIndex = 0;
+    mutable bool seenNonDeposit = false;
+    evmone::state::BlockHashes* blockHashes = nullptr;
+    uint64_t chainId = 0;
+    std::optional<uint16_t> daFootprintGasScalar;
 };
 
 /// The OP transaction executor. Discard-writes contract: on any throw out of
@@ -522,10 +504,7 @@ public:
         // BlockInfo built once in prepare() and reused by execute() (same inputs, same value).
         std::optional<evmone::state::BlockInfo> m_blockInfo;
 
-        // Shared state view built ONCE per tx and threaded across prepare/execute (review #5429 Q):
-        // m_prepare and m_execute used to construct their own Storage2State, discarding the
-        // validate-phase read cache (m_accountCache/m_codeCache) and re-reading sender/L1Block cold
-        // in the transition stage. Non-movable by design, hence held by unique_ptr.
+        // One Storage2State per tx for prepare + execute so validate-phase cache hits in transition.
         std::unique_ptr<bcos::evm::evmstate::Storage2State<Storage>> stateView;
 
         // Shared per-block context; the mutable fields above are written through this const
@@ -573,24 +552,17 @@ public:
             if (transaction.isDepositTx())
             {
                 if (m_ctx->seenNonDeposit)
-                    // M2 order gate — demoted from a hard reject to an observable log (finding D
-                    // #5429): op-geth/op-reth enforce deposit-first only at the sequencer
-                    // (construction), not at validation, so a block with a deposit after a
-                    // non-deposit is accepted by both reference clients. FISCO keeps the
-                    // invariant observable (WARNING) without diverging on acceptance.
+                    // Deposit after a non-deposit: warn only. op-geth/op-reth accept this
+                    // at validation (they enforce deposit-first at the sequencer).
                     BCOS_LOG(WARNING) << LOG_BADGE("OPSTACK")
-                                      << "deposit after non-deposit in block — accepted "
-                                         "(deliberate demotion, op-geth/op-reth accept at "
-                                         "validation)";
+                                      << "deposit after non-deposit in block — accepted";
                 try
                 {
                     m_deposit = OpstackExecutor::depositFromTransaction(transaction);
                 }
                 catch (const OpTxValidationFailed& e)
                 {
-                    // kyonRay review #5429 #2: a malformed deposit envelope (e.g. a 0x02-envelope
-                    // whose tars mirror claims deposit) is a CONSENSUS rejection, not an internal
-                    // error — reclassify so the block surfaces as INVALID instead of -32603.
+                    // Bad deposit envelope is a consensus reject, not an internal error.
                     throw engine::OpConsensusError(
                         std::string("OpScheduler: deposit envelope validation failed: ") +
                         e.what());
@@ -599,17 +571,17 @@ public:
             }
             m_ctx->seenNonDeposit = true;
             if (!m_ctx->feeLoaded)
-            {  // H1 fee lazy load (after the L1 attributes deposit has executed)
+            {  // Load fee params after the L1 attributes deposit.
                 namespace op = bcos::evm::opstack;
                 m_ctx->fee = op::loadOpFeeParams(*stateView);
-                if (m_ctx->daFootprintGasScalar)  // H1c DA scalar override
+                if (m_ctx->daFootprintGasScalar)
                     m_ctx->fee.da_footprint_gas_scalar = *m_ctx->daFootprintGasScalar;
                 m_ctx->feeLoaded = true;
             }
             m_blockInfo = buildBlockInfo(blockHeader,
                 opBlockGasLimit(blockHeader, static_cast<uint64_t>(m_ctx->blockGasLeft)), call);
             try
-            {  // M1 normalization: validation failure -> consensus rejection
+            {  // Validation failure is a consensus reject.
                 m_props = co_await executor.m_prepare(*stateView, blockHeader, transaction,
                     ledgerConfig, m_ctx->fee, m_ctx->blockGasLeft,
                     call ? std::optional<uint64_t>{} : std::optional<uint64_t>(m_ctx->chainId),
@@ -780,14 +752,13 @@ public:
         // eth_call (call=true) simulates without chain binding — op-geth eth_call is lenient about
         // chainId; block execution (call=false) enforces tx.chainId == node chainId (the op-geth
         // EIP155Signer/modernSigner ErrInvalidChainId check).
-        // One shared state view for prepare+execute (review #5429 Q): validates and transitions on
-        // the same instance so the validate-phase account/fee reads cache-hit in the transition.
+        // Same Storage2State for prepare and execute.
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)), call);
         bcos::evm::opstack::OpTxProperties props;
         try
-        {  // M1 normalization: validation failure -> consensus rejection
+        {  // Validation failure is a consensus reject.
             props = co_await m_prepare(stateView, blockHeader, transaction, ledgerConfig, fee,
                 blockGasLeft, call ? std::optional<uint64_t>{} : chainId, &blockInfo, call);
         }
@@ -952,19 +923,8 @@ private:
                              buildBlockInfo(blockHeader,
                                  opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         auto evmTx = eth::toEvmoneTransaction(transaction);
-        // op-geth parity (morebtcg review #5429): reject txs whose chainId differs from the node's
-        // chainId. op-geth EIP155Signer.Sender / modernSigner.Sender check
-        // `tx.ChainId() == chainID` (ErrInvalidChainId) during block processing; FISCO previously
-        // accepted any self-consistent chainId (the signature binds the tx's own chainId, so
-        // sender recovery always succeeds). Only legacy UNPROTECTED txs (v=27/28, chain_id==0,
-        // Homestead) are exempt; every other tx (EIP-155 protected legacy + ALL typed txs) must
-        // match. chainId is nullopt only on the eth_call path (lenient, like op-geth eth_call). The
-        // block path always engages it — an engaged 0 (caller forgot the node chainId) rejects
-        // every real tx, so the omission is loud rather than silently disabling the check.
-        // Known residual: chain_id==0 also arises from a v=35/36 EIP-155-protected legacy tx
-        // (chain id 0), which the tars layer collapses onto the same "0" as v=27/28 — such a tx is
-        // exempted here where op-geth's Protected() rejects it. Nil security impact (the signature
-        // is re-encodable as v=27/28); full parity needs a protected flag in the tars Transaction.
+        // Block path: tx.chainId must match the node, like op-geth ErrInvalidChainId.
+        // Exempt only unprotected legacy (v=27/28, chain_id==0). eth_call passes nullopt.
         if (chainId.has_value())
         {
             // Only legacy UNPROTECTED txs (v=27/28, chain_id==0, Homestead) are exempt.
@@ -1018,7 +978,7 @@ private:
                              *prebuiltBlockInfo :
                              buildBlockInfo(blockHeader,
                                  opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
-        auto const& evmTx = props.evm_tx;  // reuse the prepare-built tx (review finding F)
+        auto const& evmTx = props.evm_tx;
 
         NullBlockHashes nullBlockHashes;
         auto const& bh = (blockHashes != nullptr) ? *blockHashes : nullBlockHashes;
@@ -1070,14 +1030,7 @@ private:
         co_return std::move(receipt);
     }
 
-    /// Build a DepositTx from a protocol::Transaction whose isDepositTx() is true, re-deriving the
-    /// deposit fields from the signed 0x7E envelope (tx.extraTransactionBytes) — NEVER from the
-    /// unauthenticated tars mirrors (kyonRay review #5429 K3). The tars mirrors are display-only:
-    /// a peer-controlled mirror can mint arbitrary value (deposits are unsigned by design;
-    /// authenticity comes from the L1-derived envelope). On the engine newPayload path the mirrors
-    /// happen to be self-consistent (opEnvelopeToTars derives them in-process), but with OP mode
-    /// behind MultiVersionScheduler slot 3 any future wiring that feeds wire-decoded tars into
-    /// OpScheduler must not be able to mint. The strict decode rejects envelope/mirror mismatch.
+    /// Build DepositTx from the signed 0x7E envelope, never from tars mirrors.
 public:
     static bcos::evm::opstack::DepositTx depositFromTransaction(protocol::Transaction const& tx)
     {
@@ -1086,8 +1039,7 @@ public:
 
 private:
     protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
-    // Reserved for the part-5 seal wiring (header-commitment hashing); unused since the
-    // write-back moved to Storage2State::applyDiff.
+    // Unused; write-back is Storage2State::applyDiff.
     [[maybe_unused]] crypto::Hash::Ptr m_hashImpl;
     // Value copy, not a reference: OpForkConfig is small (~32B, once per block) and a reference
     // member to a caller's config is the same lifetime footgun class that m_ctx had.

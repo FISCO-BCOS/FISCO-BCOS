@@ -20,9 +20,7 @@ target_link_libraries(opstack-executor PUBLIC
     evmone::evmone intx::intx TBB::tbb)
 set_target_properties(opstack-executor PROPERTIES UNITY_BUILD OFF)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    # kyonRay review #5429 K5: OP modules deliberately use skipped-field designated initializers
-    # and GCC-13 reference-returning helpers (jAt); downgrade only here, not repository-wide.
-    # PRIVATE: opstack-executor is a compiled library; the -Wno-error flags apply to its own TU.
+    # Designated initializers and GCC-13 jAt refs trip -Werror here only.
     target_compile_options(opstack-executor PRIVATE
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
 endif()

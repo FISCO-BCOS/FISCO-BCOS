@@ -151,10 +151,7 @@ task::Task<void> EthEndpoint::coinbase(const Json::Value&, Json::Value& response
 }
 task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
 {
-    // Reads via LedgerConfig (not a raw SYS_CONFIG single-key read) so that L2-mode
-    // governance (SystemConfig.sol via L2ConfigLoader, wired in A4) flows through one
-    // path. getLedgerConfig over-fetches (~5 storage reads) per call; per plan decision,
-    // RPC-side caching is deferred to Phase B.
+    // Prefer LedgerConfig so L2 SystemConfig governance uses the same path as the rest of the node.
     auto const ledger = m_nodeService->ledger();
     auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
     Json::Value result;
@@ -227,12 +224,8 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
     //
     // Chain-mode dispatch is intrinsic rather than configured: EIP-1559 chains (the OP
     // path) always carry baseFee on the header, PBFT headers never write the tars field.
-    // The suggested tip reuses this node's eth_maxPriorityFeePerGas value (currently 0) —
-    // a single source of truth, and honest for our inert tip market: op-geth's OP-mode
-    // oracle likewise serves a constant floor (0.001 gwei) because with a single block
-    // builder tips do not affect inclusion while blocks have capacity. Its
-    // capacity-heuristic escalation (median-tip * 1.1 when the last block was full) is a
-    // deliberate omission here, to be revisited if this chain ever runs congested.
+    // Suggested tip is this node's eth_maxPriorityFeePerGas (currently 0). Single builder,
+    // so tips do not change inclusion while blocks have capacity.
     auto const ledger = m_nodeService->ledger();
     if (auto const latest = co_await ledger::getCurrentBlockNumber(*ledger); latest >= 0)
     {
@@ -971,11 +964,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto rawTx = toView(request[0U]);
     auto rawTxBytes = fromHexWithPrefix(rawTx);
     auto bytesRef = bcos::ref(rawTxBytes);
-    // Authoritative first-byte dispatch (RawTransactionDispatch.h). FISCO's OP policy rejects
-    // blob (type-3) at the gate — op-geth's decodeTyped accepts them, so this is a deliberate
-    // acceptance divergence, not a reference check (see the blob-rejection note in
-    // RawTransactionDispatch.h). Deposits (0x7e) can only be injected by the consensus layer
-    // through the Engine API, never through the public transaction pool.
+    // Reject blob txs at the RPC gate. Deposits (0x7e) enter only via Engine API.
     switch (engine::dispatchRawTransaction(bytesRef))
     {
     case engine::RawTransactionKind::Blob:
@@ -1060,12 +1049,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         else
         {
             auto [chainIdStr, _] = chainIdConfig.value();
-            // Validate against the SIGNED envelope like TxValidator::validateChainId: typed
-            // txs get no "0" exemption (op-geth modernSigner); only pre-EIP-155 legacy (no
-            // chainId in the envelope) is exempt — a deliberate divergence (geth/op-geth
-            // default rejects unprotected txs at the RPC layer; part 5 adds the config gate).
-            // Parse as u256 via the shared helper (ledger::parseWeb3ChainId); a corrupted
-            // config rejects the tx.
+            // Match the signed envelope. Typed txs have no "0" exemption; only pre-EIP-155
+            // legacy (no envelope chainId) is exempt. Bad web3_chain_id config rejects the tx.
             auto expected = ledger::parseWeb3ChainId(chainIdStr);
             if (!expected.has_value())
             {

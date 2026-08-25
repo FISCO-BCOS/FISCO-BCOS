@@ -34,9 +34,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     auto blockNumber = receipt.blockNumber();
     result["blockNumber"] = toQuantity(blockNumber);
     auto from = toHex(tx.sender());
-    // EIP-55 checksum needs keccak256(address) per recipient; RPC read path (not consensus),
-    // so the 3-4 hashes per receipt are acceptable — caching here would need shared-state
-    // synchronization for a marginal win (see review Finding J).
+    // EIP-55 checksum; RPC path only, not consensus.
     toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
     result["from"] = "0x" + std::move(from);
     if (tx.to().empty())

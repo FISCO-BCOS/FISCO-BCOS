@@ -2,17 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// Canonical RLP tuple encoder (promoted from test support 08-19: production consumer is
-// OpDepositEncode.h via the engine's Tier-2 OP build) (bcos::evm::eth::detail::encodeTuple) used
-// by OpDepositEncode.h (0x7e deposit-envelope encoding).
-//
-// Byte-for-byte equivalents of the evmone *test-only* RLP encoder (test/utils/rlp.hpp +
-// test/utils/rlp_encode.hpp), rebuilt on the production bcos-codec encoder. `encodeTuple` mirrors
-// evmone::rlp::encode_tuple. Lives in the opstack test tree because it has no production consumer.
-// (a list header + each element's canonical RLP); the element dispatch (`encodeRlp`) covers
-// exactly the types the consumers need — unsigned scalars, intx::uint256, fixed-width evmc
-// bytes, and the access/authorization lists. Equivalence to evmone is asserted by the
-// 125-vector golden corpus plus the whole-envelope `assertCanonicalRoundTrip` in OpTxDecode.h.
+// Canonical RLP list encoder on bcos-codec. encodeTuple matches evmone::rlp::encode_tuple.
 
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-evm/eth/state/transaction.hpp>

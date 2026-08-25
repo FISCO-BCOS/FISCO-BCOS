@@ -2,20 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// Shared error types + the block-execution result for the OP scheduler, plus the block-context
-// conversion helpers (bcos<->evmc fixed-size conversions / bounds-checked narrowing / FISCO-header
-// -> evmone BlockInfo build). Split out of OpSchedulerSeam.h so dependent layers can throw without
-// depending on the class template. OpBlockSeal lives here too (not in OpBlockExecute.h):
-// OpExecuteBlockResult carries it by value.
-//
-// The six-way commitment comparison surface (OpBlockCommitments / commitmentsOf /
-// payloadBloomToH2048 / mismatchedFieldOf / detail::toBcosH256 / toBcosBloom) lives in
-// OpCommitments.h — this header is deliberately types + conversions, no commitment logic.
+// OP block types and header conversions. Commitment comparison lives in OpCommitments.h.
 
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>  // bcos::toQuantity (hexCumulative reuse, review #5429 R)
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-evm/eth/state/block.hpp>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
@@ -57,16 +49,13 @@ struct OpBlockSeal
     return static_cast<int64_t>(gasUsed);
 }
 
-/// "0x" + lowercase hex (op-geth hexutil.Uint64); parsed back by encodeReceiptForRoot.
+/// 0x-hex uint64, op-geth hexutil.Uint64.
 [[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
 {
-    return bcos::toQuantity(cumulative);  // reuse the library quantity formatter (review #5429 R)
+    return bcos::toQuantity(cumulative);
 }
 
-/// Plain DECIMAL string — the tars receipt field's de-facto convention (the generic line's
-/// BaselineScheduler writes u256.str(), and the RPC read path's safeCastToU256 lexical_casts
-/// decimal only, so a hex string serialises as cumulativeGasUsed=0x0). The receipts-root
-/// encoder's parser accepts both formats (OpBlockExecute.cpp parseHexUint64).
+/// Decimal string for the tars receipt field. RPC parses this as decimal only.
 [[nodiscard]] inline std::string decimalCumulative(uint64_t cumulative)
 {
     return std::to_string(cumulative);

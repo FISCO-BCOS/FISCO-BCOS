@@ -5,7 +5,7 @@
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
-#include <bcos-utilities/DataConvertUtility.h>  // bcos::safeFromQuantity (parseHexUint64 reuse, review #5429 T)
+#include <bcos-utilities/DataConvertUtility.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <algorithm>
 #include <bcos-evm/eth/state/state.hpp>  // evmone::state::finalize
@@ -105,8 +105,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             const auto gasUsed = narrowGasUsed(receipt->gasUsed());
             blockGasLeft -= gasUsed;
             cumulative += gasUsed;
-            // Decimal storage + the receipt's block index: the RPC read path lexical_casts
-            // decimal only and serves transactionIndex from the receipt (Tier-2 Phase B).
+            // Store cumulative gas as decimal; RPC parses that field as decimal.
             receipt->setCumulativeGasUsed(decimalCumulative(static_cast<uint64_t>(cumulative)));
             receipt->setTransactionIndex(transactionIndex++);
             result.receipts.emplace_back(std::move(receipt));
@@ -167,15 +166,10 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
 // ---- block-header seal ----
 namespace
 {
-/// Parse "0x"-prefixed hex back to uint64 (the EncodeIndex leaf's cumulativeGasUsed). Delegates to
-/// the strict library parser bcos::safeFromQuantity — the previous hand-rolled loop silently
-/// wrapped >16-hex-digit input, where the library rejects overflow (review #5429 T).
+/// Parse cumulativeGasUsed: 0x-hex via safeFromQuantity, otherwise decimal.
+/// Bare digits must not go to safeFromQuantity (it treats them as hex).
 [[nodiscard]] uint64_t parseHexUint64(std::string_view s)
 {
-    // Tier-2 Phase B: the stored field is now DECIMAL (tars convention); the historical hex
-    // form (hexCumulative, pre-Phase-B blocks) stays parseable. Dispatch on the prefix —
-    // safeFromQuantity accepts a BARE-digit string as hex ("22760" -> 0x22760), so a decimal
-    // value must never reach it.
     if (s.size() > 1 && (s[0] == '0') && (s[1] == 'x' || s[1] == 'X'))
     {
         if (auto v = bcos::safeFromQuantity(s))

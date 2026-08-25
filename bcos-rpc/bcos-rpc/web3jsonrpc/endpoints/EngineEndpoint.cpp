@@ -135,9 +135,7 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
 task::Task<void> EngineEndpoint::forkchoiceUpdatedV4(
     const Json::Value& request, Json::Value& response)
 {
-    // Tier-2 (08-19): the OP face is Isthmus+/V4-only — the engine's attribute-driven build and
-    // the newPayload path both gate on V4, so the RPC surface serves it (Prague payload shape;
-    // executionRequests stays empty on this chain).
+    // OP is Isthmus+/V4-only; executionRequests stays empty.
     co_await handleForkchoiceUpdated(engine::ApiVersion::V4, request, response);
 }
 

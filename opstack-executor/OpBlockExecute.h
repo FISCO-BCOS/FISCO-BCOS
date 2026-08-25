@@ -16,7 +16,7 @@
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/BoostLog.h>  // BCOS_LOG (finding-D demoted-deposit-check observability)
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / payloadBloomToH2048 / toBcosH256
 #include <opstack-executor/OpCommon.h>  // toBlockInfo / narrowU256ToU64 / toEvmcBytes32 / OpBlockSeal
@@ -265,16 +265,11 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     // L1-attributes deposit seeds the block's fee/DA context and deposits[0] is read below.
     if (rawTxBytes[0].empty() || rawTxBytes[0][0] != kDepositTypeByte || deposits.empty())
         throw OpConsensusError("op block: no deposit transaction to seed the block");
-    // L1-attributes content check — demoted from a hard reject to an observable log (finding D
-    // #5429): op-geth/op-reth parse the first tx as the L1 info (extract_l1_info) without
-    // validating it is the L1-attributes tx, so a block whose first deposit is not the canonical
-    // L1-attributes one is accepted by both reference clients. FISCO keeps it observable
-    // (WARNING) without diverging on acceptance.
+    // First deposit is not L1 attributes: warn only. op-geth/op-reth accept this at validation.
     if (!op::isL1AttributesTx(deposits[0]))
         BCOS_LOG(WARNING) << LOG_BADGE("OP_BLOCK_EXEC")
                           << "op block: first tx is a deposit but not the L1 attributes tx — "
-                             "accepted (deliberate demotion, op-geth/op-reth accept at "
-                             "validation)";
+                             "accepted";
     if (cfg.has_da_footprint)
     {
         auto const& data = deposits[0].data;
@@ -305,8 +300,7 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
         }
     }
 
-    // (3) DA scalar (H1c): Jovian extracts big-endian uint16 from deposits[0].data[176:178]; the
-    // 176B Isthmus activation attributes → 0.
+    // Jovian DA scalar: big-endian uint16 at data[176:178]. Isthmus 176-byte attrs → 0.
     if (cfg.has_da_footprint)
     {
         auto const& attrData = deposits[0].data;

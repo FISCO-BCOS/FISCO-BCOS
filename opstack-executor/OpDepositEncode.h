@@ -1,6 +1,5 @@
 #pragma once
-// Deposit-envelope encoder (promoted from test support 08-19: the Tier-2 attribute-driven
-// OP build synthesizes the L1-attributes deposit envelope in the engine).
+// 0x7e deposit-envelope encoder.
 #include <opstack-executor/RlpEncodeTuple.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-utilities/Common.h>
