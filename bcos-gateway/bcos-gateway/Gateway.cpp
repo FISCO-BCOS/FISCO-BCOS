@@ -152,9 +152,37 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
     NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bytesConstRef _payload,
     ErrorRespFunc _errorRespFunc)
 {
-    // Thin shim: preserve the synchronous-copy contract for borrowed payloads (the caller may
-    // release its buffer as soon as this returns). The actual zero-copy, retrying send runs as a
-    // coroutine that owns the copied payload in its frame.
+    // Local delivery first (zero-copy): when no remote gateway hosts the destination front, deliver
+    // directly through the local router table using the borrowed payload, exactly like the pre-PR
+    // path. Only the remote path copies the payload (into the coroutine frame) so the caller may
+    // release its buffer as soon as this returns.
+    auto p2pIDs =
+        m_gatewayNodeManager->peersRouterTable()->queryP2pIDs(_groupID, _dstNodeID->hex());
+    if (p2pIDs.empty())
+    {
+        if (m_gatewayNodeManager->localRouterTable()->sendMessage(
+                _groupID, _srcNodeID, _dstNodeID, _payload, _errorRespFunc))
+        {
+            return;
+        }
+        GATEWAY_LOG(DEBUG) << LOG_DESC("could not find a gateway to send this message")
+                           << LOG_KV("groupID", _groupID)
+                           << LOG_KV("srcNodeID", _srcNodeID->hex())
+                           << LOG_KV("dstNodeID", _dstNodeID->hex());
+        auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceSendMsg,
+            "could not find a gateway to "
+            "send this message, groupID:" +
+                _groupID + " ,dstNodeID:" + _dstNodeID->hex());
+        if (_errorRespFunc)
+        {
+            _errorRespFunc(errorPtr);
+        }
+        return;
+    }
+
+    // Thin shim for the remote path: preserve the synchronous-copy contract for borrowed payloads
+    // (the caller may release its buffer as soon as this returns). The actual zero-copy, retrying
+    // send runs as a coroutine that owns the copied payload in its frame.
     auto self = shared_from_this();
     task::wait(
         [](std::shared_ptr<Gateway> _self, std::string _groupID, int _moduleID,
@@ -227,14 +255,22 @@ bcos::task::Task<void> bcos::gateway::Gateway::sendMessageByNodeID(const std::st
         {
             auto resp = co_await m_p2pInterface->sendMessageByNodeID(
                 p2pID, message, _payloads, Options{c_gatewaySendTimeoutMs, true});
-            int respCode = bcos::protocol::CommonError::SUCCESS;
             auto respMessage = std::dynamic_pointer_cast<P2PMessage>(resp);
-            if (respMessage)
+            if (!respMessage)
             {
-                auto payload = respMessage->payload();
-                respCode = boost::lexical_cast<int>(std::string_view(
-                    reinterpret_cast<const char*>(payload.data()), payload.size()));
+                // No response means nothing was sent (e.g. the target session is inactive or the
+                // nodeID is local). Treat it as a failed attempt and try the next gateway — the
+                // previous Retry path never reported a missing response as success, and reporting
+                // success here would silently drop the message.
+                GATEWAY_LOG(DEBUG)
+                    << LOG_BADGE("Gateway::sendMessageByNodeID")
+                    << LOG_DESC("no response, try another gateway")
+                    << LOG_KV("p2pid", printShortP2pID(p2pID)) << LOG_KV("moduleID", _moduleID);
+                continue;
             }
+            auto payload = respMessage->payload();
+            int respCode = boost::lexical_cast<int>(std::string_view(
+                reinterpret_cast<const char*>(payload.data()), payload.size()));
             if (respCode == bcos::protocol::CommonError::SUCCESS)
             {
                 if (_errorRespFunc)

@@ -67,6 +67,15 @@ public:
     task::Task<void> broadcastMessageToAll(P2PMessage& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
+    /**
+     * @brief: (coroutine) broadcast a message to the directly connected sessions only (m_sessions),
+     *         without going through the router table. Used for router-table seq gossip which must
+     *         only be exchanged between neighbors and propagated hop-by-hop. The message and the
+     *         payload views must be kept alive by the caller for the duration of the co_await.
+     */
+    virtual task::Task<void> broadcastMessageToNeighbors(P2PMessage& message,
+        ::ranges::any_view<bytesConstRef> payloads, Options options = Options());
+
     virtual std::map<NodeIPEndpoint, P2pID> staticNodes();
     virtual void setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes);
 

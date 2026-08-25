@@ -385,40 +385,51 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
  * @param _callbackFunc: callback
  * @return void
  */
+std::string FrontService::registerCallback(
+    bcos::crypto::NodeIDPtr _nodeID, uint32_t _timeout, CallbackFunc _callbackFunc)
+{
+    static thread_local auto uuid_gen =
+        boost::uuids::basic_random_generator<std::random_device>();
+    std::string uuid = boost::uuids::to_string(uuid_gen());
+    if (!_callbackFunc)
+    {
+        return uuid;
+    }
+
+    auto callback = std::make_shared<Callback>();
+    callback->callbackFunc = std::move(_callbackFunc);
+
+    if (_timeout > 0)
+    {
+        // create new timer to handle timeout
+        auto timeoutHandler = std::make_shared<boost::asio::steady_timer>(
+            *m_ioService, std::chrono::milliseconds(_timeout));
+
+        callback->timeoutHandler = timeoutHandler;
+        auto frontServiceWeakPtr = std::weak_ptr<FrontService>(shared_from_this());
+        // callback->startTime = utcSteadyTime();
+        timeoutHandler->async_wait(
+            [frontServiceWeakPtr, _nodeID, uuid](const boost::system::error_code& e) {
+                auto frontService = frontServiceWeakPtr.lock();
+                if (frontService)
+                {
+                    frontService->onMessageTimeout(e, _nodeID, uuid);
+                }
+            });
+    }
+
+    addCallback(uuid, callback);
+    return uuid;
+}
+
 void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
     bytesConstRef _data, uint32_t _timeout, CallbackFunc _callbackFunc)
 {
     try
     {
-        static thread_local auto uuid_gen =
-            boost::uuids::basic_random_generator<std::random_device>();
-        std::string uuid = boost::uuids::to_string(uuid_gen());
+        std::string uuid = registerCallback(_nodeID, _timeout, _callbackFunc);
         if (_callbackFunc)
         {
-            auto callback = std::make_shared<Callback>();
-            callback->callbackFunc = _callbackFunc;
-
-            if (_timeout > 0)
-            {
-                // create new timer to handle timeout
-                auto timeoutHandler = std::make_shared<boost::asio::steady_timer>(
-                    *m_ioService, std::chrono::milliseconds(_timeout));
-
-                callback->timeoutHandler = timeoutHandler;
-                auto frontServiceWeakPtr = std::weak_ptr<FrontService>(shared_from_this());
-                // callback->startTime = utcSteadyTime();
-                timeoutHandler->async_wait(
-                    [frontServiceWeakPtr, _nodeID, uuid](const boost::system::error_code& e) {
-                        auto frontService = frontServiceWeakPtr.lock();
-                        if (frontService)
-                        {
-                            frontService->onMessageTimeout(e, _nodeID, uuid);
-                        }
-                    });
-            }
-
-            addCallback(uuid, callback);
-
             FRONT_LOG(DEBUG) << LOG_DESC("asyncSendMessageByNodeID") << LOG_KV("groupID", m_groupID)
                              << LOG_KV("moduleID", _moduleID) << LOG_KV("uuid", uuid)
                              << LOG_KV("nodeID", _nodeID->hex())
@@ -540,35 +551,9 @@ bcos::task::Task<void> FrontService::sendMessageByNodeID(int _moduleID,
     // keep the service alive for the whole (possibly deferred) send
     auto self = shared_from_this();
 
-    static thread_local auto uuid_gen =
-        boost::uuids::basic_random_generator<std::random_device>();
-    std::string uuid = boost::uuids::to_string(uuid_gen());
+    std::string uuid = registerCallback(_nodeID, _timeout, _callback);
     if (_callback)
     {
-        auto callback = std::make_shared<Callback>();
-        callback->callbackFunc = _callback;
-
-        if (_timeout > 0)
-        {
-            // create new timer to handle timeout
-            auto timeoutHandler = std::make_shared<boost::asio::steady_timer>(
-                *m_ioService, std::chrono::milliseconds(_timeout));
-
-            callback->timeoutHandler = timeoutHandler;
-            auto frontServiceWeakPtr = std::weak_ptr<FrontService>(shared_from_this());
-            // callback->startTime = utcSteadyTime();
-            timeoutHandler->async_wait([frontServiceWeakPtr, _nodeID, uuid](
-                                           const boost::system::error_code& e) {
-                auto frontService = frontServiceWeakPtr.lock();
-                if (frontService)
-                {
-                    frontService->onMessageTimeout(e, _nodeID, uuid);
-                }
-            });
-        }
-
-        addCallback(uuid, callback);
-
         FRONT_LOG(DEBUG) << LOG_DESC("sendMessageByNodeID") << LOG_KV("groupID", m_groupID)
                          << LOG_KV("moduleID", _moduleID) << LOG_KV("uuid", uuid)
                          << LOG_KV("nodeID", _nodeID->hex());

@@ -125,14 +125,16 @@ void P2PSession::heartBeat()
                                       << LOG_KV("p2pid", printShortP2pID(m_p2pInfo->p2pID))
                                       << LOG_KV("endpoint", m_session->nodeIPEndpoint());
             }
-            // value message in frame, sent through the fast path (zero-copy)
+            // value message in frame, sent through the fast path (zero-copy). The service shared_ptr
+            // is passed as a coroutine parameter so it is copied into the frame and kept alive for
+            // the whole (possibly deferred) send.
             auto self = shared_from_this();
-            task::wait([self]() -> task::Task<void> {
+            task::wait([](std::shared_ptr<P2PSession> _self) -> task::Task<void> {
                 P2PMessageV2 message;
                 message.setPacketType(GatewayMessageType::Heartbeat);
                 ::ranges::any_view<bytesConstRef> emptyPayloads;
-                co_await self->fastSendP2PMessage(message, std::move(emptyPayloads), Options{});
-            }());
+                co_await _self->fastSendP2PMessage(message, std::move(emptyPayloads), Options{});
+            }(self));
         }
 
         auto self = std::weak_ptr<P2PSession>(shared_from_this());
@@ -171,28 +173,30 @@ void P2PSession::asyncSendP2PMessage(
     // reset message using original long nodeID or short nodeID according to the protocol version
     // Note: m_protocolInfo be setted when create P2PSession
     service->resetP2pID(*message, (ProtocolVersion)m_protocolInfo->version());
-    // route through the coroutine fast path: the message (shared_ptr) is captured in the frame and
-    // its payload is sent as a view (zero-copy); response/error is delivered to callback
+    // route through the coroutine fast path: the message (shared_ptr) and the callback are passed as
+    // coroutine parameters so they are copied into the frame and stay alive for the whole (possibly
+    // deferred) send; response/error is delivered to callback
     auto self = shared_from_this();
-    task::wait([self, message, options, callback]() mutable -> task::Task<void> {
-        Options sendOptions{options.timeout, callback ? true : false};
+    task::wait([](std::shared_ptr<P2PSession> _self, P2PMessage::Ptr _message, Options _options,
+                   SessionCallbackFunc _callback) mutable -> task::Task<void> {
+        Options sendOptions{_options.timeout, _callback ? true : false};
         try
         {
-            auto resp = co_await self->fastSendP2PMessage(
-                *message, ::ranges::views::single(message->payload()), sendOptions);
-            if (callback)
+            auto resp = co_await _self->fastSendP2PMessage(
+                *_message, ::ranges::views::single(_message->payload()), sendOptions);
+            if (_callback)
             {
-                callback(NetworkException(), resp);
+                _callback(NetworkException(), resp);
             }
         }
         catch (NetworkException const& e)
         {
-            if (callback)
+            if (_callback)
             {
-                callback(e, nullptr);
+                _callback(e, nullptr);
             }
         }
-    }());
+    }(self, message, options, callback));
 }
 
 bcos::task::Task<Message::Ptr> P2PSession::fastSendP2PMessage(
@@ -213,5 +217,10 @@ bcos::task::Task<Message::Ptr> P2PSession::fastSendP2PMessage(
     // reset message using original long nodeID or short nodeID according to the protocol version
     // Note: m_protocolInfo be setted when create P2PSession
     service->resetP2pID(message, (ProtocolVersion)m_protocolInfo->version());
+    // the p2p message version must match the negotiated protocol version of this session: the
+    // encodeHeaderImpl of P2PMessageV2 only encodes the ttl/src/dst routing fields for version > V0,
+    // so sending with the default (V0) version would silently drop the V2 routing fields and break
+    // multi-hop forwarding through ServiceV2 router tables
+    message.setVersion((uint16_t)m_protocolInfo->version());
     co_return co_await m_session->fastSendMessage(message, std::move(payloads), options);
 }

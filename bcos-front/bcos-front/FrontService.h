@@ -239,6 +239,12 @@ protected:
     // gateway send.
     void enqueueSend(std::function<void()> _sendTask);
 
+    // shared uuid/timer/callback registration used by both asyncSendMessageByNodeID and the
+    // coroutine sendMessageByNodeID, so the uuid/timer/addCallback logic is not duplicated.
+    // Returns the generated uuid (used as the message id for the module-level response routing).
+    std::string registerCallback(
+        bcos::crypto::NodeIDPtr _nodeID, uint32_t _timeout, CallbackFunc _callbackFunc);
+
 private:
     bcos::IOServicePool::Ptr m_ioServicePool;
     // FIB-185: serial async send strand over the shared IOServicePool + a pending-send counter

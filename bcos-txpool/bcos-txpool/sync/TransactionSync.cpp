@@ -259,23 +259,27 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
     auto front = m_config->frontService();
     auto networkTimeout = m_config->networkTimeout();
     // owned payload + coroutine fast path -> zero-copy; the module-level response is delivered to
-    // the same callback through the front receive path (uuid-matched)
-    task::wait([front, self, startT, networkTimeout, protocolID,
-                   _generatedNodeID = std::move(_generatedNodeID),
-                   encodedData = std::move(encodedData), _missedTxs, _verifiedProposal,
-                   _onVerifyFinished]() mutable -> task::Task<void> {
-        co_await front->sendMessageByNodeID(protocolID, _generatedNodeID,
-            ::ranges::views::single(ref(*encodedData)), networkTimeout,
-            [self, startT, _missedTxs, _verifiedProposal, _onVerifyFinished](auto&& _error,
-                auto&& _nodeID, bytesConstRef _data, const std::string&, auto&&) {
+    // the same callback through the front receive path (uuid-matched). All state is passed as
+    // coroutine parameters so it is copied into the frame and stays alive for the whole (possibly
+    // deferred) send.
+    task::wait([](decltype(front) _front, decltype(self) _self, decltype(startT) _startT,
+                   decltype(networkTimeout) _networkTimeout, decltype(protocolID) _protocolID,
+                   decltype(_generatedNodeID) _generatedNodeID, decltype(encodedData) _encodedData,
+                   decltype(_missedTxs) _missedTxs, decltype(_verifiedProposal) _verifiedProposal,
+                   decltype(_onVerifyFinished) _onVerifyFinished) mutable -> task::Task<void> {
+        co_await _front->sendMessageByNodeID(_protocolID, _generatedNodeID,
+            ::ranges::views::single(ref(*_encodedData)), _networkTimeout,
+            [_self, _startT, _missedTxs, _verifiedProposal,
+                _onVerifyFinished](auto&& _error, auto&& _nodeID, bytesConstRef _data,
+                const std::string&, auto&&) {
                 try
                 {
-                    auto transactionSync = self.lock();
+                    auto transactionSync = _self.lock();
                     if (!transactionSync)
                     {
                         return;
                     }
-                    auto networkT = utcTime() - startT;
+                    auto networkT = utcTime() - _startT;
                     auto recordT = utcTime();
                     // verify fetch txs response
                     transactionSync->verifyFetchedTxs(_error, _nodeID, _data, _missedTxs,
@@ -316,7 +320,8 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                     }
                 }
             });
-    }());
+    }(front, self, startT, networkTimeout, protocolID, std::move(_generatedNodeID),
+        std::move(encodedData), _missedTxs, _verifiedProposal, _onVerifyFinished));
 }
 
 void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data,

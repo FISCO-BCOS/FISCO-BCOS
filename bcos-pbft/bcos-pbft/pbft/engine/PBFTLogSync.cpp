@@ -97,14 +97,17 @@ void PBFTLogSync::requestPBFTData(
             auto encodedData =
                 config->codec()->encode(_pbftRequest, config->pbftMsgDefaultVersion());
             // owned payload + coroutine fast path -> zero-copy; the module-level response is
-            // delivered to _callback through the front receive path (uuid-matched)
+            // delivered to _callback through the front receive path (uuid-matched). All state is
+            // passed as coroutine parameters so it is copied into the frame and stays alive for the
+            // whole (possibly deferred) send.
             auto front = config->frontService();
             auto networkTimeout = config->networkTimeoutInterval();
-            task::wait([front, _from, encodedData = std::move(encodedData), networkTimeout,
-                           _callback]() mutable -> task::Task<void> {
-                co_await front->sendMessageByNodeID(ModuleID::PBFT, _from,
-                    ::ranges::views::single(ref(*encodedData)), networkTimeout, _callback);
-            }());
+            task::wait([](decltype(front) _front, decltype(_from) _from,
+                           decltype(encodedData) _encodedData, decltype(networkTimeout) _networkTimeout,
+                           decltype(_callback) _callback) mutable -> task::Task<void> {
+                co_await _front->sendMessageByNodeID(ModuleID::PBFT, _from,
+                    ::ranges::views::single(ref(*_encodedData)), _networkTimeout, _callback);
+            }(front, _from, std::move(encodedData), networkTimeout, _callback));
             PBFT_LOG(INFO) << LOG_DESC("request the missed precommit proposal")
                            << LOG_KV("peer", _from->shortHex())
                            << LOG_KV("index", _pbftRequest->index())

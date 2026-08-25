@@ -54,13 +54,17 @@ public:
 
     virtual uint32_t lengthDirect() const = 0;
     virtual uint32_t length() const = 0;
+    // overwrite the wire length of the message (used e.g. to make outgoing rate limiting charge the
+    // actual wire bytes of a zero-copy message whose payload is not stored in the message object)
+    virtual void setLength(uint32_t length) = 0;
     virtual uint32_t seq() const = 0;
     virtual uint16_t version() const = 0;
     virtual uint16_t packetType() const = 0;
     virtual uint16_t ext() const = 0;
+    virtual void setExt(uint16_t _ext) = 0;
     virtual bool isRespPacket() const = 0;
 
-    [[deprecated("Use encode(EncodedMessage& _buffer)")]] virtual bool encode(
+    [[deprecated("Use encodeHeader(bytes& _buffer)")]] virtual bool encode(
         bcos::bytes& _buffer) = 0;
 
     virtual int32_t decode(const bytesConstRef& _buffer) = 0;

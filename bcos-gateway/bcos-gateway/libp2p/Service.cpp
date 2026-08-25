@@ -336,10 +336,13 @@ void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr 
     // Note: p2pMessage version is binded to the protocol version
     _msg->setVersion(protocolVersion);
     auto self = shared_from_this();
-    // route through the coroutine fast path: the message (shared_ptr) is captured in the frame and
-    // its payload is sent as a view (zero-copy); the response (if requested) resumes the coroutine
-    // and is delivered to _callback.
-    task::wait([self, _p2pSession, _msg, _options, _callback]() mutable -> task::Task<void> {
+    // route through the coroutine fast path: the message (shared_ptr), the session and the callback
+    // are passed as coroutine parameters so they are copied into the frame and stay alive for the
+    // whole (possibly deferred) send; the payload is sent as a view (zero-copy); the response (if
+    // requested) resumes the coroutine and is delivered to _callback.
+    task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession,
+                   P2PMessage::Ptr _msg, Options _options,
+                   CallbackFuncWithSession _callback) mutable -> task::Task<void> {
         Options sendOptions{_options.timeout, _callback ? true : false};
         try
         {
@@ -368,7 +371,7 @@ void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr 
                     NetworkException(-1, boost::diagnostic_information(e)), _p2pSession, nullptr);
             }
         }
-    }());
+    }(self, _p2pSession, _msg, _options, _callback));
 }
 
 void Service::sendRespMessageBySession(
@@ -378,22 +381,23 @@ void Service::sendRespMessageBySession(
     auto seq = _p2pMessage->seq();
     auto p2pid = _p2pSession->p2pID();
     // value message in frame; the (borrowed) response payload is copied into the frame because the
-    // receive callback that passed it does not outlive the deferred send.
-    task::wait([self, _p2pSession, _payload = bcos::bytes(_payload.begin(), _payload.end()), seq,
-                   p2pid]() -> task::Task<void> {
+    // receive callback that passed it does not outlive the deferred send. The session/service are
+    // passed as coroutine parameters so they are copied into the frame.
+    task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession,
+                   bcos::bytes _payload, uint32_t _seq, P2pID _p2pid) -> task::Task<void> {
         P2PMessageV2 respMessage;
-        respMessage.setSeq(seq);
+        respMessage.setSeq(_seq);
         respMessage.setRespPacket();
         respMessage.setPayload(std::move(_payload));
         co_await _p2pSession->fastSendP2PMessage(
             respMessage, ::ranges::views::single(respMessage.payload()), Options{});
         if (c_fileLogLevel <= TRACE) [[unlikely]]
         {
-            SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", seq)
-                               << LOG_KV("p2pid", printShortP2pID(p2pid))
+            SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _seq)
+                               << LOG_KV("p2pid", printShortP2pID(_p2pid))
                                << LOG_KV("payload size", respMessage.payload().size());
         }
-    }());
+    }(self, _p2pSession, bcos::bytes(_payload.begin(), _payload.end()), seq, p2pid));
 }
 
 std::optional<bcos::Error> Service::onBeforeMessage(SessionFace& _session, Message& _message)
@@ -577,14 +581,14 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
             }
         }
         auto self = shared_from_this();
-        task::wait([self, nodeIDs = std::move(nodeIDs), message = std::move(message),
-                       options]() mutable -> task::Task<void> {
-            for (auto const& nodeID : nodeIDs)
+        task::wait([](std::shared_ptr<Service> _self, std::vector<P2pID> _nodeIDs,
+                       P2PMessage::Ptr _message, Options _options) mutable -> task::Task<void> {
+            for (auto const& nodeID : _nodeIDs)
             {
                 try
                 {
-                    co_await self->sendMessageByNodeID(
-                        nodeID, *message, ::ranges::views::single(message->payload()), options);
+                    co_await _self->sendMessageByNodeID(
+                        nodeID, *_message, ::ranges::views::single(_message->payload()), _options);
                 }
                 catch (std::exception const& e)
                 {
@@ -593,7 +597,7 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
                                          << LOG_KV("what", boost::diagnostic_information(e));
                 }
             }
-        }());
+        }(self, std::move(nodeIDs), std::move(message), options));
     }
     catch (std::exception& e)
     {
@@ -623,6 +627,37 @@ bcos::task::Task<void> Service::broadcastMessageToAll(
         catch (std::exception const& e)
         {
             SERVICE_LOG(WARNING) << LOG_DESC("broadcastMessageToAll failed")
+                                 << LOG_KV("nodeid", printShortP2pID(nodeID))
+                                 << LOG_KV("what", boost::diagnostic_information(e));
+        }
+    }
+    co_return;
+}
+
+bcos::task::Task<void> Service::broadcastMessageToNeighbors(
+    P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+{
+    // Only directly connected sessions (m_sessions), unlike broadcastMessageToAll which may fan out
+    // through the ServiceV2 router table. This preserves the "router table sync only between
+    // neighbors, propagated hop-by-hop" gossip model used by broadcastRouterSeq.
+    std::vector<P2pID> nodeIDs;
+    {
+        std::shared_lock lock(x_sessions);
+        nodeIDs.reserve(m_sessions.size());
+        for (auto const& session : m_sessions)
+        {
+            nodeIDs.push_back(session.first);
+        }
+    }
+    for (auto const& nodeID : nodeIDs)
+    {
+        try
+        {
+            co_await sendMessageByNodeID(nodeID, message, payloads, options);
+        }
+        catch (std::exception const& e)
+        {
+            SERVICE_LOG(WARNING) << LOG_DESC("broadcastMessageToNeighbors failed")
                                  << LOG_KV("nodeid", printShortP2pID(nodeID))
                                  << LOG_KV("what", boost::diagnostic_information(e));
         }
@@ -668,23 +703,24 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
         return;
     }
     auto self = shared_from_this();
-    // value message in frame; payload owned by the frame and sent as a view (zero-copy)
-    task::wait([self, _type, _dstNodeID = std::move(_dstNodeID),
-                   _payload = bcos::bytes(_payload.begin(), _payload.end()), _options,
-                   _callback]() mutable -> task::Task<void> {
+    // value message in frame; payload owned by the frame and sent as a view (zero-copy). All state
+    // is passed as coroutine parameters so it is copied into the frame and stays alive.
+    task::wait([](std::shared_ptr<Service> _self, uint16_t _type, P2pID _dstNodeID,
+                   bcos::bytes _payload, Options _options,
+                   P2PResponseCallback _callback) mutable -> task::Task<void> {
         P2PMessageV2 message;
         message.setPacketType(_type);
-        message.setSeq(self->messageFactory()->newSeq());
+        message.setSeq(_self->messageFactory()->newSeq());
         message.setPayload(std::move(_payload));
         if (!_callback)
         {
-            co_await self->sendMessageByNodeID(_dstNodeID, message,
+            co_await _self->sendMessageByNodeID(_dstNodeID, message,
                 ::ranges::views::single(message.payload()), Options{_options.timeout, false});
             co_return;
         }
         try
         {
-            auto resp = co_await self->sendMessageByNodeID(_dstNodeID, message,
+            auto resp = co_await _self->sendMessageByNodeID(_dstNodeID, message,
                 ::ranges::views::single(message.payload()), Options{_options.timeout, true});
             auto respMessage = std::dynamic_pointer_cast<P2PMessage>(resp);
             auto packetType = respMessage ? respMessage->packetType() : (uint16_t)0;
@@ -695,23 +731,25 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
         {
             _callback(e.toError(), 0, bytesConstRef{});
         }
-    }());
+    }(self, _type, std::move(_dstNodeID),
+        bcos::bytes(_payload.begin(), _payload.end()), _options, _callback));
 }
 
 void Service::asyncBroadcastMessageToP2PNodes(
     uint16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options)
 {
     auto self = shared_from_this();
-    // value message in frame; payload owned by the frame and sent as a view (zero-copy)
-    task::wait([self, _type, _payload = bcos::bytes(_payload.begin(), _payload.end()),
-                   _options]() mutable -> task::Task<void> {
+    // value message in frame; payload owned by the frame and sent as a view (zero-copy). All state
+    // is passed as coroutine parameters so it is copied into the frame and stays alive.
+    task::wait([](std::shared_ptr<Service> _self, uint16_t _type, bcos::bytes _payload,
+                   Options _options) mutable -> task::Task<void> {
         P2PMessageV2 message;
         message.setPacketType(_type);
-        message.setSeq(self->messageFactory()->newSeq());
+        message.setSeq(_self->messageFactory()->newSeq());
         message.setPayload(std::move(_payload));
-        co_await self->broadcastMessageToAll(
+        co_await _self->broadcastMessageToAll(
             message, ::ranges::views::single(message.payload()), _options);
-    }());
+    }(self, _type, bcos::bytes(_payload.begin(), _payload.end()), _options));
 }
 
 void Service::asyncSendMessageByP2PNodeIDs(
@@ -727,20 +765,21 @@ void Service::asyncSendMessageByP2PNodeIDs(
 void Service::asyncSendProtocol(P2PSession::Ptr _session)
 {
     auto self = shared_from_this();
-    // value message in frame; payload owned by the frame
-    task::wait([self, _session]() -> task::Task<void> {
+    // value message in frame; payload owned by the frame. All state is passed as coroutine
+    // parameters so it is copied into the frame and stays alive.
+    task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _session) -> task::Task<void> {
         auto payload = bytes();
-        self->m_codec->encode(self->m_localProtocol, payload);
+        _self->m_codec->encode(_self->m_localProtocol, payload);
         P2PMessageV2 message;
         message.setPacketType(GatewayMessageType::Handshake);
-        message.setSeq(self->messageFactory()->newSeq());
+        message.setSeq(_self->messageFactory()->newSeq());
         message.setPayload(std::move(payload));
         SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol")
                           << LOG_KV("payload", message.payload().size())
                           << LOG_KV("seq", message.seq());
         co_await _session->fastSendP2PMessage(
             message, ::ranges::views::single(message.payload()), Options{});
-    }());
+    }(self, _session));
 }
 
 // receive the heartbeat msg

@@ -14,8 +14,11 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
+#include "bcos-gateway/libp2p/Common.h"  // for c_compressThreshold / c_zstdCompressLevel
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Overloaded.h"
+#include "bcos-utilities/ZstdCompress.h"
+#include <bcos-framework/protocol/Protocol.h>  // for MessageExtFieldFlag
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/throw_exception.hpp>
@@ -215,7 +218,20 @@ void Session::write()
                         {
                             session->m_server.get().asioInterface()->post(
                                 [callback = std::move(payload.m_callback), error = _error]() {
-                                    callback(error);
+                                    // The callback resumes a coroutine whose await_resume may throw
+                                    // (e.g. fastSendMessageWithoutResponse throwing NetworkException
+                                    // on write failure). Catch it here so it cannot escape the
+                                    // io_context::run() loop and crash the io thread.
+                                    try
+                                    {
+                                        callback(error);
+                                    }
+                                    catch (std::exception const& e)
+                                    {
+                                        SESSION_LOG(WARNING)
+                                            << LOG_DESC("write callback exception")
+                                            << LOG_KV("what", boost::diagnostic_information(e));
+                                    }
                                 });
                         }
                     }
@@ -872,22 +888,51 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
         co_return {};
     }
 
-    // The fast path must honour the same pre-send (outgoing rate-limit) check that the callback
-    // path (asyncSendMessage) enforces; otherwise routing sends through fastSendMessage would
-    // silently bypass outgoing bandwidth/QPS limiting. A rejection surfaces as a thrown
-    // NetworkException (e.g. OutBWOverflow / InQPSOverflow) so coroutine retry loops can stop.
-    if (auto result =
-            (m_beforeMessageHandler ? m_beforeMessageHandler(*this, message) : std::nullopt))
-    {
-        const auto& error = result.value();
-        BOOST_THROW_EXCEPTION(NetworkException((int64_t)error.errorCode(), error.errorMessage()));
-    }
-
+    // Encode the header first: when compression (below) applies it sets the COMPRESS ext flag and
+    // the header must be re-encoded to carry it.
     bytes headerBuffer;
     message.encodeHeader(headerBuffer);
 
+    // Zero-copy send by default. When compression is enabled and the payload is large enough (and
+    // the wire format is V2+, same rule as the removed asyncSendMessage path), the payload views
+    // are joined into a frame-owned buffer and compressed; the wire then carries header + the
+    // compressed payload. Both buffers live in this coroutine frame for the whole (deferred) send.
+    bcos::bytes joinedPayload;
+    bcos::bytes compressedPayload;
+    ::ranges::any_view<bytesConstRef> wirePayloads = std::move(payloads);
+    if (m_enableCompress &&
+        message.version() >= (uint16_t)bcos::protocol::ProtocolVersion::V2)
+    {
+        uint32_t payloadSize = 0;
+        for (auto const& ref : wirePayloads)
+        {
+            payloadSize += ref.size();
+        }
+        if (payloadSize > c_compressThreshold)
+        {
+            joinedPayload.reserve(payloadSize);
+            for (auto const& ref : wirePayloads)
+            {
+                joinedPayload.insert(joinedPayload.end(), ref.begin(), ref.end());
+            }
+            if (ZstdCompress::compress(
+                    ref(joinedPayload), compressedPayload, (int)c_zstdCompressLevel))
+            {
+                message.setExt(message.ext() | bcos::protocol::MessageExtFieldFlag::COMPRESS);
+                headerBuffer.clear();
+                message.encodeHeader(headerBuffer);
+                wirePayloads =
+                    ::ranges::views::single(bcos::ref(std::as_const(compressedPayload)));
+            }
+            else
+            {
+                wirePayloads = ::ranges::views::single(bcos::ref(std::as_const(joinedPayload)));
+            }
+        }
+    }
+
     auto view = ::ranges::views::concat(
-        ::ranges::views::single(bcos::ref(std::as_const(headerBuffer))), std::move(payloads));
+        ::ranges::views::single(bcos::ref(std::as_const(headerBuffer))), std::move(wirePayloads));
     uint32_t totalLength = 0;
     for (auto ref : view)
     {
@@ -895,6 +940,32 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     }
     *(uint32_t*)headerBuffer.data() =
         boost::asio::detail::socket_ops::host_to_network_long(totalLength);
+
+    // The fast path must honour the same pre-send (outgoing rate-limit) check that the callback
+    // path (asyncSendMessage) enforces; otherwise routing sends through fastSendMessage would
+    // silently bypass outgoing bandwidth/QPS limiting. The check is charged on the ACTUAL wire
+    // bytes (totalLength including the payload views) — a zero-copy message does not carry its
+    // payload, so message.length() alone would under-count the outgoing traffic. A rejection
+    // surfaces as a thrown NetworkException (e.g. OutBWOverflow / InQPSOverflow) so coroutine
+    // retry loops can stop.
+    message.setLength(totalLength);
+    if (auto result =
+            (m_beforeMessageHandler ? m_beforeMessageHandler(*this, message) : std::nullopt))
+    {
+        const auto& error = result.value();
+        BOOST_THROW_EXCEPTION(NetworkException((int64_t)error.errorCode(), error.errorMessage()));
+    }
+
+    // Restores the allowMaxMsgSize check from the removed asyncSendMessage path: a frame that
+    // exceeds the limit would otherwise be written to the wire and dropped by the peer (breaking
+    // the connection) instead of failing locally and recoverably.
+    if (totalLength > allowMaxMsgSize())
+    {
+        SESSION_LOG(WARNING) << LOG_BADGE("fastSendMessage") << LOG_DESC("msg size overflow")
+                             << LOG_KV("msgSize", totalLength)
+                             << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
+        BOOST_THROW_EXCEPTION(NetworkException(-1, "Msg size overflow"));
+    }
 
     if (c_fileLogLevel <= LogLevel::TRACE)
     {

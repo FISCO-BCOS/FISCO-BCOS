@@ -28,6 +28,9 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
+#include <atomic>
+#include <coroutine>
+#include <memory>
 #include <range/v3/view/any_view.hpp>
 
 namespace bcos
@@ -123,35 +126,64 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
         ::ranges::any_view<bytesConstRef> _payloads, ErrorRespFunc _errorRespFunc)
     {
-        bcos::bytes buffer;
+        // Both the payload buffer and the completion state are owned by shared_ptrs captured by the
+        // completion callback, NOT by this coroutine frame: the borrowed TARS client may keep
+        // reading the payload after the callback returns (e.g. a synchronous connection-check error
+        // followed by an async send setup), and it may even invoke the callback twice (synchronously
+        // for the connection check AND later for the async completion). The shared state survives
+        // the frame so the second completion is detected instead of double-resuming a destroyed
+        // coroutine.
+        auto buffer = std::make_shared<bcos::bytes>();
         for (auto const& data : _payloads)
         {
-            buffer.insert(buffer.end(), data.begin(), data.end());
+            buffer->insert(buffer->end(), data.begin(), data.end());
         }
         struct SendAwaitable
         {
+            struct CompletionState
+            {
+                std::atomic<bool> completed{false};
+                std::coroutine_handle<> handle;
+            };
+
             GatewayInterface* m_self;
             std::string m_groupID;
             int m_moduleID;
             bcos::crypto::NodeIDPtr m_srcNodeID;
             bcos::crypto::NodeIDPtr m_dstNodeID;
-            bcos::bytes m_buffer;
             ErrorRespFunc m_respFunc;
+            std::shared_ptr<bcos::bytes> m_buffer;
+            std::shared_ptr<CompletionState> m_state;
 
             constexpr static bool await_ready() noexcept { return false; }
             void await_suspend(std::coroutine_handle<> _handle)
             {
+                m_state->handle = _handle;
+                auto state = m_state;
+                auto buffer = m_buffer;
+                auto respFunc = std::move(m_respFunc);
                 m_self->asyncSendMessageByNodeID(m_groupID, m_moduleID, m_srcNodeID, m_dstNodeID,
-                    bcos::ref(m_buffer),
-                    [_handle, respFunc = std::move(m_respFunc)](bcos::Error::Ptr _error) mutable {
-                        respFunc(std::move(_error));
-                        _handle.resume();
+                    bcos::ref(*buffer),
+                    [state = std::move(state), buffer = std::move(buffer),
+                        respFunc = std::move(respFunc)](bcos::Error::Ptr _error) mutable {
+                        if (respFunc)
+                        {
+                            respFunc(std::move(_error));
+                        }
+                        // keep the payload buffer alive until after the resume: the borrowed caller
+                        // may still be reading it on this stack
+                        (void)buffer;
+                        if (!state->completed.exchange(true))
+                        {
+                            state->handle.resume();
+                        }
                     });
             }
             void await_resume() {}
         };
         SendAwaitable awaitable{this, std::string(_groupID), _moduleID, std::move(_srcNodeID),
-            std::move(_dstNodeID), std::move(buffer), std::move(_errorRespFunc)};
+            std::move(_dstNodeID), std::move(_errorRespFunc), std::move(buffer),
+            std::make_shared<SendAwaitable::CompletionState>()};
         co_await awaitable;
         co_return;
     }

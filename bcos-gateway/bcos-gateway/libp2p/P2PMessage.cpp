@@ -484,6 +484,10 @@ uint32_t bcos::gateway::P2PMessage::lengthDirect() const
 {
     return m_length;
 }
+void bcos::gateway::P2PMessage::setLength(uint32_t length)
+{
+    m_length = length;
+}
 uint32_t bcos::gateway::P2PMessage::length() const
 {
     // The length value has been set

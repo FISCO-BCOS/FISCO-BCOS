@@ -62,6 +62,12 @@ public:
     task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
+    // (coroutine) forward a received message to its destination through the router table. Unlike
+    // sendMessageByNodeID it does NOT rewrite srcP2PNodeID: the original sender must be preserved
+    // so the final destination can reply to it directly.
+    task::Task<Message::Ptr> forwardMessageByNodeID(P2pID nodeID, P2PMessage& message,
+        ::ranges::any_view<bytesConstRef> payloads, Options options = Options());
+
     std::string getShortP2pID(std::string const& rawP2pID) const override;
     std::string getRawP2pID(std::string const& shortP2pID) const override;
 

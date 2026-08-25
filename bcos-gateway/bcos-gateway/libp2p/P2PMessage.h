@@ -129,7 +129,7 @@ public:
 
     uint32_t lengthDirect() const override;
     uint32_t length() const override;
-    // virtual void setLength(uint32_t length) { m_length = length; }
+    void setLength(uint32_t length) override;
 
     uint16_t version() const override;
     virtual void setVersion(uint16_t version);
@@ -141,7 +141,7 @@ public:
     virtual void setSeq(uint32_t seq);
 
     uint16_t ext() const override;
-    virtual void setExt(uint16_t _ext);
+    void setExt(uint16_t _ext) override;
 
     const P2PMessageOptions& options() const;
     void setOptions(P2PMessageOptions _options);

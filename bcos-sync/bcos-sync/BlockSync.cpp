@@ -966,11 +966,13 @@ void BlockSync::sendSyncStatusByTree()
         m_syncTreeTopology->selectNodesForBlockSync(m_config->connectedGroupNodeList());
     for (auto const& nodeID : *groupNodeList)
     {
-        // per-node coroutine keeps the shared encodedData alive and sends it as a view (zero-copy)
-        task::wait([front, nodeID, encodedData]() mutable -> task::Task<void> {
-            co_await front->sendMessageByNodeID(ModuleID::BlockSync, nodeID,
-                ::ranges::views::single(ref(*encodedData)), 0, nullptr);
-        }());
+        // per-node coroutine keeps the shared encodedData alive and sends it as a view (zero-copy);
+        // all state is passed as coroutine parameters so it is copied into the frame and stays alive
+        task::wait([](decltype(front) _front, decltype(nodeID) _nodeID,
+                       decltype(encodedData) _encodedData) mutable -> task::Task<void> {
+            co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
+                ::ranges::views::single(ref(*_encodedData)), 0, nullptr);
+        }(front, nodeID, encodedData));
     }
 }
 
@@ -1004,11 +1006,13 @@ void BlockSync::broadcastSyncStatus()
         auto const& groupNodeList = m_config->groupNodeList();
         for (auto const& nodeID : groupNodeList)
         {
-            // per-node coroutine keeps the shared encodedData alive and sends it as a view
-            task::wait([front, nodeID, encodedData]() mutable -> task::Task<void> {
-                co_await front->sendMessageByNodeID(ModuleID::BlockSync, nodeID,
-                    ::ranges::views::single(ref(*encodedData)), 0, nullptr);
-            }());
+            // per-node coroutine keeps the shared encodedData alive and sends it as a view; all
+            // state is passed as coroutine parameters so it is copied into the frame and stays alive
+            task::wait([](decltype(front) _front, decltype(nodeID) _nodeID,
+                           decltype(encodedData) _encodedData) mutable -> task::Task<void> {
+                co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
+                    ::ranges::views::single(ref(*_encodedData)), 0, nullptr);
+            }(front, nodeID, encodedData));
         }
     }
 }
