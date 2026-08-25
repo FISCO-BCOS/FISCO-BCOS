@@ -96,17 +96,25 @@ void PBFTLogSync::requestPBFTData(
             // encode
             auto encodedData =
                 config->codec()->encode(_pbftRequest, config->pbftMsgDefaultVersion());
-            // owned payload + coroutine fast path -> zero-copy; the module-level response is
-            // delivered to _callback through the front receive path (uuid-matched). All state is
-            // passed as coroutine parameters so it is copied into the frame and stays alive for the
-            // whole (possibly deferred) send.
+            // owned payload + coroutine fast path -> zero-copy; co_await waits for the module-level
+            // response (uuid-matched) and the result is delivered to _callback. All state is passed
+            // as coroutine parameters so it is copied into the frame and stays alive for the whole
+            // (possibly deferred) send.
             auto front = config->frontService();
             auto networkTimeout = config->networkTimeoutInterval();
             task::wait([](decltype(front) _front, decltype(_from) _from,
                            decltype(encodedData) _encodedData, decltype(networkTimeout) _networkTimeout,
                            decltype(_callback) _callback) mutable -> task::Task<void> {
-                co_await _front->sendMessageByNodeID(ModuleID::PBFT, _from,
-                    ::ranges::views::single(ref(*_encodedData)), _networkTimeout, _callback);
+                auto result = co_await _front->sendMessageByNodeID(ModuleID::PBFT, _from,
+                    ::ranges::views::single(ref(*_encodedData)), _networkTimeout);
+                if (_callback)
+                {
+                    // deliver the module-level response through the caller's callback, exactly as
+                    // the front receive path used to (result.payload is owned by this frame and
+                    // stays valid for the duration of the synchronous callback)
+                    _callback(std::move(result.error), std::move(result.nodeID),
+                        bcos::ref(result.payload), result.uuid, std::move(result.respond));
+                }
             }(front, _from, std::move(encodedData), networkTimeout, _callback));
             PBFT_LOG(INFO) << LOG_DESC("request the missed precommit proposal")
                            << LOG_KV("peer", _from->shortHex())

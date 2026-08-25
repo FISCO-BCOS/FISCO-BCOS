@@ -970,8 +970,10 @@ void BlockSync::sendSyncStatusByTree()
         // all state is passed as coroutine parameters so it is copied into the frame and stays alive
         task::wait([](decltype(front) _front, decltype(nodeID) _nodeID,
                        decltype(encodedData) _encodedData) mutable -> task::Task<void> {
-            co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
-                ::ranges::views::single(ref(*_encodedData)), 0, nullptr);
+            // fire-and-forget status push: no module-level response is expected (timeout == 0)
+            auto result = co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
+                ::ranges::views::single(ref(*_encodedData)), 0);
+            (void)result;
         }(front, nodeID, encodedData));
     }
 }
@@ -1010,8 +1012,10 @@ void BlockSync::broadcastSyncStatus()
             // state is passed as coroutine parameters so it is copied into the frame and stays alive
             task::wait([](decltype(front) _front, decltype(nodeID) _nodeID,
                            decltype(encodedData) _encodedData) mutable -> task::Task<void> {
-                co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
-                    ::ranges::views::single(ref(*_encodedData)), 0, nullptr);
+                // fire-and-forget status push: no module-level response is expected (timeout == 0)
+                auto result = co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
+                    ::ranges::views::single(ref(*_encodedData)), 0);
+                (void)result;
             }(front, nodeID, encodedData));
         }
     }

@@ -279,10 +279,13 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine)
     int moduleID = 222;
     frontService->registerModuleMessageDispatcher(moduleID, moduleCallback);
 
-    task::syncWait(frontService->sendMessageByNodeID(moduleID, dstNodeID,
+    // timeout == 0: fire-and-forget send; the module-level dispatch (not a response) is what the
+    // fake gateway loops back, so only the send completion matters here.
+    auto result = task::syncWait(frontService->sendMessageByNodeID(moduleID, dstNodeID,
         ::ranges::views::single(bytesConstRef(
             reinterpret_cast<const bcos::byte*>(data.data()), data.size())),
-        0, CallbackFunc()));
+        0));
+    (void)result;
     f.get();
 }
 
