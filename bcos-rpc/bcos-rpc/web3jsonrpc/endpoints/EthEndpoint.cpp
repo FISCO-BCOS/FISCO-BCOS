@@ -721,6 +721,55 @@ task::Task<void> EthEndpoint::sendTransaction(const Json::Value&, Json::Value& r
     co_return;
 }
 
+txvalidator::TxValidator& EthEndpoint::memPoolAdmission()
+{
+    if (!m_memPoolAdmission)
+    {
+        auto ledger = m_nodeService->ledger();
+        auto cryptoSuite = m_nodeService->blockFactory()->cryptoSuite();
+        m_memPoolAdmission = std::make_unique<txvalidator::TxValidator>(
+            cryptoSuite, ledger,
+            [ledger]() -> task::Task<ledger::LedgerConfig::Ptr> {
+                co_return co_await ledger::getLedgerConfig(*ledger);
+            },
+            // Committed plane only. Under EESTReplay the balance and nonce-window checks are
+            // switched off, so the sole readers of this are EIP-3607 and EIP-2681, and both
+            // treat an absent account as "nothing to object to". Contract code is left empty:
+            // the only way to it is the callback-based SchedulerInterface::getCode, and it is
+            // not worth an extra suspension on this path for a check that execution repeats.
+            [ledger](
+                std::string_view sender) -> task::Task<std::optional<txvalidator::AccountState>> {
+                auto const state = co_await ledger->getStorageState(toHex(sender), 0);
+                if (!state)
+                {
+                    co_return std::nullopt;
+                }
+                txvalidator::AccountState account;
+                if (!state->nonce.empty())
+                {
+                    account.nonce = u256(state->nonce);
+                }
+                if (!state->balance.empty())
+                {
+                    account.balance = u256(state->balance);
+                }
+                co_return account;
+            },
+            [ledger](std::string_view sender) -> task::Task<std::optional<u256>> {
+                auto const state = co_await ledger->getStorageState(toHex(sender), 0);
+                if (!state || state->nonce.empty())
+                {
+                    co_return std::nullopt;
+                }
+                co_return u256(state->nonce);
+            },
+            // Engine-driven mode initialises no txpool, so this path sees only Web3
+            // transactions and the BCOS system-transaction rule never applies.
+            [](protocol::Transaction const&) { return false; }, /*groupId*/ "", /*chainId*/ "");
+    }
+    return *m_memPoolAdmission;
+}
+
 task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Json::Value& response)
 {
     // params: signedTransaction(DATA)
@@ -759,12 +808,6 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             "Deposit (0x7e) transactions are not supported via eth_sendRawTransaction"));
     }
     auto encodeTxHash = web3Tx.txHash();
-    // Capture the chainId decoded from the SIGNED envelope BEFORE takeToTarsTransaction moves
-    // web3Tx away (kyonRay R4 #3): re-walking the raw bytes via web3ChainIdFromEnvelope would
-    // duplicate the decoder and invite drift — the walker is uint64 while the decoder is u256,
-    // so a chainId above 2^64-1 would decode fine here but read as nullopt in the walker. The
-    // walker stays for the P2P/tars path where only a Transaction is available (part 4b).
-    auto const web3ChainId = web3Tx.chainId;
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
@@ -794,82 +837,39 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     // txpool and P2P broadcast. EngineService seals these txs into blocks on a timer.
     if (auto* memPool = m_nodeService->memPool()) [[unlikely]]
     {
-        // The mempool path bypasses TxValidator, so admission here is deliberately lighter
-        // than the txpool path: signature + EIP-155 chainId are checked below; web3 nonce,
-        // ledger nonce/blockLimit, EIP-3860 initcode size and balance are NOT — the mode is
-        // aimed at single-node EEST reproduction where fixtures use arbitrary nonces and
-        // unfunded senders (MemPoolImpl::add only rejects null / tainted / duplicate-hash /
-        // unparseable-nonce transactions). ChainId IS checked because dropping it would
-        // disable EIP-155 replay protection: a transaction signed for another chain would
-        // execute here and consume the sender's nonce.
-        auto chainIdConfig = co_await ledger::getSystemConfig(
-            *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
-        if (!chainIdConfig)
+        // Admission for this path used to be hand-rolled and covered exactly two things:
+        // signature recovery and the EIP-155 chainId. Everything else -- the type gate, the
+        // fee-market relations, per-type revision gating, intrinsic gas, initcode size, the
+        // `to` format (issue #5318), EIP-3607, EIP-2681 -- was skipped, and nothing reconciled
+        // the tars mirror with the signed envelope.
+        //
+        // EESTReplay, not PoolAdmission: this branch exists for single-node EEST reproduction,
+        // whose fixtures deliberately use arbitrary nonces and unfunded senders. That context
+        // drops exactly the balance and nonce-window checks and keeps the rest, so it is
+        // strictly stronger than what ran here before while leaving those fixtures replayable.
+        // Promoting this path to the full PoolAdmission set needs an explicit config gate so a
+        // production engine-driven node is not silently running the relaxed set; that is
+        // deliberately not decided here.
+        if (auto status =
+                co_await memPoolAdmission().admit(*tx, txvalidator::AdmissionContext::EESTReplay,
+                    txvalidator::SignaturePolicy::Required, txvalidator::PoolNonceQuery{});
+            status != protocol::TransactionStatus::None)
         {
-            // Fail closed when web3_chain_id is unconfigured: without a node chainId to
-            // compare against, an EIP-155 tx signed for a foreign chain would execute here
-            // and consume the sender's nonce (EIP-155 replay-protection bypass). op-geth
-            // always has a genesis chainId, so it has no such open default. Only pre-EIP-155
-            // legacy (no chainId in the envelope) is exempt — there is nothing to compare.
-            auto const envelopeChainId = web3ChainId;
-            if (envelopeChainId.has_value() ||
-                bcos::rlp::protocol::isTypedWeb3Envelope(tx->extraTransactionBytes()))
-            {
-                WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction: web3_chain_id not configured")
-                                  << LOG_KV("txChainId", tx->chainId());
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
-            }
+            WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction: mempool admission rejected")
+                              << LOG_KV("status", protocol::toString(status));
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, protocol::toString(status)));
         }
-        else
+
+        // tryAdd, not add: add() returns void and four of its exits are silent, so replying
+        // with the transaction hash right after it can answer with a hash for a transaction
+        // that never entered the pool -- the caller then polls for a receipt until timeout.
+        if (auto status = memPool->tryAdd(std::move(tx));
+            status != protocol::TransactionStatus::None)
         {
-            auto [chainIdStr, _] = chainIdConfig.value();
-            // Validate against the SIGNED envelope; base TxValidator::validateChainId reads the
-            // tars mirror and is migrated to this envelope-keyed form in part 4b (#5477): typed
-            // txs get no "0" exemption (op-geth modernSigner); only pre-EIP-155 legacy (no
-            // chainId in the envelope) is exempt — a deliberate divergence (geth/op-geth
-            // default rejects unprotected txs at the RPC layer; part 5 adds the config gate).
-            // Parse as u256 via the shared helper (ledger::parseWeb3ChainId); a corrupted
-            // config rejects the tx.
-            auto expected = ledger::parseWeb3ChainId(chainIdStr);
-            if (!expected.has_value())
-            {
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
-            }
-            auto const envelopeChainId = web3ChainId;
-            if (envelopeChainId.has_value() && *envelopeChainId != *expected)
-            {
-                WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction chainId mismatch")
-                                  << LOG_KV("txChainId", tx->chainId())
-                                  << LOG_KV("nodeChainId", chainIdStr);
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
-            }
-            // Same typed-envelope guard as TxValidator::validateChainId (mirror→envelope
-            // migration lands in 4b): a typed tx whose
-            // chainId field cannot be parsed (nullopt) gets no "0" exemption — a malformed
-            // typed envelope is rejected here rather than deferring to signature recovery.
-            if (!envelopeChainId.has_value() &&
-                bcos::rlp::protocol::isTypedWeb3Envelope(tx->extraTransactionBytes()))
-            {
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
-            }
+            WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction: mempool rejected")
+                              << LOG_KV("status", protocol::toString(status));
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, protocol::toString(status)));
         }
-        // The mempool rejects tainted transactions (MemPoolImpl::add throws
-        // InvalidTaintedTransaction), so recover the sender / verify the signature the same
-        // way TxValidator does for the txpool path before adding.
-        try
-        {
-            auto cryptoSuite = m_nodeService->blockFactory()->cryptoSuite();
-            tx->verify(*cryptoSuite->hashImpl(), *cryptoSuite->signatureImpl());
-        }
-        catch (std::exception const& e)
-        {
-            WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction mempool verify failed")
-                              << LOG_KV("reason", boost::diagnostic_information(e));
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid transaction signature"));
-        }
-        std::vector<protocol::Transaction::Ptr> txs;
-        txs.push_back(std::move(tx));
-        memPool->add(txs);
         Json::Value result = encodeTxHash.hexPrefixed();
         buildJsonContent(result, response);
         co_return;

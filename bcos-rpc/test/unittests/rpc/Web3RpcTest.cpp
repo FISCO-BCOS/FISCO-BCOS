@@ -499,7 +499,10 @@ BOOST_AUTO_TEST_CASE(handleMempoolChainIdGateUnconfiguredTest)
             "72f3e8f299379ce2802e64b1cbb55275ad9aaa81190b44");
         BOOST_TEST(response.isMember("error"));
         BOOST_TEST(response["error"]["code"].asInt() == InvalidParams);
-        BOOST_TEST(response["error"]["message"].asString() == "invalid chainId");
+        // The mempool path now reports the TransactionStatus name rather than a hand-written
+        // string, because admission is shared with the txpool path instead of inlined here.
+        BOOST_TEST(response["error"]["message"].asString() ==
+                   toString(protocol::TransactionStatus::InvalidChainId));
     }
     // Typed EIP-1559 (chainId=1; etherscan 0x5b2f24...): rejected via the typed-envelope guard.
     {
@@ -509,7 +512,10 @@ BOOST_AUTO_TEST_CASE(handleMempoolChainIdGateUnconfiguredTest)
             "0f6ed7d035397547aeac0e5130847570f4b607350f71c1391b7cb7f9dd604c");
         BOOST_TEST(response.isMember("error"));
         BOOST_TEST(response["error"]["code"].asInt() == InvalidParams);
-        BOOST_TEST(response["error"]["message"].asString() == "invalid chainId");
+        // The mempool path now reports the TransactionStatus name rather than a hand-written
+        // string, because admission is shared with the txpool path instead of inlined here.
+        BOOST_TEST(response["error"]["message"].asString() ==
+                   toString(protocol::TransactionStatus::InvalidChainId));
     }
     // Pre-EIP-155 legacy (v=28; etherscan 0xf6ecaf...): exempt — accepted into the mempool.
     {
