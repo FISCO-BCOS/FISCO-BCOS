@@ -61,6 +61,13 @@ constexpr Expectation kExpectations[] = {
     {TransactionStatus::MaxInitCodeSizeExceeded, "MaxInitCodeSizeExceeded"},
     {TransactionStatus::SenderNoEOA, "SenderNoEOA"},
     {TransactionStatus::InsufficientFunds, "InsufficientFunds"},
+    {TransactionStatus::TxTypeNotSupported, "TxTypeNotSupported"},
+    {TransactionStatus::TipGreaterThanFeeCap, "TipGreaterThanFeeCap"},
+    {TransactionStatus::CreateSetCodeTx, "CreateSetCodeTx"},
+    {TransactionStatus::EmptyAuthorizationList, "EmptyAuthorizationList"},
+    {TransactionStatus::NonceHasMaxValue, "NonceHasMaxValue"},
+    {TransactionStatus::FeeCapLessThanBaseFee, "FeeCapLessThanBaseFee"},
+    {TransactionStatus::MaxGasLimitExceeded, "MaxGasLimitExceeded"},
 };
 }  // namespace
 
