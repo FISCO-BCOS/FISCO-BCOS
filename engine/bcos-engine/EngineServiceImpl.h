@@ -52,16 +52,19 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include "bcos-framework/engine/Errors.h"
 #include <utility>
 #include <vector>
 
 namespace bcos::engine
 {
 // UnsupportedEngineApiVersion / UnknownPayload / IncompatiblePayloadVersion moved to
-// bcos-framework/engine/Types.h so the RPC endpoint can map them to Engine error codes.
+// bcos-framework/engine/Types.h so the RPC endpoint can map them to Engine error codes;
+// UnknownForkchoiceHeadBlock / InvalidForkchoiceState / UnsupportedFork /
+// UnsupportedOpPayloadAttributes come from bcos-framework/engine/Errors.h (the RPC
+// EngineErrorMapper dynamic_casts those exact types — local DERIVEs here would be a
+// distinct ODR type the mapper cannot catch).
 DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
-DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
-DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
 
 namespace detail
 {

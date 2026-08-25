@@ -163,8 +163,8 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             static constexpr std::array<std::pair<uint8_t, std::size_t>, 4> c_typedFieldCounts{{
                 {0x01, 8},   // EIP-2930
                 {0x02, 9},   // EIP-1559
-                {0x03, 10},  // EIP-4844
-                {0x04, 11},  // EIP-7702
+                {0x03, 11},  // EIP-4844 (.., maxFeePerBlobGas, blobVersionedHashes)
+                {0x04, 10},  // EIP-7702 (.., authorizationList)
             }};
             auto const* expected =
                 std::find_if(c_typedFieldCounts.begin(), c_typedFieldCounts.end(),
@@ -205,9 +205,19 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                     tail = tail.getCroppedData(itemHeader.payloadLength);
                     ++n;
                 }
+                // yParity is a single byte 0/1; RLP encodes 0 as the empty payload 0x80, so
+                // decode() on the payload-only ref would fail InputTooShort — read it directly.
+                auto const ypRef = last3[(n - 3) % 3];
                 uint64_t wireYParity = 0;
-                if (auto e = bcos::codec::rlp::decode(last3[(n - 3) % 3], wireYParity); e != nullptr)
-                    [[unlikely]]
+                if (ypRef.size() == 0)
+                {
+                    wireYParity = 0;  // 0x80
+                }
+                else if (ypRef.size() == 1)
+                {
+                    wireYParity = ypRef[0];
+                }
+                else [[unlikely]]
                 {
                     throwDecode("typed yParity");
                 }
