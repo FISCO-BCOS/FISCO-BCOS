@@ -22,6 +22,7 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/engine/EngineService.h"
+#include "bcos-framework/engine/Errors.h"
 #include "bcos-framework/engine/Types.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -58,10 +59,12 @@
 namespace bcos::engine
 {
 // UnsupportedEngineApiVersion / UnknownPayload / IncompatiblePayloadVersion moved to
-// bcos-framework/engine/Types.h so the RPC endpoint can map them to Engine error codes.
+// bcos-framework/engine/Types.h so the RPC endpoint can map them to Engine error codes;
+// UnknownForkchoiceHeadBlock / InvalidForkchoiceState / UnsupportedFork /
+// UnsupportedOpPayloadAttributes come from bcos-framework/engine/Errors.h (the RPC
+// EngineErrorMapper dynamic_casts those exact types — local DERIVEs here would be a
+// distinct ODR type the mapper cannot catch).
 DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
-DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
-DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
 
 namespace detail
 {
@@ -710,6 +713,7 @@ private:
             .baseFeePerGas = 0,
             .blockHash = detail::syntheticHash(payloadId),
             .transactions = std::move(engineTransactions),
+            .rawTransactions = std::nullopt,
             .extraData = {},
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .timestamp = payloadAttributes.timestamp,
