@@ -253,21 +253,6 @@ struct BloomScheduler
     }
 };
 
-using BloomEngineServiceImpl =
-    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, BloomScheduler>;
-
-BloomEngineServiceImpl makeBloomEngineServiceImpl(
-    MemPoolImpl& memPool, RealGlobalStateStorage& storage, BloomScheduler& scheduler)
-{
-    StubExecutor executor;
-    static auto blockFactory =
-        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
-    return BloomEngineServiceImpl(memPool, storage, executor, scheduler, blockFactory);
-}
-
-using TestEngineServiceImpl =
-    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
-
 bcos::protocol::BlockFactory::Ptr testBlockFactory()
 {
     static auto blockFactory =
@@ -275,11 +260,39 @@ bcos::protocol::BlockFactory::Ptr testBlockFactory()
     return blockFactory;
 }
 
+/// EngineServiceImpl stores the executor and scheduler BY REFERENCE (std::ref, see its
+/// constructor), so a function-local stub would dangle the moment a factory returns. The
+/// stubs are stateless, which is why that went unnoticed; keep one long-lived instance of
+/// each so it stays true no matter what a stub grows later.
+StubExecutor& sharedStubExecutor()
+{
+    static StubExecutor executor;
+    return executor;
+}
+
+StubScheduler& sharedStubScheduler()
+{
+    static StubScheduler scheduler;
+    return scheduler;
+}
+
+using BloomEngineServiceImpl =
+    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, BloomScheduler>;
+
+BloomEngineServiceImpl makeBloomEngineServiceImpl(
+    MemPoolImpl& memPool, RealGlobalStateStorage& storage, BloomScheduler& scheduler)
+{
+    return BloomEngineServiceImpl(
+        memPool, storage, sharedStubExecutor(), scheduler, testBlockFactory());
+}
+
+using TestEngineServiceImpl =
+    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
+
 TestEngineServiceImpl makeEngineServiceImpl(MemPoolImpl& memPool, RealGlobalStateStorage& storage)
 {
-    StubExecutor executor;
-    StubScheduler scheduler;
-    return TestEngineServiceImpl(memPool, storage, executor, scheduler, testBlockFactory());
+    return TestEngineServiceImpl(
+        memPool, storage, sharedStubExecutor(), sharedStubScheduler(), testBlockFactory());
 }
 
 /// The production ledger with its one state-storage dependency short-circuited:
@@ -303,10 +316,8 @@ public:
 TestEngineServiceImpl makeCommittingEngineServiceImpl(MemPoolImpl& memPool,
     RealGlobalStateStorage& storage, bcos::ledger::LedgerInterface::Ptr ledger)
 {
-    StubExecutor executor;
-    StubScheduler scheduler;
-    return TestEngineServiceImpl(
-        memPool, storage, executor, scheduler, testBlockFactory(), std::move(ledger));
+    return TestEngineServiceImpl(memPool, storage, sharedStubExecutor(), sharedStubScheduler(),
+        testBlockFactory(), std::move(ledger));
 }
 
 /// Reads the block header the commit persisted, the way eth_getBlockByNumber reaches it

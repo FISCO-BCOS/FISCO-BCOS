@@ -99,13 +99,14 @@ std::optional<std::string> validateExecutionPayload(
 ///    withdrawalsRoot even when the build set one — so comparing them would reject
 ///    honest CLs.
 ///  - The transaction list is NOT compared, even though a differing list under a
-///    blockHash this node minted is equally contradictory. newPayload is currently
-///    specified to REWRITE the cached payload from the request (see
-///    new_payload_round_trips_deposit_raw_bytes and
-///    payload_carries_parent_beacon_block_root_and_withdrawals_root in
-///    EngineServiceTest), and payload bodies are not independently verifiable until
-///    externally supplied payloads are actually executed — tracked as #5468. Closing
-///    the body half belongs with that work.
+///    blockHash this node minted is equally contradictory — and, on this branch, it
+///    would be perfectly comparable, since the built payload is right here. The
+///    blocker is a contract, not a capability: newPayload is currently specified to
+///    REWRITE the cached payload body from the request, which
+///    new_payload_round_trips_deposit_raw_bytes pins by appending transactions to a
+///    locally built payload and asserting VALID. Tightening the body half means
+///    changing that contract first, which belongs with #5468 (the work that makes
+///    externally supplied payload bodies verifiable at all).
 ///
 /// extraData is in scope here because this change puts it into the block hash, so
 /// leaving it unchecked would leave a hash input unchecked.
@@ -570,19 +571,24 @@ private:
             // disagree (beacon/engine/types.go:287-288, reached from
             // eth/catalyst/api.go:831). This service cannot re-derive an Ethereum block
             // hash from an ExecutionPayload, so it compares against what it handed out
-            // instead. Without this a CL could alter the extraData or the transaction
-            // list, keep the blockHash it was given, and have the node commit its own
-            // (different) header while answering VALID — the submitted payload never
-            // checked. A non-null header is what marks an entry as locally built; after
-            // a commit rewrites the entry the header is gone, so an idempotent re-submit
-            // of an already-committed block is not re-compared.
+            // instead. Without this a CL could alter the extraData, keep the blockHash it
+            // was given, and have the node commit its own (different) header while
+            // answering VALID — the submitted payload never checked. Only extraData is
+            // compared; the transaction list stays out of scope for the contract reason
+            // spelled out on compareWithBuiltPayload.
+            //
+            // Every cache hit is compared, including a re-submission of an already
+            // committed block (whose entry no longer carries a header). An honest
+            // idempotent re-submit is byte-identical and passes; gating on the header
+            // would let a second, altered submission of the same blockHash overwrite the
+            // cached payload and still be answered VALID. op-geth likewise re-derives the
+            // hash on every newPayload, committed or not.
             //
             // SCOPE: payloads this node did NOT build (lookup miss) are a separate,
             // pre-existing gap — they are answered VALID without being executed or
             // stored at all. That is tracked as #5468 and deliberately not addressed
             // here.
-            if (auto builtIt = m_payloadCache.find(payloadId);
-                builtIt != m_payloadCache.end() && builtIt->second.header)
+            if (auto builtIt = m_payloadCache.find(payloadId); builtIt != m_payloadCache.end())
             {
                 if (auto mismatch = detail::compareWithBuiltPayload(
                         request.executionPayload, builtIt->second.executionPayload))

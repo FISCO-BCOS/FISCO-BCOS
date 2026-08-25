@@ -19,7 +19,10 @@
 #include "EngineServiceImpl.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <boost/assert.hpp>
+#include <boost/throw_exception.hpp>
 #include <span>
+#include <stdexcept>
 #include <utility>
 
 namespace
@@ -323,8 +326,22 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     // FCUV3 from Ecotone onwards, FCUV2 for Canyon and FCUV1 before it, and there is
     // no FCUV4 constant at all (op-service/eth/types.go:799-801) — while Holocene and
     // Jovian both activate after Ecotone. So a conforming CL carries both fields on V3
-    // and only V3; op-geth's V1/V2 payload-attribute structs have no such field and
-    // reject them outright. Without this gate a V1/V2 forkchoiceUpdated carrying
+    // and only V3.
+    //
+    // Note this is NOT how op-geth expresses the same rule, and the difference is worth
+    // recording. op-geth has a single engine.PayloadAttributes shared by all three FCU
+    // versions, and it does carry EIP1559Params / MinBaseFee at every version
+    // (beacon/engine/types.go:83-89); its ForkchoiceUpdatedV1/V2/V3 wrappers check only
+    // withdrawals, the beacon root and the fork window (eth/catalyst/api.go:166-214) and
+    // never look at these two fields. The rejection happens later, in the shared path:
+    // checkOptimismPayloadAttributes (eth/catalyst/api_optimism.go:40-64, called from
+    // api.go:254) answers "non-empty eip155Params pre-Holocene" as a -38003
+    // InvalidPayloadAttributes, keyed off the FORK SCHEDULE (cfg.IsHolocene(timestamp)),
+    // not off the Engine API method version. This service has no fork schedule to key
+    // off, so the FCU version is the only equivalent signal available — sound precisely
+    // because op-node's version ladder above pins these fields to V3.
+    //
+    // Without this gate a V1/V2 forkchoiceUpdated carrying
     // eip1559Params would stamp Holocene extraData on a pre-Holocene build, which a
     // spec-conformant CL then rejects on read-back ("extraData must be empty before
     // Holocene", op-core/eip1559/eip1559.go:27-28).

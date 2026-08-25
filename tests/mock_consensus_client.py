@@ -477,6 +477,72 @@ def test_eip1559_fields_are_v3_only() -> None:
     _log_pass()
 
 
+def test_new_payload_rejects_tampered_extra_data() -> None:
+    """newPayload must not wave through a payload whose extraData was altered.
+
+    extraData is a block-hash input from this change onwards, so a CL returning a
+    payload under the blockHash it was handed must return the same extraData. op-geth
+    catches this by re-deriving the block hash from the payload fields it received
+    (beacon/engine/types.go:287-288); this node cannot re-derive an Ethereum block hash,
+    so it compares against the payload it handed out. A malformed shape is rejected too,
+    mirroring op-geth's header verification (consensus/beacon/consensus.go:240-243).
+    """
+    _log_test("newPayload rejects altered / malformed extraData")
+
+    head_hash = get_head_hash()
+    fc_state = {
+        "headBlockHash": head_hash,
+        "safeBlockHash": head_hash,
+        "finalizedBlockHash": head_hash,
+    }
+    attrs = {
+        "timestamp": next_timestamp(),
+        "prevRandao": PREV_RANDAO,
+        "suggestedFeeRecipient": FEE_RECIPIENT,
+        "withdrawals": [],
+        "parentBeaconBlockRoot": ZERO_HASH,
+        "noTxPool": True,
+        "minBaseFee": 0,
+        "eip1559Params": "0x0000000000000000",
+    }
+
+    fcu = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, attrs])
+    payload_id = fcu.get("payloadId")
+    if not payload_id:
+        _log_fail(f"FCU built no payload: {fcu}")
+        return
+    payload = rpc_result("engine_getPayloadV3", [payload_id])["executionPayload"]
+
+    # The build must have stamped the 17-byte Jovian form (0,0 -> Canyon 250/6).
+    if payload["extraData"].lower() != "0x01000000fa000000060000000000000000":
+        _log_fail(f"built extraData is not the Jovian vector: {payload['extraData']}")
+        return
+
+    for label, extra_data in (
+        # Same shape, different minBaseFee byte: this is the built-payload comparison.
+        ("altered", "0x01000000fa000000060000000000000009"),
+        # 17 bytes carrying the Holocene version byte: this is the shape gate.
+        ("malformed", "0x00000000fa000000060000000000000000"),
+        # Zero denominator/elasticity is illegal on a header (legal only in attributes).
+        ("zero-params", "0x010000000000000000" + "00" * 8),
+    ):
+        tampered = dict(payload, extraData=extra_data)
+        status = rpc_result("engine_newPayloadV3", [tampered, [], ZERO_HASH])
+        if status["status"] == "VALID":
+            _log_fail(f"newPayload accepted {label} extraData {extra_data}")
+            return
+        _log_info(f"{label} -> {status['status']} ({status.get('validationError')})")
+
+    # Control: the untouched payload still commits, so the checks above are not simply
+    # rejecting everything.
+    status = rpc_result("engine_newPayloadV3", [payload, [], ZERO_HASH])
+    if status["status"] != "VALID":
+        _log_fail(f"newPayload rejected the untouched payload it built: {status}")
+        return
+    _log_info("untouched payload -> VALID")
+    _log_pass()
+
+
 def test_attributes_gas_limit_is_ignored() -> None:
     """KNOWN GAP pin: payloadAttributes.gasLimit does not reach the built block.
 
@@ -639,10 +705,13 @@ def main() -> int:
         # 7. Holocene/Jovian attribute fields are forkchoiceUpdatedV3-only.
         test_eip1559_fields_are_v3_only()
 
-        # 8. Known gap: attributes.gasLimit does not reach the built block.
+        # 8. Commit-side extraData gates: altered / malformed shapes are not VALID.
+        test_new_payload_rejects_tampered_extra_data()
+
+        # 9. Known gap: attributes.gasLimit does not reach the built block.
         test_attributes_gas_limit_is_ignored()
 
-        # 9. Error semantics.
+        # 10. Error semantics.
         test_negative_cases()
 
     except requests.ConnectionError:
