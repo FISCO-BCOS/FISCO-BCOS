@@ -20,11 +20,20 @@ using namespace bcos::engine;
 
 namespace
 {
+/// V3-shaped attributes: eip1559Params and minBaseFee only ever arrive on a
+/// forkchoiceUpdatedV3 (op-node/rollup/types.go ForkchoiceUpdatedVersion tops out at
+/// FCUV3, and both fields postdate Ecotone), so the validation cases below run at
+/// version 3. That means withdrawals and parentBeaconBlockRoot must be present too,
+/// or the sibling V3 gates fire before the eip1559 ones and the cases would assert
+/// against the wrong error.
 PayloadAttributes makeAttributes(
     std::optional<bytes> eip1559Params, std::optional<std::uint64_t> minBaseFee)
 {
     PayloadAttributes attributes;
     attributes.timestamp = 1;
+    attributes.withdrawals = std::vector<WithdrawalV1>{};
+    attributes.parentBeaconBlockRoot =
+        h256("2222222222222222222222222222222222222222222222222222222222222222");
     attributes.eip1559Params = std::move(eip1559Params);
     attributes.minBaseFee = minBaseFee;
     return attributes;
@@ -91,7 +100,7 @@ BOOST_AUTO_TEST_CASE(missing_eip1559_params_keeps_extra_data_empty)
 // undefined; the attributes are rejected instead of guessed at.
 BOOST_AUTO_TEST_CASE(min_base_fee_without_params_is_rejected)
 {
-    auto error = engine::detail::validatePayloadAttributes(makeAttributes(std::nullopt, 0), 1);
+    auto error = engine::detail::validatePayloadAttributes(makeAttributes(std::nullopt, 0), 3);
     BOOST_REQUIRE(error.has_value());
     BOOST_CHECK_NE(error->find("eip1559Params"), std::string::npos);
 }
@@ -101,9 +110,9 @@ BOOST_AUTO_TEST_CASE(min_base_fee_without_params_is_rejected)
 BOOST_AUTO_TEST_CASE(wrong_length_eip1559_params_are_rejected)
 {
     BOOST_CHECK(
-        engine::detail::validatePayloadAttributes(makeAttributes(bytes(7, 0), 0), 1).has_value());
+        engine::detail::validatePayloadAttributes(makeAttributes(bytes(7, 0), 0), 3).has_value());
     BOOST_CHECK(
-        engine::detail::validatePayloadAttributes(makeAttributes(bytes(9, 0), 0), 1).has_value());
+        engine::detail::validatePayloadAttributes(makeAttributes(bytes(9, 0), 0), 3).has_value());
 }
 
 // ValidateHolocene1559Params (eip1559.go:89-100): a zero denominator with a non-zero
@@ -111,17 +120,76 @@ BOOST_AUTO_TEST_CASE(wrong_length_eip1559_params_are_rejected)
 BOOST_AUTO_TEST_CASE(mixed_zero_eip1559_params_are_rejected)
 {
     BOOST_CHECK(engine::detail::validatePayloadAttributes(
-        makeAttributes(fromHexWithPrefix("0x0000000000000006"), 0), 1)
+        makeAttributes(fromHexWithPrefix("0x0000000000000006"), 0), 3)
             .has_value());
     BOOST_CHECK(engine::detail::validatePayloadAttributes(
-        makeAttributes(fromHexWithPrefix("0x000000fa00000000"), 0), 1)
+        makeAttributes(fromHexWithPrefix("0x000000fa00000000"), 0), 3)
             .has_value());
     // Both zero and both non-zero stay valid.
     BOOST_CHECK(
-        !engine::detail::validatePayloadAttributes(makeAttributes(bytes(8, 0), 0), 1).has_value());
+        !engine::detail::validatePayloadAttributes(makeAttributes(bytes(8, 0), 0), 3).has_value());
     BOOST_CHECK(engine::detail::validatePayloadAttributes(
-                    makeAttributes(fromHexWithPrefix("0x000000fa00000006"), 0), 1)
+                    makeAttributes(fromHexWithPrefix("0x000000fa00000006"), 0), 3)
                     .has_value() == false);
+}
+
+// Both fields reach the EL only on a forkchoiceUpdatedV3: op-node's
+// Config::ForkchoiceUpdatedVersion (op-node/rollup/types.go:727-745, v1.19.3) answers
+// FCUV3 from Ecotone onwards and there is no FCUV4 constant, while Holocene (which
+// introduces eip1559Params) and Jovian (minBaseFee) both activate after Ecotone. A
+// V1/V2 forkchoiceUpdated carrying them must be rejected rather than stamp
+// Holocene/Jovian extraData on a pre-Holocene build.
+BOOST_AUTO_TEST_CASE(eip1559_fields_are_rejected_below_version_three)
+{
+    // The probes must otherwise be valid for the version under test, or a sibling gate
+    // (withdrawals on V1, parentBeaconBlockRoot on V1/V2) reports first and the case
+    // would pass without exercising the new gate at all.
+    auto attributesForVersion = [](std::uint32_t version) {
+        auto attributes = makeAttributes(std::nullopt, std::nullopt);
+        if (version == 1)
+        {
+            attributes.withdrawals = std::nullopt;
+        }
+        if (version <= 2)
+        {
+            attributes.parentBeaconBlockRoot = std::nullopt;
+        }
+        return attributes;
+    };
+
+    for (std::uint32_t version : {1U, 2U})
+    {
+        // Baseline: without the two fields these attributes are accepted at this
+        // version, so any error below is attributable to the new gate.
+        BOOST_REQUIRE(
+            !engine::detail::validatePayloadAttributes(attributesForVersion(version), version)
+                .has_value());
+
+        auto holocene = attributesForVersion(version);
+        holocene.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
+        auto holoceneError = engine::detail::validatePayloadAttributes(holocene, version);
+        BOOST_REQUIRE(holoceneError.has_value());
+        BOOST_CHECK_NE(holoceneError->find("eip1559Params"), std::string::npos);
+
+        auto jovian = holocene;
+        jovian.minBaseFee = 7;
+        BOOST_CHECK(engine::detail::validatePayloadAttributes(jovian, version).has_value());
+
+        // minBaseFee is version-gated in its own right, before the pairing rule.
+        auto minBaseFeeOnly = attributesForVersion(version);
+        minBaseFeeOnly.minBaseFee = 7;
+        auto minBaseFeeError = engine::detail::validatePayloadAttributes(minBaseFeeOnly, version);
+        BOOST_REQUIRE(minBaseFeeError.has_value());
+        BOOST_CHECK_NE(minBaseFeeError->find("minBaseFee"), std::string::npos);
+    }
+
+    // V3 is the version op-node actually uses, so both forms stay valid there.
+    BOOST_CHECK(!engine::detail::validatePayloadAttributes(
+        makeAttributes(fromHexWithPrefix("0x000000fa00000006"), std::nullopt), 3)
+            .has_value());
+    BOOST_CHECK(!engine::detail::validatePayloadAttributes(
+        makeAttributes(fromHexWithPrefix("0x000000fa00000006"), 7), 3)
+            .has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

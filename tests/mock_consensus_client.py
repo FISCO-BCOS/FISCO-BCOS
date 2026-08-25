@@ -421,6 +421,62 @@ def run_v2_block_flow() -> None:
     _log_pass()
 
 
+def test_eip1559_fields_are_v3_only() -> None:
+    """eip1559Params / minBaseFee must be refused on a pre-Holocene FCU version.
+
+    op-node only ever puts these on a forkchoiceUpdatedV3: Config.ForkchoiceUpdatedVersion
+    (op-node/rollup/types.go:727-745, v1.19.3) answers FCUV3 from Ecotone onwards, FCUV2
+    for Canyon and FCUV1 before it, and there is no FCUV4 — while Holocene (eip1559Params)
+    and Jovian (minBaseFee) both activate after Ecotone. If a V1/V2 FCU carrying them were
+    accepted, the build would stamp Holocene/Jovian extraData on a pre-Holocene block and
+    a spec-conformant CL would reject the header on read-back ("extraData must be empty
+    before Holocene", op-core/eip1559/eip1559.go:27-28).
+
+    Attribute errors surface through the payloadStatus channel, not as a JSON-RPC error.
+    """
+    _log_test("eip1559Params / minBaseFee are rejected below forkchoiceUpdatedV3")
+
+    head_hash = get_head_hash()
+    fc_state = {
+        "headBlockHash": head_hash,
+        "safeBlockHash": head_hash,
+        "finalizedBlockHash": head_hash,
+    }
+
+    def v2_attrs(**extra: object) -> dict:
+        attrs = {
+            "timestamp": next_timestamp(),
+            "prevRandao": PREV_RANDAO,
+            "suggestedFeeRecipient": FEE_RECIPIENT,
+            "withdrawals": [],
+        }
+        attrs.update(extra)
+        return attrs
+
+    # Control: the same attributes without the two fields still build on V2, so a
+    # rejection below is attributable to the new gate and not to an unrelated V2 error.
+    control = rpc_result("engine_forkchoiceUpdatedV2", [fc_state, v2_attrs()])
+    if control["payloadStatus"]["status"] != "VALID" or not control.get("payloadId"):
+        _log_fail(f"control V2 FCU did not build a payload: {control}")
+        return
+
+    for field, value in (
+        ("eip1559Params", "0x000000fa00000006"),
+        ("minBaseFee", 0),
+    ):
+        fcu = rpc_result("engine_forkchoiceUpdatedV2", [fc_state, v2_attrs(**{field: value})])
+        status = fcu["payloadStatus"]["status"]
+        if status != "INVALID" or fcu.get("payloadId"):
+            _log_fail(
+                f"forkchoiceUpdatedV2 accepted {field}: status={status}, "
+                f"payloadId={fcu.get('payloadId')}"
+            )
+            return
+        _log_info(f"V2 + {field} -> INVALID ({fcu['payloadStatus'].get('validationError')})")
+
+    _log_pass()
+
+
 def test_attributes_gas_limit_is_ignored() -> None:
     """KNOWN GAP pin: payloadAttributes.gasLimit does not reach the built block.
 
@@ -580,10 +636,13 @@ def main() -> int:
         # 6. The pre-Karst surface is still live.
         run_v2_block_flow()
 
-        # 7. Known gap: attributes.gasLimit does not reach the built block.
+        # 7. Holocene/Jovian attribute fields are forkchoiceUpdatedV3-only.
+        test_eip1559_fields_are_v3_only()
+
+        # 8. Known gap: attributes.gasLimit does not reach the built block.
         test_attributes_gas_limit_is_ignored()
 
-        # 8. Error semantics.
+        # 9. Error semantics.
         test_negative_cases()
 
     except requests.ConnectionError:

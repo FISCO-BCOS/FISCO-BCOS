@@ -240,6 +240,25 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     {
         return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3");
     }
+    // eip1559Params (Holocene) and minBaseFee (Jovian) reach the EL only on a
+    // forkchoiceUpdatedV3. op-node's FCU version ladder tops out at V3 — Config
+    // ::ForkchoiceUpdatedVersion (op-node/rollup/types.go:727-745, v1.19.3) answers
+    // FCUV3 from Ecotone onwards, FCUV2 for Canyon and FCUV1 before it, and there is
+    // no FCUV4 constant at all (op-service/eth/types.go:799-801) — while Holocene and
+    // Jovian both activate after Ecotone. So a conforming CL carries both fields on V3
+    // and only V3; op-geth's V1/V2 payload-attribute structs have no such field and
+    // reject them outright. Without this gate a V1/V2 forkchoiceUpdated carrying
+    // eip1559Params would stamp Holocene extraData on a pre-Holocene build, which a
+    // spec-conformant CL then rejects on read-back ("extraData must be empty before
+    // Holocene", op-core/eip1559/eip1559.go:27-28).
+    if (version <= 2 && payloadAttributes.eip1559Params.has_value())
+    {
+        return std::string("eip1559Params is only valid for PayloadAttributesV3");
+    }
+    if (version <= 2 && payloadAttributes.minBaseFee.has_value())
+    {
+        return std::string("minBaseFee is only valid for PayloadAttributesV3");
+    }
     // Jovian attributes always pair minBaseFee with eip1559Params: op-node fills both
     // once Jovian is active (op-service/eth/types.go PayloadAttributes), and a
     // post-Jovian block must carry the 17-byte extraData whose [1:9) params come from
