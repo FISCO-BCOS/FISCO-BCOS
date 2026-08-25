@@ -29,8 +29,10 @@ target_include_directories(bcos-tx-validator PUBLIC
 # only way to write it -- protocol::Transaction exposes no setter for a business field, by
 # design (it is an immutable-after-signing value object). Deliberately NOT linking either
 # transaction pool: this module is stateless and neither pool's public interface changes.
+# `ledger` supplies getSystemConfig and LedgerMethods; intx::intx is propagated by
+# bcos-framework for TxGasModel.h's 512-bit balance arithmetic.
 target_link_libraries(bcos-tx-validator PUBLIC
-    bcos-framework bcos-protocol bcos-crypto rlp-protocol protocol-tars)
+    bcos-framework bcos-protocol bcos-crypto ledger rlp-protocol protocol-tars)
 set_target_properties(bcos-tx-validator PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)

@@ -19,6 +19,7 @@
  */
 #pragma once
 #include <cstddef>
+#include <cstdint>
 
 // u256 with 0x prefix
 constexpr size_t TRANSACTION_VALUE_MAX_LENGTH = 256 * 2 + 2;
@@ -26,3 +27,10 @@ constexpr size_t TRANSACTION_VALUE_MAX_LENGTH = 256 * 2 + 2;
 constexpr int MAX_CODE_SIZE = 0x6000;
 // EIP 3860
 constexpr int MAX_INITCODE_SIZE = 2 * MAX_CODE_SIZE;
+
+// How far ahead of an account's on-chain nonce a Web3 transaction may queue. FISCO-specific --
+// neither evmone nor geth has an equivalent (geth uses AccountQueue/GlobalQueue quotas instead).
+// Lives here rather than in bcos-txpool so the admission layer can apply the same window without
+// depending on a transaction pool.
+constexpr int64_t DEFAULT_BLOCK_LIMIT = 600;
+constexpr uint64_t DEFAULT_WEB3_NONCE_CHECK_LIMIT = DEFAULT_BLOCK_LIMIT * 1000;
