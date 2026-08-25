@@ -35,6 +35,37 @@ bcos::protocol::TransactionReceipt::Ptr minimalDepositReceipt(
     r->setOpStackMeta(std::move(meta));
     return r;
 }
+
+/// This binary links the wedprcrypto chain (protocol-tars/bcos-crypto/ledger) that breaks
+/// libc++ typed exception matching binary-wide (the same issue bcos-rpc/test/CMakeLists.txt
+/// documents) — a `catch (const std::exception&)` does NOT bind a thrown OpConsensusError here
+/// and the exception escapes as a Boost.Test fatal. Use catch(...) so a consensus reject can
+/// never escape; then try rethrowing into std::exception to pin the message when RTTI still
+/// works (on the non-wedprcrypto presets), falling back to "rejected, message unverified".
+template <class Fn>
+bool consensusRejectPins(Fn&& fn, std::string_view needle)
+{
+    try
+    {
+        fn();
+        return false;
+    }
+    catch (...)
+    {
+        try
+        {
+            throw;
+        }
+        catch (const std::exception& e)
+        {
+            return std::string(e.what()).find(std::string{needle}) != std::string::npos;
+        }
+        catch (...)
+        {
+            return true;
+        }
+    }
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpReceiptEncodeSuite)
@@ -118,6 +149,59 @@ BOOST_AUTO_TEST_CASE(DepositWithLogEmbedsEncodedLogsAndNonceTail)
     const auto logsBytes = evmone::rlp::encode(std::vector<evmone::state::Log>{evmoneLog});
     BOOST_CHECK(
         std::search(enc.begin(), enc.end(), logsBytes.begin(), logsBytes.end()) != enc.end());
+    BOOST_REQUIRE_EQUAL(enc.size(), 269u + logsBytes.size());
+    BOOST_CHECK_EQUAL(enc[enc.size() - 2], 0x07);  // nonce
+    BOOST_CHECK_EQUAL(enc[enc.size() - 1], 0x01);  // version
+}
+
+// Multi-log shape the header-backfill rewrite made dangerous: the FIRST log's long-form list
+// header (payload >= 56) inserts bytes and shifts the buffer, so the SECOND log's positions
+// must be re-read after that insertion. First log carries 3 topics (ERC-20 Transfer shape:
+// topics list payload 96 >= 56, also long form); second log has zero topics. The whole logs
+// segment must equal evmone's independent vector<Log> encoding, and the size anchor pins that
+// the first log's long-form header did not clobber the nonce/version tail.
+BOOST_AUTO_TEST_CASE(DepositWithMultipleLogsEmbedsEncodedLogsAndNonceTail)
+{
+    constexpr auto kAddrA = 0x00000000000000000000000000000000000000aa_address;
+    constexpr auto kAddrB = 0x00000000000000000000000000000000000000bb_address;
+    evmone::state::Log logA{.addr = kAddrA,
+        .data = evmc::bytes{0x68, 0x69},
+        .topics = {0x01_bytes32, 0x02_bytes32, 0x03_bytes32}};
+    evmone::state::Log logB{.addr = kAddrB, .data = evmc::bytes{}, .topics = {}};
+
+    // Project both logs onto FISCO LogEntry (raw bytes, same mapping mapOpLogs uses).
+    std::vector<bcos::protocol::LogEntry> logs;
+    auto project = [](evmone::state::Log const& l) {
+        bcos::h256s topics;
+        for (auto const& t : l.topics)
+            topics.emplace_back(t.bytes, sizeof(t.bytes));
+        return bcos::protocol::LogEntry(
+            bcos::bytes(l.addr.bytes, l.addr.bytes + sizeof(l.addr.bytes)), std::move(topics),
+            bcos::bytes(l.data.begin(), l.data.end()));
+    };
+    logs.emplace_back(project(logA));
+    logs.emplace_back(project(logB));
+    auto dep = kOpTestReceiptFactory->createReceipt(
+        bcos::u256(21000), std::string{}, logs, /*status=*/0, bcos::bytesConstRef{}, 1);
+    dep->setCumulativeGasUsed("0x5208");
+    evmone::state::Log const evmoneLogs[] = {logA, logB};
+    const auto bloomF =
+        evmone::state::compute_bloom_filter(std::span<const evmone::state::Log>{evmoneLogs, 2});
+    bcos::bytes bloom(bloomF.bytes, bloomF.bytes + sizeof(bloomF.bytes));
+    dep->setLogsBloom(bcos::ref(bloom));
+    bcos::protocol::OpStackReceiptMeta meta;
+    meta.deposit_nonce = 7;
+    meta.deposit_receipt_version = 1;
+    dep->setOpStackMeta(std::move(meta));
+
+    const auto enc = encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
+    BOOST_CHECK_EQUAL(enc[0], 0x7e);
+    const auto logsBytes = evmone::rlp::encode(std::vector<evmone::state::Log>{logA, logB});
+    BOOST_CHECK(
+        std::search(enc.begin(), enc.end(), logsBytes.begin(), logsBytes.end()) != enc.end());
+    // 270 = empty-logs total (DepositGoldenBytes); logs item grows from 0xc0 (1B) to the full
+    // multi-log encoding, and the nonce/version tail must survive the first log's long-form
+    // header insertion.
     BOOST_REQUIRE_EQUAL(enc.size(), 269u + logsBytes.size());
     BOOST_CHECK_EQUAL(enc[enc.size() - 2], 0x07);  // nonce
     BOOST_CHECK_EQUAL(enc[enc.size() - 1], 0x01);  // version
@@ -278,18 +362,11 @@ BOOST_AUTO_TEST_CASE(ShortLogsBloomIsConsensusReject)
     dep->setLogsBloom(bcos::ref(shortBloom));
 
     // This target links protocol-tars/bcos-crypto/ledger — the chain the lightweight suite's
-    // own comment marks as breaking libc++ typed catch binary-wide. Catch std::exception and
-    // pin the message instead of relying on the exact type binding.
-    bool rejected = false;
-    try
-    {
-        (void)encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
-    }
-    catch (const std::exception& e)
-    {
-        rejected = std::string(e.what()).find("logsBloom must be 256 bytes") != std::string::npos;
-    }
-    BOOST_CHECK(rejected);
+    // own comment marks as breaking libc++ typed catch binary-wide. The catch(...) ladder
+    // below is what actually binds here (a plain catch(std::exception) escapes as a fatal).
+    BOOST_CHECK(consensusRejectPins(
+        [&] { (void)encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType)); },
+        "logsBloom must be 256 bytes"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

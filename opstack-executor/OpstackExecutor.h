@@ -261,11 +261,12 @@ namespace engine = bcos::evm::engine;
 /// BOUND COVERAGE: type byte, nonce, gasLimit, to, value, data. NOT bound: sender (needs
 /// ecrecover), the fee fields, accessList, blobVersionedHashes, authorizationList — part-5
 /// wiring must close those before this gate is the sole trust boundary.
+/// The envelope-bytes core below is shared by the per-tx path (m_prepare) and the block path
+/// (processOpBlock) — both run the same gate, so no execution path trusts an unbound mirror.
 [[nodiscard]] inline std::optional<std::string> envelopeExecutionFieldsMismatch(
-    bcos::protocol::Transaction const& tx, evmone::state::Transaction const& evmTx)
+    bcos::bytesConstRef extraBytes, evmone::state::Transaction const& evmTx)
 {
     namespace rlp = bcos::codec::rlp;
-    auto const extraBytes = tx.extraTransactionBytes();
     if (extraBytes.empty())
         return "empty extraTransactionBytes";
 
@@ -388,6 +389,14 @@ namespace engine = bcos::evm::engine;
             return "data mismatch";
     }
     return std::nullopt;
+}
+
+/// Transaction convenience overload: forwards the tars mirror's envelope bytes to the
+/// envelope-bytes core above (the mirror is never trusted — only extraTransactionBytes is read).
+[[nodiscard]] inline std::optional<std::string> envelopeExecutionFieldsMismatch(
+    bcos::protocol::Transaction const& tx, evmone::state::Transaction const& evmTx)
+{
+    return envelopeExecutionFieldsMismatch(tx.extraTransactionBytes(), evmTx);
 }
 
 /// Block-path chainId gate (review finding C): the SIGNED envelope's chainId must equal the

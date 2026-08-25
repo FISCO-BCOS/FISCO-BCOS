@@ -78,10 +78,16 @@ struct OpBlockSeal
 /// EIP-2718 tx-type classification, single home for the three block-execution sites (the
 /// OpScheduler deposit-classification loop, finalizeOpBlockResult's txTypes rebuild, and
 /// processOpBlock's variant branch) so the mapping can't drift and silently emit a wrong
-/// receiptsRoot leaf. Maps a raw type byte to the value stored in OpBlockResult.txTypes:
-/// OP deposit 0x7e (kDepositTxType, OpTransition.h) → itself; legacy (>= 0xc0 RLP list prefix)
-/// → 0; typed (0x01/0x02/0x04) → its own type byte. Unknown bytes (< 0xc0, not deposit) pass
-/// through unchanged — callers that must reject them (the deposit loop) keep their own guard.
+/// receiptsRoot leaf. The mapping is single; the INPUT ORIGIN differs per site — the
+/// execution paths feed a mirror-derived type byte (tx.type via toEvmoneTransaction), the
+/// txTypes rebuild feeds the envelope byte (rawTxBytes[i][0]). Those two agree because
+/// envelopeExecutionFieldsMismatch's type binding (envelopeKind vs evmTx.type) runs on every
+/// path that consumes a mirror-derived type; the deposit loop needs no binding (0x7e comes
+/// from the unsigned deposit decode, whose raw IS the envelope). Maps a raw type byte to the
+/// value stored in OpBlockResult.txTypes: OP deposit 0x7e (kDepositTxType, OpTransition.h) →
+/// itself; legacy (>= 0xc0 RLP list prefix) → 0; typed (0x01/0x02/0x04) → its own type byte.
+/// Unknown bytes (< 0xc0, not deposit) pass through unchanged — callers that must reject them
+/// (the deposit loop) keep their own guard.
 [[nodiscard]] constexpr uint8_t classifyTxType(uint8_t typeByte) noexcept
 {
     constexpr uint8_t kDepositTypeByte = 0x7e;  // kDepositTxType (OpTransition.h)

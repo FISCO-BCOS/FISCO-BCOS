@@ -162,6 +162,11 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
 
     // Rebuild txTypes via the shared classifyTxType helper (single home for the EIP-2718
     // classification so the deposit loop / this rebuild / processOpBlock can't drift).
+    // Length guard: sealOpBlock iterates result.receipts and indexes txTypes[i] — a caller
+    // passing mismatched lengths would read out of bounds (rawTxBytes and receipts are
+    // independent parameters; lockstep callers are unaffected).
+    if (rawTxBytes.size() != receipts.size())
+        throw OpConsensusError("op block: receipts/rawTxBytes length mismatch");
     std::vector<uint8_t> txTypes;
     txTypes.reserve(rawTxBytes.size());
     for (std::size_t i = 0; i < rawTxBytes.size(); ++i)

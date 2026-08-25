@@ -9,6 +9,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <opstack-executor/OpBlockExecute.h>
+#include <opstack-executor/OpstackExecutor.h>  // envelopeExecutionFieldsMismatch (shared gate)
 #include <algorithm>
 #include <bcos-evm/eth/state/state.hpp>  // evmone::state::finalize
 #include <bcos-evm/eth/state/system_contracts.hpp>
@@ -77,12 +78,10 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
         view, evmone::state::system_call_block_start(view, block, hashes, cfg.rev, vm)));
 
     // Step 2: first tx must be a deposit (hard reject) + L1-attributes content (warn, op-geth
-    // accept-at-validation) + Jovian shape. Accept set mirrors preBlockOpSteps / ExecuteContext
-    // (minus ExecuteContext's envelope↔mirror execution-fields cross-check, which lives in
-    // m_prepare and is not run on this test-only path), though seenNonDeposit is set
-    // pre-validation here while ExecuteContext sets it after a successful prepare — any
-    // validation failure aborts the whole block on this path, so the
-    // timing difference has no effect.
+    // accept-at-validation) + Jovian shape. Accept set mirrors preBlockOpSteps / ExecuteContext;
+    // seenNonDeposit is set pre-validation here while ExecuteContext sets it after a successful
+    // prepare — any validation failure aborts the whole block on this path, so the timing
+    // difference has no effect.
     if (txs.empty())
         throw OpConsensusError("op block: missing L1 attributes deposit (empty block)");
     const auto* firstDep = std::get_if<DepositTx>(&txs[0].tx);
@@ -176,6 +175,17 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             {
                 throw OpConsensusError(
                     "op block: typed tx envelope is missing a parseable chainId");
+            }
+            // Fail-closed mirror↔envelope cross-check — the SAME gate the per-tx path runs in
+            // m_prepare (OpstackExecutor.h): execution fields (nonce/gasLimit/to/value/data)
+            // must match the signed envelope, never the forgeable mirror. txTypes committed to
+            // the receipts root below depend on tx.type, so an unbound mirror here would poison
+            // the block's header commitment exactly like the per-tx path.
+            if (auto mismatch =
+                    bcos::executor_v1::opstack::envelopeExecutionFieldsMismatch(envRef, tx))
+            {
+                throw OpConsensusError(
+                    "op block: tx execution fields diverge from the signed envelope: " + *mismatch);
             }
             auto v = opValidate(view, block, tx, env, cfg, fee, blockGasLeft);
             if (const auto* err = std::get_if<std::error_code>(&v))
