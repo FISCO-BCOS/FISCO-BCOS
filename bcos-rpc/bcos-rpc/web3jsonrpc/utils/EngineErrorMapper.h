@@ -21,6 +21,7 @@
 
 #include "bcos-rpc/web3jsonrpc/utils/Common.h"  // EngineError
 #include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/engine/Types.h>  // UnsupportedEngineApiVersion / UnknownPayload / IncompatiblePayloadVersion
 #include <bcos-rpc/jsonrpc/Common.h>  // JsonRpcError::InternalError
 #include <bcos-utilities/Exceptions.h>
 
@@ -33,7 +34,8 @@ namespace bcos::rpc
 inline int32_t mapEngineErrorCode(bcos::Exception const& e) noexcept
 {
     if (dynamic_cast<bcos::engine::UnsupportedFork const*>(&e) ||
-        dynamic_cast<bcos::engine::IncompatiblePayloadVersion const*>(&e))
+        dynamic_cast<bcos::engine::IncompatiblePayloadVersion const*>(&e) ||
+        dynamic_cast<bcos::engine::UnsupportedEngineApiVersion const*>(&e))
     {
         return EngineError::UnsupportedFork;  // -38005
     }

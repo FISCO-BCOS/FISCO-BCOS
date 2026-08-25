@@ -166,9 +166,8 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                 {0x03, 11},  // EIP-4844 (.., maxFeePerBlobGas, blobVersionedHashes)
                 {0x04, 10},  // EIP-7702 (.., authorizationList)
             }};
-            auto const* expected =
-                std::find_if(c_typedFieldCounts.begin(), c_typedFieldCounts.end(),
-                    [txType](auto const& entry) { return entry.first == txType; });
+            auto expected = std::find_if(c_typedFieldCounts.begin(), c_typedFieldCounts.end(),
+                [txType](auto const& entry) { return entry.first == txType; });
             if (expected == c_typedFieldCounts.end()) [[unlikely]]
             {
                 throwDecode("typed unknown type");
@@ -223,8 +222,8 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                 }
                 bcos::bytes wireR(last3[(n - 2) % 3].begin(), last3[(n - 2) % 3].end());
                 bcos::bytes wireS(last3[(n - 1) % 3].begin(), last3[(n - 1) % 3].end());
-                if (wireYParity != yParity || !std::equal(wireR.begin(), wireR.end(), r.begin(),
-                                                    r.end()) ||
+                if (wireYParity != yParity ||
+                    !std::equal(wireR.begin(), wireR.end(), r.begin(), r.end()) ||
                     !std::equal(wireS.begin(), wireS.end(), s.begin(), s.end())) [[unlikely]]
                 {
                     throwDecode("typed signature mismatch");
@@ -308,6 +307,15 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                 // preimage: item7 is the signed chainId (items 8,9 are the 0,0
                 // placeholders). It is what the sender actually signed, so it is
                 // authoritative even though the whole tx arrived from an untrusted peer.
+                // A WIRE-shaped envelope whose r/s were emptied (r=s=0, an invalid EIP-2
+                // signature, RLP-encoded as 0x80) is byte-indistinguishable from a preimage
+                // here — the two differ only in field 7's value (chainId vs v), which this
+                // function cannot bind to the node without ecrecover. That binding is
+                // enforced at admission: TxValidator::validateChainId compares the envelope
+                // chainId (web3ChainIdFromEnvelope, same walker) against the node chainId,
+                // so a relabeled field 7 (v of another chain) is rejected before the pool
+                // accepts the tx. A field 7 equal to this chain's chainId IS a genuine
+                // preimage for this chain, and reassembles to the canonical v.
                 v = item7 * 2 + 35 + yParity;
             }
             else
@@ -351,9 +359,18 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
         // Deposit (0x7e): unsigned — extraTransactionBytes already IS the full 0x7e envelope
         // (stored by takeToTarsTransaction as encode()), so the hash is keccak of it verbatim;
         // reassembleWeb3RawTransaction cannot be used (it needs a 65-byte signature).
-        if (isDepositTx())
+        // The deposit determination comes from the SIGNED envelope's first byte, NEVER the
+        // forgeable web3TypedTxKind mirror (tars field 12): a peer can rewrite that mirror to
+        // 0x7e on a signed Web3 tx, which would route the hash to this unsigned-deposit form
+        // and skip reassembleWeb3RawTransaction — defeating the "never believe the wire hash"
+        // defense (kyonRay R4 #1). The mirror is display-only; security decisions key on the
+        // envelope. isDepositTx() itself must stay mirror-keyed for display/RPC classification.
+        auto const extraBytes = extraTransactionBytes();
+        bool const isDepositEnvelope =
+            (!extraBytes.empty() && extraBytes[0] == static_cast<bcos::byte>(kDepositTxType));
+        if (isDepositEnvelope)
         {
-            auto const depositHash = bcos::crypto::keccak256Hash(extraTransactionBytes());
+            auto const depositHash = bcos::crypto::keccak256Hash(extraBytes);
             m_inner()->extraTransactionHash.assign(depositHash.begin(), depositHash.end());
             return;
         }

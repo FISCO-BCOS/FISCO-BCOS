@@ -291,11 +291,25 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
     if (auto config = co_await ledger::getSystemConfig(*_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
     {
         auto [chainId, _] = config.value();
-        // if legacy tx, chainId is empty or 0, skip the check
-        if (!_tx.chainId().empty() && _tx.chainId() != "0")
+        // chainId must come from the SIGNED envelope, never the forgeable tars mirror
+        // (data.chainID, kyonRay R4 #1): a peer can rewrite the mirror to relabel a tx
+        // signed for any chain as this chain's tx, consuming sender nonce/state here.
+        // nullopt = pre-EIP-155 unprotected legacy (no chainId tail) — exempt, matching
+        // op-geth HomesteadSigner. Typed txs carry their chainId in field 0 (no "0"
+        // exemption: a typed tx must be signed for exactly this chain).
+        if (auto envelopeChainId = _tx.web3ChainIdFromEnvelope())
         {
-            // for EIP-155, check chainId
-            if (_tx.chainId() != chainId)
+            uint64_t nodeChainId = 0;
+            try
+            {
+                nodeChainId = boost::lexical_cast<uint64_t>(chainId);
+            }
+            catch (boost::bad_lexical_cast const&)
+            {
+                // misconfigured system config: fail closed rather than admit arbitrary
+                co_return TransactionStatus::InvalidChainId;
+            }
+            if (*envelopeChainId != nodeChainId)
             {
                 co_return TransactionStatus::InvalidChainId;
             }

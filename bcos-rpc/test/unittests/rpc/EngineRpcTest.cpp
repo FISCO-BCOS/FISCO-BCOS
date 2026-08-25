@@ -21,10 +21,11 @@
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
+#include <bcos-rpc/web3jsonrpc/utils/EngineErrorMapper.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <memory>
 #include <boost/test/unit_test.hpp>
+#include <memory>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -1011,6 +1012,17 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
         "0x9999999999999999999999999999999999999999999999999999999999999999");
     BOOST_CHECK_EQUAL(result["blockValue"].asString(), largeQuantity);
     BOOST_CHECK_EQUAL(result["executionRequests"].size(), 0);
+}
+
+// The engine throws UnsupportedEngineApiVersion for out-of-window version requests (the
+// forkchoice window tops out at V4 for the OP path). The mapper must surface it as the
+// execution-apis -38005 UnsupportedFork contract, not a bare -32603 InternalError.
+BOOST_AUTO_TEST_CASE(engineErrorMapperOutOfWindowVersion)
+{
+    BOOST_CHECK_EQUAL(bcos::rpc::mapEngineErrorCode(bcos::engine::UnsupportedEngineApiVersion{}),
+        EngineError::UnsupportedFork);
+    BOOST_CHECK_EQUAL(
+        bcos::rpc::mapEngineErrorCode(bcos::engine::UnknownPayload{}), EngineError::UnknownPayload);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
