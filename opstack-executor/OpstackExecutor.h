@@ -1121,8 +1121,9 @@ private:
             // WARNING here would be a log-amplification vector.
             BCOS_LOG(DEBUG) << LOG_BADGE("OPSTACK") << LOG_DESC("opValidate failed")
                             << LOG_KV("reason", err->message())
-                            << LOG_KV("sender",
-                                   bcos::toHex(std::span<uint8_t const>(evmTx.sender.bytes, 20)))
+                            << LOG_KV(
+                                   "sender", bcos::toHex(std::span<uint8_t const>(
+                                                 evmTx.sender.bytes, sizeof(evmTx.sender.bytes))))
                             << LOG_KV("nonce", evmTx.nonce)
                             << LOG_KV("skipBalanceCheck", skipBalanceCheck);
             BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(err->message()));
