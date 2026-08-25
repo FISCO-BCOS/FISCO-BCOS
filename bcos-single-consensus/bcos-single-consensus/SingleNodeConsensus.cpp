@@ -214,13 +214,13 @@ bool SingleNodeConsensus::produceBlock()
     // stays in the internal millisecond unit — the Engine wire's seconds<->ms conversion
     // lives in the RPC serialization layer only.
     //
-    // TODO(C4 header fields): the zero parentBeaconBlockRoot here, and the zero
-    // withdrawalsRoot the EngineService stamps onto the payload it builds from these
-    // attributes (see the placeholder note in EngineServiceImpl.h buildPayload), are
-    // built-in-CL stand-ins, NOT production semantics. Because they are zero, a payload
-    // produced by this driver is byte-indistinguishable from one a broken or malicious
-    // external CL would submit with zero roots. Do not read this file as evidence that
-    // zero roots are acceptable on a real chain.
+    // TODO(C4 header fields): the zero parentBeaconBlockRoot here is a built-in-CL stand-in,
+    // NOT production semantics — this driver has no beacon chain to read a real root from,
+    // so a payload it produces is byte-indistinguishable from one a broken or malicious
+    // external CL would submit with a zero root. Do not read this file as evidence that a
+    // zero beacon root is acceptable on a real chain. (The payload's withdrawalsRoot is no
+    // longer in that category: the EngineService now computes the real L2ToL1MessagePasser
+    // storage root — EngineServiceImpl.h fillWithdrawalsRoot.)
     payloadAttributes.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
     payloadAttributes.parentBeaconBlockRoot = bcos::h256{};
 

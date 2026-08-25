@@ -24,6 +24,8 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 
 using namespace bcos;
 using namespace bcos::engine;
@@ -117,6 +119,15 @@ using RealGlobalStateMutableStorage = bcos::storage2::memory_storage::MemoryStor
     bcos::executor_v1::StateKey, bcos::executor_v1::StateValue,
     bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
                                               bcos::storage2::memory_storage::LOGICAL_DELETION)>;
+// CONCURRENT is what makes the two-source MemoryStorage::merge (state delta + prewrite batch)
+// resolve for mergeBackStorage; production reaches the same merge through RocksDB. Note the
+// shape difference it buys: a CONCURRENT MemoryStorage shards into hardware_concurrency()*2+1
+// buckets and its Iterator seeks only bucket 0, then walks the remaining buckets from their
+// start (MemoryStorage.h Iterator::seek / next), so a prefix range over THIS layer is not the
+// ordered cursor a RocksDB backend gives. Tests that need an ordered prefix scan of account
+// rows therefore seed through a pushed view layer (ORDERED, single bucket) rather than by
+// writing straight into this backend — see
+// withdrawals_root_is_the_message_passer_storage_root.
 using RealGlobalStateBackendStorage =
     bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
         bcos::executor_v1::StateValue,
@@ -741,14 +752,14 @@ BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_ro
     BOOST_REQUIRE(result.payloadId.has_value());
 
     // buildPayload stored the attributes' beacon root in the payload cache; getPayload
-    // must return it. withdrawalsRoot carries the zero placeholder on V3+ builds (B4:
-    // required for the getPayloadV5 -> newPayloadV4 round trip) until real-value header
-    // wiring lands.
+    // must return it. withdrawalsRoot is the L2ToL1MessagePasser storage root — this
+    // fixture never writes a slot for that predeploy, so it is the EMPTY TRIE root, not a
+    // zero h256 (a zero root would mean "no trie", which is not an Ethereum state).
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
     BOOST_REQUIRE(payload->parentBeaconBlockRoot.has_value());
     BOOST_CHECK_EQUAL(*payload->parentBeaconBlockRoot, *payloadAttributes.parentBeaconBlockRoot);
     BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
-    BOOST_CHECK_EQUAL(*payload->executionPayload.withdrawalsRoot, h256{});
+    BOOST_CHECK_EQUAL(*payload->executionPayload.withdrawalsRoot, ledger::mpt::emptyRootHash());
 
     // newPayload carries both fields back in; the committed cache entry keeps them.
     // This exercises the structure layer only: withdrawalsRoot is set directly on the
@@ -1107,7 +1118,7 @@ BOOST_AUTO_TEST_CASE(karst_v3_build_v5_get_v4_commit_round_trip)
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
     BOOST_REQUIRE(payload);
     // V5 response shape: executionRequests present-but-empty, blobs bundle three empty
-    // arrays, shouldOverrideBuilder=false, Isthmus withdrawalsRoot placeholder present.
+    // arrays, shouldOverrideBuilder=false, Isthmus withdrawalsRoot present.
     BOOST_REQUIRE(payload->executionRequests.has_value());
     BOOST_CHECK(payload->executionRequests->empty());
     BOOST_REQUIRE(payload->blobsBundle.has_value());
@@ -1126,6 +1137,161 @@ BOOST_AUTO_TEST_CASE(karst_v3_build_v5_get_v4_commit_round_trip)
     auto status = task::syncWait(engineService.newPayload(request, 4));
     BOOST_CHECK_EQUAL(
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+}
+
+// OP Stack: attributes.gasLimit is the L1 SystemConfig gas limit relayed by the CL, and
+// op-geth writes it verbatim into the built header (miner/worker.go:362-363). Two builds
+// differing ONLY in the attribute must come out with the gas limit each asked for; an
+// attribute-less build keeps falling back to this chain's own SystemConfig value.
+BOOST_AUTO_TEST_CASE(attributes_gas_limit_is_honored)
+{
+    constexpr std::uint64_t c_firstGasLimit = 30'000'000;
+    constexpr std::uint64_t c_secondGasLimit = 50'000'000;
+
+    auto buildWith = [](std::optional<std::uint64_t> gasLimit) {
+        MemPoolImpl memPool;
+        RealGlobalStateStorageFixture globalStateStorageFixture;
+        auto forkchoiceState = makeForkchoiceState();
+        setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+            c_initialBlockNumber, c_initialBlockNumber);
+        auto payloadAttributes = makeKarstPayloadAttributes();
+        payloadAttributes.gasLimit = gasLimit;
+        auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+        auto result =
+            task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+        BOOST_REQUIRE(result.payloadId.has_value());
+        auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+        BOOST_REQUIRE(payload);
+        return payload->executionPayload.gasLimit;
+    };
+
+    BOOST_CHECK_EQUAL(buildWith(c_firstGasLimit), u256(c_firstGasLimit));
+    BOOST_CHECK_EQUAL(buildWith(c_secondGasLimit), u256(c_secondGasLimit));
+    // Absent attribute: the value getLedgerConfig read from this chain's SystemConfig —
+    // 0 on the bare fixture, which has no tx_gas_limit row. What matters is that it is
+    // neither of the two attribute values, i.e. the attribute is the only thing that
+    // moved the built gas limit above.
+    auto fallback = buildWith(std::nullopt);
+    BOOST_CHECK_NE(fallback, u256(c_firstGasLimit));
+    BOOST_CHECK_NE(fallback, u256(c_secondGasLimit));
+}
+
+// Isthmus: the header's withdrawalsRoot IS the L2ToL1MessagePasser storage root, which is
+// what L1 withdrawal proofs are checked against. Seed three slots for that predeploy and the
+// served root must be the trie over exactly those slots — pinned against the offline python
+// reference in tools/opstack-genesis/gen_storage_root_fixture.py ("three_slots"), the same
+// vector AccountStorageRootSuite uses one layer down.
+BOOST_AUTO_TEST_CASE(withdrawals_root_is_the_message_passer_storage_root)
+{
+    auto const word = [](std::uint64_t value) {
+        h256 out{};
+        for (size_t i = 0; i < sizeof(value); ++i)
+        {
+            out.data()[h256::SIZE - 1 - i] = static_cast<bcos::byte>(value >> (8 * i));
+        }
+        return out;
+    };
+    h256 allOnes{};
+    for (size_t i = 0; i < h256::SIZE; ++i)
+    {
+        allOnes.data()[i] = static_cast<bcos::byte>(0xFF);
+    }
+    auto const threeSlotsRoot =
+        h256(std::string_view{"7ce94a4a60783202e726bea0fb63adadfb79ee7903d3b30af81c4b5530b9bff5"},
+            h256::FromHex);
+
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+
+    // Seed the predeploy's slots through a pushed view layer, which is where a previously
+    // executed block's writes live before they are merged back. That layer is ORDERED and
+    // single-bucket, so the prefix range over the account table behaves the way it does
+    // against a production RocksDB backend — see the RealGlobalStateBackendStorage note.
+    auto const table = ledger::mpt::accountTableName(c_l2ToL1MessagePasser);
+    auto seedView = globalStateStorageFixture.storage.fork();
+    seedView.newMutable();
+    auto const writeSlot = [&](const h256& slot, const h256& value) {
+        storage::Entry entry;
+        entry.set(std::string(
+            reinterpret_cast<const char*>(value.data()), static_cast<size_t>(h256::SIZE)));
+        task::syncWait(storage2::writeOne(mutableStorage(seedView),
+            bcos::executor_v1::StateKey{
+                table, std::string_view{reinterpret_cast<const char*>(slot.data()),
+                           static_cast<size_t>(h256::SIZE)}},
+            std::move(entry)));
+    };
+    writeSlot(word(0), word(1));
+    writeSlot(word(1), word(0xDEADBEEF));
+    writeSlot(allOnes, word(0xFF));
+    // A zero-valued slot is not part of the trie, so it must not move the root.
+    writeSlot(word(2), word(0));
+    globalStateStorageFixture.storage.pushView(std::move(seedView));
+
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+    BOOST_REQUIRE(payload);
+    BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
+    BOOST_CHECK_EQUAL(*payload->executionPayload.withdrawalsRoot, threeSlotsRoot);
+    // Not the empty-trie root: this account really has slots, so the two must differ.
+    BOOST_CHECK_NE(*payload->executionPayload.withdrawalsRoot, ledger::mpt::emptyRootHash());
+
+    // The root must also be on the built HEADER, which is the carrier that commits to it:
+    // BlockHeaderImpl::setWithdrawalsRoot fills the tars field the NON_ETH calculateHash()
+    // digests, and it is the only carrier newPayload persists to the ledger. Committing the
+    // payload and re-reading the block proves both — the served blockHash was computed with
+    // the root in place, and eth_getBlockBy* (which reads the persisted header) can answer
+    // the same value the CL was given.
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    NewPayloadRequest request;
+    request.executionPayload = payload->executionPayload;
+    request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    request.executionRequests = std::vector<bytes>{};
+    auto status = task::syncWait(engineService.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+}
+
+// The gas limit reaches the executor as an int64 (TransactionExecutorImpl.h:53 narrows it
+// with a bare static_cast), so a Uint64Quantity above INT64_MAX would arrive as a NEGATIVE
+// gas budget. The attribute is the only wire-facing source of that tuple, so it carries the
+// bound; the FCU is answered INVALID rather than building a block on a negative budget.
+BOOST_AUTO_TEST_CASE(attributes_gas_limit_above_int64_is_rejected)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    payloadAttributes.gasLimit =
+        static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) + 1;
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_CHECK(!result.payloadId.has_value());
+    BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
+    BOOST_CHECK(result.payloadStatus.validationError->find("gasLimit") != std::string::npos);
+
+    // The largest value that still fits builds normally — the bound is the executor's width,
+    // not a smaller invented one.
+    payloadAttributes.gasLimit =
+        static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
+    auto accepted =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(accepted.payloadId.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)

@@ -19,6 +19,8 @@
 #include "EngineServiceImpl.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <cstdint>
+#include <limits>
 
 namespace
 {
@@ -167,6 +169,20 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     if (version == 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
     {
         return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3");
+    }
+    // gasLimit is a Uint64Quantity on the wire, but every consumer of the value the build
+    // hands down is int64: TransactionExecutorImpl.h:53 narrows it with a bare
+    // static_cast<int64_t> into the EVM message's gas field, and evmone's BlockInfo::gas_limit
+    // is int64 as well. Left unbounded, 2^63 or more arrives at the executor as a NEGATIVE
+    // gas budget. Before this attribute existed the tuple's only source was SystemConfig,
+    // whose own path is int64 end to end (SystemConfigPrecompiled's defaultCmp), so the
+    // narrowing was unreachable; this is a new wire-facing entry point and has to bound
+    // itself. The bound is the executor's actual width, not an invented consensus rule.
+    if (payloadAttributes.gasLimit.has_value() &&
+        *payloadAttributes.gasLimit >
+            static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+    {
+        return std::string("gasLimit exceeds the int64 range the execution layer uses");
     }
     return std::nullopt;
 }

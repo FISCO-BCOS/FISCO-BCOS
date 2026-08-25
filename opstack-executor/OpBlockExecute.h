@@ -48,9 +48,57 @@ inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6
 
 namespace bcos::evm::engine
 {
+/// The block-level system calls that run once per block, before the first transaction:
+/// EIP-4788 (Ecotone/Cancun) stores the parent beacon block root in the beacon-roots ring
+/// buffer at 0x000F3df6…, EIP-2935 (Isthmus/Prague) stores the parent block hash in the
+/// history ring buffer at 0x0000F908…2935. Both are ordinary EVM calls from the system sender
+/// 0xff…fe whose state diff belongs to the block, and the registry deciding which of them the
+/// active revision runs lives in bcos-evm (system_contracts.cpp STORAGE_SYSTEM_CONTRACTS) —
+/// nothing about them is re-implemented here.
+///
+/// This is deliberately pipeline-agnostic: it takes a storage view, a BlockInfo and a
+/// BlockHashes and applies the diff, with no dependency on how the block is scheduled. The
+/// block pipeline is being rewritten (OpScheduler), so the call site that runs it per produced
+/// block is NOT wired here — wiring is deferred until that lands. preBlockOpSteps below is its
+/// one caller today.
+///
+/// A no-op when the revision has no system contract yet, or when the target account has no
+/// code — EIP-4788 requires the call to fail silently in that case, and an empty state (a
+/// chain whose genesis never allocated the predeploys) therefore runs this unchanged.
+///
+/// @throws OpStorageError when the write-back fails or the bridge is poisoned (a local storage
+/// fault, never a consensus verdict).
+template <class Storage>
+void applyBlockStartSystemCalls(bcos::evm::evmstate::Storage2State<Storage>& stateView,
+    const evmone::state::BlockInfo& blk, const evmone::state::BlockHashes& hashes,
+    evmc_revision rev, evmc::VM& vm)
+{
+    // The diff is sanitized first — applyDiff's precondition. applyDiff poisons AND rethrows
+    // raw; a write-back failure is a local storage fault, so it leaves as OpStorageError,
+    // never a bare runtime_error.
+    auto sysDiff = evmone::state::system_call_block_start(stateView, blk, hashes, rev, vm);
+    try
+    {
+        stateView.applyDiff(bcos::evm::sanitizeStateDiff(stateView, std::move(sysDiff)));
+    }
+    catch (const std::exception& e)
+    {
+        throw OpStorageError(std::string("pre-block system-call write-back failed: ") + e.what());
+    }
+    catch (...)
+    {
+        throw OpStorageError("pre-block system-call write-back failed: unknown exception");
+    }
+    // Read-path poison from the system call with applyDiff returning normally — same check as
+    // the deposit/tx write-back paths in OpstackExecutor; without it a storage fault here would
+    // silently execute as zero-value reads and surface later as a stateRoot mismatch.
+    if (stateView.poisoned())
+        throw OpStorageError("pre-block system-call poisoned: " + stateView.firstError());
+}
+
 /// Block-pre steps shared by the OpScheduler execution path (and previously the retired
-/// runOpBlockInjection): recent-block-hashes construction → system_call_block_start +
-/// write-back → deposit-first content check + Jovian shape → DA footprint gas scalar. Outputs
+/// runOpBlockInjection): recent-block-hashes construction → applyBlockStartSystemCalls →
+/// deposit-first content check + Jovian shape → DA footprint gas scalar. Outputs
 /// hashes (emplaced in place — RecentBlockHashes holds a storage reference, not assignable, hence
 /// the std::optional carrier), hashErr, and daFootprintGasScalar via reference params. Throws
 /// OpConsensusError on shape/validation faults.
@@ -69,28 +117,8 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
         view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
     bcos::evm::evmstate::Storage2State<Storage> stateView(view, executor.sharedError());
 
-    // (1) Pre-block system call; write back through the bridge (the diff is sanitized first —
-    // applyDiff's precondition). applyDiff poisons AND rethrows raw; a write-back failure is a
-    // local storage fault, so it leaves as OpStorageError, never a bare runtime_error.
-    auto sysDiff =
-        evmone::state::system_call_block_start(stateView, blk, *hashes, cfg.rev, executor.vm());
-    try
-    {
-        stateView.applyDiff(bcos::evm::sanitizeStateDiff(stateView, std::move(sysDiff)));
-    }
-    catch (const std::exception& e)
-    {
-        throw OpStorageError(std::string("pre-block system-call write-back failed: ") + e.what());
-    }
-    catch (...)
-    {
-        throw OpStorageError("pre-block system-call write-back failed: unknown exception");
-    }
-    // Read-path poison from the system call with applyDiff returning normally — same check as
-    // the deposit/tx write-back paths in OpstackExecutor; without it a storage fault here would
-    // silently execute as zero-value reads and surface later as a stateRoot mismatch.
-    if (stateView.poisoned())
-        throw OpStorageError("pre-block system-call poisoned: " + stateView.firstError());
+    // (1) Pre-block system calls (EIP-4788 / EIP-2935); write back through the bridge.
+    applyBlockStartSystemCalls(stateView, blk, *hashes, cfg.rev, executor.vm());
 
     // (2) deposit-first content check + Jovian shape (type-byte classification, no raw-tx parse).
     constexpr uint8_t kDepositTypeByte = 0x7e;
