@@ -17,17 +17,18 @@
 #pragma once
 
 #include "bcos-framework/protocol/Authorization.h"
+#include "bcos-framework/protocol/TxGasModel.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <algorithm>
 #include <array>
-#include <evmc/evmc.hpp>
-#include <evmone_precompiles/keccak.hpp>
-#include <evmone_precompiles/secp256k1.hpp>
 #include <bit>
 #include <cassert>
 #include <cstdint>
+#include <evmc/evmc.hpp>
+#include <evmone_precompiles/keccak.hpp>
+#include <evmone_precompiles/secp256k1.hpp>
 #include <intx/intx.hpp>
 #include <ios>
 #include <limits>
@@ -40,23 +41,17 @@
 namespace bcos::executor_v1::eth::evm
 {
 
-/// Convert bcos::u256 to intx::uint256 (big-endian byte copy into a stack
-/// buffer; no string round-trip, no heap allocation). Single canonical home of
-/// this conversion.
-inline intx::uint256 toIntxU256(bcos::u256 const& val)
-{
-    std::array<bcos::byte, 32> be{};
-    bcos::toBigEndian(val, be);  // writes 32 big-endian bytes, no allocation.
-    return intx::be::unsafe::load<intx::uint256>(be.data());
-}
+// Defined in bcos-framework/protocol/TxGasModel.h so the admission layer can widen balances
+// with the same conversion the executor uses, without linking ethereum-executor. Re-imported
+// here so the ~20 existing `evm::toIntxU256(...)` call sites are unaffected.
+using bcos::protocol::toIntxU256;
 
 /// Convert intx::uint256 to bcos::u256 (big-endian byte copy; no string
 /// round-trip).
 inline bcos::u256 toBcosU256(intx::uint256 const& val)
 {
     const auto be = intx::be::store<evmc::bytes32>(val);
-    return bcos::fromBigEndian<bcos::u256>(
-        bcos::bytesConstRef(be.bytes, sizeof(be.bytes)));
+    return bcos::fromBigEndian<bcos::u256>(bcos::bytesConstRef(be.bytes, sizeof(be.bytes)));
 }
 
 /// A transaction log entry (ported evmone state::Log).
@@ -179,7 +174,8 @@ constexpr auto GAS_PER_BLOB = 0x20000;  // 2**17
 constexpr auto MAX_TX_BLOB_COUNT = 6;
 
 /// The maximum allowed gas limit for a transaction (EIP-7825).
-constexpr auto MAX_TX_GAS_LIMIT = 0x1000000;  // 2**24
+/// Defined in bcos-framework/protocol/TxGasModel.h -- admission enforces the same cap.
+using bcos::protocol::MAX_TX_GAS_LIMIT;
 
 /// The blob schedule entry for an EVM revision (EIP-7840).
 struct BlobParams
@@ -243,8 +239,7 @@ inline intx::uint256 compute_blob_gas_price(
 
     const auto base_hash = keccak256(evmc::bytes_view{encoded.data(), encoded.size()});
     evmc::address addr;
-    std::copy_n(
-        &base_hash.bytes[sizeof(base_hash) - sizeof(addr)], sizeof(addr), addr.bytes);
+    std::copy_n(&base_hash.bytes[sizeof(base_hash) - sizeof(addr)], sizeof(addr), addr.bytes);
     return addr;
 }
 
@@ -275,8 +270,10 @@ inline constexpr auto SECP256K1N_OVER_2 = evmmax::secp256k1::Curve::ORDER / 2;
 /// EIP-7702 authorization magic byte (prefix of the signing hash).
 inline constexpr uint8_t kSetCodeMagic = 0x05;
 
-/// EIP-7702: The cost of authorization that sets delegation to an account that didn't exist before.
-inline constexpr int64_t AUTHORIZATION_EMPTY_ACCOUNT_COST = 25000;
+/// EIP-7702: The cost of authorization that sets delegation to an account that didn't exist
+/// before. Defined in bcos-framework/protocol/TxGasModel.h -- it is part of the intrinsic-gas
+/// formula, which admission must compute identically.
+using bcos::protocol::AUTHORIZATION_EMPTY_ACCOUNT_COST;
 /// EIP-7702: The cost of authorization that sets delegation to an account that already exists.
 inline constexpr int64_t AUTHORIZATION_BASE_COST = 12500;
 

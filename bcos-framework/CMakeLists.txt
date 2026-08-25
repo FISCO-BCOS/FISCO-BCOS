@@ -42,6 +42,13 @@ add_library(bcos-framework STATIC ${BCOS_FRAMEWORK_SOURCES})
 if(FULLNODE)
     target_include_directories(bcos-framework PUBLIC
         $<TARGET_PROPERTY:evmone::evmone,INTERFACE_INCLUDE_DIRECTORIES>)
+    # protocol/TxGasModel.h includes <intx/intx.hpp> to widen balances past u256. intx is a
+    # header-only INTERFACE target, so linking it PUBLIC adds include dirs and no archive to
+    # any consumer's link line -- unlike evmone above, which is why that one is includes-only.
+    # Propagated from here rather than added per-consumer: any module that includes the header
+    # needs it, and a third consumer would otherwise fail to compile.
+    find_package(intx CONFIG REQUIRED)
+    target_link_libraries(bcos-framework PUBLIC intx::intx)
 endif()
 target_include_directories(bcos-framework PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
