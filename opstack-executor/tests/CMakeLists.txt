@@ -36,29 +36,13 @@ target_link_libraries(opstack-executor-tests PRIVATE
 )
 add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 
-# Runtime suite: real tars TransactionImpl / Web3Transaction / receipt factory. Isolated
-# from the lightweight binary so a wedprcrypto-tainted typed catch cannot hide
-# OpConsensusError assertions over there. Compile Web3Transaction.cpp directly instead
-# of linking `rpc` (rpc currently pulls Engine/Eth leftovers that are out of this PR).
-# BOOST_TEST_MODULE is defined in the TU.
-add_executable(opstack-executor-runtime-tests
-    OpstackExecutorTest.cpp
-    ${CMAKE_SOURCE_DIR}/bcos-rpc/bcos-rpc/web3jsonrpc/model/Web3Transaction.cpp
-    ${CMAKE_SOURCE_DIR}/bcos-rpc/bcos-rpc/web3jsonrpc/model/Web3TxHandler.cpp
-)
-set_target_properties(opstack-executor-runtime-tests PROPERTIES UNITY_BUILD OFF)
-target_include_directories(opstack-executor-runtime-tests PRIVATE
-    ${CMAKE_SOURCE_DIR}/bcos-rpc
-)
-target_link_libraries(opstack-executor-runtime-tests PRIVATE
-    opstack-executor
-    protocol-tars
-    bcos-crypto
-    codec
-    evmone::evmone
-    Boost::unit_test_framework
-)
-add_test(NAME OpstackExecutorRuntimeTests COMMAND opstack-executor-runtime-tests)
+# Runtime suite: real tars TransactionImpl / Web3Transaction / receipt factory.
+# SPLIT OUT (tracks in the next PR): it compiles base bcos-rpc model TUs
+# (Web3Transaction.cpp / Web3TxHandler.cpp) whose EIP-7702 auth-list RLP support lands
+# in the RPC split (#5496) — building them here breaks the gcc build. The end-to-end
+# executor tests (OpstackExecutorTest.cpp, incl. the envelope-vs-mirror chainId cases)
+# return with the web3-model decoupling in the follow-up PR.
+
 
 # Receipts-root leaf encoding (encodeReceiptForRoot / sealOpBlock). Needs evmone's
 # vendored RLP helpers and ledger's computeTrieRootVarKey; kept off the lightweight

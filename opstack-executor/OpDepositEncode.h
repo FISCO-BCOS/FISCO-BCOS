@@ -43,6 +43,8 @@ inline void encodeRlpItem(bcos::bytes& to, uint64_t v)
 }
 }  // namespace bcos::evm::opstack::detail
 
+namespace bcos::evm::opstack
+{
 // 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data]).
 inline bcos::bytes encodeDepositEnvelope(const bcos::evm::opstack::DepositTx& d)
 {
@@ -67,3 +69,4 @@ inline bcos::bytes encodeDepositEnvelope(const bcos::evm::opstack::DepositTx& d)
     out.insert(out.end(), body.begin(), body.end());
     return out;
 }
+}  // namespace bcos::evm::opstack

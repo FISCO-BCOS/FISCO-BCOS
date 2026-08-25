@@ -22,6 +22,7 @@
 #include "bcos-utilities/Common.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
+#include <cstdint>
 #include <optional>
 
 namespace bcos::rlp::protocol

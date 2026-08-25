@@ -5,6 +5,7 @@
 // rejection branches: one negative case per fail branch (exact-type BOOST_CHECK_THROW on
 // OpTxValidationFailed) plus positive anchors decoding valid envelopes field-by-field.
 
+#include <opstack-executor/OpDepositEncode.h>
 #include <opstack-executor/OpstackExecutor.h>
 
 #include <bcos-codec/rlp/Common.h>
@@ -381,6 +382,43 @@ BOOST_AUTO_TEST_CASE(RejectsNonCanonicalOrOverWideIntegers)
         add(base.data);
         expectReject(envelope(p));
     }
+}
+
+// encodeDepositEnvelope must produce the canonical op-geth 0x7e deposit envelope bytes —
+// the deposit tx root commits these bytes, so the encoder is consensus-critical. The golden
+// vector pins the exact output; the round-trip through decodeDepositEnvelope proves the
+// pair are inverses on every field.
+BOOST_AUTO_TEST_CASE(EncodeDepositEnvelopeGolden)
+{
+    bcos::evm::opstack::DepositTx dep{};
+    std::fill(std::begin(dep.source_hash.bytes), std::end(dep.source_hash.bytes), 0x11);
+    std::fill(std::begin(dep.from.bytes), std::end(dep.from.bytes), 0x22);
+    dep.to = std::nullopt;    // contract creation
+    dep.mint = std::nullopt;  // no mint
+    dep.value = 0;
+    dep.gas_limit = 100000;
+    dep.is_system_tx = false;
+    // data stays empty
+
+    auto const encoded = bcos::evm::opstack::encodeDepositEnvelope(dep);
+    // 7e || f8 3f (long-form list header, 63-byte payload) || a0(source_hash 0x11×32)
+    // || 94(from 0x22×20) || 80(to) 80(mint) 80(value) || 83 01 86 a0(gas 100000) || 80 80.
+    BOOST_CHECK_EQUAL(bcos::toHex(encoded),
+        "7ef83fa0111111111111111111111111111111111111111111111111111111111111111194"
+        "2222222222222222222222222222222222222222808080830186a08080");
+
+    // Round-trip: the decoder must reproduce every field.
+    auto const decoded = decodeDepositEnvelope(bcos::bytesConstRef{encoded.data(), encoded.size()});
+    BOOST_REQUIRE(!decoded.to.has_value());
+    BOOST_REQUIRE(!decoded.mint.has_value());
+    BOOST_CHECK(decoded.value == intx::uint256{0});
+    BOOST_CHECK_EQUAL(decoded.gas_limit, 100000);
+    BOOST_CHECK(!decoded.is_system_tx);
+    BOOST_REQUIRE(decoded.data.empty());
+    for (size_t i = 0; i < 32; ++i)
+        BOOST_CHECK_EQUAL(decoded.source_hash.bytes[i], 0x11);
+    for (size_t i = 0; i < 20; ++i)
+        BOOST_CHECK_EQUAL(decoded.from.bytes[i], 0x22);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

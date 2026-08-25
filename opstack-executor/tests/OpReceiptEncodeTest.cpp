@@ -235,4 +235,16 @@ BOOST_AUTO_TEST_CASE(SealReceiptsRootMatchesEvmoneReferenceTrie)
     BOOST_CHECK_EQUAL(actual, expected);
 }
 
+// A receipt whose logsBloom is not exactly 256 bytes must be a consensus rejection — a short
+// bloom would silently produce a non-canonical receipts-root leaf and a wrong block bloom.
+BOOST_AUTO_TEST_CASE(ShortLogsBloomIsConsensusReject)
+{
+    auto dep = minimalDepositReceipt();
+    bcos::bytes shortBloom(128, 0xab);
+    dep->setLogsBloom(bcos::ref(shortBloom));
+
+    BOOST_CHECK_THROW((void)encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType)),
+        bcos::evm::OpConsensusError);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

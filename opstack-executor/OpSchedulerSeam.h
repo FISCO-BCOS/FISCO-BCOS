@@ -107,6 +107,7 @@ public:
             .gas_limit = 1'000'000,
             .is_system_tx = false,
             .data = std::move(data)};
+        using bcos::evm::opstack::encodeDepositEnvelope;
         return encodeDepositEnvelope(deposit);
     }
 

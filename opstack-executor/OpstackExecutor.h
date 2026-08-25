@@ -81,9 +81,8 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
         // Fail closed: web3TypedTxKind() is a tars wire field (untrusted input). Folding an
         // unknown kind into legacy would bypass opValidate's type whitelist; op-geth's
         // UnmarshalBinary rejects with ErrTxTypeNotSupported.
-        throw bcos::evm::OpConsensusError(
-            "toEvmoneTransaction: unsupported web3TypedTxKind: " +
-            std::to_string(tx.web3TypedTxKind()));
+        throw bcos::evm::OpConsensusError("toEvmoneTransaction: unsupported web3TypedTxKind: " +
+                                          std::to_string(tx.web3TypedTxKind()));
     }
     auto const& input = tx.input();
     evmTx.data = evmc::bytes(input.begin(), input.end());
@@ -180,8 +179,7 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
     {
         evmc_bytes32 hash{};
         if (h.size() < sizeof(evmc_bytes32))
-            throw bcos::evm::OpConsensusError(
-                "toEvmoneTransaction: blob versioned hash too short");
+            throw bcos::evm::OpConsensusError("toEvmoneTransaction: blob versioned hash too short");
         std::copy_n(h.begin(), sizeof(evmc_bytes32), hash.bytes);
         evmTx.blob_hashes.push_back(hash);
     }
@@ -617,7 +615,8 @@ public:
                 try
                 {
                     m_receipt = co_await executor.executeDeposit(storage, blockHeader, m_deposit,
-                        m_ctx->chainId, m_ctx->blockGasLeft, ledgerConfig, m_ctx->blockHashes);
+                        m_ctx->chainId, m_ctx->blockGasLeft, ledgerConfig, m_ctx->blockHashes,
+                        call);
                 }
                 catch (...)
                 {
@@ -743,8 +742,8 @@ public:
             }
             try
             {
-                co_return co_await executeDeposit(
-                    storage, blockHeader, dep, chainId, blockGasLeft, ledgerConfig, blockHashes);
+                co_return co_await executeDeposit(storage, blockHeader, dep, chainId, blockGasLeft,
+                    ledgerConfig, blockHashes, call);
             }
             catch (...)
             {
@@ -782,14 +781,14 @@ public:
     task::Task<protocol::TransactionReceipt::Ptr> executeDeposit(Storage& storage,
         protocol::BlockHeader const& blockHeader, bcos::evm::opstack::DepositTx const& dep,
         uint64_t chainId, int64_t blockGasLeft, ledger::LedgerConfig const& ledgerConfig,
-        evmone::state::BlockHashes const* blockHashes = nullptr)
+        evmone::state::BlockHashes const* blockHashes = nullptr, bool call = false)
     {
         namespace op = bcos::evm::opstack;
 
         checkForkRevision(ledgerConfig);
 
         auto blockInfo = buildBlockInfo(
-            blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
+            blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)), call);
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         NullBlockHashes nullBlockHashes;
         auto const& bh = (blockHashes != nullptr) ? *blockHashes : nullBlockHashes;
@@ -886,7 +885,8 @@ private:
         }
         catch (...)
         {
-            throw bcos::evm::OpConsensusError("OpScheduler: " + what + " failed: unknown exception");
+            throw bcos::evm::OpConsensusError(
+                "OpScheduler: " + what + " failed: unknown exception");
         }
     }
 
@@ -927,6 +927,21 @@ private:
                              buildBlockInfo(blockHeader,
                                  opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         auto evmTx = eth::toEvmoneTransaction(transaction);
+        // TRUST BOUNDARY (part-5 gate): execution fields (input/gasLimit/to/value/nonce/sender)
+        // come from the tars mirror, which is NOT bound by the envelope signature — only chainId
+        // is envelope-checked above. At this head the scheduler path has no production caller and
+        // pool admission derives mirror+envelope from the same decode, so the divergence is not
+        // reachable; part-5 wiring MUST re-derive the execution fields from the signed envelope
+        // (web3ExecutionFieldsFromEnvelope, see review finding A) or fail-closed on mirror-vs-
+        // envelope mismatch before the executor becomes the live block-execution path.
+        // eth_call (call=true, skipBalanceCheck) simulates without fee constraints — op-geth's
+        // eth_call does not enforce max_gas_price >= base_fee. A pricing-less call (e.g. the RPC
+        // default 2 gwei cap) would fail MAX_FEE_PER_GAS_TOO_LOW once the OP base fee exceeds it,
+        // so clamp the cap to the block base fee for the simulation.
+        if (skipBalanceCheck)
+        {
+            evmTx.max_gas_price = std::max(evmTx.max_gas_price, intx::uint256{blockInfo.base_fee});
+        }
         // Block path: compare the SIGNED envelope to the node (op-geth ErrInvalidChainId).
         // Never use tars data.chainID / evmTx.chain_id — the signature does not bind the mirror.
         // eth_call passes nullopt (lenient, like op-geth eth_call).

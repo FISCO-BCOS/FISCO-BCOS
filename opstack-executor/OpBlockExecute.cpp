@@ -41,18 +41,18 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
         // rollup_cost.go:568-576). Checking the last tx suffices (deposits always precede
         // non-deposits).
         if (!std::holds_alternative<DepositTx>(txs.back().tx))
-            throw std::runtime_error(
+            throw OpConsensusError(
                 "op block: unexpected non-deposit transactions in Jovian activation block");
         return;
     }
 
     // Normal Jovian block: L1 attributes must carry the Jovian selector and be ≥ Jovian length.
     if (data.size() < JovianL1AttributesLen)
-        throw std::runtime_error(
+        throw OpConsensusError(
             "op block: L1 attributes transaction data too short for DA footprint gas scalar");
     if (!std::equal(
             JovianL1AttributesSelector.begin(), JovianL1AttributesSelector.end(), data.begin()))
-        throw std::runtime_error(
+        throw OpConsensusError(
             "op block: L1 attributes transaction data does not have Jovian selector");
 }
 
@@ -61,7 +61,7 @@ evmone::state::StateDiff finalizeOpBlock(
 {
     if (!cfg.disable_prague_requests)
         // runtime_error (not logic_error): block-level rejection (INVALID), not a local fault.
-        throw std::runtime_error("op finalize: prague requests unsupported on OP chains");
+        throw OpConsensusError("op finalize: prague requests unsupported on OP chains");
     return bcos::evm::sanitizeStateDiff(
         view, evmone::state::finalize(view, cfg.rev, coinbase, std::nullopt, {}, {}));
 }
@@ -79,10 +79,10 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     // Step 2: first tx must be a deposit (hard reject) + L1-attributes content (warn, op-geth
     // accept-at-validation) + Jovian shape. Same accept set as preBlockOpSteps / ExecuteContext.
     if (txs.empty())
-        throw std::runtime_error("op block: missing L1 attributes deposit (empty block)");
+        throw OpConsensusError("op block: missing L1 attributes deposit (empty block)");
     const auto* firstDep = std::get_if<DepositTx>(&txs[0].tx);
     if (firstDep == nullptr)
-        throw std::runtime_error("op block: first tx is not a deposit");
+        throw OpConsensusError("op block: first tx is not a deposit");
     if (!isL1AttributesTx(*firstDep))
         BCOS_LOG(WARNING) << LOG_BADGE("OP_BLOCK_EXEC")
                           << "op block: first tx is a deposit but not the L1 attributes tx — "
@@ -149,19 +149,19 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             auto const envelopeChainId = bcos::rlp::protocol::web3ChainIdFromEnvelope(envRef);
             if (envelopeChainId.has_value() && *envelopeChainId != chainId)
             {
-                throw std::runtime_error("op block: tx envelope chain_id " +
-                                         std::to_string(*envelopeChainId) +
-                                         " does not match node chainId " + std::to_string(chainId));
+                throw OpConsensusError("op block: tx envelope chain_id " +
+                                       std::to_string(*envelopeChainId) +
+                                       " does not match node chainId " + std::to_string(chainId));
             }
             if (!envelopeChainId.has_value() && bcos::rlp::protocol::isTypedWeb3Envelope(envRef))
             {
-                throw std::runtime_error(
+                throw OpConsensusError(
                     "op block: typed tx envelope is missing a parseable chainId");
             }
             auto v = opValidate(view, block, tx, env, cfg, fee, blockGasLeft);
             if (const auto* err = std::get_if<std::error_code>(&v))
                 // No failed-receipt mechanism for normal txs: void the whole block (op-geth).
-                throw std::runtime_error("op block: invalid non-deposit tx: " + err->message());
+                throw OpConsensusError("op block: invalid non-deposit tx: " + err->message());
             // opTransition charges from props.fee (the validate-time snapshot — no second read).
             evmone::state::StateDiff diff;
             auto receipt = opTransition(view, block, hashes, tx, cfg, vm,
@@ -206,7 +206,7 @@ namespace
         catch (const boost::bad_lexical_cast&)
         {}
     }
-    throw std::runtime_error(
+    throw OpConsensusError(
         "op block: invalid cumulativeGasUsed in receipt (not hex or decimal): " + std::string(s));
 }
 
@@ -264,6 +264,11 @@ evmc::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, ui
     const bool success = (r.status() == 0);
     const uint64_t cumGas = parseHexUint64(r.cumulativeGasUsed());
     const auto bloom = r.logsBloom();
+    if (bloom.size() != 256)
+    {
+        throw OpConsensusError(
+            "op block: receipt logsBloom must be 256 bytes, got " + std::to_string(bloom.size()));
+    }
     const auto logs = r.logEntries();
 
     bcos::bytes payload;
@@ -314,7 +319,12 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     for (const auto& r : result.receipts)
     {
         const auto bloom = r->logsBloom();
-        for (size_t i = 0; i < 256 && i < bloom.size(); ++i)
+        if (bloom.size() != 256)
+        {
+            throw OpConsensusError("op block: receipt logsBloom must be 256 bytes, got " +
+                                   std::to_string(bloom.size()));
+        }
+        for (size_t i = 0; i < 256; ++i)
             seal.logsBloom.bytes[i] |= bloom[i];
     }
 

@@ -45,7 +45,7 @@ bcos::executor_v1::opstack::OpstackExecutor::executeTransaction<MutableStorage>(
 template bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr>
 bcos::executor_v1::opstack::OpstackExecutor::executeDeposit<MutableStorage>(MutableStorage&,
     bcos::protocol::BlockHeader const&, bcos::evm::opstack::DepositTx const&, uint64_t, int64_t,
-    bcos::ledger::LedgerConfig const&, evmone::state::BlockHashes const*);
+    bcos::ledger::LedgerConfig const&, evmone::state::BlockHashes const*, bool);
 
 // The block-pre template from OpBlockExecute.h.
 template void bcos::evm::engine::preBlockOpSteps<MutableStorage, std::vector<bcos::bytes>>(
