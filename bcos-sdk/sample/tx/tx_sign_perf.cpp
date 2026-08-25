@@ -27,7 +27,9 @@
 #include <string.h>
 #include <chrono>
 #include <iostream>
+#include <limits>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 //------------------------------------------------------------------------------
@@ -125,24 +127,44 @@ const char* getBinary(int _sm)
 void usage()
 {
     printf("Desc: create signed transaction[HelloWorld set] perf test\n");
-    printf("Usage: tx_sign_perf isSM txCount\n");
+    printf("Usage: tx_sign_perf isSM txCount [group_id] [chain_id]\n");
     printf("Example:\n");
     printf("    ./tx_sign_perf true 30000\n");
-    printf("    ./tx_sign_perf false 30000\n");
+    printf("    ./tx_sign_perf false 30000 group1 chain1\n");
     exit(0);
 }
 
 int main(int argc, char** argv)
 {
-    if (argc < 2)
+    if (argc < 3)
     {
         usage();
     }
 
     bool smCrypto = (std::string(argv[1]) == "true");
-    uint32_t txCount = std::stoul(argv[2]);
+    uint32_t txCount = 0;
+    try
+    {
+        size_t parsedLength = 0;
+        auto parsedCount = std::stoull(argv[2], &parsedLength);
+        if (parsedLength != std::string(argv[2]).size() || parsedCount == 0 ||
+            parsedCount > std::numeric_limits<uint32_t>::max())
+        {
+            throw std::invalid_argument("txCount out of range");
+        }
+        txCount = static_cast<uint32_t>(parsedCount);
+    }
+    catch (std::exception const& e)
+    {
+        std::cerr << "Error: txCount must be a positive integer: " << e.what() << std::endl;
+        return EXIT_FAILURE;
+    }
 
-    printf("[Create Signed Tx Perf Test] ===>>>> smCrypto: %d, txCount: %u\n", smCrypto, txCount);
+    const char* group_id = (argc > 3) ? argv[3] : "group0";
+    const char* chain_id = (argc > 4) ? argv[4] : "chain0";
+
+    printf("[Create Signed Tx Perf Test] ===>>>> smCrypto: %d, txCount: %u, groupId: %s, chainId: %s\n",
+        smCrypto, txCount, group_id, chain_id);
 
     auto keyPairBuilder = std::make_shared<bcos::cppsdk::utilities::KeyPairBuilder>();
     auto keyPair =
@@ -153,19 +175,17 @@ int main(int argc, char** argv)
     auto code = bcos::fromHex(getBinary(smCrypto ? 1 : 0));
 
     int64_t block_limit = 111111;
-    const char* group_id = "group0";
-    const char* chain_id = "chain0";
 
     std::string txHash = "";
-    uint32_t i = 0;
+    uint32_t signIndex = 0;
     uint32_t _10Per = txCount / 10;
 
     auto startPoint = std::chrono::high_resolution_clock::now();
-    while (i++ < txCount)
+    while (signIndex++ < txCount)
     {
-        if (i % _10Per == 0)
+        if (_10Per > 0 && signIndex % _10Per == 0)
         {
-            std::cerr << " ..process : " << ((double)i / txCount) * 100 << "%" << std::endl;
+            std::cerr << " ..process : " << ((double)signIndex / txCount) * 100 << "%" << std::endl;
         }
 
         auto txPair = transactionBuilder->createSignedTransaction(
@@ -181,10 +201,12 @@ int main(int argc, char** argv)
         (long long)std::chrono::duration_cast<std::chrono::microseconds>(endPoint - startPoint)
             .count();
 
+    auto avgUS = elapsedUS / txCount;
+    auto txsPerSecond = elapsedUS > 0 ? 1000000LL * txCount / elapsedUS : 0;
     printf(
         " [Create Signed Tx Perf Test] total txs: %u, total elapsed(ms): %lld, avg(us): %lld, "
         "txs/s: %lld \n",
-        txCount, elapsedMS, elapsedUS / txCount, 1000 * txCount / elapsedMS);
+        (unsigned int)txCount, elapsedMS, avgUS, txsPerSecond);
 
     return 0;
 }
