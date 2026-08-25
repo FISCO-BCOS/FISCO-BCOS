@@ -2,20 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// Shared error types + the block-execution result for the OP scheduler, plus the block-context
-// conversion helpers (bcos<->evmc fixed-size conversions / bounds-checked narrowing / FISCO-header
-// -> evmone BlockInfo build). Split out of OpSchedulerSeam.h so dependent layers can throw without
-// depending on the class template. OpBlockSeal lives here too (not in OpBlockExecute.h):
-// OpExecuteBlockResult carries it by value.
-//
-// The six-way commitment comparison surface (OpBlockCommitments / commitmentsOf /
-// payloadBloomToH2048 / mismatchedFieldOf / detail::toBcosH256 / toBcosBloom) lives in
-// OpCommitments.h — this header is deliberately types + conversions, no commitment logic.
+// OP block types and header conversions. Commitment comparison lives in OpCommitments.h.
 
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>  // bcos::toQuantity (hexCumulative reuse)
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-evm/eth/state/block.hpp>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
@@ -29,6 +21,19 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+namespace bcos::evm
+{
+/// Thrown for anything OP block execution classifies as a consensus-level rejection (error
+/// table): malformed/undecodable raw tx bytes, processOpBlock's own semantic throws
+/// (empty block, first tx not the L1 attributes deposit, gas-pool overrun, ...). Maps to INVALID
+/// on the caller side, never -32603. Lives in bcos::evm so both the opstack and engine
+/// namespaces (and the code that references it from either) resolve it by outer-scope lookup.
+struct OpConsensusError : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+}  // namespace bcos::evm
 
 namespace bcos::evm::opstack
 {
@@ -48,17 +53,33 @@ struct OpBlockSeal
     std::optional<uint64_t> blobGasUsed;
 };
 
-/// "0x" + lowercase hex (op-geth hexutil.Uint64); the value later feeds the receipts-root leaf
-/// encoding that returns with the block-seal wiring (part 5).
-[[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
+/// Bounds-checked u256→int64 narrowing (a corrupt receipt must not wrap the gas pool).
+[[nodiscard]] inline int64_t narrowGasUsed(const bcos::u256& gasUsed)
 {
-    return bcos::toQuantity(cumulative);  // reuse the library quantity formatter
+    static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
+    if (gasUsed > kMaxInt64)
+        // Classified as OpConsensusError (INVALID), never a bare runtime_error escaping the
+        // INVALID/-32603 boundary (test: NarrowGasUsedRejectsAboveInt64).
+        throw OpConsensusError("op block: receipt gasUsed exceeds int64_t range");
+    return static_cast<int64_t>(gasUsed);
 }
 
-/// EIP-2718 tx-type classification, single home for the block-execution sites (the OpScheduler
-/// deposit-classification loop and the part-5 seal wiring's txTypes rebuild) so the mapping can't
-/// drift and silently emit a wrong receiptsRoot leaf. Maps a raw type byte to the per-receipt
-/// type byte:
+/// 0x-hex uint64, op-geth hexutil.Uint64.
+[[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
+{
+    return bcos::toQuantity(cumulative);
+}
+
+/// Decimal string for the tars receipt field. RPC parses this as decimal only.
+[[nodiscard]] inline std::string decimalCumulative(uint64_t cumulative)
+{
+    return std::to_string(cumulative);
+}
+
+/// EIP-2718 tx-type classification, single home for the three block-execution sites (the
+/// OpScheduler deposit-classification loop, finalizeOpBlockResult's txTypes rebuild, and
+/// processOpBlock's variant branch) so the mapping can't drift and silently emit a wrong
+/// receiptsRoot leaf. Maps a raw type byte to the value stored in OpBlockResult.txTypes:
 /// OP deposit 0x7e (kDepositTxType, OpTransition.h) → itself; legacy (>= 0xc0 RLP list prefix)
 /// → 0; typed (0x01/0x02/0x04) → its own type byte. Unknown bytes (< 0xc0, not deposit) pass
 /// through unchanged — callers that must reject them (the deposit loop) keep their own guard.
@@ -80,15 +101,6 @@ struct OpBlockSeal
 
 namespace bcos::evm::engine
 {
-/// Thrown for anything OP block execution classifies as a consensus-level rejection (error
-/// table): malformed/undecodable raw tx bytes, the block-shape semantic throws
-/// (empty block, missing L1 attributes deposit, gas-pool overrun, ...). Maps to INVALID
-/// on the caller side, never -32603.
-struct OpConsensusError : std::runtime_error
-{
-    using std::runtime_error::runtime_error;
-};
-
 /// Thrown when the ledger bridge's poison flag is set (a storage2-layer failure, not a consensus
 /// violation — Storage2State.h's poison-flag error channel contract). Maps to JSON-RPC -32603
 /// internal error on the caller side, never INVALID.
@@ -171,6 +183,7 @@ template <class T>
     return *opt;
 }
 
+
 /// Build the OP block context from a FISCO header. `gasLimitOverride` injects the head block's
 /// gasLimit as blockGasLeft (a minimal test header may leave gasLimit==0); `lenientOptionals`
 /// tolerates unset optional header fields as 0 (eth_call path), while block execution uses
@@ -213,18 +226,3 @@ inline evmone::state::BlockInfo toBlockInfo(const bcos::protocol::BlockHeader& e
 }
 }  // namespace detail
 }  // namespace bcos::evm::engine
-
-namespace bcos::evm::opstack
-{
-/// Bounds-checked u256→int64 narrowing (a corrupt receipt must not wrap the gas pool). Throws
-/// engine::OpConsensusError — a bare std::runtime_error would escape the INVALID/-32603
-/// classification this header establishes (see requireHeaderField's comment). Defined after the
-/// engine block because the error types live there.
-[[nodiscard]] inline int64_t narrowGasUsed(const bcos::u256& gasUsed)
-{
-    static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
-    if (gasUsed > kMaxInt64)
-        throw engine::OpConsensusError("op block: receipt gasUsed exceeds int64_t range");
-    return static_cast<int64_t>(gasUsed);
-}
-}  // namespace bcos::evm::opstack

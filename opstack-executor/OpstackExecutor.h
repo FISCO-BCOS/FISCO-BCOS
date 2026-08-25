@@ -3,8 +3,9 @@
 ///
 /// Implements the bcos::executor_v1::TransactionExecutor concept (ExecuteContext with
 /// prepare/execute/finish): opValidate + opTransition for NORMAL transactions, runDeposit for
-/// 0x7E deposits. The caller passes an already-decoded DepositTx. Storage-backed StateView and
-/// state-diff writeback (Storage2State::applyDiff) are shared with the base module.
+/// 0x7E deposits, finalizeOpBlock for block finalize. The caller passes an already-decoded
+/// DepositTx. Storage-backed StateView and state-diff writeback (Storage2State::applyDiff) are
+/// shared with the base module.
 
 #pragma once
 
@@ -16,13 +17,14 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-task/TBBWait.h"
 #include "ethereum-executor/EVMSupport.h"  // eth::evm::toIntxU256
 #include "opstack-executor/OpCommon.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
 #include "opstack-executor/Storage2State.h"  // Storage2State / SharedErrorSlot
 #include <bcos-codec/rlp/Common.h>           // BYTES_HEAD_BASE (consensus deposit-envelope decode)
 #include <bcos-codec/rlp/RLPDecode.h>        // decodeHeader / decode / decodeItems
-#include <bcos-utilities/BoostLog.h>         // BCOS_LOG
+#include <bcos-rlp-protocol/Web3TxEnvelope.h>   // isTypedWeb3Envelope (header-only)
+#include <bcos-utilities/BoostLog.h>            // BCOS_LOG
 #include <bcos-utilities/DataConvertUtility.h>  // safeFromHex / safeFromQuantity
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
@@ -35,6 +37,15 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+namespace bcos::evm::opstack
+{
+// Defined in OpBlockExecute.cpp — forward-declared here to avoid including OpBlockExecute.h
+// (which includes this header).
+evmone::state::StateDiff finalizeOpBlock(
+    const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase);
+}  // namespace bcos::evm::opstack
+
 
 namespace bcos::executor_v1::eth
 {
@@ -70,7 +81,7 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
         // Fail closed: web3TypedTxKind() is a tars wire field (untrusted input). Folding an
         // unknown kind into legacy would bypass opValidate's type whitelist; op-geth's
         // UnmarshalBinary rejects with ErrTxTypeNotSupported.
-        throw bcos::evm::engine::OpConsensusError(
+        throw bcos::evm::OpConsensusError(
             "toEvmoneTransaction: unsupported web3TypedTxKind: " +
             std::to_string(tx.web3TypedTxKind()));
     }
@@ -149,11 +160,17 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
     for (auto const& entry : tx.web3AccessList())
     {
         evmc_address addr{};
+        if (entry.account.size() < sizeof(evmc_address))
+            throw bcos::evm::OpConsensusError(
+                "toEvmoneTransaction: access-list account address too short");
         std::copy_n(entry.account.begin(), sizeof(evmc_address), addr.bytes);
         std::vector<evmc::bytes32> keys;
         for (auto const& sk : entry.storageKeys)
         {
             evmc_bytes32 key{};
+            if (sk.size() < sizeof(evmc_bytes32))
+                throw bcos::evm::OpConsensusError(
+                    "toEvmoneTransaction: access-list storage key too short");
             std::copy_n(sk.begin(), sizeof(evmc_bytes32), key.bytes);
             keys.push_back(key);
         }
@@ -162,6 +179,9 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
     for (auto const& h : tx.blobVersionedHashes())
     {
         evmc_bytes32 hash{};
+        if (h.size() < sizeof(evmc_bytes32))
+            throw bcos::evm::OpConsensusError(
+                "toEvmoneTransaction: blob versioned hash too short");
         std::copy_n(h.begin(), sizeof(evmc_bytes32), hash.bytes);
         evmTx.blob_hashes.push_back(hash);
     }
@@ -201,6 +221,9 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
         evmone::state::Authorization ea{};
         // AuthorizationEntry: all fields are numeric (uint64_t, u256, Address, uint8_t)
         ea.chain_id = toIntxU256(bcos::u256(auth.chainId));
+        if (auth.address.size() < sizeof(evmc_address))
+            throw bcos::evm::OpConsensusError(
+                "toEvmoneTransaction: authorization entry address too short");
         std::copy_n(auth.address.begin(), sizeof(evmc_address), ea.addr.bytes);
         ea.nonce = auth.nonce;
         if (auth.signer.size() == sizeof(evmc_address))
@@ -239,12 +262,8 @@ public:
     evmc::bytes32 get_block_hash(int64_t) const noexcept override { return {}; }
 };
 
-/// Strict 0x7E deposit envelope decode (consensus-grade).
-/// `0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx, data])`. Deposit fields fed
-/// to execution are re-derived HERE from the L1-derived envelope — never from the unauthenticated
-/// tars mirrors (Transaction.tars field 8+), which a peer can forge to mint arbitrary value.
-/// Unlike the RPC display-grade decoder, this rejects a non-0x7e type byte, malformed RLP,
-/// trailing bytes after the list and over-wide fields.
+/// Decode `0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx, data])`.
+/// Execution fields come from the envelope, never tars mirrors (deposits are unsigned).
 [[nodiscard]] inline bcos::evm::opstack::DepositTx decodeDepositEnvelope(bcos::bytesConstRef env)
 {
     namespace op = bcos::evm::opstack;
@@ -252,11 +271,8 @@ public:
     auto fail = [](std::string const& msg) {
         BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(msg));
     };
-    // Gate an integer RLP item for width AND canonicality: rlp::decode(UnsignedIntegral) does
-    // not bound the payload to the target width (fromBigEndian folds excess high bytes), and of
-    // the non-canonical forms it only rejects a single-byte payload < 0x80. op-geth additionally
-    // rejects the bare byte 0x00 (canonical zero is the empty item 0x80) and multi-byte payloads
-    // with a leading zero. Returns the payload length, or nullopt if not a canonical integer.
+    // Integer RLP width + canonicality. rlp::decode does not reject over-wide payloads
+    // (they truncate). Match op-geth: reject 0x00 for zero and leading-zero multi-byte ints.
     auto integerPayloadLength = [&](bcos::bytesConstRef const& ref) -> std::optional<size_t> {
         if (ref.empty())
             return std::nullopt;
@@ -264,7 +280,7 @@ public:
         if (b < 0x80)
         {
             // Byte item: 0x00 is non-canonical (integer zero must be the empty item 0x80).
-            return b == 0 ? std::nullopt : std::optional<size_t>{1};
+            return b == 0 ? std::nullopt : std::optional<size_t>{0};
         }
         if (b <= 0xb7)
         {  // short string
@@ -360,17 +376,15 @@ public:
         fail("deposit envelope: value non-canonical or over-wide (>32 bytes)");
     if (auto e = rlp::decode(items, value); e != nullptr)
         fail("deposit envelope: value decode failed");
-    // gas (uint64): width + canonicality check, then int64 range. A uint64 above INT64_MAX
-    // would silently wrap dep.gas_limit's static_cast<int64_t>(gas) — reject at the decoder.
+    // gas: width + canonicality, then int64 range. Over-range would wrap to -1.
     if (auto pl = integerPayloadLength(items); !pl || *pl > 8)
         fail("deposit envelope: gas non-canonical or over-wide (>8 bytes)");
     if (auto e = rlp::decode(items, gas); e != nullptr)
         fail("deposit envelope: gas decode failed");
     if (gas > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
         fail("deposit envelope: gas exceeds int64 range");
-    // isSystemTx (uint64): width + canonicality check, then a 0/1 value check (op-geth's
-    // decodeBool accepts only the empty item and 0x01). Decoded as uint64 because the FISCO bool
-    // overload demands payloadLength == 1 and would reject the empty-item false.
+    // isSystemTx: 0 or 1 only, matching op-geth decodeBool. Decoded as uint64 because
+    // the bool overload rejects the empty-item false.
     if (auto pl = integerPayloadLength(items); !pl || *pl > 8)
         fail("deposit envelope: isSystemTx non-canonical or over-wide (>8 bytes)");
     if (auto e = rlp::decode(items, isSystemTxValue); e != nullptr)
@@ -406,14 +420,15 @@ public:
 /// Correctness relies on a serial driver (SchedulerSerialImpl).
 struct OpBlockExecutionContext
 {
-    mutable bcos::evm::opstack::OpFeeParams fee;  // lazy-loaded once per block + DA scalar override
-    mutable bool feeLoaded = false;               // fee lazy-load flag
-    mutable int64_t blockGasLeft = 0;             // decremented per tx
-    mutable int64_t cumulativeGasUsed = 0;        // accumulated across txs
-    mutable bool seenNonDeposit = false;          // deposit-after-non-deposit gate
-    evmone::state::BlockHashes* blockHashes = nullptr;  // built once at block level
-    uint64_t chainId = 0;                               // constant for the whole block
-    std::optional<uint16_t> daFootprintGasScalar;       // Jovian DA scalar
+    mutable bcos::evm::opstack::OpFeeParams fee;
+    mutable bool feeLoaded = false;
+    mutable int64_t blockGasLeft = 0;
+    mutable int64_t cumulativeGasUsed = 0;
+    mutable size_t transactionIndex = 0;
+    mutable bool seenNonDeposit = false;
+    evmone::state::BlockHashes* blockHashes = nullptr;
+    uint64_t chainId = 0;
+    std::optional<uint16_t> daFootprintGasScalar;
 };
 
 /// The OP transaction executor. Discard-writes contract: on any throw out of
@@ -490,8 +505,8 @@ public:
         // BlockInfo built once in prepare() and reused by execute() (same inputs, same value).
         std::optional<evmone::state::BlockInfo> m_blockInfo;
 
-        // One state view per tx shared across prepare/execute, so the validate-phase read cache
-        // (m_accountCache/m_codeCache) hits in the transition stage. Non-movable, hence unique_ptr.
+        // One Storage2State per tx for prepare + execute so validate-phase cache hits in
+        // transition.
         std::unique_ptr<bcos::evm::evmstate::Storage2State<Storage>> stateView;
 
         // Shared per-block context; the mutable fields above are written through this const
@@ -528,7 +543,7 @@ public:
         void requireBlockContext() const
         {
             if (m_ctx == nullptr)
-                throw engine::OpConsensusError(
+                throw bcos::evm::OpConsensusError(
                     "OpstackExecutor: createExecuteContext called without a BlockContext (the "
                     "6-arg form is unsupported for OP execution)");
         }
@@ -539,50 +554,52 @@ public:
             if (transaction.isDepositTx())
             {
                 if (m_ctx->seenNonDeposit)
-                    // Deposit order gate — demoted from a hard reject to an observable log:
-                    // op-geth/op-reth enforce deposit-first only at the sequencer, not at
-                    // validation, so both reference clients accept such a block.
-                    BCOS_LOG(WARNING) << LOG_BADGE("OPSTACK")
-                                      << "deposit after non-deposit in block — accepted "
-                                         "(deliberate demotion, op-geth/op-reth accept at "
-                                         "validation)";
+                    // Deposit after a non-deposit: warn only. op-geth/op-reth accept this
+                    // at validation (they enforce deposit-first at the sequencer).
+                    BCOS_LOG(WARNING)
+                        << LOG_BADGE("OPSTACK") << "deposit after non-deposit in block — accepted";
                 try
                 {
                     m_deposit = OpstackExecutor::depositFromTransaction(transaction);
                 }
                 catch (const OpTxValidationFailed& e)
                 {
-                    // A malformed deposit envelope (e.g. a 0x02-envelope whose tars mirror
-                    // claims deposit) is a consensus rejection, not an internal error.
-                    throw engine::OpConsensusError(
+                    // Bad deposit envelope is a consensus reject, not an internal error.
+                    throw bcos::evm::OpConsensusError(
                         std::string("OpScheduler: deposit envelope validation failed: ") +
                         e.what());
                 }
                 co_return;  // deposit has no opValidate
             }
-            m_ctx->seenNonDeposit = true;
             if (!m_ctx->feeLoaded)
-            {  // Fee lazy load (after the L1 attributes deposit has executed)
+            {  // Load fee params after the L1 attributes deposit.
                 namespace op = bcos::evm::opstack;
                 m_ctx->fee = op::loadOpFeeParams(*stateView);
-                if (m_ctx->daFootprintGasScalar)  // DA scalar override
+                if (m_ctx->daFootprintGasScalar)
                     m_ctx->fee.da_footprint_gas_scalar = *m_ctx->daFootprintGasScalar;
                 m_ctx->feeLoaded = true;
             }
             m_blockInfo = buildBlockInfo(blockHeader,
                 opBlockGasLimit(blockHeader, static_cast<uint64_t>(m_ctx->blockGasLeft)), call);
             try
-            {  // Error normalization: validation failure -> consensus rejection
+            {  // Validation failure is a consensus reject.
                 m_props = co_await executor.m_prepare(*stateView, blockHeader, transaction,
                     ledgerConfig, m_ctx->fee, m_ctx->blockGasLeft,
                     call ? std::optional<uint64_t>{} : std::optional<uint64_t>(m_ctx->chainId),
-                    &*m_blockInfo);
+                    &*m_blockInfo, call);
             }
             catch (const OpTxValidationFailed& e)
             {
-                throw engine::OpConsensusError(
-                    std::string("OpScheduler: normal tx validation failed: ") + e.what());
+                // The offending tx's hash rides in the message (bcos::Error carries a string
+                // only across the delegate boundary): the engine's OP build loop parses it to
+                // evict the culprit from the pool instead of failing every subsequent build.
+                throw bcos::evm::OpConsensusError(
+                    std::string("OpScheduler: normal tx validation failed: ") + e.what() +
+                    " [tx=0x" + transaction.hash().hex() + "]");
             }
+            // Only after a successful prepare: a rejected normal tx must not flip the
+            // deposit-after-non-deposit warn path for a later deposit in the same block.
+            m_ctx->seenNonDeposit = true;
         }
         task::Task<void> execute()
         {
@@ -591,7 +608,7 @@ public:
             // to zeros (NullBlockHashes is the documented eth_call/standalone fallback) — fail
             // loud instead of executing a deterministic-but-wrong state transition.
             if (m_ctx->blockHashes == nullptr && !call)
-                throw engine::OpConsensusError(
+                throw bcos::evm::OpConsensusError(
                     "OpstackExecutor: block execution requires wired RecentBlockHashes");
             if (transaction.isDepositTx())
             {
@@ -612,7 +629,7 @@ public:
             {
                 m_receipt = co_await executor.m_execute(*stateView, blockHeader, transaction,
                     ledgerConfig, m_props, m_diff, m_ctx->chainId, m_ctx->blockGasLeft,
-                    m_ctx->blockHashes,  // built once at block level
+                    m_ctx->blockHashes,  // H3
                     m_blockInfo.has_value() ? &*m_blockInfo : nullptr);
             }
         }
@@ -630,11 +647,14 @@ public:
                 receipt = co_await executor.m_finish(
                     storage, blockHeader, ledgerConfig, m_receipt, m_diff);
             }
-            // Sole owner of cumulative-gas backfill + blockGasLeft decrement (narrowGasUsed /
-            // hexCumulative live in OpCommon.h).
+            // H4: sole owner of cumulative-gas backfill + blockGasLeft decrement (narrowGasUsed /
+            // decimalCumulative live in OpCommon.h). Decimal + the block index — the RPC read
+            // path lexical_casts decimal only and serves transactionIndex from the receipt.
             auto gasUsed = op::narrowGasUsed(receipt->gasUsed());
             m_ctx->cumulativeGasUsed += gasUsed;
-            receipt->setCumulativeGasUsed(op::hexCumulative(m_ctx->cumulativeGasUsed));
+            receipt->setCumulativeGasUsed(
+                op::decimalCumulative(static_cast<uint64_t>(m_ctx->cumulativeGasUsed)));
+            receipt->setTransactionIndex(m_ctx->transactionIndex++);
             m_ctx->blockGasLeft -= gasUsed;
             co_return receipt;
         }
@@ -662,6 +682,7 @@ public:
         int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
         BlockContext const&& blockCtx) = delete;
 
+
     /// 6-arg form (generic scheduler + the TransactionExecutor concept probe): no BlockContext is
     /// available, so m_ctx is null and any prepare/execute/finish throws. The previous default
     /// argument `= BlockContext{}` bound a temporary to the const-ref parameter whose lifetime
@@ -677,7 +698,22 @@ public:
             *this, storage, blockHeader, transaction, contextID, ledgerConfig, call, nullptr};
     }
 
-    /// Execute a single OP normal transaction (injection-style).
+    /// 6-arg form matching the TransactionExecutor concept probe (TransactionExecutor.h:18).
+    /// OP is never driven through this form — SchedulerSerialImpl's pipeline uses
+    /// createExecuteContext + prepare/execute/finish — but the concept requires executeTransaction
+    /// to exist with this exact signature. Throws if actually called (same guard as the 6-arg
+    /// createExecuteContext: no BlockContext means no fee / blockGasLeft / chainId / blockHashes).
+    template <class Storage>
+    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage& /*storage*/,
+        protocol::BlockHeader const& /*blockHeader*/, protocol::Transaction const& /*transaction*/,
+        int /*contextID*/, ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
+    {
+        throw bcos::evm::OpConsensusError(
+            "OpstackExecutor: executeTransaction 6-arg form is unsupported for OP execution "
+            "(use createExecuteContext + prepare/execute/finish instead)");
+    }
+
+    /// Execute a single OP normal transaction (injection-style, mirroring processOpBlock).
     /// Orchestrator supplies fee, decrementing blockGasLeft, chainId, and real block hashes.
     /// All trailing params are required: these are coroutines (task::Task is lazy — the body runs
     /// after the call expression), so a defaulted `const& fee = {}` would bind a temporary that is
@@ -702,7 +738,7 @@ public:
             {
                 // Same error normalization as ExecuteContext::prepare: a malformed deposit
                 // envelope is a CONSENSUS rejection (INVALID), not an internal error.
-                throw engine::OpConsensusError(
+                throw bcos::evm::OpConsensusError(
                     std::string("OpScheduler: deposit envelope validation failed: ") + e.what());
             }
             try
@@ -718,22 +754,21 @@ public:
         }
 
         // eth_call (call=true) simulates without chain binding — op-geth eth_call is lenient about
-        // chainId; block execution (call=false) enforces tx.chainId == node chainId (the op-geth
-        // EIP155Signer/modernSigner ErrInvalidChainId check).
-        // One shared state view for prepare+execute: the validate-phase account/fee reads
-        // cache-hit in the transition stage.
+        // chainId; block execution (call=false) compares the SIGNED envelope to the node (op-geth
+        // EIP155Signer/modernSigner ErrInvalidChainId).
+        // Same Storage2State for prepare and execute.
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)), call);
         bcos::evm::opstack::OpTxProperties props;
         try
-        {  // Error normalization (same as ExecuteContext::prepare): validation failure -> INVALID
+        {  // Validation failure is a consensus reject.
             props = co_await m_prepare(stateView, blockHeader, transaction, ledgerConfig, fee,
-                blockGasLeft, call ? std::optional<uint64_t>{} : chainId, &blockInfo);
+                blockGasLeft, call ? std::optional<uint64_t>{} : chainId, &blockInfo, call);
         }
         catch (const OpTxValidationFailed& e)
         {
-            throw engine::OpConsensusError(
+            throw bcos::evm::OpConsensusError(
                 std::string("OpScheduler: normal tx validation failed: ") + e.what());
         }
         evmone::state::StateDiff diff;
@@ -783,8 +818,39 @@ public:
         co_return receipt;
     }
 
-    // Block-level finalize (finalizeOpBlock / seal) is deferred to the part that lands the
-    // OpScheduler wiring (part 5).
+    /// OP block-level finalize (no block reward, via finalizeOpBlock).
+    template <class Storage>
+    task::Task<void> finalizeBlock(Storage& storage, protocol::BlockHeader const& blockHeader,
+        ledger::LedgerConfig const& ledgerConfig)
+    {
+        namespace op = bcos::evm::opstack;
+
+        checkForkRevision(ledgerConfig);
+
+        bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
+        evmc_address coinbase{};
+        auto const& cb = blockHeader.coinbase();
+        if (cb.size() == sizeof(evmc_address))
+            std::copy_n(cb.begin(), sizeof(evmc_address), coinbase.bytes);
+
+        auto diff = op::finalizeOpBlock(stateView, m_forkConfig, coinbase);
+        // finalizeOpBlock sanitizes the diff; applyDiff poisons AND rethrows.
+        try
+        {
+            stateView.applyDiff(diff);
+        }
+        catch (const std::exception& e)
+        {
+            throw engine::OpStorageError(std::string("finalize write-back failed: ") + e.what());
+        }
+        catch (...)
+        {
+            throw engine::OpStorageError("finalize write-back failed: unknown exception");
+        }
+        if (stateView.poisoned())
+            throw engine::OpStorageError("finalize write-back poisoned: " + stateView.firstError());
+        co_return;
+    }
 
 private:
     // ---- Shared normal-tx pipeline: three stages (prepare/execute/finish). ----
@@ -798,7 +864,7 @@ private:
         {
             throw;
         }
-        catch (const engine::OpConsensusError&)
+        catch (const bcos::evm::OpConsensusError&)
         {
             throw;
         }
@@ -816,11 +882,11 @@ private:
         }
         catch (const std::exception& e)
         {
-            throw engine::OpConsensusError("OpScheduler: " + what + " failed: " + e.what());
+            throw bcos::evm::OpConsensusError("OpScheduler: " + what + " failed: " + e.what());
         }
         catch (...)
         {
-            throw engine::OpConsensusError("OpScheduler: " + what + " failed: unknown exception");
+            throw bcos::evm::OpConsensusError("OpScheduler: " + what + " failed: unknown exception");
         }
     }
 
@@ -838,6 +904,7 @@ private:
                                       "OP fork revision does not match ledger evmcRevision"));
     }
 
+
     // Stage 1 — validate: fork/evmc revision check, block info + evmone tx + signed envelope, then
     // injection-style opValidate (props.fee snapshotted for the transition stage).
     template <class Storage>
@@ -846,7 +913,7 @@ private:
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpFeeParams const& fee,
         int64_t blockGasLeft, std::optional<uint64_t> chainId,
-        evmone::state::BlockInfo const* prebuiltBlockInfo)
+        evmone::state::BlockInfo const* prebuiltBlockInfo, bool skipBalanceCheck = false)
     {
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
@@ -860,36 +927,48 @@ private:
                              buildBlockInfo(blockHeader,
                                  opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         auto evmTx = eth::toEvmoneTransaction(transaction);
-        // op-geth parity: reject txs whose chainId differs from the node's chainId.
-        // op-geth EIP155Signer.Sender / modernSigner.Sender check `tx.ChainId() == chainID`
-        // (ErrInvalidChainId) during block processing; FISCO previously accepted any
-        // self-consistent chainId (the signature binds the tx's own chainId, so sender recovery
-        // always succeeds). Only legacy UNPROTECTED txs (v=27/28, chain_id==0, Homestead) are
-        // exempt; every other tx (EIP-155 protected legacy + ALL typed txs) must match.
-        // chainId is nullopt only on the eth_call path (lenient, like op-geth eth_call). The
-        // block path always engages it — an engaged 0 (caller forgot the node chainId) rejects
-        // every real tx, so the omission is loud rather than silently disabling the check.
-        // Known residual: chain_id==0 also arises from a v=35/36 EIP-155-protected legacy tx
-        // (chain id 0), which the tars layer collapses onto the same "0" as v=27/28 — such a tx is
-        // exempted here where op-geth's Protected() rejects it. Nil security impact (the signature
-        // is re-encodable as v=27/28); full parity needs a protected flag in the tars Transaction.
+        // Block path: compare the SIGNED envelope to the node (op-geth ErrInvalidChainId).
+        // Never use tars data.chainID / evmTx.chain_id — the signature does not bind the mirror.
+        // eth_call passes nullopt (lenient, like op-geth eth_call).
         if (chainId.has_value())
         {
-            // Only legacy UNPROTECTED txs (v=27/28, chain_id==0, Homestead) are exempt.
-            bool const exempt =
-                evmTx.type == evmone::state::Transaction::Type::legacy && evmTx.chain_id == 0;
-            if (!exempt && evmTx.chain_id != *chainId)
-                throw engine::OpConsensusError(
-                    "OpScheduler: tx chain_id " + std::to_string(evmTx.chain_id) +
+            auto const envelopeChainId = transaction.web3ChainIdFromEnvelope();
+            if (envelopeChainId.has_value() && *envelopeChainId != *chainId)
+            {
+                throw bcos::evm::OpConsensusError(
+                    "op block: tx envelope chain_id " + std::to_string(*envelopeChainId) +
                     " does not match node chainId " + std::to_string(*chainId));
+            }
+            // Typed envelopes always carry chainId (RLP field 0). nullopt there is malformed,
+            // not a pre-EIP-155 exemption. Deposits (0x7e) are unsigned and yield nullopt —
+            // they never reach m_prepare.
+            if (!envelopeChainId.has_value() &&
+                bcos::rlp::protocol::isTypedWeb3Envelope(transaction.extraTransactionBytes()))
+            {
+                throw bcos::evm::OpConsensusError(
+                    "op block: typed tx envelope is missing a parseable chainId");
+            }
         }
         auto envRef = transaction.extraTransactionBytes();
         evmc::bytes_view env{envRef.data(), envRef.size()};
 
-        auto validated =
-            op::opValidate(stateView, blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft);
+        // skipBalanceCheck: eth_call/estimateGas simulations must not balance-validate —
+        // op-geth never balance-validates a call (its simulated sender routinely carries no
+        // funds). opValidate's flag was designed for exactly this but was never wired to the
+        // call path, so every eth_call failed validation and surfaced as an opaque "unknown
+        // exception" at the RPC boundary (see OpScheduler::call).
+        auto validated = op::opValidate(
+            stateView, blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft, skipBalanceCheck);
         if (auto const* err = std::get_if<std::error_code>(&validated))
+        {
+            BCOS_LOG(WARNING) << LOG_BADGE("OPSTACK") << LOG_DESC("opValidate failed")
+                              << LOG_KV("reason", err->message())
+                              << LOG_KV("sender",
+                                     bcos::toHex(std::span<uint8_t const>(evmTx.sender.bytes, 20)))
+                              << LOG_KV("nonce", evmTx.nonce)
+                              << LOG_KV("skipBalanceCheck", skipBalanceCheck);
             BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(err->message()));
+        }
         auto props = std::move(std::get<op::OpTxProperties>(validated));
         props.evm_tx = std::move(evmTx);  // carry the built tx to m_execute (build once, not twice)
         co_return props;
@@ -913,7 +992,7 @@ private:
                              *prebuiltBlockInfo :
                              buildBlockInfo(blockHeader,
                                  opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
-        auto const& evmTx = props.evm_tx;  // reuse the prepare-built tx
+        auto const& evmTx = props.evm_tx;
 
         NullBlockHashes nullBlockHashes;
         auto const& bh = (blockHashes != nullptr) ? *blockHashes : nullBlockHashes;
@@ -965,11 +1044,7 @@ private:
         co_return std::move(receipt);
     }
 
-    /// Build a DepositTx from a protocol::Transaction whose isDepositTx() is true, re-deriving the
-    /// deposit fields from the L1-derived 0x7E envelope (tx.extraTransactionBytes) — NEVER from the
-    /// unauthenticated tars mirrors: those are display-only, and a peer-controlled mirror can mint
-    /// arbitrary value (deposits are unsigned by design). The strict decode rejects
-    /// envelope/mirror mismatch.
+    /// Build DepositTx from the signed 0x7E envelope, never from tars mirrors.
 public:
     static bcos::evm::opstack::DepositTx depositFromTransaction(protocol::Transaction const& tx)
     {
@@ -978,8 +1053,7 @@ public:
 
 private:
     protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
-    // Reserved for the part-5 seal wiring (header-commitment hashing); unused since the
-    // write-back moved to Storage2State::applyDiff.
+    // Unused; write-back is Storage2State::applyDiff.
     [[maybe_unused]] crypto::Hash::Ptr m_hashImpl;
     // Value copy, not a reference: OpForkConfig is small (~32B, once per block) and a reference
     // member to a caller's config is the same lifetime footgun class that m_ctx had.
