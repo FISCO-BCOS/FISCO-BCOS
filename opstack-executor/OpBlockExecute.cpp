@@ -19,8 +19,8 @@
 #include <sstream>
 #include <stdexcept>
 
-// isL1AttributesTx lives in OpBlockExecute.h; narrowGasUsed / hexCumulative live in OpCommon.h
-// (both shared with the per-tx loop — one implementation, no copy drift).
+// isL1AttributesTx lives in OpBlockExecute.h; narrowGasUsed / decimalCumulative live in
+// OpCommon.h (both shared with the per-tx loop — one implementation, no copy drift).
 
 namespace bcos::evm::opstack
 {
@@ -264,6 +264,11 @@ evmc::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, ui
     const bool success = (r.status() == 0);
     const uint64_t cumGas = parseHexUint64(r.cumulativeGasUsed());
     const auto bloom = r.logsBloom();
+    if (bloom.size() != 256)
+    {
+        throw bcos::evm::OpConsensusError(
+            "op block: receipt logsBloom must be 256 bytes, got " + std::to_string(bloom.size()));
+    }
     const auto logs = r.logEntries();
 
     bcos::bytes payload;
@@ -314,7 +319,13 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     for (const auto& r : result.receipts)
     {
         const auto bloom = r->logsBloom();
-        for (size_t i = 0; i < 256 && i < bloom.size(); ++i)
+        if (bloom.size() != 256)
+        {
+            throw bcos::evm::OpConsensusError(
+                "op block: receipt logsBloom must be 256 bytes, got " +
+                std::to_string(bloom.size()));
+        }
+        for (size_t i = 0; i < 256; ++i)
             seal.logsBloom.bytes[i] |= bloom[i];
     }
 

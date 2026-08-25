@@ -28,8 +28,8 @@ DERIVE_BCOS_EXCEPTION(OpExecutionInternalError);
 
 // Engine-API error classes mapped by EngineErrorMapper. UnknownPayload / IncompatiblePayloadVersion
 // already live in Types.h — do not redeclare them here.
-// UnknownForkchoiceHeadBlock / InvalidForkchoiceState -38002, UnsupportedFork -38005,
-// UnsupportedOpPayloadAttributes -38003.
+// UnknownForkchoiceHeadBlock and InvalidForkchoiceState both map to -38002;
+// UnsupportedFork → -38005; UnsupportedOpPayloadAttributes → -38003 (InvalidPayloadAttributes).
 DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
 DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
 DERIVE_BCOS_EXCEPTION(UnsupportedFork);

@@ -41,7 +41,8 @@ inline int32_t mapEngineErrorCode(bcos::Exception const& e) noexcept
     {
         return EngineError::UnknownPayload;  // -38001
     }
-    if (dynamic_cast<bcos::engine::InvalidForkchoiceState const*>(&e))
+    if (dynamic_cast<bcos::engine::UnknownForkchoiceHeadBlock const*>(&e) ||
+        dynamic_cast<bcos::engine::InvalidForkchoiceState const*>(&e))
     {
         return EngineError::InvalidForkchoiceState;  // -38002
     }

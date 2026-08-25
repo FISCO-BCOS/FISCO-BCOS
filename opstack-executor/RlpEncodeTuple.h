@@ -44,7 +44,7 @@ inline void encodeRlp(bcos::bytes& to, const intx::uint256& x)
 /// bcos::toCompactBigEndian, which is declared inline in the header but defined in a .cpp —
 /// -Werror,-Wundefined-inline fires in any TU that instantiates it. uint64_t is byte-identical
 /// RLP for every scalar the consumers produce (evmone promotes uint8_t to uint64_t the same way).
-inline void encodeRlp(bcos::bytes& to, std::unsigned_integral auto v) noexcept
+inline void encodeRlp(bcos::bytes& to, std::unsigned_integral auto v)
 {
     bcos::codec::rlp::encode(to, static_cast<uint64_t>(v));
 }

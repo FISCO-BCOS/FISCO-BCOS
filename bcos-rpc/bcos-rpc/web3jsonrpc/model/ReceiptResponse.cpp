@@ -18,10 +18,9 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     result["status"] = toQuantity(status);
     auto txHashHex = tx.hash().hexPrefixed();
     result["transactionHash"] = txHashHex;
-    // OP receipts store cumulativeGasUsed as "0x" + lowercase hex (op-geth hexutil.Uint64,
-    // hexCumulative in OpBlockExecute.cpp). safeCastToU256's boost::lexical_cast parses in
-    // decimal and rejects the 0x prefix, yielding 0 — so parse via direct u256 construction,
-    // which auto-detects the base (0x → hex, otherwise decimal) for both OP and ethereum receipts.
+    // Receipts persist cumulativeGasUsed as a decimal string (decimalCumulative). Historical
+    // hex ("0x...") values still decode because u256(std::string) auto-detects the base.
+    // safeCastToU256's boost::lexical_cast is decimal-only and would yield 0 on a 0x prefix.
     bcos::u256 cumulativeGasUsed{};
     auto const& cgs = receipt.cumulativeGasUsed();
     if (!cgs.empty())

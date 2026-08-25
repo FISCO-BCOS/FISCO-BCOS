@@ -274,8 +274,8 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
             // wrap through the later size_t cast (UB).
             if (percentile < 0.0 || percentile > 100.0) [[unlikely]]
             {
-                BOOST_THROW_EXCEPTION(
-                    JsonRpcException(InvalidParams, "rewardPercentiles entries must be in [0, 100]"));
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InvalidParams, "rewardPercentiles entries must be in [0, 100]"));
             }
             percentiles.push_back(percentile);
         }
@@ -1693,14 +1693,6 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         {
             // Same fail-closed contract as the PBFT branch below: a node without the MPT
             // node reader must not answer with a fabricated all-zero proof.
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InternalError, "MPT not enabled on this node"));
-        }
-        else
-        {
-            // Same deployment fact as the PBFT branch: no local MPT reader (e.g. a
-            // tars-built NodeService) cannot produce a verifiable proof. Returning the
-            // default-constructed empty proof would look like "account is empty".
             BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
         }
     }

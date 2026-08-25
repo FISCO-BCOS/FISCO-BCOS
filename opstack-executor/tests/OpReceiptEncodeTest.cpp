@@ -35,6 +35,18 @@ bcos::protocol::TransactionReceipt::Ptr minimalDepositReceipt(int32_t status = 0
 
 BOOST_AUTO_TEST_SUITE(OpReceiptEncodeSuite)
 
+BOOST_AUTO_TEST_CASE(EmptyLogsBloomIsConsensusReject)
+{
+    auto r = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
+        std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{},
+        /*blockNumber=*/1);
+    r->setCumulativeGasUsed("0x5208");
+    // No setLogsBloom — factory default is empty; RLP would encode 0x80, not 256 zero bytes.
+    BOOST_CHECK_THROW((void)encodeReceiptForRoot(
+                          *r, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559)),
+        bcos::evm::OpConsensusError);
+}
+
 // Hand-derived golden fixture byte-by-byte (assertion-numerics discipline: derivation is
 // the anchor; final byte authority belongs to M-B3 differential). RLP list items:
 // status success -> 0x01 (1B); cumGas 21000=0x5208 -> 0x82 52 08 (3B); bloom 256 zero

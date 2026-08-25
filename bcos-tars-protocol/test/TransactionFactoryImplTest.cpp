@@ -16,6 +16,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <stdexcept>
 
 using namespace bcos;
@@ -375,6 +376,54 @@ BOOST_AUTO_TEST_CASE(depositHashIsKeccakOfEnvelope)
     auto const expect = bcos::crypto::keccak256Hash(bcos::ref(envelope));
     BOOST_CHECK(tx->hash() == expect);
     BOOST_CHECK_EQUAL(bcos::toHex(tx->hash().asBytes()), bcos::toHex(expect.asBytes()));
+}
+
+// Mirror 0x7e on a signed 0x02 *signing preimage* must NOT take the unsigned-deposit hash
+// path. A peer can rewrite web3TypedTxKind (tars field 12); calculateHash keys on
+// extraBytes[0]. Preimage (9 fields, no trailer) is the distinguisher: deposit path
+// would keccak the preimage, reassemble path keccak's the signed wire form.
+BOOST_AUTO_TEST_CASE(calculateHashIgnoresForgedDepositMirrorOnSignedEnvelope)
+{
+    auto suite = makeSuite();
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+    uint8_t const yParity = 1;
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));      // chainId
+    rlp::encode(items, static_cast<uint64_t>(0));      // nonce
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(21000));  // gasLimit
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));  // value
+    rlp::encode(items, bcos::bytes{});             // data
+    rlp::encode(items, bcos::bytes{});             // accessList
+    bcos::bytes preimage{0x02};
+    rlp::encodeHeader(preimage, rlp::Header{true, items.size()});
+    preimage.insert(preimage.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = yParity;
+
+    auto tx = std::make_shared<TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.web3TypedTxKind = static_cast<tars::Char>(0x7e);  // forged deposit mirror
+    inner.extraTransactionBytes.assign(preimage.begin(), preimage.end());
+    inner.signature.assign(sig.begin(), sig.end());
+
+    BOOST_CHECK(tx->isDepositTx());  // mirror still reports deposit
+    tx->calculateHash(*suite->hashImpl());
+    auto const depositPathHash = bcos::crypto::keccak256Hash(bcos::ref(preimage));
+    auto const reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(preimage), bcos::bytesConstRef(sig.data(), sig.size()));
+    auto const expect = bcos::crypto::keccak256Hash(bcos::ref(reassembled));
+    BOOST_CHECK(tx->hash() == expect);
+    BOOST_CHECK(expect != depositPathHash);
 }
 
 // web3ChainIdFromEnvelope must read the SIGNED envelope (extraTransactionBytes), never the
