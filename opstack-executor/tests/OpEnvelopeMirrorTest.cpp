@@ -210,6 +210,28 @@ BOOST_AUTO_TEST_CASE(MirrorKindDivergenceRejected)
     BOOST_CHECK(std::string(*mismatch).find("tx type mismatch") != std::string::npos);
 }
 
+// A typed envelope whose chainId field is not a parseable integer (here: an RLP list) must
+// be rejected by the gate — typed txs always carry chainId in field 0; nullopt there is
+// malformed, not a pre-EIP-155 exemption (m_prepare's typed-nullopt hard reject).
+BOOST_AUTO_TEST_CASE(TypedEnvelopeUnparseableChainIdRejected)
+{
+    FakeTx tx;
+    // 0x02 || rlp([<empty list as chainId>, nonce, ...]) — field 0 is a list, not an integer.
+    bcos::bytes payload;
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    bcos::bytes c0{0xc0};
+    append(c0);
+    append(c0);  // nonce placeholder (unused — the gate fails at chainId)
+    bcos::bytes out{static_cast<bcos::byte>(0x02)};
+    rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+    out.insert(out.end(), payload.begin(), payload.end());
+    tx.m_extraBytes = out;
+    auto const gate = envelopeChainIdMismatch(tx, 10);
+    BOOST_REQUIRE(gate.has_value());
+    BOOST_CHECK(std::string(*gate).find("missing a parseable chainId") != std::string::npos);
+}
+
 // Consistent mirror + envelope passes the cross-check.
 BOOST_AUTO_TEST_CASE(ConsistentMirrorPasses)
 {
