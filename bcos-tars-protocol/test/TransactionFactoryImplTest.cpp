@@ -493,6 +493,5 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireFormCrossChecksSignature)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-(fix(opstack): repair split seams + review findings on the 4a-leftover slice)
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

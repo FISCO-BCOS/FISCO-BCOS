@@ -87,7 +87,6 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
         BCOS_LOG(WARNING) << LOG_BADGE("OP_BLOCK_EXEC")
                           << "op block: first tx is a deposit but not the L1 attributes tx — "
                              "accepted";
-(fix(opstack): repair split seams + review findings on the 4a-leftover slice)
     validateJovianBlockShape(txs, cfg);
 
     OpBlockResult result;
