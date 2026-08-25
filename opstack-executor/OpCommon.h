@@ -32,6 +32,10 @@ namespace bcos::evm
 struct OpConsensusError : std::runtime_error
 {
     using std::runtime_error::runtime_error;
+    /// Offending tx (when the rejection is per-tx). Downstream pool eviction reads this
+    /// field, never the message text — a string-format contract would silently break the
+    /// moment anyone rewords the message.
+    std::optional<bcos::h256> txHash;
 };
 }  // namespace bcos::evm
 

@@ -46,17 +46,27 @@ add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 
 # Receipts-root leaf encoding (encodeReceiptForRoot / sealOpBlock). Needs evmone's
 # vendored RLP helpers and ledger's computeTrieRootVarKey; kept off the lightweight
-# binary for the same wedprcrypto reason.
+# binary for the same wedprcrypto reason. Both extras are optional: a build without
+# blst or evmone test-utils skips this target instead of failing configure.
 get_target_property(_evmone_inc_dirs evmone::evmone INTERFACE_INCLUDE_DIRECTORIES)
 list(GET _evmone_inc_dirs 0 _evmone_inc_dir)
 cmake_path(NORMAL_PATH _evmone_inc_dir)
 set(EVMONE_TEST_UTILS_DIR "${_evmone_inc_dir}/test/utils")
+if(NOT EXISTS "${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp")
+    message(STATUS "opstack-executor: evmone test-utils not found (${EVMONE_TEST_UTILS_DIR}) — "
+        "skipping opstack-executor-receipt-tests")
+    return()
+endif()
 
 find_library(BLST_LIBRARY NAMES blst PATHS
     "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib"
     NO_DEFAULT_PATH)
 if(NOT BLST_LIBRARY)
-    find_library(BLST_LIBRARY NAMES blst REQUIRED)
+    find_library(BLST_LIBRARY NAMES blst)
+endif()
+if(NOT BLST_LIBRARY)
+    message(STATUS "opstack-executor: blst not found — skipping opstack-executor-receipt-tests")
+    return()
 endif()
 
 add_executable(opstack-executor-receipt-tests

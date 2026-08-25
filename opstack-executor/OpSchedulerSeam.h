@@ -25,10 +25,6 @@
 namespace bcos::evm::engine
 {
 
-namespace detail
-{
-}  // namespace detail
-
 /// Re-exports the engine newPayload surface as dependent names on SchedulerType.
 template <class Storage>
 class OpSchedulerSeam
@@ -86,29 +82,6 @@ public:
     {
         throw std::logic_error("OpSchedulerSeam::executeBlock: not supported in OP mode");
         co_return {};  // unreachable; satisfies the coroutine's declared return type
-    }
-
-    /// Fixture L1-attributes deposit: Isthmus 176 zero bytes; Jovian selector + zeros to 178.
-    static bcos::bytes synthesizeL1AttributesEnvelope(bool jovianActive)
-    {
-        namespace op = bcos::evm::opstack;
-        evmc::bytes data(op::IsthmusL1AttributesLen, 0);
-        if (jovianActive)
-        {
-            data.resize(op::JovianL1AttributesLen, 0);
-            std::copy(op::JovianL1AttributesSelector.begin(), op::JovianL1AttributesSelector.end(),
-                data.begin());
-        }
-        op::DepositTx deposit{.source_hash = evmc::bytes32{},
-            .from = op::OP_DEPOSITOR,
-            .to = op::OP_L1_BLOCK,
-            .mint = std::nullopt,
-            .value = intx::uint256{0},
-            .gas_limit = 1'000'000,
-            .is_system_tx = false,
-            .data = std::move(data)};
-        using bcos::evm::opstack::encodeDepositEnvelope;
-        return encodeDepositEnvelope(deposit);
     }
 
 private:

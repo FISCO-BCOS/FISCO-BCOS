@@ -83,10 +83,20 @@ namespace bcos::rlp::protocol
         }
         walker = walker.getCroppedData(fieldHeader.payloadLength);
     }
+    // Legacy dual layout: the tail after the 6 fields is either the preimage's (chainId, 0, 0)
+    // — the txpool-stage signing preimage stored by takeToTarsTransaction — or the full signed
+    // envelope's (v, r, s) on the sealed-block path. RLP encodes the integer 0 as an empty
+    // payload while secp256k1 r/s never are, so emptiness of fields 8/9 discriminates the two
+    // shapes unambiguously. Only field 8 is checked here; field 9 validation is deferred to
+    // reassembleWeb3RawTransaction (which validates the full 0,0 tail).
     if (walker.empty())
     {
         return std::nullopt;
     }
+    // field7Item keeps the WHOLE field-7 item (header + payload): decodeHeader advances the
+    // walker to the payload start, and decoding that payload as a fresh item mis-reads any
+    // multi-byte chainId/v (e.g. chainId 8453 -> 33) or classifies it as a list header
+    // (chainId 200 -> nullopt -> bogus "unprotected" exemption). Decode from the item start.
     bcos::bytesRef field7Item = walker;
     auto [field7Error, field7Header] = bcos::codec::rlp::decodeHeader(walker);
     if (field7Error || field7Header.payloadLength > walker.size()) [[unlikely]]

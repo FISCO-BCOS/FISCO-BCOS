@@ -38,6 +38,9 @@ struct OpTxProperties
     // with the SAME formula that priced the sender's pre-charge (operator_cost_at_gas_limit).
     // Without this, a cfg mismatch across validate/transition (fork boundary) would credit the
     // vault by a different formula than the sender was charged → non-conservation / mint.
+    // NOTE: three adjacent bools (has_operator_fee / jovian_operator_formula /
+    // has_da_footprint) — callers can swap two and still compile cleanly. Keep the order
+    // stable; prefer a bitmask or struct if the surface grows.
     bool has_operator_fee = false;
     bool jovian_operator_formula = false;
     // Likewise for the receipt's DA-footprint fields: they must describe the fork the transaction

@@ -6,8 +6,9 @@
 // that its engine-facing seam surface works. Exercises only:
 //   1. construction over a real MultiLayerStorage ViewType;
 //   2. the static seam surface the engine reaches as dependent names
-//      (computeTxRoot / commitmentsOf / isJovianActive);
-//   3. executeOpBlock's empty-block rejection (processOpBlock throws -> classified escape).
+//      (computeTxRoot / commitmentsOf / isJovianActive).
+//      (The block-pre shape checks live in PreBlockOpStepsTest; the seam itself no longer
+//      executes blocks — see the note at the end of this file.)
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>

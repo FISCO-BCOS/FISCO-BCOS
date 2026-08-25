@@ -277,8 +277,9 @@ public:
         uint8_t const b = ref[0];
         if (b < 0x80)
         {
-            // Byte item: 0x00 is non-canonical (integer zero must be the empty item 0x80).
-            return b == 0 ? std::nullopt : std::optional<size_t>{0};
+            // Byte item: 0x00 is non-canonical (integer zero must be the empty item 0x80);
+            // a bare byte 0x01..0x7f is a single payload byte.
+            return b == 0 ? std::nullopt : std::optional<size_t>{1};
         }
         if (b <= 0xb7)
         {  // short string
@@ -588,12 +589,14 @@ public:
             }
             catch (const OpTxValidationFailed& e)
             {
-                // The offending tx's hash rides in the message (bcos::Error carries a string
-                // only across the delegate boundary): the engine's OP build loop parses it to
-                // evict the culprit from the pool instead of failing every subsequent build.
-                throw bcos::evm::OpConsensusError(
-                    std::string("OpScheduler: normal tx validation failed: ") + e.what() +
-                    " [tx=0x" + transaction.hash().hex() + "]");
+                // The offending tx's hash rides in a structured member (bcos::Error carries a
+                // string only across the delegate boundary): the engine's OP build loop reads
+                // e.txHash to evict the culprit from the pool instead of failing every
+                // subsequent build — never parse the message text.
+                bcos::evm::OpConsensusError err(
+                    std::string("OpScheduler: normal tx validation failed: ") + e.what());
+                err.txHash = transaction.hash();
+                throw err;
             }
             // Only after a successful prepare: a rejected normal tx must not flip the
             // deposit-after-non-deposit warn path for a later deposit in the same block.
@@ -827,10 +830,9 @@ public:
         checkForkRevision(ledgerConfig);
 
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
-        evmc_address coinbase{};
-        auto const& cb = blockHeader.coinbase();
-        if (cb.size() == sizeof(evmc_address))
-            std::copy_n(cb.begin(), sizeof(evmc_address), coinbase.bytes);
+        // coinbase is a fixed 20-byte bcos::Address — the shared converter handles the
+        // fixed-size copy; no silent zero-pad branch for a wrong-sized header field.
+        auto const coinbase = bcos::evm::engine::detail::toEvmcAddress(blockHeader.coinbase());
 
         auto diff = op::finalizeOpBlock(stateView, m_forkConfig, coinbase);
         // finalizeOpBlock sanitizes the diff; applyDiff poisons AND rethrows.
@@ -976,12 +978,15 @@ private:
             stateView, blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft, skipBalanceCheck);
         if (auto const* err = std::get_if<std::error_code>(&validated))
         {
-            BCOS_LOG(WARNING) << LOG_BADGE("OPSTACK") << LOG_DESC("opValidate failed")
-                              << LOG_KV("reason", err->message())
-                              << LOG_KV("sender",
-                                     bcos::toHex(std::span<uint8_t const>(evmTx.sender.bytes, 20)))
-                              << LOG_KV("nonce", evmTx.nonce)
-                              << LOG_KV("skipBalanceCheck", skipBalanceCheck);
+            // DEBUG not WARNING: this path is reachable from unauthenticated eth_call /
+            // estimateGas, where any caller can trigger validation failures at will — a
+            // WARNING here would be a log-amplification vector.
+            BCOS_LOG(DEBUG) << LOG_BADGE("OPSTACK") << LOG_DESC("opValidate failed")
+                            << LOG_KV("reason", err->message())
+                            << LOG_KV("sender",
+                                   bcos::toHex(std::span<uint8_t const>(evmTx.sender.bytes, 20)))
+                            << LOG_KV("nonce", evmTx.nonce)
+                            << LOG_KV("skipBalanceCheck", skipBalanceCheck);
             BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(err->message()));
         }
         auto props = std::move(std::get<op::OpTxProperties>(validated));
