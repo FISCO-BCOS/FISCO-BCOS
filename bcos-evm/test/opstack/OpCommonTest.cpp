@@ -8,6 +8,7 @@
 
 using namespace bcos::evm::opstack;
 using namespace bcos::evm::engine;
+using bcos::evm::OpConsensusError;
 using namespace bcos::evm::engine::detail;
 using intx::operator""_u256;
 
