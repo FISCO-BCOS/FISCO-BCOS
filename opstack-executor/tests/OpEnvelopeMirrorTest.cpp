@@ -201,6 +201,44 @@ bcos::bytes accessListEnvelope(uint64_t chainId, uint64_t nonce, uint64_t gasLim
     out.insert(out.end(), payload.begin(), payload.end());
     return out;
 }
+
+/// Build a 0x03 (blob) or 0x04 (7702) envelope. The first 8 fields are identical to 0x02
+/// (chainId, nonce, prio, maxFee, gasLimit, to, value, data), followed by accessList and a
+/// per-type tail (blobVersionedHashes / authorizationList). The gate reads only through data,
+/// so both shapes exercise the shared typed (envelopeKind != 0x01) index layout [1,4,5,6,7].
+bcos::bytes blobOrAuthEnvelope(uint8_t typeByte, uint64_t chainId, uint64_t nonce,
+    uint64_t gasLimit, std::string_view toHex, bcos::u256 value, bcos::bytes const& data)
+{
+    auto item = [](bcos::bytes const& payload) {
+        bcos::bytes out;
+        rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+        return out;
+    };
+    auto intItem = [](uint64_t v) {
+        bcos::bytes out;
+        rlp::encode(out, v);
+        return out;
+    };
+    bcos::bytes payload;
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(chainId));
+    append(intItem(nonce));
+    append(intItem(30000000000));  // maxPriorityFeePerGas
+    append(intItem(30000000000));  // maxFeePerGas
+    append(intItem(gasLimit));
+    auto toBytes = bcos::fromHex(toHex.substr(2));
+    append(item(toBytes));
+    append(intItem(static_cast<uint64_t>(value)));
+    append(item(data));
+    payload.push_back(0xc0);  // empty accessList
+    payload.push_back(0xc0);  // empty per-type tail
+
+    bcos::bytes out{static_cast<bcos::byte>(typeByte)};
+    rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+    out.insert(out.end(), payload.begin(), payload.end());
+    return out;
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpEnvelopeMirrorSuite)
@@ -402,6 +440,52 @@ BOOST_AUTO_TEST_CASE(ContractCreationEnvelopeToDivergenceRejected)
     auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
     BOOST_REQUIRE(mismatch.has_value());
     BOOST_CHECK(std::string(*mismatch).find("to mismatch") != std::string::npos);
+}
+
+// The 0x03 (blob) and 0x04 (7702) shapes share the typed (envelopeKind != 0x01) index layout
+// [1,4,5,6,7] with 0x02 — a consistent mirror must pass (wrong indices would make it fail),
+// and a forged mirror value must be rejected through the shared value index 6.
+BOOST_AUTO_TEST_CASE(BlobEnvelopeConsistentMirrorPasses)
+{
+    FakeTx tx;
+    tx.m_kind = 3;
+    tx.m_extraBytes = blobOrAuthEnvelope(
+        0x03, 10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {0xde});
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde};
+    BOOST_CHECK(!envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(SetCodeEnvelopeConsistentMirrorPasses)
+{
+    FakeTx tx;
+    tx.m_kind = 4;
+    tx.m_extraBytes = blobOrAuthEnvelope(
+        0x04, 10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {0xde});
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde};
+    BOOST_CHECK(!envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(BlobEnvelopeValueDivergenceRejected)
+{
+    FakeTx tx;
+    tx.m_kind = 3;
+    tx.m_extraBytes = blobOrAuthEnvelope(
+        0x03, 10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_value = bcos::u256{999};  // forged
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("value mismatch") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
