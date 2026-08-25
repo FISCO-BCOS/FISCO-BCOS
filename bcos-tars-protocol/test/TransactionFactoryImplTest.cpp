@@ -570,5 +570,76 @@ BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
         std::invalid_argument);
 }
 
+// Homestead v=27 with emptied r/s (0x80) must NOT be read as an EIP-155 preimage
+// (that would fabricate v=27*2+35+parity). Cross-check against a nonempty tars sig rejects.
+BOOST_AUTO_TEST_CASE(reassembleLegacyEmptyRSHomesteadVIsNotPreimage)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, static_cast<uint64_t>(27));  // homestead v
+    rlp::encode(items, static_cast<uint64_t>(0));   // empty r
+    rlp::encode(items, static_cast<uint64_t>(0));   // empty s
+    bcos::bytes env;
+    rlp::encodeHeader(env, rlp::Header{true, items.size()});
+    env.insert(env.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = 0;
+
+    BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
+                          bcos::ref(env), bcos::bytesConstRef(sig.data(), sig.size())),
+        std::invalid_argument);
+}
+
+// calculateHash must key the deposit path on extraBytes[0]==0x7e, never the forgeable
+// web3TypedTxKind mirror. A signed typed envelope with kind rewritten to 0x7e still
+// hashes as keccak(reassemble), not keccak(extraBytes).
+BOOST_AUTO_TEST_CASE(calculateHashIgnoresForgeableDepositKindMirror)
+{
+    auto suite = makeSuite();
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));      // chainId
+    rlp::encode(items, static_cast<uint64_t>(0));      // nonce
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(21000));  // gasLimit
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, bcos::bytes{});  // accessList
+    bcos::bytes env{0x02};
+    rlp::encodeHeader(env, rlp::Header{true, items.size()});
+    env.insert(env.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x11);
+    sig[64] = 1;
+
+    auto tx = std::make_shared<TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.web3TypedTxKind = static_cast<tars::Char>(0x7e);  // forged deposit mirror
+    inner.extraTransactionBytes.assign(env.begin(), env.end());
+    inner.signature.assign(sig.begin(), sig.end());
+
+    tx->calculateHash(*suite->hashImpl());
+    auto const raw = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(env), bcos::bytesConstRef(sig.data(), sig.size()));
+    auto const expect = bcos::crypto::keccak256Hash(bcos::ref(raw));
+    BOOST_CHECK(tx->hash() == expect);
+    BOOST_CHECK(tx->hash() != bcos::crypto::keccak256Hash(bcos::ref(env)));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

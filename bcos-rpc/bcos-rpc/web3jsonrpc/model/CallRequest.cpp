@@ -31,7 +31,8 @@ using namespace bcos::rpc;
 
 bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     bcos::protocol::TransactionFactory::Ptr const& factory,
-    bcos::scheduler::SchedulerInterface::Ptr const& scheduler) noexcept
+    bcos::scheduler::SchedulerInterface::Ptr const& scheduler,
+    std::optional<u256> blockBaseFee) noexcept
 {
     std::string nonce;
     if (to.empty() && scheduler) [[unlikely]]
@@ -71,10 +72,12 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     // Web3Transaction::takeToTarsTransaction, which stores the envelope in
     // extraTransactionBytes. Unsigned legacy shape: chainId stays nullopt (pre-EIP-155
     // exemption from the node chain-id check), dummy r/s mirror the scheduler-test fixture
-    // (the sender is forced below regardless). gasPrice defaults to 2 gwei when the request
-    // omits pricing so the fee-cap check against a nonzero block base fee (genesis: 1e9)
-    // does not reject pricing-less simulations — op-geth skips fee validation for eth_call
-    // entirely (known divergence).
+    // (the sender is forced below regardless).
+    //
+    // Pricing-less eth_call: op-geth skips the fee-cap check. We cannot skip it here, so
+    // default max_gas_price to max(head.baseFee*2, 2 gwei) when the caller passed a block
+    // base fee, or 1 ether/gas when the header is unknown — a fixed 2 gwei loses after a
+    // few Holocene full blocks.
     auto quantity = [](std::optional<std::string> const& s) -> std::optional<u256> {
         if (!s || s->empty())
         {
@@ -104,8 +107,13 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
         // op-geth caps a gas-less eth_call at its RPC gas cap; default to the 30M block-gas
         // convention so a pricing-less simulation passes the intrinsic-gas check.
         w3.gasLimit = gas.value_or(30'000'000);
+        u256 defaultFee = u256(1'000'000'000'000'000'000);  // 1 ether/gas if header unknown
+        if (blockBaseFee)
+        {
+            defaultFee = std::max(*blockBaseFee * 2, u256(2'000'000'000));
+        }
         w3.maxPriorityFeePerGas =
-            quantity(gasPrice).value_or(quantity(maxFeePerGas).value_or(u256(2'000'000'000)));
+            quantity(gasPrice).value_or(quantity(maxFeePerGas).value_or(defaultFee));
         w3.signatureV = 0;
         w3.signatureR = bcos::bytes(32, 0x01);
         w3.signatureS = bcos::bytes(32, 0x02);

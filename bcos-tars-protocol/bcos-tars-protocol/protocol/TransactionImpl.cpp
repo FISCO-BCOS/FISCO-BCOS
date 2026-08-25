@@ -302,20 +302,13 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             {
                 throwDecode("legacy trailing garbage");
             }
-            if (item8.empty() && item9.empty())
+            if (item8.empty() && item9.empty() && item7 != 27 && item7 != 28)
             {
                 // preimage: item7 is the signed chainId (items 8,9 are the 0,0
-                // placeholders). It is what the sender actually signed, so it is
-                // authoritative even though the whole tx arrived from an untrusted peer.
-                // A WIRE-shaped envelope whose r/s were emptied (r=s=0, an invalid EIP-2
-                // signature, RLP-encoded as 0x80) is byte-indistinguishable from a preimage
-                // here — the two differ only in field 7's value (chainId vs v), which this
-                // function cannot bind to the node without ecrecover. That binding is
-                // enforced at admission: TxValidator::validateChainId compares the envelope
-                // chainId (web3ChainIdFromEnvelope, same walker) against the node chainId,
-                // so a relabeled field 7 (v of another chain) is rejected before the pool
-                // accepts the tx. A field 7 equal to this chain's chainId IS a genuine
-                // preimage for this chain, and reassembles to the canonical v.
+                // placeholders). Homestead v (27/28) with emptied r/s is a crafted wire,
+                // not a preimage — treating it as chainId would fabricate
+                // v = 27*2+35+parity. High chainIds (>=35) remain preimages; admission
+                // (TxValidator::validateChainId / EthEndpoint) binds them to the node.
                 v = item7 * 2 + 35 + yParity;
             }
             else

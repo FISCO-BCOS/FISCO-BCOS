@@ -60,7 +60,8 @@ struct CallRequest
     }
     bcos::protocol::Transaction::Ptr takeToTransaction(
         bcos::protocol::TransactionFactory::Ptr const&,
-        bcos::scheduler::SchedulerInterface::Ptr const&) noexcept;
+        bcos::scheduler::SchedulerInterface::Ptr const&,
+        std::optional<u256> blockBaseFee = std::nullopt) noexcept;
 };
 [[maybe_unused]] std::tuple<bool, CallRequest> decodeCallRequest(Json::Value const& _root);
 }  // namespace bcos::rpc

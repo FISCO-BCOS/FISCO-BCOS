@@ -19,6 +19,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-framework/engine/AnyEngineService.h>
+#include <bcos-framework/engine/Types.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineErrorMapper.h>
@@ -71,6 +72,14 @@ public:
         const engine::ForkchoiceState& forkchoiceState, const engine::PayloadAttributes*,
         std::uint32_t version)
     {
+        // Mirror EngineServiceImpl::isForkchoiceVersionSupported (V1–V3). A test that
+        // routes FCU V4 into the engine must not stay green while production rejects it.
+        if (version < static_cast<std::uint32_t>(engine::ApiVersion::V1) ||
+            version > static_cast<std::uint32_t>(engine::ApiVersion::V3))
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{}
+                                  << bcos::errinfo_comment{"Unsupported Engine API version"});
+        }
         m_state->capturedForkchoiceState = forkchoiceState;
         m_state->capturedForkchoiceVersion = static_cast<int>(version);
         co_return m_state->forkchoiceUpdatedResult;
@@ -211,9 +220,8 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 3);
 }
 
-// V4 is the OP-stack Isthmus+ forkchoice version and IS implemented (the forkchoice
-// window was raised to V4 for the OP engine path) — the request must reach the engine
-// service and answer VALID with the version captured.
+// FCU V4 is not implemented: Karst builds on V3, and getPayload V4/V5 only accept
+// payloadVersion==3. The endpoint must answer -38005 without reaching the engine.
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
 {
     Json::Value params(Json::arrayValue);
@@ -226,11 +234,9 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
     Json::Value response;
     CALL_ENGINE(forkchoiceUpdatedV4, params, response);
 
-    BOOST_CHECK(response["result"].isMember("payloadStatus"));
-    BOOST_CHECK_EQUAL(response["result"]["payloadStatus"]["status"].asString(), "VALID");
-
-    BOOST_REQUIRE(mockService.m_state->capturedForkchoiceVersion.has_value());
-    BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 4);
+    BOOST_REQUIRE(response.isMember("error"));
+    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
+    BOOST_CHECK(!mockService.m_state->capturedForkchoiceVersion.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(getPayloadV1)

@@ -291,6 +291,11 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
             // geth's feeHistory does (floor index, clamped).
             auto receiptsBlock = co_await ledger::getBlockData(
                 *ledger, static_cast<protocol::BlockNumber>(n), bcos::ledger::RECEIPTS);
+            if (!receiptsBlock)
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                    "feeHistory: receipts unavailable at height " + std::to_string(n)));
+            }
             std::vector<bcos::u256> priorities;
             for (auto const& receipt : receiptsBlock->receipts())
             {
@@ -1113,8 +1118,19 @@ task::Task<void> EthEndpoint::call(
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
-    auto tx = call.takeToTransaction(
-        m_nodeService->blockFactory()->transactionFactory(), isEstimate ? scheduler : nullptr);
+    std::optional<u256> blockBaseFee;
+    if (auto const ledger = m_nodeService->ledger())
+    {
+        if (auto block = co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
+        {
+            if (auto const& header = block->blockHeader(); header && header->baseFee())
+            {
+                blockBaseFee = *header->baseFee();
+            }
+        }
+    }
+    auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
+        isEstimate ? scheduler : nullptr, blockBaseFee);
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;

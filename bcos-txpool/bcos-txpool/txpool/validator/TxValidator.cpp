@@ -288,32 +288,41 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
     {
         co_return TransactionStatus::None;
     }
+    auto const extraBytes = _tx.extraTransactionBytes();
+    auto const envelopeChainId = _tx.web3ChainIdFromEnvelope();
+    // EIP-2718 typed marker, excluding deposit (0x7e): deposits have no chainId field
+    // (field 0 is sourceHash). Same predicate as isTypedWeb3Envelope minus 0x7e.
+    bool const typed =
+        !extraBytes.empty() && extraBytes[0] > 0 && extraBytes[0] < 0x80 && extraBytes[0] != 0x7e;
+    // Same fail-closed rules as EthEndpoint::sendRawTransaction: missing/unparsable
+    // web3_chain_id, or a typed envelope whose chainId field is unreadable, must not
+    // fall through to None. Only pre-EIP-155 unprotected legacy (no envelope chainId)
+    // is exempt.
     if (auto config = co_await ledger::getSystemConfig(*_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
     {
         auto [chainId, _] = config.value();
-        // chainId must come from the SIGNED envelope, never the forgeable tars mirror
-        // (data.chainID, kyonRay R4 #1): a peer can rewrite the mirror to relabel a tx
-        // signed for any chain as this chain's tx, consuming sender nonce/state here.
-        // nullopt = pre-EIP-155 unprotected legacy (no chainId tail) — exempt, matching
-        // op-geth HomesteadSigner. Typed txs carry their chainId in field 0 (no "0"
-        // exemption: a typed tx must be signed for exactly this chain).
-        if (auto envelopeChainId = _tx.web3ChainIdFromEnvelope())
+        uint64_t nodeChainId = 0;
+        try
         {
-            uint64_t nodeChainId = 0;
-            try
-            {
-                nodeChainId = boost::lexical_cast<uint64_t>(chainId);
-            }
-            catch (boost::bad_lexical_cast const&)
-            {
-                // misconfigured system config: fail closed rather than admit arbitrary
-                co_return TransactionStatus::InvalidChainId;
-            }
-            if (*envelopeChainId != nodeChainId)
-            {
-                co_return TransactionStatus::InvalidChainId;
-            }
+            nodeChainId = boost::lexical_cast<uint64_t>(chainId);
         }
+        catch (boost::bad_lexical_cast const&)
+        {
+            co_return TransactionStatus::InvalidChainId;
+        }
+        if (envelopeChainId.has_value() && *envelopeChainId != nodeChainId)
+        {
+            co_return TransactionStatus::InvalidChainId;
+        }
+        if (!envelopeChainId.has_value() && typed)
+        {
+            co_return TransactionStatus::InvalidChainId;
+        }
+        co_return TransactionStatus::None;
+    }
+    if (envelopeChainId.has_value() || typed)
+    {
+        co_return TransactionStatus::InvalidChainId;
     }
     co_return TransactionStatus::None;
 }

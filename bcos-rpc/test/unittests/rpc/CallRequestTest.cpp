@@ -235,4 +235,19 @@ BOOST_AUTO_TEST_CASE(deployEstimateGasLeavesCorruptNonceUnset)
     }
 }
 
+BOOST_AUTO_TEST_CASE(pricingLessCallUsesBaseFeeTimesTwo)
+{
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    CallRequest req;
+    req.to = "0x1234567890abcdef1234567890abcdef12345678";
+    auto const highBase = bcos::u256(8'000'000'000);  // 8 gwei > 2 gwei floor
+    auto tx = req.takeToTransaction(txFactory, nullptr, highBase);
+    BOOST_REQUIRE(tx);
+    auto const got = tx->maxPriorityFeePerGas().value_or(tx->gasPrice().value_or(bcos::u256(0)));
+    BOOST_CHECK_EQUAL(got, highBase * 2);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

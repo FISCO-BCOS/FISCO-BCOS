@@ -96,11 +96,12 @@ void EngineEndpoint::buildUnimplementedVersionError(
     std::string_view method, Json::Value& response) const
 {
     // -38005 Unsupported fork for a method version this node does not implement at all
-    // (currently only forkchoiceUpdatedV4: the service layer's forkchoice window tops out
-    // at V3, see isForkchoiceVersionSupported). This is NOT a declaration that older
-    // versions are incompatible: every version that IS implemented stays served, so a
-    // pre-Karst CL — the v1 Engine API harness kept alive by unsafe_allow_v1_executor, or
-    // a stock Lodestar driving V1-V3 — keeps working.
+    // (currently only forkchoiceUpdatedV4: isForkchoiceVersionSupported tops out at V3,
+    // and getPayload V4/V5 only accept payloadVersion==3 builds — raising the FCU window
+    // alone would tag builds as V4 and break the getPayload round-trip). This is NOT a
+    // declaration that older versions are incompatible: every version that IS implemented
+    // stays served, so a pre-Karst CL — the v1 Engine API harness kept alive by
+    // unsafe_allow_v1_executor, or a stock Lodestar driving V1-V3 — keeps working.
     //
     // Built inline instead of through buildJsonError(request, ...) because a handler only
     // ever receives the params array, never the request envelope: the JSON-RPC id is
@@ -133,10 +134,13 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
 }
 
 task::Task<void> EngineEndpoint::forkchoiceUpdatedV4(
-    const Json::Value& request, Json::Value& response)
+    const Json::Value& /*request*/, Json::Value& response)
 {
-    // OP is Isthmus+/V4-only; executionRequests stays empty.
-    co_await handleForkchoiceUpdated(engine::ApiVersion::V4, request, response);
+    // Not implemented: Karst payload building is FCU V3 / getPayload V5 / newPayload V4.
+    // Do not route V4 into updateForkchoice — the engine window is still V3 and a V4-tagged
+    // build is incompatible with isGetPayloadVersionCompatible (payloadVersion == 3).
+    buildUnimplementedVersionError("engine_forkchoiceUpdatedV4", response);
+    co_return;
 }
 
 task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
