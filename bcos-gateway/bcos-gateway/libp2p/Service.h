@@ -64,8 +64,8 @@ public:
      * @brief: (coroutine) broadcast a message to all connected sessions. The message and the
      *         payload views must be kept alive by the caller for the duration of the co_await.
      */
-    virtual task::Task<void> broadcastMessageToAll(P2PMessage& message,
-        ::ranges::any_view<bytesConstRef> payloads, Options options = Options());
+    task::Task<void> broadcastMessageToAll(P2PMessage& message,
+        ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
     virtual std::map<NodeIPEndpoint, P2pID> staticNodes();
     virtual void setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes);

@@ -703,7 +703,7 @@ void Service::asyncBroadcastMessageToP2PNodes(
 {
     auto self = shared_from_this();
     // value message in frame; payload owned by the frame and sent as a view (zero-copy)
-    task::wait([self, _type, moduleID, _payload = bcos::bytes(_payload.begin(), _payload.end()),
+    task::wait([self, _type, _payload = bcos::bytes(_payload.begin(), _payload.end()),
                    _options]() mutable -> task::Task<void> {
         P2PMessageV2 message;
         message.setPacketType(_type);
