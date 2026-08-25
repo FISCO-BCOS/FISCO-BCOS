@@ -162,14 +162,17 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         // reconstructed from the stored parity byte — the storage layer keeps only the parity.
         if (web3Tx.type == TransactionType::Legacy)
         {
+            // signatureData() is unchecked on this read path — a corrupt/peer-crafted tars
+            // signature shorter than 65 bytes would read OOB at [64]. Fail to "0x0" instead.
+            auto const sig = tx.signatureData();
+            uint64_t const parity = (sig.size() >= 65) ? static_cast<uint64_t>(sig[64]) : 0;
             if (web3Tx.chainId.has_value() && web3Tx.chainId.value() != 0)
             {
-                result["v"] =
-                    toQuantity(u256(web3Tx.chainId.value()) * 2 + 35 + tx.signatureData()[64]);
+                result["v"] = toQuantity(u256(web3Tx.chainId.value()) * 2 + 35 + parity);
             }
             else
             {
-                result["v"] = toQuantity(27 + tx.signatureData()[64]);
+                result["v"] = toQuantity(27 + parity);
             }
         }
         if (web3Tx.type == TransactionType::EIP4844)

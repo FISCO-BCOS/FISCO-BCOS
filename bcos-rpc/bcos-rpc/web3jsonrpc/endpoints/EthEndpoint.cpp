@@ -262,6 +262,13 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(InvalidParams, "rewardPercentiles must be an array"));
         }
+        // Bound the array: each entry materializes one JSON value per block (up to 1024),
+        // so an unbounded list is a response-size/CPU amplification vector.
+        if (request[2U].size() > 100)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "rewardPercentiles must have at most 100 entries"));
+        }
         for (auto const& p : request[2U])
         {
             if (!p.isNumeric())
@@ -303,6 +310,11 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
     {
         auto block = co_await ledger::getBlockData(
             *ledger, static_cast<protocol::BlockNumber>(n), bcos::ledger::HEADER);
+        if (!block || !block->blockHeader())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                "feeHistory: block header unavailable at height " + std::to_string(n)));
+        }
         auto const& header = block->blockHeader();
         auto const baseFee = header->baseFee().value_or(bcos::u256(0));
         auto const gasLimit = static_cast<uint64_t>(header->gasLimit());
@@ -340,17 +352,25 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
                 {
                     index = priorities.size() - 1;
                 }
-                rewards.append(toQuantity(priorities.empty() ? bcos::u256(0) : priorities[index]));
+                // geth emits null for a percentile of an empty reward set — an all-zero
+                // entry would be misread as a real floor by fee-suggestion tooling.
+                rewards.append(priorities.empty() ? Json::Value(Json::nullValue) :
+                                                    Json::Value(toQuantity(priorities[index])));
             }
             result["reward"].append(std::move(rewards));
         }
         newestHeader = header;
     }
-    // Trailing entry: the predicted base fee of newest+1 from newest's own header.
+    // Trailing entry: the predicted base fee of newest+1 from newest's own header. Only OP
+    // headers carry baseFee; on PBFT chains every entry is 0x0, so the prediction must stay
+    // 0x0 there too (calcOpBaseFee would otherwise return 1 for a zero parent base fee).
     if (newestHeader)
     {
-        result["baseFeePerGas"].append(toQuantity(
-            bcos::engine::calcOpBaseFee(*newestHeader, jovianFromExtraData(*newestHeader))));
+        auto const predicted =
+            newestHeader->baseFee().has_value() ?
+                bcos::engine::calcOpBaseFee(*newestHeader, jovianFromExtraData(*newestHeader)) :
+                bcos::u256(0);
+        result["baseFeePerGas"].append(toQuantity(predicted));
     }
     buildJsonContent(result, response);
     co_return;
@@ -1261,7 +1281,11 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         auto upperBound = effectiveFirstRunLimit > lowerBound ?
                               effectiveFirstRunLimit :
                               lowerBound + 1;  // the first run succeeded at its own limit
-        while (upperBound - lowerBound > 1)
+        // Each iteration is a full EVM re-execution: cap the search so an adversarial
+        // estimateGas flood cannot multiply node CPU unboundedly (log2(30M) ~= 25; cap at 16
+        // keeps the estimate within one gas step of the exact value for realistic ranges).
+        size_t iterations = 0;
+        while (upperBound - lowerBound > 1 && iterations < 16)
         {
             auto const mid = lowerBound + (upperBound - lowerBound) / 2;
             if (co_await simulateAtGasLimit(request, mid))
@@ -1272,6 +1296,7 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
             {
                 lowerBound = mid;
             }
+            ++iterations;
         }
         estimate = upperBound;
     }
@@ -1625,6 +1650,13 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "storageKeys must be an array"));
     }
+    // Bound the array: each key triggers an O(depth) MPT walk — an unbounded list is a
+    // storage-I/O amplification vector (geth-style ~1000 cap).
+    if (keysJson.size() > 1024)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "storageKeys must have at most 1024 entries"));
+    }
     std::vector<h256> slots;
     slots.reserve(keysJson.size());
     for (auto const& key : keysJson)
@@ -1665,10 +1697,10 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         // MPT node rows. With ①a (feature_l2_ethereum_compat: OpScheduler's incremental
         // buildAndCollect at commit + the l2EthereumCompat genesis import) runtime blocks DO
         // persist their trie nodes, so try the node-backed proof FIRST — it serves ANY height
-        // (historical tags included, which the one-version flat plane below cannot) and is
-        // O(path). Roots without rows (a chain segment produced before ①a landed) report
-        // BlockNotCommitted and fall through to the flat rebuild, preserving the latest-only
-        // contract for those segments.
+        // (historical tags included) and is O(path). Roots without rows (a chain segment
+        // produced before ①a landed) cannot be served in this slice: the flat-state fallback
+        // lands with the eth_getProof PR, so we fail closed with -32004 (never a fabricated
+        // proof).
         if (auto const mptReader = m_nodeService->mptNodeReader())
         {
             auto const fullTrie = co_await ledger::getFeature(
