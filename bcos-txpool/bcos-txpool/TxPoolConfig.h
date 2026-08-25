@@ -20,6 +20,7 @@
  * @date 2021-05-08
  */
 #pragma once
+#include "bcos-tx-validator/TxValidator.h"
 #include "txpool/interfaces/NonceCheckerInterface.h"
 #include "txpool/interfaces/TxValidatorInterface.h"
 #include "txpool/utilities/Common.h"
@@ -27,6 +28,7 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionMetaData.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
+
 namespace bcos::txpool
 {
 class TxPoolConfig
@@ -47,6 +49,28 @@ public:
     NonceCheckerInterface::Ptr txPoolNonceChecker();
 
     TxValidatorInterface::Ptr txValidator();
+
+    /// The consolidated admission layer. Set once by TxPoolFactory, together with the
+    /// PoolNonceQuery that binds the two BCOS nonce checkers this pool owns privately -- the one
+    /// seam between the pool and bcos-tx-validator, so no public pool interface changes.
+    std::shared_ptr<txvalidator::TxValidator> admissionValidator() const
+    {
+        return m_admissionValidator;
+    }
+    txvalidator::PoolNonceQuery const& poolNonceQuery() const { return m_poolNonceQuery; }
+    void setAdmission(std::shared_ptr<txvalidator::TxValidator> validator,
+        txvalidator::PoolNonceQuery poolNonceQuery)
+    {
+        m_admissionValidator = std::move(validator);
+        m_poolNonceQuery = std::move(poolNonceQuery);
+    }
+
+    /// SignaturePolicy for this chain, from experimental.check_transaction_signature.
+    txvalidator::SignaturePolicy signaturePolicy() const
+    {
+        return m_checkTransactionSignature ? txvalidator::SignaturePolicy::Required :
+                                             txvalidator::SignaturePolicy::Disabled;
+    }
     bcos::protocol::TransactionSubmitResultFactory::Ptr txResultFactory();
 
     bcos::protocol::BlockFactory::Ptr blockFactory();
@@ -60,6 +84,8 @@ public:
 
 private:
     TxValidatorInterface::Ptr m_txValidator;
+    std::shared_ptr<txvalidator::TxValidator> m_admissionValidator;
+    txvalidator::PoolNonceQuery m_poolNonceQuery;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;

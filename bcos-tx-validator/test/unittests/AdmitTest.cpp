@@ -132,7 +132,7 @@ struct AdmitHarness
         ledgerConfig->setEVMCRevision(EVMC_PRAGUE);
         // Comfortably funded, nonce 7 (matches the fixture), plain EOA.
         account.balance = u256("0xffffffffffffffffffffffffffff");
-        account.nonce = 7;
+        account.nonce = u256(7);
     }
 
     TxValidator make()
@@ -148,7 +148,7 @@ struct AdmitHarness
             },
             [this](std::string_view) -> task::Task<std::optional<u256>> {
                 ++accountNonceReads;
-                co_return accountExists ? std::make_optional(account.nonce) : std::nullopt;
+                co_return accountExists ? account.nonce : std::optional<u256>{};
             },
             [](Transaction const&) { return false; }, "group0", "chain0"};
     }
@@ -236,7 +236,7 @@ BOOST_AUTO_TEST_CASE(accountNonceAtMaxIsRejected)
 BOOST_AUTO_TEST_CASE(alreadyUsedNonceIsRejected)
 {
     AdmitHarness harness;
-    harness.account.nonce = 12;  // fixture nonce is 7
+    harness.account.nonce = u256(12);  // fixture nonce is 7
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::NonceCheckFail);
 }
@@ -244,7 +244,7 @@ BOOST_AUTO_TEST_CASE(alreadyUsedNonceIsRejected)
 BOOST_AUTO_TEST_CASE(nonceBeyondTheQueueWindowIsRejected)
 {
     AdmitHarness harness;
-    harness.account.nonce = 0;
+    harness.account.nonce = u256(0);
     // Just inside the window: queued, not rejected. Admission keeps future-nonce transactions,
     // unlike execution, which requires an exact match.
     auto inside = admitTx({.nonce = DEFAULT_WEB3_NONCE_CHECK_LIMIT});
@@ -380,7 +380,7 @@ BOOST_AUTO_TEST_CASE(eestReplaySkipsBalanceAndNonceWindowOnly)
     AdmitHarness harness;
     harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "1");
     harness.account.balance = 0;
-    harness.account.nonce = 999999;
+    harness.account.nonce = u256(999999);
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx, AdmissionContext::EESTReplay) == TransactionStatus::None);
 
@@ -399,7 +399,7 @@ BOOST_AUTO_TEST_CASE(disabledSignaturePolicySkipsSenderDependentChecks)
     AdmitHarness harness;
     harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "1");
     harness.account.balance = 0;
-    harness.account.nonce = 999999;
+    harness.account.nonce = u256(999999);
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx, AdmissionContext::PoolAdmission, SignaturePolicy::Disabled) ==
                 TransactionStatus::None);

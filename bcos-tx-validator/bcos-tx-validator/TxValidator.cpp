@@ -29,7 +29,9 @@
 #include "bcos-tx-validator/Normalize.h"
 #include "bcos-utilities/BoostLog.h"
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/throw_exception.hpp>
 #include <cctype>
+#include <stdexcept>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -150,19 +152,35 @@ task::Task<TransactionStatus> TxValidator::admit(
         if (!ledgerConfig)
         {
             ledgerConfig = co_await m_ledgerConfigProvider();
+            if (!ledgerConfig)
+            {
+                // Infrastructure, not a defect in the transaction: without the chain's config
+                // the revision and gas cap are unknown. Reported as an exception rather than a
+                // status so a wiring or storage problem cannot masquerade as a rejected
+                // transaction (and so it is never silently dereferenced).
+                BOOST_THROW_EXCEPTION(
+                    std::runtime_error("admission: ledger config provider returned null"));
+            }
         }
         co_return ledgerConfig;
     };
     std::optional<evmc_revision> revision;
-    const auto rev = [&]() -> task::Task<evmc_revision> {
-        if (!revision)
+    bool revisionResolved = false;
+    // std::nullopt means the chain declares no EVM revision. The four checks below that depend
+    // on one then stand down rather than guessing: guessing low (FRONTIER) would reject every
+    // typed transaction on such a chain, and admission must never be STRICTER than execution.
+    // A chain in that state cannot execute Web3 transactions at all -- EthereumExecutor throws
+    // EvmcRevisionNotConfigured -- so letting them into the pool costs nothing and keeps
+    // admission advisory, with execution authoritative.
+    const auto rev = [&]() -> task::Task<std::optional<evmc_revision>> {
+        if (!revisionResolved)
         {
             auto cfg = co_await config();
-            // Admission judges a transaction against the block it would be executed in, which is
-            // the next one, not the last one.
-            revision = cfg->evmcRevisionForBlock(cfg->blockNumber() + 1).value_or(EVMC_FRONTIER);
+            // Judged against the block it would execute in, which is the next one.
+            revision = cfg->evmcRevisionForBlock(cfg->blockNumber() + 1);
+            revisionResolved = true;
         }
-        co_return *revision;
+        co_return revision;
     };
     std::optional<AccountState> account;
     bool accountLoaded = false;
@@ -233,7 +251,8 @@ task::Task<TransactionStatus> TxValidator::admit(
         }
         case Check::TypeByRevision:
         {
-            if (co_await rev() < requiredRevision(kind))
+            if (auto revision = co_await rev();
+                revision.has_value() && *revision < requiredRevision(kind))
             {
                 co_return TransactionStatus::TxTypeNotSupported;
             }
@@ -305,19 +324,6 @@ task::Task<TransactionStatus> TxValidator::admit(
         }
         case Check::ChainId:
         {
-            auto chainIdConfig =
-                co_await ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
-            if (!chainIdConfig)
-            {
-                // Fail closed. Silently skipping the check when the chain is not configured
-                // would accept transactions signed for any chain.
-                co_return TransactionStatus::InvalidChainId;
-            }
-            auto const expected = ledger::parseWeb3ChainId(std::get<0>(chainIdConfig.value()));
-            if (!expected)
-            {
-                co_return TransactionStatus::InvalidChainId;
-            }
             // From the SIGNED envelope. The mirror cannot distinguish "no chainId"
             // (pre-EIP-155) from "chainId 0" -- both serialise to "0" -- and a typed
             // transaction may legitimately carry an explicit 0, which must still be compared.
@@ -325,15 +331,28 @@ task::Task<TransactionStatus> TxValidator::admit(
                 rlp::protocol::web3ChainIdFromEnvelope(tx.extraTransactionBytes());
             if (!envelopeChainId)
             {
-                // Absent is legitimate only for unprotected pre-EIP-155 legacy; a typed
-                // envelope always carries one, so a missing value there is malformed.
+                // A typed envelope always carries a chainId, so a missing one there is
+                // malformed. An unprotected pre-EIP-155 legacy transaction makes no chainId
+                // claim at all -- there is nothing to compare it against, so this check has
+                // nothing to say about it and the chain's configuration is irrelevant.
                 if (rlp::protocol::isTypedWeb3Envelope(tx.extraTransactionBytes()))
                 {
                     co_return TransactionStatus::InvalidChainId;
                 }
                 break;
             }
-            if (u256(*envelopeChainId) != *expected)
+            // The transaction claims a chain. From here the configuration is required: without
+            // it the claim cannot be checked, and silently accepting an unverifiable claim
+            // admits transactions signed for any chain -- which is what EthEndpoint does today
+            // when web3_chain_id is unset.
+            auto chainIdConfig =
+                co_await ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
+            if (!chainIdConfig)
+            {
+                co_return TransactionStatus::InvalidChainId;
+            }
+            auto const expected = ledger::parseWeb3ChainId(std::get<0>(chainIdConfig.value()));
+            if (!expected || u256(*envelopeChainId) != *expected)
             {
                 co_return TransactionStatus::InvalidChainId;
             }
@@ -353,7 +372,8 @@ task::Task<TransactionStatus> TxValidator::admit(
         {
             auto state = co_await senderState();
             // EIP-2681.
-            if (state && state->nonce >= std::numeric_limits<uint64_t>::max())
+            if (state && state->nonce.has_value() &&
+                *state->nonce >= std::numeric_limits<uint64_t>::max())
             {
                 co_return TransactionStatus::NonceHasMaxValue;
             }
@@ -361,27 +381,33 @@ task::Task<TransactionStatus> TxValidator::admit(
         }
         case Check::Web3NonceWindow:
         {
-            // Lower bound and queue depth are one check: they share a single account-nonce read
-            // and the existing implementation expresses them in one comparison.
-            u256 accountNonce{0};
+            // Lower bound and queue depth are one check: they share a single account-nonce read,
+            // and the existing implementation expresses both in one comparison.
+            std::optional<u256> accountNonce;
             if (context == AdmissionContext::ProposalVerification)
             {
                 // Consensus hot path: nonce only, no balance and no contract code.
-                if (auto nonce = co_await m_accountNonceReader(tx.sender()))
-                {
-                    accountNonce = *nonce;
-                }
+                accountNonce = co_await m_accountNonceReader(tx.sender());
             }
             else if (auto state = co_await senderState())
             {
                 accountNonce = state->nonce;
             }
+            if (!accountNonce.has_value())
+            {
+                // Account not on chain yet. The existing Web3NonceChecker also declines to
+                // judge in this case (its storage-miss branch falls through without comparing),
+                // and matching it keeps this a pure refactor. Whether an unknown account should
+                // instead be treated as nonce 0 is a separate question -- it would tighten
+                // queue-flooding behaviour, and it is not part of this change.
+                break;
+            }
             auto const txNonce = u256(tx.nonce());
-            if (txNonce < accountNonce)
+            if (txNonce < *accountNonce)
             {
                 co_return TransactionStatus::NonceCheckFail;  // already used
             }
-            if (txNonce > accountNonce + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
+            if (txNonce > *accountNonce + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
             {
                 co_return TransactionStatus::NonceCheckFail;  // too far ahead to queue
             }
@@ -392,8 +418,9 @@ task::Task<TransactionStatus> TxValidator::admit(
             // EIP-3860 applies to contract CREATION only. The current implementation keys on
             // transaction type alone, so a 60000-byte call to a deployed contract is wrongly
             // rejected with MaxInitCodeSizeExceeded.
-            if (co_await rev() >= EVMC_SHANGHAI && tx.to().empty() &&
-                tx.input().size() > MAX_INITCODE_SIZE)
+            if (auto revision = co_await rev(); revision.has_value() &&
+                                                *revision >= EVMC_SHANGHAI && tx.to().empty() &&
+                                                tx.input().size() > MAX_INITCODE_SIZE)
             {
                 co_return TransactionStatus::MaxInitCodeSizeExceeded;
             }
@@ -401,26 +428,36 @@ task::Task<TransactionStatus> TxValidator::admit(
         }
         case Check::Balance:
         {
-            auto gasPriceConfig =
-                co_await ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
-            if (gasPriceConfig)
+            // What the sender must be able to cover depends on whether this chain charges gas
+            // at all:
+            //   tx_gas_price unset or "0"  -> gas is free; only `value` has to be covered
+            //   tx_gas_price > 0           -> value + gasLimit * effectiveGasPrice
+            // This mirrors the existing rule. It differs from evmone, which always charges
+            // max_gas_price * gas_limit + value, because on a free-gas FISCO chain the sender
+            // is never actually debited the fee cap they declared -- charging it at admission
+            // would reject transactions that execute perfectly well.
+            bool chargesGas = false;
+            if (auto gasPriceConfig =
+                    co_await ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE))
             {
                 auto const& [gasPriceStr, _] = gasPriceConfig.value();
-                if (gasPriceStr == "0" || gasPriceStr == "0x0")
-                {
-                    break;  // free-gas chain: nothing to pay for
-                }
+                chargesGas = !(gasPriceStr == "0" || gasPriceStr == "0x0");
             }
+
             auto state = co_await senderState();
             u256 const balance = state ? state->balance : u256{0};
+
             // 512-bit, deliberately. bcos::u256 carries boost::multiprecision::unchecked, so
-            // gasLimit * gasPrice + value wraps SILENTLY on it -- with maxFeePerGas near 2^256-1
-            // the product comes back small and an unfundable transaction is admitted. Execution
-            // already computes this with intx::umul; admission has to use the same width.
-            auto maxTotalFee = intx::umul(intx::uint256{static_cast<uint64_t>(tx.gasLimit())},
-                protocol::toIntxU256(protocol::effectiveGasPrice(tx)));
-            maxTotalFee += intx::uint512{protocol::toIntxU256(tx.value())};
-            if (intx::uint512{protocol::toIntxU256(balance)} < maxTotalFee)
+            // gasLimit * gasPrice + value is reduced mod 2^256 with no signal -- with a
+            // maxFeePerGas near 2^256-1 the product comes back small and an unfundable
+            // transaction is admitted. Execution already computes this with intx::umul.
+            intx::uint512 required{protocol::toIntxU256(tx.value())};
+            if (chargesGas)
+            {
+                required += intx::umul(intx::uint256{static_cast<uint64_t>(tx.gasLimit())},
+                    protocol::toIntxU256(protocol::effectiveGasPrice(tx)));
+            }
+            if (intx::uint512{protocol::toIntxU256(balance)} < required)
             {
                 co_return TransactionStatus::InsufficientFunds;
             }
@@ -431,7 +468,14 @@ task::Task<TransactionStatus> TxValidator::admit(
             // Same formula the executor uses (TxGasModel.h). A separate copy would drift at the
             // next fork that moves EIP-7623's floor, and the drift shows up as "admitted, then
             // failed with OutOfGasLimit" -- a block carrying a certainly-failing transaction.
-            auto const cost = protocol::compute_tx_intrinsic_cost(co_await rev(), tx);
+            auto const revision = co_await rev();
+            if (!revision.has_value())
+            {
+                // The intrinsic cost is revision-dependent (EIP-7623's floor, the calldata token
+                // price), so without one there is no figure to compare against.
+                break;
+            }
+            auto const cost = protocol::compute_tx_intrinsic_cost(*revision, tx);
             if (tx.gasLimit() < std::max(cost.intrinsic, cost.min))
             {
                 co_return TransactionStatus::OutOfGasLimit;

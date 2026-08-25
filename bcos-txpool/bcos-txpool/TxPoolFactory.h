@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "TxPool.h"
+#include "bcos-txpool/txpool/validator/AdmissionAdapters.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-utilities/IOServicePool.h>
@@ -41,9 +42,8 @@ public:
 
     virtual ~TxPoolFactory() = default;
     TxPool::Ptr createTxPool(boost::asio::io_context& _ioContext,
-        bcos::IOServicePool::Ptr _ioServicePool,
-        size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 4,
-        uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
+        bcos::IOServicePool::Ptr _ioServicePool, size_t _notifyWorkerNum = 2,
+        size_t _verifierWorkerNum = 4, uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
 
     void setScheduler(std::shared_ptr<bcos::scheduler::SchedulerInterface> _scheduler);
 
@@ -60,6 +60,9 @@ private:
     size_t m_txpoolLimit = DEFAULT_POOL_LIMIT;
     bool m_checkTransactionSignature;
     std::weak_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
+    // Shared with the admission readers, which are built in createTxPool -- before setScheduler
+    // runs -- so they hold this instead of a scheduler and pick it up when it arrives.
+    std::shared_ptr<SchedulerHolder> m_schedulerHolder;
     TxPool::Ptr m_txpool;
 };
 }  // namespace bcos::txpool

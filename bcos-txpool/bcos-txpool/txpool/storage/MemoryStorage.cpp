@@ -287,17 +287,30 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
                             << LOG_KV("importBatchHash", _tx->batchHash().abridged());
         return TransactionStatus::Malformed;
     }
-    // the transaction has already onChain, reject it
-    // check ledger tx
-    // check web3 tx
-    if (auto result = m_config->txValidator()->checkTransaction(*_tx, true);
-        result == TransactionStatus::NonceCheckFail)
+    // Proposal verification. The check set here is deliberately narrow (type gate, `to` format,
+    // signature, Web3 nonce window, BCOS pool nonce): failing anything makes the WHOLE proposal
+    // fail and triggers a view change, so checks whose inputs are local state -- balance above
+    // all -- must not run. See CheckSet.h.
+    if (auto result = task::syncWait(m_config->admissionValidator()->admit(*_tx,
+            txvalidator::AdmissionContext::ProposalVerification, m_config->signaturePolicy(),
+            m_config->poolNonceQuery()));
+        result != TransactionStatus::None && result != TransactionStatus::BlockLimitCheckFail)
     {
-        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for nonce check failed: ")
+        // BlockLimitCheckFail is deliberately still ignored, exactly as before this change.
+        // Every other status here means the transaction is malformed, forged, or of a type this
+        // chain refuses -- all of which SHOULD fail the proposal, and previously did not: the
+        // old code acted only on NonceCheckFail and let everything else through into the pool.
+        //
+        // blockLimit is different in kind. It compares against the LOCAL block height, which
+        // legitimately lags the leader's, so rejecting on it could fail an honest proposal and
+        // cost liveness. Acting on it needs the multi-node evidence described in the plan
+        // (section 11.6) and is deliberately left out of this change.
+        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for admission check")
+                            << LOG_KV("status", protocol::toString(result))
                             << LOG_KV("importTxHash", txHash)
                             << LOG_KV("importBatchId", _tx->batchId())
                             << LOG_KV("importBatchHash", _tx->batchHash().abridged());
-        return TransactionStatus::NonceCheckFail;
+        return result;
     }
 
     Transaction::Ptr tx = nullptr;
@@ -415,29 +428,18 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             return TransactionStatus::None;
         },
         [this, transaction]() {
-            // Step 2: Verify transaction signature (if enabled)
-            return m_config->checkTransactionSignature() ?
-                       m_config->txValidator()->verify(*transaction) :
-                       TransactionStatus::None;
-        },
-        [this, transaction]() {
-            // Step 3: Validate transaction format and constraints
-            return m_config->txValidator()->validateTransaction(*transaction);
-        },
-        [this, transaction]() {
-            // Step 4: Validate balance (only for Web3 transactions)
-            if (transaction->type() ==
-                static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
-            {
-                return task::syncWait(
-                    m_config->txValidator()->validateBalance(*transaction, m_config->ledger()));
-            }
-            return bcos::protocol::TransactionStatus::None;
-        },
-        [this, transaction]() {
-            // Step 5: Check chain Id
-            return task::syncWait(
-                m_config->txValidator()->validateChainId(*transaction, m_config->ledger()));
+            // Steps 2-5 (signature, format, balance, chainId) are now one call into
+            // bcos-tx-validator, which also normalizes the tars mirror against the signed
+            // envelope and adds the checks this chain never had (intrinsic gas, EIP-3607,
+            // EIP-2681, the fee-market relations, per-type revision gating).
+            //
+            // syncWait, not co_await: verifyAndSubmitTransaction returns TransactionStatus and
+            // is synchronous, exactly like the two validation steps it replaces. Turning the
+            // whole submit chain into a coroutine is a separate change -- it needs the verifier
+            // thread pool re-examined for starvation on suspension.
+            return task::syncWait(m_config->admissionValidator()->admit(*transaction,
+                txvalidator::AdmissionContext::PoolAdmission, m_config->signaturePolicy(),
+                m_config->poolNonceQuery()));
         },
     };
 

@@ -46,7 +46,12 @@ bool isValidToField(std::string_view toField);
 struct AccountState
 {
     u256 balance;
-    u256 nonce;
+    /// std::nullopt = the account has no on-chain state yet. Distinct from nonce 0: the nonce
+    /// window declines to judge an unknown account (matching the existing Web3NonceChecker),
+    /// whereas nonce 0 is a real lower bound. Collapsing the two would reject a first-time
+    /// sender whose nonce sits beyond the queue window measured from zero -- while balance may
+    /// still be readable for that same account from the pending plane.
+    std::optional<u256> nonce;
     bytes code;  ///< empty = EOA; non-empty and not 0xef0100-prefixed = contract, EIP-3607 rejects
 };
 

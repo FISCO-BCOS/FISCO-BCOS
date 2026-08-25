@@ -523,14 +523,16 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     auto const& blockData = ledger->ledgerData();
     size_t importedTxNum = 1;
 
-    auto duplicatedNonce =
-        blockData[ledger->blockNumber() - blockLimit + 1]->transactions()[0]->nonce();
-    auto tx = fakeWeb3Tx(_cryptoSuite, std::string(duplicatedNonce), eoaKey);
-    // bcos nonce not effect web3 nonce
+    // A Web3 nonce is a 64-bit account sequence number (EIP-2681); a BCOS nonce is a 256-bit
+    // random value. They are different namespaces, and re-using a BCOS nonce as a Web3 one only
+    // ever "worked" because nothing validated the Web3 nonce against the signed envelope -- now
+    // that admission rebuilds data.nonce from that envelope, a 256-bit value cannot round-trip.
+    // The property under test is unchanged: a Web3 transaction is unaffected by BCOS nonces.
+    u256 fakeNonce = 1;
+    auto tx = fakeWeb3Tx(_cryptoSuite, fakeNonce.convert_to<std::string>(), eoaKey);
     checkWebTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None, importedTxNum);
 
-    u256 fakeNonce = u256(duplicatedNonce);
     StorageState state{.nonce = fakeNonce.convert_to<std::string>(), .balance = "1"};
     faker->ledger()->setStorageState(
         eoaKey->address(_cryptoSuite->hashImpl()).hex(), std::move(state));
