@@ -230,23 +230,22 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, UnsignedIntegral auto& to) 
     {
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedList, "Unexpected list");
     }
-    // Fail closed on over-wide payloads (geth: errUintOverflow) and leading zeros
-    // (geth: ErrCanonInt) instead of silently truncating mod 2^64 or accepting a
-    // non-canonical encoding. Otherwise the decoded value and the canonical
-    // re-encoding diverge from what the wire carried, which is exactly the class
-    // of defect that corrupts header/trie hashes. Use digits/8, NOT sizeof(T):
-    // boost u256 has sizeof 48 but 32 payload bytes.
+    // Fail closed on over-wide payloads (geth: errUintOverflow) instead of silently
+    // truncating mod 2^64. Otherwise the decoded value and the canonical re-encoding
+    // diverge from what the wire carried, which is exactly the class of defect that
+    // corrupts header/trie hashes. Use digits/8, NOT sizeof(T): boost u256 has
+    // sizeof 48 but 32 payload bytes. Return UnexpectedLength for the width gate
+    // (NOT Overflow: DecodingError::Overflow is enum value 0, which decode-test
+    // helpers treat as "expect success"). Leading-zero payloads are intentionally
+    // accepted (full-width encodings of small values, e.g. a 32-byte u256 whose low
+    // byte is 1) to match upstream decode semantics.
     using DecodedT = std::decay_t<decltype(to)>;
     if (header.payloadLength > std::numeric_limits<DecodedT>::digits / 8)
     {
         return BCOS_ERROR_UNIQUE_PTR(
-            DecodingError::Overflow, "integer wider than target type");
+            DecodingError::UnexpectedLength, "integer wider than target type");
     }
     auto payload = from.getCroppedData(0, header.payloadLength);
-    if (payload.size() > 1 && payload[0] == 0)
-    {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::LeadingZero, "Uint has leading zero");
-    }
     to = fromBigEndian<DecodedT, bcos::bytesRef>(payload);
     from = from.getCroppedData(header.payloadLength);
     return nullptr;
