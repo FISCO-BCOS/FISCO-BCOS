@@ -281,6 +281,10 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
         }
     }
     auto const [newestNumber, _] = co_await getBlockNumberByTag(toView(request[1U]));
+    if (newestNumber < 0)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "newestBlock not found"));
+    }
     auto const newest = static_cast<uint64_t>(newestNumber);
     auto const oldest = newest >= blockCount - 1 ? newest - (blockCount - 1) : 0;
 
@@ -1684,6 +1688,20 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
                     "Proof unavailable for this block (flat rebuild lands with the "
                     "eth_getProof PR)"));
             }
+        }
+        else [[unlikely]]
+        {
+            // Same fail-closed contract as the PBFT branch below: a node without the MPT
+            // node reader must not answer with a fabricated all-zero proof.
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InternalError, "MPT not enabled on this node"));
+        }
+        else
+        {
+            // Same deployment fact as the PBFT branch: no local MPT reader (e.g. a
+            // tars-built NodeService) cannot produce a verifiable proof. Returning the
+            // default-constructed empty proof would look like "account is empty".
+            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
         }
     }
     else
