@@ -292,7 +292,7 @@ void PeersRouterTable::asyncBroadcastMsg(
 }
 
 bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_t type,
-    std::string_view group, uint16_t moduleID, const P2PMessage& message,
+    std::string_view group, uint16_t moduleID, const P2PMessageV2& message,
     ::ranges::any_view<bytesConstRef> payloads)
 {
     std::vector<std::string> selectedPeers;
