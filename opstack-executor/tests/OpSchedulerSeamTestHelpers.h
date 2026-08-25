@@ -8,9 +8,12 @@
 
 #pragma once
 
+#include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-utilities/Common.h>
+#include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpDepositEncode.h>
+#include <algorithm>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
 

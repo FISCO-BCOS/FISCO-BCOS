@@ -261,7 +261,8 @@ public:
 };
 
 /// Decode `0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx, data])`.
-/// Execution fields come from the envelope, never tars mirrors (deposits are unsigned).
+/// Trust boundary: deposits are unsigned, so a peer can forge tars mint/value; only the
+/// 0x7e envelope bytes bind those fields. Never read mint/value from the tars mirror.
 [[nodiscard]] inline bcos::evm::opstack::DepositTx decodeDepositEnvelope(bcos::bytesConstRef env)
 {
     namespace op = bcos::evm::opstack;

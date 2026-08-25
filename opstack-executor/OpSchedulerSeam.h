@@ -14,7 +14,6 @@
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpCommitments.h>
 #include <opstack-executor/OpCommon.h>
-#include <opstack-executor/OpDepositEncode.h>
 #include <cstdint>
 #include <optional>
 #include <range/v3/range/concepts.hpp>

@@ -9,6 +9,7 @@
 //      (computeTxRoot / commitmentsOf / isJovianActive).
 //      (The block-pre shape checks live in PreBlockOpStepsTest; the seam itself no longer
 //      executes blocks — see the note at the end of this file.)
+#include "OpSchedulerSeamTestHelpers.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -107,10 +108,16 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
     BOOST_CHECK_EQUAL(commitments.txRoot, txRoot);
 }
 
-// Note: the empty-block rejection test lives in OpBlockInjectorTest
-// (EmptyBlockRejectedByBlockPreSteps), now driving preBlockOpSteps (the retired
-// runOpBlockInjection's guard). OpSchedulerSeam is a pure engine seam and no longer executes
-// blocks, so there is no matching execution case here. The EIP-7702 authorization yParity width
-// test was removed with the RLP decode primitives (decodeAuthYParityScalar retired in OpCommon.h).
+BOOST_AUTO_TEST_CASE(SynthesizeL1AttributesIsDepositEnvelope)
+{
+    auto const env = bcos::evm::engine::testutil::synthesizeL1AttributesEnvelope(false);
+    BOOST_REQUIRE(!env.empty());
+    BOOST_CHECK_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
+}
+
+// Note: the empty-block rejection test lives in PreBlockOpStepsTest (RejectsEmptyBlock).
+// OpSchedulerSeam is a pure engine seam and no longer executes blocks, so there is no
+// matching execution case here. The EIP-7702 authorization yParity width test was removed
+// with the RLP decode primitives (decodeAuthYParityScalar retired in OpCommon.h).
 
 BOOST_AUTO_TEST_SUITE_END()

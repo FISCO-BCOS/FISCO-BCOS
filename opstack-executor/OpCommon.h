@@ -74,7 +74,8 @@ struct OpBlockSeal
     return bcos::toQuantity(cumulative);
 }
 
-/// Decimal string for the tars receipt field. RPC parses this as decimal only.
+/// Decimal string for the tars receipt field. eth_getTransactionReceipt reads this via
+/// `safeCastToU256` (`boost::lexical_cast<u256>`, decimal — not `safeFromQuantity`).
 [[nodiscard]] inline std::string decimalCumulative(uint64_t cumulative)
 {
     return std::to_string(cumulative);

@@ -135,6 +135,27 @@ BOOST_AUTO_TEST_CASE(ValidEnvelopeDecodesFieldByField)
     BOOST_CHECK_EQUAL(dep.data[1], 0xad);
 }
 
+BOOST_AUTO_TEST_CASE(BareByteIntegersDecode)
+{
+    // Canonical RLP integers 0x01..0x7f are a single bare byte. integerPayloadLength
+    // must report 1 for those (0 is reserved for the empty item 0x80). Callers today
+    // only use the result as an upper bound, so this pins the name/value contract
+    // against a future exact-width check collapsing a bare byte with canonical zero.
+    Fields f;
+    f.mint = bcos::bytes{0x7f};
+    f.value = bcos::bytes{0x01};
+    f.gas = 21;
+    f.isSystemTx = 1;
+    auto const env = validEnvelope(f);
+    auto dep = decodeDepositEnvelope(bcos::bytesConstRef{env.data(), env.size()});
+
+    BOOST_REQUIRE(dep.mint.has_value());
+    BOOST_CHECK(*dep.mint == intx::uint256{0x7f});
+    BOOST_CHECK(dep.value == intx::uint256{1});
+    BOOST_CHECK_EQUAL(dep.gas_limit, 21);
+    BOOST_CHECK(dep.is_system_tx);
+}
+
 BOOST_AUTO_TEST_CASE(ValidCreationEnvelopeEmptyMintZeroValue)
 {
     Fields f;
