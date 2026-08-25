@@ -162,33 +162,24 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
         // contract creation, never a transfer to address(0).
     }
     evmTx.value = toIntxU256(tx.value());
+    // Access-list / blob / auth entries are compile-time FixedBytes (Address / h256).
+    // `size()` is constexpr SIZE, so a runtime `size() < N` + `copy_n(N)` guard can never
+    // reject over-wide input and would silently look like a length check. Convert through the
+    // typed helpers (full N-byte memcpy). The only variable-width addresses on this path are
+    // tx.sender() / tx.to() (string_view), already exact-size above.
+    static_assert(sizeof(bcos::Address) == sizeof(evmc_address));
+    static_assert(sizeof(bcos::h256) == sizeof(evmc_bytes32));
     for (auto const& entry : tx.web3AccessList())
     {
-        evmc_address addr{};
-        if (entry.account.size() < sizeof(evmc_address))
-            throw bcos::evm::OpConsensusError(
-                "toEvmoneTransaction: access-list account address too short");
-        std::copy_n(entry.account.begin(), sizeof(evmc_address), addr.bytes);
         std::vector<evmc::bytes32> keys;
+        keys.reserve(entry.storageKeys.size());
         for (auto const& sk : entry.storageKeys)
-        {
-            evmc_bytes32 key{};
-            if (sk.size() < sizeof(evmc_bytes32))
-                throw bcos::evm::OpConsensusError(
-                    "toEvmoneTransaction: access-list storage key too short");
-            std::copy_n(sk.begin(), sizeof(evmc_bytes32), key.bytes);
-            keys.push_back(key);
-        }
-        evmTx.access_list.emplace_back(addr, std::move(keys));
+            keys.push_back(bcos::evm::engine::detail::toEvmcBytes32(sk));
+        evmTx.access_list.emplace_back(
+            bcos::evm::engine::detail::toEvmcAddress(entry.account), std::move(keys));
     }
     for (auto const& h : tx.blobVersionedHashes())
-    {
-        evmc_bytes32 hash{};
-        if (h.size() < sizeof(evmc_bytes32))
-            throw bcos::evm::OpConsensusError("toEvmoneTransaction: blob versioned hash too short");
-        std::copy_n(h.begin(), sizeof(evmc_bytes32), hash.bytes);
-        evmTx.blob_hashes.push_back(hash);
-    }
+        evmTx.blob_hashes.push_back(bcos::evm::engine::detail::toEvmcBytes32(h));
     // chainId and nonce from the BCOS tx use DIFFERENT string encodings in the tars field:
     // nonce is a hex quantity (takeToTarsTransaction writes toQuantity(nonce),
     // Web3Transaction.cpp:262), while chainID is DECIMAL (takeToTarsTransaction writes
@@ -223,19 +214,10 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
     for (auto const& auth : tx.authorizationList())
     {
         evmone::state::Authorization ea{};
-        // AuthorizationEntry: all fields are numeric (uint64_t, u256, Address, uint8_t)
         ea.chain_id = toIntxU256(bcos::u256(auth.chainId));
-        if (auth.address.size() < sizeof(evmc_address))
-            throw bcos::evm::OpConsensusError(
-                "toEvmoneTransaction: authorization entry address too short");
-        std::copy_n(auth.address.begin(), sizeof(evmc_address), ea.addr.bytes);
+        ea.addr = bcos::evm::engine::detail::toEvmcAddress(auth.address);
         ea.nonce = auth.nonce;
-        if (auth.signer.size() == sizeof(evmc_address))
-        {
-            evmc_address sa{};
-            std::copy_n(auth.signer.begin(), sizeof(evmc_address), sa.bytes);
-            ea.signer = sa;
-        }
+        ea.signer = bcos::evm::engine::detail::toEvmcAddress(auth.signer);
         ea.r = toIntxU256(auth.r);
         ea.s = toIntxU256(auth.s);
         ea.v = toIntxU256(bcos::u256(auth.v));
