@@ -36,7 +36,66 @@ target_link_libraries(opstack-executor-tests PRIVATE
 )
 add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 
+# Runtime suite: real tars TransactionImpl / Web3Transaction / receipt factory. Isolated
+# from the lightweight binary so a wedprcrypto-tainted typed catch cannot hide
+# OpConsensusError assertions over there. Compile Web3Transaction.cpp directly instead
+# of linking `rpc` (rpc currently pulls Engine/Eth leftovers that are out of this PR).
+# BOOST_TEST_MODULE is defined in the TU.
+add_executable(opstack-executor-runtime-tests
+    OpstackExecutorTest.cpp
+    ${CMAKE_SOURCE_DIR}/bcos-rpc/bcos-rpc/web3jsonrpc/model/Web3Transaction.cpp
+    ${CMAKE_SOURCE_DIR}/bcos-rpc/bcos-rpc/web3jsonrpc/model/Web3TxHandler.cpp
+)
+set_target_properties(opstack-executor-runtime-tests PROPERTIES UNITY_BUILD OFF)
+target_include_directories(opstack-executor-runtime-tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/bcos-rpc
+)
+target_link_libraries(opstack-executor-runtime-tests PRIVATE
+    opstack-executor
+    protocol-tars
+    bcos-crypto
+    codec
+    evmone::evmone
+    Boost::unit_test_framework
+)
+add_test(NAME OpstackExecutorRuntimeTests COMMAND opstack-executor-runtime-tests)
 
-# opstack-executor-runtime-tests (OpstackExecutorTest) is split out: it compiles
-# Web3TxHandler.cpp (RPC model) — a cross-block dependency that would couple this
-# PR to the RPC+shared PR. It returns with the web3-model decoupling (next PR).
+# Receipts-root leaf encoding (encodeReceiptForRoot / sealOpBlock). Needs evmone's
+# vendored RLP helpers and ledger's computeTrieRootVarKey; kept off the lightweight
+# binary for the same wedprcrypto reason.
+get_target_property(_evmone_inc_dirs evmone::evmone INTERFACE_INCLUDE_DIRECTORIES)
+list(GET _evmone_inc_dirs 0 _evmone_inc_dir)
+cmake_path(NORMAL_PATH _evmone_inc_dir)
+set(EVMONE_TEST_UTILS_DIR "${_evmone_inc_dir}/test/utils")
+
+find_library(BLST_LIBRARY NAMES blst PATHS
+    "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib"
+    NO_DEFAULT_PATH)
+if(NOT BLST_LIBRARY)
+    find_library(BLST_LIBRARY NAMES blst REQUIRED)
+endif()
+
+add_executable(opstack-executor-receipt-tests
+    TestMain.cpp
+    OpReceiptEncodeTest.cpp
+    ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
+)
+set_target_properties(opstack-executor-receipt-tests PROPERTIES UNITY_BUILD OFF)
+set_source_files_properties(${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
+    PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
+target_link_libraries(opstack-executor-receipt-tests PRIVATE
+    opstack-executor
+    protocol-tars
+    bcos-crypto
+    codec
+    ledger
+    evmone::evmone
+    Boost::unit_test_framework
+    ${BLST_LIBRARY}
+)
+target_include_directories(opstack-executor-receipt-tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/bcos-ledger
+)
+add_test(NAME OpstackExecutorReceiptTests COMMAND opstack-executor-receipt-tests)

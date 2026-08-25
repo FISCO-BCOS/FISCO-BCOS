@@ -273,7 +273,7 @@ BOOST_FIXTURE_TEST_CASE(RejectsInvalidTx, Fixture)
     bcos::evm::opstack::OpFeeParams fee{};
     BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx, 0,
                           ledgerConfig, false, fee, 30000000, 10, nullptr)),
-        bcos::evm::engine::OpConsensusError);
+        bcos::evm::OpConsensusError);
 }
 
 BOOST_FIXTURE_TEST_CASE(ChargesL1AndOperatorFees, Fixture)
@@ -542,9 +542,9 @@ BOOST_FIXTURE_TEST_CASE(NullContextSixArgFormThrows, Fixture)
     auto tx = buildDepositTx();
     auto context = task::syncWait(executor.createExecuteContext(
         storage, blockHeader, tx, /*contextID=*/0, ledgerConfig, /*call=*/false));
-    BOOST_CHECK_THROW(task::syncWait(context.prepare()), bcos::evm::engine::OpConsensusError);
-    BOOST_CHECK_THROW(task::syncWait(context.execute()), bcos::evm::engine::OpConsensusError);
-    BOOST_CHECK_THROW(task::syncWait(context.finish()), bcos::evm::engine::OpConsensusError);
+    BOOST_CHECK_THROW(task::syncWait(context.prepare()), bcos::evm::OpConsensusError);
+    BOOST_CHECK_THROW(task::syncWait(context.execute()), bcos::evm::OpConsensusError);
+    BOOST_CHECK_THROW(task::syncWait(context.finish()), bcos::evm::OpConsensusError);
 }
 
 BOOST_FIXTURE_TEST_CASE(DepositGasLimitReachedIsBlockError, Fixture)
@@ -882,7 +882,7 @@ BOOST_FIXTURE_TEST_CASE(ChainIdMismatchEnforced, Fixture)
         BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
                               /*contextID=*/0, ledgerConfig, /*call=*/false, fee,
                               /*blockGasLeft=*/30000000, /*chainId=*/10, /*blockHashes=*/nullptr)),
-            bcos::evm::engine::OpConsensusError);
+            bcos::evm::OpConsensusError);
     }
     // (2) typed tx chain_id==0 is NOT exempt (modernSigner rejects 0 != node chainId; a
     // malicious proposer can craft a 0x02 envelope with chain_id 0). Pinned so a future
@@ -894,7 +894,7 @@ BOOST_FIXTURE_TEST_CASE(ChainIdMismatchEnforced, Fixture)
         BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
                               /*contextID=*/0, ledgerConfig, /*call=*/false, fee,
                               /*blockGasLeft=*/30000000, /*chainId=*/10, /*blockHashes=*/nullptr)),
-            bcos::evm::engine::OpConsensusError);
+            bcos::evm::OpConsensusError);
     }
 }
 
@@ -1106,7 +1106,7 @@ BOOST_FIXTURE_TEST_CASE(TarsChainIdIgnoredWhenEnvelopeDiffers, Fixture)
     bcos::evm::opstack::OpFeeParams fee{};
     BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx, 0,
                           ledgerConfig, false, fee, 30000000, /*chainId=*/10, nullptr)),
-        bcos::evm::engine::OpConsensusError);
+        bcos::evm::OpConsensusError);
 }
 
 namespace

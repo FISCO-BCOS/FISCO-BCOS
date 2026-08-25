@@ -22,6 +22,19 @@
 #include <string_view>
 #include <vector>
 
+namespace bcos::evm
+{
+/// Thrown for anything OP block execution classifies as a consensus-level rejection (error
+/// table): malformed/undecodable raw tx bytes, processOpBlock's own semantic throws
+/// (empty block, first tx not the L1 attributes deposit, gas-pool overrun, ...). Maps to INVALID
+/// on the caller side, never -32603. Lives in bcos::evm so both the opstack and engine
+/// namespaces (and the code that references it from either) resolve it by outer-scope lookup.
+struct OpConsensusError : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+}  // namespace bcos::evm
+
 namespace bcos::evm::opstack
 {
 /// Block-header commitment fields. Jovian BlobGasUsed (the DA footprint header field) was
@@ -88,15 +101,6 @@ struct OpBlockSeal
 
 namespace bcos::evm::engine
 {
-/// Thrown for anything OP block execution classifies as a consensus-level rejection (error
-/// table): malformed/undecodable raw tx bytes, processOpBlock's own semantic throws
-/// (empty block, first tx not the L1 attributes deposit, gas-pool overrun, ...). Maps to INVALID
-/// on the caller side, never -32603.
-struct OpConsensusError : std::runtime_error
-{
-    using std::runtime_error::runtime_error;
-};
-
 /// Thrown when the ledger bridge's poison flag is set (a storage2-layer failure, not a consensus
 /// violation — Storage2State.h's poison-flag error channel contract). Maps to JSON-RPC -32603
 /// internal error on the caller side, never INVALID.
