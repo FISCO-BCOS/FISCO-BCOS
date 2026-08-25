@@ -21,8 +21,10 @@ target_link_libraries(opstack-executor PUBLIC
     evmone::evmone intx::intx TBB::tbb)
 set_target_properties(opstack-executor PROPERTIES UNITY_BUILD OFF)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    # Designated initializers and GCC-13 jAt refs trip -Werror here only.
-    target_compile_options(opstack-executor PRIVATE
+    # PUBLIC: OpstackExecutor.h / OpBlockExecute.h / Storage2State.h still instantiate
+    # templates in consumer TUs (opstack-executor-runtime-tests). PRIVATE would hide
+    # the -Wno-error flags from those instantiations.
+    target_compile_options(opstack-executor PUBLIC
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
 endif()
 
