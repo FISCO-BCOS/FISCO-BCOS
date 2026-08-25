@@ -36,7 +36,6 @@
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/mpt/Constants.h>
-#include <bcos-ledger/mpt/FlatProof.h>
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
@@ -1683,50 +1682,6 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
             {
                 BOOST_THROW_EXCEPTION(JsonRpcException(
                     EthGetProofUnavailable, "Account not in trie (dormant in scenario A)"));
-            }
-        }
-        if (!servedFromNodes)
-        {
-            // Flat-state fallback: rebuild the trie from the committed flat plane, gated on the
-            // requested block's root (generateProofFromFlat's RootMismatch check).
-            auto const& stateProvider = m_nodeService->stateStorageProvider();
-            if (!stateProvider) [[unlikely]]
-            {
-                BOOST_THROW_EXCEPTION(
-                    JsonRpcException(InternalError, "Flat state reader not wired on this node"));
-            }
-            for (int attempt = 0;; ++attempt)
-            {
-                auto view = stateProvider();
-                auto opResult = co_await ledger::mpt::generateProofFromFlat(
-                    *view, stateRoot, address, std::span<h256 const>(slots));
-                if (auto* built = std::get_if<ledger::mpt::EIP1186Proof>(&opResult))
-                {
-                    proof = std::move(*built);
-                    break;
-                }
-                auto const code = std::get<ledger::mpt::ProofErrorCode>(opResult);
-                if (code == ledger::mpt::ProofErrorCode::RootMismatch && isLatest && attempt < 2)
-                {
-                    // A block committed between the tag resolution and the view fork makes the
-                    // header and the flat plane disagree by one version. Re-resolve and rebuild;
-                    // an explicit older block/tag keeps failing — the flat plane holds exactly one
-                    // state version (latest committed), and a mismatch there is the honest answer.
-                    std::tie(blockNumber, isLatest) = co_await getBlockNumberByTag(blockTag);
-                    auto reblock =
-                        co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER);
-                    if (!reblock || !reblock->blockHeader()) [[unlikely]]
-                    {
-                        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
-                    }
-                    stateRoot = reblock->blockHeader()->stateRoot();
-                    continue;
-                }
-                BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
-                    code == ledger::mpt::ProofErrorCode::RootMismatch ?
-                        "Requested block state is not available (OP path serves the latest "
-                        "committed state only)" :
-                        "Account not in trie (dormant in scenario A)"));
             }
         }
     }
