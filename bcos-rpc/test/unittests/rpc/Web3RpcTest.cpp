@@ -24,11 +24,11 @@
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-rpc/jwtAuth/JwtConfig.h>
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-task/Task.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -626,21 +626,21 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadVersion.has_value());
     BOOST_TEST(*testEngineService.m_state->capturedNewPayloadVersion == 4);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
-                      .withdrawalsRoot.has_value());
+            .withdrawalsRoot.has_value());
     BOOST_REQUIRE(
         testEngineService.m_state->capturedNewPayloadRequest->executionRequests.has_value());
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionRequests->empty());
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions
                    .size() == 1);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals
-                      .has_value());
+            .has_value());
     BOOST_TEST(
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front()
             .amount == expectedLargeValue);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed
-                      .has_value());
+            .has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
-                      .excessBlobGas.has_value());
+            .excessBlobGas.has_value());
     BOOST_TEST(
         *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed ==
         expectedLargeValue);
@@ -650,8 +650,8 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
 
     // Raw-bytes carrier: newPayload preserves the wire bytes verbatim (no decoding).
     BOOST_TEST(toHexStringWithPrefix(testEngineService.m_state->capturedNewPayloadRequest
-                                         ->executionPayload.transactions.front()
-                                         .raw) == encodedTxHex);
+                       ->executionPayload.transactions.front()
+                       .raw) == encodedTxHex);
 
     testEngineService.m_state->getPayloadResult->executionPayload =
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload;

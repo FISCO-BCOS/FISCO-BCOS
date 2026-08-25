@@ -1,7 +1,7 @@
 #include "ReceiptResponse.h"
 #include "Log.h"
-#include "Web3Transaction.h"
 #include "bcos-crypto/ChecksumAddress.h"
+#include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-crypto/hash/Keccak256.h>
