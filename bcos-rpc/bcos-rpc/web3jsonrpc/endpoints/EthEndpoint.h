@@ -19,7 +19,6 @@
  */
 
 #pragma once
-#include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/ledger/Ledger.h>
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
@@ -83,20 +82,12 @@ public:
         std::string_view blockTag);
     task::Task<void> maxPriorityFeePerGas(const Json::Value&, Json::Value&);
     task::Task<void> getProof(const Json::Value&, Json::Value&);
-    task::Task<void> setMaxDASize(const Json::Value&, Json::Value&);
 
 private:
     NodeService::Ptr m_nodeService;
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;
 
-    /// Shared DA throttling caps with the engine's OP build path (see NodeService::
-    /// setDACaps). miner_setMaxDASize writes here; the engine's buildOpPayload filters
-    /// oversized sealed txs (maxTxSize) and truncates block assembly (maxBlockSize).
-    /// When NodeService carries no shared instance (tars-built nodes, unit fixtures) a
-    /// detached local instance is created — recorded and logged, never consumed.
-    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
-    bcos::engine::DACaps& daCaps();
 
     task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
 

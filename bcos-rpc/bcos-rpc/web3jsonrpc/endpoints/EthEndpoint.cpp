@@ -177,42 +177,6 @@ task::Task<void> EthEndpoint::hashrate(const Json::Value&, Json::Value& response
     buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::setMaxDASize(const Json::Value& request, Json::Value& response)
-{
-    // miner_setMaxDASize(maxCanonTxSize, maxBlockSize): the OP Stack batcher's DA throttling
-    // calls this on every L2 endpoint and treats "method not found" as fatal ("either enable
-    // it or disable throttling"). The caps land in the DACaps instance SHARED with the
-    // engine's OP build path (NodeService::daCaps — one instance, created by the Initializer):
-    // buildOpPayload drops sealed envelopes over maxTxSize and truncates block assembly at
-    // maxBlockSize. Without a shared instance (tars nodes, fixtures) a detached local one
-    // records+logs only.
-    if (!request.isArray() || request.size() != 2U)
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
-            "miner_setMaxDASize expects exactly two quantities: maxTxSize, maxBlockSize"));
-    }
-    uint64_t maxTxSize = 0;
-    uint64_t maxBlockSize = 0;
-    try
-    {
-        maxTxSize = fromQuantity(std::string(toView(request[0U])));
-        maxBlockSize = fromQuantity(std::string(toView(request[1U])));
-    }
-    catch (...)
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "miner_setMaxDASize quantities must be 0x-prefixed hex"));
-    }
-    auto& caps = daCaps();
-    caps.maxTxSize.store(maxTxSize, std::memory_order_relaxed);
-    caps.maxBlockSize.store(maxBlockSize, std::memory_order_relaxed);
-    WEB3_LOG(INFO) << LOG_BADGE("setMaxDASize") << LOG_KV("maxTxSize", maxTxSize)
-                   << LOG_KV("maxBlockSize", maxBlockSize)
-                   << LOG_KV("sharedWithEngine", m_nodeService->daCaps() ? "yes" : "no");
-    Json::Value result = true;
-    buildJsonContent(result, response);
-    co_return;
-}
 task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response)
 {
     // eth_gasPrice is a SUGGESTION for pricing legacy (type 0) transactions, not a chain
@@ -306,7 +270,15 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
                 BOOST_THROW_EXCEPTION(
                     JsonRpcException(InvalidParams, "rewardPercentiles entries must be numbers"));
             }
-            percentiles.push_back(p.asDouble());
+            auto const percentile = p.asDouble();
+            // op-geth rejects out-of-range percentiles; a negative value would otherwise
+            // wrap through the later size_t cast (UB).
+            if (percentile < 0.0 || percentile > 100.0) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "rewardPercentiles entries must be in [0, 100]"));
+            }
+            percentiles.push_back(percentile);
         }
     }
     auto const [newestNumber, _] = co_await getBlockNumberByTag(toView(request[1U]));
@@ -1869,19 +1841,3 @@ bcos::rpc::EthEndpoint::EthEndpoint(
 // Lazy shared-cap resolution: prefer the engine-shared instance from NodeService;
 // fall back to a detached local one so unset wiring (tars nodes, unit fixtures)
 // still records+logs instead of crashing.
-bcos::engine::DACaps& EthEndpoint::daCaps()
-{
-    if (m_daCaps)
-    {
-        return *m_daCaps;
-    }
-    if (auto shared = m_nodeService->daCaps(); shared)
-    {
-        m_daCaps = std::move(shared);
-    }
-    else
-    {
-        m_daCaps = std::make_shared<bcos::engine::DACaps>();
-    }
-    return *m_daCaps;
-}

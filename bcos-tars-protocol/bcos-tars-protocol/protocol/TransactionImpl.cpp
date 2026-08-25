@@ -187,7 +187,38 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             }
             if (itemCount == expected->second + 3) [[unlikely]]
             {
-                // wire form: already signed
+                // wire form: already signed. Cross-check the trailer (yParity, r, s)
+                // against the tars signature before adopting it verbatim — same rule as
+                // the legacy wire form below — so a tampered envelope cannot produce a
+                // txHash inconsistent with the stored signature.
+                bcos::bytesRef tail(cursor.data(), header.payloadLength);
+                bcos::bytesRef last3[3]{};
+                size_t n = 0;
+                while (!tail.empty())
+                {
+                    auto [tailError, itemHeader] = bcos::codec::rlp::decodeHeader(tail);
+                    if (tailError || itemHeader.payloadLength > tail.size()) [[unlikely]]
+                    {
+                        throwDecode("typed trailer");
+                    }
+                    last3[n % 3] = tail.getCroppedData(itemHeader.payloadLength);
+                    tail = tail.getCroppedData(itemHeader.payloadLength);
+                    ++n;
+                }
+                uint64_t wireYParity = 0;
+                if (auto e = bcos::codec::rlp::decode(last3[(n - 3) % 3], wireYParity); e != nullptr)
+                    [[unlikely]]
+                {
+                    throwDecode("typed yParity");
+                }
+                bcos::bytes wireR(last3[(n - 2) % 3].begin(), last3[(n - 2) % 3].end());
+                bcos::bytes wireS(last3[(n - 1) % 3].begin(), last3[(n - 1) % 3].end());
+                if (wireYParity != yParity || !std::equal(wireR.begin(), wireR.end(), r.begin(),
+                                                    r.end()) ||
+                    !std::equal(wireS.begin(), wireS.end(), s.begin(), s.end())) [[unlikely]]
+                {
+                    throwDecode("typed signature mismatch");
+                }
                 return buffer;
             }
             if (itemCount != expected->second) [[unlikely]]

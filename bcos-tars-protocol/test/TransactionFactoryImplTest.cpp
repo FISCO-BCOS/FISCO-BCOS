@@ -10,6 +10,7 @@
 
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -439,5 +440,59 @@ BOOST_AUTO_TEST_CASE(typedUnknownTypeReassembleThrows)
     BOOST_CHECK_THROW(tx->calculateHash(*suite->hashImpl()), std::invalid_argument);
 }
 
+
+// Sealed-block wire-form envelopes (type || fields || yParity,r,s): reassembleWeb3RawTransaction
+// must adopt them verbatim ONLY when the trailer matches the tars signature — a tampered
+// trailer is rejected (the typed twin of the legacy wire-form cross-check).
+BOOST_AUTO_TEST_CASE(reassembleTypedWireFormCrossChecksSignature)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+    uint8_t const yParity = 1;
+
+    auto buildWire = [&](bcos::bytes const& rSig, bcos::bytes const& sSig, uint64_t yp) {
+        // EIP-1559 fields (9) + trailer (yParity, r, s).
+        bcos::bytes items;
+        rlp::encode(items, static_cast<uint64_t>(1));     // chainId
+        rlp::encode(items, static_cast<uint64_t>(0));     // nonce
+        rlp::encode(items, static_cast<uint64_t>(1));     // maxPriorityFeePerGas
+        rlp::encode(items, static_cast<uint64_t>(1));     // maxFeePerGas
+        rlp::encode(items, static_cast<uint64_t>(21000)); // gasLimit
+        rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+        rlp::encode(items, static_cast<uint64_t>(0));     // value
+        rlp::encode(items, bcos::bytes{});                // data
+        rlp::encode(items, bcos::bytes{});                // accessList
+        rlp::encode(items, yp);
+        rlp::encode(items, rSig);
+        rlp::encode(items, sSig);
+        bcos::bytes env{0x02};
+        rlp::encodeHeader(env, rlp::Header{true, items.size()});
+        env.insert(env.end(), items.begin(), items.end());
+        return env;
+    };
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = yParity;
+
+    // Matching trailer -> adopted verbatim.
+    auto wire = buildWire(r, s, yParity);
+    auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(wire), bcos::bytesConstRef(sig.data(), sig.size()));
+    BOOST_CHECK(reassembled == wire);
+
+    // Tampered r in the trailer -> rejected (would otherwise produce a txHash inconsistent
+    // with the stored signature).
+    auto tampered = buildWire(bcos::bytes(32, 0x33), s, yParity);
+    BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
+                          bcos::ref(tampered), bcos::bytesConstRef(sig.data(), sig.size())),
+        std::invalid_argument);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+(fix(opstack): repair split seams + review findings on the 4a-leftover slice)
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
