@@ -29,6 +29,7 @@
 #include <concepts>
 #include <optional>
 #include <type_traits>
+#include <bcos-utilities/BoostLog.h>
 
 #define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
 namespace bcos::ledger

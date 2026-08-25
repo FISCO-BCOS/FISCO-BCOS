@@ -25,6 +25,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <type_traits>
+#include <boost/algorithm/string.hpp>
 
 using namespace bcos;
 using namespace bcos::cppsdk;

@@ -1,5 +1,6 @@
 #include "TransactionReceiptFactoryImpl.h"
 #include "../impl/TarsHashable.h"
+#include <bcos-utilities/BoostLog.h>
 
 bcostars::protocol::TransactionReceiptImpl::Ptr
 bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt() const

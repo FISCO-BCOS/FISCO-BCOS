@@ -15,6 +15,7 @@
 #include <range/v3/view/zip.hpp>
 #include <type_traits>
 #include <variant>
+#include <deque>
 
 namespace bcos::storage2
 {

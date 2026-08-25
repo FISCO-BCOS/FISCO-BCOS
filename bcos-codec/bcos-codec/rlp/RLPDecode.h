@@ -25,6 +25,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <utility>
 
@@ -228,6 +229,14 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, UnsignedIntegral auto& to) 
     if (header.isList)
     {
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedList, "Unexpected list");
+    }
+    // Reject integers wider than the target type instead of silently truncating via fromBigEndian
+    // (op-geth parity). Use digits/8, NOT sizeof(T): boost u256 has sizeof 48 but 32 payload bytes.
+    constexpr auto maxBytes = std::numeric_limits<std::decay_t<decltype(to)>>::digits / 8;
+    if (header.payloadLength > maxBytes)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedLength,
+            "integer wider than target type");
     }
     to = fromBigEndian<std::decay_t<decltype(to)>, bcos::bytesRef>(
         from.getCroppedData(0, header.payloadLength));

@@ -33,6 +33,7 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/compute/detail/lru_cache.hpp>
 #include <utility>
+#include <bcos-utilities/BoostLog.h>
 
 #define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
 

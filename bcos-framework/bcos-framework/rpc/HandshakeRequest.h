@@ -24,6 +24,7 @@
 #include <fmt/format.h>
 #include <json/json.h>
 #include <memory>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::rpc
 {

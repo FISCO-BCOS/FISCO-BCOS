@@ -3,6 +3,7 @@
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <cstdint>
 #include <tuple>
+#include <bcos-utilities/BoostLog.h>
 #define SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SCHEDULER")
 #define SCHEDULER_BLK_LOG(LEVEL, NUMBER) \
     BCOS_LOG(LEVEL) << LOG_BADGE("SCHEDULER") << BLOCK_NUMBER(NUMBER)

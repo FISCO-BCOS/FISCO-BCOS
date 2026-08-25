@@ -28,7 +28,14 @@
 #include <utility>
 #include <vector>
 
-using namespace std;
+using std::cout;
+using std::endl;
+using std::exception;
+using std::make_shared;
+using std::map;
+using std::shared_ptr;
+using std::string;
+using std::vector;
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::executor::critical;

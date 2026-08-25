@@ -30,6 +30,7 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::protocol
 {

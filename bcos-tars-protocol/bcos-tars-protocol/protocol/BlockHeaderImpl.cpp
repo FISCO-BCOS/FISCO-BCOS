@@ -36,6 +36,7 @@
 #include <range/v3/view/any_view.hpp>
 #include <range/v3/view/transform.hpp>
 #include <stdexcept>
+#include <bcos-utilities/BoostLog.h>
 
 DERIVE_BCOS_EXCEPTION(EmptyBlockHeaderHash);
 

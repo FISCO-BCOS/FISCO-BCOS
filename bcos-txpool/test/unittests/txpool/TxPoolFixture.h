@@ -43,6 +43,8 @@
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
+#include <list>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::protocol;

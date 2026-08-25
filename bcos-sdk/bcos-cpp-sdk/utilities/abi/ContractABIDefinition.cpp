@@ -30,6 +30,7 @@
 #include <optional>
 #include <stdexcept>
 #include <vector>
+#include <boost/algorithm/string.hpp>
 
 using namespace bcos;
 using namespace bcos::cppsdk;

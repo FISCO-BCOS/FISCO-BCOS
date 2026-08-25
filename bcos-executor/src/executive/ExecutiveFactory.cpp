@@ -25,6 +25,7 @@
 #include "CoroutineTransactionExecutive.h"
 #include "ShardingTransactionExecutive.h"
 #include "TransactionExecutive.h"
+#include <boost/algorithm/string.hpp>
 
 using namespace bcos::executor;
 using namespace bcos::precompiled;

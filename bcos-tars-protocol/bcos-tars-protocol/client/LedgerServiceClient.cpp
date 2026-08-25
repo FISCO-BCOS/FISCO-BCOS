@@ -23,6 +23,7 @@
 #include "../protocol/BlockImpl.h"
 #include "../protocol/TransactionImpl.h"
 #include "../protocol/TransactionReceiptImpl.h"
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcostars;
 

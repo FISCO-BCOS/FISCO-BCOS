@@ -22,6 +22,7 @@
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::crypto;

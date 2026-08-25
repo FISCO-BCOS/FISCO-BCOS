@@ -130,7 +130,7 @@ struct FIB153Fixture
     sealer::SealerConfig::Ptr sealerConfig;
 };
 
-inline std::vector<bcos::protocol::TransactionMetaData::Ptr> makeMetaDataBatch(size_t count)
+inline std::vector<bcos::protocol::TransactionMetaData::Ptr> makeMetaDataBatch153(size_t count)
 {
     std::vector<bcos::protocol::TransactionMetaData::Ptr> batch;
     batch.reserve(count);
@@ -153,7 +153,7 @@ inline std::shared_ptr<HookGateSealingManager> makeHookGateManager(sealer::Seale
     // sees txsSize >= m_maxTxsPerBlock and lets execution proceed to the
     // hook gate we want to test. Without this seed the FIB-117 inner re-check
     // would short-circuit before the gate is reached.
-    auto seed = makeMetaDataBatch(4);
+    auto seed = makeMetaDataBatch153(4);
     mgr->testOnlySeedPendingTxs(seed);
     return mgr;
 }
@@ -181,7 +181,7 @@ BOOST_AUTO_TEST_CASE(hook_added_sys_tx_advances_waitUntil)
 
     // Hook synthesises a sys-tx and appends it directly to the block — same
     // shape as VRFBasedSealer::generateTransactionForRotating.
-    auto syntheticSysTx = makeMetaDataBatch(1).front();
+    auto syntheticSysTx = makeMetaDataBatch153(1).front();
     int hookCalls = 0;
     auto [containsSysTxs, block] =
         mgr->generateProposal([&](bcos::protocol::Block::Ptr _block) -> uint16_t {

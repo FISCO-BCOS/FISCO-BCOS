@@ -29,6 +29,7 @@
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-rlp-protocol/Web3TxEnvelope.h>
 #include <bcos-utilities/BoostLog.h>
 #include <boost/throw_exception.hpp>
 #include <cstring>
@@ -250,6 +251,24 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
     // The recompute is a byte splice plus one keccak, cheap enough to always run.
     if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
     {
+        // Deposit (0x7e): unsigned — extraTransactionBytes already IS the full 0x7e envelope
+        // (stored by takeToTarsTransaction as encode()), so the hash is keccak of it verbatim;
+        // reassembleWeb3RawTransaction cannot be used (it needs a 65-byte signature).
+        // The deposit determination comes from the SIGNED envelope's first byte, NEVER the
+        // forgeable web3TypedTxKind mirror (tars field 12): a peer can rewrite that mirror to
+        // 0x7e on a signed Web3 tx, which would route the hash to this unsigned-deposit form
+        // and skip reassembleWeb3RawTransaction — defeating the "never believe the wire hash"
+        // defense (kyonRay R4 #1). The mirror is display-only; security decisions key on the
+        // envelope.
+        auto const extraBytes = extraTransactionBytes();
+        bool const isDepositEnvelope =
+            (!extraBytes.empty() && extraBytes[0] == static_cast<bcos::byte>(0x7e));
+        if (isDepositEnvelope)
+        {
+            auto const depositHash = bcos::crypto::keccak256Hash(extraBytes);
+            m_inner()->extraTransactionHash.assign(depositHash.begin(), depositHash.end());
+            return;
+        }
         auto const canonicalTxHash = bcos::crypto::keccak256Hash(
             bcos::ref(reassembleWeb3RawTransaction(extraTransactionBytes(), signatureData())));
         m_inner()->extraTransactionHash.assign(canonicalTxHash.begin(), canonicalTxHash.end());
@@ -411,6 +430,22 @@ uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
         return 0;
     }
     return static_cast<uint8_t>(m_inner()->web3TypedTxKind);
+}
+
+std::optional<uint64_t> bcostars::protocol::TransactionImpl::web3ChainIdFromEnvelope() const
+{
+    // chainId admission must come from the SIGNED envelope, not the tars mirror (data.chainID):
+    // the signature binds only extraTransactionBytes + signatureData. extraTransactionBytes is
+    // the signing preimage: typed = type byte || rlp([chainId, ...]); legacy = 6 fields or
+    // [...6 fields, chainId, 0, 0]. nullopt means a pre-EIP-155 legacy preimage (no chainId
+    // tail) — a malformed tail (unparseable field 7) also yields nullopt, but is unreachable
+    // through TxValidator: verify() rejects the same bytes first via reassembleWeb3RawTransaction
+    // (the walker is shared with the block path — see Web3TxEnvelope.h — keep one home).
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        return std::nullopt;
+    }
+    return bcos::rlp::protocol::web3ChainIdFromEnvelope(extraTransactionBytes());
 }
 
 std::string_view bcostars::protocol::TransactionImpl::sourceHash() const

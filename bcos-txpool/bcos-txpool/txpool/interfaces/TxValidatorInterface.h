@@ -24,6 +24,7 @@
 #include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-protocol/TransactionStatus.h>
+#include <bcos-utilities/BoostLog.h>
 
 #define TX_VALIDATOR_CHECKER_LOG(LEVEL) \
     BCOS_LOG(LEVEL) << LOG_BADGE("TXValidator") << LOG_BADGE("CHECKER")

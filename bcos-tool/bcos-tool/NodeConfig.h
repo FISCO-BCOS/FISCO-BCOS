@@ -32,6 +32,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <cstddef>
 #include <unordered_map>
+#include <bcos-utilities/BoostLog.h>
 
 #define NodeConfig_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("NodeConfig")
 namespace bcos::tool

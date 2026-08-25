@@ -17,6 +17,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <boost/algorithm/string.hpp>
 #include <atomic>
 #include <chrono>
 #include <cstdint>

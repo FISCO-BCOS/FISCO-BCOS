@@ -19,4 +19,5 @@
  */
 #pragma once
 #include <bcos-framework/Common.h>
+#include <bcos-utilities/BoostLog.h>
 #define SEAL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")
