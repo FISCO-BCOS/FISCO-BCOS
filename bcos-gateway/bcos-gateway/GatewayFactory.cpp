@@ -821,7 +821,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             auto gatewayRateLimiterWeakPtr =
                 std::weak_ptr<ratelimiter::GatewayRateLimiter>(gatewayRateLimiter);
             service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](SessionFace& _session,
-                                                 Message& _msg) -> std::optional<bcos::Error> {
+                                                 const Message& _msg,
+                                                 uint32_t _wireLength) -> std::optional<bcos::Error> {
                 auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
                 if (!gatewayRateLimiter)
                 {
@@ -835,7 +836,9 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                         msgExtAttributes ? msgExtAttributes->groupID() : std::string();
                     uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
                     std::string endpoint = _session.nodeIPEndpoint().address();
-                    int64_t msgLength = _msg.length();
+                    // charge the actual wire bytes (payload views included): a zero-copy message
+                    // does not carry its payload, so message.length() alone would under-count
+                    int64_t msgLength = _wireLength;
                     auto pkgType = _msg.packetType();
 
                     auto result = gatewayRateLimiter->checkOutGoing(

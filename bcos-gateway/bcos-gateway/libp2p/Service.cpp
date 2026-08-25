@@ -253,9 +253,10 @@ void Service::onConnect(
             std::forward<decltype(session)>(session), std::forward<decltype(message)>(message),
             p2pSessionWeakPtr);
     });
-    p2pSession->session()->setBeforeMessageHandler([this](SessionFace& session, Message& message) {
-        return onBeforeMessage(session, message);
-    });
+    p2pSession->session()->setBeforeMessageHandler(
+        [this](SessionFace& session, const Message& message, uint32_t wireLength) {
+            return onBeforeMessage(session, message, wireLength);
+        });
 
     // Note: the lock must be here, otherwise there will be more than one started sessions,
     // and a session not maintained in m_sessions will be choosed when send messages in some cases
@@ -400,11 +401,12 @@ void Service::sendRespMessageBySession(
     }(self, _p2pSession, bcos::bytes(_payload.begin(), _payload.end()), seq, p2pid));
 }
 
-std::optional<bcos::Error> Service::onBeforeMessage(SessionFace& _session, Message& _message)
+std::optional<bcos::Error> Service::onBeforeMessage(
+    SessionFace& _session, const Message& _message, uint32_t _wireLength)
 {
     if (m_beforeMessageHandler)
     {
-        return m_beforeMessageHandler(_session, _message);
+        return m_beforeMessageHandler(_session, _message, _wireLength);
     }
 
     return std::nullopt;
@@ -1027,8 +1029,8 @@ void bcos::gateway::Service::eraseHandlerByMsgType(uint16_t _type)
 {
     m_msgHandlers.at(_type) = nullptr;
 }
-void bcos::gateway::Service::setBeforeMessageHandler(
-    std::function<std::optional<bcos::Error>(SessionFace&, Message&)> _handler)
+void bcos::gateway::Service::setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
+    SessionFace&, const Message&, uint32_t)> _handler)
 {
     m_beforeMessageHandler = std::move(_handler);
 }

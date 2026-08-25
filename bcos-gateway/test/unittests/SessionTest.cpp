@@ -385,10 +385,11 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
         auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
         session->setMessageFactory(fakeHost->messageFactory());
-        session->setBeforeMessageHandler([](SessionFace&, Message&) -> std::optional<bcos::Error> {
-            return bcos::Error::buildError(
-                "", P2PExceptionType::OutBWOverflow, "outgoing bandwidth overflow");
-        });
+        session->setBeforeMessageHandler(
+            [](SessionFace&, const Message&, uint32_t) -> std::optional<bcos::Error> {
+                return bcos::Error::buildError(
+                    "", P2PExceptionType::OutBWOverflow, "outgoing bandwidth overflow");
+            });
         session->start();
 
         P2PMessage message;
@@ -442,13 +443,13 @@ private:
     NodeIPEndpoint m_nodeIPEndpoint;
 };
 
-BOOST_AUTO_TEST_CASE(fastSendMessageCompressionTransientExt)
+BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
 {
-    // Regression for the second-round review finding: the COMPRESS ext flag must be applied only
-    // TRANSIENTLY inside fastSendMessage. A reused message object (broadcast fan-out / retry loop)
-    // that compresses for one peer must not leak the flag to a later peer that receives an
-    // uncompressed frame (which would fail to decompress and drop the connection). Also exercises
-    // the compression branch itself, which the FakeSocket-based tests cannot reach.
+    // The COMPRESS ext flag is stamped only onto the encoded wire header inside fastSendMessage:
+    // the caller's message is const and never mutated, so a reused message object (broadcast
+    // fan-out / retry loop) that compresses for one peer cannot leak the flag to a later peer that
+    // receives an uncompressed frame (which would fail to decompress and drop the connection).
+    // Also exercises the compression branch itself, which the FakeSocket-based tests cannot reach.
     auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO>();
@@ -504,8 +505,8 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompressionTransientExt)
         task::syncWait(session->fastSendMessage(
             message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{}));
 
-        // The caller's message must NOT keep the COMPRESS flag (transient ext restore), otherwise a
-        // reused message would leak it to an uncompressed peer.
+        // fastSendMessage takes the message by const ref and never mutates it — the COMPRESS flag
+        // only rides on the wire header, so the caller's ext is untouched.
         BOOST_CHECK_EQUAL(message.ext(), originalExt);
 
         // Clean teardown: disconnect closes the socket and stops the read loop. Do NOT null the

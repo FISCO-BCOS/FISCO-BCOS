@@ -43,15 +43,18 @@ public:
     virtual void disconnect(DisconnectReason) = 0;
 
     virtual task::Task<Message::Ptr> fastSendMessage(
-        Message& header, ::ranges::any_view<bytesConstRef> payloads, Options options) = 0;
+        const Message& header, ::ranges::any_view<bytesConstRef> payloads, Options options) = 0;
 
     virtual std::shared_ptr<SocketFace> socket() = 0;
 
     virtual void setMessageHandler(
         std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler) = 0;
 
-    virtual void setBeforeMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace&, Message&)> handler) = 0;
+    // Outgoing pre-send check (rate limiting). _wireLength is the actual frame size including the
+    // payload views — a zero-copy message does not carry its payload, so message.length() alone
+    // under-counts.
+    virtual void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
+        SessionFace&, const Message&, uint32_t _wireLength)> handler) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 

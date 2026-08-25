@@ -129,7 +129,6 @@ public:
 
     uint32_t lengthDirect() const override;
     uint32_t length() const override;
-    void setLength(uint32_t length) override;
 
     uint16_t version() const override;
     virtual void setVersion(uint16_t version);

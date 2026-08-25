@@ -45,7 +45,8 @@ public:
     virtual void onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
-    virtual std::optional<bcos::Error> onBeforeMessage(SessionFace& _session, Message& _message);
+    virtual std::optional<bcos::Error> onBeforeMessage(
+        SessionFace& _session, const Message& _message, uint32_t _wireLength);
 
     virtual void registerUnreachableHandler(std::function<void(std::string)> /*unused*/);
 
@@ -105,6 +106,9 @@ public:
     void asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
         Options options = Options(), P2PResponseCallback _callback = nullptr) override;
 
+    void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
+        SessionFace&, const Message&, uint32_t)> _handler);
+
     void asyncBroadcastMessageToP2PNodes(
         uint16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options) override;
 
@@ -119,9 +123,6 @@ public:
 
     void asyncSendMessageByEndPoint(NodeIPEndpoint const& _endPoint, P2PMessage::Ptr message,
         CallbackFuncWithSession callback, Options options = Options());
-
-    void setBeforeMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace&, Message&)> _handler);
 
     void setOnMessageHandler(
         std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> _handler);
@@ -187,7 +188,8 @@ protected:
     // handlers called when delete-session
     std::vector<std::function<void(P2PSession::Ptr)>> m_deleteSessionHandlers;
 
-    std::function<std::optional<bcos::Error>(SessionFace&, Message&)> m_beforeMessageHandler;
+    std::function<std::optional<bcos::Error>(
+        SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
     std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> m_onMessageHandler;
 };
 
