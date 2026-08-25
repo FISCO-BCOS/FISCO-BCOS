@@ -383,7 +383,7 @@ namespace engine = bcos::evm::engine;
     }
     // data
     {
-        auto const mirrorData = evmTx.data;
+        auto const& mirrorData = evmTx.data;
         if (mirrorData.size() != dataPayload->size() ||
             !std::equal(mirrorData.begin(), mirrorData.end(), dataPayload->begin()))
             return "data mismatch";
@@ -1105,13 +1105,13 @@ private:
                              buildBlockInfo(blockHeader,
                                  opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         auto evmTx = eth::toEvmoneTransaction(transaction);
-        // TRUST BOUNDARY (part-5 gate): execution fields (input/gasLimit/to/value/nonce/sender)
-        // come from the tars mirror, which is NOT bound by the envelope signature — only chainId
-        // is envelope-checked above. At this head the scheduler path has no production caller and
-        // pool admission derives mirror+envelope from the same decode, so the divergence is not
-        // reachable; part-5 wiring MUST re-derive the execution fields from the signed envelope
-        // (web3ExecutionFieldsFromEnvelope, see review finding A) or fail-closed on mirror-vs-
-        // envelope mismatch before the executor becomes the live block-execution path.
+        // TRUST BOUNDARY (envelope↔mirror gate, below): the execution fields come from the tars
+        // mirror, so they are bound against the signed envelope by
+        // envelopeExecutionFieldsMismatch — type byte, nonce, gasLimit, to, value, data are
+        // fail-closed (OpConsensusError) on both the scheduler and block paths. NOT bound at
+        // this head: sender (needs ecrecover), the fee fields, accessList, blobVersionedHashes,
+        // authorizationList — part-5 wiring must close those before the executor becomes the
+        // live block-execution path.
         // eth_call (call=true, skipBalanceCheck) simulates without fee constraints — op-geth's
         // eth_call does not enforce max_gas_price >= base_fee. A pricing-less call (e.g. the RPC
         // default 2 gwei cap) would fail MAX_FEE_PER_GAS_TOO_LOW once the OP base fee exceeds it,

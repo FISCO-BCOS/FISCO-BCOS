@@ -132,6 +132,75 @@ bcos::bytes eip1559Envelope(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
     out.insert(out.end(), payload.begin(), payload.end());
     return out;
 }
+
+/// Build a legacy envelope: bare RLP list rlp([nonce, gasPrice, gasLimit, to, value, data, v, r,
+/// s]) (no EIP-2718 type byte; first byte is the list header, so isTypedWeb3Envelope is false).
+bcos::bytes legacyEnvelope(uint64_t nonce, uint64_t gasLimit, std::string_view toHex,
+    bcos::u256 value, bcos::bytes const& data)
+{
+    auto item = [](bcos::bytes const& payload) {
+        bcos::bytes out;
+        rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+        return out;
+    };
+    auto intItem = [](uint64_t v) {
+        bcos::bytes out;
+        rlp::encode(out, v);
+        return out;
+    };
+    bcos::bytes payload;
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(nonce));
+    append(intItem(1000000000));  // gasPrice
+    append(intItem(gasLimit));
+    auto toBytes = bcos::fromHex(toHex.substr(2));
+    append(item(toBytes));
+    append(intItem(static_cast<uint64_t>(value)));
+    append(item(data));
+    append(intItem(27));  // v (unprotected legacy)
+    append(intItem(0));   // r
+    append(intItem(0));   // s
+
+    bcos::bytes out;
+    rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+    out.insert(out.end(), payload.begin(), payload.end());
+    return out;
+}
+
+/// Build an EIP-2930 (0x01) envelope: 0x01 || rlp([chainId, nonce, gasPrice, gasLimit, to, value,
+/// data, accessList]).
+bcos::bytes accessListEnvelope(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
+    std::string_view toHex, bcos::u256 value, bcos::bytes const& data)
+{
+    auto item = [](bcos::bytes const& payload) {
+        bcos::bytes out;
+        rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+        return out;
+    };
+    auto intItem = [](uint64_t v) {
+        bcos::bytes out;
+        rlp::encode(out, v);
+        return out;
+    };
+    bcos::bytes payload;
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(chainId));
+    append(intItem(nonce));
+    append(intItem(1000000000));  // gasPrice
+    append(intItem(gasLimit));
+    auto toBytes = bcos::fromHex(toHex.substr(2));
+    append(item(toBytes));
+    append(intItem(static_cast<uint64_t>(value)));
+    append(item(data));
+    payload.push_back(0xc0);  // empty accessList
+
+    bcos::bytes out{static_cast<bcos::byte>(0x01)};
+    rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+    out.insert(out.end(), payload.begin(), payload.end());
+    return out;
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpEnvelopeMirrorSuite)
@@ -244,6 +313,95 @@ BOOST_AUTO_TEST_CASE(ConsistentMirrorPasses)
     tx.m_gasLimit = 5000000;
     tx.m_input = {0xde, 0xad};
     BOOST_CHECK(!envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
+}
+
+// The field-index table's legacy branch (typed == false → [0,2,3,4,5]) is exercised: a bare
+// legacy list envelope + matching mirror passes, a forged mirror value is rejected.
+BOOST_AUTO_TEST_CASE(LegacyEnvelopeConsistentMirrorPasses)
+{
+    FakeTx tx;
+    tx.m_kind = 0;
+    tx.m_extraBytes = legacyEnvelope(
+        7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {0xde, 0xad});
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde, 0xad};
+    BOOST_CHECK(!envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(LegacyEnvelopeValueDivergenceRejected)
+{
+    FakeTx tx;
+    tx.m_kind = 0;
+    tx.m_extraBytes =
+        legacyEnvelope(7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_value = bcos::u256{999};  // forged
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("value mismatch") != std::string::npos);
+}
+
+// The field-index table's 0x01 (2930) branch (envelopeKind == 0x01 → [1,3,4,5,6]) is exercised.
+BOOST_AUTO_TEST_CASE(AccessListEnvelopeConsistentMirrorPasses)
+{
+    FakeTx tx;
+    tx.m_kind = 1;
+    tx.m_extraBytes = accessListEnvelope(
+        10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {0xde, 0xad});
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde, 0xad};
+    BOOST_CHECK(!envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(AccessListEnvelopeValueDivergenceRejected)
+{
+    FakeTx tx;
+    tx.m_kind = 1;
+    tx.m_extraBytes = accessListEnvelope(
+        10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_value = bcos::u256{999};  // forged
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("value mismatch") != std::string::npos);
+}
+
+// Contract-creation shape: mirror `to` empty (→ evmTx.to = nullopt) and the envelope's `to`
+// item empty — consistent, passes. An envelope carrying a 20-byte `to` then diverges.
+BOOST_AUTO_TEST_CASE(ContractCreationEnvelopePasses)
+{
+    FakeTx tx;
+    tx.m_extraBytes = eip1559Envelope(10, 7, 5000000, "0x", bcos::u256{5}, {0x60, 0x00});
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "";  // creation
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0x60, 0x00};
+    BOOST_CHECK(!envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(ContractCreationEnvelopeToDivergenceRejected)
+{
+    FakeTx tx;
+    tx.m_extraBytes = eip1559Envelope(
+        10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "";  // creation, but the envelope carries a recipient
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("to mismatch") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

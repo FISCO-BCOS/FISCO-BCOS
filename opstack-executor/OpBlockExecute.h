@@ -69,6 +69,9 @@ struct OpBlockResult
 /// contract**: on any throw the caller must discard all writes already applied (op-geth Process
 /// semantics). Throws OpConsensusError on block-level errors, including errors normalized from
 /// runDeposit/opTransition.
+/// Every normal (non-deposit) transaction must carry a non-empty signedEnvelope: the
+/// envelope↔mirror cross-check rejects an empty envelope as a hard whole-block rejection
+/// (OpConsensusError), mirroring the per-tx path.
 OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     std::span<const OpBlockTx> txs, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,

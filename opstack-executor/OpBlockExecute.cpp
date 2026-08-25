@@ -367,6 +367,12 @@ bcos::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, ui
 OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     const std::map<evmc::bytes32, evmc::bytes32>& messagePasserStorage)
 {
+    // Guard before any indexing: a caller that builds an OpBlockResult by hand (part-5's
+    // OpScheduler, or a test) could otherwise feed mismatched receipts/txTypes — txTypes[i] is
+    // indexed below and its bytes become the receipts-root leaf's type prefix, so a length
+    // mismatch would silently produce a wrong header commitment (an out-of-bounds read).
+    if (result.txTypes.size() != result.receipts.size())
+        throw OpConsensusError("op block: receipts/txTypes length mismatch");
     OpBlockSeal seal{};
 
     // receipts-root: var-key trie (key = rlp(index), leaf = EncodeIndex encoding).
