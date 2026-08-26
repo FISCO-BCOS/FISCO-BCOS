@@ -267,10 +267,13 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                    decltype(_generatedNodeID) _generatedNodeID, decltype(encodedData) _encodedData,
                    decltype(_missedTxs) _missedTxs, decltype(_verifiedProposal) _verifiedProposal,
                    decltype(_onVerifyFinished) _onVerifyFinished) mutable -> task::Task<void> {
-        auto result = co_await _front->sendMessageByNodeID(_protocolID, _generatedNodeID,
-            ::ranges::views::single(ref(*_encodedData)), _networkTimeout);
+        // result is declared outside the try so the catch below can still log the peer on a
+        // synchronous send failure
+        bcos::front::SendResult result;
         try
         {
+            result = co_await _front->sendMessageByNodeID(_protocolID, _generatedNodeID,
+                ::ranges::views::single(ref(*_encodedData)), _networkTimeout);
             auto transactionSync = _self.lock();
             if (!transactionSync)
             {

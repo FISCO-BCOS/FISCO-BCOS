@@ -970,10 +970,22 @@ void BlockSync::sendSyncStatusByTree()
         // all state is passed as coroutine parameters so it is copied into the frame and stays alive
         task::wait([](decltype(front) _front, decltype(nodeID) _nodeID,
                        decltype(encodedData) _encodedData) mutable -> task::Task<void> {
-            // fire-and-forget status push: no module-level response is expected (timeout == 0)
-            auto result = co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
-                ::ranges::views::single(ref(*_encodedData)), 0);
-            (void)result;
+            try
+            {
+                // fire-and-forget: no module-level response expected (timeout == 0)
+                auto result = co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
+                    ::ranges::views::single(ref(*_encodedData)), 0);
+                (void)result;
+            }
+            catch (std::exception const& e)
+            {
+                // a synchronous throw (e.g. gateway local delivery or a bad front) must not break
+                // the per-node loop: log and continue with the next peer
+                BLKSYNC_LOG(WARNING) << LOG_BADGE("BlockSync")
+                                     << LOG_DESC("broadcastSyncStatusByTree send exception")
+                                     << LOG_KV("nodeID", _nodeID->shortHex())
+                                     << LOG_KV("message", boost::diagnostic_information(e));
+            }
         }(front, nodeID, encodedData));
     }
 }
@@ -997,9 +1009,18 @@ void BlockSync::broadcastSyncStatus()
     {
         task::wait([](decltype(encodedData) encodedData,
                        bcos::front::FrontServiceInterface::Ptr front) -> task::Task<void> {
-            co_await front->broadcastMessage(
-                LIGHT_NODE | CONSENSUS_NODE | OBSERVER_NODE | FREE_NODE, ModuleID::BlockSync,
-                ::ranges::views::single(bcos::ref(*encodedData)));
+            try
+            {
+                co_await front->broadcastMessage(
+                    LIGHT_NODE | CONSENSUS_NODE | OBSERVER_NODE | FREE_NODE, ModuleID::BlockSync,
+                    ::ranges::views::single(bcos::ref(*encodedData)));
+            }
+            catch (std::exception const& e)
+            {
+                BLKSYNC_LOG(WARNING) << LOG_BADGE("BlockSync")
+                                     << LOG_DESC("broadcastSyncStatus send exception")
+                                     << LOG_KV("message", boost::diagnostic_information(e));
+            }
         }(std::move(encodedData), m_config->frontService()));
     }
     else
@@ -1012,10 +1033,21 @@ void BlockSync::broadcastSyncStatus()
             // state is passed as coroutine parameters so it is copied into the frame and stays alive
             task::wait([](decltype(front) _front, decltype(nodeID) _nodeID,
                            decltype(encodedData) _encodedData) mutable -> task::Task<void> {
-                // fire-and-forget status push: no module-level response is expected (timeout == 0)
-                auto result = co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
-                    ::ranges::views::single(ref(*_encodedData)), 0);
-                (void)result;
+                try
+                {
+                    // fire-and-forget: no module-level response expected (timeout == 0)
+                    auto result = co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
+                        ::ranges::views::single(ref(*_encodedData)), 0);
+                    (void)result;
+                }
+                catch (std::exception const& e)
+                {
+                    // a synchronous throw must not break the per-node loop: log and continue
+                    BLKSYNC_LOG(WARNING) << LOG_BADGE("BlockSync")
+                                         << LOG_DESC("broadcastSyncStatus send exception")
+                                         << LOG_KV("nodeID", _nodeID->shortHex())
+                                         << LOG_KV("message", boost::diagnostic_information(e));
+                }
             }(front, nodeID, encodedData));
         }
     }

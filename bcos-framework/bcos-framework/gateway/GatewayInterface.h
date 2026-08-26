@@ -131,8 +131,9 @@ public:
         // Both the payload buffer and the completion state are owned by shared_ptrs captured by the
         // completion callback, NOT by this coroutine frame: the borrowed TARS client may keep
         // reading the payload after the callback returns (e.g. a synchronous connection-check error
-        // followed by an async send setup), and it may even invoke the callback twice (synchronously
-        // for the connection check AND later for the async completion). The shared state survives
+        // followed by an async send setup), and it may even invoke the callback twice
+        // (synchronously for the connection check AND later for the async completion). The
+        // shared state survives
         // the frame so the second completion is detected instead of double-resuming a destroyed
         // coroutine.
         auto buffer = std::make_shared<bcos::bytes>();

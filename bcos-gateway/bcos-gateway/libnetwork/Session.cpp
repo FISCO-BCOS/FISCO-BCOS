@@ -110,7 +110,7 @@ static void send(Session& session, ::ranges::input_range auto payloads,
         // coroutine (fastSendMessageWithoutResponse) is resumed with an error instead of leaking
         // the whole task::wait chain — which would pin the session/socket/service forever. Post to
         // the io thread rather than call inline: await_suspend has not returned yet, and a
-        // synchronous resume would re-enter the awaiting coroutine from inside its own await_suspend.
+        // synchronous resume would re-enter the awaiting coroutine from inside await_suspend.
         if (callback)
         {
             session.m_server.get().asioInterface()->post([callback = std::move(callback)]() {
@@ -258,9 +258,8 @@ void Session::write()
                             session->m_server.get().asioInterface()->post(
                                 [callback = std::move(payload.m_callback), error = _error]() {
                                     // The callback resumes a coroutine whose await_resume may throw
-                                    // (e.g. fastSendMessageWithoutResponse throwing NetworkException
-                                    // on write failure). Catch it here so it cannot escape the
-                                    // io_context::run() loop and crash the io thread.
+                                    // (fastSendMessageWithoutResponse throws NetworkException on
+                                    // write failure). Catch so it cannot escape io_context::run().
                                     try
                                     {
                                         callback(error);
@@ -297,7 +296,9 @@ void Session::write()
                 if (m_server.get().haveNetwork())
                 {
                     m_server.get().asioInterface()->post(
-                        [callback = std::move(cb)]() { callback(boost::asio::error::operation_aborted); });
+                        [callback = std::move(cb)]() {
+                            callback(boost::asio::error::operation_aborted);
+                        });
                 }
                 else
                 {

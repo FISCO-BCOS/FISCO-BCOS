@@ -386,17 +386,30 @@ void Service::sendRespMessageBySession(
     // passed as coroutine parameters so they are copied into the frame.
     task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession,
                    bcos::bytes _payload, uint32_t _seq, P2pID _p2pid) -> task::Task<void> {
-        P2PMessageV2 respMessage;
-        respMessage.setSeq(_seq);
-        respMessage.setRespPacket();
-        respMessage.setPayload(std::move(_payload));
-        co_await _p2pSession->fastSendP2PMessage(
-            respMessage, ::ranges::views::single(respMessage.payload()), Options{});
-        if (c_fileLogLevel <= TRACE) [[unlikely]]
+        try
         {
-            SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _seq)
-                               << LOG_KV("p2pid", printShortP2pID(_p2pid))
-                               << LOG_KV("payload size", respMessage.payload().size());
+            P2PMessageV2 respMessage;
+            respMessage.setSeq(_seq);
+            respMessage.setRespPacket();
+            respMessage.setPayload(std::move(_payload));
+            co_await _p2pSession->fastSendP2PMessage(
+                respMessage, ::ranges::views::single(respMessage.payload()), Options{});
+            if (c_fileLogLevel <= TRACE) [[unlikely]]
+            {
+                SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _seq)
+                                   << LOG_KV("p2pid", printShortP2pID(_p2pid))
+                                   << LOG_KV("payload size", respMessage.payload().size());
+            }
+        }
+        catch (std::exception const& e)
+        {
+            // Same shape as ServiceV2::sendRespMessageBySession (ServiceV2 delegates V0 peers
+            // here): a synchronous pre-send rejection on the response path must not propagate out
+            // of the receiving handler.
+            SERVICE_LOG(WARNING) << LOG_BADGE("sendRespMessageBySession")
+                                 << LOG_DESC("send response failed") << LOG_KV("seq", _seq)
+                                 << LOG_KV("p2pid", printShortP2pID(_p2pid))
+                                 << LOG_KV("what", boost::diagnostic_information(e));
         }
     }(self, _p2pSession, bcos::bytes(_payload.begin(), _payload.end()), seq, p2pid));
 }
@@ -617,9 +630,8 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
     }
 }
 
-bcos::task::Task<void> Service::broadcastMessageToAll(
-    P2PMessage::Ptr message, ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
-    Options options)
+bcos::task::Task<void> Service::broadcastMessageToAll(P2PMessage::Ptr message,
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads, Options options)
 {
     std::vector<P2pID> nodeIDs;
     {
@@ -656,9 +668,8 @@ bcos::task::Task<void> Service::broadcastMessageToAll(
     co_return;
 }
 
-bcos::task::Task<void> Service::broadcastMessageToNeighbors(
-    P2PMessage::Ptr message, ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
-    Options options)
+bcos::task::Task<void> Service::broadcastMessageToNeighbors(P2PMessage::Ptr message,
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads, Options options)
 {
     // Only directly connected sessions (m_sessions), unlike broadcastMessageToAll which may fan out
     // through the ServiceV2 router table. This preserves the "router table sync only between

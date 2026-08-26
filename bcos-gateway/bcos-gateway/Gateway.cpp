@@ -200,8 +200,9 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
             bcos::bytes(_payload.begin(), _payload.end()), std::move(_errorRespFunc)));
 }
 
-bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(const std::string& _groupID,
-    int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
+bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
+    const std::string& _groupID, int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID,
+    bcos::crypto::NodeIDPtr _dstNodeID,
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads)
 {
     auto p2pIDs =

@@ -302,8 +302,12 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine_withResponse
     std::string data(1000, 'z');
     std::string responsePayload(64, 'R');
 
-    std::promise<SendResult> resultPromise;
-    auto resultFuture = resultPromise.get_future();
+    // Round-7 review: keep the promise alive via shared_ptr. The detached coroutine holds a raw
+    // reference to it; if wait_for below ever timed out, BOOST_REQUIRE aborts the test and the
+    // stack promise would be destroyed while the coroutine may still call set_value. A shared_ptr
+    // keeps the promise alive either way.
+    auto resultPromise = std::make_shared<std::promise<SendResult>>();
+    auto resultFuture = resultPromise->get_future();
 
     int moduleID = 333;
     frontService->registerModuleMessageDispatcher(moduleID,
@@ -322,13 +326,13 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine_withResponse
     auto self = frontService;
     task::wait(
         [](decltype(self) _self, decltype(dstNodeID) _dstNodeID, int _moduleID, std::string _data,
-            std::promise<SendResult>* _resultPromise) -> task::Task<void> {
+            std::shared_ptr<std::promise<SendResult>> _resultPromise) -> task::Task<void> {
             auto result = co_await _self->sendMessageByNodeID(_moduleID, _dstNodeID,
                 ::ranges::views::single(bytesConstRef(
                     reinterpret_cast<const bcos::byte*>(_data.data()), _data.size())),
                 5000);
             _resultPromise->set_value(std::move(result));
-        }(self, dstNodeID, moduleID, data, &resultPromise));
+        }(self, dstNodeID, moduleID, data, resultPromise));
 
     auto status = resultFuture.wait_for(std::chrono::seconds(10));
     BOOST_REQUIRE(status == std::future_status::ready);

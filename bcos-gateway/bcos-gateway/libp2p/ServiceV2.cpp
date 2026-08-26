@@ -487,9 +487,8 @@ void ServiceV2::asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Optio
     }
 }
 
-bcos::task::Task<void> ServiceV2::broadcastMessageToAll(
-    P2PMessage::Ptr message, ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
-    Options options)
+bcos::task::Task<void> ServiceV2::broadcastMessageToAll(P2PMessage::Ptr message,
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads, Options options)
 {
     auto reachableNodes = m_routerTable->getAllReachableNode();
     auto selfV2 = std::static_pointer_cast<ServiceV2>(shared_from_this());
@@ -556,7 +555,7 @@ void ServiceV2::sendRespMessageBySession(
             respMessage.setSeq(_seq);
             respMessage.setRespPacket();
             respMessage.setPayload(std::move(_payload));
-            // Note: send response directly with the original session (zero-copy view of frame payload)
+            // Note: respond directly via the original session (zero-copy view)
             co_await _p2pSession->fastSendP2PMessage(
                 respMessage, ::ranges::views::single(respMessage.payload()), Options{});
             if (c_fileLogLevel <= TRACE) [[unlikely]]

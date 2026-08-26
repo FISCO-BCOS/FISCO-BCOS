@@ -59,6 +59,11 @@ struct SendResult
  *         timeout / gateway failure, on the front's io-thread pool) to a co_await. Race-safe:
  *         whichever of the callback and the suspension wins, the coroutine is resumed exactly once
  *         and the result is delivered exactly once.
+ *
+ * Publication order: complete() writes State::result BEFORE publishing State::done (release),
+ * and await_ready()/await_suspend() read done with acquire — so a reader that observes done ==
+ * true is guaranteed to see the fully-written result. The idempotency guard stays under the mutex;
+ * the lock itself only serializes complete() vs await_suspend().
  */
 class SendResponseAwaitable
 {
@@ -74,6 +79,8 @@ public:
 
     explicit SendResponseAwaitable(StatePtr state) : m_state(std::move(state)) {}
 
+    // Lock-free fast path: pairs with complete()'s release store — observing done == true implies
+    // result is fully written, so await_resume() may move it without the lock.
     bool await_ready() const noexcept { return m_state->done.load(std::memory_order_acquire); }
 
     void await_suspend(std::coroutine_handle<> handle)
@@ -99,17 +106,19 @@ public:
 
     // Called by the response/timeout/gateway-failure callback (on its own thread). Completes the
     // wait exactly once; if the coroutine has not suspended yet, await_suspend observes done and
-    // resumes itself.
+    // resumes itself. result is written BEFORE done is published (release) so the lock-free
+    // await_ready() fast path never races with this write.
     static void complete(const StatePtr& state, SendResult result)
     {
         std::coroutine_handle<> handle;
         {
             std::lock_guard lock(state->mutex);
-            if (state->done.exchange(true, std::memory_order_acq_rel))
+            if (state->done.load(std::memory_order_relaxed))
             {
                 return;
             }
             state->result = std::move(result);
+            state->done.store(true, std::memory_order_release);
             handle = state->handle;
         }
         if (handle)

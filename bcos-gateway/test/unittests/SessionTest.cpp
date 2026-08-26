@@ -546,7 +546,8 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     // The wire frame must actually be compressed: parse the header
     // [length:4][version:2][packetType:2][seq:4][ext:2] (P2PMessage::MESSAGE_HEADER_LENGTH = 14).
     BOOST_REQUIRE(received.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
-    uint16_t frameExt = (static_cast<uint16_t>(received[12]) << 8) | static_cast<uint16_t>(received[13]);
+    uint16_t frameExt = (static_cast<uint16_t>(received[12]) << 8) |
+                        static_cast<uint16_t>(received[13]);
     BOOST_CHECK(frameExt & bcos::protocol::MessageExtFieldFlag::COMPRESS);
 }
 
@@ -691,13 +692,19 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     task::syncWait(service->broadcastMessageToNeighbors(
         message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{}));
 
-    peerV2.join();
-    peerV0.join();
-
+    // Round-7 review: disconnect the sessions BEFORE joining the peer threads. Each peer thread
+    // blocks on a synchronous asio read; if a broadcast regression ever skipped a peer, that
+    // thread would block forever and a disconnect placed after join() would never run — surfacing
+    // as a CI hang instead of a failure. Closing the client sockets first unblocks any stuck peer
+    // read so a missed peer fails the test.
     for (auto& session : sessions)
     {
         session->disconnect(DisconnectReason::DisconnectRequested);
     }
+
+    peerV2.join();
+    peerV0.join();
+
     workGuard.reset();
     {
         boost::system::error_code ec;
