@@ -2,27 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// ReorgUndo — the per-height undo journal behind one-level tip rollback (S-DRV-6/7 stage 1).
-//
-// The engine's execution base is the MLS layer stack's top — after a block commits, the
-// backend IS that block's state; the parent's flat values of every key the block wrote are
-// overwritten and gone (the MPT plane keeps them provable, but has no preimage enumeration
-// to rebuild a flat base from). A reorg sibling at the committed tip's own height therefore
-// has no execution base — unless the parent's values were journaled when the block committed.
-//
-// That journal is ReorgUndoBlob: for every state-plane key the block's delta layer touched
-// (the "/mpt/" node table excluded — content-addressed, append-only, never overwritten), the
-// value the key held BEFORE the block, plus the block's tx counters (total_transaction_count
-// compensation). Stored as one SYS_REORG_UNDO row keyed by the block's decimal height.
-//
-// Consumption (OpScheduler): the sibling's execute pre-writes the rows into its view's
-// mutable layer — that single act is simultaneously the read shadow (mutable layer is
-// consulted first, tombstones hide backend rows) and the write-back (the rows merge into the
-// backend with the block's own delta, so keys the sibling does not touch return to their
-// parent values). Capture: at every commit, the delta layer is enumerated and each key's
-// pre-block value is read from a committed view — for a ROLLBACK commit the replaced tip's
-// journal supplies the parent values instead, because the backend still holds the replaced
-// block's writes until the merge.
+// Per-height undo journal for one-level tip rollback.
+// SYS_REORG_UNDO key = decimal height; value = ReorgUndoBlob
+// (pre-block values, /mpt/ excluded, plus tx counters).
 
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
@@ -31,6 +13,8 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -40,8 +24,7 @@
 namespace bcos::executor_v1::opstack
 {
 
-/// One undo entry: the value `key` held before the journaled block's delta layer wrote it.
-/// nullopt = the key did not exist; restoring it must delete the row.
+/// Pre-block value for one key. nullopt means the key did not exist.
 struct ReorgUndoRow
 {
     executor_v1::StateKey key;
@@ -50,9 +33,7 @@ struct ReorgUndoRow
 
 struct ReorgUndoBlob
 {
-    /// The journaled block's transaction counters, for total/failed count compensation when a
-    /// sibling overwrites the height (prewrite adds counters on top of the ledger's stored
-    /// totals, which already include the replaced block's contribution).
+    /// Tx counters of the journaled block (used to undo prewrite totals).
     int64_t txCount = 0;
     int64_t failedCount = 0;
     std::vector<ReorgUndoRow> rows;
@@ -129,6 +110,10 @@ public:
             {
                 throw std::runtime_error("ReorgUndo: truncated blob");
             }
+            if (n == 0)
+            {
+                return {};
+            }
             auto begin = cursor;
             std::advance(cursor, static_cast<std::ptrdiff_t>(n));
             return {&*begin, n};
@@ -158,16 +143,33 @@ public:
             throw std::runtime_error("ReorgUndo: unsupported blob version");
         }
         ReorgUndoBlob blob;
-        blob.txCount = static_cast<int64_t>(takeU64());
-        blob.failedCount = static_cast<int64_t>(takeU64());
+        auto const txCountU64 = takeU64();
+        auto const failedCountU64 = takeU64();
+        auto const maxI64 = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+        if (txCountU64 > maxI64 || failedCountU64 > maxI64)
+        {
+            throw std::runtime_error("ReorgUndo: counter exceeds int64");
+        }
+        blob.txCount = static_cast<int64_t>(txCountU64);
+        blob.failedCount = static_cast<int64_t>(failedCountU64);
         auto rowCount = takeU32();
+        constexpr size_t kMinRowBytes = 5;  // u32 keyLen + u8 hasOld
+        if (rowCount > 0 && remaining() < static_cast<size_t>(rowCount) * kMinRowBytes)
+        {
+            throw std::runtime_error("ReorgUndo: truncated blob");
+        }
         blob.rows.reserve(rowCount);
         for (uint32_t i = 0; i < rowCount; ++i)
         {
             auto keyLen = takeU32();
             auto keyBytes = take(keyLen);
             ReorgUndoRow row{executor_v1::StateKey{std::string(keyBytes)}, std::nullopt};
-            if (takeU8() != 0)
+            auto const hasOld = takeU8();
+            if (hasOld != 0 && hasOld != 1)
+            {
+                throw std::runtime_error("ReorgUndo: invalid hasOld flag");
+            }
+            if (hasOld == 1)
             {
                 auto valueLen = takeU32();
                 auto valueBytes = take(valueLen);
@@ -176,6 +178,10 @@ public:
                 row.oldValue.emplace(std::move(entry));
             }
             blob.rows.push_back(std::move(row));
+        }
+        if (remaining() != 0)
+        {
+            throw std::runtime_error("ReorgUndo: trailing bytes");
         }
         return blob;
     }

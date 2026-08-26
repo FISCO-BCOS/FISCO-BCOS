@@ -2,70 +2,53 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// OpScheduler — the OP-specific SchedulerInterface implementation. Standalone: no shared
-// SchedulerSkeleton, so this class owns its execute/commit orchestration inline.
-//
-// DESIGN INVARIANT — OP is LINEAR-ONLY (never a parallel/partitioned scheduler). OP block
-// execution carries three cross-transaction sequential dependencies that forbid any
-// parallel or chunked-staged execution model:
-//   1. the blockGasLeft pool — each tx validates against the gas left AFTER prior txs ran;
-//   2. state-diff visibility — each tx reads the state written by the previous tx;
-//   3. deposit ordering — L1 attributes are injected strictly in order.
-// runOpBlockInjection (the linear per-tx executor) was retired in Task 5: the per-tx loop is the
-// shared SchedulerSerialImpl(serial=true) (grain-size 1 — the same degenerate loop, now shared),
-// the block-pre steps live in OpBlockExecute.h's preBlockOpSteps, the block-post steps in
-// finalizeOpBlockResult.
-// SchedulerParallelImpl must never drive OP. The three sequential dependencies above forbid any
-// parallel or chunked-staged execution model.
-//
-// executeBlock → (preBlockOpSteps → SchedulerSerialImpl per-tx → finalizeOpBlockResult) →
-// six-way verify → stash m_pending;
-// commitBlock → prewriteBlockToBuffer(announcedHash) → mergeBackStorage. OP execution is
-// synchronous single-block — the engine holds x_state across executeBlock→commitBlock
-// (EngineServiceImpl runOpNewPayloadSteps), so a single m_pending slot survives the two
-// calls (no pipelining deque needed; that is an ethereum concern).
+// OpScheduler — SchedulerInterface for OP. Linear only: blockGasLeft, state-diff
+// visibility, and deposit order forbid a parallel scheduler.
+// executeBlock: preBlockOpSteps → SchedulerSerialImpl(serial=true) →
+// finalizeOpBlockResult → commitment check → m_pending.
+// commitBlock: prewriteBlockToBuffer(announcedHash) → mergeBackStorage.
 
-#include <opstack-executor/OpBlockExecute.h>  // preBlockOpSteps / finalizeOpBlockResult / OpBlockSeal
-#include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / mismatchedFieldOf / toBcosH256
+#include <opstack-executor/OpBlockExecute.h>
+#include <opstack-executor/OpCommitments.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
-#include <opstack-executor/ReorgUndo.h>  // ReorgUndoBlob (S-DRV-6/7 one-level tip rollback)
+#include <opstack-executor/ReorgUndo.h>
 
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/dispatcher/SchedulerTypeDef.h>  // SchedulerError (OpConsensusRejected...)
-#include <bcos-framework/engine/Errors.h>  // OpExecutionInternalError (commit-hook guard)
-#include <bcos-framework/executor/PrecompiledTypeDef.h>  // isSysContractDeploy
+#include <bcos-framework/dispatcher/SchedulerTypeDef.h>
+#include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/Features.h>
-#include <bcos-framework/ledger/FeaturesStorage.h>  // readFromStorage
+#include <bcos-framework/ledger/FeaturesStorage.h>
 #include <bcos-framework/ledger/Ledger.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/BlockHeader.h>
-#include <bcos-framework/protocol/ProtocolTypeDef.h>  // ConstTransactions
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
-#include <bcos-framework/protocol/TransactionSubmitResult.h>  // TransactionSubmitResults(Ptr)
-#include <bcos-framework/storage2/MultiLayerStorage.h>  // storage2::View (historical call stack)
-#include <bcos-framework/storage2/Storage.h>  // storage2::existsOne (M5 root-existence probe)
-#include <bcos-ledger/LedgerMethods.h>        // getCurrentBlockNumber / getBlockData CPO tag_invoke
-#include <bcos-ledger/mpt/Constants.h>        // emptyRootHash (empty-trie exemption, M5 probe)
-#include <bcos-ledger/mpt/Errors.h>  // MPTInvariantViolation / MPTDecodeError (classifyException)
-#include <bcos-ledger/mpt/MPTBuilder.h>  // buildAndCollect (①a incremental MPT)
+#include <bcos-framework/protocol/TransactionSubmitResult.h>
+#include <bcos-framework/storage2/MultiLayerStorage.h>
+#include <bcos-framework/storage2/Storage.h>
+#include <bcos-ledger/LedgerMethods.h>
+#include <bcos-ledger/mpt/Constants.h>
+#include <bcos-ledger/mpt/Errors.h>
+#include <bcos-ledger/mpt/MPTBuilder.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
-#include <bcos-storage/KeyPrefixes.h>  // storage2::mptNodeStateKey (M5 root-existence probe)
+#include <bcos-storage/KeyPrefixes.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
-#include <bcos-transaction-scheduler/HistoricalCallStorage.h>  // HistoricalStateBackend (①b/③)
-#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>    // serial per-tx scheduler (Task 4)
+#include <bcos-transaction-scheduler/HistoricalCallStorage.h>
+#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
-#include <bcos-utilities/IOServicePool.h>  // IOServicePool::Ptr (Task 4 ctor param)
+#include <bcos-utilities/IOServicePool.h>
 #include <fmt/format.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -73,6 +56,7 @@
 #include <boost/throw_exception.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -88,16 +72,15 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace bcos::executor_v1::opstack
 {
 #define OP_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("OP_SCHEDULER")
 
-/// OP block execution payload carried from executeBlock to commitBlock: the execution view (which
-/// the commit merges), the announced block, the six-commitment result, the CL-announced block hash
-/// (never recomputed on the executed header — its optional fields are incomplete → would throw),
-/// and the executed header (commit's number match + fast-path cache).
+/// executeBlock → commitBlock payload. announcedBlockHash is the CL hash; do not
+/// recompute it from executedHeader (optional fields are incomplete).
 template <class MultiLayerStorage>
 class OpScheduler : public scheduler::SchedulerInterface
 {
@@ -108,27 +91,20 @@ public:
     struct PendingBlock
     {
         protocol::Block::Ptr block;                      // receipts attached at commit time
-        bcos::evm::engine::OpExecuteBlockResult result;  // six commitments + receipts
+        bcos::evm::engine::OpExecuteBlockResult result;  // commitments + receipts
         bcos::crypto::HashType announcedBlockHash;       // keyed by the CL-announced hash
         protocol::BlockHeader::Ptr executedHeader;       // commitment-filled header
+        bool verified = false;                           // true only after verify=true + pushView
     };
 
-    /// What the execute phase produces before being wrapped into a PendingBlock.
+    /// execute() result before it is wrapped as PendingBlock.
     struct ExecuteOutcome
     {
         bcos::evm::engine::OpExecuteBlockResult result;
         bcos::crypto::HashType announcedBlockHash;
     };
 
-    // ---- S-DRV-6/7 stage 1: one-level tip rollback ----
-    /// Engaged when a block executes at the COMMITTED tip's own height on the common parent
-    /// (a reorg sibling; L1 reorg / consolidation event). Holds the replaced tip's undo
-    /// journal: its rows were pre-written into the execute view's mutable layer (one act is
-    /// both the read shadow over the replaced tip's backend writes and the write-back that
-    /// merges with the sibling's delta), its counters compensate total_transaction_count at
-    /// commit, and its rows are the correct parent-state values for the sibling's OWN undo
-    /// capture (the backend still holds the replaced tip's writes until the merge).
-    /// Guarded by m_pendingMutex; stashed with m_pending, cleared with it.
+    /// One-level tip rollback: replaced tip's undo journal, stashed with m_pending.
     struct RollbackContext
     {
         protocol::BlockNumber replacedHeight{};
@@ -138,7 +114,7 @@ public:
 public:
     // ---- SchedulerInterface overrides ----
 
-    /// by pbft & sync — here: driven by the engine's OP newPayload (m_delegate).
+    /// Engine newPayload drives this; PBFT/sync do not.
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
             callback) override
@@ -166,18 +142,18 @@ public:
 
     void reset(std::function<void(Error::Ptr)> callback) override
     {
-        // Drop an uncommitted pending block (Tier-2: an abandoned self-built payload) so the
-        // next executeBlock is not refused by the continuity guard. The pushed execute view
-        // stays on the MLS stack (no pop API); abandoning is a leak bounded by the engine's
-        // payload-cache eviction cadence — documented Phase A caveat.
-        std::lock_guard<std::mutex> lock(m_pendingMutex);
+        std::scoped_lock lock(m_executeMutex, m_commitMutex, m_pendingMutex);
         if (m_pending)
         {
             OP_SCHEDULER_LOG(INFO) << "reset: dropping uncommitted pending block "
                                    << m_pending->executedHeader->number();
+            if (m_pending->verified)
+            {
+                m_multiLayerStorage->popFrontStorage();
+            }
             m_pending.reset();
             m_rollbackContext.reset();
-            m_lastExecutedBlockNumber = -1;
+            m_lastExecutedBlockNumber.store(-1);
         }
         callback(nullptr);
     }
@@ -188,8 +164,8 @@ public:
         callback(nullptr);
     }
 
-    /// eth_call: coCallLatest with injection + a hand-built LedgerConfig + double catch.
-    /// Errors go back via the callback as a JSON-RPC Error, never a status-0 receipt.
+    /// eth_call on the latest committed state. Failures return an RPC Error, not a status-0
+    /// receipt.
     void call(protocol::Transaction::Ptr transaction,
         std::function<void(bcos::Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
@@ -201,12 +177,7 @@ public:
             }
             catch (const bcos::evm::engine::OpStorageError& e)
             {
-                // Storage faults stay generic (round-2 F4: schema/corruption detail is internal —
-                // full diagnostic to the node log, "internal error" wording to the RPC client;
-                // CallLatestStorageReadFaultFailsLoudly pins this). Validation/user errors keep
-                // their reason via e.what() in the catch below (CallInvalidReturnsError pins
-                // that). callAtBlock is different — its refusals are semantic codes
-                // (classifyException + rpcSafeReason).
+                // Log the detail; return a generic RPC message.
                 OP_SCHEDULER_LOG(WARNING)
                     << LOG_DESC("eth_call failed (storage fault)") << LOG_KV("detail", e.what());
                 cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
@@ -215,9 +186,7 @@ public:
             }
             catch (const std::exception& e)
             {
-                // The message (e.what()) is part of the latest-call API surface: validation
-                // reasons ("max fee per gas less than block base fee"...) must survive to the
-                // callback (CallInvalidReturnsError).
+                // Keep e.what() on the RPC callback.
                 OP_SCHEDULER_LOG(WARNING) << LOG_DESC("eth_call failed")
                                           << LOG_KV("detail", boost::diagnostic_information(e));
                 cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError, e.what()),
@@ -225,9 +194,6 @@ public:
             }
             catch (...)
             {
-                // Defense-in-depth backstop. Historically this caught the duplicate-typeinfo
-                // poisoning described at describeException() below; with the evmone port fixed
-                // (RTTI enabled, ports/evmone) typed catches bind again and this stays silent.
                 cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
                        "OpScheduler::call: unknown exception"),
                     nullptr);
@@ -235,12 +201,7 @@ public:
         }());
     }
 
-    /// eth_call pinned at @p blockNumber (OP historical call): the boundary checks and
-    /// refusals of BaselineScheduler::callAtBlock (same codes and boundary order; the
-    /// feature-gate message text is slightly shorter — see coCallAtBlock), then OP-semantics
-    /// execution on the block-N MPT via HistoricalStateBackend (coCallAtBlock). Requires the
-    /// block's trie nodes to be persisted (①a: OP finalize's incremental build flushes them
-    /// when feature_l2_ethereum_compat is on; genesis nodes come from Ledger::buildGenesisBlock).
+    /// eth_call against the committed MPT at @p blockNumber.
     void callAtBlock(protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
         std::function<void(bcos::Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
@@ -253,10 +214,7 @@ public:
             }
             catch (const std::exception& e)
             {
-                // classifyException (not a hardcoded UnknownError): OpConsensusError /
-                // OpStorageError / mpt read-path faults keep their semantic codes
-                // (OpScheduler.h classifyException). RPC hygiene (round-2 F4): the full
-                // diagnostic goes to the node log, the RPC-bound message stays generic.
+                // Log the detail; return a generic RPC reason.
                 auto const code = classifyException(std::current_exception());
                 OP_SCHEDULER_LOG(WARNING)
                     << LOG_DESC("eth_call at block failed") << LOG_KV("block", blockNumber)
@@ -268,11 +226,6 @@ public:
             }
             catch (...)
             {
-                // Same typed-catch bypass backstop as call() (wedprcrypto-linked binaries — see
-                // call()'s catch(...) comment): exceptions escape the typed catch; normalize
-                // through describeException/classifyException. The RPC-bound message is the SAME
-                // rpcSafeReason wording as the typed catch — which arm fires is unreliable, so
-                // the observable text must not depend on it.
                 auto const code = classifyException(std::current_exception());
                 OP_SCHEDULER_LOG(WARNING)
                     << LOG_DESC("eth_call at block failed") << LOG_KV("block", blockNumber)
@@ -285,16 +238,16 @@ public:
         }());
     }
 
-    /// getCode: storage read via the readFromStorage pattern (not getLedgerConfig — header.hash()
-    /// throws EmptyBlockHeaderHash for OP headers).
+    /// Contract code at the latest committed height. Do not use getLedgerConfig (header.hash()
+    /// throws).
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
     {
-        task::wait([](decltype(this) self, std::string_view contract,
-                       decltype(callback) callback) -> task::Task<void> {
+        task::wait([this, contract = std::string(contract),
+                       cb = std::move(callback)]() -> task::Task<void> {
             try
             {
-                auto view = self->m_multiLayerStorage->fork();
+                auto view = m_multiLayerStorage->fork();
                 auto blockNumber =
                     co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
                 bcos::ledger::Features features;
@@ -305,28 +258,32 @@ public:
                 auto code = co_await account.code();
                 if (!code)
                 {
-                    callback(nullptr, {});
+                    cb(nullptr, {});
                     co_return;
                 }
                 auto bytesView = code->get();
-                callback(nullptr, bcos::bytes(bytesView.begin(), bytesView.end()));
+                cb(nullptr, bcos::bytes(bytesView.begin(), bytesView.end()));
             }
             catch (const std::exception& e)
             {
-                callback(
-                    BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError, e.what()), {});
+                auto const code = classifyException(std::current_exception());
+                OP_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("getCode failed") << LOG_KV("detail", e.what());
+                cb(BCOS_ERROR_PTR(
+                       code, fmt::format("getCode failed: {} (see node log)", rpcSafeReason(code))),
+                    {});
             }
-        }(this, contract, std::move(callback)));
+        }());
     }
 
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override
     {
-        task::wait([](decltype(this) self, std::string_view contract,
-                       decltype(callback) callback) -> task::Task<void> {
+        task::wait([this, contract = std::string(contract),
+                       cb = std::move(callback)]() -> task::Task<void> {
             try
             {
-                auto view = self->m_multiLayerStorage->fork();
+                auto view = m_multiLayerStorage->fork();
                 auto blockNumber =
                     co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
                 bcos::ledger::Features features;
@@ -337,17 +294,21 @@ public:
                 auto abi = co_await account.abi();
                 if (!abi)
                 {
-                    callback(nullptr, {});
+                    cb(nullptr, {});
                     co_return;
                 }
-                callback(nullptr, std::string(abi->get()));
+                cb(nullptr, std::string(abi->get()));
             }
             catch (const std::exception& e)
             {
-                callback(
-                    BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError, e.what()), {});
+                auto const code = classifyException(std::current_exception());
+                OP_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("getABI failed") << LOG_KV("detail", e.what());
+                cb(BCOS_ERROR_PTR(
+                       code, fmt::format("getABI failed: {} (see node log)", rpcSafeReason(code))),
+                    {});
             }
-        }(this, contract, std::move(callback)));
+        }());
     }
 
     task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
@@ -361,7 +322,7 @@ public:
         co_return co_await account.storageEntry(key);
     }
 
-    /// Test observation surface: returns the raw execution result of the pending block.
+    /// Pending execute result, if any.
     std::optional<bcos::evm::engine::OpExecuteBlockResult> peekExecuteResult()
     {
         std::lock_guard<std::mutex> lock(m_pendingMutex);
@@ -370,10 +331,7 @@ public:
         return m_pending->result;
     }
 
-    /// Both ledger and ioServicePool are required (no defaults — a defaulted param cannot precede a
-    /// non-defaulted one, and the compiler must force every construction site to pass the pool:
-    /// SchedulerSerialImpl's GC defers context destruction onto it, a null pool would crash on the
-    /// first deferred collect). ledger may still be nullptr explicitly (execute tolerates it).
+    /// ledger may be null (execute only). ioServicePool is required (SchedulerSerialImpl GC).
     OpScheduler(bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory,
         bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
         bcos::evm::opstack::OpForkFlags forkFlags, bcos::protocol::BlockFactory::Ptr blockFactory,
@@ -387,14 +345,12 @@ public:
         m_blockFactory(blockFactory.get()),
         m_ioServicePool(std::move(ioServicePool))
     {
-        // A null ledger is tolerated by the execute path but committing would throw a null deref.
+        // execute() tolerates a null ledger; commit does not.
         if (ledger)
         {
             m_ledger = ledger.get();
         }
-        // OP has no RPC push needs — register no-op notifiers (a default-empty std::function would
-        // throw bad_function_call inside an async task → terminate), overridable by the
-        // composition root.
+        // Default no-op notifiers. An empty std::function would throw inside the async task.
         m_blockNumberNotifier = [](bcos::protocol::BlockNumber) {};
         m_transactionNotifier = [](bcos::protocol::BlockNumber,
                                     bcos::protocol::TransactionSubmitResultsPtr,
@@ -404,20 +360,14 @@ public:
     OpScheduler& operator=(const OpScheduler&) = delete;
     ~OpScheduler() noexcept override = default;
 
-    /// RPC block-number push channel (alignment plan problem 3): the composition root
-    /// (Initializer's m_setOpSchedulerBlockNumberNotifier) installs the callback; commitBlock
-    /// fires it via notifyBlockNumber after the merge of a VALID OP block. Without the setter the
-    /// ctor no-op is permanent and RPC block-number subscribers never see OP blocks.
+    /// Optional RPC block-number callback; commitBlock invokes it after a successful merge.
     void setBlockNumberNotifier(std::function<void(bcos::protocol::BlockNumber)> notifier)
     {
         m_blockNumberNotifier = std::move(notifier);
     }
 
 private:
-    // ================================================================
-    // Orchestration (inlined from the former SchedulerSkeleton; trimmed — OP is synchronous
-    // single-block, so no pipelining deque, no backpressure, no MPT observer).
-    // ================================================================
+    // ---- execute / commit ----
 
     task::Task<std::tuple<Error::Ptr, protocol::BlockHeader::Ptr, bool>> coExecuteBlock(
         protocol::Block::Ptr block, bool verify)
@@ -430,16 +380,13 @@ private:
                 << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
             auto number = blockHeader->number();
 
-            // fast-path: a pending block at the same height whose announced hash matches the
-            // incoming header is a resend (e.g. after a failed commit) — serve the cached header
-            // without re-executing.
+            // Resend of the same announced hash at this height: reuse the cached header.
             if (auto cached = fastPathHit(number, *blockHeader))
             {
                 co_return {nullptr, cached->first, cached->second};
             }
 
-            // execute serialization (the engine holds x_state, but the delegate must be safe on
-            // its own).
+            // One execute at a time.
             std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
             if (!executeLock.owns_lock())
             {
@@ -449,59 +396,48 @@ private:
                     nullptr, false};
             }
 
-            // S-DRV-6/7 stage 1, case U — a divergent block replacing an UNCOMMITTED pending at
-            // the same height (a second delivery/build diverged before the commit landed). The
-            // pending's pushed delta layer must leave the MLS stack BEFORE the fork below, or
-            // the replacement would execute on top of the block it replaces. reset() drops the
-            // slot but cannot pop the layer; here the pop is possible and exact (execute is
-            // serialized by m_executeMutex and the engine's x_state, so the stack's front IS
-            // this pending's layer).
+            // Replace an uncommitted pending at this height.
             if (number > 0)
             {
                 std::lock_guard<std::mutex> lock(m_pendingMutex);
                 if (m_pending && m_pending->executedHeader->number() == number)
                 {
-                    OP_SCHEDULER_LOG(WARNING)
-                        << "Rollback case U: replacing uncommitted pending block " << number
-                        << " with a divergent block at the same height";
+                    OP_SCHEDULER_LOG(WARNING) << "Replacing uncommitted pending block " << number
+                                              << " with a divergent block at the same height";
+                    auto const pushed = m_pending->verified;
                     m_pending.reset();
                     m_rollbackContext.reset();
-                    m_lastExecutedBlockNumber = number - 1;
-                    m_multiLayerStorage->popFrontStorage();
+                    m_lastExecutedBlockNumber.store(number - 1);
+                    if (pushed)
+                    {
+                        m_multiLayerStorage->popFrontStorage();
+                    }
                 }
             }
 
-            // Rollback re-execution candidate (memory-only precondition; the authoritative
-            // common-parent and undo-journal checks run after the fork, on storage): a block at
-            // the COMMITTED tip's own height is a reorg sibling when its parent is the tip's
-            // parent.
-            bool const rollbackCandidate = number > 0 && number == m_lastCommittedBlockNumber;
+            // Same height as the committed tip: candidate for one-level rollback.
+            bool const rollbackCandidate =
+                number > 0 && number == m_lastCommittedBlockNumber.load();
 
-            // execute continuity (in-lock).
-            if (m_lastExecutedBlockNumber != -1 && number - m_lastExecutedBlockNumber != 1 &&
-                !(rollbackCandidate && number == m_lastExecutedBlockNumber))
+            // Continuity vs last executed number.
+            auto const lastExecuted = m_lastExecutedBlockNumber.load();
+            if (lastExecuted != -1 && number - lastExecuted != 1 &&
+                !(rollbackCandidate && number == lastExecuted))
             {
                 auto message =
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
-                        m_lastExecutedBlockNumber + 1, number);
+                        lastExecuted + 1, number);
                 OP_SCHEDULER_LOG(INFO) << message;
                 co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
                     nullptr, false};
             }
 
-            // execute writes land in the view's mutable layer; commit's mergeBackStorage persists.
+            // Writes go to this view.
             auto view = m_multiLayerStorage->fork();
             view.newMutable();
 
-            // S-DRV-6/7 stage 1, case C — the reorg sibling of the COMMITTED tip. The backend
-            // holds the TIP's state; the sibling's execution base is the PARENT's state, rebuilt
-            // by pre-writing the tip's undo-journal rows into this view's mutable layer: the
-            // pre-writes shadow the tip's backend writes for every read (the mutable layer is
-            // consulted first; tombstones hide rows outright), and they merge back together
-            // with the sibling's own delta, so keys the sibling does not touch return to their
-            // parent values. One pre-write is both the read shadow and the write-back — no
-            // separate shadow plane, no merge-order hazard.
+            // Reorg sibling: apply the tip's undo journal so this view reads as the parent.
             std::optional<RollbackContext> rollback;
             if (rollbackCandidate)
             {
@@ -526,9 +462,7 @@ private:
                 if (canonicalAtHeight.has_value() &&
                     *canonicalAtHeight == bcos::protocol::EthBlockHeader::computeHash(*blockHeader))
                 {
-                    // The engine's step-3b short-circuit owns committed re-deliveries; a direct
-                    // delegate call with the committed tip itself would otherwise re-execute it
-                    // as its own sibling.
+                    // Already the committed tip; do not re-execute.
                     auto message = fmt::format(
                         "Block {} is already the committed canonical tip; re-deliveries are "
                         "served without re-execution",
@@ -548,9 +482,8 @@ private:
                 else
                 {
                     auto message = fmt::format(
-                        "Rollback to height {} has no undo journal (chain tip "
-                        "predates S-DRV-6/7, or the window was pruned) — cannot "
-                        "rebuild the parent state as the execution base",
+                        "Rollback to height {} has no undo journal (missing or "
+                        "pruned) — cannot rebuild the parent state as the execution base",
                         number);
                     OP_SCHEDULER_LOG(WARNING) << message;
                     co_return {BCOS_ERROR_UNIQUE_PTR(
@@ -558,10 +491,10 @@ private:
                         nullptr, false};
                 }
                 OP_SCHEDULER_LOG(INFO)
-                    << "Rollback case C: executing the reorg sibling of committed tip " << number
+                    << "Executing the reorg sibling of committed tip " << number
                     << " on the parent base (" << replacedUndo.rows.size() << " undo rows, "
                     << "replaced txCount " << replacedUndo.txCount << ")";
-                for (auto& row : replacedUndo.rows)
+                for (auto const& row : replacedUndo.rows)
                 {
                     if (row.oldValue.has_value())
                     {
@@ -569,7 +502,7 @@ private:
                     }
                     else
                     {
-                        co_await storage2::removeOne(view, std::move(row.key));
+                        co_await storage2::removeOne(view, row.key);
                     }
                 }
                 rollback.emplace(RollbackContext{number, std::move(replacedUndo)});
@@ -588,57 +521,48 @@ private:
 
             auto ledgerConfig = co_await loadLedgerConfig(view, number);
 
-            // ①b: persist trie nodes only on the canonical pass (verify=false probe views are
-            // discarded — flushing them would be wasted work) and only on scenario-B chains
-            // (feature_l2_ethereum_compat), where the MPT is the complete state and
-            // callAtBlock serves historical eth_call from it.
+            // Persist trie nodes only on verify=true + feature_l2_ethereum_compat.
             bool const persistTrieNodes =
                 verify &&
                 ledgerConfig->features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
             auto outcome =
                 co_await execute(view, *blockHeader, transactions, *ledgerConfig, persistTrieNodes);
 
-            // finish: write the OP commitments into the executedHeader (skip MPT; never call
-            // BlockHeader::hash() — the header is rebuilt from the announced payload).
+            // Copy execution commitments onto a header cloned from the announced payload.
             bool sysBlock = false;
             auto executedHeader = co_await finishExecute(
                 view, outcome, *blockHeader, *block, transactions, *ledgerConfig, sysBlock);
 
-            // Six-way commitment comparison (a mismatch throws OpConsensusError →
-            // OpConsensusRejected), gated on `verify`: an external payload's announced
-            // commitments must match execution. A SELF-BUILT payload (Tier-2 attribute-driven
-            // building) executes with verify=false — its announced roots are provisional
-            // zeros; the engine fills the real commitments from `executedHeader` afterwards,
-            // and the payload is only published after the round-trip is self-consistent.
+            // When verify=true, announced header fields must match execution.
             namespace engine = bcos::evm::engine;
             if (verify)
             {
+                if (executedHeader->withdrawalsRoot().has_value() !=
+                    blockHeader->withdrawalsRoot().has_value())
+                {
+                    throw engine::OpConsensusError(
+                        "OpScheduler: commitment mismatch on field withdrawalsRoot");
+                }
                 if (auto mismatch = engine::mismatchedFieldOf(
                         headerCommitments(*executedHeader), headerCommitments(*blockHeader)))
                 {
                     throw engine::OpConsensusError(
-                        "OpScheduler: six-way commitment mismatch on field " + *mismatch);
+                        "OpScheduler: commitment mismatch on field " + *mismatch);
                 }
             }
 
-            // Push the execute view onto the MLS layer stack (mergeBackStorage in the commit
-            // phase requires a non-empty stack — the pushed view IS the block's state delta).
-            // Probe executions (verify=false, the Tier-2 build's first pass) skip the push:
-            // their view is discarded, so no layer residue accumulates per built block; the
-            // canonical second pass (verify=true) pushes the view the commit merges.
+            // Push and stash only when verify is true. Probe results are returned, not committed.
             if (verify)
             {
                 m_multiLayerStorage->pushView(std::move(view));
+                {
+                    std::lock_guard<std::mutex> lock(m_pendingMutex);
+                    m_pending = PendingBlock{std::move(block), std::move(outcome.result),
+                        outcome.announcedBlockHash, executedHeader, true};
+                    m_rollbackContext = std::move(rollback);
+                }
+                m_lastExecutedBlockNumber.store(number);
             }
-
-            // stash for the commit phase (the view already rides the layer stack).
-            {
-                std::lock_guard<std::mutex> lock(m_pendingMutex);
-                m_pending = PendingBlock{std::move(block), std::move(outcome.result),
-                    outcome.announcedBlockHash, executedHeader};
-                m_rollbackContext = std::move(rollback);
-            }
-            m_lastExecutedBlockNumber = number;
 
             co_return {nullptr, std::move(executedHeader), sysBlock};
         }
@@ -652,10 +576,6 @@ private:
         }
         catch (...)
         {
-            // Backstop for non-std::exception throws. Historically this also caught the
-            // duplicate-typeinfo poisoning (see describeException below); with the evmone
-            // port fixed (RTTI enabled, ports/evmone) std::exception types bind in the
-            // catch above, and this stays silent for them.
             auto message = std::string{"Execute block failed! ("} +
                            describeException(std::current_exception()) + ")";
             OP_SCHEDULER_LOG(ERROR) << message;
@@ -681,19 +601,13 @@ private:
                     nullptr};
             }
 
-            // Validate the pending slot (kept in place until the merge succeeds — the original
-            // skeleton popped only after merge, so a failed commit retries from the same data; a
-            // stale slot at a different height is refused). Snapshot the WHOLE PendingBlock under
-            // the lock: block/executedHeader are shared_ptr (refcount-safe copies) and result
-            // holds vector<Receipt::Ptr>, so the copy keeps every reference alive across the
-            // awaits below even if a concurrent executeBlock replaces m_pending (TOCTOU UAF).
-            // The rollback context rides the same slot (S-DRV-6/7): a reorg sibling's commit is
-            // validated and persisted against it.
+            // Copy pending under the lock so later awaits do not race a replacing execute.
             PendingBlock pending;
             std::optional<RollbackContext> rollback;
             {
                 std::lock_guard<std::mutex> lock(m_pendingMutex);
-                if (!m_pending || m_pending->executedHeader->number() != number)
+                if (!m_pending || !m_pending->verified ||
+                    m_pending->executedHeader->number() != number)
                 {
                     co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
                                    "Unexpected empty results!"),
@@ -703,11 +617,7 @@ private:
                 rollback = m_rollbackContext;
             }
 
-            // head-advance guard: prewriteBlockToBuffer writes SYS_CURRENT_STATE unconditionally,
-            // so reject already-committed / discontinuous commits (reads the storage view, not the
-            // ledger's own m_stateStorage). S-DRV-6/7 stage 1: a reorg sibling commits at the
-            // committed tip's OWN height — the same-height overwrite is the exemption, gated on
-            // the context stashed by the sibling's execute.
+            // Reject already-committed / discontinuous numbers, except a rollback overwrite.
             if (!co_await commitContinuityCheck(
                     number, rollback.has_value() && rollback->replacedHeight == number))
             {
@@ -718,10 +628,10 @@ private:
 
             auto storage = co_await commitPersist(pending, rollback);
 
-            // The one merge (atomic: either all visible or none).
+            // Single merge: all-or-nothing.
             co_await m_multiLayerStorage->mergeBackStorage(*storage);
 
-            // Clear the slot only after the merge succeeds.
+            // Drop the slot only after merge succeeds (failed commit can retry).
             {
                 std::lock_guard<std::mutex> lock(m_pendingMutex);
                 m_pending.reset();
@@ -729,7 +639,7 @@ private:
             }
 
             auto ledgerConfig = co_await loadCommitLedgerConfig(header);
-            m_lastCommittedBlockNumber = number;
+            m_lastCommittedBlockNumber.store(number);
             commitLock.unlock();
 
             OP_SCHEDULER_LOG(INFO) << "Commit block finished: " << number;
@@ -754,16 +664,12 @@ private:
         }
     }
 
-    /// Fast-path cache: a pending block at the same height whose announced hash equals the
-    /// incoming header's EthBlockHeader hash is a resend (e.g. after a failed commit) — serve the
-    /// cached executedHeader without re-executing. Block number alone is not unique for an OP
-    /// block: a resend carrying a DIFFERENT block at the same height must not hit the stale
-    /// header, or the new payload would be reported VALID without execution — forking the chain.
+    /// Hit only when height and announced hash both match a verified pending.
     std::optional<std::pair<protocol::BlockHeader::Ptr, bool>> fastPathHit(
         protocol::BlockNumber number, protocol::BlockHeader const& announcedHeader)
     {
         std::lock_guard<std::mutex> lock(m_pendingMutex);
-        if (!m_pending || m_pending->executedHeader->number() != number)
+        if (!m_pending || !m_pending->verified || m_pending->executedHeader->number() != number)
         {
             return std::nullopt;
         }
@@ -778,10 +684,7 @@ private:
         return std::pair{m_pending->executedHeader, false};
     }
 
-    // ---- hooks (kept as private helpers) ----
-
-    /// ① Transaction source: block.transactions() → Transaction::ConstPtr (OP blocks carry
-    /// inline transactions, no txpool). extraTransactionBytes holds the full envelope.
+    /// OP blocks carry txs inline.
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         protocol::Block& block, ViewType& /*view*/)
     {
@@ -790,18 +693,8 @@ private:
         }) | ::ranges::to<std::vector>();
     }
 
-    /// ② Execution kernel: three-phase — ① pre-block (system_call + deposit-first + Jovian shape +
-    /// DA scalar) → ② SchedulerSerialImpl(serial=true) per-tx → ③ finalizeOpBlockResult. rawTxBytes
-    /// = each tx's extraTransactionBytes; deposits = decoded 0x7E envelopes; cfg =
-    /// configAt(m_forkFlags) (feature_op_jovian); executor = a per-block OpstackExecutor (one
-    /// evmc::VM);
-    /// ledgerConfig only needs evmcRevision.
-    /// @p persistTrieNodes (①a historical eth_call): when set (and number > 0), the stateRoot
-    /// comes from the incremental buildAndCollect over this block's delta (the full two-layer
-    /// rebuild is skipped) and its new trie nodes land as "/mpt/" rows in this block's mutable
-    /// layer — keeping the committed stateRoot resolvable by HistoricalStateBackend at any
-    /// later height. Block 0 is never executed by OP; genesis nodes are persisted by
-    /// Ledger::buildGenesisBlock, so no fallback branch exists here.
+    /// preBlockOpSteps → serial per-tx → finalizeOpBlockResult.
+    /// persistTrieNodes: persist incremental MPT nodes when number > 0.
     task::Task<ExecuteOutcome> execute(ViewType& view, protocol::BlockHeader const& header,
         std::vector<protocol::Transaction::ConstPtr> const& transactions,
         ledger::LedgerConfig const& ledgerConfig, bool persistTrieNodes)
@@ -809,10 +702,7 @@ private:
         namespace op = bcos::evm::opstack;
         namespace detail = bcos::evm::engine::detail;
 
-        // Views into each tx's live envelope: extraTransactionBytes() returns a bytesConstRef into
-        // the tars Transaction (transactions outlive rawTxBytes — both are consumed within this
-        // execute() scope). One view vector + N*16B view copies replaces N per-envelope heap
-        // allocations.
+        // Views into each tx envelope; transactions outlive this vector.
         std::vector<bcos::bytesConstRef> rawTxBytes;
         rawTxBytes.reserve(transactions.size());
         for (auto const& tx : transactions)
@@ -825,9 +715,7 @@ private:
         {
             const auto& cfg = op::configAt(m_forkFlags);
 
-            // Classify by type byte: deposits come from the block's Transaction objects
-            // (depositFromTransaction); deposit canonicality is backed by its width checks +
-            // the engine step-2 blockHash check.
+            // Split deposits from other typed envelopes.
             std::vector<op::DepositTx> deposits;
             deposits.reserve(rawTxBytes.size());
             for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
@@ -849,15 +737,7 @@ private:
                             std::string("OpScheduler: malformed deposit: ") + e.what());
                     }
                 }
-                // NOTE (independent review #5429, finding C): this whitelist {0x7e, 0x01, 0x02,
-                // 0x04, >=0xc0} is deliberately STRICTER than op-geth: decodeTyped
-                // (transaction.go:218-228) also accepts 0x03 (blob) and 0x7d (post-exec) and the
-                // state processor would execute them. A payload carrying either is accepted by
-                // op-geth but rejected INVALID here — an intentional acceptance divergence (OP L2
-                // has no blob/post-exec txs), NOT parity. op-geth has no "blob ban" check (the
-                // only related gate, Jovian CalcDAFootprint, requires txs[0] to be *a* deposit);
-                // the "L2 forbids blob" wording elsewhere is FISCO's own policy. DIVERGENCES.md
-                // row corrected from "等价" to match.
+                // Reject blob (0x03) and 0x7d type bytes.
                 else if (typeByte < 0xc0 && typeByte != 0x01 && typeByte != 0x02 &&
                          typeByte != 0x04)
                     throw bcos::evm::engine::OpConsensusError(
@@ -871,19 +751,14 @@ private:
             auto sharedError = std::make_shared<SharedErrorSlot>();
             OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
 
-            // ① Block-pre steps (preBlockOpSteps, OpBlockExecute.h — the single home shared with
-            // the retired runOpBlockInjection): recent-block-hashes construction,
-            // system_call_block_start
-            // + applyStateDiff, deposit-first content check + Jovian shape, DA footprint gas
-            // scalar.
+            // Block-start system call, deposit-first check, Jovian shape, DA scalar.
             std::optional<std::string> hashErr;
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<detail::RecentBlockHashes<ViewType>> hashes;
             bcos::evm::engine::preBlockOpSteps(view, header, cfg, rawTxBytes, deposits, executor,
                 hashes, hashErr, daFootprintGasScalar);
 
-            // ② Per-block context (fee NOT loaded here — lazily on the first NORMAL tx's prepare).
-            // blockGasLeft via narrowU256ToU64 (silent-truncation guard, same as coCallOnView).
+            // Fee params load on the first normal tx. blockGasLeft is narrowed from gasLimit.
             OpBlockExecutionContext ctx{.fee = {},
                 .blockGasLeft = static_cast<int64_t>(
                     detail::narrowU256ToU64(header.gasLimit(), "OpScheduler blockGasLeft")),
@@ -891,8 +766,7 @@ private:
                 .chainId = m_chainId,
                 .daFootprintGasScalar = daFootprintGasScalar};
 
-            // ③ Per-tx execution via the shared serial scheduler (one per block; serial=true
-            // forces grain size 1 — OP is linear-only, see the class header's DESIGN INVARIANT).
+            // Linear per-tx loop (serial=true, chunk size 1).
             bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
                 m_ioServicePool, /*chunkSize=*/1, /*serial=*/true);
             auto transactionsRefs =
@@ -904,30 +778,14 @@ private:
             auto receipts = co_await serialScheduler.executeBlock(
                 view, executor, header, transactionsRefs, execLedgerConfig, ctx);
 
-            // ④ Block-post finalize (hashErr check lives inside finalizeOpBlockResult).
-            // ①a: on the canonical scenario-B pass past genesis, the full two-layer rebuild is
-            // SKIPPED — the incremental buildAndCollect in ⑤ computes the same root from the
-            // block delta alone (gate: OpSchedulerTest.IncrementalMPTRootMatchesFullRebuild).
-            bool const incrementalRoot =
-                persistTrieNodes && header.number() > 0 && !m_incrementalMptLatchedOff;
+            // Finalize receipts/seal. incrementalRoot skips the full state-root rebuild here.
+            bool const incrementalRoot = persistTrieNodes && header.number() > 0;
             result =
                 bcos::evm::engine::finalizeOpBlockResult(executor, view, header, execLedgerConfig,
                     cfg, receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr, incrementalRoot);
 
-            // ⑤ Historical eth_call trie-node persistence (①a): keep the committed
-            // stateRoot resolvable by HistoricalStateBackend at any later height.
-            // buildAndCollect scans ONLY this block's delta layer (the view's top mutable
-            // layer — preBlockOpSteps/serial-execute/finalizeBlock writes), reads parent nodes
-            // through the view, commits both trie levels and flushes the new nodes itself; its
-            // root replaces the skipped full rebuild. PRECONDITION: the parent header must be
-            // COMMITTED (OP's single-slot m_pending never executes on a pending parent) and its
-            // trie nodes persisted — i.e. scenario B must be on since genesis; a chain that
-            // committed scenario-B blocks before node persistence existed (or activated the
-            // flag mid-chain) fails LOUDLY here with MPTInvariantViolation rather than
-            // rebuilding from an empty trie (BaselineScheduler's buildMPTStateRoot contract,
-            // including its block-1 diagnostic, BaselineScheduler.h:505-519). Block 0 needs no
-            // persistence here: OP never executes it — genesis nodes come from
-            // Ledger::buildGenesisBlock's l2EthereumCompat import (Ledger.cpp:2391).
+            // Persist this block's trie nodes. Parent nodes must already exist; otherwise
+            // MPTInvariantViolation (do not rebuild from an empty trie).
             if (incrementalRoot)
             {
                 bcos::scheduler_v1::ViewNodeStorage<ViewType> nodeStorage(view);
@@ -938,49 +796,22 @@ private:
                 {
                     auto delta = co_await ledger::mpt::buildAndCollect(
                         nodeStorage, parentRoot, view, /*l2Mode=*/true);
-                    // Interim safety (root-divergence bug, 2026-08-23): cross-check the
-                    // incremental root against the full rebuild over the same view. The two
-                    // agree on every golden vector and the C3-shaped states, but DIVERGE on
-                    // the C2-fresh op-deployer allocs (a per-execution empty "ghost" account
-                    // enters the full walk but not the incremental delta scan, plus an
-                    // iteration-order sensitivity — full triage in
-                    // docs/2026-08-23-jovian-alignment-handoff.md). Until that is root-caused,
-                    // the battle-tested FULL rebuild stays authoritative: on disagreement we
-                    // adopt its root, latch ①a off for the process lifetime (later blocks
-                    // skip ⑤ entirely and finalize does the full build), and this block's
-                    // already-flushed node rows remain as harmless content-addressed orphans
-                    // (nothing resolves the discarded incremental root).
                     bcos::evm::evmstate::Storage2State<ViewType> fullCheck(view);
                     auto const fullRoot =
                         bcos::evm::engine::detail::toBcosH256(bcos::evm::stateRootOf(fullCheck));
-                    if (delta.stateRoot == fullRoot) [[likely]]
+                    if (delta.stateRoot != fullRoot)
                     {
-                        result.stateRoot = delta.stateRoot;
+                        throw bcos::evm::engine::OpStorageError(fmt::format(
+                            "OpScheduler: incremental MPT root diverged from the full rebuild "
+                            "at block {} (incremental={}, full={}, parent={})",
+                            header.number(), delta.stateRoot.hexPrefixed(), fullRoot.hexPrefixed(),
+                            parentRoot.hexPrefixed()));
                     }
-                    else
-                    {
-                        m_incrementalMptLatchedOff = true;
-                        OP_SCHEDULER_LOG(WARNING)
-                            << LOG_DESC(
-                                   "①a incremental MPT root diverged from the full rebuild — "
-                                   "falling back to the full root and latching ①a off for "
-                                   "this process (historical eth_call/getProof serve "
-                                   "latest-only until the divergence is fixed; see the "
-                                   "Jovian alignment handoff doc)")
-                            << LOG_KV("block", header.number())
-                            << LOG_KV("incrementalRoot", delta.stateRoot.hexPrefixed())
-                            << LOG_KV("fullRoot", fullRoot.hexPrefixed())
-                            << LOG_KV("parentRoot", parentRoot.hexPrefixed());
-                        result.stateRoot = fullRoot;
-                    }
+                    result.stateRoot = delta.stateRoot;
                 }
                 catch (const bcos::ledger::mpt::MPTInvariantViolation& e)
                 {
-                    // Named diagnosis (BaselineScheduler.h:505-519 contract): a missing node
-                    // under the parent root means scenario-B node persistence was not active
-                    // at the parent height — pre-①a chain, or feature_l2_ethereum_compat
-                    // activated mid-chain. Halting here is intended; rebuilding over an empty
-                    // trie would fork the stateRoot away from the announced header.
+                    // Missing parent trie nodes: fail rather than rebuild from an empty trie.
                     throw bcos::evm::engine::OpStorageError(fmt::format(
                         "OpScheduler: incremental MPT build at block {} failed — parent block "
                         "{}'s state root {} has no persisted trie nodes (scenario B / "
@@ -991,39 +822,30 @@ private:
         }
         catch (const bcos::evm::engine::OpConsensusError&)
         {
-            // Keep the FISCO type and message; describeException/classifyException at the
-            // skeleton backstop consume them (OpConsensusRejected / detailed reason).
             throw;
         }
         catch (const bcos::evm::engine::OpStorageError&)
         {
-            // Keep the type and message — classifyException maps it to OpStorageFault (-32603).
             throw;
         }
         catch (const std::exception&)
         {
-            throw;  // Bindable families → the skeleton classifies.
+            throw;
         }
         catch (...)
         {
-            // Non-std::exception throw (raw evmone code paths can still produce these).
-            // Normalize to a FISCO type so the skeleton's catch(std::exception&) binds and
-            // classifyException receives a catchable one.
             throw bcos::evm::engine::OpConsensusError(
                 "OpScheduler: execute threw an unrecognized (non-std::exception) object; "
                 "raw tx decode or block-level consensus fault");
         }
 
-        // Announced block hash stashed for the commit hook (EthBlockHeader::computeHash on the
-        // executed header would throw std::bad_optional_access — its optional fields are
-        // incomplete).
+        // Commit uses this hash. Do not hash executedHeader (optional fields incomplete).
         bcos::crypto::HashType announcedBlockHash =
             bcos::protocol::EthBlockHeader::computeHash(header);
         co_return ExecuteOutcome{std::move(result), announcedBlockHash};
     }
 
-    /// ③ finish: write the OP commitments into the executedHeader (skip MPT; never call
-    /// BlockHeader::hash() — the header is rebuilt from the announced payload).
+    /// Copy execution commitments onto a clone of the announced header.
     task::Task<protocol::BlockHeader::Ptr> finishExecute(ViewType& /*view*/,
         ExecuteOutcome const& outcome, protocol::BlockHeader const& blockHeader,
         protocol::Block& /*block*/,
@@ -1049,24 +871,12 @@ private:
             executedBlockHeader->setRequestsHash(detail::toBcosH256(*opResult.seal.requestsHash));
         if (opResult.seal.blobGasUsed.has_value())
             executedBlockHeader->setBlobGasUsed(bcos::u256(*opResult.seal.blobGasUsed));
-        else if (blockHeader.blobGasUsed())
-            // Pre-Jovian (Isthmus): the seal does not compute DA-footprint blobGasUsed,
-            // but the announced OP header always carries blobGasUsed=0 (EIP-4844 leftover
-            // in the 21-field RLP). Copy it so the six-way commitment check does not
-            // spuriously reject on presence-asymmetry (nullopt vs 0).
-            executedBlockHeader->setBlobGasUsed(*blockHeader.blobGasUsed());
+        else
+            executedBlockHeader->setBlobGasUsed(bcos::u256{0});
         co_return executedBlockHeader;
     }
 
-    /// ④ commit: persist the 7 SYS tables via ledger::prewriteBlockToBuffer into a standalone
-    /// MutableStorage. blockHash = the execute phase's announcedBlockHash, never recomputed on the
-    /// executed header (its optional fields are incomplete → would throw). writeNonces=false.
-    /// **Registers the announced header (pending.block->blockHeader()), NOT the executed one** —
-    /// the executed header's tars encode is incomplete (missing coinbase/gasLimit/baseFee/...),
-    /// which a child block's parent-header read would reject.
-    /// The execute view's delta layer — the MLS stack's front pending layer at commit time
-    /// (this block's execute pushed it; the engine's x_state serializes block processing, so
-    /// at most one pending layer exists). Used by the undo-journal capture below.
+    /// Front MLS layer of the current execute view (used when journaling undo rows).
     std::shared_ptr<typename MultiLayerStorage::MutableStorage> pendingDeltaLayer()
     {
         auto& mls = *m_multiLayerStorage;
@@ -1078,12 +888,13 @@ private:
         return mls.m_storages.front();
     }
 
+    /// prewriteBlockToBuffer(announcedHash) plus the undo journal for this height.
     task::Task<std::shared_ptr<typename MultiLayerStorage::MutableStorage>> commitPersist(
         PendingBlock const& pending, std::optional<RollbackContext> const& rollback)
     {
         auto storage = std::make_shared<typename MultiLayerStorage::MutableStorage>();
 
-        // Guard: receipt count must equal tx count (opstackRegisterBlock invariant).
+        // Receipt count must equal tx count.
         if (pending.result.receipts.size() != pending.block->transactionsSize())
             BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{} << bcos::errinfo_comment{
                                       "OP block execution returned a receipt count differing "
@@ -1095,13 +906,11 @@ private:
         block->clearReceipts();
         for (auto const& r : pending.result.receipts)
             block->appendReceipt(r);
-        // setStoreToBackend should only be set on the toShared() fresh copies; this reset is
-        // defensive.
+        // Only toShared() copies should carry setStoreToBackend.
         for (auto const& tx : block->transactions())
             tx->setStoreToBackend(false);
 
-        // blockTxs: same pattern as the getTransactions hook (toShared() is required for the
-        // ConstPtr conversion).
+        // toShared() is required for ConstPtr.
         auto blockTxs = std::make_shared<protocol::ConstTransactions>(
             block->transactions() | ::ranges::views::transform([](auto tx) {
                 return protocol::Transaction::ConstPtr{std::move(tx).toShared()};
@@ -1111,37 +920,30 @@ private:
         co_await bcos::ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, *storage,
             pending.announcedBlockHash, /*writeNonces=*/false);
 
-        // ---- S-DRV-6/7 stage 1: the undo journal of THIS commit ----
-        //
-        // For every state-plane key the delta layer touched, record the value it held BEFORE
-        // this block (a committed view excludes the not-yet-merged delta). "/mpt/" rows are
-        // excluded: content-addressed and append-only, they are never overwritten, so a
-        // sibling never needs to undo them (the orphan's nodes stay as harmless garbage). On a
-        // ROLLBACK commit the replaced tip's journal supplies the parent values for the keys
-        // IT touched — the backend still holds the replaced tip's writes, so a committed-view
-        // read would return the wrong (post-replaced-tip) values for exactly those keys.
+        // Journal pre-block values for keys this delta touched (skip /mpt/).
+        // On rollback, use the replaced tip's journal: the backend still has that tip.
         if (auto deltaLayer = pendingDeltaLayer(); deltaLayer)
         {
             std::vector<executor_v1::StateKey> touched;
             std::vector<std::optional<storage::Entry>> newValues;
-            for (auto const& data : deltaLayer->m_buckets[0].container)
-            {
-                if (executor_v1::StateKeyView{data.key}.m_table == storage2::kMPTTable)
+            for (auto const& bucket : deltaLayer->m_buckets)
+                for (auto const& data : bucket.container)
                 {
-                    continue;
+                    if (executor_v1::StateKeyView{data.key}.m_table == storage2::kMPTTable)
+                    {
+                        continue;
+                    }
+                    touched.emplace_back(data.key);
+                    // NOT_EXISTS and DELETED both mean this commit removes the row.
+                    if (auto* entry = std::get_if<storage::Entry>(std::addressof(data.value)))
+                    {
+                        newValues.emplace_back(*entry);
+                    }
+                    else
+                    {
+                        newValues.emplace_back(std::nullopt);
+                    }
                 }
-                touched.emplace_back(data.key);
-                // DataValue = variant<NOT_EXISTS, DELETED, Entry>: DELETED (the delta's
-                // tombstones) and NOT_EXISTS both mean "this commit removes the row".
-                if (auto* entry = std::get_if<storage::Entry>(std::addressof(data.value)))
-                {
-                    newValues.emplace_back(*entry);
-                }
-                else
-                {
-                    newValues.emplace_back(std::nullopt);
-                }
-            }
             auto committed = m_multiLayerStorage->forkCommitted();
             auto oldValues = co_await storage2::readSome(committed, touched);
             std::map<executor_v1::StateKey, std::optional<storage::Entry> const*,
@@ -1163,14 +965,12 @@ private:
                 auto old = [&]() -> std::optional<storage::Entry> {
                     if (auto it = replacedBase.find(touched[i]); it != replacedBase.end())
                     {
-                        // Parent-state value journaled when the replaced tip committed.
+                        // Parent value recorded when the replaced tip committed.
                         return *it->second;
                     }
                     return oldValues[i];
                 }();
-                // The no-op filter must compare against the enumeration's NEW values —
-                // comparing old against old would discard every modified row and keep only
-                // created ones, silently breaking the next rollback's base.
+                // Skip unchanged rows.
                 if (old.has_value() && newValues[i].has_value() &&
                     old->get() == newValues[i]->get())
                 {
@@ -1191,11 +991,7 @@ private:
                                   std::to_string(number - c_reorgUndoKeep)});
             }
 
-            // Rollback count compensation: prewrite's asyncGetTotalTransactionCount read the
-            // ledger's stored totals, which already include the replaced tip's counters — the
-            // reorged history never contained that block, so subtract them back out of the
-            // buffer rows (writing the failed row explicitly when the sibling had no failures
-            // and prewrite skipped it).
+            // prewrite totals still include the replaced tip; subtract them.
             if (rollback.has_value())
             {
                 auto adjust = [&](std::string_view key, int64_t delta) -> task::Task<void> {
@@ -1233,45 +1029,41 @@ private:
         co_return storage;
     }
 
-    /// Commit continuity (head-advance guard): prewriteBlockToBuffer writes SYS_CURRENT_STATE
-    /// unconditionally, so restore the monotonic guard (rejecting already-committed / discontinuous
-    /// commits). Reads the storage view (where the OP commit writes), not the ledger's own
-    /// m_stateStorage. `sameHeightOverwrite` is the S-DRV-6/7 reorg-sibling exemption: a commit
-    /// at the committed tip's own height that arrived through the rollback path (context stashed
-    /// by execute) overwrites the height instead of advancing it.
+    /// Reject already-committed or discontinuous heights, unless this is a same-height rollback.
     task::Task<bool> commitContinuityCheck(
         protocol::BlockNumber number, bool sameHeightOverwrite = false)
     {
         if (!isSysContractDeploy(number))
         {
-            if (m_lastCommittedBlockNumber == -1)
+            auto lastCommitted = m_lastCommittedBlockNumber.load();
+            if (lastCommitted == -1)
             {
                 auto view = m_multiLayerStorage->fork();
-                m_lastCommittedBlockNumber =
+                lastCommitted =
                     co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
+                m_lastCommittedBlockNumber.store(lastCommitted);
             }
-            if (m_lastCommittedBlockNumber != -1 && number == m_lastCommittedBlockNumber &&
-                sameHeightOverwrite)
+            if (lastCommitted != -1 && number == lastCommitted && sameHeightOverwrite)
             {
-                // The one leveled reorg commit: same height, different block.
+                // Same-height rollback overwrite.
             }
-            else if (m_lastCommittedBlockNumber != -1 && number <= m_lastCommittedBlockNumber)
+            else if (lastCommitted != -1 && number <= lastCommitted)
             {
-                OP_SCHEDULER_LOG(INFO) << "Block already committed: " << number
-                                       << "! latest: " << m_lastCommittedBlockNumber;
+                OP_SCHEDULER_LOG(INFO)
+                    << "Block already committed: " << number << "! latest: " << lastCommitted;
                 co_return false;
             }
-            else if (m_lastCommittedBlockNumber != -1 && number - m_lastCommittedBlockNumber != 1)
+            else if (lastCommitted != -1 && number - lastCommitted != 1)
             {
                 OP_SCHEDULER_LOG(INFO) << "Discontinuous commit block number: " << number
-                                       << "! expect: " << (m_lastCommittedBlockNumber + 1);
+                                       << "! expect: " << (lastCommitted + 1);
                 co_return false;
             }
         }
         co_return true;
     }
 
-    /// OP notifiers are no-ops registered in the ctor (no txpool / RPC push on the OP path).
+    /// Invoke the installed notifiers (ctor defaults are no-ops).
     void notifyBlockNumber(protocol::BlockNumber number)
     {
         m_blockNumberNotifier(number);
@@ -1279,8 +1071,7 @@ private:
             [](const Error::Ptr&) {});
     }
 
-    /// The skeleton default calls header.hash(), which throws for an OP header — build the
-    /// LedgerConfig by hand (features only).
+    /// Build LedgerConfig without header.hash() (throws on an OP header).
     task::Task<ledger::LedgerConfig::Ptr> loadLedgerConfig(
         ViewType& view, protocol::BlockNumber number)
     {
@@ -1292,7 +1083,7 @@ private:
         co_return ledgerConfig;
     }
 
-    /// Same: the skeleton default calls header.hash(); the OP commit path never does.
+    /// Commit-path LedgerConfig (number + timestamp only).
     task::Task<ledger::LedgerConfig::Ptr> loadCommitLedgerConfig(protocol::BlockHeader::Ptr header)
     {
         auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
@@ -1302,13 +1093,7 @@ private:
     }
 
 public:
-    /// Round-2 F4: the RPC-bound reason string per classified code. Both catch arms of call() /
-    /// callAtBlock must produce the SAME string for the same code — which arm fires is
-    /// unreliable in wedprcrypto-linked binaries (observed: an OpStorageError thrown after
-    /// the executor co_await escapes catch(std::exception&) yet classifyException still types
-    /// it; mechanism: the Rust libs' bundled runtime breaks libc++ base-class exception
-    /// matching binary-wide — precedent bcos-rpc/test/CMakeLists.txt:29-36, NOT -fno-rtti),
-    /// so the classification carries the semantics and this carries the wording.
+    /// Stable RPC reason text for a classified scheduler code.
     static constexpr std::string_view rpcSafeReason(scheduler::SchedulerError code) noexcept
     {
         return code == scheduler::SchedulerError::OpStorageFault      ? "storage fault" :
@@ -1316,14 +1101,7 @@ public:
                                                                         "internal error";
     }
 
-    // Exception classification: OpConsensusError→OpConsensusRejected / OpStorageError→
-    // OpStorageFault / MPT read-path faults (MPTInvariantViolation: missing node,
-    // MPTDecodeError: corrupt node — both mean the persisted trie is unreadable)→
-    // OpStorageFault / other→UnknownError. The mpt tier matters because Storage2State's
-    // poison ladder only catches its own read wrapper: a missing/corrupt node can escape
-    // as a raw mpt exception (e.g. from loadOpFeeParams' first trie walk), and without
-    // this tier it would surface as UnknownError instead of the storage-fault semantics.
-    // Public: unit-tested directly (ClassifyExceptionMapping).
+    /// Map OP / MPT exceptions to SchedulerError. Raw MPT faults are storage faults.
     scheduler::SchedulerError classifyException(std::exception_ptr eptr) const
     {
         try
@@ -1352,15 +1130,7 @@ public:
         }
     }
 
-    /// Error-message recovery at the catch(...) backstop: rethrow + typed catch, so the engine
-    /// barrier can emit a detailed validationError. Prefer what() from the OP error families;
-    /// history note — the former catch-all "RTTI typed-catch bypassed" outcome was not an
-    /// evmone-RTTI property at all: the pre-fix evmone port (compiled -fno-rtti) injected a
-    /// private typeinfo(std::exception) copy into the link, so EVERY catch(std::exception&)
-    /// in the binary compared against a different typeinfo address than the runtime used and
-    /// silently fell to catch(...). The port now builds evmone with RTTI (ports/evmone,
-    /// rtti-enabled.patch); a plain catch(const std::exception&) here would bind fine — the
-    /// OP-specific catches stay first so their exact messages win.
+    /// Recover what() from known exception types; unknown throws stay generic.
     std::string describeException(std::exception_ptr eptr) const
     {
         try
@@ -1390,8 +1160,7 @@ public:
     }
 
 private:
-    /// Project an executed/announced header's commitment fields into the six-way comparison
-    /// surface; both sides read the same accessors.
+    /// Commitment fields used to compare executed vs announced headers.
     static bcos::evm::engine::OpBlockCommitments headerCommitments(protocol::BlockHeader const& h)
     {
         namespace detail = bcos::evm::engine::detail;
@@ -1424,15 +1193,7 @@ private:
         return out;
     }
 
-    /// OP eth_call: fork the latest committed state, build a real OP block context (hand-built
-    /// LedgerConfig), load the L1Block fee params, run OpstackExecutor::executeTransaction
-    /// (injecting chainId/blockGasLeft/block hashes), then discard the fork (dry-run).
-    /// Shared call-execution tail of coCallLatest / coCallAtBlock (round-2 F1 dedup — the two
-    /// used to carry ~35 near-identical lines each, and the round-1 poison/sharedError fix had
-    /// to be written twice): load fee params with a poison check → blockGasLeft → block-hash
-    /// window → per-call executor → executeTransaction → loud sharedError/hashErr checks.
-    /// @p errTag is only the message-prefix discriminator ("call" vs "historical") — a
-    /// string_view; both call sites pass string literals, so it outlives the coroutine.
+    /// Dry-run one eth_call on @p view. errTag prefixes errors.
     template <class AnyView>
     task::Task<protocol::TransactionReceipt::Ptr> coCallOnView(AnyView& view,
         protocol::BlockHeader const& header, protocol::Transaction const& transaction,
@@ -1444,9 +1205,7 @@ private:
         const auto& cfg = op::configAt(m_forkFlags);
         bcos::evm::evmstate::Storage2State<AnyView> stateView(view);
         auto fee = op::loadOpFeeParams(stateView);
-        // Storage2State swallows storage faults into the poison flag (its noexcept read
-        // contract) — without this check a corrupted read would degrade to zero fee params /
-        // absent accounts and the call would return a plausible-looking WRONG answer.
+        // Fail if Storage2State poisoned the fee-param read.
         if (stateView.poisoned())
             throw bcos::evm::engine::OpStorageError(fmt::format(
                 "OpScheduler: {} fee-param read fault: {}", errTag, stateView.firstError()));
@@ -1457,23 +1216,17 @@ private:
         detail::RecentBlockHashes<AnyView> hashes(
             view, header.number(), detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
 
-        // Construct the executor per call (one evmc::VM).
+        // One executor (and one evmc::VM) per call.
         auto sharedError = std::make_shared<SharedErrorSlot>();
         OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
 
         auto receipt = co_await executor.executeTransaction(view, header, transaction,
             /*contextID=*/0, ledgerConfig, /*call=*/true, fee, blockGasLeft, m_chainId, &hashes);
 
-        // The executor's internal Storage2State instances report read faults to sharedError
-        // (same poison contract) — fail the call loudly instead of returning a receipt built
-        // on swallowed zero-value reads.
-        // Stage-attribution invariant (round-3 S5): fee-param-stage read faults trip the poison
-        // check above; EXECUTION-stage faults (a missing/corrupt node hit by an intra-call SLOAD
-        // on the historical trie — CallAtBlockExecutionStageNodeMissingIsStorageFault) can only
-        // surface HERE, via sharedError. Both tiers must stay loud.
+        // Fail if the executor reported a storage read fault.
         std::string firstError;
         {
-            // SharedErrorSlot access contract (Storage2State.h): every read takes the mutex.
+            // SharedErrorSlot is mutex-guarded.
             std::lock_guard lock(sharedError->mutex);
             firstError = sharedError->message;
         }
@@ -1481,9 +1234,6 @@ private:
             throw bcos::evm::engine::OpStorageError(
                 fmt::format("OpScheduler: {} state read fault: {}", errTag, firstError));
         if (hashErr.has_value())
-            // Block-hash lookup reads storage — a fault is OpStorageError (→ OpStorageFault via
-            // classifyException), matching the block path (OpBlockExecute.h finalizeOpBlockResult),
-            // not a bare runtime_error mapped to UnknownError (round-3 S1).
             throw bcos::evm::engine::OpStorageError(
                 fmt::format("OpScheduler: {} block-hash lookup failed: {}", errTag, *hashErr));
         co_return receipt;
@@ -1500,8 +1250,7 @@ private:
             co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
         auto block = co_await bcos::ledger::getBlockData(
             view, blockNumber, bcos::ledger::HEADER, *m_blockFactory);
-        // Keep the header Ptr alive: blockHeader() returns a fresh shared_ptr BY VALUE; binding a
-        // reference to it would dangle a temporary.
+        // blockHeader() returns a shared_ptr by value; keep it alive.
         auto blockHeader = block->blockHeader();
         auto const& header = *blockHeader;
 
@@ -1518,19 +1267,7 @@ private:
         co_return co_await coCallOnView(view, header, *transaction, *ledgerConfig, "call");
     }
 
-    /// OP historical eth_call (③ + ①b): execute @p transaction against the state block
-    /// @p blockNumber committed — the MPT at that block's header stateRoot — keeping the full
-    /// OP execution semantics of coCallLatest (same OpstackExecutor, hand-built LedgerConfig,
-    /// historical L1 fee params and block-hash window). The call's own writes land in a fresh
-    /// mutable layer over a HistoricalStateBackend (read-your-writes, nothing persisted).
-    ///
-    /// Boundary sequence mirrors BaselineScheduler::callAtBlock (same codes, same boundary
-    /// order; the feature-gate message drops Baseline's trailing "not completely committed"
-    /// clause): beyond-latest → InvalidBlockNumber; block == latest → the coCallLatest fast
-    /// path; non-scenario-B chain (no feature_l2_ethereum_compat) → InvalidStatus; a missing or
-    /// unpersisted state root → InvalidStatus (loud refusal, never a latest-state answer
-    /// dressed up as a historical one). Returns (Error, receipt) — the Error half carries
-    /// the refusal so callAtBlock's catch wrappers only see real exceptions.
+    /// eth_call against the committed MPT at @p blockNumber. Refusals return Error, not throw.
     task::Task<std::tuple<Error::Ptr, protocol::TransactionReceipt::Ptr>> coCallAtBlock(
         protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber)
     {
@@ -1539,9 +1276,7 @@ private:
         auto latestView = m_multiLayerStorage->fork();
         auto latestNumber =
             co_await bcos::ledger::getCurrentBlockNumber(latestView, bcos::ledger::fromStorage);
-        // blockNumber < 0: refuse semantically (BaselineScheduler shares this hole — a negative
-        // number falls through to the storage read and fails unclassified); getBlockData on a
-        // negative height is not a meaningful lookup either way.
+        // Negative or beyond-latest: InvalidBlockNumber.
         if (blockNumber < 0 || blockNumber > latestNumber)
         {
             co_return std::tuple{
@@ -1552,20 +1287,12 @@ private:
         }
         if (blockNumber == latestNumber)
         {
-            // Fast path parity note (pre-existing BaselineScheduler deviation, documented not
-            // fixed): latestNumber is read once up front, so a commit landing between this read
-            // and coCallLatest's own fork makes "latest" here one height stale (benign TOCTOU —
-            // the call still executes on a committed state, just the previous one), and the
-            // latest view is forked twice (here + inside coCallLatest). Not worth diverging from
-            // the Baseline boundary order to fix.
+            // Latest height: reuse coCallLatest.
             co_return std::tuple{
                 Error::Ptr{nullptr}, co_await coCallLatest(std::move(transaction))};
         }
 
-        // OQ6 gate: only scenario B (feature_l2_ethereum_compat) commits the COMPLETE state to
-        // the trie; anywhere else a historical call could silently read dormant accounts as
-        // absent. Features are read at the pinned height from the latest view (SYS_CONFIG is
-        // pass-through metadata, not historicised state).
+        // Historical call needs feature_l2_ethereum_compat (full-fidelity MPT).
         bcos::ledger::Features features;
         co_await bcos::ledger::readFromStorage(features, latestView, blockNumber);
         if (!features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat))
@@ -1581,8 +1308,7 @@ private:
 
         auto block = co_await bcos::ledger::getBlockData(
             latestView, blockNumber, bcos::ledger::HEADER, *m_blockFactory);
-        // Keep the header Ptr alive: blockHeader() returns a fresh shared_ptr BY VALUE; binding a
-        // reference to it would dangle a temporary (same guard as coCallLatest).
+        // blockHeader() returns a shared_ptr by value; keep it alive.
         auto blockHeader = block->blockHeader();
         auto const& header = *blockHeader;
         auto const stateRoot = header.stateRoot();
@@ -1594,8 +1320,7 @@ private:
                                          blockNumber)),
                 protocol::TransactionReceipt::Ptr{nullptr}};
         }
-        // Loud refusal when the root's trie nodes were never persisted (a chain that ran
-        // before ①b node persistence). The empty root needs no rows — it IS the empty trie.
+        // Empty root needs no nodes; any other missing root is an error.
         if (stateRoot != bcos::ledger::mpt::emptyRootHash() &&
             !co_await storage2::existsOne(latestView, storage2::mptNodeStateKey(stateRoot)))
         {
@@ -1615,17 +1340,12 @@ private:
         ledgerConfig->setFeatures(features);
         ledgerConfig->setEVMCRevision(cfg.rev);
 
-        // The historical stack: a fresh writable layer over the read-through backend, so the
-        // call's own writes read back inside the call and die with the view (dry-run).
+        // Fresh mutable layer over the historical MPT; call writes are not persisted.
         using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType>;
         HistoricalBackend historicalBackend(latestView, stateRoot);
         storage2::View<typename MultiLayerStorage::MutableStorage, void, HistoricalBackend>
             historicalView(std::addressof(historicalBackend));
         historicalView.newMutable();
-        // The shared tail (coCallOnView) then loads the historical L1Block fee params through
-        // this view (poison-checked), builds the block-hash window, and runs the executor —
-        // a historical read that hits a missing trie node mid-execution surfaces via its
-        // sharedError check, not as a status-ok receipt built on swallowed zero values.
         co_return std::tuple{Error::Ptr{nullptr}, co_await coCallOnView(historicalView, header,
                                                       *transaction, *ledgerConfig, "historical")};
     }
@@ -1635,7 +1355,6 @@ private:
     uint64_t m_chainId;
     bcos::evm::opstack::OpForkFlags m_forkFlags;
 
-    // Orchestration state (was the skeleton's protected block).
     MultiLayerStorage* m_multiLayerStorage = nullptr;
     bcos::protocol::BlockFactory* m_blockFactory = nullptr;
     bcos::ledger::LedgerInterface* m_ledger = nullptr;
@@ -1645,21 +1364,15 @@ private:
         std::function<void(bcos::Error::Ptr)>)>
         m_transactionNotifier;
     std::mutex m_executeMutex;
-    int64_t m_lastExecutedBlockNumber{-1};
+    std::atomic<int64_t> m_lastExecutedBlockNumber{-1};
     std::mutex m_commitMutex;
-    int64_t m_lastCommittedBlockNumber{-1};
-    /// ①a kill-latch (root-divergence interim, see execute() ⑤): tripped once the incremental
-    /// MPT root disagrees with the full rebuild — all later blocks build the root the
-    /// battle-tested full-rebuild way and skip node persistence. Execute is single-flight
-    /// under m_executeMutex; atomic only for defensive simplicity.
-    std::atomic_bool m_incrementalMptLatchedOff{false};
+    std::atomic<int64_t> m_lastCommittedBlockNumber{-1};
     std::mutex m_pendingMutex;
     std::optional<PendingBlock> m_pending;
 
-    /// S-DRV-6/7 rollback context slot (see RollbackContext above).
+    /// Stashed when execute prepares a same-height rollback.
     std::optional<RollbackContext> m_rollbackContext;
-    /// How many heights of SYS_REORG_UNDO rows to retain (the rollback feature targets the
-    /// tip's own height; the window only survives restarts and repeated reorgs).
+    /// SYS_REORG_UNDO retention window (heights).
     static constexpr int64_t c_reorgUndoKeep = 64;
 };
 
