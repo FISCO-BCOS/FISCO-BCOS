@@ -22,6 +22,10 @@
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libnetwork/Common.h"
+#include <bcos-task/Wait.h>
+#include <algorithm>
+#include <chrono>
+#include <random>
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::amop;
@@ -78,7 +82,7 @@ void AMOPImpl::broadcastTopicSeq()
     // each task keeps the message alive (zero-copy: the payload rides as a view). All state is
     // passed as coroutine parameters so it is copied into the frame and stays alive.
     task::wait([](P2PInterface::Ptr _network, bcos::bytes _payload) -> task::Task<void> {
-        auto message = std::dynamic_pointer_cast<P2PMessage>(
+        auto message = std::static_pointer_cast<P2PMessage>(
             _network->messageFactory()->buildMessage());
         message->setPacketType(GatewayMessageType::AMOPMessageType);
         message->setSeq(_network->messageFactory()->newSeq());
@@ -113,7 +117,7 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
         // an unreachable peer is an expected, recoverable state.
         task::wait([](P2PInterface::Ptr _network, uint16_t _type, P2pID _nodeID,
                        bcos::bytes _payload) -> task::Task<void> {
-            auto message = std::dynamic_pointer_cast<P2PMessage>(
+            auto message = std::static_pointer_cast<P2PMessage>(
                 _network->messageFactory()->buildMessage());
             message->setPacketType(_type);
             message->setSeq(_network->messageFactory()->newSeq());
@@ -198,7 +202,7 @@ void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::P
         // a send failure is logged here (the old async callback only logged errors too).
         task::wait([](P2PInterface::Ptr _network, uint16_t _type, P2pID _nodeID,
                        bcos::bytes _payload) -> task::Task<void> {
-            auto message = std::dynamic_pointer_cast<P2PMessage>(
+            auto message = std::static_pointer_cast<P2PMessage>(
                 _network->messageFactory()->buildMessage());
             message->setPacketType(_type);
             message->setSeq(_network->messageFactory()->newSeq());
@@ -396,14 +400,18 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                    -> task::Task<void> {
         auto network = _self->m_network;
         auto messageFactory = _self->m_messageFactory;
+        // shuffle the candidate list once, then take-and-erase the front per attempt: the node
+        // attempted is always the one removed, so a dead node is never retried while a live one
+        // is dropped untried (randomChoose+erase(begin()) removed a different node than tried).
+        auto seed = std::chrono::system_clock::now().time_since_epoch().count();
+        std::shuffle(_nodeIDs.begin(), _nodeIDs.end(), std::default_random_engine(seed));
         while (!_nodeIDs.empty())
         {
-            auto choosedNodeID = randomChoose(_nodeIDs);
-            // erase in case of select the same node when retry
+            auto choosedNodeID = _nodeIDs.front();
             _nodeIDs.erase(_nodeIDs.begin());
             AMOP_LOG(INFO) << LOG_DESC("asyncSendMessageByTopic")
                            << LOG_KV("choosedNodeID", printShortP2pID(choosedNodeID));
-            auto message = std::dynamic_pointer_cast<P2PMessage>(
+            auto message = std::static_pointer_cast<P2PMessage>(
                 network->messageFactory()->buildMessage());
             message->setPacketType(GatewayMessageType::AMOPMessageType);
             message->setSeq(network->messageFactory()->newSeq());

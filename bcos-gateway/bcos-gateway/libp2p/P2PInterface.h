@@ -47,9 +47,10 @@ public:
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
         Options options = {}) = 0;
 
-    // (coroutine) send a message to each of the given p2p nodes. A failed/unreachable node is
-    // logged and skipped (fire-and-forget per node); the payload bytes are owned by the frame so
-    // the caller does not need to keep them alive.
+    // (coroutine) send a message to each of the given p2p nodes. One independent coroutine is
+    // fanned out per node (no head-of-line blocking on a stalled peer's socket write); a
+    // failed/unreachable node is logged and skipped (fire-and-forget per node). The payload bytes
+    // are owned by the frame so the caller does not need to keep them alive.
     virtual task::Task<void> sendMessageByNodeIDs(uint16_t _type,
         const std::vector<P2pID>& _nodeIDs, bcos::bytes _payload, Options options = {}) = 0;
 

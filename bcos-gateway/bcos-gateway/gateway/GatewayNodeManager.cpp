@@ -316,8 +316,7 @@ void GatewayNodeManager::onRequestNodeStatus(
                 << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", e.errorCode())
                 << LOG_KV("msg", e.what());
         }
-    }(p2pInterface, GatewayMessageType::ResponseNodeStatus, from,
-        bcos::bytes(nodeStatusData->begin(), nodeStatusData->end())));
+    }(p2pInterface, GatewayMessageType::ResponseNodeStatus, from, std::move(*nodeStatusData)));
 }
 
 bytesPointer GatewayNodeManager::generateNodeStatus()

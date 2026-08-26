@@ -567,29 +567,33 @@ bool Service::isConnected(P2pID const& nodeID) const
 bcos::task::Task<void> Service::sendMessageByNodeIDs(uint16_t _type,
     const std::vector<P2pID>& _nodeIDs, bcos::bytes _payload, Options _options)
 {
-    // value message in frame; payload owned by the frame and sent as a view (zero-copy). Reuses
-    // one header across the fan-out: sendMessageByNodeID re-stamps the per-session version and
-    // src/dst before each send, so the shared header is safe.
-    P2PMessageV2 message;
-    message.setPacketType(_type);
-    message.setSeq(m_messageFactory->newSeq());
-    message.setPayload(std::move(_payload));
-    // fire-and-forget per node: an unreachable peer (session dropped before the send) is an
-    // expected, recoverable state — log and continue. sendMessageByNodeID throws NetworkException
-    // for an inactive session, so catching it here keeps the remaining nodes in the fan-out alive.
+    // value message held by shared_ptr: fan out one independent coroutine per node, so a stalled
+    // peer's socket write cannot delay delivery to the peers behind it (same head-of-line-blocking
+    // reasoning as broadcastMessageToAll). Each per-peer task keeps the message alive; its
+    // per-session src/dst/version stamping runs synchronously before its first suspension, so the
+    // shared header stays race-free. A failed/unreachable node is logged and skipped.
+    auto message = std::make_shared<P2PMessageV2>();
+    message->setPacketType(_type);
+    message->setSeq(m_messageFactory->newSeq());
+    message->setPayload(std::move(_payload));
+    auto self = shared_from_this();
     for (auto const& nodeID : _nodeIDs)
     {
-        try
-        {
-            co_await sendMessageByNodeID(nodeID, message,
-                ::ranges::views::single(message.payload()), Options{_options.timeout, false});
-        }
-        catch (NetworkException const& e)
-        {
-            SERVICE_LOG(INFO) << LOG_DESC("sendMessageByNodeIDs send failed")
-                              << LOG_KV("nodeid", printShortP2pID(nodeID))
-                              << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.what());
-        }
+        task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID, P2PMessage::Ptr _message,
+                       Options _options) -> task::Task<void> {
+            try
+            {
+                co_await _self->sendMessageByNodeID(_nodeID, *_message,
+                    ::ranges::views::single(_message->payload()),
+                    Options{_options.timeout, false});
+            }
+            catch (NetworkException const& e)
+            {
+                SERVICE_LOG(INFO) << LOG_DESC("sendMessageByNodeIDs send failed")
+                                  << LOG_KV("nodeid", printShortP2pID(_nodeID))
+                                  << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.what());
+            }
+        }(self, nodeID, message, _options));
     }
     co_return;
 }
