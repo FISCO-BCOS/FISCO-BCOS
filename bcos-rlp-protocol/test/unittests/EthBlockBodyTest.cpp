@@ -413,6 +413,33 @@ BOOST_AUTO_TEST_CASE(rejectsConcatenatedLegacyLists)
     BOOST_REQUIRE(b.rlpEncode(out) != nullptr);
 }
 
+// Decode-side rejection arms: 0x00 content, a legacy-short element, and a bare
+// single byte — the wire-facing decoder's own guards, not just the encoder's.
+BOOST_AUTO_TEST_CASE(decodeTxRejectionArms)
+{
+    // 0x00 content: RLP string of 10 bytes whose content starts with the reserved type 0x00.
+    {
+        auto elem = fromHex("8a00c98080808080808080");
+        bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
+        bcos::bytes out;
+        BOOST_REQUIRE(codec::rlp::detail::decodeTx(in, out) != nullptr);
+    }
+    // Bare 0xc0: empty legacy list, below the 9-field minimum.
+    {
+        auto elem = fromHex("c0");
+        bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
+        bcos::bytes out;
+        BOOST_REQUIRE(codec::rlp::detail::decodeTx(in, out) != nullptr);
+    }
+    // Bare single byte 0x05 (below BYTES_HEAD_BASE, not a valid transaction).
+    {
+        auto elem = fromHex("05");
+        bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
+        bcos::bytes out;
+        BOOST_REQUIRE(codec::rlp::detail::decodeTx(in, out) != nullptr);
+    }
+}
+
 // An empty transaction element must be rejected by the encoder (round-6 lower bound
 // landed only on decode; the encoder must not silently drop it into a hash input).
 BOOST_AUTO_TEST_CASE(rejectsEmptyTransactionElement)

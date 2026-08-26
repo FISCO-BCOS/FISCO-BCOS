@@ -21,6 +21,7 @@
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 
 using namespace bcos;
@@ -130,6 +131,13 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthReceiptData& _re
     }
     else if (firstItem.size() <= 1)
     {
+        // geth's setStatus accepts only 0x01 (success), empty (failure), or a 32-byte
+        // postState; any other single byte is "invalid receipt status" (EIP-658).
+        if (firstItem.size() == 1 && firstItem[0] != 1)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                DecodingError::InvalidFieldset, "invalid receipt status byte");
+        }
         _receipt.postState.reset();
         _receipt.status = firstItem.empty() ? 0 : firstItem[0];
     }
@@ -320,10 +328,18 @@ bcos::Error::UniquePtr toEthReceiptData(
         {
             // In-tree producers (HostContext) store the address as 40 ASCII hex
             // chars; decode as hex — FixedBytes' default AlignRight would
-            // otherwise truncate the ASCII bytes to the last 20 of them.
-            ethLog.address =
-                Address(std::string(reinterpret_cast<const char*>(addr.data()), addr.size()),
-                    Address::FromHex);
+            // otherwise truncate the ASCII bytes to the last 20 of them. Validate the
+            // charset first: FixedBytes FromHex throws on non-hex characters outside
+            // the enclosing try, which would break the Error-return contract.
+            auto const addrStr =
+                std::string(reinterpret_cast<const char*>(addr.data()), addr.size());
+            if (!std::all_of(addrStr.begin(), addrStr.end(),
+                    [](unsigned char c) { return std::isxdigit(c) != 0; }))
+            {
+                return BCOS_ERROR_UNIQUE_PTR(
+                    DecodingError::InvalidFieldset, "toEthReceiptData: non-hex log address");
+            }
+            ethLog.address = Address(addrStr, Address::FromHex);
         }
         else
         {

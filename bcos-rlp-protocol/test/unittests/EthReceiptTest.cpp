@@ -248,6 +248,32 @@ BOOST_AUTO_TEST_CASE(malformedRejected)
     auto rawMalformed3 = fromHex("");
     auto err2 = r.rlpDecode(ref(rawMalformed3));
     BOOST_CHECK(err2 != nullptr);
+
+    // Legacy receipt with an invalid single-byte status (0x02): geth rejects all
+    // but 0x01 / empty / 32-byte postState.
+    auto rawBadStatus = fromHex("c402808080");
+    auto errBad = r.rlpDecode(ref(rawBadStatus));
+    BOOST_CHECK(errBad != nullptr);
+    // status byte 0x80 (canonical 81 80) also rejected.
+    auto rawBadStatus2 = fromHex("c58180808080");
+    auto errBad2 = r.rlpDecode(ref(rawBadStatus2));
+    BOOST_CHECK(errBad2 != nullptr);
+}
+
+// A legacy receipt with status byte 0x01 (EIP-658 success) decodes with status 1.
+BOOST_AUTO_TEST_CASE(legacyReceiptStatusOne)
+{
+    EthReceiptData data;
+    data.type = 0;
+    data.status = 1;
+    data.cumulativeGasUsed = 21000;
+    data.logsBloom = makeBloom();
+    EthReceipt r(data);
+    bytes out;
+    BOOST_REQUIRE(!r.rlpEncode(out));
+    EthReceipt decoded;
+    BOOST_REQUIRE(!decoded.rlpDecode(ref(out)));
+    BOOST_CHECK_EQUAL(decoded.data().status, 1);
 }
 
 // toEthReceiptData: BCOS receipt (FISCO TransactionStatus) -> Ethereum receipt data
@@ -320,6 +346,45 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataRejectsBadType)
     inner.logsBloom.assign(256, static_cast<char>(0xab));
     protocol::EthReceiptData eth;
     BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, 0x80, eth) != nullptr);
+}
+
+// The log-address conversion must accept 20 raw bytes and reject invalid lengths
+// (regression for the round-8 HIGH AlignRight-truncation fix, which was only
+// exercised on the 40-hex branch).
+BOOST_AUTO_TEST_CASE(logAddressRawAndInvalidLength)
+{
+    // 20 raw bytes -> copied directly (0x11 x 20).
+    {
+        auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        auto& inner = receipt->inner();
+        inner.data.status = 0;
+        inner.data.gasUsed = "21000";
+        inner.cumulativeGasUsed = "42000";
+        inner.logsBloom.assign(256, static_cast<char>(0xab));
+        bcostars::LogEntry tarsLog;
+        tarsLog.address = std::string(20, static_cast<char>(0x11));
+        inner.data.logEntries.push_back(std::move(tarsLog));
+        protocol::EthReceiptData eth;
+        BOOST_REQUIRE(!protocol::toEthReceiptData(*receipt, 1, eth));
+        BOOST_REQUIRE_EQUAL(eth.logs.size(), 1u);
+        bcos::bytes const expected(20, static_cast<bcos::byte>(0x11));
+        BOOST_CHECK(
+            eth.logs[0].address == Address(bcos::bytesConstRef(expected.data(), expected.size())));
+    }
+    // Invalid length (30) -> fail closed.
+    {
+        auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        auto& inner = receipt->inner();
+        inner.data.status = 0;
+        inner.data.gasUsed = "21000";
+        inner.cumulativeGasUsed = "42000";
+        inner.logsBloom.assign(256, static_cast<char>(0xab));
+        bcostars::LogEntry tarsLog;
+        tarsLog.address = std::string(30, 'x');
+        inner.data.logEntries.push_back(std::move(tarsLog));
+        protocol::EthReceiptData eth;
+        BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, 1, eth) != nullptr);
+    }
 }
 
 // Fail closed: a malformed cumulativeGasUsed must be rejected, not substituted,
