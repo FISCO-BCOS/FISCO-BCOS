@@ -226,6 +226,31 @@ public:
     const std::string& singleNodeConsensusPrevRandao() const;
     std::uint64_t singleNodeConsensusFixedTimestamp() const;
 
+    // Ethereum L1 EL-mode (self-sync) configurations ([ethereum] in config.ini).
+    // mode=el runs the node as an Ethereum execution-layer client: it downloads blocks
+    // from RLPx bootnodes, verifies them with EthereumBlockVerifier and commits them
+    // locally — no FISCO gateway / PBFT / txpool pipeline.
+    bool ethereumELModeEnabled() const;
+    const std::string& ethereumListenIP() const;
+    uint16_t ethereumListenPort() const;
+    // path to the bootnodes file (enode:// list, geth-style); default ./bootnodes.json
+    const std::string& ethereumBootnodesFile() const;
+    // path to the secp256k1 node private key (PEM/hex), default empty => derive/load
+    // from the node's own key material
+    const std::string& ethereumNodeKeyFile() const;
+    uint32_t ethereumMaxBatchSize() const;
+    uint64_t ethereumChainId() const;
+    // EL-mode fork schedule ([fork_timestamps] in config.genesis): L1 PoS chains fork on
+    // timestamps (not block heights); 0 means active from genesis.
+    uint64_t ethereumForkLondonTime() const;
+    uint64_t ethereumForkParisTime() const;
+    uint64_t ethereumForkShanghaiTime() const;
+    uint64_t ethereumForkCancunTime() const;
+    uint64_t ethereumForkPragueTime() const;
+    uint64_t ethereumForkOsakaTime() const;
+    uint64_t ethereumForkBpo1Time() const;
+    uint64_t ethereumForkBpo2Time() const;
+
     // the gateway configurations
     const std::string& p2pListenIP() const;
     uint16_t p2pListenPort() const;
@@ -338,6 +363,7 @@ protected:
     virtual void loadSingleNodeConsensusConfig(boost::property_tree::ptree const& _pt);
     virtual void loadStorageSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSyncConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadEthereumConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
@@ -350,6 +376,8 @@ protected:
 
     // load config.genesis
     void loadExecutorConfig(boost::property_tree::ptree const& _pt);
+    // EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis)
+    void loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
 
     // load config.ini
     void loadExecutorNormalConfig(boost::property_tree::ptree const& _pt);
@@ -547,6 +575,25 @@ private:
     bool m_enableSendBlockStatusByTree = false;
     bool m_enableSendTxByTree = false;
     std::uint32_t m_treeWidth = 3;
+
+    // config for Ethereum L1 EL-mode self-sync ([ethereum] in config.ini)
+    bool m_enableEthereumEL = false;
+    std::string m_ethereumListenIP = "0.0.0.0";
+    uint16_t m_ethereumListenPort = 30303;
+    std::string m_ethereumBootnodesFile = "./bootnodes.json";
+    std::string m_ethereumNodeKeyFile;
+    uint32_t m_ethereumMaxBatchSize = 192;
+    uint64_t m_ethereumChainId = 1;
+    // EL-mode fork schedule ([fork_timestamps] in config.genesis); 0 = active from genesis
+    uint64_t m_ethereumForkLondonTime = 0;
+    uint64_t m_ethereumForkParisTime = 0;
+    uint64_t m_ethereumForkShanghaiTime = 0;
+    uint64_t m_ethereumForkCancunTime = 0;
+    uint64_t m_ethereumForkPragueTime = 0;
+    uint64_t m_ethereumForkOsakaTime = 0;
+    uint64_t m_ethereumForkBpo1Time = 0;
+    uint64_t m_ethereumForkBpo2Time = 0;
+    bool m_ethereumForkScheduleSet = false;
 
     // config for cert
     std::string m_certPath;

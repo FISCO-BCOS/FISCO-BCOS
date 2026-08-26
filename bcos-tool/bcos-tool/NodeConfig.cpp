@@ -174,6 +174,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadSecurityConfig(_pt);
     loadStorageSecurityConfig(_pt);
     loadExecutorNormalConfig(_pt);
+    loadEthereumConfig(_pt);
 
     loadFailOverConfig(_pt, _enforceMemberID);
     loadStorageConfig(_pt);
@@ -197,6 +198,9 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     loadGenesisFeatures(_genesisConfig);
 
     loadLedgerConfig(_genesisConfig);
+    // EL-mode fork schedule must be parsed BEFORE loadExecutorConfig: its v2 EVMC-revision
+    // guard exempts chains with a [fork_timestamps] section (m_ethereumForkScheduleSet).
+    loadForkTimestamps(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
 
     // === A6.5: L2 genesis allocs; L2 mode is gated by feature_l2_ethereum_compat ===
@@ -382,12 +386,41 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
     auto nonce = requireField("nonce");
     requireHexField(std::string(sectionName), "nonce", nonce, 16, false);
     header.m_nonce = h64(nonce);
-    header.m_baseFeePerGas = quantityField("base_fee_per_gas");
-    header.m_withdrawalsRoot = hashField("withdrawals_root");
-    header.m_blobGasUsed = quantityField("blob_gas_used");
-    header.m_excessBlobGas = quantityField("excess_blob_gas");
-    header.m_parentBeaconBlockRoot = hashField("parent_beacon_block_root");
-    header.m_requestsHash = hashField("requests_hash");
+    // Fork-gated fields are OPTIONAL: a pre-Cancun chain (e.g. Sepolia's
+    // London-era genesis) omits the keys, which makes the corresponding RLP
+    // field absent — that is exactly what lets Ledger re-encode the header
+    // byte-for-byte. An L2 artifact always emits all 21 keys, so the
+    // 21-field encoding is unchanged.
+    auto optionalHashField = [&](std::string const& key) -> std::optional<crypto::HashType> {
+        auto value = section->get_optional<std::string>(key);
+        if (!value || value->empty())
+        {
+            return std::nullopt;
+        }
+        requireHexField(std::string(sectionName), key, *value, 64, false);
+        return crypto::HashType(*value);
+    };
+    auto optionalQuantityField = [&](std::string const& key) -> std::optional<u256> {
+        auto value = section->get_optional<std::string>(key);
+        if (!value || value->empty())
+        {
+            return std::nullopt;
+        }
+        requireHexField(std::string(sectionName), key, *value, 0, false);
+        if (value->size() > 2 + 64)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "[" + std::string(sectionName) + "]." + key + " exceeds 32 bytes: " + *value));
+        }
+        return u256(*value);
+    };
+    header.m_baseFeePerGas = optionalQuantityField("base_fee_per_gas");
+    header.m_withdrawalsRoot = optionalHashField("withdrawals_root");
+    header.m_blobGasUsed = optionalQuantityField("blob_gas_used");
+    header.m_excessBlobGas = optionalQuantityField("excess_blob_gas");
+    header.m_parentBeaconBlockRoot = optionalHashField("parent_beacon_block_root");
+    header.m_requestsHash = optionalHashField("requests_hash");
     // The artifact's own hash claim. Ledger recomputes keccak256(rlp(header))
     // from the 21 fields above and refuses to build genesis on mismatch, so a
     // stale or hand-edited section cannot silently mint a different B0.
@@ -895,6 +928,181 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("jwtSecretFile", jwtSecretFile)
                          << LOG_KV("clockSkewSecs", clockSkewSecs)
                          << LOG_KV("unsafeAllowV1Executor", allowV1Executor);
+}
+
+void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
+{
+    /*
+    [ethereum]
+        ; Ethereum L1 EL-mode self-sync. mode=el runs the node as an Ethereum
+        ; execution-layer client (download via RLPx -> verify -> commit), with no
+        ; FISCO gateway / PBFT / txpool pipeline. Any other value (or absent
+        ; section) leaves the node in the normal FISCO mode.
+        mode=none
+        listen_ip=0.0.0.0
+        listen_port=30303
+        ; geth-style enode:// list; path relative to the working directory
+        bootnodes_file=./bootnodes.json
+        ; secp256k1 node identity (hex or PEM). Empty = derive deterministically.
+        node_key_file=
+        ; max blocks requested per batch
+        max_batch_size=192
+    */
+    const std::string mode = _pt.get<std::string>("ethereum.mode", "none");
+    if (mode != "none" && mode != "el")
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.mode invalid: \"" + mode +
+                                  "\" (supported: none, el)"));
+    }
+    const bool enableEL = (mode == "el");
+    // EL mode is a self-contained L1 sync client: it is mutually exclusive with the
+    // op-stack Engine API driver and the single-node consensus driver (both drive block
+    // production through the EngineService; EL mode drives it through devp2p download).
+    if (enableEL && m_enableOpEngineRpc)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.mode=el and op_engine_rpc.enable are mutually exclusive: "
+                "EL mode self-syncs from bootnodes; op_engine_rpc is driven by an "
+                "external op-node"));
+    }
+    if (enableEL && m_enableSingleNodeConsensus)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.mode=el and consensus.enable_single_node_consensus are mutually "
+                "exclusive: EL mode self-syncs from bootnodes; single-node consensus "
+                "produces its own blocks"));
+    }
+    m_enableEthereumEL = enableEL;
+    m_ethereumListenIP = _pt.get<std::string>("ethereum.listen_ip", "0.0.0.0");
+    int listenPort = _pt.get<int>("ethereum.listen_port", 30303);
+    if (!isValidPort(listenPort))
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.listen_port invalid: " + std::to_string(listenPort)));
+    }
+    m_ethereumListenPort = static_cast<uint16_t>(listenPort);
+    m_ethereumBootnodesFile =
+        _pt.get<std::string>("ethereum.bootnodes_file", "./bootnodes.json");
+    m_ethereumNodeKeyFile = _pt.get<std::string>("ethereum.node_key_file", "");
+    uint32_t maxBatch = _pt.get<uint32_t>("ethereum.max_batch_size", 192);
+    if (maxBatch == 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("ethereum.max_batch_size must be > 0"));
+    }
+    m_ethereumMaxBatchSize = maxBatch;
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig")
+                         << LOG_KV("mode", mode) << LOG_KV("listenIP", m_ethereumListenIP)
+                         << LOG_KV("listenPort", m_ethereumListenPort)
+                         << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
+                         << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
+                         << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize);
+}
+
+// EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis). L1 PoS chains
+// fork on timestamps rather than block heights (unlike op-stack L2's
+// executor.evm_revision_forks). A zero timestamp means "active from genesis".
+void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig)
+{
+    auto section = _genesisConfig.get_child_optional("fork_timestamps");
+    if (!section)
+    {
+        return;
+    }
+    auto readTs = [&](std::string const& key) -> uint64_t {
+        auto value = section->get_optional<std::string>(key);
+        if (!value)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[fork_timestamps]." + key + " is required"));
+        }
+        try
+        {
+            // Accept decimal or 0x-prefixed hex.
+            auto trimmed = *value;
+            if (trimmed.rfind("0x", 0) == 0 || trimmed.rfind("0X", 0) == 0)
+            {
+                return std::stoull(trimmed.substr(2), nullptr, 16);
+            }
+            return std::stoull(trimmed);
+        }
+        catch (std::exception const&)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[fork_timestamps]." + key +
+                                                   " invalid timestamp: " + *value));
+        }
+    };
+    m_ethereumForkLondonTime = readTs("london_time");
+    // Paris (The Merge) is timestamp-gated on chains with a PoW phase (Sepolia).
+    // A chain that is PoS from genesis (Holesky) can omit it; readOptionalTs
+    // leaves it at 0 (active from genesis) when absent.
+    if (auto value = section->get_optional<std::string>("paris_time"))
+    {
+        auto trimmed = *value;
+        try
+        {
+            m_ethereumForkParisTime =
+                (trimmed.rfind("0x", 0) == 0 || trimmed.rfind("0X", 0) == 0) ?
+                    std::stoull(trimmed.substr(2), nullptr, 16) :
+                    std::stoull(trimmed);
+        }
+        catch (std::exception const&)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[fork_timestamps].paris_time invalid: " + trimmed));
+        }
+    }
+    else
+    {
+        m_ethereumForkParisTime = 0;  // active from genesis (pure PoS chain)
+    }
+    m_ethereumForkShanghaiTime = readTs("shanghai_time");
+    m_ethereumForkCancunTime = readTs("cancun_time");
+    m_ethereumForkPragueTime = readTs("prague_time");
+    // Post-Prague forks (osaka, bpo1, bpo2, ...) are optional: absent means "not yet
+    // active". They MUST be configured once activated on the chain — geth's EIP-2124
+    // fork-id checksum chains every activated fork, so a missing entry makes us
+    // announce a stale checksum and get rejected by peers.
+    auto readOptionalTs = [&](std::string const& key, uint64_t& out) {
+        if (auto value = section->get_optional<std::string>(key))
+        {
+            auto trimmed = *value;
+            try
+            {
+                out = (trimmed.rfind("0x", 0) == 0 || trimmed.rfind("0X", 0) == 0) ?
+                          std::stoull(trimmed.substr(2), nullptr, 16) :
+                          std::stoull(trimmed);
+            }
+            catch (std::exception const&)
+            {
+                BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                          "[fork_timestamps]." + key + " invalid: " + trimmed));
+            }
+        }
+        else
+        {
+            out = std::numeric_limits<uint64_t>::max();  // not yet active
+        }
+    };
+    readOptionalTs("osaka_time", m_ethereumForkOsakaTime);
+    readOptionalTs("bpo1_time", m_ethereumForkBpo1Time);
+    readOptionalTs("bpo2_time", m_ethereumForkBpo2Time);
+    m_ethereumForkScheduleSet = true;
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadForkTimestamps")
+                         << LOG_KV("london", m_ethereumForkLondonTime)
+                         << LOG_KV("paris", m_ethereumForkParisTime)
+                         << LOG_KV("shanghai", m_ethereumForkShanghaiTime)
+                         << LOG_KV("cancun", m_ethereumForkCancunTime)
+                         << LOG_KV("prague", m_ethereumForkPragueTime)
+                         << LOG_KV("osaka", m_ethereumForkOsakaTime)
+                         << LOG_KV("bpo1", m_ethereumForkBpo1Time)
+                         << LOG_KV("bpo2", m_ethereumForkBpo2Time);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -1821,13 +2029,20 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     // hard fork (replay/resync would diverge and a mixed-version network could split, without
     // either side erroring). Requiring it here makes the effective revision part of the
     // genesis config and therefore of the on-chain state.
+    // EL mode (Ethereum L1 self-sync) is the exception: its fork schedule is timestamp-based
+    // ([fork_timestamps], loaded by loadForkTimestamps) and EthereumBlockVerifier derives the
+    // EVMC revision from the block timestamp via fillExecutionLedgerConfig — the revision is
+    // never read from on-chain state in this mode, so an executor.evm_revision is not
+    // required (the [fork_timestamps] section itself pins the schedule in the config).
     if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
-        !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty())
+        !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty() &&
+        !m_ethereumForkScheduleSet)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
                 "executor.version=2 (ethereum-executor) requires an explicit "
-                "executor.evm_revision (or executor.evm_revision_forks) so the EVM "
+                "executor.evm_revision (or executor.evm_revision_forks), or a "
+                "[fork_timestamps] section (Ethereum L1 EL mode) so the EVM "
                 "revision is recorded on-chain; refusing to run with an implicit "
                 "binary-side default"));
     }
@@ -1860,9 +2075,13 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     {
         m_genesisConfig.m_authAdminAccount =
             _genesisConfig.get<std::string>("executor.auth_admin_account", "");
+        // Ethereum L1 EL mode ([fork_timestamps] present) is a pure Ethereum execution
+        // layer: it has no FISCO system-contract auth, so the auth_admin_account
+        // requirement (normally enforced from compatibility_version 3.3.0) does not apply.
         if (m_genesisConfig.m_authAdminAccount.empty() &&
             (m_genesisConfig.m_isAuthCheck ||
-                m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION)) [[unlikely]]
+                m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION) &&
+            !m_ethereumForkScheduleSet) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is empty, "
@@ -1871,8 +2090,9 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     }
     catch (std::exception const& e)
     {
-        if (m_genesisConfig.m_isAuthCheck ||
-            m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION)
+        if ((m_genesisConfig.m_isAuthCheck ||
+                m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION) &&
+            !m_ethereumForkScheduleSet)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is null, "
@@ -2767,15 +2987,33 @@ std::string bcos::tool::generateGenesisData(
                << "timestamp:" << ethHeader.m_timestamp << '\n'
                << "extra_data:" << toHexStringWithPrefix(ethHeader.m_extraData) << '\n'
                << "mix_hash:" << ethHeader.m_mixHash.hexPrefixed() << '\n'
-               << "nonce:" << ethHeader.m_nonce.hexPrefixed() << '\n'
-               << "base_fee_per_gas:" << ethHeader.m_baseFeePerGas << '\n'
-               << "withdrawals_root:" << ethHeader.m_withdrawalsRoot.hexPrefixed() << '\n'
-               << "blob_gas_used:" << ethHeader.m_blobGasUsed << '\n'
-               << "excess_blob_gas:" << ethHeader.m_excessBlobGas << '\n'
-               << "parent_beacon_block_root:" << ethHeader.m_parentBeaconBlockRoot.hexPrefixed()
-               << '\n'
-               << "requests_hash:" << ethHeader.m_requestsHash.hexPrefixed() << '\n'
-               << "hash:" << ethHeader.m_hash.hexPrefixed() << '\n';
+               << "nonce:" << ethHeader.m_nonce.hexPrefixed() << '\n';
+            if (ethHeader.m_baseFeePerGas.has_value())
+            {
+                ss << "base_fee_per_gas:" << *ethHeader.m_baseFeePerGas << '\n';
+            }
+            if (ethHeader.m_withdrawalsRoot.has_value())
+            {
+                ss << "withdrawals_root:" << ethHeader.m_withdrawalsRoot->hexPrefixed() << '\n';
+            }
+            if (ethHeader.m_blobGasUsed.has_value())
+            {
+                ss << "blob_gas_used:" << *ethHeader.m_blobGasUsed << '\n';
+            }
+            if (ethHeader.m_excessBlobGas.has_value())
+            {
+                ss << "excess_blob_gas:" << *ethHeader.m_excessBlobGas << '\n';
+            }
+            if (ethHeader.m_parentBeaconBlockRoot.has_value())
+            {
+                ss << "parent_beacon_block_root:" << ethHeader.m_parentBeaconBlockRoot->hexPrefixed()
+                   << '\n';
+            }
+            if (ethHeader.m_requestsHash.has_value())
+            {
+                ss << "requests_hash:" << ethHeader.m_requestsHash->hexPrefixed() << '\n';
+            }
+            ss << "hash:" << ethHeader.m_hash.hexPrefixed() << '\n';
         }
 
         size_t j = 0;
@@ -2834,6 +3072,93 @@ std::map<protocol::BlockNumber, evmc_revision> const& bcos::tool::NodeConfig::ev
     const
 {
     return m_genesisConfig.m_evmcRevisionForks;
+}
+bool bcos::tool::NodeConfig::ethereumELModeEnabled() const
+{
+    return m_enableEthereumEL;
+}
+const std::string& bcos::tool::NodeConfig::ethereumListenIP() const
+{
+    return m_ethereumListenIP;
+}
+uint16_t bcos::tool::NodeConfig::ethereumListenPort() const
+{
+    return m_ethereumListenPort;
+}
+const std::string& bcos::tool::NodeConfig::ethereumBootnodesFile() const
+{
+    return m_ethereumBootnodesFile;
+}
+const std::string& bcos::tool::NodeConfig::ethereumNodeKeyFile() const
+{
+    return m_ethereumNodeKeyFile;
+}
+uint32_t bcos::tool::NodeConfig::ethereumMaxBatchSize() const
+{
+    return m_ethereumMaxBatchSize;
+}
+uint64_t bcos::tool::NodeConfig::ethereumChainId() const
+{
+    // L1 EL mode: chain id comes from [web3] chain_id in config.genesis (decimal string,
+    // e.g. 11155111 for Sepolia). Falls back to parsing [chain] chain_id when it is
+    // numeric (geth-style configs), else the default mainnet id 1.
+    auto const& web3Id = m_genesisConfig.m_web3ChainID;
+    if (!web3Id.empty() && web3Id != "0")
+    {
+        try
+        {
+            return boost::lexical_cast<uint64_t>(web3Id);
+        }
+        catch (boost::bad_lexical_cast const&)
+        {
+            // fall through
+        }
+    }
+    auto const& chainId = m_genesisConfig.m_chainID;
+    try
+    {
+        if (!chainId.empty())
+        {
+            return boost::lexical_cast<uint64_t>(chainId);
+        }
+    }
+    catch (boost::bad_lexical_cast const&)
+    {
+        // non-numeric FISCO chain id (e.g. "chain0"): not a real chain id
+    }
+    return m_ethereumChainId;
+}
+uint64_t bcos::tool::NodeConfig::ethereumForkLondonTime() const
+{
+    return m_ethereumForkLondonTime;
+}
+uint64_t bcos::tool::NodeConfig::ethereumForkParisTime() const
+{
+    return m_ethereumForkParisTime;
+}
+uint64_t bcos::tool::NodeConfig::ethereumForkShanghaiTime() const
+{
+    return m_ethereumForkShanghaiTime;
+}
+uint64_t bcos::tool::NodeConfig::ethereumForkCancunTime() const
+{
+    return m_ethereumForkCancunTime;
+}
+uint64_t bcos::tool::NodeConfig::ethereumForkPragueTime() const
+{
+    return m_ethereumForkPragueTime;
+}
+uint64_t bcos::tool::NodeConfig::ethereumForkOsakaTime() const
+{
+    return m_ethereumForkOsakaTime;
+}
+uint64_t bcos::tool::NodeConfig::ethereumForkBpo1Time() const
+{
+    return m_ethereumForkBpo1Time;
+}
+uint64_t bcos::tool::NodeConfig::ethereumForkBpo2Time() const
+{
+    return m_ethereumForkBpo2Time;
 }
 bool bcos::tool::NodeConfig::singlePointConsensus() const
 {

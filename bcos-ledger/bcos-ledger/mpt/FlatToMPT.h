@@ -58,9 +58,12 @@ inline bcos::u256 entryToU256(bcos::storage::Entry const& entry)
     {
         return bcos::u256{0};
     }
-    // boost::multiprecision::number has a string_view constructor (number.hpp) that takes the
-    // length explicitly, so no NUL terminator and no std::string copy are needed.
-    return bcos::u256{value};
+    // Construct from a std::string_view WITH its explicit length: boost::multiprecision's
+    // number(std::basic_string_view) (number.hpp) parses exactly `value.size()` bytes via
+    // assign_from_string_view, so it never falls back to the NUL-terminated const char*
+    // overload and cannot read past the string_view into stale memory. (A plain u256{value}
+    // would already select this overload — this makes the intent explicit and future-proof.)
+    return bcos::u256{std::string_view{value.data(), value.size()}};
 }
 
 /// Copy an Entry's stored bytes into a 32-byte hash. Unlike nonce/balance, codeHash is stored as

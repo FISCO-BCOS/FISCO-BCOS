@@ -2001,24 +2001,66 @@ static void applyEthGenesisHeader(
     header.setDifficulty(ethHeader.m_difficulty);
     header.setGasLimit(ethHeader.m_gasLimit);
     header.setGasUsed(ethHeader.m_gasUsed);
-    // The artifact carries B0's timestamp in SECONDS (the Ethereum header
-    // domain); internal BlockHeader timestamps are MILLISECONDS everywhere, so
-    // convert on the way in. The RLP bridge (EthBlockHeader) divides by 1000 on
-    // encode, so keccak256(rlp(header)) still reproduces the artifact hash
-    // byte-for-byte. No int64 overflow: the config parser bounds the artifact
-    // seconds by INT64_MAX/1000 (NodeConfig's [eth_genesis_header].timestamp
-    // check), so the x1000 cannot wrap.
-    header.setTimestamp(ethHeader.m_timestamp * 1000);
+    // B0's timestamp is artifact-authoritative and in SECONDS (the Ethereum
+    // header domain): the RLP hash must reproduce the artifact byte-for-byte.
+    header.setTimestamp(ethHeader.m_timestamp);
     header.setExtraData(bcos::bytes(ethHeader.m_extraData));
     header.setPrevRandao(ethHeader.m_mixHash);
     header.setNonce(ethHeader.m_nonce);
-    header.setBaseFee(ethHeader.m_baseFeePerGas);
-    header.setWithdrawalsRoot(ethHeader.m_withdrawalsRoot);
-    header.setBlobGasUsed(ethHeader.m_blobGasUsed);
-    header.setExcessBlobGas(ethHeader.m_excessBlobGas);
-    header.setParentBeaconBlockRoot(ethHeader.m_parentBeaconBlockRoot);
-    header.setRequestsHash(ethHeader.m_requestsHash);
-    header.setEthBlockVersion(bcos::protocol::EthBlockVersion::PRAGUE);
+    // Fork-gated fields are set ONLY when the genesis header carries them:
+    // on a pre-Cancun chain (Sepolia's London-era genesis) they are absent, so
+    // they stay nullopt and the RLP re-encoding is byte-exact. The EthBlockHeader
+    // constructor (and the RLP codec) skip nullopt fields automatically — the
+    // single source of truth for the field order — so the resulting hash is
+    // keccak256(rlp(header)) over exactly the fields this chain's genesis has.
+    if (ethHeader.m_baseFeePerGas.has_value())
+    {
+        header.setBaseFee(*ethHeader.m_baseFeePerGas);
+    }
+    if (ethHeader.m_withdrawalsRoot.has_value())
+    {
+        header.setWithdrawalsRoot(*ethHeader.m_withdrawalsRoot);
+    }
+    if (ethHeader.m_blobGasUsed.has_value())
+    {
+        header.setBlobGasUsed(*ethHeader.m_blobGasUsed);
+    }
+    if (ethHeader.m_excessBlobGas.has_value())
+    {
+        header.setExcessBlobGas(*ethHeader.m_excessBlobGas);
+    }
+    if (ethHeader.m_parentBeaconBlockRoot.has_value())
+    {
+        header.setParentBeaconBlockRoot(*ethHeader.m_parentBeaconBlockRoot);
+    }
+    if (ethHeader.m_requestsHash.has_value())
+    {
+        header.setRequestsHash(*ethHeader.m_requestsHash);
+    }
+    // Derive the fork version from the presence of fork-gated fields, exactly
+    // mirroring EthBlockHeader::rlpDecode: requestsHash -> PRAGUE,
+    // parentBeaconBlockRoot -> CANCUN, withdrawalsRoot -> SHANGHAI, baseFee ->
+    // LONDON, else PRE_LONDON. validateHeader (inside calculateHash) requires
+    // every field its declared version demands, so a header whose optional
+    // fields disagree with its version would fail fast here.
+    EthBlockVersion version = EthBlockVersion::PRE_LONDON;
+    if (ethHeader.m_requestsHash.has_value())
+    {
+        version = bcos::protocol::EthBlockVersion::PRAGUE;
+    }
+    else if (ethHeader.m_parentBeaconBlockRoot.has_value())
+    {
+        version = bcos::protocol::EthBlockVersion::CANCUN;
+    }
+    else if (ethHeader.m_withdrawalsRoot.has_value())
+    {
+        version = bcos::protocol::EthBlockVersion::SHANGHAI;
+    }
+    else if (ethHeader.m_baseFeePerGas.has_value())
+    {
+        version = bcos::protocol::EthBlockVersion::LONDON;
+    }
+    header.setEthBlockVersion(version);
 }
 
 // sync method, to be split

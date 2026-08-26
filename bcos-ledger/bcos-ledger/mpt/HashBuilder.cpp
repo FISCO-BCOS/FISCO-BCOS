@@ -34,10 +34,12 @@ namespace bcos::ledger::mpt
 namespace
 {
 
-// One sorted entry: the full 64-nibble path and its value. Built once per key in commit().
+// One sorted entry: the full nibble path and its value. Built once per key in commit().
+// The secure-trie callers use exactly 64 nibbles (bytesToNibbles of a 32-byte key hash); the
+// raw-key (non-secure trie) path uses variable-length paths (bytesToNibbles of the raw key).
 struct HBEntry
 {
-    bcos::bytes nibbles;  // exactly 64 nibbles (the key's bytesToNibbles form)
+    bcos::bytes nibbles;  // 64 nibbles for secure keys, 2*keyLen for raw keys
     bcos::bytes value;
 };
 
@@ -83,6 +85,15 @@ NodeRef hbBuildBranch(HBContext& ctx, std::span<HBEntry const> entries, size_t d
 {
     BranchNode branch;
     size_t i = 0;
+    // A raw-key (non-secure) trie may hold a value at a path that is a proper prefix of other
+    // keys: the entry whose nibble path ends exactly at `depth` is the branch's own value.
+    // Prefix keys sort before their extensions, so it is entries[0]. With distinct 64-nibble
+    // (secure) keys no key terminates before depth 64, so the secure path is unaffected.
+    if (!entries.empty() && entries.front().nibbles.size() == depth)
+    {
+        branch.value = entries.front().value;
+        i = 1;
+    }
     while (i < entries.size())
     {
         bcos::byte const nibble = entries[i].nibbles[depth];
@@ -94,7 +105,6 @@ NodeRef hbBuildBranch(HBContext& ctx, std::span<HBEntry const> entries, size_t d
         branch.children[nibble] = hbBuild(ctx, entries.subspan(i, j - i), depth + 1);
         i = j;
     }
-    // With distinct 64-nibble keys, no key terminates before depth 64 → branch value stays empty.
     return hbEmit(ctx, TrieNode{std::move(branch)});
 }
 
@@ -193,6 +203,43 @@ TrieBuildResult computeTrieRootFromSorted(
     std::span<std::pair<bcos::h256, bcos::bytesConstRef> const> sortedEntries)
 {
     return computeTrieRootImpl(sortedEntries);
+}
+
+TrieBuildResult computeTrieRootFromRawKeys(
+    std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> sortedEntries)
+{
+    if (sortedEntries.empty())
+    {
+        return TrieBuildResult{.root = emptyRootHash(), .newNodes = {}};
+    }
+
+    std::vector<HBEntry> entries;
+    entries.reserve(sortedEntries.size());
+    for (auto const& [key, value] : sortedEntries)
+    {
+        entries.push_back(HBEntry{.nibbles = bytesToNibbles(key), .value = value.toBytes()});
+    }
+
+    // Own hasher + own newNodes → no shared state (same concurrency contract as the secure path).
+    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
+    HBContext ctx{.hasher = hasher, .newNodes = newNodes};
+    NodeRef const rootRef =
+        hbBuild(ctx, std::span<HBEntry const>{entries.data(), entries.size()}, /*depth=*/0);
+
+    // A trie root is ALWAYS a 32-byte hash, even when the top node encodes to < 32 bytes.
+    bcos::h256 root;
+    if (rootRef.kind() == NodeRef::Kind::Hash)
+    {
+        root = rootRef.hash();
+    }
+    else
+    {
+        bcos::crypto::hasher::hash(hasher, rootRef.inlineRef(), root);
+        newNodes.emplace(root, rootRef.inlineRef().toBytes());
+    }
+
+    return TrieBuildResult{.root = root, .newNodes = std::move(newNodes)};
 }
 
 TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::bytes> const> entries)
