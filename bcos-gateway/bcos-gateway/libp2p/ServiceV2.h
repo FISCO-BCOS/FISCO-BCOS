@@ -42,14 +42,10 @@ public:
     void start() override;
     void stop() override;
 
-    void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
-        CallbackFuncWithSession callback, Options options = Options()) override;
-
     void onMessage(NetworkException _error, SessionFace::Ptr session, Message::Ptr message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr) override;
     void sendRespMessageBySession(
         bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
-    void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
     bool isReachable(P2pID const& _nodeID) const override;
 
     // (coroutine) broadcast to all reachable nodes through the router table
@@ -97,12 +93,6 @@ protected:
     virtual void onEraseSession(P2PSession::Ptr _session);
     bool tryToUpdateSeq(std::string const& _p2pNodeID, uint32_t _seq);
     bool eraseSeq(std::string const& _p2pNodeID);
-
-    virtual void asyncSendMessageByNodeIDWithMsgForward(std::shared_ptr<P2PMessage> _message,
-        CallbackFuncWithSession _callback, Options options = Options());
-
-    virtual void asyncBroadcastMessageWithoutForward(
-        std::shared_ptr<P2PMessage> message, Options options);
 
     void updateP2pInfo(P2PInfo const& p2pInfo);
     void tryToUpdateRawP2pInfo(P2PInfo const& p2pInfo);

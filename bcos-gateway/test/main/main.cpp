@@ -22,7 +22,9 @@
 #include <thread>
 
 #include "../common/FrontServiceBuilder.h"
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/BoostLog.h>
+#include <range/v3/view/single.hpp>
 
 using namespace std;
 using namespace bcos;
@@ -91,35 +93,32 @@ int main(int argc, const char** argv)
 
                         auto payload = bytesConstRef((bcos::byte*)randStr.data(), randStr.size());
 
-                        frontService->asyncSendMessageByNodeID(bcos::protocol::ModuleID::AMOP,
-                            nodeID, payload, 0,
-                            [randStr](Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-                                bytesConstRef _data, const std::string& _id,
-                                bcos::front::ResponseFunc _respFunc) {
-                                (void)_respFunc;
-                                if (_error && (_error->errorCode() != 0))
-                                {
-                                    GATEWAY_MAIN_LOG(ERROR)
-                                        << LOG_DESC("request error") << LOG_KV("to", _nodeID->hex())
-                                        << LOG_KV("id", _id);
-                                    return;
-                                }
+                        auto result = task::syncWait(frontService->sendMessageByNodeID(
+                            bcos::protocol::ModuleID::AMOP, nodeID,
+                            ::ranges::views::single(payload), 10000));
 
-                                std::string retMsg = std::string(_data.begin(), _data.end());
-                                if (retMsg == randStr)
-                                {
-                                    GATEWAY_MAIN_LOG(INFO)
-                                        << LOG_DESC("response ok") << LOG_KV("from", _nodeID->hex())
-                                        << LOG_KV("id", _id);
-                                }
-                                else
-                                {
-                                    GATEWAY_MAIN_LOG(ERROR)
-                                        << LOG_DESC("response error")
-                                        << LOG_KV("from", _nodeID->hex()) << LOG_KV("id", _id)
-                                        << LOG_KV("req", randStr) << LOG_KV("rep", retMsg);
-                                }
-                            });
+                        if (result.error && (result.error->errorCode() != 0))
+                        {
+                            GATEWAY_MAIN_LOG(ERROR)
+                                << LOG_DESC("request error") << LOG_KV("to", nodeID->hex())
+                                << LOG_KV("id", result.uuid);
+                            continue;
+                        }
+
+                        std::string retMsg(result.payload.begin(), result.payload.end());
+                        if (retMsg == randStr)
+                        {
+                            GATEWAY_MAIN_LOG(INFO)
+                                << LOG_DESC("response ok") << LOG_KV("from", nodeID->hex())
+                                << LOG_KV("id", result.uuid);
+                        }
+                        else
+                        {
+                            GATEWAY_MAIN_LOG(ERROR)
+                                << LOG_DESC("response error") << LOG_KV("from", nodeID->hex())
+                                << LOG_KV("id", result.uuid) << LOG_KV("req", randStr)
+                                << LOG_KV("rep", retMsg);
+                        }
                     }
                 });
         }

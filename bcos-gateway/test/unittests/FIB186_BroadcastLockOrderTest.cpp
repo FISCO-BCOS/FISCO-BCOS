@@ -14,12 +14,12 @@
  *  limitations under the License.
  *
  * @brief Regression test for FIB-186 vector D: the recursive x_sessions shared-lock deadlock in
- *        Service::asyncBroadcastMessage.
+ *        Service::broadcastMessageToAll (previously Service::asyncBroadcastMessage).
  * @file FIB186_BroadcastLockOrderTest.cpp
  * @date 2026-07-21
  *
- * asyncBroadcastMessage held x_sessions(shared) while looping over m_sessions and calling
- * asyncSendMessageByNodeID(), which re-acquires x_sessions(shared) via getP2PSessionByNodeId. That
+ * broadcastMessageToAll held x_sessions(shared) while looping over m_sessions and calling
+ * sendMessageByNodeID(), which re-acquires x_sessions(shared) via getP2PSessionByNodeId. That
  * is a RECURSIVE shared lock. std::shared_mutex is not recursive under a waiting writer: as soon as
  * an onConnect thread is blocked on x_sessions(W), libc++ writer-priority blocks the second
  * lock_shared(), so the broadcasting thread can neither finish nor release its first shared lock
@@ -29,14 +29,15 @@
  * recovery).
  *
  * The fix snapshots the session keys under x_sessions, releases it, then sends. This test drives
- * the real Service::asyncBroadcastMessage and asserts x_sessions is not held while it calls
- * asyncSendMessageByNodeID. It is RED on the pre-fix code and GREEN after.
+ * the real Service::broadcastMessageToAll and asserts x_sessions is not held while it calls
+ * sendMessageByNodeID. It is RED on the pre-fix code and GREEN after.
  */
 
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -56,7 +57,7 @@ class BroadcastProbeService : public Service
 public:
     explicit BroadcastProbeService(P2PInfo const& _info) : Service(_info) {}
 
-    // Put one session in m_sessions so asyncBroadcastMessage's loop actually sends once; capture
+    // Put one session in m_sessions so broadcastMessageToAll's loop actually sends once; capture
     // x_sessions for the probe thread.
     void arm()
     {
@@ -64,10 +65,10 @@ public:
         m_sessions.emplace("peerRawP2pID", std::make_shared<P2PSession>());
     }
 
-    // asyncBroadcastMessage now sends through the coroutine fast path (sendMessageByNodeID) for
+    // broadcastMessageToAll sends through the coroutine fast path (sendMessageByNodeID) for
     // each session, after snapshotting the session keys under x_sessions and releasing it. This
     // virtual is called for each session; a probe thread tries to take x_sessions EXCLUSIVELY: it
-    // fails iff the broadcasting thread still holds it. No throw needed -- asyncBroadcastMessage
+    // fails iff the broadcasting thread still holds it. No throw needed -- broadcastMessageToAll
     // touches no host; we just probe the lock state and stop.
     task::Task<Message::Ptr> sendMessageByNodeID(P2pID /*nodeID*/, P2PMessage& /*header*/,
         ::ranges::any_view<bytesConstRef> /*payloads*/, Options /*options*/) override
@@ -108,14 +109,18 @@ BOOST_AUTO_TEST_CASE(BroadcastDoesNotHoldSessionsLockWhileSending)
     service->arm();
 
     auto message = std::make_shared<P2PMessage>();
-    service->asyncBroadcastMessage(message, Options());
+    task::wait([](std::shared_ptr<BroadcastProbeService> _service, P2PMessage::Ptr _message)
+                   -> task::Task<void> {
+        co_await _service->broadcastMessageToAll(
+            _message, ::ranges::views::single(_message->payload()), Options{});
+    }(service, message));
 
     BOOST_REQUIRE(service->m_sendInvoked.load());
     BOOST_CHECK_MESSAGE(!service->m_xSessionsHeldDuringSend.load(),
-        "FIB-186 vector D: asyncBroadcastMessage held x_sessions(shared) while sending to a "
+        "FIB-186 vector D: broadcastMessageToAll held x_sessions(shared) while sending to a "
         "session via sendMessageByNodeID (which re-acquires x_sessions via getP2PSessionByNodeId). "
         "That recursive shared lock deadlocks against a waiting onConnect writer and halts "
-        "consensus. asyncBroadcastMessage must snapshot the session keys under x_sessions, "
+        "consensus. broadcastMessageToAll must snapshot the session keys under x_sessions, "
         "release it, then send.");
 }
 

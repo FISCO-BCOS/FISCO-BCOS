@@ -1,6 +1,7 @@
 #include "GatewayServiceServer.h"
 #include "bcos-task/Wait.h"
 #include <bcos-tars-protocol/Common.h>
+#include <boost/exception/diagnostic_information.hpp>
 using namespace bcostars;
 bcostars::Error GatewayServiceServer::asyncNotifyGroupInfo(
     const bcostars::GroupInfo& groupInfo, tars::TarsCurrentPtr current)
@@ -117,12 +118,34 @@ bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeID(const s
         bcos::bytesConstRef((const bcos::byte*)srcNodeID.data(), srcNodeID.size()));
     auto bcosDstNodeID = keyFactory->createKey(
         bcos::bytesConstRef((const bcos::byte*)dstNodeID.data(), dstNodeID.size()));
-
-    m_gatewayInitializer->gateway()->asyncSendMessageByNodeID(groupID, moduleID, bcosSrcNodeID,
-        bcosDstNodeID, bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size()),
-        [current](bcos::Error::Ptr error) {
-            async_response_asyncSendMessageByNodeID(current, toTarsError(error));
-        });
+    auto gateway = m_gatewayInitializer->gateway();
+    // keep the payload alive and pass all state as coroutine parameters so it is copied into the
+    // frame and stays alive for the whole (possibly deferred) send; the send result is delivered
+    // through the async RPC response. try/catch guarantees the RPC is always answered even if the
+    // send throws (current->setResponse(false) already disabled the automatic reply).
+    auto payloadData = std::make_shared<std::vector<tars::Char>>(payload);
+    bcos::task::wait([](auto _gateway, auto _groupID, auto _moduleID, auto _srcNodeID,
+                         auto _dstNodeID, auto _payloadData,
+                         auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            auto error = co_await _gateway->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID,
+                _dstNodeID,
+                ::ranges::views::single(bcos::bytesConstRef(
+                    (const bcos::byte*)_payloadData->data(), _payloadData->size())));
+            async_response_asyncSendMessageByNodeID(_current, toTarsError(error));
+        }
+        catch (std::exception const& e)
+        {
+            GATEWAYSERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByNodeID send exception")
+                                        << LOG_KV("groupID", _groupID)
+                                        << LOG_KV("moduleID", _moduleID)
+                                        << LOG_KV("dst", _dstNodeID->hex())
+                                        << LOG_KV("what", boost::diagnostic_information(e));
+            async_response_asyncSendMessageByNodeID(
+                _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))));
+        }
+    }(gateway, groupID, moduleID, bcosSrcNodeID, bcosDstNodeID, payloadData, current));
     return {};
 }
 bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeIDs(
@@ -142,8 +165,31 @@ bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeIDs(
             keyFactory->createKey(bcos::bytesConstRef((const bcos::byte*)it.data(), it.size())));
     }
 
-    m_gatewayInitializer->gateway()->asyncSendMessageByNodeIDs(groupID, moduleID, bcosSrcNodeID,
-        nodeIDs, bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size()));
+    auto gateway = m_gatewayInitializer->gateway();
+    auto payloadData = std::make_shared<std::vector<tars::Char>>(payload);
+    // fan out one detached task::wait per destination (sharing the owned payload), so a slow or
+    // unreachable destination does not head-of-line-block the others; each send is wrapped in
+    // try/catch so an exception cannot leak out of a TARS/ASIO completion handler
+    for (auto const& dstNodeID : nodeIDs)
+    {
+        bcos::task::wait([](auto _gateway, auto _groupID, auto _moduleID, auto _srcNodeID,
+                             auto _dstNodeID, auto _payloadData) -> bcos::task::Task<void> {
+            try
+            {
+                co_await _gateway->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID, _dstNodeID,
+                    ::ranges::views::single(bcos::bytesConstRef(
+                        (const bcos::byte*)_payloadData->data(), _payloadData->size())));
+            }
+            catch (std::exception const& e)
+            {
+                GATEWAYSERVICE_LOG(WARNING)
+                    << LOG_DESC("asyncSendMessageByNodeIDs send exception")
+                    << LOG_KV("groupID", _groupID) << LOG_KV("moduleID", _moduleID)
+                    << LOG_KV("dst", _dstNodeID->hex())
+                    << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }(gateway, groupID, moduleID, bcosSrcNodeID, dstNodeID, payloadData));
+    }
 
     async_response_asyncSendMessageByNodeIDs(current, toTarsError<bcos::Error::Ptr>(nullptr));
     return bcostars::Error();

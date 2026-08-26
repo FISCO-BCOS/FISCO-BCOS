@@ -139,67 +139,6 @@ void Gateway::asyncGetGroupNodeInfo(
 }
 
 
-/**
- * @brief: send message
- * @param _groupID: groupID
- * @param _moduleID: moduleID
- * @param _srcNodeID: the sender nodeID
- * @param _dstNodeID: the receiver nodeID
- * @param _payload: message payload
- * @param _errorRespFunc: error func
- * @return void
- */
-void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
-    NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bytesConstRef _payload,
-    ErrorRespFunc _errorRespFunc)
-{
-    // Local delivery first (zero-copy): when no remote gateway hosts the destination front, deliver
-    // directly through the local router table using the borrowed payload, exactly like the pre-PR
-    // path. Only the remote path copies the payload (into the coroutine frame) so the caller may
-    // release its buffer as soon as this returns.
-    auto p2pIDs =
-        m_gatewayNodeManager->peersRouterTable()->queryP2pIDs(_groupID, _dstNodeID->hex());
-    if (p2pIDs.empty())
-    {
-        if (m_gatewayNodeManager->localRouterTable()->sendMessage(
-                _groupID, _srcNodeID, _dstNodeID, _payload, _errorRespFunc))
-        {
-            return;
-        }
-        GATEWAY_LOG(DEBUG) << LOG_DESC("could not find a gateway to send this message")
-                           << LOG_KV("groupID", _groupID)
-                           << LOG_KV("srcNodeID", _srcNodeID->hex())
-                           << LOG_KV("dstNodeID", _dstNodeID->hex());
-        auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceSendMsg,
-            "could not find a gateway to "
-            "send this message, groupID:" +
-                _groupID + " ,dstNodeID:" + _dstNodeID->hex());
-        if (_errorRespFunc)
-        {
-            _errorRespFunc(errorPtr);
-        }
-        return;
-    }
-
-    // Thin shim for the remote path: preserve the synchronous-copy contract for borrowed payloads
-    // (the caller may release its buffer as soon as this returns). The actual zero-copy, retrying
-    // send runs as a coroutine that owns the copied payload in its frame; the send result is
-    // delivered through _errorRespFunc (nullptr on success).
-    auto self = shared_from_this();
-    task::wait(
-        [](std::shared_ptr<Gateway> _self, std::string _groupID, int _moduleID,
-            NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bcos::bytes _payload,
-            ErrorRespFunc _errorRespFunc) -> task::Task<void> {
-            auto error = co_await _self->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID,
-                _dstNodeID, ::ranges::views::single(bcos::ref(std::as_const(_payload))));
-            if (_errorRespFunc)
-            {
-                _errorRespFunc(std::move(error));
-            }
-        }(self, std::string(_groupID), _moduleID, std::move(_srcNodeID), std::move(_dstNodeID),
-            bcos::bytes(_payload.begin(), _payload.end()), std::move(_errorRespFunc)));
-}
-
 bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
     const std::string& _groupID, int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID,
     bcos::crypto::NodeIDPtr _dstNodeID,
@@ -364,34 +303,6 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
     }
     co_return BCOS_ERROR_PTR(
         bcos::protocol::CommonError::GatewaySendMsgFailed, "unable to send the message");
-}
-
-/**
- * @brief: send message to multiple nodes
- * @param _groupID: groupID
- * @param _moduleID: moduleID
- * @param _srcNodeID: the sender nodeID
- * @param _nodeIDs: the receiver nodeIDs
- * @param _payload: message content
- * @return void
- */
-void Gateway::asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
-    NodeIDPtr _srcNodeID, const NodeIDs& _dstNodeIDs, bytesConstRef _payload)
-{
-    for (auto dstNodeID : _dstNodeIDs)
-    {
-        asyncSendMessageByNodeID(_groupID, _moduleID, _srcNodeID, dstNodeID, _payload,
-            [_groupID, _srcNodeID, dstNodeID](Error::Ptr _error) {
-                if (!_error)
-                {
-                    return;
-                }
-                GATEWAY_LOG(TRACE)
-                    << LOG_DESC("asyncSendMessageByNodeIDs callback") << LOG_KV("groupID", _groupID)
-                    << LOG_KV("srcNodeID", _srcNodeID->hex())
-                    << LOG_KV("dstNodeID", dstNodeID->hex()) << LOG_KV("code", _error->errorCode());
-            });
-    }
 }
 
 /**

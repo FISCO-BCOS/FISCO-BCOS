@@ -43,50 +43,102 @@ void bcostars::GatewayServiceClient::setKeyFactory(bcos::crypto::KeyFactory::Ptr
 {
     m_keyFactory = std::move(keyFactory);
 }
-void bcostars::GatewayServiceClient::asyncSendMessageByNodeID(const std::string& _groupID,
-    int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-    bcos::bytesConstRef _payload, bcos::gateway::ErrorRespFunc _errorRespFunc)
+bcos::task::Task<bcos::Error::Ptr> bcostars::GatewayServiceClient::sendMessageByNodeID(
+    const std::string& _groupID, int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID,
+    bcos::crypto::NodeIDPtr _dstNodeID,
+    ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> _payloads)
 {
-    class Callback : public bcostars::GatewayServicePrxCallback
+    struct SendAwaitable
     {
-    public:
-        Callback(bcos::gateway::ErrorRespFunc callback) : m_callback(callback) {}
-
-        void callback_asyncSendMessageByNodeID(const bcostars::Error& ret) override
+        struct CompletionState
         {
-            s_tarsTimeoutCount.store(0);
-            m_callback(toBcosError(ret));
-        }
-        void callback_asyncSendMessageByNodeID_exception(tars::Int32 ret) override
-        {
-            s_tarsTimeoutCount++;
-            m_callback(toBcosError(ret));
-        }
+            std::atomic<bool> completed{false};
+            std::coroutine_handle<> handle;
+            bcos::Error::Ptr error;
+        };
 
-    private:
-        bcos::gateway::ErrorRespFunc m_callback;
-    };
-    auto shouldBlockCall = shouldStopCall();
-    auto ret = checkConnection(
-        c_moduleName, "asyncSendMessageByNodeID", m_prx,
-        [_errorRespFunc](bcos::Error::Ptr _error) {
-            if (_errorRespFunc)
+        class Callback : public bcostars::GatewayServicePrxCallback
+        {
+        public:
+            explicit Callback(std::shared_ptr<CompletionState> state) : m_state(std::move(state)) {}
+
+            void callback_asyncSendMessageByNodeID(const bcostars::Error& ret) override
             {
-                _errorRespFunc(_error);
+                s_tarsTimeoutCount.store(0);
+                complete(toBcosError(ret));
             }
-        },
-        shouldBlockCall);
-    if (!ret && shouldBlockCall)
+            void callback_asyncSendMessageByNodeID_exception(tars::Int32 ret) override
+            {
+                s_tarsTimeoutCount++;
+                complete(toBcosError(ret));
+            }
+
+        private:
+            void complete(bcos::Error::Ptr error)
+            {
+                if (!m_state->completed.exchange(true))
+                {
+                    m_state->error = std::move(error);
+                    m_state->handle.resume();
+                }
+            }
+            std::shared_ptr<CompletionState> m_state;
+        };
+
+        GatewayServiceClient* m_self;
+        std::string m_groupID;
+        int m_moduleID;
+        bcos::crypto::NodeIDPtr m_srcNodeID;
+        bcos::crypto::NodeIDPtr m_dstNodeID;
+        std::shared_ptr<std::vector<char>> m_buffer;
+        std::shared_ptr<CompletionState> m_state;
+
+        constexpr static bool await_ready() noexcept { return false; }
+
+        // Returns false (no suspension) on a synchronous connection-check failure so the coroutine
+        // is never resumed from inside await_suspend — resuming a coroutine that is still executing
+        // await_suspend is undefined behaviour. Returns true (suspend) once the RPC is in flight.
+        bool await_suspend(std::coroutine_handle<> _handle)
+        {
+            m_state->handle = _handle;
+            auto state = m_state;
+            auto buffer = m_buffer;
+            auto shouldBlockCall = m_self->shouldStopCall();
+            auto ret = checkConnection(m_self->c_moduleName, "asyncSendMessageByNodeID",
+                m_self->m_prx,
+                [state, buffer](bcos::Error::Ptr _error) {
+                    // connection-check failure: record the error; await_suspend returns false so
+                    // the coroutine continues on this thread and await_resume delivers it
+                    state->error = std::move(_error);
+                    (void)buffer;
+                },
+                shouldBlockCall);
+            if (!ret && shouldBlockCall)
+            {
+                return false;
+            }
+            auto srcNodeID = m_srcNodeID->data();
+            auto destNodeID = m_dstNodeID->data();
+            m_self->m_prx->tars_set_timeout(m_self->c_networkTimeout)
+                ->async_asyncSendMessageByNodeID(new Callback(state), m_groupID, m_moduleID,
+                    std::vector<char>(srcNodeID.begin(), srcNodeID.end()),
+                    std::vector<char>(destNodeID.begin(), destNodeID.end()), *buffer);
+            return true;
+        }
+
+        bcos::Error::Ptr await_resume() { return std::move(m_state->error); }
+    };
+
+    // materialise the joined payload directly as the std::vector<char> the RPC argument needs —
+    // a single pass and one allocation, no second copy in await_suspend
+    auto buffer = std::make_shared<std::vector<char>>();
+    for (auto const& data : _payloads)
     {
-        return;
+        buffer->insert(buffer->end(), data.begin(), data.end());
     }
-    auto srcNodeID = _srcNodeID->data();
-    auto destNodeID = _dstNodeID->data();
-    m_prx->tars_set_timeout(c_networkTimeout)
-        ->async_asyncSendMessageByNodeID(new Callback(_errorRespFunc), _groupID, _moduleID,
-            std::vector<char>(srcNodeID.begin(), srcNodeID.end()),
-            std::vector<char>(destNodeID.begin(), destNodeID.end()),
-            std::vector<char>(_payload.begin(), _payload.end()));
+    SendAwaitable awaitable{this, _groupID, _moduleID, std::move(_srcNodeID), std::move(_dstNodeID),
+        std::move(buffer), std::make_shared<SendAwaitable::CompletionState>()};
+    co_return co_await awaitable;
 }
 void bcostars::GatewayServiceClient::asyncGetPeers(std::function<void(
         bcos::Error::Ptr, bcos::gateway::GatewayInfo::Ptr, bcos::gateway::GatewayInfosPtr)>
@@ -140,28 +192,6 @@ void bcostars::GatewayServiceClient::asyncGetPeers(std::function<void(
         return;
     }
     m_prx->async_asyncGetPeers(new Callback(_callback));
-}
-void bcostars::GatewayServiceClient::asyncSendMessageByNodeIDs(const std::string& _groupID,
-    int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
-    bcos::bytesConstRef _payload)
-{
-    std::vector<std::vector<char>> tarsNodeIDs;
-    for (auto const& it : _dstNodeIDs)
-    {
-        auto nodeID = it->data();
-        tarsNodeIDs.emplace_back(nodeID.begin(), nodeID.end());
-    }
-    auto shouldBlockCall = shouldStopCall();
-    auto ret =
-        checkConnection(c_moduleName, "asyncSendMessageByNodeIDs", m_prx, nullptr, shouldBlockCall);
-    if (!ret && shouldBlockCall)
-    {
-        return;
-    }
-    auto srcNodeID = _srcNodeID->data();
-    m_prx->async_asyncSendMessageByNodeIDs(nullptr, _groupID, _moduleID,
-        std::vector<char>(srcNodeID.begin(), srcNodeID.end()), tarsNodeIDs,
-        std::vector<char>(_payload.begin(), _payload.end()));
 }
 bcos::task::Task<void> bcostars::GatewayServiceClient::broadcastMessage(uint16_t type,
     std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,

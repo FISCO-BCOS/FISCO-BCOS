@@ -133,8 +133,13 @@ private:
 
 /**
  * @brief: the interface provided by the front service
+ *
+ * enable_shared_from_this lets the owned-payload bridges (asyncBroadcastMessageByOwnedPayload /
+ * asyncSendMessageByNodeIDByOwnedPayload) pass an owning Ptr as the coroutine parameter, so the
+ * front object (FrontService / FrontServiceClient / test fakes, all shared_ptr-owned) stays alive
+ * for the whole detached send instead of holding a raw `this`.
  */
-class FrontServiceInterface
+class FrontServiceInterface : public std::enable_shared_from_this<FrontServiceInterface>
 {
 public:
     using Ptr = std::shared_ptr<FrontServiceInterface>;
@@ -193,18 +198,6 @@ public:
         ReceiveMsgFunc _receiveMsgCallback) = 0;
 
     /**
-     * @brief: send message to node
-     * @param _moduleID: moduleID
-     * @param _nodeID: the receiver nodeID
-     * @param _data: message
-     * @param _timeout: the timeout value of async function, in milliseconds.
-     * @param _callback: callback
-     * @return void
-     */
-    virtual void asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
-        bytesConstRef _data, uint32_t _timeout, CallbackFunc _callback) = 0;
-
-    /**
      * @brief: send response
      * @param _id: the request id
      * @param _moduleID: moduleID
@@ -215,16 +208,6 @@ public:
     virtual void asyncSendResponse(const std::string& _id, int _moduleID,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
         ReceiveMsgFunc _receiveMsgCallback) = 0;
-
-    /**
-     * @brief: send messages to multiple nodes
-     * @param _moduleID: moduleID
-     * @param _nodeIDs: the receiver nodeIDs
-     * @param _data: message
-     * @return void
-     */
-    virtual void asyncSendMessageByNodeIDs(int _moduleID,
-        const std::vector<bcos::crypto::NodeIDPtr>& _nodeIDs, bytesConstRef _data) = 0;
 
     virtual task::Task<void> broadcastMessage(
         uint16_t type, int moduleID,
@@ -241,64 +224,18 @@ public:
      *         in task::wait, passing any captured state as coroutine parameters (the recommended
      *         pattern across the send path).
      *
-     * The payloads must be at least forward ranges: the default bridge joins them into one buffer
-     * (single pass), but overrides may iterate them multiple times (e.g. a retry loop).
+     * The payloads must be at least forward ranges: implementations may iterate them multiple
+     * times (e.g. a retry loop).
      *
-     * Default implementation: joins the payload views into one contiguous buffer and bridges to
-     * the borrowed asyncSendMessageByNodeID. The front client (FrontServiceClient) copies the
-     * payload synchronously in the call arguments, so the buffer only needs to stay alive until
-     * asyncSendMessageByNodeID returns; with _timeout == 0 the bridge passes a null callback so
-     * the client forwards requireRespCallback = false (no response entry is registered on the
-     * peer). The _timeout > 0 bridge captures the buffer in the completion callback, which runs
-     * on another thread and must copy the borrowed payload view into the SendResult before the
-     * frame is gone.
+     * @param _moduleID: moduleID
+     * @param _nodeID: the receiver nodeID
+     * @param _payloads: message content (views, kept alive by the caller)
+     * @param _timeout: the module-response timeout in milliseconds; 0 = fire-and-forget
      */
     virtual task::Task<SendResult> sendMessageByNodeID(int _moduleID,
         bcos::crypto::NodeIDPtr _nodeID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
-        uint32_t _timeout)
-    {
-        // The payload views are joined into one contiguous buffer. For the response-waiting
-        // (_timeout > 0) path the buffer is captured by the completion callback so it stays alive
-        // while the callback (possibly on another thread) copies the borrowed payload view into
-        // the SendResult.
-        auto buffer = std::make_shared<bcos::bytes>();
-        for (auto const& data : _payloads)
-        {
-            buffer->insert(buffer->end(), data.begin(), data.end());
-        }
-        auto payload = bcos::ref(*buffer);
-
-        if (_timeout == 0)
-        {
-            // fire-and-forget: no module-level response is expected. Pass a null callback so the
-            // borrowed client forwards requireRespCallback = false (the peer registers no response
-            // entry and the tars request completes normally instead of hanging until
-            // c_frontServiceTimeout). The front client copies the payload synchronously in the
-            // call arguments, so the frame-local buffer only needs to stay alive until
-            // asyncSendMessageByNodeID returns.
-            asyncSendMessageByNodeID(_moduleID, std::move(_nodeID), payload, 0, nullptr);
-            co_return SendResult{};
-        }
-
-        auto state = std::make_shared<SendResponseAwaitable::State>();
-        asyncSendMessageByNodeID(_moduleID, std::move(_nodeID), payload, _timeout,
-            [state, buffer = std::move(buffer)](bcos::Error::Ptr _error,
-                bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data, const std::string& _id,
-                ResponseFunc _resp) mutable {
-                // keep the payload buffer alive until after the callback returns: the borrowed
-                // caller may still be reading it on this stack
-                (void)buffer;
-                SendResult result;
-                result.error = std::move(_error);
-                result.nodeID = std::move(_nodeID);
-                result.payload.assign(_data.begin(), _data.end());
-                result.uuid = _id;
-                result.respond = std::move(_resp);
-                SendResponseAwaitable::complete(state, std::move(result));
-            });
-        co_return co_await SendResponseAwaitable{std::move(state)};
-    }
+        uint32_t _timeout) = 0;
 
     /**
      * @brief broadcast an already-encoded message, taking ownership of the payload so the send can
@@ -323,11 +260,11 @@ public:
     virtual void asyncBroadcastMessageByOwnedPayload(
         uint16_t type, int moduleID, bytesPointer payload)
     {
-        task::wait([](FrontServiceInterface* self, uint16_t _type, int _moduleID,
+        task::wait([](FrontServiceInterface::Ptr self, uint16_t _type, int _moduleID,
                        bytesPointer _payload) -> task::Task<void> {
             co_await self->broadcastMessage(
                 _type, _moduleID, ::ranges::views::single(bcos::ref(*_payload)));
-        }(this, type, moduleID, std::move(payload)));
+        }(shared_from_this(), type, moduleID, std::move(payload)));
     }
 
     /**
@@ -338,7 +275,8 @@ public:
      * the gateway send off the caller thread (PBFT under m_mutex must not contend the gateway
      * session lock; sendViewChange / sendRecoverResponse run there). Point-to-point sends encode
      * the wire frame anyway, so this is not zero-copy; owning the payload only keeps it alive
-     * across the deferred encode. The default implementation bridges to asyncSendMessageByNodeID.
+     * across the deferred encode. The default implementation bridges to the coroutine
+     * sendMessageByNodeID (fire-and-forget).
      *
      * @param moduleID: moduleID
      * @param nodeID: the receiver nodeID
@@ -347,7 +285,12 @@ public:
     virtual void asyncSendMessageByNodeIDByOwnedPayload(
         int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload)
     {
-        asyncSendMessageByNodeID(moduleID, std::move(nodeID), bcos::ref(*payload), 0, nullptr);
+        task::wait([](FrontServiceInterface::Ptr self, int _moduleID,
+                       bcos::crypto::NodeIDPtr _nodeID,
+                       bytesPointer _payload) -> task::Task<void> {
+            co_await self->sendMessageByNodeID(_moduleID, std::move(_nodeID),
+                ::ranges::views::single(bcos::ref(*_payload)), 0);
+        }(shared_from_this(), moduleID, std::move(nodeID), std::move(payload)));
     }
 
     /**

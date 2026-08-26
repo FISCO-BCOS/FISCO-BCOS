@@ -22,6 +22,7 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/RateCollector.h"
@@ -171,28 +172,23 @@ int main(int argc, const char** argv)
                 message->setSeq(messageFactory->newSeq());
                 timeWindowRateLimiter->acquire(1);
                 reporter->update(message->length(), true);
-                service->asyncSendMessageByNodeID(p2pID, message,
-                    [reporter](NetworkException _e, std::shared_ptr<P2PSession> _session,
-                        std::shared_ptr<P2PMessage> _message) {
-                        if (_e.errorCode() != P2PExceptionType::Success)
-                        {
-                            std::cerr << "\t[Client] recv exception, error code: " << _e.errorCode()
-                                      << " ,error message: " << _e.what() << std::endl;
-                            return;
-                        }
-
-                        // std::cerr << "\t[Client] recv response from server: "
-                        //           << std::string(
-                        //                  _message->payload().begin(),
-                        //                  _message->payload().end())
-                        //           << std::endl;
-                        // auto readPayload = _message->readPayload();
-                        // auto refBuffer = readPayload->asRefBuffer();
-
-                        // std::cerr << "\t[Client] recv response from server: "
-                        //           << std::string(refBuffer.begin(), refBuffer.end()) <<
-                        //           std::endl;
-                    });
+                // send through the coroutine fast path and wait for the echo response (replaces
+                // the removed asyncSendMessageByNodeID callback path): the message is passed as a
+                // coroutine parameter so it is copied into the frame and stays alive for the whole
+                // (possibly deferred) send.
+                task::wait([](P2PInterface::Ptr _service, P2pID _p2pID, P2PMessage::Ptr _message)
+                               -> task::Task<void> {
+                    try
+                    {
+                        co_await _service->sendMessageByNodeID(_p2pID, *_message,
+                            ::ranges::views::single(_message->payload()), Options{0, true});
+                    }
+                    catch (NetworkException const& e)
+                    {
+                        std::cerr << "\t[Client] recv exception, error code: " << e.errorCode()
+                                  << " ,error message: " << e.what() << std::endl;
+                    }
+                }(service, p2pID, message));
                 // std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
         }

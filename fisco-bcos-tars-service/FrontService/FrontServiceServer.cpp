@@ -2,6 +2,7 @@
 #include "../Common/TarsUtils.h"
 #include "bcos-task/Wait.h"
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
+#include <boost/exception/diagnostic_information.hpp>
 
 using namespace bcostars;
 
@@ -48,31 +49,59 @@ bcostars::Error FrontServiceServer::asyncSendMessageByNodeID(tars::Int32 moduleI
 
     auto bcosNodeID = m_frontServiceInitializer->keyFactory()->createKey(
         bcos::bytesConstRef((bcos::byte*)nodeID.data(), nodeID.size()));
-    if (requireRespCallback)
-    {
-        m_frontServiceInitializer->front()->asyncSendMessageByNodeID(moduleID, bcosNodeID,
-            bcos::bytesConstRef((bcos::byte*)data.data(), data.size()), timeout,
-            [current](bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-                bcos::bytesConstRef _data, const std::string& _id,
-                bcos::front::ResponseFunc _respFunc) {
-                boost::ignore_unused(_respFunc);
-                auto encodedNodeID = _nodeID->encode();
-                async_response_asyncSendMessageByNodeID(current, toTarsError(_error),
-                    std::vector<char>(encodedNodeID.begin(), encodedNodeID.end()),
-                    std::vector<char>(_data.begin(), _data.end()), _id);
-            });
-    }
-    else
-    {
-        m_frontServiceInitializer->front()->asyncSendMessageByNodeID(moduleID, bcosNodeID,
-            bcos::bytesConstRef((bcos::byte*)data.data(), data.size()), timeout, nullptr);
+    auto front = m_frontServiceInitializer->front();
+    // keep the payload, the request nodeID and the request seq alive by passing them as coroutine
+    // parameters (they are copied into the frame and stay alive for the whole send)
+    auto payloadData = std::make_shared<std::vector<tars::Char>>(data);
+    auto requestNodeID = std::make_shared<std::vector<tars::Char>>(nodeID);
+    auto requestSeq = std::make_shared<std::string>(seq);
 
-        // response directly
-        bcos::bytesConstRef respData;
-        async_response_asyncSendMessageByNodeID(current, toTarsError<bcos::Error::Ptr>(nullptr),
-            std::vector<char>(nodeID.begin(), nodeID.end()),
-            std::vector<char>(respData.begin(), respData.end()), seq);
-    }
+    bcos::task::wait([](auto _front, auto _moduleID, auto _bcosNodeID, auto _payloadData,
+                         auto _requestNodeID, auto _requestSeq, auto _timeout,
+                         auto _requireRespCallback, auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            // requireRespCallback == false maps to a fire-and-forget send (timeout 0); the send
+            // result (module response, timeout or gateway failure) is delivered through the async
+            // RPC response
+            auto result = co_await _front->sendMessageByNodeID(_moduleID, _bcosNodeID,
+                ::ranges::views::single(bcos::bytesConstRef(
+                    (const bcos::byte*)_payloadData->data(), _payloadData->size())),
+                _requireRespCallback ? _timeout : 0);
+
+            bcos::bytes encodedNodeID;
+            if (result.nodeID)
+            {
+                encodedNodeID = result.nodeID->encode();
+            }
+            else
+            {
+                // fire-and-forget (or failed) send: echo the request nodeID, matching the previous
+                // handler behaviour
+                encodedNodeID.assign(_requestNodeID->begin(), _requestNodeID->end());
+            }
+            // fire-and-forget sends return an empty uuid: echo the request seq so clients that
+            // correlate responses by seq still get a correlation ID
+            std::string replySeq = result.uuid.empty() ? *_requestSeq : result.uuid;
+            async_response_asyncSendMessageByNodeID(_current, toTarsError(result.error),
+                std::vector<char>(encodedNodeID.begin(), encodedNodeID.end()),
+                std::vector<char>(result.payload.begin(), result.payload.end()), replySeq);
+        }
+        catch (std::exception const& e)
+        {
+            // ensure the RPC is always answered: current->setResponse(false) already disabled the
+            // automatic reply, so an exception before async_response would leave the caller blocked
+            FRONTSERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByNodeID send exception")
+                                      << LOG_KV("moduleID", _moduleID)
+                                      << LOG_KV("nodeID", _bcosNodeID->hex())
+                                      << LOG_KV("what", boost::diagnostic_information(e));
+            async_response_asyncSendMessageByNodeID(_current,
+                toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))),
+                std::vector<char>(_requestNodeID->begin(), _requestNodeID->end()),
+                std::vector<tars::Char>(), *_requestSeq);
+        }
+    }(front, moduleID, bcosNodeID, payloadData, requestNodeID, requestSeq, timeout,
+        requireRespCallback, current));
 
     return bcostars::Error();
 }
@@ -88,9 +117,31 @@ void FrontServiceServer::asyncSendMessageByNodeIDs(tars::Int32 moduleID,
         bcosNodeIDs.push_back(m_frontServiceInitializer->keyFactory()->createKey(
             bcos::bytesConstRef((bcos::byte*)it.data(), it.size())));
     }
-
-    m_frontServiceInitializer->front()->asyncSendMessageByNodeIDs(
-        moduleID, bcosNodeIDs, bcos::bytesConstRef((bcos::byte*)data.data(), data.size()));
+    auto front = m_frontServiceInitializer->front();
+    auto payloadData = std::make_shared<std::vector<tars::Char>>(data);
+    // fan out one detached task::wait per destination (sharing the owned payload), so a slow or
+    // unreachable destination does not head-of-line-block the others; each send is wrapped in
+    // try/catch so an exception cannot leak out of a TARS/ASIO completion handler
+    for (auto const& nodeID : bcosNodeIDs)
+    {
+        bcos::task::wait([](auto _front, auto _moduleID, auto _nodeID,
+                             auto _payloadData) -> bcos::task::Task<void> {
+            try
+            {
+                co_await _front->sendMessageByNodeID(_moduleID, _nodeID,
+                    ::ranges::views::single(bcos::bytesConstRef(
+                        (const bcos::byte*)_payloadData->data(), _payloadData->size())),
+                    0);
+            }
+            catch (std::exception const& e)
+            {
+                FRONTSERVICE_LOG(WARNING)
+                    << LOG_DESC("asyncSendMessageByNodeIDs send exception")
+                    << LOG_KV("moduleID", _moduleID) << LOG_KV("nodeID", _nodeID->hex())
+                    << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }(front, moduleID, nodeID, payloadData));
+    }
 }
 
 bcostars::Error FrontServiceServer::asyncSendResponse(const std::string& id, tars::Int32 moduleID,
