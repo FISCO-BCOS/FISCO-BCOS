@@ -16,7 +16,7 @@
 #include <stdexcept>
 #include <string>
 
-using bcos::evm::engine::OpConsensusError;
+using bcos::evm::OpConsensusError;
 namespace detail = bcos::evm::engine::detail;
 namespace op = bcos::evm::opstack;
 

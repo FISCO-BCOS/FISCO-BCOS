@@ -14,20 +14,29 @@
  *  limitations under the License.
  *
  * @file Web3TxEnvelope.cpp
- * @brief Signed-envelope walkers for Web3 transactions
- * @date 2026/8/21
+ * @brief Library TU for web3ChainIdFromEnvelope. Kept out of the public header so every
+ *        consumer compiles one copy (link-period identity) rather than one copy per include.
  */
 #include "Web3TxEnvelope.h"
-
 #include <bcos-codec/rlp/RLPDecode.h>
 
 namespace bcos::rlp::protocol
 {
-std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
+Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payload)
 {
+    auto const malformed = [] {
+        return Web3EnvelopeChainIdResult{.kind = Web3EnvelopeChainIdKind::Malformed};
+    };
+    auto const unprotected = [] {
+        return Web3EnvelopeChainIdResult{.kind = Web3EnvelopeChainIdKind::Unprotected};
+    };
+    auto const protectedChainId = [](uint64_t chainId) {
+        return Web3EnvelopeChainIdResult{
+            .kind = Web3EnvelopeChainIdKind::Protected, .chainId = chainId};
+    };
     if (payload.empty()) [[unlikely]]
     {
-        return std::nullopt;
+        return malformed();
     }
     auto const firstByte = payload[0];
     // decode() requires a mutable bytesRef cursor even for read-only parsing; the cast is safe
@@ -39,7 +48,7 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
     // so callers that gate on nullopt+isTyped see a clean signal.
     if (firstByte == 0x7E) [[unlikely]]
     {
-        return std::nullopt;
+        return malformed();
     }
     if (firstByte > 0 && firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
     {
@@ -48,14 +57,14 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
         auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
         if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
         {
-            return std::nullopt;
+            return malformed();
         }
         uint64_t chainId = 0;
         if (auto e = bcos::codec::rlp::decode(cursor, chainId); e != nullptr) [[unlikely]]
         {
-            return std::nullopt;
+            return malformed();
         }
-        return chainId;
+        return protectedChainId(chainId);
     }
     // Legacy: walk the first 6 fields. The tail after them is one of two forms:
     //   preimage  EIP-155: [..6 fields, chainId, 0, 0]  (admission path — takeToTarsTransaction
@@ -69,7 +78,7 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
     auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
     if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
     {
-        return std::nullopt;
+        return malformed();
     }
     bcos::bytesRef walker(cursor.data(), header.payloadLength);
     for (int i = 0; i < 6; ++i)
@@ -77,7 +86,7 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
         auto [fieldError, fieldHeader] = bcos::codec::rlp::decodeHeader(walker);
         if (fieldError || fieldHeader.payloadLength > walker.size()) [[unlikely]]
         {
-            return std::nullopt;
+            return malformed();
         }
         walker = walker.getCroppedData(fieldHeader.payloadLength);
     }
@@ -85,13 +94,13 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
     {
         // pre-EIP-155 unprotected legacy (6-field preimage, v=27/28): no chainId, exempt —
         // op-geth HomesteadSigner.
-        return std::nullopt;
+        return unprotected();
     }
     // Peek field 8 (without consuming field 7 yet) to classify preimage vs full envelope.
     // Only field 8 is checked here — field 9 validation is deferred to
     // reassembleWeb3RawTransaction (which validates the full 0,0 tail). This keeps the
     // walker simple and avoids cursor arithmetic pitfalls with multi-field lookahead.
-    // field7Item keeps the WHOLE field-7 item (header + payload): decodeHeader below advances
+    // field7Item keeps the WHOLE field-7 item (header + payload): decodeHeader advances the
     // walker to the payload start, and decoding that payload as a fresh item mis-reads any
     // multi-byte chainId/v (e.g. chainId 8453 -> 33) or classifies it as a list header
     // (chainId 200 -> nullopt -> bogus "unprotected" exemption). Decode from the item start.
@@ -99,7 +108,7 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
     auto [field7Error, field7Header] = bcos::codec::rlp::decodeHeader(walker);
     if (field7Error || field7Header.payloadLength > walker.size()) [[unlikely]]
     {
-        return std::nullopt;
+        return malformed();
     }
     bcos::bytesRef afterField7 = walker.getCroppedData(field7Header.payloadLength);
     bool const isPreimageTail = [&] {
@@ -116,25 +125,38 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
         uint64_t chainId = 0;
         if (auto e = bcos::codec::rlp::decode(field7Item, chainId); e != nullptr) [[unlikely]]
         {
-            return std::nullopt;
+            return malformed();
         }
-        return chainId;
+        return protectedChainId(chainId);
     }
     // Full envelope: field 7 is v. 27/28 = pre-EIP-155 unprotected (exempt); >= 35 = EIP-155
-    // protected, chainId = (v - 35) >> 1. Anything else (0/1, 29-34) is malformed.
+    // protected, chainId = (v - 35) >> 1. Anything else (0/1, 29-34) is malformed — fail
+    // closed rather than folding it into the unprotected exemption.
     uint64_t v = 0;
     if (auto e = bcos::codec::rlp::decode(field7Item, v); e != nullptr) [[unlikely]]
     {
-        return std::nullopt;
+        return malformed();
     }
     if (v == 27 || v == 28)
     {
-        return std::nullopt;
+        return unprotected();
     }
     if (v >= 35)
     {
-        return (v - 35) >> 1;
+        return protectedChainId((v - 35) >> 1);
     }
-    return std::nullopt;
+    return malformed();
+}
+
+std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
+{
+    auto const result = classifyWeb3EnvelopeChainId(payload);
+    if (result.kind != Web3EnvelopeChainIdKind::Protected)
+    {
+        // nullopt contract preserved: unprotected legacy AND malformed both collapse here
+        // (the header documents this; chainId gates that need fail-closed use the classifier).
+        return std::nullopt;
+    }
+    return result.chainId;
 }
 }  // namespace bcos::rlp::protocol
