@@ -15,9 +15,10 @@ target_include_directories(opstack-executor PUBLIC
     $<INSTALL_INTERFACE:include/opstack-executor>)
 # `ledger` is explicit because OpBlockExecute.h exposes HashBuilder-backed templates and
 # OpBlockExecute.cpp calls the trie builders directly; do not rely on bcos-evm-eth's PUBLIC
-# closure. Web3TxEnvelope is header-only here, so no rlp-protocol link is required.
+# closure. `rlp-protocol` is explicit because web3ChainIdFromEnvelope lives in that library
+# TU (typed catch was measured to bind even with bcos-crypto on the link line).
 target_link_libraries(opstack-executor PUBLIC
-    bcos-evm-opstack ethereum-executor bcos-framework bcos-protocol ledger
+    bcos-evm-opstack ethereum-executor bcos-framework bcos-protocol ledger rlp-protocol
     evmone::evmone intx::intx TBB::tbb)
 set_target_properties(opstack-executor PROPERTIES UNITY_BUILD OFF)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")

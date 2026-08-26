@@ -19,6 +19,7 @@
 
 using bcos::executor_v1::eth::toEvmoneTransaction;
 using bcos::executor_v1::opstack::blockPathSenderMissing;
+using bcos::executor_v1::opstack::blockPathZeroSender;
 using bcos::executor_v1::opstack::envelopeChainIdMismatch;
 using bcos::executor_v1::opstack::envelopeExecutionFieldsMismatch;
 namespace rlp = bcos::codec::rlp;
@@ -160,7 +161,8 @@ bcos::bytes eip1559Envelope(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
 /// Build a legacy envelope: bare RLP list rlp([nonce, gasPrice, gasLimit, to, value, data, v, r,
 /// s]) (no EIP-2718 type byte; first byte is the list header, so isTypedWeb3Envelope is false).
 bcos::bytes legacyEnvelope(uint64_t nonce, uint64_t gasLimit, std::string_view toHex,
-    bcos::u256 value, bcos::bytes const& data)
+    bcos::u256 value, bcos::bytes const& data, bool nonceIsList = false, bool gasIsList = false,
+    bool valueIsList = false)
 {
     auto item = [](bcos::bytes const& payload) {
         bcos::bytes out;
@@ -172,15 +174,25 @@ bcos::bytes legacyEnvelope(uint64_t nonce, uint64_t gasLimit, std::string_view t
         rlp::encode(out, v);
         return out;
     };
+    auto shortList = []() -> bcos::bytes { return {0xc1, 0x05}; };
     bcos::bytes payload;
     auto append = [&payload](
                       bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
-    append(intItem(nonce));
+    if (nonceIsList)
+        append(shortList());
+    else
+        append(intItem(nonce));
     append(intItem(1000000000));  // gasPrice
-    append(intItem(gasLimit));
+    if (gasIsList)
+        append(shortList());
+    else
+        append(intItem(gasLimit));
     auto toBytes = bcos::fromHex(toHex.substr(2));
     append(item(toBytes));
-    append(intItem(static_cast<uint64_t>(value)));
+    if (valueIsList)
+        append(shortList());
+    else
+        append(intItem(static_cast<uint64_t>(value)));
     append(item(data));
     append(intItem(27));  // v (unprotected legacy)
     append(intItem(1));   // non-empty r: full signed-envelope shape, not an EIP-155 preimage
@@ -195,7 +207,8 @@ bcos::bytes legacyEnvelope(uint64_t nonce, uint64_t gasLimit, std::string_view t
 /// Build an EIP-2930 (0x01) envelope: 0x01 || rlp([chainId, nonce, gasPrice, gasLimit, to, value,
 /// data, accessList]).
 bcos::bytes accessListEnvelope(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
-    std::string_view toHex, bcos::u256 value, bcos::bytes const& data)
+    std::string_view toHex, bcos::u256 value, bcos::bytes const& data, bool nonceIsList = false,
+    bool gasIsList = false, bool valueIsList = false)
 {
     auto item = [](bcos::bytes const& payload) {
         bcos::bytes out;
@@ -207,16 +220,26 @@ bcos::bytes accessListEnvelope(uint64_t chainId, uint64_t nonce, uint64_t gasLim
         rlp::encode(out, v);
         return out;
     };
+    auto shortList = []() -> bcos::bytes { return {0xc1, 0x05}; };
     bcos::bytes payload;
     auto append = [&payload](
                       bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(intItem(chainId));
-    append(intItem(nonce));
+    if (nonceIsList)
+        append(shortList());
+    else
+        append(intItem(nonce));
     append(intItem(1000000000));  // gasPrice
-    append(intItem(gasLimit));
+    if (gasIsList)
+        append(shortList());
+    else
+        append(intItem(gasLimit));
     auto toBytes = bcos::fromHex(toHex.substr(2));
     append(item(toBytes));
-    append(intItem(static_cast<uint64_t>(value)));
+    if (valueIsList)
+        append(shortList());
+    else
+        append(intItem(static_cast<uint64_t>(value)));
     append(item(data));
     payload.push_back(0xc0);  // empty accessList
 
@@ -509,7 +532,7 @@ BOOST_AUTO_TEST_CASE(ListShapedToAndDataAreRejected)
 
 BOOST_AUTO_TEST_CASE(ListShapedIntegerFieldsAreRejected)
 {
-    auto run = [](bool nonceIsList, bool gasIsList, bool valueIsList, char const* needle) {
+    auto run1559 = [](bool nonceIsList, bool gasIsList, bool valueIsList, char const* needle) {
         FakeTx tx;
         tx.m_extraBytes = eip1559Envelope(10, 7, 5000000, "0x", bcos::u256{5}, {}, false, false,
             nonceIsList, gasIsList, valueIsList);
@@ -520,9 +543,42 @@ BOOST_AUTO_TEST_CASE(ListShapedIntegerFieldsAreRejected)
         BOOST_REQUIRE(mismatch.has_value());
         BOOST_CHECK_EQUAL(*mismatch, needle);
     };
-    run(true, false, false, "nonce field is an RLP list");
-    run(false, true, false, "gasLimit field is an RLP list");
-    run(false, false, true, "value field is an RLP list");
+    run1559(true, false, false, "nonce field is an RLP list");
+    run1559(false, true, false, "gasLimit field is an RLP list");
+    run1559(false, false, true, "value field is an RLP list");
+
+    auto runLegacy = [](bool nonceIsList, bool gasIsList, bool valueIsList, char const* needle) {
+        FakeTx tx;
+        tx.m_kind = 0;
+        tx.m_extraBytes = legacyEnvelope(
+            7, 5000000, "0x", bcos::u256{5}, {}, nonceIsList, gasIsList, valueIsList);
+        tx.m_value = bcos::u256{5};
+        tx.m_nonce = "0x7";
+        tx.m_gasLimit = 5000000;
+        auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+        BOOST_REQUIRE(mismatch.has_value());
+        BOOST_CHECK_EQUAL(*mismatch, needle);
+    };
+    runLegacy(true, false, false, "nonce field is an RLP list");
+    runLegacy(false, true, false, "gasLimit field is an RLP list");
+    runLegacy(false, false, true, "value field is an RLP list");
+
+    auto runAccessList = [](bool nonceIsList, bool gasIsList, bool valueIsList,
+                             char const* needle) {
+        FakeTx tx;
+        tx.m_kind = 1;
+        tx.m_extraBytes = accessListEnvelope(
+            10, 7, 5000000, "0x", bcos::u256{5}, {}, nonceIsList, gasIsList, valueIsList);
+        tx.m_value = bcos::u256{5};
+        tx.m_nonce = "0x7";
+        tx.m_gasLimit = 5000000;
+        auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+        BOOST_REQUIRE(mismatch.has_value());
+        BOOST_CHECK_EQUAL(*mismatch, needle);
+    };
+    runAccessList(true, false, false, "nonce field is an RLP list");
+    runAccessList(false, true, false, "gasLimit field is an RLP list");
+    runAccessList(false, false, true, "value field is an RLP list");
 }
 
 BOOST_AUTO_TEST_CASE(BlockPathRejectsEmptySender)
@@ -531,8 +587,11 @@ BOOST_AUTO_TEST_CASE(BlockPathRejectsEmptySender)
     tx.m_sender.clear();
     BOOST_REQUIRE(blockPathSenderMissing(tx).has_value());
     BOOST_CHECK_EQUAL(*blockPathSenderMissing(tx), "empty sender");
+    BOOST_REQUIRE(blockPathZeroSender(evmTxOf(tx).sender).has_value());
+    BOOST_CHECK_EQUAL(*blockPathZeroSender(evmTxOf(tx).sender), "empty sender");
     tx.m_sender.assign(sizeof(evmc_address), '\xaa');
     BOOST_CHECK(!blockPathSenderMissing(tx).has_value());
+    BOOST_CHECK(!blockPathZeroSender(evmTxOf(tx).sender).has_value());
 }
 
 BOOST_AUTO_TEST_CASE(LegacyFixtureIsAFullUnprotectedSignedEnvelope)

@@ -441,9 +441,18 @@ namespace engine = bcos::evm::engine;
     return envelopeChainIdMismatch(tx.extraTransactionBytes(), nodeChainId);
 }
 
-/// Block-path only: an omitted sender is address(0) for eth_call, but a sealed block must not
-/// execute with that default. Empty is the one remaining sender shape toEvmoneTransaction still
-/// accepts; reject it here so the call path keeps the default.
+/// Block-path only: address(0) is the eth_call default, but a sealed block must not execute
+/// with that sender. Used by both m_prepare (after toEvmoneTransaction) and processOpBlock
+/// (evmone::state::Transaction already in hand).
+[[nodiscard]] inline std::optional<std::string> blockPathZeroSender(evmc::address const& sender)
+{
+    if (sender == evmc::address{})
+        return "empty sender";
+    return std::nullopt;
+}
+
+/// Tars-mirror form of the same gate: an omitted sender string becomes address(0) in
+/// toEvmoneTransaction. Prefer blockPathZeroSender on the executing address.
 [[nodiscard]] inline std::optional<std::string> blockPathSenderMissing(
     bcos::protocol::Transaction const& tx)
 {
@@ -1157,7 +1166,7 @@ private:
         // eth_call passes nullopt (lenient, like op-geth eth_call).
         if (chainId.has_value())
         {
-            if (auto missing = blockPathSenderMissing(transaction))
+            if (auto missing = blockPathZeroSender(evmTx.sender))
             {
                 throw bcos::evm::OpConsensusError("op block: " + *missing);
             }

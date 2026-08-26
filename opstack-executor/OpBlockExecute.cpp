@@ -180,6 +180,10 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 throw OpConsensusError(
                     "op block: tx execution fields diverge from the signed envelope: " + *mismatch);
             }
+            if (auto missing = bcos::executor_v1::opstack::blockPathZeroSender(tx.sender))
+            {
+                throw OpConsensusError("op block: " + *missing);
+            }
             auto v = opValidate(view, block, tx, env, cfg, fee, blockGasLeft);
             if (const auto* err = std::get_if<std::error_code>(&v))
                 // No failed-receipt mechanism for normal txs: void the whole block (op-geth).
