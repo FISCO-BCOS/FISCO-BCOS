@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// Shared error types + the block-execution result for the OP scheduler, plus the block-context
-// conversion helpers (bcos<->evmc fixed-size conversions / bounds-checked narrowing / FISCO-header
-// -> evmone BlockInfo build). Split out of OpSchedulerSeam.h so dependent layers can throw without
-// depending on the class template. OpBlockSeal lives here too (not in OpBlockExecute.h):
-// OpExecuteBlockResult carries it by value.
+// Shared error types + the block-execution result for the OP block executor, plus the
+// block-context conversion helpers (bcos<->evmc fixed-size conversions / bounds-checked
+// narrowing / FISCO-header -> evmone BlockInfo build), kept class-free so dependent layers can
+// throw without depending on the executor templates. OpBlockSeal lives here too (not in
+// OpBlockExecute.h): OpExecuteBlockResult carries it by value.
 //
 // The six-way commitment comparison surface (OpBlockCommitments / commitmentsOf /
 // payloadBloomToH2048 / mismatchedFieldOf / detail::toBcosH256 / toBcosBloom) lives in
@@ -48,15 +48,36 @@ struct OpBlockSeal
     std::optional<uint64_t> blobGasUsed;
 };
 
-/// "0x" + lowercase hex (op-geth hexutil.Uint64); the value later feeds the receipts-root leaf
-/// encoding that returns with the block-seal wiring (part 5).
-[[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
+/// "0x" + lowercase hex (op-geth hexutil.Uint64); feeds the receipts-root leaf encoding
+/// (OpBlockExecute.cpp). Formats into `out` (caller-reused per block) instead of allocating a
+/// fresh string per tx — setCumulativeGasUsed copies the value into the receipt anyway, so the
+/// per-tx path should not add another allocation chain on top (toQuantity builds bytes→hex→string).
+inline void appendHexCumulative(uint64_t cumulative, std::string& out)
 {
-    return bcos::toQuantity(cumulative);  // reuse the library quantity formatter
+    out = "0x";
+    // Up to 16 hex digits (uint64 max = 0xffffffffffffffff); the per-tx buffer is reserved once.
+    char buf[16];
+    auto* p = buf + sizeof(buf);
+    do
+    {
+        *--p = "0123456789abcdef"[cumulative & 0xF];
+        cumulative >>= 4;
+    } while (cumulative != 0);
+    out.append(p, buf + sizeof(buf));
 }
 
-/// EIP-2718 tx-type classification, single home for the block-execution sites (the OpScheduler
-/// deposit-classification loop and the part-5 seal wiring's txTypes rebuild) so the mapping can't
+/// Convenience wrapper returning a fresh string (ExecuteContext::finish, a per-tx path that
+/// cannot reuse a block-level buffer).
+[[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
+{
+    std::string out;
+    out.reserve(18);  // "0x" + 16 hex digits
+    appendHexCumulative(cumulative, out);
+    return out;
+}
+
+/// EIP-2718 tx-type classification, single home for the block-execution sites (the
+/// deposit-classification loop and the seal path's txTypes rebuild) so the mapping can't
 /// drift and silently emit a wrong receiptsRoot leaf. Maps a raw type byte to the per-receipt
 /// type byte:
 /// OP deposit 0x7e (kDepositTxType, OpTransition.h) → itself; legacy (>= 0xc0 RLP list prefix)
@@ -142,8 +163,7 @@ inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
 {
     static const bcos::u256 kMaxU64(std::numeric_limits<uint64_t>::max());
     if (v > kMaxU64)
-        throw OpConsensusError(
-            std::string("OpSchedulerSeam: field exceeds uint64_t range: ") + fieldName);
+        throw OpConsensusError(std::string("op block: field exceeds uint64_t range: ") + fieldName);
     return static_cast<uint64_t>(v);
 }
 
@@ -154,8 +174,7 @@ inline int64_t narrowU256ToI64(const bcos::u256& v, const char* fieldName)
 {
     static const bcos::u256 kMaxI64(std::numeric_limits<int64_t>::max());
     if (v > kMaxI64)
-        throw OpConsensusError(
-            std::string("OpSchedulerSeam: field exceeds int64_t range: ") + fieldName);
+        throw OpConsensusError(std::string("op block: field exceeds int64_t range: ") + fieldName);
     return static_cast<int64_t>(v);
 }
 
@@ -167,7 +186,7 @@ template <class T>
 {
     if (!opt.has_value())
         throw OpConsensusError(
-            std::string("OpSchedulerSeam: missing required header field: ") + fieldName);
+            std::string("op block: missing required header field: ") + fieldName);
     return *opt;
 }
 
@@ -216,15 +235,12 @@ inline evmone::state::BlockInfo toBlockInfo(const bcos::protocol::BlockHeader& e
 
 namespace bcos::evm::opstack
 {
-/// Bounds-checked u256→int64 narrowing (a corrupt receipt must not wrap the gas pool). Throws
-/// engine::OpConsensusError — a bare std::runtime_error would escape the INVALID/-32603
-/// classification this header establishes (see requireHeaderField's comment). Defined after the
-/// engine block because the error types live there.
+/// Bounds-checked u256→int64 narrowing (a corrupt receipt must not wrap the gas pool). Delegates
+/// to engine::detail::narrowU256ToI64 (single home for the u256→int64 ceiling); the receipt-
+/// specific message is folded into the shared "exceeds int64_t range" text so the two cannot
+/// drift in ceiling.
 [[nodiscard]] inline int64_t narrowGasUsed(const bcos::u256& gasUsed)
 {
-    static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
-    if (gasUsed > kMaxInt64)
-        throw engine::OpConsensusError("op block: receipt gasUsed exceeds int64_t range");
-    return static_cast<int64_t>(gasUsed);
+    return engine::detail::narrowU256ToI64(gasUsed, "receipt gasUsed");
 }
 }  // namespace bcos::evm::opstack

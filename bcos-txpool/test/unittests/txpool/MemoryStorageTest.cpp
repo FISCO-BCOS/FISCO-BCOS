@@ -3,6 +3,8 @@
  *  SPDX-License-Identifier: Apache-2.0
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include "bcos-codec/rlp/Common.h"
+#include "bcos-codec/rlp/RLPEncode.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
@@ -545,12 +547,22 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         storageNoSig.clear();
         const std::string senderHex = "0x1234567890123456789012345678901234567890";
         auto tx7 = makeWeb3Tx("0x3", senderHex, false);
-        // Set an invalid chainId - need to cast to TransactionImpl
         auto tx7Impl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx7);
         if (tx7Impl)
         {
-            std::string invalidChainId = "123";
-            tx7Impl->mutableInner().data.chainID = invalidChainId;
+            // The tars mirror is unauthenticated and must NOT drive the check: set it to a
+            // value that matches the config to prove it is ignored.
+            tx7Impl->mutableInner().data.chainID = "321";
+            // A typed (EIP-1559) signing preimage whose envelope chainId (123) does not match
+            // the configured chain id (321): validateChainId derives the value from the SIGNED
+            // envelope, so this must be rejected regardless of the mirror.
+            tx7Impl->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x02);
+            bcos::bytes typed{0x02};
+            bcos::codec::rlp::encode(typed, static_cast<uint64_t>(123), static_cast<uint64_t>(0),
+                static_cast<uint64_t>(1), static_cast<uint64_t>(1), static_cast<uint64_t>(21000),
+                bcos::Address("0xdead000000000000000000000000000000000011"),
+                static_cast<uint64_t>(0), bcos::bytes{}, bcos::bytes{});
+            tx7Impl->mutableInner().extraTransactionBytes.assign(typed.begin(), typed.end());
         }
 
         fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))

@@ -64,25 +64,27 @@ JsonRpcImpl_2_0::JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
     m_forceSender(std::move(forceSender))
 {
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
-        [this](boostssl::ws::WsMessage msg, std::shared_ptr<boostssl::ws::WsSession> session) {
+        [this](std::shared_ptr<boostssl::MessageFace> msg,
+            std::shared_ptr<boostssl::ws::WsSession> session) {
             this->handleRpcRequest(std::move(msg), std::move(session));
         });
 }
 
 void JsonRpcImpl_2_0::handleRpcRequest(
-    boostssl::ws::WsMessage _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
+    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
-    auto buffer = _msg.payload();
+    auto buffer = _msg->payload();
     auto req = std::string_view((const char*)buffer.data(), buffer.size());
 
     auto start = std::chrono::high_resolution_clock::now();
-    auto seq = _msg.seq();
-    auto version = _msg.version();
-    auto ext = _msg.ext();
+    auto seq = _msg->seq();
+    auto version = _msg->version();
+    auto ext = _msg->ext();
 
     auto weakptrSession = std::weak_ptr<boostssl::ws::WsSession>(_session);
+    auto messageFactory = m_wsService->messageFactory();
 
-    onRPCRequest(req, [ext, seq, version, weakptrSession, start](
+    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](
                           bcos::bytes resp, boost::beast::http::status) {
         auto session = weakptrSession.lock();
 
@@ -100,11 +102,11 @@ void JsonRpcImpl_2_0::handleRpcRequest(
         if (session->isConnected())
         {
             // TODO: no need to copy resp
-            bcos::boostssl::ws::WsMessage msg;
-            msg.setPayload(std::move(resp));
-            msg.setVersion(version);
-            msg.setSeq(seq);
-            msg.setExt(ext);
+            auto msg = messageFactory->buildMessage();
+            msg->setPayload(std::move(resp));
+            msg->setVersion(version);
+            msg->setSeq(seq);
+            msg->setExt(ext);
             session->asyncSendMessage(msg);
         }
         else
@@ -250,18 +252,66 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         auto extraBytesRef =
             bcos::bytesRef(const_cast<byte*>(transaction.extraTransactionBytes().data()),
                 transaction.extraTransactionBytes().size());
-        codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
-        jResp["value"] = web3Tx.value.str();
-        jResp["gasLimit"] = web3Tx.gasLimit;
-        if (web3Tx.type >= TransactionType::EIP1559)
+        if (auto error = codec::rlp::decodeFromPayload(extraBytesRef, web3Tx); error != nullptr)
         {
-            jResp["maxPriorityFeePerGas"] = web3Tx.maxPriorityFeePerGas.str();
-            jResp["maxFeePerGas"] = web3Tx.maxFeePerGas.str();
-            jResp["gasPrice"] = "0";
+            // Undecodable web3 payload (corrupt extraTransactionBytes): emit zeroed fields
+            // instead of half-decoded state (same posture as TransactionResponse.cpp).
+            WEB3_LOG(WARNING) << LOG_DESC("JsonRpcImpl: undecodable web3 payload")
+                              << LOG_KV("txHash", transaction.hash().hexPrefixed());
+            jResp["value"] = "0x0";
+            jResp["gasLimit"] = "0x0";
+            jResp["gasPrice"] = "0x0";
         }
         else
         {
-            jResp["gasPrice"] = web3Tx.maxPriorityFeePerGas.str();
+            jResp["value"] = toQuantity(web3Tx.value);
+            jResp["gasLimit"] = web3Tx.gasLimit;
+            // Use explicit range check rather than `>=` so that Deposit (0x7e), which is
+            // numerically larger than all EIP types, is excluded from EIP-1559 field output.
+            // EIP-7702 is a fee-market type, so the upper bound is EIP7702 (matching
+            // TransactionResponse.cpp).
+            if (web3Tx.type >= TransactionType::EIP1559 && web3Tx.type <= TransactionType::EIP7702)
+            {
+                jResp["maxPriorityFeePerGas"] = toQuantity(web3Tx.maxPriorityFeePerGas);
+                jResp["maxFeePerGas"] = toQuantity(web3Tx.maxFeePerGas);
+                jResp["gasPrice"] = "0x0";
+            }
+            else
+            {
+                jResp["gasPrice"] = toQuantity(web3Tx.maxPriorityFeePerGas);
+            }
+        }
+        // accessList (EIP-2930+) and authorizationList (EIP-7702) — same serialization as
+        // TransactionResponse.cpp (geth parity).
+        if (web3Tx.type >= TransactionType::EIP2930 && web3Tx.type <= TransactionType::EIP7702)
+        {
+            jResp["accessList"] = Json::arrayValue;
+            for (const auto& accessList : web3Tx.accessList)
+            {
+                Json::Value access = Json::objectValue;
+                access["address"] = accessList.account.hexPrefixed();
+                access["storageKeys"] = Json::arrayValue;
+                for (const auto& storageKey : accessList.storageKeys)
+                {
+                    access["storageKeys"].append(storageKey.hexPrefixed());
+                }
+                jResp["accessList"].append(std::move(access));
+            }
+        }
+        if (web3Tx.type == TransactionType::EIP7702)
+        {
+            jResp["authorizationList"] = Json::arrayValue;
+            for (const auto& auth : web3Tx.authorizationList)
+            {
+                Json::Value entry = Json::objectValue;
+                entry["chainId"] = toQuantity(auth.chainId);
+                entry["address"] = auth.address.hexPrefixed();
+                entry["nonce"] = toQuantity(auth.nonce);
+                entry["yParity"] = toQuantity(auth.yParity);
+                entry["r"] = toQuantity(auth.r);
+                entry["s"] = toQuantity(auth.s);
+                jResp["authorizationList"].append(std::move(entry));
+            }
         }
     }
 }

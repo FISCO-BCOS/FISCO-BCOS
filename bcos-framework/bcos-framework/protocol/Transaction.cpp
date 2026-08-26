@@ -1,6 +1,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/BoostLog.h>
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
@@ -121,6 +122,49 @@ void Transaction::verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signat
     }
 
     auto const signature = signatureData();
+    // Defense-in-depth BEFORE recoverAddress: an explicitly-sized check gives a precise error
+    // (recoverAddress's checkSigLen would throw a generic InvalidSignature for the same input).
+    // All legitimate Web3 signatures are exactly 65 bytes (r||s||v, assembled by
+    // takeToTarsTransaction); a different length means malformed tars deserialization or a
+    // hostile peer. Deposits never legitimately reach verify() — admission rejects 0x7e and
+    // the engine path decodes via decodeDepositEnvelope — so an empty/short signature here is
+    // treated as malformed (fail-closed), never as an unsigned deposit.
+    if (type() == static_cast<uint8_t>(TransactionType::Web3Transaction) && signature.size() != 65)
+        [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("EIP-2: Web3 signature must be exactly 65 bytes (v, r, s)"));
+    }
+    // The EIP-2 r/s range and v-domain checks are alloc-free and need only the signature bytes,
+    // so they run BEFORE the EC recovery: hostile peers pay nothing per rejected signature
+    // (same ordering as the RPC decode funnel).
+    if (type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
+    {
+        auto const r = bcos::fromBigEndian<u256>(signature.getCroppedData(0, 32));
+        auto const s = bcos::fromBigEndian<u256>(signature.getCroppedData(32, 32));
+        if (r == 0 || r >= bcos::crypto::c_secp256k1n || s == 0 ||
+            s > bcos::crypto::c_secp256k1nOver2) [[unlikely]]
+        {
+            // n is odd, so n/2 = (n-1)/2; s > (n-1)/2 is equivalent to s >= ceil(n/2),
+            // matching op-geth's secp256k1.IsCanonical check.
+            BOOST_THROW_EXCEPTION(std::invalid_argument(
+                "EIP-2: invalid signature (r out of [1,n-1] or s exceeds secp256k1n/2)"));
+        }
+        // The tars signature byte is the recovery id / yParity — always 0/1 by construction:
+        // LegacyTxHandler::decode normalizes legacy v (27/28 -> v-27, EIP-155 -> (v-35)%2) and
+        // the typed handlers store y_parity; secp256k1Sign stores the raw recid (0/1; 2/3 only
+        // in the rare r < p - n corner where x0 = r + n is the recovered x — such r passes the
+        // r < n check above, so the value needs its own gate). A signature byte > 1 (recid 2/3,
+        // the v=29/30 envelope form) is never produced by the RPC funnel; op-geth rejects the
+        // same in decode and Sender(). Applies to typed AND legacy envelopes — the
+        // envelope-vs-preimage distinction lives in extraTransactionBytes, not in this byte.
+        auto const& env = extraTransactionBytes();
+        if (!env.empty() && signature[64] > 1) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(std::invalid_argument(
+                "EIP-2718/EIP-155: recovery id exceeds 1 in transaction signature"));
+        }
+    }
     auto [recovered, sender] = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
     if (!recovered) [[unlikely]]
     {

@@ -47,6 +47,7 @@
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <cstdint>
@@ -54,7 +55,6 @@
 #include <string>
 #include <variant>
 #include <vector>
-#include <boost/algorithm/string.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;
