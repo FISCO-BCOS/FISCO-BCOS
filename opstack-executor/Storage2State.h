@@ -321,16 +321,25 @@ public:
         return false;
     }
 
-    /// Single-account live slot map (tombstone/zero filtered), same contract as
-    /// visitAccounts' AccountView.storage but without scanning SYS_TABLES or any other
-    /// account. Used by finalizeOpBlockResult for the MessagePasser withdrawalsRoot.
+    /// Single-account live slot map (tombstone/zero filtered). Same account-level liveness
+    /// filters as visitAccounts' AccountView.storage — the SYS_TABLES marker must pass the
+    /// existsOne/liveContent gate (fetchAccountForVisit) — and the scan is narrowed to one
+    /// account instead of walking every /apps/ entry. Used by finalizeOpBlockResult for the
+    /// MessagePasser withdrawalsRoot.
     /// Consumer contract: after this returns, check poisoned() before trusting the map.
     [[nodiscard]] std::map<evmc::bytes32, evmc::bytes32> accountStorage(
         const evmc::address& addr) const noexcept
     {
         try
         {
-            return task::syncWait(fetchAllStorage(accountTableName(addr)));
+            const std::string tableName = accountTableName(addr);
+            // Same liveness gate as visitAccountsImpl: a tombstoned or deleted SYS_TABLES
+            // marker must contribute no slots (visitAccounts skips such rows via
+            // fetchAccountForVisit). The scan is the only thing that is narrower here.
+            auto account = task::syncWait(fetchAccountForVisit(addr, tableName));
+            if (!account.has_value())
+                return {};
+            return task::syncWait(fetchAllStorage(tableName));
         }
         catch (const std::runtime_error& e)
         {

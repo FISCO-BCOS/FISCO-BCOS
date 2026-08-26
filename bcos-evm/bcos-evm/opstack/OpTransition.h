@@ -76,6 +76,15 @@ struct OpTxProperties
 /// (EIP-3607 still applies; a contract-sender call must execute real bytecode).
 /// Pass the same wrapper to opValidate and opTransition so the unchecked uint256
 /// subtractions in opTransition cannot wrap. Writes are discarded with the call overlay.
+/// The mask is deliberately visible to the EVM: the same State is what the VM executes
+/// against, so during a simulation BALANCE(sender) and SELFBALANCE report 2^256-1, a CALL
+/// transferring more than the sender's real balance succeeds, and EXTCODEHASH(sender) for a
+/// never-used address returns the empty-code hash (the account is materialised). An additive
+/// credit is not an alternative: tx_max_cost = gasLimit * max_gas_price is unbounded above, so
+/// saturating at max() is the only form that cannot reintroduce the underflow. eth_call's
+/// post-state is never read (status/gasUsed/output are on the receipt), so the fabricated
+/// balance must also never be written back — OpstackExecutor::m_finish skips applyDiff for
+/// call=true (OpstackExecutor.h).
 class CallSimulationView final : public evmone::state::StateView
 {
 public:

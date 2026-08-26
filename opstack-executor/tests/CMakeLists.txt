@@ -77,6 +77,7 @@ endif()
 add_executable(opstack-executor-receipt-tests
     TestMain.cpp
     OpReceiptEncodeTest.cpp
+    OpCallWritebackTest.cpp
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
 )
 set_target_properties(opstack-executor-receipt-tests PROPERTIES UNITY_BUILD OFF)

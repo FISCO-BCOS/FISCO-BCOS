@@ -458,11 +458,16 @@ namespace engine = bcos::evm::engine;
 
 /// Block-path only: 7702 authorizationList[].signer is copied from the tars mirror and is
 /// not recovered from the signed envelope (part-5 ecrecover). A non-empty list would let
-/// processAuthorizationList apply unbound signers. Used by both m_prepare and processOpBlock.
+/// processAuthorizationList apply unbound signers. A set_code (0x04) transaction is rejected
+/// regardless of the mirror list: an empty mirror list would otherwise let the block producer
+/// strip the delegations while the envelope (whose type byte is bound by
+/// envelopeExecutionFieldsMismatch before this gate runs on both block paths) still says 0x04.
+/// Used by both m_prepare and processOpBlock.
 [[nodiscard]] inline std::optional<std::string> blockPathUnboundAuthorizationList(
     evmone::state::Transaction const& evmTx)
 {
-    if (!evmTx.authorization_list.empty())
+    if (evmTx.type == evmone::state::Transaction::Type::set_code ||
+        !evmTx.authorization_list.empty())
         return "authorizationList is not bound to the signed envelope";
     return std::nullopt;
 }
@@ -865,7 +870,7 @@ public:
             else
             {
                 receipt = co_await executor.m_finish(
-                    storage, blockHeader, ledgerConfig, m_receipt, m_diff);
+                    storage, blockHeader, ledgerConfig, m_receipt, m_diff, call);
             }
             // This stage solely owns cumulative-gas backfill + blockGasLeft decrement
             // (narrowGasUsed / decimalCumulative live in OpCommon.h). Decimal + the block index —
@@ -1001,7 +1006,7 @@ public:
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(stateView, blockHeader, transaction, ledgerConfig, props,
             diff, chainId, blockGasLeft, blockHashes, &blockInfo, call);
-        co_return co_await m_finish(storage, blockHeader, ledgerConfig, receipt, diff);
+        co_return co_await m_finish(storage, blockHeader, ledgerConfig, receipt, diff, call);
     }
 
     /// Execute a single OP 0x7E deposit transaction (reuses runDeposit).
@@ -1179,20 +1184,22 @@ private:
             {
                 throw bcos::evm::OpConsensusError("op block: " + *missing);
             }
-            if (auto unbound = blockPathUnboundAuthorizationList(evmTx))
-            {
-                throw bcos::evm::OpConsensusError("op block: " + *unbound);
-            }
             if (auto gate = envelopeChainIdMismatch(transaction, *chainId))
             {
                 throw bcos::evm::OpConsensusError("op block: " + *gate);
             }
             // Fail-closed mirror↔envelope cross-check: execution fields (nonce/gasLimit/
-            // to/value/data) must match the SIGNED envelope, never the forgeable mirror.
+            // to/value/data) must match the SIGNED envelope, never the forgeable mirror. Runs
+            // before blockPathUnboundAuthorizationList so evmTx.type is envelope-bound when the
+            // 7702 gate reads it (same order as processOpBlock).
             if (auto mismatch = envelopeExecutionFieldsMismatch(transaction, evmTx))
             {
                 throw bcos::evm::OpConsensusError(
                     "op block: tx execution fields diverge from the signed envelope: " + *mismatch);
+            }
+            if (auto unbound = blockPathUnboundAuthorizationList(evmTx))
+            {
+                throw bcos::evm::OpConsensusError("op block: " + *unbound);
             }
         }
         auto envRef = transaction.extraTransactionBytes();
@@ -1202,6 +1209,11 @@ private:
         // lets validate_transaction and the OP 512-bit cap both run (and pass) for an
         // unfunded simulated sender. Skipping the cap used to leave INSUFFICIENT_FUNDS
         // and opTransition's unchecked subtractions unguarded. Block path uses the raw view.
+        // The same masked view is handed to opTransition, so the fabricated balance is also
+        // visible to the EVM (BALANCE/SELFBALANCE/value transfers, and EXTCODEHASH for a
+        // fresh sender) and lands in the simulated StateDiff — m_finish discards that diff for
+        // call=true so none of it is written back. This is a decision on record, not an
+        // accident (OpTransition.h CallSimulationView doc block).
         auto validated = call ? op::opValidate(op::CallSimulationView{stateView, evmTx.sender},
                                     blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft) :
                                 op::opValidate(stateView, blockInfo, evmTx, env, m_forkConfig, fee,
@@ -1267,10 +1279,15 @@ private:
     }
 
     // Stage 3 — writeback: apply the transition's state diff to storage, return the final receipt.
+    // `call` (eth_call / estimateGas) discards the diff: the simulation ran against a masked
+    // view whose fabricated sender balance must never reach the caller's storage. The
+    // poisoned() check still runs so a storage fault observed during the simulation surfaces as
+    // OpStorageError rather than a silently "successful" dry run.
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> m_finish(Storage& storage,
         protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,
-        protocol::TransactionReceipt::Ptr receipt, evmone::state::StateDiff const& diff)
+        protocol::TransactionReceipt::Ptr receipt, evmone::state::StateDiff const& diff,
+        bool call = false)
     {
         auto revOpt = ledgerConfig.evmcRevision();
         if (!revOpt.has_value())
@@ -1281,17 +1298,20 @@ private:
         // precondition. applyDiff poisons AND rethrows raw; every write-back failure is a local
         // storage fault, so it must leave as OpStorageError (-32603), never INVALID.
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
-        try
+        if (!call)
         {
-            stateView.applyDiff(diff);
-        }
-        catch (const std::exception& e)
-        {
-            throw engine::OpStorageError(std::string("tx write-back failed: ") + e.what());
-        }
-        catch (...)
-        {
-            throw engine::OpStorageError("tx write-back failed: unknown exception");
+            try
+            {
+                stateView.applyDiff(diff);
+            }
+            catch (const std::exception& e)
+            {
+                throw engine::OpStorageError(std::string("tx write-back failed: ") + e.what());
+            }
+            catch (...)
+            {
+                throw engine::OpStorageError("tx write-back failed: unknown exception");
+            }
         }
         // Read-path poison from the transition with applyDiff returning normally (the shared
         // slot aggregates per-tx instances).
