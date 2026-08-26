@@ -493,10 +493,9 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
     // accepted by the codec; the canonical re-encode below is what guards the hash against
     // them.
     //
-    // The codec's decode takes a mutable bytesRef& (it advances a view cursor); the bytes
-    // themselves are never written, so a single copy into a mutable buffer is enough.
-    auto mutableData = data.toBytes();
-    bytesRef out(mutableData.data(), mutableData.size());
+    // The codec's decode only advances a view cursor and never writes the buffer, so
+    // take the view directly; the const_cast is confined to this read-only entry point.
+    bytesRef out(const_cast<bcos::byte*>(data.data()), data.size());
 
     auto error = codec::rlp::decode(out, m_data);
     if (error)
@@ -553,7 +552,7 @@ namespace bcos::codec::rlp
 {
 // EthBlockHeaderData codec: the single source of truth for the 21-field canonical header
 // order. Reused by EthBlockHeader::rlpEncode/rlpDecode (which delegate here) and by
-// EthBlockBody for ommers. The timestamp here is the WIRE domain (seconds); the ms bridge
+// EthBlock for ommers. The timestamp here is the WIRE domain (seconds); the ms bridge
 // lives in EthBlockHeader::rlpEncode/rlpDecode.
 size_t length(const protocol::EthBlockHeaderData& _header) noexcept
 {
@@ -581,13 +580,20 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthBlockHeaderData&
     uint64_t timestamp = 0;
     auto err = decode(_in, _header.parentInfo.blockHash, _header.uncleHash, _header.coinbase,
         _header.stateRoot, _header.txsRoot, _header.receiptsRoot, _header.logsBloom,
-        _header.difficulty, number, _header.gasLimit, _header.gasUsed, timestamp,
-        _header.extraData, _header.prevRandao, _header.nonce, _header.baseFee,
-        _header.withdrawalsHash, _header.blobGasUsed, _header.excessBlobGas,
-        _header.parentBeaconRoot, _header.requestsHash);
+        _header.difficulty, number, _header.gasLimit, _header.gasUsed, timestamp, _header.extraData,
+        _header.prevRandao, _header.nonce, _header.baseFee, _header.withdrawalsHash,
+        _header.blobGasUsed, _header.excessBlobGas, _header.parentBeaconRoot, _header.requestsHash);
     if (err)
     {
         return err;
+    }
+    // Block number is internal int64; reject wire values above INT64_MAX instead
+    // of narrowing into a negative number (decodeTarsHeader skips validation and
+    // downstream code assumes a non-negative BlockNumber).
+    if (number > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+    {
+        return BCOS_ERROR_UNIQUE_PTR(
+            DecodingError::UnexpectedLength, "block number exceeds int64 range");
     }
     _header.number = static_cast<int64_t>(number);
     _header.timestamp = static_cast<int64_t>(timestamp);

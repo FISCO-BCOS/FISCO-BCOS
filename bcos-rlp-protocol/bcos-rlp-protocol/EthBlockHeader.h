@@ -54,7 +54,7 @@ struct EthBlockHeaderData
     bcos::Address coinbase;
     bcos::h64 nonce;
     int64_t number{0};
-    // WIRE seconds (the domain of the EthBlockHeaderData codec, of EthBlockBody and of the
+    // WIRE seconds (the domain of the EthBlockHeaderData codec, of EthBlock and of the
     // devp2p sync layer). EthBlockHeader::m_data mirrors the internal BlockHeader and is
     // MILLISECONDS instead — that ms↔s conversion happens ONLY at the EthBlockHeader
     // rlpEncode/rlpDecode bridge (/1000 on encode, ×1000 on decode), never in the codec.
@@ -71,10 +71,9 @@ struct EthBlockHeaderData
     bool operator==(const EthBlockHeaderData& rhs) const
     {
         return logsBloom == rhs.logsBloom && parentInfo == rhs.parentInfo &&
-               uncleHash == rhs.uncleHash && stateRoot == rhs.stateRoot &&
-               txsRoot == rhs.txsRoot && receiptsRoot == rhs.receiptsRoot &&
-               difficulty == rhs.difficulty && gasLimit == rhs.gasLimit &&
-               gasUsed == rhs.gasUsed && prevRandao == rhs.prevRandao &&
+               uncleHash == rhs.uncleHash && stateRoot == rhs.stateRoot && txsRoot == rhs.txsRoot &&
+               receiptsRoot == rhs.receiptsRoot && difficulty == rhs.difficulty &&
+               gasLimit == rhs.gasLimit && gasUsed == rhs.gasUsed && prevRandao == rhs.prevRandao &&
                extraData == rhs.extraData && coinbase == rhs.coinbase && nonce == rhs.nonce &&
                number == rhs.number && timestamp == rhs.timestamp && baseFee == rhs.baseFee &&
                withdrawalsHash == rhs.withdrawalsHash && blobGasUsed == rhs.blobGasUsed &&
@@ -175,8 +174,7 @@ inline void encode(bcos::bytes& _out, const EthBlockHeaderData& _headerData) noe
 {
     codec::rlp::encode(_out, _headerData);
 }
-inline bcos::Error::UniquePtr decode(
-    bcos::bytesRef& _in, EthBlockHeaderData& _headerData) noexcept
+inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, EthBlockHeaderData& _headerData) noexcept
 {
     return codec::rlp::decode(_in, _headerData);
 }

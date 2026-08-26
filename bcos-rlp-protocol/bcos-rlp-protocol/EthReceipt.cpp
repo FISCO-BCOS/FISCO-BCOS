@@ -20,6 +20,7 @@
 #include "EthReceipt.h"
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/lexical_cast.hpp>
 #include <cstring>
 
@@ -165,45 +166,51 @@ void EthReceipt::rlpEncode(bcos::bytes& out) const
 
 bcos::Error::UniquePtr EthReceipt::rlpDecode(bcos::bytesConstRef data)
 {
-    // The codec's decode takes a mutable bytesRef& (it advances a view cursor); the bytes
-    // themselves are never written, so a single copy into a mutable buffer is enough.
-    auto mutableData = data.toBytes();
-    bytesRef in(mutableData.data(), mutableData.size());
+    // The codec's decode only advances a view cursor and never writes the buffer, so
+    // take the view directly; the const_cast is confined to this read-only entry point.
+    bytesRef in(const_cast<bcos::byte*>(data.data()), data.size());
     return codec::rlp::decode(in, m_data);
 }
 
 bcos::Error::UniquePtr toEthReceiptData(
     TransactionReceipt const& receipt, uint8_t txType, EthReceiptData& eth)
 {
+    // Reset the destination at entry so no stale field (notably postState) can
+    // survive from a previous call when the caller reuses the object.
+    eth = EthReceiptData{};
     eth.type = txType;
     // The BCOS receipt carries the FISCO TransactionStatus convention (None = 0 = success,
     // per mapEvmcStatusToBcosStatus); the Ethereum receipt commits EIP-658 status 1 for
     // success and 0 for every failure.
     eth.status =
         (receipt.status() == static_cast<int32_t>(protocol::TransactionStatus::None)) ? 1 : 0;
-    // cumulativeGasUsed may be empty on legacy receipts / older executor versions;
-    // fail closed to 0 and surface the anomaly rather than throwing an uncaught
-    // bad_lexical_cast from the receiptsRoot computation path. The empty case is a
-    // property of the data (a whole block of legacy receipts would otherwise log one
-    // WARNING per receipt, i.e. a per-block flood), so it is traced at TRACE level;
-    // a non-numeric value is a genuine data fault and stays at WARNING.
+    // cumulativeGasUsed must parse to a number: it feeds the receipts root, so a
+    // missing/non-numeric value fails closed (returns an Error) rather than
+    // substituting 0. Producers write decimal (transaction-scheduler) or
+    // "0x"+minimal hex (opstack-executor), so parse both shapes explicitly
+    // (mirrors jsonStringToInt) instead of relying on boost::lexical_cast.
     auto const cumStr = std::string(receipt.cumulativeGasUsed());
     if (cumStr.empty())
     {
-        eth.cumulativeGasUsed = 0;
-        BCOS_LOG(TRACE) << "toEthReceiptData: empty cumulativeGasUsed";
+        return BCOS_ERROR_UNIQUE_PTR(
+            DecodingError::InputTooShort, "toEthReceiptData: empty cumulativeGasUsed");
     }
-    else
+    try
     {
-        try
+        if (cumStr.size() >= 2 && cumStr[0] == '0' && (cumStr[1] == 'x' || cumStr[1] == 'X'))
         {
-            eth.cumulativeGasUsed = boost::lexical_cast<bcos::u256>(cumStr);
+            eth.cumulativeGasUsed =
+                bcos::fromBigEndian<bcos::u256>(bcos::fromHex(cumStr.substr(2)));
         }
-        catch (boost::bad_lexical_cast const&)
+        else
         {
-            eth.cumulativeGasUsed = 0;
-            BCOS_LOG(WARNING) << "toEthReceiptData: non-numeric cumulativeGasUsed: " << cumStr;
+            eth.cumulativeGasUsed = bcos::u256(cumStr);
         }
+    }
+    catch (std::exception const&)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::InvalidFieldset,
+            "toEthReceiptData: non-numeric cumulativeGasUsed: " + cumStr);
     }
     auto const bloom = receipt.logsBloom();
     if (bloom.size() == eth.logsBloom.size())
@@ -222,9 +229,28 @@ bcos::Error::UniquePtr toEthReceiptData(
     for (auto const& log : receipt.logEntries())
     {
         EthLogData ethLog;
-        auto const addr = log.address();
-        ethLog.address = Address(
-            bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(addr.data()), addr.size()));
+        auto const& addr = log.address();
+        if (addr.size() == 20)
+        {
+            // Raw 20-byte address.
+            ethLog.address = Address(
+                bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(addr.data()), addr.size()));
+        }
+        else if (addr.size() == 40)
+        {
+            // In-tree producers (HostContext) store the address as 40 ASCII hex
+            // chars; decode as hex — FixedBytes' default AlignRight would
+            // otherwise truncate the ASCII bytes to the last 20 of them.
+            ethLog.address =
+                Address(std::string(reinterpret_cast<const char*>(addr.data()), addr.size()),
+                    Address::FromHex);
+        }
+        else
+        {
+            return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedLength,
+                "toEthReceiptData: log address length " + std::to_string(addr.size()) +
+                    " (expected 20 raw bytes or 40 hex chars)");
+        }
         for (auto const& topic : log.topics())
         {
             ethLog.topics.push_back(topic);

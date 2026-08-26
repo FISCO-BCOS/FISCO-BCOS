@@ -32,7 +32,10 @@
 
 namespace bcos::protocol
 {
-// Ethereum block body (the part of a block not committed to by the header hash).
+// Ethereum block (geth's types.Block): rlp([header, transactions, ommers]) — the
+// ENTIRE block, header included. It is NOT the header-less devp2p BlockBodies element
+// ([transactions, ommers, withdrawals?]); a body codec for that wire form belongs with
+// the devp2p eth protocol.
 // RLP form (yellow paper, Appendix B):
 //   pre-Shanghai: rlp([header, transactions, ommers])
 //   Shanghai+  :  rlp([header, transactions, ommers, withdrawals])   (EIP-4895)
@@ -40,38 +43,38 @@ namespace bcos::protocol
 // (always empty on PoS chains); `withdrawals` is nullopt for pre-Shanghai bodies and an
 // (possibly empty) list for Shanghai+ bodies — the presence of the field itself is fork
 // significant, so it is an optional<vector>, not a bare vector.
-struct EthBlockBodyData
+struct EthBlockData
 {
     EthBlockHeaderData header;
-    std::vector<bcos::bytes> transactions;           // opaque EIP-2718 encoded transactions
-    std::vector<EthBlockHeaderData> ommers;          // uncle headers (empty on PoS)
+    std::vector<bcos::bytes> transactions;   // opaque EIP-2718 encoded transactions
+    std::vector<EthBlockHeaderData> ommers;  // uncle headers (empty on PoS)
     std::optional<std::vector<EthWithdrawalData>> withdrawals;  // nullopt = pre-Shanghai
 
-    bool operator==(const EthBlockBodyData& rhs) const
+    bool operator==(const EthBlockData& rhs) const
     {
-        return header == rhs.header && transactions == rhs.transactions &&
-               ommers == rhs.ommers && withdrawals == rhs.withdrawals;
+        return header == rhs.header && transactions == rhs.transactions && ommers == rhs.ommers &&
+               withdrawals == rhs.withdrawals;
     }
-    bool operator!=(const EthBlockBodyData& rhs) const { return !(*this == rhs); }
+    bool operator!=(const EthBlockData& rhs) const { return !(*this == rhs); }
 };
 
 // Class wrapper following the EthBlockHeader pattern: rlpEncode/rlpDecode plus the
-// codec::rlp overloads that let EthBlockBodyData work as an item in larger structures.
-class EthBlockBody
+// codec::rlp overloads that let EthBlockData work as an item in larger structures.
+class EthBlock
 {
 public:
-    EthBlockBody() = default;
-    explicit EthBlockBody(EthBlockBodyData data) : m_data(std::move(data)) {}
+    EthBlock() = default;
+    explicit EthBlock(EthBlockData data) : m_data(std::move(data)) {}
 
     void rlpEncode(bcos::bytes& out) const;
     // Decodes a single block body (a 3- or 4-element list) from `data`.
     bcos::Error::UniquePtr rlpDecode(bcos::bytesConstRef data);
 
-    const EthBlockBodyData& data() const { return m_data; }
-    EthBlockBodyData& data() { return m_data; }
+    const EthBlockData& data() const { return m_data; }
+    EthBlockData& data() { return m_data; }
 
 private:
-    EthBlockBodyData m_data;
+    EthBlockData m_data;
 };
 }  // namespace bcos::protocol
 
@@ -106,38 +109,34 @@ inline size_t txListLength(std::vector<bcos::bytes> const& _txs) noexcept
     return lengthOfLength(payload) + payload;
 }
 
-// Encode the complete transactions list element (header + payload), splicing
-// legacy txs raw and string-wrapping typed txs.
-inline bcos::bytes encodeTxList(std::vector<bcos::bytes> const& _txs) noexcept
+// Encode the complete transactions list element (header + payload) directly into
+// _out, splicing legacy txs raw and string-wrapping typed txs. txListLength above
+// is the single length source so length()/encode() stay in agreement.
+inline void encodeTxList(bcos::bytes& _out, std::vector<bcos::bytes> const& _txs) noexcept
 {
-    size_t const payload = [&_txs] {
-        size_t sum = 0;
-        for (auto const& tx : _txs)
-        {
-            sum += txWireLength(tx);
-        }
-        return sum;
-    }();
-    bcos::bytes out;
-    encodeHeader(out, {.isList = true, .payloadLength = payload});
-    out.reserve(out.size() + payload);
+    size_t payload = 0;
+    for (auto const& tx : _txs)
+    {
+        payload += txWireLength(tx);
+    }
+    encodeHeader(_out, {.isList = true, .payloadLength = payload});
+    _out.reserve(_out.size() + payload);
     for (auto const& tx : _txs)
     {
         if (!tx.empty() && tx.front() < LIST_HEAD_BASE)
         {
-            encode(out, bytesConstRef(tx.data(), tx.size()));
+            encode(_out, bytesConstRef(tx.data(), tx.size()));
         }
         else
         {
-            out.insert(out.end(), tx.begin(), tx.end());
+            _out.insert(_out.end(), tx.begin(), tx.end());
         }
     }
-    return out;
 }
 
 // Decode one transaction from a block-body transactions list into its opaque
 // EIP-2718 bytes: a typed tx (RLP string) loses its string prefix (0xNN||payload
-// is returned, matching what encodeTxList wraps); a legacy tx (RLP list) is taken
+// is returned, matching what encode wraps); a legacy tx (RLP list) is taken
 // whole. Malformed input (e.g. a bare type byte 0x00) is rejected.
 inline bcos::Error::UniquePtr decodeTx(bcos::bytesRef& _in, bcos::bytes& _out) noexcept
 {
@@ -157,8 +156,8 @@ inline bcos::Error::UniquePtr decodeTx(bcos::bytesRef& _in, bcos::bytes& _out) n
         }
         if (_out.empty())
         {
-            return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
-                "empty typed transaction in block body");
+            return BCOS_ERROR_UNIQUE_PTR(
+                DecodingError::UnsupportedTransactionType, "empty typed transaction in block body");
         }
         if (_out[0] == 0)
         {
@@ -183,31 +182,29 @@ inline bcos::Error::UniquePtr decodeTx(bcos::bytesRef& _in, bcos::bytes& _out) n
         _in = bcos::bytesRef(_in.data() + payloadLen, _in.size() - payloadLen);
         return nullptr;
     }
-    // A bare type byte 0x00 is not a valid EIP-2718 transaction.
+    // A bare single-byte element (0x00..0x7f) is not a valid EIP-2718 transaction.
     return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
-        "invalid EIP-2718 type byte 0x00 in block body");
+        "unsupported bare single-byte transaction element in block body");
 }
 }  // namespace detail
 
-// Overloads so EthBlockBodyData works as an item inside the generic list/vector codecs.
+// Overloads so EthBlockData works as an item inside the generic list/vector codecs.
 // The header codec (EthBlockHeaderData) is the single source of truth for the header
 // field order; the transactions list is built by hand so legacy txs stay raw lists.
-inline size_t length(const protocol::EthBlockBodyData& _body) noexcept
+inline size_t length(const protocol::EthBlockData& _body) noexcept
 {
     size_t const txsLen = detail::txListLength(_body.transactions);
-    size_t payload =
-        bcos::codec::rlp::length(_body.header) + txsLen + length(_body.ommers);
+    size_t payload = bcos::codec::rlp::length(_body.header) + txsLen + length(_body.ommers);
     if (_body.withdrawals.has_value())
     {
         payload += length(*_body.withdrawals);
     }
     return lengthOfLength(payload) + payload;
 }
-inline void encode(bcos::bytes& _out, const protocol::EthBlockBodyData& _body) noexcept
+inline void encode(bcos::bytes& _out, const protocol::EthBlockData& _body) noexcept
 {
-    bcos::bytes const txsList = detail::encodeTxList(_body.transactions);
-    size_t payload =
-        bcos::codec::rlp::length(_body.header) + txsList.size() + length(_body.ommers);
+    size_t const txsLen = detail::txListLength(_body.transactions);
+    size_t payload = bcos::codec::rlp::length(_body.header) + txsLen + length(_body.ommers);
     if (_body.withdrawals.has_value())
     {
         payload += length(*_body.withdrawals);
@@ -215,14 +212,15 @@ inline void encode(bcos::bytes& _out, const protocol::EthBlockBodyData& _body) n
     encodeHeader(_out, {.isList = true, .payloadLength = payload});
     _out.reserve(_out.size() + payload);
     bcos::codec::rlp::encode(_out, _body.header);
-    _out.insert(_out.end(), txsList.begin(), txsList.end());
+    // Splice the transactions list in a single pass (header + elements).
+    detail::encodeTxList(_out, _body.transactions);
     encode(_out, _body.ommers);
     if (_body.withdrawals.has_value())
     {
         encode(_out, *_body.withdrawals);
     }
 }
-inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthBlockBodyData& _body) noexcept
+inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthBlockData& _body) noexcept
 {
     // The body is a list: [header, transactions, ommers, withdrawals?]. Consume
     // the body list header first; the header element is itself a list decoded by
@@ -234,8 +232,7 @@ inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthBlockBody
     }
     if (!bodyHeader.isList)
     {
-        return BCOS_ERROR_UNIQUE_PTR(
-            DecodingError::UnexpectedString, "block body must be a list");
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedString, "block body must be a list");
     }
     bytesRef items(_in.data(), bodyHeader.payloadLength);
     _in = bytesRef(_in.data() + bodyHeader.payloadLength, _in.size() - bodyHeader.payloadLength);
@@ -257,7 +254,10 @@ inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthBlockBody
     }
     bytesRef txPayload(items.data(), txHeader.payloadLength);
     _body.transactions.clear();
-    _body.transactions.reserve(txHeader.payloadLength);
+    // No reserve(payloadLength): payloadLength counts bytes, not elements (a
+    // bcos::bytes element is 24 bytes on LP64), so it would be a 24x memory
+    // amplification driven purely by the list header. push_back's amortised
+    // growth is fine at these sizes.
     while (!txPayload.empty())
     {
         bcos::bytes tx;
@@ -303,17 +303,17 @@ inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthBlockBody
 
 namespace bcos::protocol
 {
-// ADL-visible delegators (see EthLog.h): let EthBlockBodyData participate in
+// ADL-visible delegators (see EthLog.h): let EthBlockData participate in
 // variadic-list encode/decode.
-inline size_t length(const EthBlockBodyData& _body) noexcept
+inline size_t length(const EthBlockData& _body) noexcept
 {
     return codec::rlp::length(_body);
 }
-inline void encode(bcos::bytes& _out, const EthBlockBodyData& _body) noexcept
+inline void encode(bcos::bytes& _out, const EthBlockData& _body) noexcept
 {
     codec::rlp::encode(_out, _body);
 }
-inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, EthBlockBodyData& _body) noexcept
+inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, EthBlockData& _body) noexcept
 {
     return codec::rlp::decode(_in, _body);
 }

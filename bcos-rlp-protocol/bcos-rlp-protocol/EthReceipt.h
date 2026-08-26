@@ -99,10 +99,11 @@ private:
 /// receiptsRoot trie on Ethereum-compatible (executor_version >= 2) chains. The bcos status
 /// maps None (0, success) -> 1 (EIP-658 success) and every other status -> 0.
 ///
-/// Returns nullptr on success. On failure (e.g. a logsBloom whose size cannot be
-/// represented in the wire format) it returns an Error and leaves @p out untouched;
-/// callers must fail closed rather than substitute a bloom, since this value feeds the
-/// receipts root.
+/// Returns nullptr on success. On failure (e.g. a malformed cumulativeGasUsed or a
+/// logsBloom whose size cannot be represented in the wire format) it returns an Error;
+/// @p out is reset at entry and may hold partially-written fields afterwards, so callers
+/// must fail closed rather than substitute defaults, since this value feeds the receipts
+/// root.
 bcos::Error::UniquePtr toEthReceiptData(
     TransactionReceipt const& receipt, uint8_t txType, EthReceiptData& out);
 }  // namespace bcos::protocol

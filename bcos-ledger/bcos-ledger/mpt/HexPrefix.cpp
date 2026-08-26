@@ -37,11 +37,13 @@ bcos::bytes hexPrefixEncode(bcos::bytesConstRef nibbles, bool isLeaf)
 {
     bcos::bytes out;
     bool const odd = (nibbles.size() % NIBBLES_PER_BYTE == 1);
-    // An empty nibble path is LEGAL for variable-length (raw-key, non-secure) tries: a key that
-    // terminates exactly where a branch node's child would continue (or a single-entry leaf whose
-    // path is consumed by the time the build reaches depth == nibbles.size()) encodes as the bare
-    // header byte (e.g. 0x20 for an even leaf). The 64-nibble secure-trie path never reaches here
-    // empty, so this assertion only fired on raw-key tries and was removed.
+    // An empty nibble path is LEGAL for a LEAF on variable-length (raw-key, non-secure)
+    // tries: a key that terminates exactly where a branch node's child would continue
+    // (or a single-entry leaf whose path is consumed by the time the build reaches
+    // depth == nibbles.size()) encodes as the bare header byte (e.g. 0x20 for an even
+    // leaf). It is NOT legal for an extension node: an empty extension path encodes as
+    // 0x00 and yields a self-consistent root no other client agrees with.
+    assert((isLeaf || !nibbles.empty()) && "extension nodes require a non-empty path");
     uint8_t firstByte = (isLeaf ? HP_LEAF_FLAG : 0U) | (odd ? HP_ODD_FLAG : 0U);
     if (odd)
     {
