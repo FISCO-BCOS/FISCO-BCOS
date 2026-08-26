@@ -737,6 +737,19 @@ private:
         }
 
         bcos::evm::engine::OpExecuteBlockResult result;
+
+        // Assigned inside the try; the catch ladder below reclassifies a poisoned slot as a
+        // storage fault even when the escaping exception is not std::exception-matching
+        // (wedprcrypto's corrupted typed-catch, Storage2State.h ladder comment).
+        std::shared_ptr<SharedErrorSlot> sharedError;
+        auto rethrowStorageFaultIfPoisoned = [&sharedError]() {
+            if (!sharedError)
+                return;
+            std::lock_guard lock(sharedError->mutex);
+            if (!sharedError->message.empty())
+                throw bcos::evm::engine::OpStorageError(
+                    "OpScheduler: block state read fault (poisoned): " + sharedError->message);
+        };
         try
         {
             const auto& cfg = op::configAt(m_forkFlags);
@@ -774,7 +787,7 @@ private:
             bcos::ledger::LedgerConfig execLedgerConfig;
             execLedgerConfig.setEVMCRevision(cfg.rev);
 
-            auto sharedError = std::make_shared<SharedErrorSlot>();
+            sharedError = std::make_shared<SharedErrorSlot>();
             OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
 
             // Block-start system call, deposit-first check, Jovian shape, DA scalar.
@@ -868,10 +881,12 @@ private:
         }
         catch (const std::exception&)
         {
+            rethrowStorageFaultIfPoisoned();
             throw;
         }
         catch (...)
         {
+            rethrowStorageFaultIfPoisoned();
             throw bcos::evm::OpConsensusError(
                 "OpScheduler: execute threw an unrecognized (non-std::exception) object; "
                 "raw tx decode or block-level consensus fault");
