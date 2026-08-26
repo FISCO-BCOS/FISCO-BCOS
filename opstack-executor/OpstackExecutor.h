@@ -491,6 +491,15 @@ namespace engine = bcos::evm::engine;
     auto const classified = protocol::classifyWeb3EnvelopeChainId(envelope);
     if (classified.kind == protocol::Web3EnvelopeChainIdKind::Malformed)
     {
+        // 0x7E deposits are typed-looking (type byte < 0x80) but carry no chainId: field 0 is
+        // sourceHash, which the classifier reports as Malformed. The skip is unconditional —
+        // field 0 is never a chainId on a deposit, so deleting this branch fails the pinned
+        // deposit gate test.
+        if (!envelope.empty() &&
+            envelope[0] == static_cast<uint8_t>(bcos::evm::opstack::kDepositTxType))
+        {
+            return std::nullopt;
+        }
         if (protocol::isTypedWeb3Envelope(envelope))
         {
             return "typed tx envelope is missing a parseable chainId";

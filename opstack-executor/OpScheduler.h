@@ -505,13 +505,13 @@ private:
                 if (executedHeader->withdrawalsRoot().has_value() !=
                     blockHeader->withdrawalsRoot().has_value())
                 {
-                    throw engine::OpConsensusError(
+                    throw bcos::evm::OpConsensusError(
                         "OpScheduler: commitment mismatch on field withdrawalsRoot");
                 }
                 if (auto mismatch = engine::mismatchedFieldOf(
                         headerCommitments(*executedHeader), headerCommitments(*blockHeader)))
                 {
-                    throw engine::OpConsensusError(
+                    throw bcos::evm::OpConsensusError(
                         "OpScheduler: commitment mismatch on field " + *mismatch);
                 }
             }
@@ -686,7 +686,7 @@ private:
             {
                 auto const& raw = rawTxBytes[i];
                 if (raw.empty())  // empty envelope: raw[0] would be out of bounds
-                    throw bcos::evm::engine::OpConsensusError("OpScheduler: empty envelope");
+                    throw bcos::evm::OpConsensusError("OpScheduler: empty envelope");
                 auto const typeByte = raw[0];
                 if (op::classifyTxType(typeByte) == static_cast<uint8_t>(op::kDepositTxType))
                 {
@@ -697,14 +697,14 @@ private:
                     }
                     catch (const OpTxValidationFailed& e)
                     {
-                        throw bcos::evm::engine::OpConsensusError(
+                        throw bcos::evm::OpConsensusError(
                             std::string("OpScheduler: malformed deposit: ") + e.what());
                     }
                 }
                 // Reject blob (0x03) and 0x7d type bytes.
                 else if (typeByte < 0xc0 && typeByte != 0x01 && typeByte != 0x02 &&
                          typeByte != 0x04)
-                    throw bcos::evm::engine::OpConsensusError(
+                    throw bcos::evm::OpConsensusError(
                         fmt::format("OpScheduler: unsupported tx type byte 0x{:02x}",
                             static_cast<unsigned>(typeByte)));
             }
@@ -785,7 +785,7 @@ private:
                 }
             }
         }
-        catch (const bcos::evm::engine::OpConsensusError&)
+        catch (const bcos::evm::OpConsensusError&)
         {
             throw;
         }
@@ -799,7 +799,7 @@ private:
         }
         catch (...)
         {
-            throw bcos::evm::engine::OpConsensusError(
+            throw bcos::evm::OpConsensusError(
                 "OpScheduler: execute threw an unrecognized (non-std::exception) object; "
                 "raw tx decode or block-level consensus fault");
         }
@@ -836,6 +836,9 @@ private:
             executedBlockHeader->setRequestsHash(detail::toBcosH256(*opResult.seal.requestsHash));
         if (opResult.seal.blobGasUsed.has_value())
             executedBlockHeader->setBlobGasUsed(bcos::u256(*opResult.seal.blobGasUsed));
+        else if (blockHeader.blobGasUsed())
+            // Seal omitted blobGasUsed (pre-Jovian): copy announced. Do not invent 0.
+            executedBlockHeader->setBlobGasUsed(*blockHeader.blobGasUsed());
         co_return executedBlockHeader;
     }
 
@@ -966,7 +969,7 @@ public:
         {
             std::rethrow_exception(std::move(eptr));
         }
-        catch (const bcos::evm::engine::OpConsensusError&)
+        catch (const bcos::evm::OpConsensusError&)
         {
             return scheduler::SchedulerError::OpConsensusRejected;
         }
@@ -995,7 +998,7 @@ public:
         {
             std::rethrow_exception(std::move(eptr));
         }
-        catch (const bcos::evm::engine::OpConsensusError& e)
+        catch (const bcos::evm::OpConsensusError& e)
         {
             return e.what();
         }
@@ -1078,17 +1081,30 @@ private:
         auto sharedError = std::make_shared<SharedErrorSlot>();
         OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
 
-        auto receipt = co_await executor.executeTransaction(view, header, transaction,
-            /*contextID=*/0, ledgerConfig, /*call=*/true, fee, blockGasLeft, m_chainId, &hashes);
+        auto takeSharedError = [&]() {
+            std::lock_guard lock(sharedError->mutex);
+            return sharedError->message;
+        };
+
+        protocol::TransactionReceipt::Ptr receipt;
+        try
+        {
+            receipt = co_await executor.executeTransaction(view, header, transaction,
+                /*contextID=*/0, ledgerConfig, /*call=*/true, fee, blockGasLeft, m_chainId,
+                &hashes);
+        }
+        catch (...)
+        {
+            // A poisoned slot is a storage fault even if validation wrapped it as consensus
+            // (missing inner node → get_account returns nullopt → insufficient funds).
+            if (auto firstError = takeSharedError(); !firstError.empty())
+                throw bcos::evm::engine::OpStorageError(
+                    fmt::format("OpScheduler: {} state read fault: {}", errTag, firstError));
+            throw;
+        }
 
         // Fail if the executor reported a storage read fault.
-        std::string firstError;
-        {
-            // SharedErrorSlot is mutex-guarded.
-            std::lock_guard lock(sharedError->mutex);
-            firstError = sharedError->message;
-        }
-        if (!firstError.empty())
+        if (auto firstError = takeSharedError(); !firstError.empty())
             throw bcos::evm::engine::OpStorageError(
                 fmt::format("OpScheduler: {} state read fault: {}", errTag, firstError));
         if (hashErr.has_value())
