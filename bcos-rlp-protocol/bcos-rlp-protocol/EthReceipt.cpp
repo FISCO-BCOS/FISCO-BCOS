@@ -230,6 +230,14 @@ bcos::Error::UniquePtr toEthReceiptData(
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::InvalidFieldset,
             "toEthReceiptData: empty cumulativeGasUsed payload: " + cumStr);
     }
+    // A u256 holds at most 256 bits: more hex digits than 64 (or decimal digits than 78)
+    // would wrap modulo 2^256 under boost's unchecked policy — bound before parsing so the
+    // value can never silently wrap into a wrong receipts-root input.
+    if (hexForm ? digits.size() > 64 : digits.size() > 78)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedLength,
+            "toEthReceiptData: cumulativeGasUsed exceeds 256 bits: " + cumStr);
+    }
     bool const shapeOk = hexForm ? std::all_of(digits.begin(), digits.end(), isHexDigit) :
                                    std::all_of(digits.begin(), digits.end(), isDecimalDigit);
     if (!shapeOk)

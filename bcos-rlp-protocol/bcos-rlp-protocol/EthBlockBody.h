@@ -66,9 +66,10 @@ public:
     EthBlock() = default;
     explicit EthBlock(EthBlockData data) : m_data(std::move(data)) {}
 
-    // Encode the block. Returns nullptr on success; fails closed (with an Error) on
-    // transaction elements the decoder would reject, so encode and decode accept the
-    // same set and no element is silently dropped into a hash input.
+    // Encode the block via EthBlock::rlpEncode — that entry point enforces the decoder's
+    // invariants (empty / too-short / invalid-type elements rejected) so no element is
+    // silently dropped into a hash input. The codec::rlp::encode overload below performs no
+    // such check.
     bcos::Error::UniquePtr rlpEncode(bcos::bytes& out) const;
     // Decodes a single block body (a 3- or 4-element list) from `data`.
     bcos::Error::UniquePtr rlpDecode(bcos::bytesConstRef data);
@@ -157,9 +158,11 @@ inline bcos::Error::UniquePtr decodeTx(bcos::bytesRef& _in, bcos::bytes& _out) n
         {
             return err;
         }
-        // geth's decodeTyped rejects len(b) <= 1 (errShortTypedTx): a one-byte payload is
-        // not decodable as any transaction type (e.g. the canonical element 81 80 -> {0x80}).
-        if (_out.size() <= 1)
+        // A real EIP-2718 typed transaction is `type || rlp(list of 8+ fields)`, so it is
+        // never shorter than ~10 bytes; geth's decodeTyped rejects len(b) <= 1
+        // (errShortTypedTx). This floor also caps the one-element-per-input-byte
+        // amplification (a bare 0xc0 empty-list element is handled by the legacy arm).
+        if (_out.size() < 10)
         {
             return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
                 "typed transaction too short in block body (errShortTypedTx)");
@@ -168,6 +171,14 @@ inline bcos::Error::UniquePtr decodeTx(bcos::bytesRef& _in, bcos::bytes& _out) n
         {
             return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
                 "invalid EIP-2718 type byte 0x00 in block body");
+        }
+        if (_out[0] >= BYTES_HEAD_BASE)
+        {
+            // A content byte >= 0x80 would be classified as a legacy list on re-encode
+            // (the encoder's discriminator is tx.front() < LIST_HEAD_BASE), so decode and
+            // encode would not be the identity. EIP-2718 types are confined to 0x01..0x7f.
+            return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
+                "EIP-2718 transaction type byte out of range in block body");
         }
         return nullptr;
     }

@@ -72,32 +72,42 @@ static const std::string kPreShanghaiHex =
     "cd804d8401c9c380825208846553f10080a0444444444444444444444444444444444444444444444444444444"
     "4444444444880000000000000000843b9aca00c0c0";  // [header, [], []]
 static const std::string kShanghaiHex =
-    "f90245f9021da05555555555555555555555555555555555555555555555555555555555555555a0eeeeeeeeeeeeee"
-    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee94ababababababababababababababababababababa0"
-    "1111111111111111111111111111111111111111111111111111111111111111a02222222222222222222222222222"
-    "222222222222222222222222222222222222a033333333333333333333333333333333333333333333333333333333"
-    "33333333b90100cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd804d8401c9c380825208846553f10080a04444"
-    "444444444444444444444444444444444444444444444444444444444444880000000000000000843b9aca00a06666"
-    "666666666666666666666666666666666666666666666666666666666666c9830102038404050607c0d9d801029433"
-    "3333333333333333333333333333333333333304";  // [header, [tx1, tx2], [], [w]]
+    "f90255f9021da0555555555555555555555555555555555555555555555555555555"
+    "5555555555a0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    "eeeeeeee94ababababababababababababababababababababa01111111111111111"
+    "111111111111111111111111111111111111111111111111a0222222222222222222"
+    "2222222222222222222222222222222222222222222222a033333333333333333333"
+    "33333333333333333333333333333333333333333333b90100cdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcd804d8401c9c380825208846553f10080a04444444444444444"
+    "44444444444444444444444444444444444444444444444488000000000000000084"
+    "3b9aca00a06666666666666666666666666666666666666666666666666666666666"
+    "666666d98b01c90102030405060708098c02ca0102030405060708090ac0d9d80102"
+    "94333333333333333333333333333333333333333304";  // [header, [tx1, tx2], [], [w]]
 static const std::string kShanghaiEmptyWHex =
-    "f90223f9021da05555555555555555555555555555555555555555555555555555555555555555a0eeeeeeeeeeeeee"
-    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee94ababababababababababababababababababababa0"
-    "1111111111111111111111111111111111111111111111111111111111111111a02222222222222222222222222222"
-    "222222222222222222222222222222222222a033333333333333333333333333333333333333333333333333333333"
-    "33333333b90100cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd804d8401c9c380825208846553f10080a04444"
-    "444444444444444444444444444444444444444444444444444444444444880000000000000000843b9aca00a06666"
-    "666666666666666666666666666666666666666666666666666666666666c0c0c0";  // [header, [], [], []]
+    "f90223f9021da0555555555555555555555555555555555555555555555555555555"
+    "5555555555a0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    "eeeeeeee94ababababababababababababababababababababa01111111111111111"
+    "111111111111111111111111111111111111111111111111a0222222222222222222"
+    "2222222222222222222222222222222222222222222222a033333333333333333333"
+    "33333333333333333333333333333333333333333333b90100cdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcd804d8401c9c380825208846553f10080a04444444444444444"
+    "44444444444444444444444444444444444444444444444488000000000000000084"
+    "3b9aca00a06666666666666666666666666666666666666666666666666666666666"
+    "666666c0c0c0";  // [header, [], [], []]
 
 static crypto::HashType hashOf(const char* hex8)
 {
@@ -227,7 +237,8 @@ BOOST_AUTO_TEST_CASE(goldenEncode)
 
     EthBlockData shanghai;
     shanghai.header = makeShanghaiHeader();
-    shanghai.transactions = {fromHex("010203"), fromHex("04050607")};
+    shanghai.transactions = {
+        fromHex("01c9010203040506070809"), fromHex("02ca0102030405060708090a")};
     shanghai.withdrawals = std::vector<EthWithdrawalData>{makeWithdrawal()};
     EthBlock b2(shanghai);
     bytes out2;
@@ -260,8 +271,8 @@ BOOST_AUTO_TEST_CASE(goldenDecode)
     BOOST_CHECK(!err2);
     BOOST_CHECK(b2.data().header == makeShanghaiHeader());
     BOOST_REQUIRE_EQUAL(b2.data().transactions.size(), 2u);
-    BOOST_CHECK(b2.data().transactions[0] == fromHex("010203"));
-    BOOST_CHECK(b2.data().transactions[1] == fromHex("04050607"));
+    BOOST_CHECK(b2.data().transactions[0] == fromHex("01c9010203040506070809"));
+    BOOST_CHECK(b2.data().transactions[1] == fromHex("02ca0102030405060708090a"));
     BOOST_CHECK(b2.data().ommers.empty());
     BOOST_REQUIRE(b2.data().withdrawals.has_value());
     BOOST_REQUIRE_EQUAL(b2.data().withdrawals->size(), 1u);
@@ -279,7 +290,7 @@ BOOST_AUTO_TEST_CASE(roundTrip)
 {
     EthBlockData body;
     body.header = makeShanghaiHeader();
-    body.transactions = {fromHex("010203")};
+    body.transactions = {fromHex("01c9010203040506070809")};
     body.ommers.push_back(makeLondonHeader());
     body.withdrawals = std::vector<EthWithdrawalData>{makeWithdrawal()};
     EthBlock b(body);
@@ -354,9 +365,39 @@ BOOST_AUTO_TEST_CASE(rejectsReservedTypeByte)
     body.transactions = {fromHex("0080")};  // 0x00 || rlp(empty payload)
     EthBlock b(body);
     bytes out;
-    BOOST_REQUIRE(!b.rlpEncode(out));
-    EthBlock decoded;
-    BOOST_CHECK(decoded.rlpDecode(ref(out)) != nullptr);
+    // The encoder now rejects the reserved 0x00 type byte (round-8 F2 typed arm).
+    BOOST_REQUIRE(b.rlpEncode(out) != nullptr);
+}
+
+// A bare single-byte transaction element must be rejected by the encoder.
+BOOST_AUTO_TEST_CASE(rejectsBareSingleByteTransaction)
+{
+    EthBlockData body;
+    body.header = makeLondonHeader();
+    body.transactions = {fromHex("02")};  // 1-byte element, no payload
+    EthBlock b(body);
+    bytes out;
+    BOOST_REQUIRE(b.rlpEncode(out) != nullptr);
+}
+
+// A string-wrapped element whose content starts at 0xc0..0xfe must be rejected by
+// decodeTx: re-encoding it would splice it raw (the encoder discriminates on
+// tx.front() < LIST_HEAD_BASE), so decode-then-encode would not be the identity.
+BOOST_AUTO_TEST_CASE(rejectsWrappedElementWithListByteContent)
+{
+    auto elem = fromHex("8ac9808080808080808080");  // RLP string len 10, content starts 0xc9
+    bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
+    bcos::bytes out;
+    BOOST_REQUIRE(codec::rlp::detail::decodeTx(in, out) != nullptr);
+}
+
+// A typed element below the 10-byte floor (type byte + 9-field list) must be rejected.
+BOOST_AUTO_TEST_CASE(rejectsShortTypedTransaction)
+{
+    auto elem = fromHex("83010203");  // 3-byte typed element (type 0x01 + 2 bytes)
+    bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
+    bcos::bytes out;
+    BOOST_REQUIRE(codec::rlp::detail::decodeTx(in, out) != nullptr);
 }
 
 // An empty transaction element must be rejected by the encoder (round-6 lower bound

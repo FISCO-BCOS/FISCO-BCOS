@@ -368,6 +368,28 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedGas)
         BOOST_REQUIRE(!protocol::toEthReceiptData(*receipt, 1, eth));
         BOOST_CHECK_EQUAL(eth.cumulativeGasUsed, u256(21000));
     }
+    // Over-256-bit values must fail closed (would wrap modulo 2^256 under boost's
+    // unchecked policy).
+    {
+        auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        auto& inner = receipt->inner();
+        inner.data.status = 0;
+        inner.data.gasUsed = "21000";
+        inner.cumulativeGasUsed = std::string(65, 'f');  // 65 hex digits > 256 bits
+        inner.logsBloom.assign(256, static_cast<char>(0xab));
+        protocol::EthReceiptData eth;
+        BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, 1, eth) != nullptr);
+    }
+    {
+        auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        auto& inner = receipt->inner();
+        inner.data.status = 0;
+        inner.data.gasUsed = "21000";
+        inner.cumulativeGasUsed = std::string(79, '9');  // 79 decimal digits > 256 bits
+        inner.logsBloom.assign(256, static_cast<char>(0xab));
+        protocol::EthReceiptData eth;
+        BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, 1, eth) != nullptr);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

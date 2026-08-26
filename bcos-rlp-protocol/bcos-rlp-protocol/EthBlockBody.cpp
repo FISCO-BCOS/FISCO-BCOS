@@ -48,6 +48,16 @@ bcos::Error::UniquePtr EthBlock::rlpEncode(bcos::bytes& out) const
                     "EthBlock::rlpEncode: invalid legacy transaction element");
             }
         }
+        else
+        {
+            // Typed arm: mirror detail::decodeTx — the type byte must be 0x01..0x7f and the
+            // payload must be long enough to be a real EIP-2718 typed transaction.
+            if (tx.size() < 10 || tx.front() == 0 || tx.front() >= BYTES_HEAD_BASE)
+            {
+                return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
+                    "EthBlock::rlpEncode: invalid typed transaction element");
+            }
+        }
     }
     codec::rlp::encode(out, m_data);
     return nullptr;
