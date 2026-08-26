@@ -20,9 +20,10 @@
 #include "bcos-task/TBBWait.h"
 #include "ethereum-executor/EVMSupport.h"  // eth::evm::toIntxU256
 #include "opstack-executor/OpCommon.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
-#include "opstack-executor/Storage2State.h"  // Storage2State / SharedErrorSlot
-#include <bcos-codec/rlp/Common.h>           // BYTES_HEAD_BASE (consensus deposit-envelope decode)
-#include <bcos-codec/rlp/RLPDecode.h>        // decodeHeader / decode / decodeItems
+#include "opstack-executor/OpDepositEncode.h"  // detail::encodeRlpItem (call-path sizing envelope)
+#include "opstack-executor/Storage2State.h"    // Storage2State / SharedErrorSlot
+#include <bcos-codec/rlp/Common.h>     // BYTES_HEAD_BASE (consensus deposit-envelope decode)
+#include <bcos-codec/rlp/RLPDecode.h>  // decodeHeader / decode / decodeItems
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>   // isTypedWeb3Envelope (header-only)
 #include <bcos-utilities/BoostLog.h>            // BCOS_LOG
 #include <bcos-utilities/DataConvertUtility.h>  // safeFromHex / safeFromQuantity
@@ -513,6 +514,67 @@ namespace engine = bcos::evm::engine;
     return envelopeChainIdMismatch(tx.extraTransactionBytes(), nodeChainId);
 }
 
+/// Unsigned EIP-2718 sizing envelope for eth_call / estimateGas. CallRequest cannot carry a
+/// signed envelope, but opValidate still needs non-empty bytes for L1-cost / calldata-gas
+/// estimates. Legacy has no type prefix (type 0 is not an EIP-2718 marker). Typed forms get
+/// their type byte and an empty access-list slot; blobHashes / authorizationList are omitted
+/// (CallRequest does not populate them). Signatures are omitted — there is none on this path.
+[[nodiscard]] inline bcos::bytes synthesizeCallSizingEnvelope(
+    evmone::state::Transaction const& evmTx)
+{
+    namespace rlp = bcos::codec::rlp;
+    namespace enc = bcos::evm::opstack::detail;
+    bcos::bytes payload;
+    auto appendU64 = [&](uint64_t v) { enc::encodeRlpItem(payload, v); };
+    auto appendU256 = [&](intx::uint256 const& v) { enc::encodeRlpItem(payload, v); };
+    auto appendBytes = [&](evmc::bytes_view b) { enc::encodeRlpItem(payload, b); };
+    auto appendTo = [&] {
+        if (evmTx.to.has_value())
+            appendBytes({evmTx.to->bytes, sizeof(evmTx.to->bytes)});
+        else
+            appendBytes({});
+    };
+    auto appendEmptyList = [&] {
+        rlp::encodeHeader(payload, {.isList = true, .payloadLength = 0});
+    };
+
+    if (evmTx.type == evmone::state::Transaction::Type::legacy)
+    {
+        appendU64(evmTx.nonce);
+        appendU256(evmTx.max_gas_price);
+        appendU64(static_cast<uint64_t>(evmTx.gas_limit));
+        appendTo();
+        appendU256(evmTx.value);
+        appendBytes({evmTx.data.data(), evmTx.data.size()});
+    }
+    else
+    {
+        appendU64(evmTx.chain_id);
+        appendU64(evmTx.nonce);
+        if (evmTx.type == evmone::state::Transaction::Type::access_list)
+        {
+            appendU256(evmTx.max_gas_price);
+        }
+        else
+        {
+            appendU256(evmTx.max_priority_gas_price);
+            appendU256(evmTx.max_gas_price);
+        }
+        appendU64(static_cast<uint64_t>(evmTx.gas_limit));
+        appendTo();
+        appendU256(evmTx.value);
+        appendBytes({evmTx.data.data(), evmTx.data.size()});
+        appendEmptyList();  // accessList
+    }
+
+    bcos::bytes out;
+    if (evmTx.type != evmone::state::Transaction::Type::legacy)
+        out.push_back(static_cast<bcos::byte>(evmTx.type));
+    rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+    out.insert(out.end(), payload.begin(), payload.end());
+    return out;
+}
+
 /// Block-path only: address(0) is the eth_call default, but a sealed block must not execute
 /// with that sender. Used by both m_prepare (after toEvmoneTransaction) and processOpBlock
 /// (evmone::state::Transaction already in hand).
@@ -888,7 +950,7 @@ public:
             protocol::TransactionReceipt::Ptr receipt;
             if (transaction.isDepositTx())
             {
-                receipt = m_receipt;  // executeDeposit already applied the state diff
+                receipt = m_receipt;  // executeDeposit applied the diff only when call=false
             }
             else
             {
@@ -1063,7 +1125,7 @@ public:
     task::Task<protocol::TransactionReceipt::Ptr> executeDeposit(Storage& storage,
         protocol::BlockHeader const& blockHeader, bcos::evm::opstack::DepositTx const& dep,
         uint64_t chainId, int64_t blockGasLeft, ledger::LedgerConfig const& ledgerConfig,
-        evmone::state::BlockHashes const* blockHashes = nullptr, bool call = false)
+        evmone::state::BlockHashes const* blockHashes, bool call)
     {
         namespace op = bcos::evm::opstack;
 
@@ -1206,7 +1268,7 @@ private:
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpFeeParams const& fee,
         int64_t blockGasLeft, std::optional<uint64_t> chainId,
-        evmone::state::BlockInfo const* prebuiltBlockInfo, bool call = false)
+        evmone::state::BlockInfo const* prebuiltBlockInfo, bool call)
     {
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
@@ -1278,63 +1340,7 @@ private:
         bcos::bytes synthesizedEnvelope;
         if (call && env.empty())
         {
-            namespace rlp = bcos::codec::rlp;
-            synthesizedEnvelope.push_back(static_cast<bcos::byte>(evmTx.type));
-            bcos::bytes payload;
-            auto appendU64 = [&payload](uint64_t v) {
-                bcos::bytes out;
-                rlp::encode(out, v);
-                payload.insert(payload.end(), out.begin(), out.end());
-            };
-            auto appendBytes = [&payload](evmc::bytes_view b) {
-                bcos::bytes out;
-                rlp::encode(out, bcos::bytesConstRef{b.data(), b.size()});
-                payload.insert(payload.end(), out.begin(), out.end());
-            };
-            if (evmTx.type == evmone::state::Transaction::Type::legacy)
-            {
-                appendU64(evmTx.nonce);
-                appendU64(static_cast<uint64_t>(evmTx.max_gas_price));
-                appendU64(static_cast<uint64_t>(evmTx.gas_limit));
-                if (evmTx.to.has_value())
-                    appendBytes({evmTx.to->bytes, sizeof(evmTx.to->bytes)});
-                else
-                    appendBytes({});
-                appendBytes({});  // value: RLP zero (empty item)
-                appendBytes({evmTx.data.data(), evmTx.data.size()});
-            }
-            else
-            {
-                // Typed (0x01-0x04): [chainId, nonce, ...fee fields..., gasLimit, to, value,
-                // data, ...]. chainId is synthesized as 0 — on the simulation path the chainId
-                // gate is skipped (chainId=nullopt) and only sizing reads the envelope.
-                appendU64(0);  // chainId
-                appendU64(evmTx.nonce);
-                if (evmTx.type == evmone::state::Transaction::Type::access_list)
-                {
-                    appendU64(static_cast<uint64_t>(evmTx.max_gas_price));  // gasPrice
-                }
-                else
-                {
-                    appendU64(static_cast<uint64_t>(evmTx.max_priority_gas_price));
-                    appendU64(static_cast<uint64_t>(evmTx.max_gas_price));
-                }
-                appendU64(static_cast<uint64_t>(evmTx.gas_limit));
-                if (evmTx.to.has_value())
-                    appendBytes({evmTx.to->bytes, sizeof(evmTx.to->bytes)});
-                else
-                    appendBytes({});
-                appendBytes({});  // value: RLP zero (empty item)
-                appendBytes({evmTx.data.data(), evmTx.data.size()});
-                // accessList (0x01-0x04) and blobHashes (0x03) omitted: the synthesized
-                // envelope is a sizing input only (flzCompressLen / bedrockCalldataGasUsed
-                // read the calldata, not the access list), and their RLP types are not
-                // needed to keep the L1-cost estimate self-consistent with the simulated tx.
-            }
-            bcos::bytes list;
-            rlp::encodeHeader(list, {.isList = true, .payloadLength = payload.size()});
-            list.insert(list.end(), payload.begin(), payload.end());
-            synthesizedEnvelope.insert(synthesizedEnvelope.end(), list.begin(), list.end());
+            synthesizedEnvelope = synthesizeCallSizingEnvelope(evmTx);
             env = evmc::bytes_view{synthesizedEnvelope.data(), synthesizedEnvelope.size()};
         }
 
@@ -1376,9 +1382,9 @@ private:
         bcos::evm::evmstate::Storage2State<Storage>& stateView,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpTxProperties const& props,
-        evmone::state::StateDiff& diff, uint64_t chainId = 0, int64_t blockGasLeft = 0,
-        evmone::state::BlockHashes const* blockHashes = nullptr,
-        evmone::state::BlockInfo const* prebuiltBlockInfo = nullptr, bool call = false)
+        evmone::state::StateDiff& diff, uint64_t chainId, int64_t blockGasLeft,
+        evmone::state::BlockHashes const* blockHashes,
+        evmone::state::BlockInfo const* prebuiltBlockInfo, bool call)
     {
         namespace op = bcos::evm::opstack;
 

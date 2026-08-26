@@ -195,6 +195,36 @@ BOOST_AUTO_TEST_CASE(SixArgCallPathExecutesSimulation)
     BOOST_CHECK_EQUAL(countRows(storage), 0u);
 }
 
+/// Round-12 F1: the 6-argument form must still refuse the block path (call=false). That path
+/// needs a scheduler-provided BlockContext with fee / blockHashes; throwing is the contract.
+BOOST_AUTO_TEST_CASE(SixArgBlockPathStillThrows)
+{
+    MutableStorage storage;
+    auto header = makeCallHeader();
+
+    bcos::ledger::LedgerConfig ledgerConfig;
+    auto cfg = bcos::evm::opstack::jovianConfig();
+    ledgerConfig.setEVMCRevision(cfg.rev);
+
+    FakeTransaction tx;
+    bcos::executor_v1::opstack::OpstackExecutor executor{
+        bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+        std::make_shared<bcos::crypto::Keccak256>(), cfg};
+
+    try
+    {
+        (void)bcos::task::syncWait(executor.executeTransaction(
+            storage, *header, tx, /*contextID=*/0, ledgerConfig, /*call=*/false));
+        BOOST_FAIL("6-arg call=false must throw");
+    }
+    catch (bcos::evm::OpConsensusError const& e)
+    {
+        BOOST_TEST(std::string(e.what()).find(
+                       "6-arg executeTransaction block execution requires a") != std::string::npos);
+    }
+    BOOST_CHECK_EQUAL(countRows(storage), 0u);
+}
+
 /// Round-12 F4: a deposit transaction on the call path (call=true) must also discard its
 /// simulated diff — executeDeposit's write-back must honour the call flag like m_finish does.
 BOOST_AUTO_TEST_CASE(DepositCallPathLeavesStorageUnmodified)
