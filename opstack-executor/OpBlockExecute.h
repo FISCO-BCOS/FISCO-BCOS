@@ -212,15 +212,17 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
     // classification so the deposit loop / this rebuild / processOpBlock can't drift).
     // Length guard: sealOpBlock iterates result.receipts and indexes txTypes[i] — a caller
     // passing mismatched lengths would read out of bounds (rawTxBytes and receipts are
-    // independent parameters; lockstep callers are unaffected).
+    // independent parameters; lockstep callers are unaffected). Internal-invariant guard: a
+    // length mismatch is a caller programming error, not a block-content rejection, so it is
+    // classified as std::logic_error rather than OpConsensusError (INVALID).
     if (rawTxBytes.size() != receipts.size())
-        throw OpConsensusError("op block: receipts/rawTxBytes length mismatch");
+        throw std::logic_error("op block: receipts/rawTxBytes length mismatch (caller bug)");
     std::vector<uint8_t> txTypes;
     txTypes.reserve(rawTxBytes.size());
     for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
     {
         if (rawTxBytes[i].empty())  // defensive: the per-tx loop already rejects empty envelopes
-            throw OpConsensusError("op block: empty envelope");
+            throw std::logic_error("op block: empty envelope (caller bug)");
         txTypes.emplace_back(op::classifyTxType(rawTxBytes[i][0]));
     }
 

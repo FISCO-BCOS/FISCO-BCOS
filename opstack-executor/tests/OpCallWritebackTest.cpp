@@ -237,6 +237,46 @@ BOOST_AUTO_TEST_CASE(LegacyCallPathExecutesSimulation)
     BOOST_CHECK_EQUAL(countRows(storage), 0u);
 }
 
+/// Round-14 F2: the call-path fee-cap clamp must apply ONLY to a pricing-less call (no explicit
+/// gasPrice / maxFeePerGas). A caller that explicitly requested a cap below the block base fee
+/// keeps it, so opValidate's FEE_CAP_LESS_THAN_BLOCKS rejects the simulation exactly like
+/// op-geth's ErrFeeCapTooLow — not silently simulated at an unrequested price. makeCallHeader
+/// sets base_fee = 7; an explicit cap of 5 must fail validation.
+BOOST_AUTO_TEST_CASE(ExplicitLowFeeCapCallRejectedNotClamped)
+{
+    MutableStorage storage;
+    auto header = makeCallHeader();
+
+    bcos::ledger::LedgerConfig ledgerConfig;
+    auto cfg = bcos::evm::opstack::jovianConfig();
+    ledgerConfig.setEVMCRevision(cfg.rev);
+    evmc_uint256be chainIdBe{};
+    chainIdBe.bytes[31] = 10;
+    ledgerConfig.setChainId(chainIdBe);
+
+    FakeTransaction tx;
+    tx.m_maxFeePerGas = bcos::u256{5};  // explicit, below the header base fee (7)
+    tx.m_maxPriorityFeePerGas = bcos::u256{1};
+    bcos::executor_v1::opstack::OpstackExecutor executor{
+        bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+        std::make_shared<bcos::crypto::Keccak256>(), cfg};
+
+    try
+    {
+        (void)bcos::task::syncWait(executor.executeTransaction(
+            storage, *header, tx, /*contextID=*/0, ledgerConfig, /*call=*/true));
+        BOOST_FAIL("explicit low fee cap must be rejected, not silently clamped up");
+    }
+    catch (bcos::evm::OpConsensusError const& e)
+    {
+        // m_prepare's OpTxValidationFailed is normalized to OpConsensusError (INVALID) by
+        // executeTransaction, carrying the evmone validation message.
+        BOOST_TEST(std::string(e.what()).find("max fee per gas less than block base fee") !=
+                   std::string::npos);
+    }
+    BOOST_CHECK_EQUAL(countRows(storage), 0u);
+}
+
 /// Round-12 F1: the 6-argument form must still refuse the block path (call=false). That path
 /// needs a scheduler-provided BlockContext with fee / blockHashes; throwing is the contract.
 BOOST_AUTO_TEST_CASE(SixArgBlockPathStillThrows)

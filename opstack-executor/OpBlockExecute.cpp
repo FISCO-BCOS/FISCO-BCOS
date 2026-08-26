@@ -55,8 +55,34 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     const std::function<void(const evmone::state::StateDiff&)>& applyDiff)
 {
+    // Storage write-back failures must leave as OpStorageError (-32603), never a bare
+    // runtime_error — the same classification the per-tx path applies in m_finish /
+    // executeDeposit / finalizeBlock (Storage2State::applyDiff poisons AND rethrows raw).
+    // Without this normalization, a storage fault on the block path would escape unclassified
+    // and diverge from the documented error contract.
+    auto applyDiffChecked = [&](const evmone::state::StateDiff& diff) {
+        try
+        {
+            applyDiff(diff);
+        }
+        catch (const bcos::evm::engine::OpStorageError&)
+        {
+            throw;
+        }
+        catch (const std::exception& e)
+        {
+            throw bcos::evm::engine::OpStorageError(
+                std::string("op block: storage write-back failed: ") + e.what());
+        }
+        catch (...)
+        {
+            throw bcos::evm::engine::OpStorageError(
+                "op block: storage write-back failed: unknown exception");
+        }
+    };
+
     // Step 1: pre-block system call (4788/2935; gating/skip handled inside evmone).
-    applyDiff(bcos::evm::sanitizeStateDiff(
+    applyDiffChecked(bcos::evm::sanitizeStateDiff(
         view, evmone::state::system_call_block_start(view, block, hashes, cfg.rev, vm)));
 
     // Step 2: first tx must be a deposit (hard reject) + L1-attributes content (warn, op-geth
@@ -109,7 +135,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                         std::string("op block: deposit execution failed: ") + e.what());
                 }
             }();
-            applyDiff(diff);
+            applyDiffChecked(diff);
             const auto gasUsed = narrowGasUsed(receipt->gasUsed());
             blockGasLeft -= gasUsed;
             cumulative += gasUsed;
@@ -124,9 +150,13 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             seenNonDeposit = true;
             if (!feeLoaded)
             {
-                // Fee params lazily loaded at the first normal tx (op-geth's per-block cache). DA
-                // scalar reads calldata[176:178] (authoritative even if the attributes deposit
-                // rolled back L1Block slot8); activation block (176B) forces 0.
+                // Fee params lazily loaded at the first normal tx (op-geth's per-block cache).
+                // loadOpFeeParams reads the L1Block predeploy storage slots — same source as
+                // op-geth's rollup cost, which also reads the L1Block predeploy (written from
+                // the L1 attributes deposit) rather than re-parsing the deposit calldata. The
+                // Jovian-only DA scalar is the one deliberate exception: it is read directly
+                // from calldata[176:178] so it stays authoritative even if the attributes
+                // deposit rolled back L1Block slot8; the activation block (176B) forces 0.
                 fee = loadOpFeeParams(view);
                 if (cfg.has_da_footprint)
                 {
@@ -187,7 +217,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                         std::string("op block: transaction execution failed: ") + e.what());
                 }
             }();
-            applyDiff(diff);
+            applyDiffChecked(diff);
             const auto gasUsed = narrowGasUsed(receipt->gasUsed());
             blockGasLeft -= gasUsed;
             cumulative += gasUsed;
@@ -200,7 +230,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
 
     // Step 4: end-of-block finalize.
     result.finalizeDiff = finalizeOpBlock(view, cfg, block.coinbase);
-    applyDiff(result.finalizeDiff);
+    applyDiffChecked(result.finalizeDiff);
 
     result.gasUsed = cumulative;
     return result;
@@ -348,9 +378,11 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     // Guard before any indexing: a caller that builds an OpBlockResult by hand (part-5's
     // OpScheduler, or a test) could otherwise feed mismatched receipts/txTypes — txTypes[i] is
     // indexed below and its bytes become the receipts-root leaf's type prefix, so a length
-    // mismatch would silently produce a wrong header commitment (an out-of-bounds read).
+    // mismatch would silently produce a wrong header commitment (an out-of-bounds read). This is
+    // a caller programming error (internal invariant), not a block-content rejection — mapped to
+    // std::logic_error, never INVALID.
     if (result.txTypes.size() != result.receipts.size())
-        throw OpConsensusError("op block: receipts/txTypes length mismatch");
+        throw std::logic_error("op block: receipts/txTypes length mismatch (caller bug)");
     OpBlockSeal seal{};
 
     // receipts-root: var-key trie (key = rlp(index), leaf = EncodeIndex encoding).

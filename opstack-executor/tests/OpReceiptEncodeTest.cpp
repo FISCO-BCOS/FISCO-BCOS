@@ -487,4 +487,27 @@ BOOST_AUTO_TEST_CASE(JovianDaFootprintOverflowIsConsensusReject)
         bcos::evm::OpConsensusError, consensusWhatContains("DA footprint overflows uint64"));
 }
 
+// Round-14 F5: a receipts/txTypes length mismatch is an internal-invariant violation (a caller
+// programming error), not a block-content rejection — it must surface as std::logic_error, never
+// OpConsensusError (which maps to INVALID and would blame the block for the caller's bug).
+BOOST_AUTO_TEST_CASE(ReceiptsTxTypesLengthMismatchIsLogicError)
+{
+    auto receipt = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
+        std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{}, 1);
+    receipt->setCumulativeGasUsed("21000");
+    bcos::bytes bloom(256, 0x00);
+    receipt->setLogsBloom(bcos::ref(bloom));
+
+    bcos::evm::opstack::OpBlockResult mismatch;
+    mismatch.receipts.push_back(receipt);
+    mismatch.txTypes.push_back(static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+    mismatch.txTypes.push_back(static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+    BOOST_CHECK_EXCEPTION(
+        (void)bcos::evm::opstack::sealOpBlock(mismatch, bcos::evm::opstack::jovianConfig(), {}),
+        std::logic_error, [](std::logic_error const& e) {
+            return std::string(e.what()).find("receipts/txTypes length mismatch") !=
+                   std::string::npos;
+        });
+}
+
 BOOST_AUTO_TEST_SUITE_END()

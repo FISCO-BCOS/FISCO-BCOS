@@ -519,6 +519,15 @@ namespace engine = bcos::evm::engine;
 /// estimates. Legacy has no type prefix (type 0 is not an EIP-2718 marker). Typed forms get
 /// their type byte and an empty access-list slot; blobHashes / authorizationList are omitted
 /// (CallRequest does not populate them). Signatures are omitted — there is none on this path.
+///
+/// KNOWN ESTIMATE BIAS (accepted, documented): the synthesized envelope is ~65 bytes shorter
+/// than the eventually-signed transaction (v/r/s), so estimateGas's L1-cost component is
+/// systematically LOW for the same calldata. This is inherent to pre-signature estimation:
+/// the caller has not signed yet, so the exact signature bytes (and their flz-compressibility)
+/// cannot be known; appending a zero placeholder would mislead the size-based L1-cost formula
+/// (zeros compress differently from real v/r/s). The BLOCK path always prices the real signed
+/// envelope, so the bias is confined to the estimate returned by eth_call/estimateGas, not to
+/// executed transactions.
 [[nodiscard]] inline bcos::bytes synthesizeCallSizingEnvelope(
     evmone::state::Transaction const& evmTx)
 {
@@ -1293,8 +1302,12 @@ private:
         // eth_call (call=true) simulates without fee constraints — op-geth's eth_call does
         // not enforce max_gas_price >= base_fee. A pricing-less call (e.g. the RPC default
         // 2 gwei cap) would fail MAX_FEE_PER_GAS_TOO_LOW once the OP base fee exceeds it, so
-        // clamp the cap to the block base fee for the simulation.
-        if (call)
+        // clamp the cap to the block base fee for the simulation. Only a call that carries NO
+        // explicit fee cap (gasPrice / maxFeePerGas both unset — the pricing-less shape) gets
+        // clamped: a caller that explicitly requested a cap below the base fee keeps it, and
+        // opValidate's FEE_CAP_LESS_THAN_BLOCKS (evmone state.cpp) then rejects it exactly like
+        // op-geth's ErrFeeCapTooLow instead of silently simulating at an unrequested price.
+        if (call && !transaction.gasPrice().has_value() && !transaction.maxFeePerGas().has_value())
         {
             evmTx.max_gas_price = std::max(evmTx.max_gas_price, intx::uint256{blockInfo.base_fee});
         }

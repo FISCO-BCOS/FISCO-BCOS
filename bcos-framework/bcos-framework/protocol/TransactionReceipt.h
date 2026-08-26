@@ -89,6 +89,10 @@ public:
     virtual size_t size() const = 0;
 
     // Fields after block execution
+    // cumulativeGasUsed is stored as a DECIMAL string (not 0x-hex) on the OP Stack path:
+    // eth_getTransactionReceipt reads it via safeCastToU256 (boost::lexical_cast, decimal),
+    // and parseCumulativeGasUsed accepts both forms for robustness. Keep the decimal
+    // convention; a future switch to hex must update the RPC reader in the same change.
     virtual std::string_view cumulativeGasUsed() const = 0;
     virtual void setCumulativeGasUsed(std::string cumulativeGasUsed) = 0;
     virtual bcos::bytesConstRef logsBloom() const = 0;
