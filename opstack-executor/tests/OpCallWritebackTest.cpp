@@ -44,6 +44,7 @@ public:
     uint8_t m_kind = 2;
     bcos::bytes m_input;
     int64_t m_gasLimit = 100000;
+    std::optional<bcos::u256> m_gasPrice;
     std::optional<bcos::u256> m_maxFeePerGas = bcos::u256{1000};
     std::optional<bcos::u256> m_maxPriorityFeePerGas = bcos::u256{10};
     std::string m_sender = std::string(sizeof(evmc_address), '\xaa');  // raw 20 bytes
@@ -67,7 +68,7 @@ public:
         return bcos::bytesConstRef{m_input.data(), m_input.size()};
     }
     int64_t gasLimit() const override { return m_gasLimit; }
-    std::optional<bcos::u256> gasPrice() const override { return std::nullopt; }
+    std::optional<bcos::u256> gasPrice() const override { return m_gasPrice; }
     std::optional<bcos::u256> maxFeePerGas() const override { return m_maxFeePerGas; }
     std::optional<bcos::u256> maxPriorityFeePerGas() const override
     {
@@ -188,6 +189,47 @@ BOOST_AUTO_TEST_CASE(SixArgCallPathExecutesSimulation)
         std::make_shared<bcos::crypto::Keccak256>(), cfg};
 
     // Six arguments: the TransactionExecutor-concept form. call=true → real simulation.
+    auto receipt = bcos::task::syncWait(executor.executeTransaction(
+        storage, *header, tx, /*contextID=*/0, ledgerConfig, /*call=*/true));
+
+    BOOST_REQUIRE(receipt != nullptr);
+    BOOST_CHECK_EQUAL(countRows(storage), 0u);
+}
+
+/// Round-13 F1: the legacy (kind 0) branch of synthesizeCallSizingEnvelope — the shape a real
+/// RPC eth_call takes, since CallRequest::takeToTransaction never sets web3TypedTxKind — must
+/// execute end-to-end and leave storage untouched, and must encode the six unsigned legacy
+/// fields in exactly the op-geth order. The byte-level pin catches a field-order regression
+/// that the run itself would miss (L1-cost sizing only reads lengths / RLP shapes).
+BOOST_AUTO_TEST_CASE(LegacyCallPathExecutesSimulation)
+{
+    MutableStorage storage;
+    auto header = makeCallHeader();
+
+    bcos::ledger::LedgerConfig ledgerConfig;
+    auto cfg = bcos::evm::opstack::jovianConfig();
+    ledgerConfig.setEVMCRevision(cfg.rev);
+    evmc_uint256be chainIdBe{};
+    chainIdBe.bytes[31] = 10;
+    ledgerConfig.setChainId(chainIdBe);
+
+    FakeTransaction tx;
+    tx.m_kind = 0;  // legacy — the kind an RPC-built call never sets (stays 0)
+    tx.m_gasPrice = bcos::u256{1000};
+    tx.m_maxFeePerGas = std::nullopt;  // legacy fee field is gasPrice, not maxFeePerGas
+    tx.m_maxPriorityFeePerGas = std::nullopt;
+    bcos::executor_v1::opstack::OpstackExecutor executor{
+        bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+        std::make_shared<bcos::crypto::Keccak256>(), cfg};
+
+    // Pin the legacy sizing envelope bytes: no type prefix, then the six unsigned fields
+    // (nonce, gasPrice, gasLimit, to, value, data). nonce 0 → 0x80; gasPrice 1000 → 82 03 e8;
+    // gasLimit 100000 → 83 01 86 a0; to = 0x94 + 20 bytes; value 0 → 0x80; data empty → 0x80.
+    // Payload = 1+3+4+21+1+1 = 31 bytes → long-form list header 0xdf.
+    auto const evmTx = bcos::executor_v1::eth::toEvmoneTransaction(tx);
+    BOOST_CHECK_EQUAL(bcos::toHex(bcos::executor_v1::opstack::synthesizeCallSizingEnvelope(evmTx)),
+        "df808203e8830186a094811a752c8cd697e3cb27279c330ed1ada745a8d78080");
+
     auto receipt = bcos::task::syncWait(executor.executeTransaction(
         storage, *header, tx, /*contextID=*/0, ledgerConfig, /*call=*/true));
 

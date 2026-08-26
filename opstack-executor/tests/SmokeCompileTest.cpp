@@ -1,9 +1,10 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// SmokeCompileTest — opstack-executor is a pure INTERFACE (header-only) library whose templates
-// compile ONLY at instantiation. This TU includes every public header and EXPLICITLY
-// INSTANTIATES the template surface, so a base-API break fails this build immediately.
+// SmokeCompileTest — opstack-executor is a compiled library (OpBlockExecute.cpp and friends),
+// but its template surface is header-only and compiles ONLY at instantiation. This TU includes
+// every public header and EXPLICITLY INSTANTIATES that surface, so a base-API break fails this
+// build immediately.
 
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpCommitments.h>
