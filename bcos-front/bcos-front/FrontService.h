@@ -31,7 +31,7 @@
 
 namespace bcos::front
 {
-class FrontService : public FrontServiceInterface, public std::enable_shared_from_this<FrontService>
+class FrontService : public FrontServiceInterface
 {
 public:
     using Ptr = std::shared_ptr<FrontService>;

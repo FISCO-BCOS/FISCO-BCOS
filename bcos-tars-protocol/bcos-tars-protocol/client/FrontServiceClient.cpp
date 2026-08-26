@@ -213,7 +213,7 @@ bcos::task::Task<bcos::front::SendResult> bcostars::FrontServiceClient::sendMess
         FrontServiceClient* m_self;
         int m_moduleID;
         bcos::crypto::NodeIDPtr m_nodeID;
-        std::shared_ptr<bcos::bytes> m_buffer;
+        std::shared_ptr<std::vector<char>> m_buffer;
         uint32_t m_timeout;
         std::shared_ptr<CompletionState> m_state;
 
@@ -226,15 +226,16 @@ bcos::task::Task<bcos::front::SendResult> bcostars::FrontServiceClient::sendMess
             auto nodeIDData = m_nodeID->data();
             m_self->m_proxy->tars_set_timeout(m_self->c_frontServiceTimeout)
                 ->async_asyncSendMessageByNodeID(new Callback(state, m_self), m_moduleID,
-                    std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
-                    std::vector<char>(m_buffer->begin(), m_buffer->end()), m_timeout,
+                    std::vector<char>(nodeIDData.begin(), nodeIDData.end()), *m_buffer, m_timeout,
                     (m_timeout > 0));
         }
 
         bcos::front::SendResult await_resume() { return std::move(m_state->result); }
     };
 
-    auto buffer = std::make_shared<bcos::bytes>();
+    // materialise the joined payload directly as the std::vector<char> the RPC argument needs —
+    // a single pass and one allocation, no second copy in await_suspend
+    auto buffer = std::make_shared<std::vector<char>>();
     for (auto const& data : _payloads)
     {
         buffer->insert(buffer->end(), data.begin(), data.end());

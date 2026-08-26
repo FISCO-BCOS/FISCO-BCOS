@@ -249,7 +249,8 @@ void FrontService::start()
     m_run = true;
 
     // try to getNodeIDs from gateway
-    auto self = std::weak_ptr<FrontService>(shared_from_this());
+    auto self = std::weak_ptr<FrontService>(
+        std::static_pointer_cast<FrontService>(shared_from_this()));
     m_gatewayInterface->asyncGetGroupNodeInfo(m_groupID,
         [self](const Error::Ptr& _error, const bcos::gateway::GroupNodeInfo::Ptr& _groupNodeInfo) {
             if (_error)
@@ -406,7 +407,8 @@ std::string FrontService::registerCallback(
             *m_ioService, std::chrono::milliseconds(_timeout));
 
         callback->timeoutHandler = timeoutHandler;
-        auto frontServiceWeakPtr = std::weak_ptr<FrontService>(shared_from_this());
+        auto frontServiceWeakPtr = std::weak_ptr<FrontService>(
+            std::static_pointer_cast<FrontService>(shared_from_this()));
         // callback->startTime = utcSteadyTime();
         timeoutHandler->async_wait(
             [frontServiceWeakPtr, _nodeID, uuid](const boost::system::error_code& e) {
@@ -479,7 +481,7 @@ void FrontService::asyncSendMessageByNodeIDByOwnedPayload(
     // gateway-session-lock-acquiring send on its own thread. The owned payload is captured by the
     // launched coroutine -> the message body is sent as a view (zero-copy).
     enqueueSend([this, moduleID, nodeID = std::move(nodeID), payload = std::move(payload)]() {
-        auto self = shared_from_this();
+        auto self = std::static_pointer_cast<FrontService>(shared_from_this());
         task::wait(
             [](FrontService::Ptr _self, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
                 bytesPointer _payload) -> task::Task<void> {
@@ -602,7 +604,7 @@ void FrontService::enqueueSend(std::function<void()> _sendTask)
     // for the send and no-ops once it is gone. (A shared_ptr capture would also form a cycle:
     // FrontService -> Strand -> queued task -> FrontService.)
     m_sendStrand->post([weak = weak_from_this(), task = std::move(_sendTask)]() mutable {
-        if (auto self = weak.lock())
+        if (auto self = std::static_pointer_cast<FrontService>(weak.lock()))
         {
             // this task no longer occupies queue space; decrement before running so the counter
             // reflects queued depth while a blocking gateway send is in flight
@@ -637,7 +639,7 @@ void FrontService::onReceiveGroupNodeInfo(const std::string& _groupID,
     auto self = weak_from_this();
     dispatchTo(
         *m_ioServicePool, [self, _groupID, _groupNodeInfo = std::move(_groupNodeInfo)]() mutable {
-            if (auto frontService = self.lock())
+            if (auto frontService = std::static_pointer_cast<FrontService>(self.lock()))
             {
                 frontService->notifyGroupNodeInfo(_groupID, _groupNodeInfo);
             }
@@ -714,7 +716,8 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
     {
         return;
     }
-    auto frontServiceWeakPtr = std::weak_ptr<FrontService>(shared_from_this());
+    auto frontServiceWeakPtr = std::weak_ptr<FrontService>(
+        std::static_pointer_cast<FrontService>(shared_from_this()));
     auto respFunc = [frontServiceWeakPtr, _moduleID, _nodeID, _uuid](bytesConstRef _data) {
         auto frontService = frontServiceWeakPtr.lock();
         if (frontService)
@@ -854,27 +857,30 @@ void FrontService::sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
         message.setResponse();
     }
 
-    // zero-copy: only the header is encoded; the payload rides as a view that stays alive for the
-    // (blocking) co_await below
+    // header + payload must both outlive the non-blocking task::wait: copy them into owned
+    // buffers held by the coroutine frame (sendMessage is the bridge from borrowed-callback APIs,
+    // so it cannot preserve zero-copy)
     bytes header;
     message.encodeHeader(header);
 
-    // bridge the coroutine gateway send to the borrowed callback
     auto gateway = m_gatewayInterface;
     auto hdr = std::make_shared<bytes>(std::move(header));
+    auto payload = std::make_shared<bytes>(_data.begin(), _data.end());
     task::wait([](gateway::GatewayInterface::Ptr _gateway, std::string _groupID, int _moduleID,
                    bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _nodeID,
-                   std::shared_ptr<bytes> _hdr, bytesConstRef _data,
+                   std::shared_ptr<bytes> _hdr, std::shared_ptr<bytes> _payload,
                    ReceiveMsgFunc _receiveMsgCallback) -> task::Task<void> {
         auto error = co_await _gateway->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID,
             std::move(_nodeID),
             ::ranges::views::concat(::ranges::views::single(bcos::ref(std::as_const(*_hdr))),
-                ::ranges::views::single(_data)));
+                ::ranges::views::single(
+                    bytesConstRef(_payload->data(), _payload->size()))));
         if (_receiveMsgCallback)
         {
             _receiveMsgCallback(std::move(error));
         }
-    }(gateway, m_groupID, _moduleID, m_nodeID, std::move(_nodeID), hdr, _data, _receiveMsgCallback));
+    }(gateway, m_groupID, _moduleID, m_nodeID, std::move(_nodeID), hdr, payload,
+        _receiveMsgCallback));
 }
 
 /**

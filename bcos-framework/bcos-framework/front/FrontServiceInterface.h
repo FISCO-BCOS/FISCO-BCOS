@@ -133,8 +133,13 @@ private:
 
 /**
  * @brief: the interface provided by the front service
+ *
+ * enable_shared_from_this lets the owned-payload bridges (asyncBroadcastMessageByOwnedPayload /
+ * asyncSendMessageByNodeIDByOwnedPayload) pass an owning Ptr as the coroutine parameter, so the
+ * front object (FrontService / FrontServiceClient / test fakes, all shared_ptr-owned) stays alive
+ * for the whole detached send instead of holding a raw `this`.
  */
-class FrontServiceInterface
+class FrontServiceInterface : public std::enable_shared_from_this<FrontServiceInterface>
 {
 public:
     using Ptr = std::shared_ptr<FrontServiceInterface>;
@@ -255,11 +260,11 @@ public:
     virtual void asyncBroadcastMessageByOwnedPayload(
         uint16_t type, int moduleID, bytesPointer payload)
     {
-        task::wait([](FrontServiceInterface* self, uint16_t _type, int _moduleID,
+        task::wait([](FrontServiceInterface::Ptr self, uint16_t _type, int _moduleID,
                        bytesPointer _payload) -> task::Task<void> {
             co_await self->broadcastMessage(
                 _type, _moduleID, ::ranges::views::single(bcos::ref(*_payload)));
-        }(this, type, moduleID, std::move(payload)));
+        }(shared_from_this(), type, moduleID, std::move(payload)));
     }
 
     /**
@@ -280,11 +285,11 @@ public:
     virtual void asyncSendMessageByNodeIDByOwnedPayload(
         int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload)
     {
-        task::wait([](FrontServiceInterface* self, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+        task::wait([](FrontServiceInterface::Ptr self, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
                        bytesPointer _payload) -> task::Task<void> {
             co_await self->sendMessageByNodeID(_moduleID, std::move(_nodeID),
                 ::ranges::views::single(bcos::ref(*_payload)), 0);
-        }(this, moduleID, std::move(nodeID), std::move(payload)));
+        }(shared_from_this(), moduleID, std::move(nodeID), std::move(payload)));
     }
 
     /**

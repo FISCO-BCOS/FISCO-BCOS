@@ -90,47 +90,48 @@ bcos::task::Task<bcos::Error::Ptr> bcostars::GatewayServiceClient::sendMessageBy
         int m_moduleID;
         bcos::crypto::NodeIDPtr m_srcNodeID;
         bcos::crypto::NodeIDPtr m_dstNodeID;
-        std::shared_ptr<bcos::bytes> m_buffer;
+        std::shared_ptr<std::vector<char>> m_buffer;
         std::shared_ptr<CompletionState> m_state;
 
         constexpr static bool await_ready() noexcept { return false; }
 
-        void await_suspend(std::coroutine_handle<> _handle)
+        // Returns false (no suspension) on a synchronous connection-check failure so the coroutine
+        // is never resumed from inside await_suspend — resuming a coroutine that is still executing
+        // await_suspend is undefined behaviour. Returns true (suspend) once the RPC is in flight.
+        bool await_suspend(std::coroutine_handle<> _handle)
         {
             m_state->handle = _handle;
             auto state = m_state;
             auto buffer = m_buffer;
-            // A synchronous connection-check failure completes the coroutine exactly once (the
-            // completion guard also protects against the async TARS callback arriving later).
             auto shouldBlockCall = m_self->shouldStopCall();
             auto ret = checkConnection(m_self->c_moduleName, "asyncSendMessageByNodeID",
                 m_self->m_prx,
                 [state, buffer](bcos::Error::Ptr _error) {
-                    if (!state->completed.exchange(true))
-                    {
-                        state->error = std::move(_error);
-                        (void)buffer;
-                        state->handle.resume();
-                    }
+                    // connection-check failure: record the error; await_suspend returns false so
+                    // the coroutine continues on this thread and await_resume delivers it
+                    state->error = std::move(_error);
+                    (void)buffer;
                 },
                 shouldBlockCall);
             if (!ret && shouldBlockCall)
             {
-                return;
+                return false;
             }
             auto srcNodeID = m_srcNodeID->data();
             auto destNodeID = m_dstNodeID->data();
             m_self->m_prx->tars_set_timeout(m_self->c_networkTimeout)
                 ->async_asyncSendMessageByNodeID(new Callback(state), m_groupID, m_moduleID,
                     std::vector<char>(srcNodeID.begin(), srcNodeID.end()),
-                    std::vector<char>(destNodeID.begin(), destNodeID.end()),
-                    std::vector<char>(buffer->begin(), buffer->end()));
+                    std::vector<char>(destNodeID.begin(), destNodeID.end()), *buffer);
+            return true;
         }
 
         bcos::Error::Ptr await_resume() { return std::move(m_state->error); }
     };
 
-    auto buffer = std::make_shared<bcos::bytes>();
+    // materialise the joined payload directly as the std::vector<char> the RPC argument needs —
+    // a single pass and one allocation, no second copy in await_suspend
+    auto buffer = std::make_shared<std::vector<char>>();
     for (auto const& data : _payloads)
     {
         buffer->insert(buffer->end(), data.begin(), data.end());
