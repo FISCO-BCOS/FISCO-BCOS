@@ -948,19 +948,37 @@ public:
     }
 
     /// 6-arg form matching the TransactionExecutor concept probe (TransactionExecutor.h:18).
-    /// OP is never driven through this form — SchedulerSerialImpl's pipeline uses
-    /// createExecuteContext + prepare/execute/finish — but the concept requires executeTransaction
-    /// to exist with this exact signature. Throws if actually called (same guard as the 6-arg
-    /// createExecuteContext: no BlockContext means no fee / blockGasLeft / chainId / blockHashes).
+    /// This IS the eth_call / estimateGas entry point: BaselineScheduler's coCallLatest
+    /// (transaction-scheduler/BaselineScheduler-tpp.h:805) and callAtBlock (:868) resolve to this
+    /// overload, so it must drive a real simulation rather than throw. A local BlockContext is
+    /// built in the coroutine frame (an lvalue, so it outlives the awaits and does not trip the
+    /// deleted rvalue createExecuteContext overload); ctx.blockHashes stays null, which
+    /// execute() accepts for call=true. The block path (call=false) still throws: it needs the
+    /// fee / blockGasLeft / blockHashes that only a scheduler-provided BlockContext carries.
     template <class Storage>
-    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage& /*storage*/,
-        protocol::BlockHeader const& /*blockHeader*/, protocol::Transaction const& /*transaction*/,
-        int /*contextID*/, ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
+    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call)
     {
-        throw bcos::evm::OpConsensusError(
-            "OpstackExecutor: executeTransaction 6-arg form is unsupported for OP execution "
-            "(use createExecuteContext + prepare/execute/finish instead)");
-        co_return {};  // unreachable; satisfies the coroutine's declared return type
+        if (!call)
+        {
+            throw bcos::evm::OpConsensusError(
+                "OpstackExecutor: 6-arg executeTransaction block execution requires a "
+                "scheduler-provided BlockContext (use the 10-arg form)");
+        }
+        BlockContext ctx{};
+        if (auto const& chainId = ledgerConfig.chainId(); chainId.has_value())
+        {
+            ctx.chainId = static_cast<uint64_t>(bcos::fromBigEndian<bcos::u256>(bcos::bytesConstRef{
+                reinterpret_cast<bcos::byte const*>(chainId->bytes), sizeof(chainId->bytes)}));
+        }
+        ctx.blockGasLeft =
+            static_cast<int64_t>(opBlockGasLimit(blockHeader, static_cast<uint64_t>(0)));
+        auto executeContext = co_await createExecuteContext(
+            storage, blockHeader, transaction, contextID, ledgerConfig, call, ctx);
+        co_await executeContext.prepare();
+        co_await executeContext.execute();
+        co_return co_await executeContext.finish();
     }
 
     /// Execute a single OP normal transaction (injection-style, mirroring processOpBlock).
@@ -1069,17 +1087,23 @@ public:
         // runDeposit sanitizes the diff at source (OpTransition.cpp), satisfying applyDiff's
         // precondition. applyDiff poisons AND rethrows raw; every write-back failure is a local
         // storage fault, so it must leave as OpStorageError (-32603), never INVALID.
-        try
+        // call=true (eth_call/estimateGas) discards the simulated deposit diff, matching the
+        // normal-tx guard in m_finish; the poisoned() check still runs so a simulation storage
+        // fault surfaces as OpStorageError.
+        if (!call)
         {
-            stateView.applyDiff(diff);
-        }
-        catch (const std::exception& e)
-        {
-            throw engine::OpStorageError(std::string("deposit write-back failed: ") + e.what());
-        }
-        catch (...)
-        {
-            throw engine::OpStorageError("deposit write-back failed: unknown exception");
+            try
+            {
+                stateView.applyDiff(diff);
+            }
+            catch (const std::exception& e)
+            {
+                throw engine::OpStorageError(std::string("deposit write-back failed: ") + e.what());
+            }
+            catch (...)
+            {
+                throw engine::OpStorageError("deposit write-back failed: unknown exception");
+            }
         }
         // Read-path poison from runDeposit with applyDiff returning normally.
         if (stateView.poisoned())
@@ -1242,6 +1266,78 @@ private:
         auto envRef = transaction.extraTransactionBytes();
         evmc::bytes_view env{envRef.data(), envRef.size()};
 
+        // eth_call/estimateGas cannot carry a signed envelope: CallRequest builds the
+        // transaction with no extraTransactionBytes (CallRequest.cpp:65-67), so the envelope
+        // here is empty for every simulation. opValidate uses the envelope only for L1-cost /
+        // calldata sizing (computeL1Cost / flzCompressLen / bedrockCalldataGasUsed) — estimates
+        // on a simulation, not a correctness precondition — so failing closed on it would reject
+        // every eth_call. Re-encode the executing transaction into its EIP-2718 form as the
+        // sizing input instead, keeping the estimates self-consistent with what is simulated.
+        // The block path (call=false) keeps the raw signed envelope: there it is the trust
+        // anchor for the mirror↔envelope cross-check and must never be synthesized.
+        bcos::bytes synthesizedEnvelope;
+        if (call && env.empty())
+        {
+            namespace rlp = bcos::codec::rlp;
+            synthesizedEnvelope.push_back(static_cast<bcos::byte>(evmTx.type));
+            bcos::bytes payload;
+            auto appendU64 = [&payload](uint64_t v) {
+                bcos::bytes out;
+                rlp::encode(out, v);
+                payload.insert(payload.end(), out.begin(), out.end());
+            };
+            auto appendBytes = [&payload](evmc::bytes_view b) {
+                bcos::bytes out;
+                rlp::encode(out, bcos::bytesConstRef{b.data(), b.size()});
+                payload.insert(payload.end(), out.begin(), out.end());
+            };
+            if (evmTx.type == evmone::state::Transaction::Type::legacy)
+            {
+                appendU64(evmTx.nonce);
+                appendU64(static_cast<uint64_t>(evmTx.max_gas_price));
+                appendU64(static_cast<uint64_t>(evmTx.gas_limit));
+                if (evmTx.to.has_value())
+                    appendBytes({evmTx.to->bytes, sizeof(evmTx.to->bytes)});
+                else
+                    appendBytes({});
+                appendBytes({});  // value: RLP zero (empty item)
+                appendBytes({evmTx.data.data(), evmTx.data.size()});
+            }
+            else
+            {
+                // Typed (0x01-0x04): [chainId, nonce, ...fee fields..., gasLimit, to, value,
+                // data, ...]. chainId is synthesized as 0 — on the simulation path the chainId
+                // gate is skipped (chainId=nullopt) and only sizing reads the envelope.
+                appendU64(0);  // chainId
+                appendU64(evmTx.nonce);
+                if (evmTx.type == evmone::state::Transaction::Type::access_list)
+                {
+                    appendU64(static_cast<uint64_t>(evmTx.max_gas_price));  // gasPrice
+                }
+                else
+                {
+                    appendU64(static_cast<uint64_t>(evmTx.max_priority_gas_price));
+                    appendU64(static_cast<uint64_t>(evmTx.max_gas_price));
+                }
+                appendU64(static_cast<uint64_t>(evmTx.gas_limit));
+                if (evmTx.to.has_value())
+                    appendBytes({evmTx.to->bytes, sizeof(evmTx.to->bytes)});
+                else
+                    appendBytes({});
+                appendBytes({});  // value: RLP zero (empty item)
+                appendBytes({evmTx.data.data(), evmTx.data.size()});
+                // accessList (0x01-0x04) and blobHashes (0x03) omitted: the synthesized
+                // envelope is a sizing input only (flzCompressLen / bedrockCalldataGasUsed
+                // read the calldata, not the access list), and their RLP types are not
+                // needed to keep the L1-cost estimate self-consistent with the simulated tx.
+            }
+            bcos::bytes list;
+            rlp::encodeHeader(list, {.isList = true, .payloadLength = payload.size()});
+            list.insert(list.end(), payload.begin(), payload.end());
+            synthesizedEnvelope.insert(synthesizedEnvelope.end(), list.begin(), list.end());
+            env = evmc::bytes_view{synthesizedEnvelope.data(), synthesizedEnvelope.size()};
+        }
+
         // eth_call/estimateGas wrap the view so the sender reports uint256::max() — that
         // lets validate_transaction and the OP 512-bit cap both run (and pass) for an
         // unfunded simulated sender. Skipping the cap used to leave INSUFFICIENT_FUNDS
@@ -1323,8 +1419,7 @@ private:
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> m_finish(Storage& storage,
         protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,
-        protocol::TransactionReceipt::Ptr receipt, evmone::state::StateDiff const& diff,
-        bool call = false)
+        protocol::TransactionReceipt::Ptr receipt, evmone::state::StateDiff const& diff, bool call)
     {
         auto revOpt = ledgerConfig.evmcRevision();
         if (!revOpt.has_value())

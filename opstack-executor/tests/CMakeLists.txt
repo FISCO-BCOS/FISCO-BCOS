@@ -37,6 +37,13 @@ target_link_libraries(opstack-executor-tests PRIVATE
     jsoncpp_static
     Boost::unit_test_framework
 )
+# The OP templates instantiate in these consumer TUs, so the GNU downgrades that the library
+# marks PRIVATE (opstack-executor/CMakeLists.txt) must be re-added here explicitly — keeping
+# them out of every other downstream target.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    target_compile_options(opstack-executor-tests PRIVATE
+        -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
+endif()
 add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 
 # Runtime suite: real tars TransactionImpl / Web3Transaction / receipt factory.
@@ -93,6 +100,12 @@ target_link_libraries(opstack-executor-receipt-tests PRIVATE
     Boost::unit_test_framework
     blst
 )
+# Same GNU downgrades as opstack-executor-tests: the OP templates instantiate in this TU too
+# (OpCallWritebackTest / OpReceiptEncodeTest), and the library's flags are PRIVATE.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    target_compile_options(opstack-executor-receipt-tests PRIVATE
+        -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
+endif()
 target_include_directories(opstack-executor-receipt-tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}

@@ -22,10 +22,14 @@ target_link_libraries(opstack-executor PUBLIC
     evmone::evmone intx::intx TBB::tbb)
 set_target_properties(opstack-executor PROPERTIES UNITY_BUILD OFF)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    # PUBLIC: OpstackExecutor.h / OpBlockExecute.h / Storage2State.h still instantiate
-    # templates in consumer TUs (opstack-executor-tests). PRIVATE would hide
-    # the -Wno-error flags from those instantiations.
-    target_compile_options(opstack-executor PUBLIC
+    # PRIVATE: the OP templates (OpstackExecutor.h / OpBlockExecute.h / Storage2State.h)
+    # instantiate in the test TUs, so those binaries add the flags explicitly (tests/
+    # CMakeLists.txt). PUBLIC would propagate the downgrades to every future consumer —
+    # including the node binary once part-5 links the library — which
+    # cmake/CompilerSettings.cmake:118-129 forbids ("would silence a real defect detector
+    # (-Wmissing-field-initializers) for all 25+ modules on behalf of one feature"; the
+    # per-target downgrade is the documented mechanism, cf. bcos-evm/CMakeLists.txt).
+    target_compile_options(opstack-executor PRIVATE
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
 endif()
 

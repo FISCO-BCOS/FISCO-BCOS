@@ -16,8 +16,10 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-task/Wait.h>
+#include <opstack-executor/OpDepositEncode.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <boost/test/unit_test.hpp>
+#include <intx/intx.hpp>
 
 #include <cstdint>
 #include <optional>
@@ -26,6 +28,7 @@
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
 namespace memory_storage = bcos::storage2::memory_storage;
+using namespace evmc::literals;
 
 namespace
 {
@@ -46,13 +49,19 @@ public:
     std::string m_sender = std::string(sizeof(evmc_address), '\xaa');  // raw 20 bytes
     std::string m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
     bcos::u256 m_value = 0;
-    std::string m_nonce = "0x0";        // hex quantity
-    bcos::bytes m_extraBytes = {0x02};  // non-empty envelope satisfies opValidate
+    std::string m_nonce = "0x0";  // hex quantity
+    // Empty by default, matching what CallRequest::takeToTransaction produces for eth_call —
+    // the RPC has no envelope field, so a call-path regression test must not fabricate one.
+    bcos::bytes m_extraBytes;
     bcos::protocol::Web3AccessList m_accessList;
     bcos::protocol::VersionedHashes m_blobHashes;
     bcos::protocol::AuthorizationList m_authList;
 
     uint8_t web3TypedTxKind() const override { return m_kind; }
+    bool isDepositTx() const override
+    {
+        return m_kind == static_cast<uint8_t>(bcos::evm::opstack::kDepositTxType);
+    }
     bcos::bytesConstRef input() const override
     {
         return bcos::bytesConstRef{m_input.data(), m_input.size()};
@@ -154,6 +163,77 @@ BOOST_AUTO_TEST_CASE(CallPathLeavesStorageUnmodified)
     BOOST_REQUIRE(receipt != nullptr);
     // The simulated tx executed (masked sender balance lets validation pass), but its state
     // diff — which carries the fabricated ~2^256 sender balance — must not be written back.
+    BOOST_CHECK_EQUAL(countRows(storage), 0u);
+}
+
+/// Round-12 F1: the 6-argument executeTransaction (the overload BaselineScheduler's eth_call
+/// resolves to) must drive a real simulation instead of throwing. The empty envelope matches
+/// what the RPC can actually produce, so this also covers round-12 F2 (opValidate must not
+/// reject an envelope-less call).
+BOOST_AUTO_TEST_CASE(SixArgCallPathExecutesSimulation)
+{
+    MutableStorage storage;
+    auto header = makeCallHeader();
+
+    bcos::ledger::LedgerConfig ledgerConfig;
+    auto cfg = bcos::evm::opstack::jovianConfig();
+    ledgerConfig.setEVMCRevision(cfg.rev);
+    evmc_uint256be chainIdBe{};
+    chainIdBe.bytes[31] = 10;
+    ledgerConfig.setChainId(chainIdBe);
+
+    FakeTransaction tx;
+    bcos::executor_v1::opstack::OpstackExecutor executor{
+        bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+        std::make_shared<bcos::crypto::Keccak256>(), cfg};
+
+    // Six arguments: the TransactionExecutor-concept form. call=true → real simulation.
+    auto receipt = bcos::task::syncWait(executor.executeTransaction(
+        storage, *header, tx, /*contextID=*/0, ledgerConfig, /*call=*/true));
+
+    BOOST_REQUIRE(receipt != nullptr);
+    BOOST_CHECK_EQUAL(countRows(storage), 0u);
+}
+
+/// Round-12 F4: a deposit transaction on the call path (call=true) must also discard its
+/// simulated diff — executeDeposit's write-back must honour the call flag like m_finish does.
+BOOST_AUTO_TEST_CASE(DepositCallPathLeavesStorageUnmodified)
+{
+    MutableStorage storage;
+    auto header = makeCallHeader();
+
+    bcos::ledger::LedgerConfig ledgerConfig;
+    auto cfg = bcos::evm::opstack::jovianConfig();
+    ledgerConfig.setEVMCRevision(cfg.rev);
+
+    // A minimal signed deposit envelope: executeTransaction's deposit branch decodes it via
+    // depositFromTransaction. The mint below is caller-supplied on a simulation, which is
+    // exactly why the call path must not write the deposit diff back.
+    bcos::evm::opstack::DepositTx dep{};
+    dep.source_hash = evmc::bytes32{};
+    dep.from = 0x00000000000000000000000000000000000000aa_address;
+    dep.to = 0x00000000000000000000000000000000000000bb_address;
+    dep.value = intx::uint256{0};
+    dep.gas_limit = 1'000'000;
+    dep.is_system_tx = false;
+    dep.mint = intx::uint256{42};  // fabricated mint on a simulation
+    dep.data = {};
+
+    FakeTransaction tx;
+    tx.m_kind = static_cast<uint8_t>(bcos::evm::opstack::kDepositTxType);  // 0x7e → isDepositTx
+    tx.m_extraBytes = bcos::evm::opstack::encodeDepositEnvelope(dep);
+    bcos::executor_v1::opstack::OpstackExecutor executor{
+        bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+        std::make_shared<bcos::crypto::Keccak256>(), cfg};
+
+    // The 10-arg form's deposit branch routes through executeDeposit; call=true must not write
+    // the simulated deposit diff (which carries the caller-supplied mint) into storage.
+    bcos::evm::opstack::OpFeeParams fee{};
+    auto receipt = bcos::task::syncWait(executor.executeTransaction(storage, *header, tx,
+        /*contextID=*/0, ledgerConfig, /*call=*/true, fee, /*blockGasLeft=*/30'000'000,
+        /*chainId=*/10, /*blockHashes=*/nullptr));
+
+    BOOST_REQUIRE(receipt != nullptr);
     BOOST_CHECK_EQUAL(countRows(storage), 0u);
 }
 
