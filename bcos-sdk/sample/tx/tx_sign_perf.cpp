@@ -125,16 +125,17 @@ const char* getBinary(int _sm)
 void usage()
 {
     printf("Desc: create signed transaction[HelloWorld set] perf test\n");
-    printf("Usage: tx_sign_perf isSM txCount\n");
+    printf("Usage: tx_sign_perf isSM txCount [group_id] [chain_id]\n");
     printf("Example:\n");
     printf("    ./tx_sign_perf true 30000\n");
     printf("    ./tx_sign_perf false 30000\n");
+    printf("    ./tx_sign_perf true 30000 group1 chain1\n");
     exit(0);
 }
 
 int main(int argc, char** argv)
 {
-    if (argc < 2)
+    if (argc < 3)
     {
         usage();
     }
@@ -142,7 +143,17 @@ int main(int argc, char** argv)
     bool smCrypto = (std::string(argv[1]) == "true");
     uint32_t txCount = std::stoul(argv[2]);
 
-    printf("[Create Signed Tx Perf Test] ===>>>> smCrypto: %d, txCount: %u\n", smCrypto, txCount);
+    std::string groupIdStr = (argc > 3) ? argv[3] : "group0";
+    std::string chainIdStr = (argc > 4) ? argv[4] : "chain0";
+
+    if (txCount < 10)
+    {
+        printf("Error: txCount must be at least 10, got %u\n", txCount);
+        exit(1);
+    }
+
+    printf("[Create Signed Tx Perf Test] ===>>>> smCrypto: %d, txCount: %u, group: %s, chain: %s\n",
+        smCrypto, txCount, groupIdStr.c_str(), chainIdStr.c_str());
 
     auto keyPairBuilder = std::make_shared<bcos::cppsdk::utilities::KeyPairBuilder>();
     auto keyPair =
@@ -153,8 +164,8 @@ int main(int argc, char** argv)
     auto code = bcos::fromHex(getBinary(smCrypto ? 1 : 0));
 
     int64_t block_limit = 111111;
-    const char* group_id = "group0";
-    const char* chain_id = "chain0";
+    const char* group_id = groupIdStr.c_str();
+    const char* chain_id = chainIdStr.c_str();
 
     std::string txHash = "";
     uint32_t i = 0;
@@ -181,10 +192,20 @@ int main(int argc, char** argv)
         (long long)std::chrono::duration_cast<std::chrono::microseconds>(endPoint - startPoint)
             .count();
 
-    printf(
-        " [Create Signed Tx Perf Test] total txs: %u, total elapsed(ms): %lld, avg(us): %lld, "
-        "txs/s: %lld \n",
-        txCount, elapsedMS, elapsedUS / txCount, 1000 * txCount / elapsedMS);
+    if (elapsedMS > 0)
+    {
+        printf(
+            " [Create Signed Tx Perf Test] total txs: %u, total elapsed(ms): %lld, avg(us): %lld, "
+            "txs/s: %lld \n",
+            txCount, elapsedMS, elapsedUS / txCount, 1000 * txCount / elapsedMS);
+    }
+    else
+    {
+        printf(
+            " [Create Signed Tx Perf Test] total txs: %u, total elapsed(ms): %lld, avg(us): %lld, "
+            "txs/s: N/A (too fast to measure) \n",
+            txCount, elapsedMS, elapsedUS / txCount);
+    }
 
     return 0;
 }
