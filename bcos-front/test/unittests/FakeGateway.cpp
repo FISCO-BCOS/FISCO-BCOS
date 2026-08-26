@@ -48,6 +48,10 @@ bcos::task::Task<bcos::Error::Ptr> bcos::front::test::FakeGateway::sendMessageBy
     {
         buffer.insert(buffer.end(), data.begin(), data.end());
     }
+    if (m_sendError)
+    {
+        co_return m_sendError;
+    }
     if (auto frontService = m_frontService.lock())
     {
         frontService->onReceiveMessage(

@@ -112,6 +112,26 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_fireAndForget)
     f.get();
 }
 
+BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_fireAndForget_propagatesGatewayError)
+{
+    // Round-8 review: the fire-and-forget branch (_timeout == 0) previously returned SendResult{}
+    // even when the gateway send failed, so the TARS fire-and-forget reply always encoded SUCCESS.
+    // The gateway failure must now be propagated in SendResult::error.
+    auto frontService = buildFrontService();
+    auto gateway = std::static_pointer_cast<FakeGateway>(frontService->gatewayInterface());
+    gateway->setSendError(BCOS_ERROR_PTR(12345, "gateway send failed"));
+
+    auto dstNodeID = createKey(g_dstNodeID_0);
+    std::string data(100, 'x');
+    auto result = task::syncWait(frontService->sendMessageByNodeID(111, dstNodeID,
+        ::ranges::views::single(bytesConstRef((unsigned char*)data.data(), data.size())), 0));
+    BOOST_REQUIRE(result.error);
+    BOOST_CHECK_EQUAL(result.error->errorCode(), 12345);
+    // nodeID/uuid stay default so the TARS server echoes the request nodeID/seq
+    BOOST_CHECK(!result.nodeID);
+    BOOST_CHECK(result.uuid.empty());
+}
+
 BOOST_AUTO_TEST_CASE(testFrontService_onRecieveNodeIDsAnd)
 {
     auto frontService = buildFrontService();

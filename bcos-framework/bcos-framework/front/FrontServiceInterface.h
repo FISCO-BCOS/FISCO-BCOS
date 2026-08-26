@@ -285,7 +285,8 @@ public:
     virtual void asyncSendMessageByNodeIDByOwnedPayload(
         int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload)
     {
-        task::wait([](FrontServiceInterface::Ptr self, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+        task::wait([](FrontServiceInterface::Ptr self, int _moduleID,
+                       bcos::crypto::NodeIDPtr _nodeID,
                        bytesPointer _payload) -> task::Task<void> {
             co_await self->sendMessageByNodeID(_moduleID, std::move(_nodeID),
                 ::ranges::views::single(bcos::ref(*_payload)), 0);

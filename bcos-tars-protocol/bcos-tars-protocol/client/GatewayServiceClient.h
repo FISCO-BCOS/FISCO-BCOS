@@ -46,8 +46,8 @@ public:
             _callback) override;
 
     // (coroutine) send message to a single node by awaiting the gateway-service RPC
-    bcos::task::Task<bcos::Error::Ptr> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
+    bcos::task::Task<bcos::Error::Ptr> sendMessageByNodeID(const std::string& _groupID,
+        int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
         ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> _payloads) override;
 
     bcos::task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,

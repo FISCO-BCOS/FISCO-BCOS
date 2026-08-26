@@ -42,6 +42,11 @@ public:
         m_frontService = _frontService;
     }
 
+    // when non-null, sendMessageByNodeID returns this error instead of delivering locally (lets
+    // tests exercise gateway-send-failure propagation into the coroutine send result)
+    Error::Ptr m_sendError;
+    void setSendError(Error::Ptr _error) { m_sendError = std::move(_error); }
+
     /**
      * @brief: start/stop service
      */

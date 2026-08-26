@@ -542,8 +542,14 @@ bcos::task::Task<SendResult> FrontService::sendMessageByNodeID(
     if (_timeout == 0)
     {
         // fire-and-forget: no module-level response is expected; return once the gateway send
-        // completes
-        co_return SendResult{};
+        // completes. Propagate the gateway failure (when any) so the TARS fire-and-forget reply
+        // carries a truthful error code instead of always reporting SUCCESS. nodeID/uuid stay
+        // default (the TARS server echoes the request nodeID/seq in that case).
+        SendResult result;
+        result.error = (gatewayError && gatewayError->errorCode() != CommonError::SUCCESS) ?
+            gatewayError :
+            nullptr;
+        co_return result;
     }
     co_return co_await SendResponseAwaitable{std::move(state)};
 }
