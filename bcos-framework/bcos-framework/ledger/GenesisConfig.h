@@ -59,7 +59,9 @@ struct Alloc
 // B0 full Ethereum genesis header, sourced field-by-field from the merged
 // genesis artifact (op-deployer base + FISCO overlay). Parsed from the
 // [eth_genesis_header] section of config.genesis; when the section is present
-// every field is REQUIRED (NodeConfig fail-fasts on the first missing key).
+// the CORE fields are REQUIRED (NodeConfig fail-fasts on the first missing
+// key) while the fork-gated fields are OPTIONAL (absent key = field does not
+// exist on this chain's genesis, and is left off the RLP).
 // m_hash is a checksum, not an input: Ledger::buildGenesisBlock recomputes
 // keccak256(rlp(header)) from the other 21 fields and refuses to start if it
 // differs. m_timestamp is in SECONDS (the Ethereum header domain);
@@ -82,12 +84,20 @@ struct EthGenesisHeader
     bytes m_extraData;      // artifact extraData (Jovian 17-byte format on our chain)
     h256 m_mixHash;
     h64 m_nonce;
-    u256 m_baseFeePerGas;
-    crypto::HashType m_withdrawalsRoot;
-    u256 m_blobGasUsed;
-    u256 m_excessBlobGas;
-    crypto::HashType m_parentBeaconBlockRoot;
-    crypto::HashType m_requestsHash;
+    // Fork-gated fields are OPTIONAL: on a pre-Cancun chain (e.g. Sepolia's
+    // London-era genesis) the corresponding header fields do not exist and the
+    // keys are omitted from [eth_genesis_header]. A nullopt field is left off
+    // the RLP re-encoding, which is what makes the computed genesis hash
+    // byte-exact for chains whose genesis predates those forks. NodeConfig
+    // parses each key with get_optional: present key -> has_value, absent key
+    // -> nullopt. On an L2 chain every key is present (the artifact converter
+    // emits all 21), so the 21-field encoding is unchanged.
+    std::optional<u256> m_baseFeePerGas;
+    std::optional<crypto::HashType> m_withdrawalsRoot;
+    std::optional<u256> m_blobGasUsed;
+    std::optional<u256> m_excessBlobGas;
+    std::optional<crypto::HashType> m_parentBeaconBlockRoot;
+    std::optional<crypto::HashType> m_requestsHash;
     crypto::HashType m_hash;  // expected keccak256(rlp(header)); checked, never trusted
 };
 
