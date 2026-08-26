@@ -451,16 +451,6 @@ namespace engine = bcos::evm::engine;
     return std::nullopt;
 }
 
-/// Tars-mirror form of the same gate: an omitted sender string becomes address(0) in
-/// toEvmoneTransaction. Prefer blockPathZeroSender on the executing address.
-[[nodiscard]] inline std::optional<std::string> blockPathSenderMissing(
-    bcos::protocol::Transaction const& tx)
-{
-    if (tx.sender().empty())
-        return "empty sender";
-    return std::nullopt;
-}
-
 /// BlockHashes that answers zero for every block number — the eth_call / standalone-tx paths
 /// have no block-hash source (the BLOCKHASH opcode then reads zero, as an out-of-window lookup).
 class NullBlockHashes final : public evmone::state::BlockHashes

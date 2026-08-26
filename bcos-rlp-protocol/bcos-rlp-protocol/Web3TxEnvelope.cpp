@@ -29,14 +29,20 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
         return std::nullopt;
     }
     auto const firstByte = payload[0];
+    // decode() requires a mutable bytesRef cursor even for read-only parsing; the cast is safe
+    // because this function never writes through the cursor — only reads via decodeHeader/decode.
     bcos::bytesRef cursor(const_cast<bcos::byte*>(payload.data()), payload.size());
-    // 0x7E (Deposit) has no chainId field — field 0 is sourceHash (h256).
+    // 0x7E (Deposit) has no chainId field — field 0 is sourceHash (h256). A naive typed-tx
+    // decode would fail the uint64_t width gate on sourceHash and return nullopt, which is
+    // misleading (nullopt is documented as "pre-EIP-155 unprotected legacy"). Return early
+    // so callers that gate on nullopt+isTyped see a clean signal.
     if (firstByte == 0x7E) [[unlikely]]
     {
         return std::nullopt;
     }
     if (firstByte > 0 && firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
     {
+        // Typed (EIP-2718: 0x01-0x04): chainId is RLP field 0 of the inner list.
         cursor = cursor.getCroppedData(1);
         auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
         if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
@@ -50,6 +56,15 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
         }
         return chainId;
     }
+    // Legacy: walk the first 6 fields. The tail after them is one of two forms:
+    //   preimage  EIP-155: [..6 fields, chainId, 0, 0]  (admission path — takeToTarsTransaction
+    //             stores encodeForSign())
+    //   full      envelope: [..6 fields, v, r, s]       (block path — engine SEV-8 feeds the
+    //             raw signed envelope)
+    // In the preimage form field 7 IS the chainId and fields 8/9 are the empty 0,0 placeholders;
+    // in the full form field 7 is v (27/28 unprotected, or chainId*2+35+yParity) and fields 8/9
+    // are the non-empty r/s scalars (EIP-2 keeps r,s in [1,n-1], never empty). Distinguish by
+    // whether field 8 is an empty byte string.
     auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
     if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
     {
@@ -65,16 +80,13 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
         }
         walker = walker.getCroppedData(fieldHeader.payloadLength);
     }
-    // Legacy dual layout: the tail after the 6 fields is either the preimage's (chainId, 0, 0)
-    // — the txpool-stage signing preimage stored by takeToTarsTransaction — or the full signed
-    // envelope's (v, r, s) on the sealed-block path. RLP encodes the integer 0 as an empty
-    // payload while secp256k1 r/s never are, so emptiness of fields 8/9 discriminates the two
-    // shapes unambiguously. Only field 8 is checked here; field 9 validation is deferred to
-    // reassembleWeb3RawTransaction (which validates the full 0,0 tail).
     if (walker.empty())
     {
+        // pre-EIP-155 unprotected legacy (6-field preimage, v=27/28): no chainId, exempt —
+        // op-geth HomesteadSigner.
         return std::nullopt;
     }
+    // Peek field 8 (without consuming field 7 yet) to classify preimage vs full envelope.
     // field7Item keeps the WHOLE field-7 item (header + payload): decodeHeader advances the
     // walker to the payload start, and decoding that payload as a fresh item mis-reads any
     // multi-byte chainId/v (e.g. chainId 8453 -> 33) or classifies it as a list header
@@ -89,13 +101,14 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
     bool const isPreimageTail = [&] {
         if (afterField7.empty()) [[unlikely]]
         {
-            return false;
+            return false;  // no 0,0 placeholders — treat as full form (or malformed)
         }
         auto [field8Error, field8Header] = bcos::codec::rlp::decodeHeader(afterField7);
         return field8Error == nullptr && !field8Header.isList && field8Header.payloadLength == 0;
     }();
     if (isPreimageTail)
     {
+        // preimage form: field 7 is the EIP-155 chainId.
         uint64_t chainId = 0;
         if (auto e = bcos::codec::rlp::decode(field7Item, chainId); e != nullptr) [[unlikely]]
         {
@@ -103,6 +116,8 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
         }
         return chainId;
     }
+    // Full envelope: field 7 is v. 27/28 = pre-EIP-155 unprotected (exempt); >= 35 = EIP-155
+    // protected, chainId = (v - 35) >> 1. Anything else (0/1, 29-34) is malformed.
     uint64_t v = 0;
     if (auto e = bcos::codec::rlp::decode(field7Item, v); e != nullptr) [[unlikely]]
     {

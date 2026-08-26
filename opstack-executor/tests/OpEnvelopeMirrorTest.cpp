@@ -18,7 +18,6 @@
 #include <string>
 
 using bcos::executor_v1::eth::toEvmoneTransaction;
-using bcos::executor_v1::opstack::blockPathSenderMissing;
 using bcos::executor_v1::opstack::blockPathZeroSender;
 using bcos::executor_v1::opstack::envelopeChainIdMismatch;
 using bcos::executor_v1::opstack::envelopeExecutionFieldsMismatch;
@@ -585,13 +584,12 @@ BOOST_AUTO_TEST_CASE(BlockPathRejectsEmptySender)
 {
     FakeTx tx;
     tx.m_sender.clear();
-    BOOST_REQUIRE(blockPathSenderMissing(tx).has_value());
-    BOOST_CHECK_EQUAL(*blockPathSenderMissing(tx), "empty sender");
     BOOST_REQUIRE(blockPathZeroSender(evmTxOf(tx).sender).has_value());
     BOOST_CHECK_EQUAL(*blockPathZeroSender(evmTxOf(tx).sender), "empty sender");
     tx.m_sender.assign(sizeof(evmc_address), '\xaa');
-    BOOST_CHECK(!blockPathSenderMissing(tx).has_value());
     BOOST_CHECK(!blockPathZeroSender(evmTxOf(tx).sender).has_value());
+    tx.m_sender.assign(sizeof(evmc_address), '\0');
+    BOOST_REQUIRE(blockPathZeroSender(evmTxOf(tx).sender).has_value());
 }
 
 BOOST_AUTO_TEST_CASE(LegacyFixtureIsAFullUnprotectedSignedEnvelope)

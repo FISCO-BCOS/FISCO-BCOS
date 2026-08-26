@@ -34,27 +34,9 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
     const auto* firstDep = std::get_if<DepositTx>(&txs[0].tx);
     if (firstDep == nullptr)
         return;
-
-    const auto& data = firstDep->data;
-    if (data.size() == IsthmusL1AttributesLen)
-    {
-        // Jovian activation block: Isthmus-length attributes, must be deposits-only (op-geth
-        // rollup_cost.go:568-576). Checking the last tx suffices (deposits always precede
-        // non-deposits).
-        if (!std::holds_alternative<DepositTx>(txs.back().tx))
-            throw OpConsensusError(
-                "op block: unexpected non-deposit transactions in Jovian activation block");
-        return;
-    }
-
-    // Normal Jovian block: L1 attributes must carry the Jovian selector and be ≥ Jovian length.
-    if (data.size() < JovianL1AttributesLen)
-        throw OpConsensusError(
-            "op block: L1 attributes transaction data too short for DA footprint gas scalar");
-    if (!std::equal(
-            JovianL1AttributesSelector.begin(), JovianL1AttributesSelector.end(), data.begin()))
-        throw OpConsensusError(
-            "op block: L1 attributes transaction data does not have Jovian selector");
+    validateJovianL1AttributesShape(
+        std::span<uint8_t const>{firstDep->data.data(), firstDep->data.size()},
+        std::holds_alternative<DepositTx>(txs.back().tx), cfg);
 }
 
 evmone::state::StateDiff finalizeOpBlock(
@@ -149,14 +131,9 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 if (cfg.has_da_footprint)
                 {
                     const auto& attrData = std::get<DepositTx>(txs[0].tx).data;
-                    if (attrData.size() == IsthmusL1AttributesLen)
-                        fee.da_footprint_gas_scalar = 0;
-                    else if (attrData.size() >= JovianL1AttributesLen)
-                    {
-                        fee.da_footprint_gas_scalar = static_cast<uint16_t>(
-                            (static_cast<uint16_t>(attrData[JovianL1AttributesLen - 2]) << 8) |
-                            static_cast<uint16_t>(attrData[JovianL1AttributesLen - 1]));
-                    }
+                    if (auto scalar = jovianDaFootprintGasScalar(
+                            std::span<uint8_t const>{attrData.data(), attrData.size()}))
+                        fee.da_footprint_gas_scalar = *scalar;
                 }
                 feeLoaded = true;
             }

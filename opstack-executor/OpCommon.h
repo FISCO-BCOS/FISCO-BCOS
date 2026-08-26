@@ -161,8 +161,7 @@ inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
 {
     static const bcos::u256 kMaxU64(std::numeric_limits<uint64_t>::max());
     if (v > kMaxU64)
-        throw OpConsensusError(
-            std::string("OpSchedulerSeam: field exceeds uint64_t range: ") + fieldName);
+        throw OpConsensusError(std::string("field exceeds uint64_t range: ") + fieldName);
     return static_cast<uint64_t>(v);
 }
 
@@ -173,8 +172,7 @@ inline int64_t narrowU256ToI64(const bcos::u256& v, const char* fieldName)
 {
     static const bcos::u256 kMaxI64(std::numeric_limits<int64_t>::max());
     if (v > kMaxI64)
-        throw OpConsensusError(
-            std::string("OpSchedulerSeam: field exceeds int64_t range: ") + fieldName);
+        throw OpConsensusError(std::string("field exceeds int64_t range: ") + fieldName);
     return static_cast<int64_t>(v);
 }
 
@@ -185,8 +183,7 @@ template <class T>
 [[nodiscard]] T requireHeaderField(const std::optional<T>& opt, const char* fieldName)
 {
     if (!opt.has_value())
-        throw OpConsensusError(
-            std::string("OpSchedulerSeam: missing required header field: ") + fieldName);
+        throw OpConsensusError(std::string("missing required header field: ") + fieldName);
     return *opt;
 }
 

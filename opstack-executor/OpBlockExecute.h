@@ -18,8 +18,10 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
-#include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / payloadBloomToH2048 / toBcosH256
-#include <opstack-executor/OpCommon.h>  // toBlockInfo / narrowU256ToU64 / toEvmcBytes32 / OpBlockSeal
+#include <opstack-executor/OpCommitments.h>
+// OpBlockCommitments / payloadBloomToH2048 / toBcosH256
+#include <opstack-executor/OpCommon.h>
+// toBlockInfo / narrowU256ToU64 / toEvmcBytes32 / OpBlockSeal
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
 #include <opstack-executor/Storage2State.h>
@@ -86,8 +88,51 @@ inline constexpr std::size_t IsthmusL1AttributesLen = 176;
 inline constexpr std::size_t JovianL1AttributesLen = 178;
 inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6, 0xbe, 0x2b};
 
+/// Shared Jovian L1-attributes shape (selector/length + activation deposits-only).
+/// `lastTxIsDeposit` is the path-specific last-tx probe: processOpBlock uses the DepositTx
+/// variant; preBlockOpSteps uses the raw envelope type byte. No-op pre-Jovian.
+inline void validateJovianL1AttributesShape(
+    std::span<uint8_t const> data, bool lastTxIsDeposit, OpForkConfig const& cfg)
+{
+    if (!cfg.has_da_footprint)
+        return;
+    if (data.size() == IsthmusL1AttributesLen)
+    {
+        // Jovian activation block: Isthmus-length attributes, must be deposits-only (op-geth
+        // rollup_cost.go:568-576). Checking the last tx suffices (deposits always precede
+        // non-deposits).
+        if (!lastTxIsDeposit)
+            throw OpConsensusError(
+                "op block: unexpected non-deposit transactions in Jovian activation block");
+        return;
+    }
+    if (data.size() < JovianL1AttributesLen)
+        throw OpConsensusError(
+            "op block: L1 attributes transaction data too short for DA footprint gas scalar");
+    if (!std::equal(
+            JovianL1AttributesSelector.begin(), JovianL1AttributesSelector.end(), data.begin()))
+        throw OpConsensusError(
+            "op block: L1 attributes transaction data does not have Jovian selector");
+}
+
+/// DA footprint gas scalar from L1-attributes calldata: Isthmus 176B → 0; Jovian ≥178B →
+/// big-endian uint16 at [176:178]. nullopt when the length is neither (shape validation should
+/// already have rejected that case on a Jovian block).
+[[nodiscard]] inline std::optional<uint16_t> jovianDaFootprintGasScalar(
+    std::span<uint8_t const> attrData)
+{
+    if (attrData.size() == IsthmusL1AttributesLen)
+        return uint16_t{0};
+    if (attrData.size() >= JovianL1AttributesLen)
+        return static_cast<uint16_t>(
+            (static_cast<uint16_t>(attrData[JovianL1AttributesLen - 2]) << 8) |
+            static_cast<uint16_t>(attrData[JovianL1AttributesLen - 1]));
+    return std::nullopt;
+}
+
 /// Validate the Jovian L1-attributes block shape (selector/length + activation deposits-only).
-/// No-op pre-Jovian. Throws OpConsensusError.
+/// No-op pre-Jovian. Throws OpConsensusError. Public wrapper around
+/// validateJovianL1AttributesShape for the processOpBlock data shape (`span<OpBlockTx>`).
 void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig& cfg);
 
 // ---- shared per-receipt helpers (one implementation shared with the per-tx loop) ----
@@ -286,43 +331,16 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     if (cfg.has_da_footprint)
     {
         auto const& data = deposits[0].data;
-        if (data.size() == op::IsthmusL1AttributesLen)
-        {
-            // Jovian activation block must be deposits-only. Parity anchor: op-geth
-            // CalcDAFootprint (core/types/rollup_cost.go:563-577, v1.101701.0) makes the exact
-            // same last-tx-only check ("sufficient to check last transaction because deposits
-            // precede non-deposit txs") and likewise relies on — without enforcing — the
-            // deposit-prefix invariant, so with the deposit order gate demoted to a log our accept
-            // set still matches op-geth's; iterating all envelopes here would be stricter than the
-            // reference client and a consensus divergence.
-            // Empty-envelope guard before back()[0] access (trailing empty tx -> same reject path).
-            if (rawTxBytes.back().empty() || rawTxBytes.back()[0] != kDepositTypeByte)
-                throw OpConsensusError(
-                    "op block: unexpected non-deposit transactions in Jovian activation block");
-        }
-        else
-        {
-            if (data.size() < op::JovianL1AttributesLen)
-                throw OpConsensusError(
-                    "op block: L1 attributes transaction data too short for DA footprint gas "
-                    "scalar");
-            if (!std::equal(op::JovianL1AttributesSelector.begin(),
-                    op::JovianL1AttributesSelector.end(), data.begin()))
-                throw OpConsensusError(
-                    "op block: L1 attributes transaction data does not have Jovian selector");
-        }
-    }
-
-    // Jovian DA scalar: big-endian uint16 at data[176:178]. Isthmus 176-byte attrs → 0.
-    if (cfg.has_da_footprint)
-    {
-        auto const& attrData = deposits[0].data;
-        if (attrData.size() == op::IsthmusL1AttributesLen)
-            daFootprintGasScalar = 0;
-        else if (attrData.size() >= op::JovianL1AttributesLen)
-            daFootprintGasScalar = static_cast<uint16_t>(
-                (static_cast<uint16_t>(attrData[op::JovianL1AttributesLen - 2]) << 8) |
-                static_cast<uint16_t>(attrData[op::JovianL1AttributesLen - 1]));
+        // Last-tx-only deposits-only check matches op-geth CalcDAFootprint
+        // (core/types/rollup_cost.go:563-577): iterating every envelope would be stricter than
+        // the reference client. Empty trailing envelope is treated as non-deposit.
+        bool const lastTxIsDeposit =
+            !rawTxBytes.back().empty() && rawTxBytes.back()[0] == kDepositTypeByte;
+        op::validateJovianL1AttributesShape(
+            std::span<uint8_t const>{data.data(), data.size()}, lastTxIsDeposit, cfg);
+        if (auto scalar =
+                op::jovianDaFootprintGasScalar(std::span<uint8_t const>{data.data(), data.size()}))
+            daFootprintGasScalar = *scalar;
     }
 }
 

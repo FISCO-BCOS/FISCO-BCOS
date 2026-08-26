@@ -34,12 +34,13 @@ namespace bcos::rlp::protocol
 }
 
 /// Chain id from a Web3 transaction's SIGNED envelope (extraTransactionBytes), never the
-/// unauthenticated tars mirror. Defined in the rlp-protocol library TU — callers must link
-/// that target. (A previous comment claimed linking it broke libc++ typed catch via
-/// wedprcrypto; that was measured false on the opstack-executor receipt suite, which already
-/// links bcos-crypto / ledger / protocol-tars.)
+/// unauthenticated tars mirror. The signature binds only the envelope bytes, so a mirror field
+/// is forgeable by a malicious peer/proposer; the envelope is authoritative.
+/// Defined in the rlp-protocol library TU — callers must link that target.
 ///   typed (first byte < 0x80, not 0x7E): chainId = RLP field 0 of the inner list;
 ///   legacy: walk the first 6 fields; if a 7th is present it is the EIP-155 chainId or v.
 /// nullopt = pre-EIP-155 unprotected legacy (6-field, v=27/28) or a malformed preimage.
+/// A malformed tail is normally rejected upstream by reassembleWeb3RawTransaction /
+/// verify() — keep the walkers' strictness in sync if that ordering ever changes.
 [[nodiscard]] std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload);
 }  // namespace bcos::rlp::protocol
