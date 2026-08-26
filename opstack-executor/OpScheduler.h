@@ -143,7 +143,9 @@ public:
                 m_multiLayerStorage->popFrontStorage();
             }
             m_pending.reset();
-            m_lastExecutedBlockNumber.store(-1);
+            // Continuity keys off lastExecuted; hydrateCommittedTip is a no-op once
+            // lastCommitted is set. Restore the watermark to the committed tip.
+            m_lastExecutedBlockNumber.store(m_lastCommittedBlockNumber.load());
         }
         callback(nullptr);
     }
@@ -238,7 +240,7 @@ public:
                        cb = std::move(callback)]() -> task::Task<void> {
             try
             {
-                auto view = m_multiLayerStorage->fork();
+                auto view = m_multiLayerStorage->forkCommitted();
                 auto blockNumber =
                     co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
                 bcos::ledger::Features features;
@@ -264,6 +266,12 @@ public:
                        code, fmt::format("getCode failed: {} (see node log)", rpcSafeReason(code))),
                     {});
             }
+            catch (...)
+            {
+                cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+                       "OpScheduler::getCode: unknown exception"),
+                    {});
+            }
         }());
     }
 
@@ -274,7 +282,7 @@ public:
                        cb = std::move(callback)]() -> task::Task<void> {
             try
             {
-                auto view = m_multiLayerStorage->fork();
+                auto view = m_multiLayerStorage->forkCommitted();
                 auto blockNumber =
                     co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
                 bcos::ledger::Features features;
@@ -297,6 +305,12 @@ public:
                     << LOG_DESC("getABI failed") << LOG_KV("detail", e.what());
                 cb(BCOS_ERROR_PTR(
                        code, fmt::format("getABI failed: {} (see node log)", rpcSafeReason(code))),
+                    {});
+            }
+            catch (...)
+            {
+                cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+                       "OpScheduler::getABI: unknown exception"),
                     {});
             }
         }());
@@ -335,14 +349,11 @@ public:
         m_chainId(chainId),
         m_forkFlags(forkFlags),
         m_multiLayerStorage(&multiLayerStorage),
-        m_blockFactory(blockFactory.get()),
+        m_blockFactory(std::move(blockFactory)),
+        m_ledger(std::move(ledger)),
         m_ioServicePool(std::move(ioServicePool))
     {
-        // execute() tolerates a null ledger; commit does not.
-        if (ledger)
-        {
-            m_ledger = ledger.get();
-        }
+        // execute() tolerates a null ledger; commit does not (see coCommitBlock).
         // Default no-op notifiers. An empty std::function would throw inside the async task.
         m_blockNumberNotifier = [](bcos::protocol::BlockNumber) {};
         m_transactionNotifier = [](bcos::protocol::BlockNumber,
@@ -358,6 +369,21 @@ public:
     {
         m_blockNumberNotifier = std::move(notifier);
     }
+
+    /// Optional txpool eviction callback; commitBlock invokes it after a successful merge.
+    void setTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
+            bcos::protocol::TransactionSubmitResultsPtr, std::function<void(bcos::Error::Ptr)>)>
+            notifier)
+    {
+        if (notifier)
+        {
+            m_transactionNotifier = std::move(notifier);
+        }
+    }
+
+    /// When true, execute() compares buildAndCollect against a full stateRootOf rebuild.
+    /// Defaults off: the equality contract lives in IncrementalMPTRootMatchesFullRebuild.
+    void setCrossCheckIncrementalRoot(bool enable) { m_crossCheckIncrementalRoot = enable; }
 
 private:
     // ---- execute / commit ----
@@ -379,11 +405,20 @@ private:
                 co_return {nullptr, cached->first, cached->second};
             }
 
-            // One execute at a time.
+            // One execute at a time. Also take m_commitMutex so pushView / popFrontStorage
+            // cannot race mergeBackStorage (reset() already takes all three).
             std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
             if (!executeLock.owns_lock())
             {
                 auto message = std::string{"Another block is executing!"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr, false};
+            }
+            std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
+            if (!commitLock.owns_lock())
+            {
+                auto message = std::string{"Another block is committing!"};
                 OP_SCHEDULER_LOG(INFO) << message;
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr, false};
@@ -435,7 +470,7 @@ private:
             bool const probeAtPending = conflict == PendingConflict::KeepProbe;
             if (number > 0 && number == lastCommitted)
             {
-                auto tipView = m_multiLayerStorage->fork();
+                auto tipView = m_multiLayerStorage->forkCommitted();
                 auto const canonicalAtHeight =
                     co_await ledger::getBlockHash(tipView, number, ledger::fromStorage);
                 if (canonicalAtHeight.has_value() &&
@@ -469,8 +504,10 @@ private:
                     nullptr, false};
             }
 
-            // Writes go to this view.
-            auto view = m_multiLayerStorage->fork();
+            // Writes go to a committed-parent view. KeepProbe must not see the uncommitted
+            // pending layer; after ReplaceSameHeight popFront (or with no pending) this equals
+            // fork(). getPendingStorageAt still uses fork() so it can read the pending slot.
+            auto view = m_multiLayerStorage->forkCommitted();
             view.newMutable();
 
             auto transactions = co_await getTransactions(*block, view);
@@ -561,6 +598,14 @@ private:
             {
                 auto message = std::string{"Another block is committing!"};
                 OP_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr};
+            }
+            if (!m_ledger)
+            {
+                auto message = std::string{
+                    "OpScheduler: commit requires a ledger (execute-only construction)"};
+                OP_SCHEDULER_LOG(ERROR) << message;
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr};
             }
@@ -724,8 +769,8 @@ private:
 
             // Fee params load on the first normal tx. blockGasLeft is narrowed from gasLimit.
             OpBlockExecutionContext ctx{.fee = {},
-                .blockGasLeft = static_cast<int64_t>(
-                    detail::narrowU256ToU64(header.gasLimit(), "OpScheduler blockGasLeft")),
+                .blockGasLeft =
+                    detail::narrowU256ToI64(header.gasLimit(), "OpScheduler blockGasLeft"),
                 .blockHashes = &*hashes,
                 .chainId = m_chainId,
                 .daFootprintGasScalar = daFootprintGasScalar};
@@ -742,8 +787,9 @@ private:
             auto receipts = co_await serialScheduler.executeBlock(
                 view, executor, header, transactionsRefs, execLedgerConfig, ctx);
 
-            // Finalize receipts/seal. incrementalRoot skips finalize's own full rebuild;
-            // this path still cross-checks buildAndCollect against stateRootOf.
+            // Finalize receipts/seal. incrementalRoot skips finalize's own full rebuild.
+            // The incremental vs full equality contract is IncrementalMPTRootMatchesFullRebuild;
+            // an optional debug cross-check (default off) can still run stateRootOf here.
             bool const incrementalRoot = persistTrieNodes && header.number() > 0;
             result =
                 bcos::evm::engine::finalizeOpBlockResult(executor, view, header, execLedgerConfig,
@@ -761,16 +807,26 @@ private:
                 {
                     auto delta = co_await ledger::mpt::buildAndCollect(
                         nodeStorage, parentRoot, view, /*l2Mode=*/true);
-                    bcos::evm::evmstate::Storage2State<ViewType> fullCheck(view);
-                    auto const fullRoot =
-                        bcos::evm::engine::detail::toBcosH256(bcos::evm::stateRootOf(fullCheck));
-                    if (delta.stateRoot != fullRoot)
+                    if (m_crossCheckIncrementalRoot)
                     {
-                        throw bcos::evm::engine::OpStorageError(fmt::format(
-                            "OpScheduler: incremental MPT root diverged from the full rebuild "
-                            "at block {} (incremental={}, full={}, parent={})",
-                            header.number(), delta.stateRoot.hexPrefixed(), fullRoot.hexPrefixed(),
-                            parentRoot.hexPrefixed()));
+                        bcos::evm::evmstate::Storage2State<ViewType> fullCheck(
+                            view, executor.sharedError());
+                        auto const fullRoot = bcos::evm::engine::detail::toBcosH256(
+                            bcos::evm::stateRootOf(fullCheck));
+                        if (fullCheck.poisoned())
+                        {
+                            throw bcos::evm::engine::OpStorageError(
+                                fmt::format("OpScheduler: full rebuild poisoned at block {}: {}",
+                                    header.number(), fullCheck.firstError()));
+                        }
+                        if (delta.stateRoot != fullRoot)
+                        {
+                            throw bcos::evm::engine::OpStorageError(fmt::format(
+                                "OpScheduler: incremental MPT root diverged from the full rebuild "
+                                "at block {} (incremental={}, full={}, parent={})",
+                                header.number(), delta.stateRoot.hexPrefixed(),
+                                fullRoot.hexPrefixed(), parentRoot.hexPrefixed()));
+                        }
                     }
                     result.stateRoot = delta.stateRoot;
                 }
@@ -882,7 +938,7 @@ private:
         {
             co_return;
         }
-        auto view = m_multiLayerStorage->fork();
+        auto view = m_multiLayerStorage->forkCommitted();
         auto const tip =
             co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
         if (tip != -1)
@@ -903,7 +959,7 @@ private:
             auto lastCommitted = m_lastCommittedBlockNumber.load();
             if (lastCommitted == -1)
             {
-                auto view = m_multiLayerStorage->fork();
+                auto view = m_multiLayerStorage->forkCommitted();
                 lastCommitted =
                     co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
                 m_lastCommittedBlockNumber.store(lastCommitted);
@@ -1070,8 +1126,8 @@ private:
         if (stateView.poisoned())
             throw bcos::evm::engine::OpStorageError(fmt::format(
                 "OpScheduler: {} fee-param read fault: {}", errTag, stateView.firstError()));
-        const auto blockGasLeft = static_cast<int64_t>(
-            detail::narrowU256ToU64(header.gasLimit(), "OpScheduler blockGasLeft"));
+        const auto blockGasLeft =
+            detail::narrowU256ToI64(header.gasLimit(), "OpScheduler blockGasLeft");
 
         std::optional<std::string> hashErr;
         detail::RecentBlockHashes<AnyView> hashes(
@@ -1118,7 +1174,7 @@ private:
     {
         namespace op = bcos::evm::opstack;
 
-        auto view = m_multiLayerStorage->fork();
+        auto view = m_multiLayerStorage->forkCommitted();
         view.newMutable();
         auto blockNumber =
             co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
@@ -1147,7 +1203,7 @@ private:
     {
         namespace op = bcos::evm::opstack;
 
-        auto latestView = m_multiLayerStorage->fork();
+        auto latestView = m_multiLayerStorage->forkCommitted();
         auto latestNumber =
             co_await bcos::ledger::getCurrentBlockNumber(latestView, bcos::ledger::fromStorage);
         // Negative or beyond-latest: InvalidBlockNumber.
@@ -1230,13 +1286,14 @@ private:
     bcos::evm::opstack::OpForkFlags m_forkFlags;
 
     MultiLayerStorage* m_multiLayerStorage = nullptr;
-    bcos::protocol::BlockFactory* m_blockFactory = nullptr;
-    bcos::ledger::LedgerInterface* m_ledger = nullptr;
+    bcos::protocol::BlockFactory::Ptr m_blockFactory;
+    bcos::ledger::LedgerInterface::Ptr m_ledger;
     bcos::IOServicePool::Ptr m_ioServicePool;
     std::function<void(bcos::protocol::BlockNumber)> m_blockNumberNotifier;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
         std::function<void(bcos::Error::Ptr)>)>
         m_transactionNotifier;
+    bool m_crossCheckIncrementalRoot = false;
     std::mutex m_executeMutex;
     std::atomic<int64_t> m_lastExecutedBlockNumber{-1};
     std::mutex m_commitMutex;

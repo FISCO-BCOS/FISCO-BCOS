@@ -154,6 +154,13 @@ bcos::evm::opstack::DepositTx makeDeposit()
     return dep;
 }
 
+bcos::bytes depositEnvWithSource(evmc::bytes32 source)
+{
+    auto dep = makeDeposit();
+    dep.source_hash = source;
+    return encodeDepositEnvelope(dep);
+}
+
 /// OP header from the corpus environment (isthmus_transfer_basic env). timestamp is stored in
 /// milliseconds (FISCO convention; /1000 gives OP seconds). Commitment fields (stateRoot/txsRoot/
 /// receiptsRoot/gasUsed/withdrawalsRoot/logsBloom/requestsHash) are back-filled by the caller from
@@ -779,6 +786,53 @@ void driveOpBlock(Fixture& f, std::shared_ptr<bcostars::protocol::BlockHeaderImp
                        << " failed: " << (commitErr ? commitErr->errorMessage() : ""));
 }
 
+struct ExecuteCb
+{
+    bcos::Error::Ptr err;
+    bcos::protocol::BlockHeader::Ptr header;
+};
+
+ExecuteCb invokeExecute(Fixture& f, bcos::protocol::Block::Ptr block, bool verify)
+{
+    ExecuteCb out;
+    bool called = false;
+    f.scheduler->executeBlock(std::move(block), verify,
+        [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr h, bool) {
+            called = true;
+            out.err = std::move(e);
+            out.header = std::move(h);
+        });
+    BOOST_REQUIRE(called);
+    return out;
+}
+
+bcos::protocol::Block::Ptr assembleBlock(
+    Fixture& f, bcos::protocol::BlockHeader::Ptr header, std::vector<bcos::bytes> const& rawTxBytes)
+{
+    auto block = f.blockFactory->createBlock();
+    block->setBlockHeader(std::move(header));
+    for (auto const& env : rawTxBytes)
+    {
+        auto fiscoTx = buildFiscoTx(env, f.hashImpl);
+        BOOST_REQUIRE(fiscoTx != nullptr);
+        block->appendTransaction(fiscoTx);
+    }
+    return block;
+}
+
+/// Probe against the committed parent (matches OpScheduler::coExecuteBlock's forkCommitted),
+/// fill the announced header, then executeBlock without commit.
+ExecuteCb executeOpBlock(Fixture& f, std::shared_ptr<bcostars::protocol::BlockHeaderImpl> header,
+    std::vector<bcos::bytes> const& rawTxBytes, bool verify)
+{
+    auto view = f.multiLayerStorage.forkCommitted();
+    view.newMutable();
+    auto const result = runExecutionProbe(f, view, *header, rawTxBytes);
+    BOOST_REQUIRE_EQUAL(result.receipts.size(), rawTxBytes.size());
+    fillAnnouncedHeader(header, result);
+    return invokeExecute(f, assembleBlock(f, header, rawTxBytes), verify);
+}
+
 /// Synchronous callAtBlock driver: returns the callback's (Error, receipt) pair.
 std::pair<bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr> callAt(
     Fixture& f, bcos::protocol::Transaction::Ptr tx, bcos::protocol::BlockNumber number)
@@ -952,6 +1006,143 @@ BOOST_AUTO_TEST_CASE(StatusAndResetNoOp)
         BOOST_REQUIRE(err == nullptr);
     });
     f.scheduler->reset([&](bcos::Error::Ptr err) { BOOST_REQUIRE(err == nullptr); });
+}
+
+/// Pending-slot state machine on the scheduler (not just classifyPendingConflict):
+/// RefuseOtherHeight, KeepProbe, ReplaceSameHeight + popFront, reset watermark restore.
+BOOST_AUTO_TEST_CASE(PendingSlotStateMachine)
+{
+    Fixture f;
+    auto depEnv = encodeDepositEnvelope(makeDeposit());
+    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
+    auto dep2a = depositEnvWithSource(
+        0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_bytes32);
+    auto depProbe = depositEnvWithSource(
+        0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bytes32);
+    auto dep2b = depositEnvWithSource(
+        0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc_bytes32);
+    auto dep3 = depositEnvWithSource(
+        0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd_bytes32);
+
+    driveOpBlock(f, makeHeader(), {depEnv, eipEnvBytes});
+
+    auto siblingTip = invokeExecute(
+        f, assembleBlock(f, makeHeaderAt(1, bcos::u256(1'000'000'000)), {depEnv}), /*verify=*/true);
+    BOOST_REQUIRE(siblingTip.err != nullptr);
+    BOOST_CHECK_EQUAL(
+        siblingTip.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidBlockNumber);
+    BOOST_CHECK_MESSAGE(
+        siblingTip.err->errorMessage().find("sibling of the committed tip") != std::string::npos,
+        "committed-tip sibling must fail closed, got: " << siblingTip.err->errorMessage());
+
+    auto block2a =
+        executeOpBlock(f, makeHeaderAt(2, bcos::u256(2'000'000'000)), {dep2a}, /*verify=*/true);
+    BOOST_REQUIRE_MESSAGE(block2a.err == nullptr,
+        "execute block 2a: " << (block2a.err ? block2a.err->errorMessage() : ""));
+    BOOST_REQUIRE(block2a.header != nullptr);
+
+    // (a) another height while pending is occupied.
+    auto refused = invokeExecute(
+        f, assembleBlock(f, makeHeaderAt(3, bcos::u256(3'000'000'000)), {depEnv}), /*verify=*/true);
+    BOOST_REQUIRE(refused.err != nullptr);
+    BOOST_CHECK_EQUAL(
+        refused.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidStatus);
+    BOOST_CHECK_MESSAGE(
+        refused.err->errorMessage().find("Uncommitted pending block 2") != std::string::npos,
+        "RefuseOtherHeight must pin pending height 2, got: " << refused.err->errorMessage());
+
+    // KeepProbe: verify=false sibling at the pending height must not drop the slot.
+    auto probe =
+        executeOpBlock(f, makeHeaderAt(2, bcos::u256(2'000'000'000)), {depProbe}, /*verify=*/false);
+    BOOST_REQUIRE_MESSAGE(probe.err == nullptr,
+        "KeepProbe execute: " << (probe.err ? probe.err->errorMessage() : ""));
+    auto stillRefused = invokeExecute(
+        f, assembleBlock(f, makeHeaderAt(3, bcos::u256(3'000'000'000)), {depEnv}), /*verify=*/true);
+    BOOST_REQUIRE(stillRefused.err != nullptr);
+    BOOST_CHECK_EQUAL(
+        stillRefused.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidStatus);
+    BOOST_CHECK_MESSAGE(
+        stillRefused.err->errorMessage().find("Uncommitted pending block 2") != std::string::npos,
+        "KeepProbe must leave pending 2 occupied, got: " << stillRefused.err->errorMessage());
+
+    // (b) verify=true replace at height 2; commit must find exactly one pushed layer.
+    int txNotify = 0;
+    f.scheduler->setTransactionNotifier(
+        [&](bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
+            std::function<void(bcos::Error::Ptr)> cb) {
+            ++txNotify;
+            cb(nullptr);
+        });
+    auto block2b =
+        executeOpBlock(f, makeHeaderAt(2, bcos::u256(2'000'000'000)), {dep2b}, /*verify=*/true);
+    BOOST_REQUIRE_MESSAGE(block2b.err == nullptr,
+        "ReplaceSameHeight execute: " << (block2b.err ? block2b.err->errorMessage() : ""));
+    BOOST_REQUIRE(block2b.header != nullptr);
+
+    bcos::Error::Ptr commitErr;
+    bool called = false;
+    f.scheduler->commitBlock(
+        block2b.header, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) {
+            called = true;
+            commitErr = std::move(e);
+        });
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE_MESSAGE(
+        commitErr == nullptr, "replace commit must merge the single remaining layer: "
+                                  << (commitErr ? commitErr->errorMessage() : ""));
+    BOOST_CHECK_EQUAL(txNotify, 1);
+
+    // Occupied pending at 3, then reset restores lastExecuted to lastCommitted (2).
+    auto block3 =
+        executeOpBlock(f, makeHeaderAt(3, bcos::u256(3'000'000'000)), {dep3}, /*verify=*/true);
+    BOOST_REQUIRE_MESSAGE(block3.err == nullptr,
+        "execute block 3: " << (block3.err ? block3.err->errorMessage() : ""));
+    f.scheduler->reset([&](bcos::Error::Ptr err) { BOOST_REQUIRE(err == nullptr); });
+
+    // (c) non-contiguous execute after reset.
+    auto discontinuous = invokeExecute(
+        f, assembleBlock(f, makeHeaderAt(5, bcos::u256(5'000'000'000)), {depEnv}), /*verify=*/true);
+    BOOST_REQUIRE(discontinuous.err != nullptr);
+    BOOST_CHECK_EQUAL(
+        discontinuous.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidBlockNumber);
+    BOOST_CHECK_MESSAGE(discontinuous.err->errorMessage().find("expect: 3") != std::string::npos &&
+                            discontinuous.err->errorMessage().find("input: 5") != std::string::npos,
+        "reset must restore lastExecuted to committed tip 2, got: "
+            << discontinuous.err->errorMessage());
+}
+
+/// execute-only construction (null ledger) must not deref; commit returns InvalidStatus.
+BOOST_AUTO_TEST_CASE(CommitWithoutLedgerReturnsInvalidStatus)
+{
+    Fixture f;
+    auto execOnly =
+        std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(f.receiptFactory, f.hashImpl,
+            kChainId, f.forkFlags, f.blockFactory, f.multiLayerStorage, nullptr, f.ioServicePool);
+    auto saved = f.scheduler;
+    f.scheduler = execOnly;
+
+    auto depEnv = encodeDepositEnvelope(makeDeposit());
+    auto executed = executeOpBlock(f, makeHeader(), {depEnv}, /*verify=*/true);
+    BOOST_REQUIRE_MESSAGE(executed.err == nullptr,
+        "execute-only executeBlock: " << (executed.err ? executed.err->errorMessage() : ""));
+    BOOST_REQUIRE(executed.header != nullptr);
+
+    bcos::Error::Ptr commitErr;
+    bool called = false;
+    execOnly->commitBlock(
+        executed.header, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) {
+            called = true;
+            commitErr = std::move(e);
+        });
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE(commitErr != nullptr);
+    BOOST_CHECK_EQUAL(commitErr->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidStatus);
+    BOOST_CHECK_MESSAGE(
+        commitErr->errorMessage().find("execute-only construction") != std::string::npos,
+        "null-ledger commit must name execute-only construction, got: "
+            << commitErr->errorMessage());
+    f.scheduler = std::move(saved);
 }
 
 /// Unknown address → empty code, no error (getCode only reads features, never calls
