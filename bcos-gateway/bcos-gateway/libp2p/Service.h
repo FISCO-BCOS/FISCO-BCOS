@@ -56,6 +56,9 @@ public:
     task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& header,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
+    task::Task<void> sendMessageByNodeIDs(uint16_t _type, const std::vector<P2pID>& _nodeIDs,
+        bcos::bytes _payload, Options options = Options()) override;
+
     /**
      * @brief: (coroutine) broadcast a message to all connected sessions. The message is handed
      *         over as a shared_ptr: broadcastMessageToAll fans out one coroutine per peer and each
@@ -101,17 +104,9 @@ public:
         std::shared_lock lock(x_sessions);
         return getP2PSessionByNodeIdWithoutLock(_nodeID);
     }
-    void asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
-        Options options = Options(), P2PResponseCallback _callback = nullptr) override;
 
     void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
         SessionFace&, const Message&, uint32_t)> _handler);
-
-    void asyncBroadcastMessageToP2PNodes(
-        uint16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options) override;
-
-    void asyncSendMessageByP2PNodeIDs(uint16_t _type, const std::vector<P2pID>& _nodeIDs,
-        bytesConstRef _payload, Options _options) override;
 
     bool registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler) override;
 
@@ -133,7 +128,6 @@ public:
 protected:
     std::shared_ptr<P2PSession> getP2PSessionByNodeIdWithoutLock(P2pID const& _nodeID) const;
 
-    std::shared_ptr<P2PMessage> newP2PMessage(uint16_t _type, bytesConstRef _payload);
     // handshake protocol
     void asyncSendProtocol(P2PSession::Ptr _session);
     void onReceiveProtocol(

@@ -50,9 +50,6 @@ public:
     // empty when negotiate failed or negotiate unfinished
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const;
 
-    virtual void asyncSendP2PMessage(P2PMessage::Ptr message, Options options,
-        SessionCallbackFunc callback = SessionCallbackFunc());
-
     task::Task<Message::Ptr> fastSendP2PMessage(
         P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
 

@@ -168,50 +168,6 @@ void P2PSession::heartBeat()
     }
 }
 
-void P2PSession::asyncSendP2PMessage(
-    P2PMessage::Ptr message, Options options, SessionCallbackFunc callback)
-{
-    if (!m_session || !m_session->active()) [[unlikely]]
-    {
-        P2PSESSION_LOG(WARNING) << LOG_DESC("asyncSendP2PMessage failed for invalid session")
-                                << LOG_KV("from", message->printSrcP2PNodeID())
-                                << LOG_KV("dst", message->printDstP2PNodeID());
-        return;
-    }
-    auto service = m_service.lock();
-    if (!service)
-    {
-        return;
-    }
-    // reset message using original long nodeID or short nodeID according to the protocol version
-    // Note: m_protocolInfo be setted when create P2PSession
-    service->resetP2pID(*message, (ProtocolVersion)m_protocolInfo->version());
-    // route through the coroutine fast path: the message (shared_ptr) and the callback are passed as
-    // coroutine parameters so they are copied into the frame and stay alive for the whole (possibly
-    // deferred) send; response/error is delivered to callback
-    auto self = shared_from_this();
-    task::wait([](std::shared_ptr<P2PSession> _self, P2PMessage::Ptr _message, Options _options,
-                   SessionCallbackFunc _callback) mutable -> task::Task<void> {
-        Options sendOptions{_options.timeout, _callback ? true : false};
-        try
-        {
-            auto resp = co_await _self->fastSendP2PMessage(
-                *_message, ::ranges::views::single(_message->payload()), sendOptions);
-            if (_callback)
-            {
-                _callback(NetworkException(), resp);
-            }
-        }
-        catch (NetworkException const& e)
-        {
-            if (_callback)
-            {
-                _callback(e, nullptr);
-            }
-        }
-    }(self, message, options, callback));
-}
-
 bcos::task::Task<Message::Ptr> P2PSession::fastSendP2PMessage(
     P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
