@@ -200,7 +200,8 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataConversion)
     tarsLog.data = {static_cast<char>(0xde), static_cast<char>(0xad)};
     inner.data.logEntries.push_back(std::move(tarsLog));
 
-    auto eth = protocol::toEthReceiptData(*receipt, 2);  // EIP-1559
+    protocol::EthReceiptData eth;
+    BOOST_REQUIRE(!protocol::toEthReceiptData(*receipt, 2, eth));  // EIP-1559
 
     BOOST_CHECK_EQUAL(eth.type, 2);
     BOOST_CHECK_EQUAL(eth.status, 1);  // None -> EIP-658 success
@@ -219,9 +220,25 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataConversion)
 
     // Failure status maps to EIP-658 0.
     inner.data.status = static_cast<int32_t>(TransactionStatus::RevertInstruction);
-    auto ethFail = protocol::toEthReceiptData(*receipt, 1);
+    protocol::EthReceiptData ethFail;
+    BOOST_REQUIRE(!protocol::toEthReceiptData(*receipt, 1, ethFail));
     BOOST_CHECK_EQUAL(ethFail.status, 0);
     BOOST_CHECK_EQUAL(ethFail.type, 1);
+}
+
+// Fail closed: a logsBloom of the wrong size must be rejected, not silently substituted,
+// because the value feeds the receiptsRoot trie.
+BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedBloom)
+{
+    auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+    auto& inner = receipt->inner();
+    inner.data.status = 0;
+    inner.data.gasUsed = "21000";
+    inner.cumulativeGasUsed = "42000";
+    inner.logsBloom.assign(32, static_cast<char>(0xab));  // wrong size (not 256)
+
+    protocol::EthReceiptData eth;
+    BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, 1, eth) != nullptr);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

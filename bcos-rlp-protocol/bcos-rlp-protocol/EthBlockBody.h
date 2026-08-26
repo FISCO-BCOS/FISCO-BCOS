@@ -77,15 +77,16 @@ private:
 
 namespace bcos::codec::rlp
 {
-namespace
+namespace detail
 {
 // RLP length of one transaction inside a block-body transactions list, with the
 // wire semantics geth uses: legacy txs (leading byte >= 0xc0 — already a complete
 // RLP list) are spliced raw; typed txs (leading byte 0x01..0x7f) are wrapped in an
 // RLP string (geth's Transaction.EncodeRLP). The generic bytes codec would wrap
 // EVERY element as a string, which corrupts legacy txs, so the list is built by
-// hand.
-size_t txWireLength(bcos::bytes const& _tx) noexcept
+// hand. (detail + inline: this is an installed public header, so an anonymous
+// namespace here would give every TU its own copy and risk ODR violations.)
+inline size_t txWireLength(bcos::bytes const& _tx) noexcept
 {
     if (!_tx.empty() && _tx.front() < LIST_HEAD_BASE)
     {
@@ -95,7 +96,7 @@ size_t txWireLength(bcos::bytes const& _tx) noexcept
 }
 
 // RLP length of the complete transactions list element (header + payload).
-size_t txListLength(std::vector<bcos::bytes> const& _txs) noexcept
+inline size_t txListLength(std::vector<bcos::bytes> const& _txs) noexcept
 {
     size_t payload = 0;
     for (auto const& tx : _txs)
@@ -107,7 +108,7 @@ size_t txListLength(std::vector<bcos::bytes> const& _txs) noexcept
 
 // Encode the complete transactions list element (header + payload), splicing
 // legacy txs raw and string-wrapping typed txs.
-bcos::bytes encodeTxList(std::vector<bcos::bytes> const& _txs) noexcept
+inline bcos::bytes encodeTxList(std::vector<bcos::bytes> const& _txs) noexcept
 {
     size_t const payload = [&_txs] {
         size_t sum = 0;
@@ -138,7 +139,7 @@ bcos::bytes encodeTxList(std::vector<bcos::bytes> const& _txs) noexcept
 // EIP-2718 bytes: a typed tx (RLP string) loses its string prefix (0xNN||payload
 // is returned, matching what encodeTxList wraps); a legacy tx (RLP list) is taken
 // whole. Malformed input (e.g. a bare type byte 0x00) is rejected.
-bcos::Error::UniquePtr decodeTx(bcos::bytesRef& _in, bcos::bytes& _out) noexcept
+inline bcos::Error::UniquePtr decodeTx(bcos::bytesRef& _in, bcos::bytes& _out) noexcept
 {
     if (_in.empty())
     {
@@ -186,14 +187,14 @@ bcos::Error::UniquePtr decodeTx(bcos::bytesRef& _in, bcos::bytes& _out) noexcept
     return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
         "invalid EIP-2718 type byte 0x00 in block body");
 }
-}  // namespace
+}  // namespace detail
 
 // Overloads so EthBlockBodyData works as an item inside the generic list/vector codecs.
 // The header codec (EthBlockHeaderData) is the single source of truth for the header
 // field order; the transactions list is built by hand so legacy txs stay raw lists.
 inline size_t length(const protocol::EthBlockBodyData& _body) noexcept
 {
-    size_t const txsLen = txListLength(_body.transactions);
+    size_t const txsLen = detail::txListLength(_body.transactions);
     size_t payload =
         bcos::codec::rlp::length(_body.header) + txsLen + length(_body.ommers);
     if (_body.withdrawals.has_value())
@@ -204,7 +205,7 @@ inline size_t length(const protocol::EthBlockBodyData& _body) noexcept
 }
 inline void encode(bcos::bytes& _out, const protocol::EthBlockBodyData& _body) noexcept
 {
-    bcos::bytes const txsList = encodeTxList(_body.transactions);
+    bcos::bytes const txsList = detail::encodeTxList(_body.transactions);
     size_t payload =
         bcos::codec::rlp::length(_body.header) + txsList.size() + length(_body.ommers);
     if (_body.withdrawals.has_value())
@@ -260,7 +261,7 @@ inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthBlockBody
     while (!txPayload.empty())
     {
         bcos::bytes tx;
-        if (auto err = decodeTx(txPayload, tx))
+        if (auto err = detail::decodeTx(txPayload, tx))
         {
             return err;
         }

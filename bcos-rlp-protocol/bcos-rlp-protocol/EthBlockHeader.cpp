@@ -487,10 +487,11 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
 
 bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
 {
-    // The shared scalar codec now fails closed on over-wide uint payloads (> target width)
-    // and leading zeros (matching geth's errUintOverflow / ErrCanonInt), so a malformed
-    // header is rejected here at decode time instead of being accepted and later
-    // normalised when hashing the canonical re-encoding.
+    // The shared scalar codec now fails closed on over-wide uint payloads (> target width),
+    // so a malformed header is rejected here at decode time instead of being accepted and
+    // later normalised when hashing the canonical re-encoding. Leading zeros are still
+    // accepted by the codec; the canonical re-encode below is what guards the hash against
+    // them.
     //
     // The codec's decode takes a mutable bytesRef& (it advances a view cursor); the bytes
     // themselves are never written, so a single copy into a mutable buffer is enough.

@@ -172,9 +172,9 @@ bcos::Error::UniquePtr EthReceipt::rlpDecode(bcos::bytesConstRef data)
     return codec::rlp::decode(in, m_data);
 }
 
-EthReceiptData toEthReceiptData(TransactionReceipt const& receipt, uint8_t txType)
+bcos::Error::UniquePtr toEthReceiptData(
+    TransactionReceipt const& receipt, uint8_t txType, EthReceiptData& eth)
 {
-    EthReceiptData eth;
     eth.type = txType;
     // The BCOS receipt carries the FISCO TransactionStatus convention (None = 0 = success,
     // per mapEvmcStatusToBcosStatus); the Ethereum receipt commits EIP-658 status 1 for
@@ -212,8 +212,11 @@ EthReceiptData toEthReceiptData(TransactionReceipt const& receipt, uint8_t txTyp
     }
     else
     {
-        BCOS_LOG(WARNING) << "toEthReceiptData: logsBloom size mismatch: " << bloom.size()
-                          << " != " << eth.logsBloom.size();
+        // Fail closed: the bloom feeds the receipts root, so a substituted bloom would
+        // silently corrupt the trie. Surface the fault instead of logging and continuing.
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedLength,
+            "toEthReceiptData: logsBloom size mismatch: " + std::to_string(bloom.size()) +
+                " != " + std::to_string(eth.logsBloom.size()));
     }
     eth.logs.reserve(receipt.logEntries().size());
     for (auto const& log : receipt.logEntries())
@@ -229,6 +232,6 @@ EthReceiptData toEthReceiptData(TransactionReceipt const& receipt, uint8_t txTyp
         ethLog.data = log.data().toBytes();
         eth.logs.push_back(std::move(ethLog));
     }
-    return eth;
+    return nullptr;
 }
 }  // namespace bcos::protocol
