@@ -478,9 +478,10 @@ namespace engine = bcos::evm::engine;
 }
 
 /// Shared chainId gate (review finding C): the SIGNED envelope's chainId must equal the node
-/// chainId — never the forgeable tars mirror. Typed envelopes always carry chainId (RLP field 0);
-/// nullopt there is malformed, not a pre-EIP-155 exemption. Both execution paths call this
-/// envelope-bytes core so parser semantics and rejection text cannot drift.
+/// chainId — never the forgeable tars mirror. Typed envelopes carry chainId in RLP field 0,
+/// except 0x7E deposits whose field 0 is sourceHash; nullopt elsewhere is malformed, not a
+/// pre-EIP-155 exemption. Both execution paths call this envelope-bytes core so parser
+/// semantics and rejection text cannot drift.
 /// Legacy envelopes: only a genuinely unprotected form (6-field preimage or v=27/28) is exempt;
 /// a malformed v (0/1, 29-34) or unparseable tail fails closed instead of being folded into the
 /// unprotected exemption (op-geth rejects such signatures).

@@ -624,6 +624,23 @@ private:
                 pending = *m_pending;
             }
 
+            // Bind the commit to the exact block that was executed: a replace at this height
+            // swaps m_pending for a divergent block, and committing its layer under the old
+            // header would silently persist a different payload than the caller believes.
+            // Compare the executed headers directly — announcedBlockHash is the CL hash of the
+            // announced header and cannot be recomputed from the executed header (engine wiring
+            // passes the executed header back into commitBlock).
+            if (bcos::protocol::EthBlockHeader::computeHash(*header) !=
+                bcos::protocol::EthBlockHeader::computeHash(*pending.executedHeader))
+            {
+                auto message = fmt::format(
+                    "Commit block {} does not match the announced block being committed", number);
+                OP_SCHEDULER_LOG(ERROR) << message;
+                co_return {
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
+                    nullptr};
+            }
+
             if (!co_await commitContinuityCheck(number))
             {
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,

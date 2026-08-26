@@ -1080,6 +1080,24 @@ BOOST_AUTO_TEST_CASE(PendingSlotStateMachine)
         "ReplaceSameHeight execute: " << (block2b.err ? block2b.err->errorMessage() : ""));
     BOOST_REQUIRE(block2b.header != nullptr);
 
+    // Committing the replaced block's header must be refused: the slot now holds block 2b,
+    // whose announced hash differs from block 2a's.
+    bcos::Error::Ptr staleCommitErr;
+    bool staleCalled = false;
+    f.scheduler->commitBlock(
+        block2a.header, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) {
+            staleCalled = true;
+            staleCommitErr = std::move(e);
+        });
+    BOOST_REQUIRE(staleCalled);
+    BOOST_REQUIRE(staleCommitErr != nullptr);
+    BOOST_CHECK_EQUAL(
+        staleCommitErr->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidBlockNumber);
+    BOOST_CHECK_MESSAGE(staleCommitErr->errorMessage().find("does not match the announced block") !=
+                            std::string::npos,
+        "stale-header commit must be refused by the announced-hash binding, got: "
+            << staleCommitErr->errorMessage());
+
     bcos::Error::Ptr commitErr;
     bool called = false;
     f.scheduler->commitBlock(
@@ -1243,6 +1261,8 @@ BOOST_AUTO_TEST_CASE(ConsensusRejectionClassifiedAsOpConsensusRejected)
     BOOST_REQUIRE(called);
     BOOST_REQUIRE(err != nullptr);
     BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::OpConsensusRejected);
+    BOOST_CHECK_MESSAGE(err->errorMessage().find("0x03") != std::string::npos,
+        "0x03 rejection must name the type byte, got: " << err->errorMessage());
     BOOST_CHECK(executedHeader == nullptr);
 }
 
