@@ -76,7 +76,7 @@ void FakeGateway::asyncSendMessageByNodeIDs(const std::string& _groupID, int,
 }
 bcos::task::Task<void> bcos::front::test::FakeGateway::broadcastMessage(uint16_t type,
     std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
-    ::ranges::any_view<bytesConstRef> payloads)
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads)
 {
     auto data = ::ranges::views::join(payloads) | ::ranges::to<bcos::bytes>();
     auto nodeIDPtr = std::shared_ptr<bcos::crypto::NodeID>(

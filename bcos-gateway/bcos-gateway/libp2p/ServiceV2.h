@@ -52,11 +52,22 @@ public:
     void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
     bool isReachable(P2pID const& _nodeID) const override;
 
+    // (coroutine) broadcast to all reachable nodes through the router table
+    task::Task<void> broadcastMessageToAll(P2PMessage::Ptr message,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
+        Options options = Options()) override;
+
     // handlers called when the node is unreachable
     void registerUnreachableHandler(std::function<void(std::string)> _handler) override;
 
     task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
+
+    // (coroutine) forward a received message to its destination through the router table. Unlike
+    // sendMessageByNodeID it does NOT rewrite srcP2PNodeID: the original sender must be preserved
+    // so the final destination can reply to it directly.
+    task::Task<Message::Ptr> forwardMessageByNodeID(P2pID nodeID, P2PMessage& message,
+        ::ranges::any_view<bytesConstRef> payloads, Options options = Options());
 
     std::string getShortP2pID(std::string const& rawP2pID) const override;
     std::string getRawP2pID(std::string const& shortP2pID) const override;

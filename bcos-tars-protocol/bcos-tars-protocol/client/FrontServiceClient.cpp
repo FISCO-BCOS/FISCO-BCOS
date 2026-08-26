@@ -215,8 +215,8 @@ void bcostars::FrontServiceClient::asyncSendMessageByNodeIDs(
         ->async_asyncSendMessageByNodeIDs(
             nullptr, _moduleID, tarsNodeIDs, std::vector<char>(_data.begin(), _data.end()));
 }
-bcos::task::Task<void> bcostars::FrontServiceClient::broadcastMessage(
-    uint16_t _type, int _moduleID, ::ranges::any_view<bcos::bytesConstRef> payloads)
+bcos::task::Task<void> bcostars::FrontServiceClient::broadcastMessage(uint16_t _type,
+    int _moduleID, ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads)
 {
     std::vector<char> data;
     for (auto payload : payloads)

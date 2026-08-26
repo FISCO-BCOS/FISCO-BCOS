@@ -129,7 +129,6 @@ public:
 
     uint32_t lengthDirect() const override;
     uint32_t length() const override;
-    // virtual void setLength(uint32_t length) { m_length = length; }
 
     uint16_t version() const override;
     virtual void setVersion(uint16_t version);
@@ -151,7 +150,6 @@ public:
 
     void setRespPacket();
     bool encode(bytes& _buffer) override;
-    bool encode(EncodedMessage& _buffer) const override;
     int32_t decode(const bytesConstRef& _buffer) override;
     bool isRespPacket() const override;
 

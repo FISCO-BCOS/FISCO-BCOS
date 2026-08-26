@@ -669,8 +669,9 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to, int32_t blockD
                     blockRequest->setBlockInterval(interval);
                 }
                 auto encodedData = blockRequest->encode();
-                m_config->frontService()->asyncSendMessageByNodeID(
-                    ModuleID::BlockSync, _p->nodeId(), ref(*encodedData), 0, nullptr);
+                // owned payload -> zero-copy through the front/gateway coroutine fast path
+                m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+                    ModuleID::BlockSync, _p->nodeId(), std::move(encodedData));
 
                 m_maxRequestNumber = std::max(m_maxRequestNumber.load(), to);
 
@@ -882,8 +883,8 @@ void BlockSync::fetchAndSendBlock(
                 _block->encode(blockData);
                 blocksReq->appendBlockData(std::move(blockData));
                 blocksReq->setNumber(_number);
-                config->frontService()->asyncSendMessageByNodeID(
-                    ModuleID::BlockSync, _peer, ref(*(blocksReq->encode())), 0, nullptr);
+                config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+                    ModuleID::BlockSync, _peer, blocksReq->encode());
                 BLKSYNC_LOG(DEBUG)
                     << BLOCK_NUMBER(_number) << LOG_DESC("fetchAndSendBlock: response block")
                     << LOG_KV("toPeer", _peer->shortHex())
@@ -960,12 +961,32 @@ void BlockSync::sendSyncStatusByTree()
     // Note: connectedNodeSet() cannot be used directly here, because connectedNodeSet()
     // contains light nodes, but the nodes in groupNodeList() are not necessarily connected to this
     // node, so take the intersection of the two.
+    auto front = m_config->frontService();
     auto const& groupNodeList =
         m_syncTreeTopology->selectNodesForBlockSync(m_config->connectedGroupNodeList());
     for (auto const& nodeID : *groupNodeList)
     {
-        m_config->frontService()->asyncSendMessageByNodeID(
-            ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
+        // per-node coroutine keeps the shared encodedData alive and sends it as a view (zero-copy);
+        // all state is passed as coroutine parameters so it is copied into the frame and stays alive
+        task::wait([](decltype(front) _front, decltype(nodeID) _nodeID,
+                       decltype(encodedData) _encodedData) mutable -> task::Task<void> {
+            try
+            {
+                // fire-and-forget: no module-level response expected (timeout == 0)
+                auto result = co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
+                    ::ranges::views::single(ref(*_encodedData)), 0);
+                (void)result;
+            }
+            catch (std::exception const& e)
+            {
+                // a synchronous throw (e.g. gateway local delivery or a bad front) must not break
+                // the per-node loop: log and continue with the next peer
+                BLKSYNC_LOG(WARNING) << LOG_BADGE("BlockSync")
+                                     << LOG_DESC("broadcastSyncStatusByTree send exception")
+                                     << LOG_KV("nodeID", _nodeID->shortHex())
+                                     << LOG_KV("message", boost::diagnostic_information(e));
+            }
+        }(front, nodeID, encodedData));
     }
 }
 
@@ -988,18 +1009,46 @@ void BlockSync::broadcastSyncStatus()
     {
         task::wait([](decltype(encodedData) encodedData,
                        bcos::front::FrontServiceInterface::Ptr front) -> task::Task<void> {
-            co_await front->broadcastMessage(
-                LIGHT_NODE | CONSENSUS_NODE | OBSERVER_NODE | FREE_NODE, ModuleID::BlockSync,
-                ::ranges::views::single(bcos::ref(*encodedData)));
+            try
+            {
+                co_await front->broadcastMessage(
+                    LIGHT_NODE | CONSENSUS_NODE | OBSERVER_NODE | FREE_NODE, ModuleID::BlockSync,
+                    ::ranges::views::single(bcos::ref(*encodedData)));
+            }
+            catch (std::exception const& e)
+            {
+                BLKSYNC_LOG(WARNING) << LOG_BADGE("BlockSync")
+                                     << LOG_DESC("broadcastSyncStatus send exception")
+                                     << LOG_KV("message", boost::diagnostic_information(e));
+            }
         }(std::move(encodedData), m_config->frontService()));
     }
     else
     {
+        auto front = m_config->frontService();
         auto const& groupNodeList = m_config->groupNodeList();
         for (auto const& nodeID : groupNodeList)
         {
-            m_config->frontService()->asyncSendMessageByNodeID(
-                ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
+            // per-node coroutine keeps the shared encodedData alive and sends it as a view; all
+            // state is passed as coroutine parameters so it is copied into the frame and stays alive
+            task::wait([](decltype(front) _front, decltype(nodeID) _nodeID,
+                           decltype(encodedData) _encodedData) mutable -> task::Task<void> {
+                try
+                {
+                    // fire-and-forget: no module-level response expected (timeout == 0)
+                    auto result = co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
+                        ::ranges::views::single(ref(*_encodedData)), 0);
+                    (void)result;
+                }
+                catch (std::exception const& e)
+                {
+                    // a synchronous throw must not break the per-node loop: log and continue
+                    BLKSYNC_LOG(WARNING) << LOG_BADGE("BlockSync")
+                                         << LOG_DESC("broadcastSyncStatus send exception")
+                                         << LOG_KV("nodeID", _nodeID->shortHex())
+                                         << LOG_KV("message", boost::diagnostic_information(e));
+                }
+            }(front, nodeID, encodedData));
         }
     }
 }

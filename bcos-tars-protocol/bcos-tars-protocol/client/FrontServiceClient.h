@@ -41,8 +41,8 @@ public:
     void asyncSendMessageByNodeIDs(int _moduleID,
         const std::vector<bcos::crypto::NodeIDPtr>& _nodeIDs, bcos::bytesConstRef _data) override;
 
-    bcos::task::Task<void> broadcastMessage(
-        uint16_t _type, int _moduleID, ::ranges::any_view<bcos::bytesConstRef> payloads) override;
+    bcos::task::Task<void> broadcastMessage(uint16_t _type, int _moduleID,
+        ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads) override;
 
 private:
     // 30s

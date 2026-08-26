@@ -19,6 +19,8 @@
  * @date 2021-05-13
  */
 #include "GatewayNodeManager.h"
+#include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include <bcos-task/Wait.h>
 #include <cstring>
 
 using namespace std;
@@ -369,14 +371,23 @@ void GatewayNodeManager::onRemoveNodeIDs(const P2pID& _p2pID)
 void GatewayNodeManager::broadcastStatusSeq()
 {
     m_timer->restart();
-    auto message =
-        std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
-    message->setPacketType(GatewayMessageType::SyncNodeSeq);
     auto seq = statusSeq();
     auto statusSeq = boost::asio::detail::socket_ops::host_to_network_long(seq);
-    message->setPayload({(byte*)&statusSeq, (byte*)&statusSeq + 4});
+    bytes payload;
+    payload.insert(payload.end(), (byte*)&statusSeq, (byte*)&statusSeq + 4);
     NODE_MANAGER_LOG(TRACE) << LOG_DESC("broadcastStatusSeq") << LOG_KV("seq", seq);
-    m_p2pInterface->asyncBroadcastMessage(message, Options());
+    auto p2p = m_p2pInterface;
+    // value message held by shared_ptr; the 4-byte seq payload is owned by it (zero-copy view
+    // send). The p2p interface is passed as a coroutine parameter so it is copied into the frame
+    // and stays alive for the whole (possibly deferred) send.
+    task::wait([](P2PInterface::Ptr _p2p, bcos::bytes _payload) mutable
+                   -> task::Task<void> {
+        auto message = std::make_shared<P2PMessageV2>();
+        message->setPacketType(GatewayMessageType::SyncNodeSeq);
+        message->setPayload(std::move(_payload));
+        co_await _p2p->broadcastMessageToAll(
+            message, ::ranges::views::single(message->payload()), Options{});
+    }(p2p, std::move(payload)));
 }
 
 void GatewayNodeManager::syncLatestNodeIDList()

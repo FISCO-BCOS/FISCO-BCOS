@@ -19,7 +19,9 @@
  * @date 2021-04-28
  */
 #include "PBFTLogSync.h"
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-task/Wait.h>
 #include <utility>
 
 using namespace bcos;
@@ -95,9 +97,44 @@ void PBFTLogSync::requestPBFTData(
             // encode
             auto encodedData =
                 config->codec()->encode(_pbftRequest, config->pbftMsgDefaultVersion());
-            // send the request
-            config->frontService()->asyncSendMessageByNodeID(ModuleID::PBFT, _from,
-                ref(*encodedData), config->networkTimeoutInterval(), _callback);
+            // owned payload + coroutine fast path -> zero-copy; co_await waits for the module-level
+            // response (uuid-matched) and the result is delivered to _callback. All state is passed
+            // as coroutine parameters so it is copied into the frame and stays alive for the whole
+            // (possibly deferred) send.
+            auto front = config->frontService();
+            auto networkTimeout = config->networkTimeoutInterval();
+            task::wait([](decltype(front) _front, decltype(_from) _from,
+                           decltype(encodedData) _encodedData, decltype(networkTimeout) _networkTimeout,
+                           decltype(_callback) _callback) mutable -> task::Task<void> {
+                try
+                {
+                    auto result = co_await _front->sendMessageByNodeID(ModuleID::PBFT, _from,
+                        ::ranges::views::single(ref(*_encodedData)), _networkTimeout);
+                    if (_callback)
+                    {
+                        // deliver the module-level response through the caller's callback
+                        // (result.payload is owned by this frame and valid for the callback)
+                        _callback(std::move(result.error), std::move(result.nodeID),
+                            bcos::ref(result.payload), result.uuid, std::move(result.respond));
+                    }
+                }
+                catch (std::exception const& e)
+                {
+                    // restore the base "a send failure still yields a callback" contract: under the
+                    // new coroutine shape the front timeout can no longer rescue a callback that
+                    // was never registered because the send threw before registration.
+                    PBFT_LOG(WARNING) << LOG_DESC("requestPBFTData send exception")
+                                      << LOG_KV("to", _from->shortHex())
+                                      << LOG_KV("message", boost::diagnostic_information(e));
+                    if (_callback)
+                    {
+                        _callback(BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed,
+                                      "requestPBFTData exception: " +
+                                          boost::diagnostic_information(e)),
+                            _from, bytesConstRef(), std::string(), ResponseFunc());
+                    }
+                }
+            }(front, _from, std::move(encodedData), networkTimeout, _callback));
             PBFT_LOG(INFO) << LOG_DESC("request the missed precommit proposal")
                            << LOG_KV("peer", _from->shortHex())
                            << LOG_KV("index", _pbftRequest->index())

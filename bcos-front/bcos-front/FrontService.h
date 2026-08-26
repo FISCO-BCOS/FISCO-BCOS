@@ -91,7 +91,18 @@ public:
         int _moduleID, const crypto::NodeIDs& _nodeIDs, bytesConstRef _data) override;
 
     task::Task<void> broadcastMessage(
-        uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override;
+        uint16_t type, int moduleID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override;
+
+    /**
+     * @brief: (coroutine, zero-copy) send message to one node and await the module-level response.
+     *         The payload rides as views that the caller keeps alive for the duration of the
+     *         co_await; the coroutine resumes with the peer's response (or timeout / gateway
+     *         failure). See FrontServiceInterface::sendMessageByNodeID for the contract.
+     */
+    task::Task<SendResult> sendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
+        uint32_t _timeout) override;
 
     // FIB-185: dispatch the gateway broadcast onto a serial send queue (off the caller thread) so a
     // caller holding a lock (PBFT under m_mutex) is not coupled to gateway session-lock contention.
@@ -228,6 +239,12 @@ protected:
     // on the shared IOServicePool (serialized, never concurrently), so no caller thread runs the
     // gateway send.
     void enqueueSend(std::function<void()> _sendTask);
+
+    // shared uuid/timer/callback registration used by both asyncSendMessageByNodeID and the
+    // coroutine sendMessageByNodeID, so the uuid/timer/addCallback logic is not duplicated.
+    // Returns the generated uuid (used as the message id for the module-level response routing).
+    std::string registerCallback(
+        bcos::crypto::NodeIDPtr _nodeID, uint32_t _timeout, CallbackFunc _callbackFunc);
 
 private:
     bcos::IOServicePool::Ptr m_ioServicePool;

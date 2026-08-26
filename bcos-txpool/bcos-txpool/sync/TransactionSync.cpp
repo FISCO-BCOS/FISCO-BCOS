@@ -256,58 +256,70 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
     auto encodedData = txsRequest->encode();
     auto startT = utcTime();
     auto self = weak_from_this();
-    m_config->frontService()->asyncSendMessageByNodeID(protocolID, std::move(_generatedNodeID),
-        ref(*encodedData), m_config->networkTimeout(),
-        [self, startT, _missedTxs, _verifiedProposal, _onVerifyFinished](
-            auto&& _error, auto&& _nodeID, bytesConstRef _data, const std::string&, auto&&) {
-            try
+    auto front = m_config->frontService();
+    auto networkTimeout = m_config->networkTimeout();
+    // owned payload + coroutine fast path -> zero-copy; the module-level response is delivered to
+    // the same callback through the front receive path (uuid-matched). All state is passed as
+    // coroutine parameters so it is copied into the frame and stays alive for the whole (possibly
+    // deferred) send.
+    task::wait([](decltype(front) _front, decltype(self) _self, decltype(startT) _startT,
+                   decltype(networkTimeout) _networkTimeout, decltype(protocolID) _protocolID,
+                   decltype(_generatedNodeID) _generatedNodeID, decltype(encodedData) _encodedData,
+                   decltype(_missedTxs) _missedTxs, decltype(_verifiedProposal) _verifiedProposal,
+                   decltype(_onVerifyFinished) _onVerifyFinished) mutable -> task::Task<void> {
+        // result is declared outside the try so the catch below can still log the peer on a
+        // synchronous send failure
+        bcos::front::SendResult result;
+        try
+        {
+            result = co_await _front->sendMessageByNodeID(_protocolID, _generatedNodeID,
+                ::ranges::views::single(ref(*_encodedData)), _networkTimeout);
+            auto transactionSync = _self.lock();
+            if (!transactionSync)
             {
-                auto transactionSync = self.lock();
-                if (!transactionSync)
-                {
-                    return;
-                }
-                auto networkT = utcTime() - startT;
-                auto recordT = utcTime();
-                // verify fetch txs response
-                transactionSync->verifyFetchedTxs(_error, _nodeID, _data, _missedTxs,
-                    _verifiedProposal,
-                    [networkT, recordT, _verifiedProposal, _onVerifyFinished](
-                        Error::Ptr _error, bool _result) {
-                        if (!_onVerifyFinished)
-                        {
-                            return;
-                        }
-                        _onVerifyFinished(std::move(_error), _result);
-                        if (!(_verifiedProposal))
-                        {
-                            return;
-                        }
-                        SYNC_LOG(DEBUG)
-                            << LOG_DESC("requestMissedTxs: response verify result")
-                            << LOG_KV("propIndex", _verifiedProposal->blockHeader()->number())
-                            << LOG_KV(
-                                   "propHash", _verifiedProposal->blockHeader()->hash().abridged())
-                            << LOG_KV("_result", _result) << LOG_KV("networkT", networkT)
-                            << LOG_KV("verifyAndSubmitT", (utcTime() - recordT));
-                    });
+                co_return;
             }
-            catch (std::exception const& e)
+            auto networkT = utcTime() - _startT;
+            auto recordT = utcTime();
+            // verify fetch txs response
+            transactionSync->verifyFetchedTxs(result.error, result.nodeID,
+                bcos::ref(result.payload), _missedTxs, _verifiedProposal,
+                [networkT, recordT, _verifiedProposal, _onVerifyFinished](
+                    Error::Ptr _error, bool _result) {
+                    if (!_onVerifyFinished)
+                    {
+                        return;
+                    }
+                    _onVerifyFinished(std::move(_error), _result);
+                    if (!(_verifiedProposal))
+                    {
+                        return;
+                    }
+                    SYNC_LOG(DEBUG)
+                        << LOG_DESC("requestMissedTxs: response verify result")
+                        << LOG_KV("propIndex", _verifiedProposal->blockHeader()->number())
+                        << LOG_KV("propHash",
+                            _verifiedProposal->blockHeader()->hash().abridged())
+                        << LOG_KV("_result", _result) << LOG_KV("networkT", networkT)
+                        << LOG_KV("verifyAndSubmitT", (utcTime() - recordT));
+                });
+        }
+        catch (std::exception const& e)
+        {
+            SYNC_LOG(WARNING)
+                << LOG_DESC("requestMissedTxs: verifyFetchedTxs when recv txs response exception")
+                << LOG_KV("message", boost::diagnostic_information(e))
+                << LOG_KV("_peer", result.nodeID ? result.nodeID->shortHex() : "unknown");
+            if (_onVerifyFinished)
             {
-                SYNC_LOG(WARNING)
-                    << LOG_DESC(
-                           "requestMissedTxs: verifyFetchedTxs when recv txs response exception")
-                    << LOG_KV("message", boost::diagnostic_information(e))
-                    << LOG_KV("_peer", _nodeID->shortHex());
-                if (_onVerifyFinished)
-                {
-                    _onVerifyFinished(
-                        BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed,
-                            "verifyFetchedTxs exception: " + boost::diagnostic_information(e)),
-                        false);
-                }
+                _onVerifyFinished(BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed,
+                                      "verifyFetchedTxs exception: " +
+                                          boost::diagnostic_information(e)),
+                    false);
             }
-        });
+        }
+    }(front, self, startT, networkTimeout, protocolID, std::move(_generatedNodeID),
+        std::move(encodedData), _missedTxs, _verifiedProposal, _onVerifyFinished));
 }
 
 void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data,
@@ -542,11 +554,13 @@ void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
     auto txsStatus = m_config->msgFactory()->createTxsSyncMsg(
         static_cast<uint32_t>(TxsSyncPacketType::TxsStatusPacket), *txsHash);
     auto packetData = txsStatus->encode();
-    m_config->frontService()->asyncSendMessageByNodeID(
-        ModuleID::TxsSync, _fromNode, ref(*packetData), 0, nullptr);
+    auto packetSize = packetData->size();
+    // owned payload -> zero-copy through the front/gateway coroutine fast path
+    m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+        ModuleID::TxsSync, _fromNode, std::move(packetData));
     SYNC_LOG(DEBUG) << LOG_DESC("onPeerTxsStatus: receive empty txsStatus and responseTxsStatus")
                     << LOG_KV("to", _fromNode->shortHex()) << LOG_KV("txsSize", txsHash->size())
-                    << LOG_KV("packetSize", packetData->size());
+                    << LOG_KV("packetSize", packetSize);
 }
 
 void TransactionSync::onEmptyTxs()

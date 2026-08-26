@@ -14,8 +14,11 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
+#include "bcos-gateway/libp2p/Common.h"  // for c_compressThreshold / c_zstdCompressLevel
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Overloaded.h"
+#include "bcos-utilities/ZstdCompress.h"
+#include <bcos-framework/protocol/Protocol.h>  // for MessageExtFieldFlag
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/throw_exception.hpp>
@@ -25,6 +28,7 @@
 #include <functional>
 #include <iterator>
 #include <range/v3/numeric/accumulate.hpp>
+#include <range/v3/view/all.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
 #include <utility>
@@ -32,6 +36,11 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
+
+// ext field offset in the fixed base P2P header: length(4) | version(2) | packetType(2) |
+// seq(4) | ext(2). ext is the last field of the base header (P2PMessage::MESSAGE_HEADER_LENGTH
+// = 14); the V2 ttl/src/dst extension follows it.
+constexpr size_t c_p2pHeaderExtOffset = 12;  // P2PMessage::MESSAGE_HEADER_LENGTH(14) - 2
 
 Session::Session(
     std::shared_ptr<SocketFace> socket, Host& server, size_t _recvBufferSize, bool _forceSize)
@@ -92,27 +101,27 @@ bool Session::active(Host& server) const
     return m_active && server.haveNetwork() && m_socket && m_socket->isConnected();
 }
 
-static void send(Session& session, EncodedMessage encodedMsg)
-{
-    if (!session.active() || !session.m_socket->isConnected())
-    {
-        return;
-    }
-
-    session.m_writeQueue.push({.m_data = std::move(encodedMsg), .m_callback = {}});
-    session.write();
-}
-
 static void send(Session& session, ::ranges::input_range auto payloads,
     std::function<void(boost::system::error_code)> callback)
 {
     if (!session.active() || !session.m_socket->isConnected())
     {
+        // The zero-copy fast path's completion callback must still fire (once) so the suspended
+        // coroutine (fastSendMessageWithoutResponse) is resumed with an error instead of leaking
+        // the whole task::wait chain — which would pin the session/socket/service forever. Post to
+        // the io thread rather than call inline: await_suspend has not returned yet, and a
+        // synchronous resume would re-enter the awaiting coroutine from inside await_suspend.
+        if (callback)
+        {
+            session.m_server.get().asioInterface()->post([callback = std::move(callback)]() {
+                callback(boost::asio::error::not_connected);
+            });
+        }
         return;
     }
 
-    Payload payload{.m_data{Payload::MessageList{}}, .m_callback = std::move(callback)};
-    auto& vec = std::get<1>(payload.m_data);
+    Payload payload{.m_data = Payload::MessageList{}, .m_callback = std::move(callback)};
+    auto& vec = payload.m_data;
     if constexpr (::ranges::sized_range<decltype(payloads)>)
     {
         vec.reserve(::ranges::size(payloads));
@@ -123,105 +132,29 @@ static void send(Session& session, ::ranges::input_range auto payloads,
     }
 
     session.m_writeQueue.push(std::move(payload));
+    // FIB-185 (review): re-check the session state AFTER the push. drop() may have drained the
+    // queue (CAS won) between the active() check above and this push, in which case this
+    // payload's callback would never fire and the whole task::wait chain would leak (it pins the
+    // session/socket/service forever). Either drop()'s drain already popped our payload (its
+    // callback then fires with operation_aborted), or this re-check sees an inactive session and
+    // drains it here. Both paths complete the callback exactly once through the same posted
+    // channel used by the early-return branch above.
+    if (!session.active())
+    {
+        Payload pending;
+        while (session.m_writeQueue.try_pop(pending))
+        {
+            if (pending.m_callback)
+            {
+                session.m_server.get().asioInterface()->post(
+                    [callback = std::move(pending.m_callback)]() {
+                        callback(boost::asio::error::not_connected);
+                    });
+            }
+        }
+        return;
+    }
     session.write();
-}
-
-void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCallbackFunc callback)
-{
-    if (!active(m_server))
-    {
-        SESSION_LOG(WARNING) << "Session inactive";
-        if (callback)
-        {
-            m_server.get().asioInterface()->dispatch([callback = std::move(callback)] {
-                callback(NetworkException(-1, "Session inactive"), Message::Ptr());
-            });
-        }
-        return;
-    }
-
-    // Notice: check message size overflow, if msg->length() > allowMaxMsgSize()
-    if (message->length() > allowMaxMsgSize())
-    {
-        SESSION_LOG(WARNING) << LOG_BADGE("asyncSendMessage") << LOG_DESC("msg size overflow")
-                             << LOG_KV("msgSize", message->length())
-                             << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
-        if (callback)
-        {
-            m_server.get().asioInterface()->dispatch([callback = std::move(callback)] {
-                callback(NetworkException(-1, "Msg size overflow"), Message::Ptr());
-            });
-        }
-        return;
-    }
-
-    auto session = shared_from_this();
-
-    if (auto result =
-            (m_beforeMessageHandler ? m_beforeMessageHandler(*session, *message) : std::nullopt))
-    {
-        if (callback && result.has_value())
-        {
-            const auto& error = result.value();
-            auto errorCode = error.errorCode();
-            auto errorMessage = error.errorMessage();
-            m_server.get().asioInterface()->dispatch([callback = std::move(callback), errorCode,
-                                                         errorMessage = std::move(errorMessage)] {
-                callback(NetworkException((int64_t)errorCode, errorMessage), Message::Ptr());
-            });
-        }
-        return;
-    }
-
-    if (callback)
-    {
-        auto handler = std::make_shared<ResponseCallback>();
-        handler->callback = callback;
-        if (options.timeout > 0)
-        {
-            handler->timeoutHandler.emplace(
-                m_server.get().asioInterface()->newTimer(options.timeout));
-            auto seq = message->seq();
-            handler->timeoutHandler->async_wait(
-                [sessionWeak = std::weak_ptr<Session>(shared_from_this()), seq](
-                    const boost::system::error_code& _error) {
-                    try
-                    {
-                        auto session = sessionWeak.lock();
-                        if (!session)
-                        {
-                            return;
-                        }
-                        session->onTimeout(_error, seq);
-                    }
-                    catch (std::exception const& e)
-                    {
-                        SESSION_LOG(WARNING) << LOG_DESC("async_wait exception")
-                                             << LOG_KV("message", boost::diagnostic_information(e));
-                    }
-                });
-            handler->startTime = utcSteadyTime();
-        }
-
-        m_sessionCallbackManager->addCallback(message->seq(), handler);
-    }
-
-    EncodedMessage encodedMessage;
-    encodedMessage.compress = m_enableCompress;
-    message->encode(encodedMessage);
-
-    if (c_fileLogLevel <= LogLevel::TRACE)
-    {
-        SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
-                           << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message->seq())
-                           << LOG_KV("packetType", message->packetType())
-                           << LOG_KV("ext", message->ext())
-                           << LOG_KV("src", printShortP2pID(message->srcP2PNodeID()))
-                           << LOG_KV("dst", printShortP2pID(message->dstP2PNodeID()))
-                           << LOG_KV("this", this);
-    }
-
-    send(*this, encodedMessage);
 }
 
 std::size_t Session::writeQueueSize()
@@ -324,7 +257,19 @@ void Session::write()
                         {
                             session->m_server.get().asioInterface()->post(
                                 [callback = std::move(payload.m_callback), error = _error]() {
-                                    callback(error);
+                                    // The callback resumes a coroutine whose await_resume may throw
+                                    // (fastSendMessageWithoutResponse throws NetworkException on
+                                    // write failure). Catch so it cannot escape io_context::run().
+                                    try
+                                    {
+                                        callback(error);
+                                    }
+                                    catch (std::exception const& e)
+                                    {
+                                        SESSION_LOG(WARNING)
+                                            << LOG_DESC("write callback exception")
+                                            << LOG_KV("what", boost::diagnostic_information(e));
+                                    }
                                 });
                         }
                     }
@@ -337,6 +282,40 @@ void Session::write()
     {
         SESSION_LOG(ERROR) << LOG_DESC("write error") << LOG_KV("endpoint", nodeIPEndpoint())
                            << LOG_KV("what", boost::diagnostic_information(e));
+        // FIB-185 (review): when asyncWrite throws, the payloads have already been moved into
+        // m_writings->payloads and the completion handler was never registered, so their callbacks
+        // would never fire (drop() only drains m_writeQueue, and this catch runs before any
+        // completion handler exists). Fail them here — posted rather than inline, for the same
+        // reason as drop()'s drain: this catch runs on the caller's stack, which may still be
+        // inside an await_suspend.
+        for (auto& p : m_writings->payloads)
+        {
+            if (p.m_callback)
+            {
+                auto cb = std::move(p.m_callback);
+                if (m_server.get().haveNetwork())
+                {
+                    m_server.get().asioInterface()->post(
+                        [callback = std::move(cb)]() {
+                            callback(boost::asio::error::operation_aborted);
+                        });
+                }
+                else
+                {
+                    try
+                    {
+                        cb(boost::asio::error::operation_aborted);
+                    }
+                    catch (std::exception const& e2)
+                    {
+                        SESSION_LOG(WARNING)
+                            << LOG_DESC("write callback exception")
+                            << LOG_KV("what", boost::diagnostic_information(e2));
+                    }
+                }
+            }
+        }
+        m_writings->payloads.clear();
         drop(TCPError);
         return;
     }
@@ -360,6 +339,49 @@ void Session::drop(DisconnectReason _reason)
     auto socket = m_socket;
 
     m_active = false;
+
+    // Fail any queued zero-copy sends: their completion callbacks resume suspended coroutine
+    // chains (fastSendMessageWithoutResponse). Without this, a session that disappears before the
+    // write completes would leak the whole task::wait chain — including the strong refs to the
+    // session/socket/service it captured (a broadcast fan-out multiplies this by the peer count).
+    // In-flight writes (m_writings) are covered by the asyncWrite completion handler, which
+    // already invokes their callbacks with the error when the socket close cancels the write.
+    // Also covers Session::write()'s early returns: they call drop(TCPError) right after the
+    // payload has been pushed into m_writeQueue.
+    //
+    // FIB-185 (review): complete these callbacks OFF the caller's stack. drop() is reachable from
+    // Session::write()'s early-return path, which runs on the stack of a sender that is still
+    // inside its own await_suspend — calling the callback inline there would resume that coroutine
+    // from inside its own await_suspend (the exact hazard send()'s early-return branch avoids by
+    // posting). Post to the shared pool; when the host is already gone there is no live executor
+    // to hand it to, so fall back to inline — the same shape as the notifyDisconnect / closeSocket
+    // branches below.
+    Payload payload;
+    while (m_writeQueue.try_pop(payload))
+    {
+        if (payload.m_callback)
+        {
+            if (m_server.get().haveNetwork())
+            {
+                m_server.get().asioInterface()->post(
+                    [callback = std::move(payload.m_callback)]() {
+                        callback(boost::asio::error::operation_aborted);
+                    });
+            }
+            else
+            {
+                try
+                {
+                    payload.m_callback(boost::asio::error::operation_aborted);
+                }
+                catch (std::exception const& e)
+                {
+                    SESSION_LOG(WARNING) << LOG_DESC("write callback exception during drop")
+                                         << LOG_KV("what", boost::diagnostic_information(e));
+                }
+            }
+        }
+    }
 
     int errorCode = P2PExceptionType::Disconnect;
     std::string errorMsg = "Disconnect";
@@ -981,11 +1003,81 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
         co_return {};
     }
 
+    // Materialize the payload views once: the incoming any_view is category::input (single-pass),
+    // while the compression/join and the length passes below each iterate the payloads. Copying
+    // the (cheap) views into a forward container makes every later pass multi-pass safe without
+    // changing the interface contract.
+    boost::container::small_vector<bytesConstRef, 3> payloadRefs;
+    for (auto const& ref : payloads)
+    {
+        payloadRefs.push_back(ref);
+    }
+
+    // Encode the base header once. When compression (below) applies, the COMPRESS flag is stamped
+    // directly onto the encoded header's ext field — the caller's message is left untouched (it is
+    // const), so a reused message object (broadcast fan-out / retry loop) can never leak the flag
+    // to a peer that receives an uncompressed frame.
     bytes headerBuffer;
-    message.encodeHeader(headerBuffer);
+    if (!message.encodeHeader(headerBuffer))
+    {
+        // e.g. P2PMessageOptions::encode failed (empty/oversized src/dst IDs). Sending a frame
+        // whose header claims "has options" while the options are missing would make the peer
+        // drop the connection instead of the message.
+        BOOST_THROW_EXCEPTION(NetworkException(-1, "encode header failed"));
+    }
+    // encodeHeader always emits the fixed 14-byte base header (options are appended after it, and
+    // option-encoding failures above are already rejected); guard the two fixed-offset writes
+    // below defensively anyway.
+    if (headerBuffer.size() < c_p2pHeaderExtOffset + sizeof(uint16_t))
+    {
+        BOOST_THROW_EXCEPTION(NetworkException(-1, "encode header failed: header too short"));
+    }
+
+    // Zero-copy send by default. When compression is enabled and the payload is large enough (and
+    // the wire format is V2+ — the same rule as the removed asyncSendMessage path, P2PMessage::
+    // tryToCompressPayload also requires V2), the payload views are joined into a frame-owned
+    // buffer and compressed; the wire then carries header + the compressed payload. Both buffers
+    // live in this coroutine frame for the whole (deferred) send.
+    bcos::bytes joinedPayload;
+    bcos::bytes compressedPayload;
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> wirePayloads =
+        ::ranges::views::all(payloadRefs);
+    if (m_enableCompress &&
+        message.version() >= (uint16_t)bcos::protocol::ProtocolVersion::V2)
+    {
+        uint32_t payloadSize = 0;
+        for (auto const& ref : payloadRefs)
+        {
+            payloadSize += ref.size();
+        }
+        if (payloadSize > c_compressThreshold)
+        {
+            joinedPayload.reserve(payloadSize);
+            for (auto const& ref : payloadRefs)
+            {
+                joinedPayload.insert(joinedPayload.end(), ref.begin(), ref.end());
+            }
+            if (ZstdCompress::compress(
+                    ref(joinedPayload), compressedPayload, (int)c_zstdCompressLevel))
+            {
+                // stamp the COMPRESS flag onto the encoded header only (ext field of the fixed
+                // base header), before the frame is written to the wire
+                const auto compressedExt = static_cast<uint16_t>(
+                    message.ext() | bcos::protocol::MessageExtFieldFlag::COMPRESS);
+                *(uint16_t*)(headerBuffer.data() + c_p2pHeaderExtOffset) =
+                    boost::asio::detail::socket_ops::host_to_network_short(compressedExt);
+                wirePayloads =
+                    ::ranges::views::single(bcos::ref(std::as_const(compressedPayload)));
+            }
+            else
+            {
+                wirePayloads = ::ranges::views::single(bcos::ref(std::as_const(joinedPayload)));
+            }
+        }
+    }
 
     auto view = ::ranges::views::concat(
-        ::ranges::views::single(bcos::ref(std::as_const(headerBuffer))), std::move(payloads));
+        ::ranges::views::single(bcos::ref(std::as_const(headerBuffer))), std::move(wirePayloads));
     uint32_t totalLength = 0;
     for (auto ref : view)
     {
@@ -994,12 +1086,46 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     *(uint32_t*)headerBuffer.data() =
         boost::asio::detail::socket_ops::host_to_network_long(totalLength);
 
+    // The pre-send checks run in the same order as the removed asyncSendMessage path (active →
+    // allowMaxMsgSize → beforeMessageHandler), but the size limit is judged on the COMPRESSED wire
+    // bytes (totalLength, computed above after compression) rather than the pre-compression
+    // estimate the old path used: the peer's read side (Session::doRead) rejects frames by the
+    // on-the-wire length too, so a message that only fits after compression is accepted here and
+    // decodes on the peer — this is an intentional, documented divergence from asyncSendMessage.
+    // The outgoing rate-limit handler receives the ACTUAL wire bytes (totalLength including the
+    // payload views) explicitly — a zero-copy message does not carry its payload, so
+    // message.length() alone would under-count the outgoing traffic.
+    if (totalLength > allowMaxMsgSize())
+    {
+        SESSION_LOG(WARNING) << LOG_BADGE("fastSendMessage") << LOG_DESC("msg size overflow")
+                             << LOG_KV("msgSize", totalLength)
+                             << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
+        BOOST_THROW_EXCEPTION(NetworkException(-1, "Msg size overflow"));
+    }
+
+    // The fast path must honour the same pre-send (outgoing rate-limit) check that the callback
+    // path (asyncSendMessage) enforces; otherwise routing sends through fastSendMessage would
+    // silently bypass outgoing bandwidth/QPS limiting. A rejection surfaces as a thrown
+    // NetworkException (e.g. OutBWOverflow / InQPSOverflow) so coroutine retry loops can stop.
+    if (auto result = (m_beforeMessageHandler ?
+                           m_beforeMessageHandler(*this, message, totalLength) :
+                           std::nullopt))
+    {
+        const auto& error = result.value();
+        BOOST_THROW_EXCEPTION(NetworkException((int64_t)error.errorCode(), error.errorMessage()));
+    }
+
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
+        // Log the ext actually on the wire (the header's ext field), not the caller's ext: when
+        // compression applied, the wire header carries the COMPRESS bit that message.ext() does
+        // not have — a future "peer failed to decompress" investigation must read the wire value.
+        const uint16_t wireExt = boost::asio::detail::socket_ops::network_to_host_short(
+            *reinterpret_cast<uint16_t const*>(headerBuffer.data() + c_p2pHeaderExtOffset));
         SESSION_LOG(TRACE) << LOG_DESC("Session fastSendMessage")
                            << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message.seq())
-                           << LOG_KV("packetType", message.packetType())
-                           << LOG_KV("ext", message.ext()) << LOG_KV("this", this);
+                           << LOG_KV("packetType", message.packetType()) << LOG_KV("ext", wireExt)
+                           << LOG_KV("this", this);
     }
     if (options.response)
     {
@@ -1014,16 +1140,8 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
 
 size_t bcos::gateway::Payload::size() const
 {
-    return std::visit(
-        bcos::overloaded(
-            [](const EncodedMessage& encodedMessage) -> size_t {
-                return encodedMessage.header.size() + encodedMessage.payload.size();
-            },
-            [](const boost::container::small_vector<bytesConstRef, 3>& refs) {
-                return ::ranges::accumulate(refs, size_t(0),
-                    [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
-            }),
-        m_data);
+    return ::ranges::accumulate(m_data, size_t(0),
+        [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
 }
 std::size_t bcos::gateway::SessionRecvBuffer::readPos() const
 {
@@ -1135,7 +1253,7 @@ void bcos::gateway::Session::setMessageHandler(
     m_messageHandler = std::move(messageHandler);
 }
 void bcos::gateway::Session::setBeforeMessageHandler(
-    std::function<std::optional<bcos::Error>(SessionFace&, Message&)> handler)
+    std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)> handler)
 {
     m_beforeMessageHandler = std::move(handler);
 }

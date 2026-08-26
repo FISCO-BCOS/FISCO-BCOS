@@ -74,24 +74,16 @@ private:
 struct Payload
 {
     using MessageList = boost::container::small_vector<bytesConstRef, 3>;
-    std::variant<EncodedMessage, MessageList> m_data;
+    MessageList m_data;
     std::function<void(boost::system::error_code)> m_callback;
 
     size_t size() const;
     void toConstBuffer(std::output_iterator<boost::asio::const_buffer> auto output) const
     {
-        std::visit(bcos::overloaded(
-                       [&](const EncodedMessage& encodedMessage) {
-                           *output = {encodedMessage.header.data(), encodedMessage.header.size()};
-                           *output = {encodedMessage.payload.data(), encodedMessage.payload.size()};
-                       },
-                       [&](const MessageList& refs) {
-                           for (const auto& ref : refs)
-                           {
-                               *output = {ref.data(), ref.size()};
-                           }
-                       }),
-            m_data);
+        for (const auto& ref : m_data)
+        {
+            *output = {ref.data(), ref.size()};
+        }
     }
 };
 
@@ -122,9 +114,6 @@ public:
     void start() override;
     void disconnect(DisconnectReason _reason) override;
 
-    void asyncSendMessage(Message::Ptr message, Options options,
-        SessionCallbackFunc callback = SessionCallbackFunc()) override;
-
     task::Task<Message::Ptr> fastSendMessage(const Message& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options) override;
 
@@ -154,10 +143,11 @@ public:
         std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler)
         override;
 
-    // handle before sending message, if the check fails, meaning false is returned, the message
-    // is not sent, and the SessionCallbackFunc will be performed
-    void setBeforeMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace&, Message&)> handler) override;
+    // handle before sending message: if the check fails (returns an error), the message is not
+    // sent and a NetworkException surfaces so coroutine retry loops can stop. The handler receives
+    // the actual wire length (payload views included) as _wireLength.
+    void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
+        SessionFace&, const Message&, uint32_t _wireLength)> handler) override;
 
     void setHostInfo(P2PInfo _hostInfo);
 
@@ -269,7 +259,8 @@ public:
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
-    std::function<std::optional<bcos::Error>(SessionFace&, Message&)> m_beforeMessageHandler;
+    std::function<std::optional<bcos::Error>(
+        SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
 
     uint64_t m_shutDownTimeThres = 50000;
     // 1min
