@@ -110,19 +110,26 @@ public:
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
             callback) override
     {
-        task::wait([this, block = std::move(block), verify,
-                       cb = std::move(callback)]() mutable -> task::Task<void> {
-            std::apply(cb, co_await coExecuteBlock(std::move(block), verify));
-        }());
+        // Capturing lambda would hold this/block/cb in the closure, which task::wait destroys at
+        // the end of this full-expression; a coroutine that genuinely suspends would then read a
+        // freed closure (BaselineScheduler-tpp.h uses this parameter form for the same reason).
+        task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
+                       std::function<void(
+                           bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
+                           callback) -> task::Task<void> {
+            std::apply(callback, co_await self->coExecuteBlock(std::move(block), verify));
+        }(this, std::move(block), verify, std::move(callback)));
     }
 
     void commitBlock(bcos::protocol::BlockHeader::Ptr header,
         std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback) override
     {
-        task::wait([this, header = std::move(header),
-                       cb = std::move(callback)]() mutable -> task::Task<void> {
-            std::apply(cb, co_await coCommitBlock(std::move(header)));
-        }());
+        task::wait(
+            [](decltype(this) self, bcos::protocol::BlockHeader::Ptr header,
+                std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback)
+                -> task::Task<void> {
+                std::apply(callback, co_await self->coCommitBlock(std::move(header)));
+            }(this, std::move(header), std::move(callback)));
     }
 
     void status(
@@ -161,75 +168,82 @@ public:
     void call(protocol::Transaction::Ptr transaction,
         std::function<void(bcos::Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
-        task::wait([this, tx = std::move(transaction),
-                       cb = std::move(callback)]() mutable -> task::Task<void> {
-            try
-            {
-                cb(nullptr, co_await coCallLatest(std::move(tx)));
-            }
-            catch (const std::exception& e)
-            {
-                // Round-4 F1: no dedicated OpStorageError clause — a storage fault must classify
-                // as OpStorageFault ("storage fault") exactly like callAtBlock's
-                // catch(std::exception&) arm, so latest and historical calls report the same
-                // node-local fault identically.
-                auto const code = classifyException(std::current_exception());
-                OP_SCHEDULER_LOG(WARNING) << LOG_DESC("eth_call failed")
-                                          << LOG_KV("detail", boost::diagnostic_information(e));
-                cb(BCOS_ERROR_PTR(code,
-                       fmt::format("eth_call failed: {} (see node log)", rpcSafeReason(code))),
-                    nullptr);
-            }
-            catch (...)
-            {
-                // Same shape as callAtBlock: classify the unrecognized object and log a trace —
-                // an unlogged "unknown exception" would leave the operator nothing to correlate.
-                auto const code = classifyException(std::current_exception());
-                OP_SCHEDULER_LOG(WARNING)
-                    << LOG_DESC("eth_call failed")
-                    << LOG_KV("detail", describeException(std::current_exception()));
-                cb(BCOS_ERROR_PTR(code,
-                       fmt::format("eth_call failed: {} (see node log)", rpcSafeReason(code))),
-                    nullptr);
-            }
-        }());
+        task::wait(
+            [](decltype(this) self, protocol::Transaction::Ptr transaction,
+                std::function<void(bcos::Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
+                -> task::Task<void> {
+                try
+                {
+                    callback(nullptr, co_await self->coCallLatest(std::move(transaction)));
+                }
+                catch (const std::exception& e)
+                {
+                    // Round-4 F1: no dedicated OpStorageError clause — a storage fault must
+                    // classify as OpStorageFault ("storage fault") exactly like callAtBlock's
+                    // catch(std::exception&) arm, so latest and historical calls report the same
+                    // node-local fault identically.
+                    auto const code = self->classifyException(std::current_exception());
+                    OP_SCHEDULER_LOG(WARNING) << LOG_DESC("eth_call failed")
+                                              << LOG_KV("detail", boost::diagnostic_information(e));
+                    callback(BCOS_ERROR_PTR(code, fmt::format("eth_call failed: {} (see node log)",
+                                                      rpcSafeReason(code))),
+                        nullptr);
+                }
+                catch (...)
+                {
+                    // Same shape as callAtBlock: classify the unrecognized object and log a trace —
+                    // an unlogged "unknown exception" would leave the operator nothing to
+                    // correlate.
+                    auto const code = self->classifyException(std::current_exception());
+                    OP_SCHEDULER_LOG(WARNING)
+                        << LOG_DESC("eth_call failed")
+                        << LOG_KV("detail", self->describeException(std::current_exception()));
+                    callback(BCOS_ERROR_PTR(code, fmt::format("eth_call failed: {} (see node log)",
+                                                      rpcSafeReason(code))),
+                        nullptr);
+                }
+            }(this, std::move(transaction), std::move(callback)));
     }
 
     /// eth_call against the committed MPT at @p blockNumber.
     void callAtBlock(protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
         std::function<void(bcos::Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
-        task::wait([this, tx = std::move(transaction), blockNumber,
-                       cb = std::move(callback)]() mutable -> task::Task<void> {
-            try
-            {
-                auto [error, receipt] = co_await coCallAtBlock(std::move(tx), blockNumber);
-                cb(std::move(error), std::move(receipt));
-            }
-            catch (const std::exception& e)
-            {
-                // Log the detail; return a generic RPC reason.
-                auto const code = classifyException(std::current_exception());
-                OP_SCHEDULER_LOG(WARNING)
-                    << LOG_DESC("eth_call at block failed") << LOG_KV("block", blockNumber)
-                    << LOG_KV("detail", boost::diagnostic_information(e));
-                cb(BCOS_ERROR_PTR(
-                       code, fmt::format("eth_call at block {} failed: {} (see node log)",
-                                 blockNumber, rpcSafeReason(code))),
-                    nullptr);
-            }
-            catch (...)
-            {
-                auto const code = classifyException(std::current_exception());
-                OP_SCHEDULER_LOG(WARNING)
-                    << LOG_DESC("eth_call at block failed") << LOG_KV("block", blockNumber)
-                    << LOG_KV("detail", describeException(std::current_exception()));
-                cb(BCOS_ERROR_PTR(
-                       code, fmt::format("eth_call at block {} failed: {} (see node log)",
-                                 blockNumber, rpcSafeReason(code))),
-                    nullptr);
-            }
-        }());
+        task::wait(
+            [](decltype(this) self, protocol::Transaction::Ptr transaction,
+                protocol::BlockNumber blockNumber,
+                std::function<void(bcos::Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
+                -> task::Task<void> {
+                try
+                {
+                    auto [error, receipt] =
+                        co_await self->coCallAtBlock(std::move(transaction), blockNumber);
+                    callback(std::move(error), std::move(receipt));
+                }
+                catch (const std::exception& e)
+                {
+                    // Log the detail; return a generic RPC reason.
+                    auto const code = self->classifyException(std::current_exception());
+                    OP_SCHEDULER_LOG(WARNING)
+                        << LOG_DESC("eth_call at block failed") << LOG_KV("block", blockNumber)
+                        << LOG_KV("detail", boost::diagnostic_information(e));
+                    callback(BCOS_ERROR_PTR(
+                                 code, fmt::format("eth_call at block {} failed: {} (see node log)",
+                                           blockNumber, rpcSafeReason(code))),
+                        nullptr);
+                }
+                catch (...)
+                {
+                    auto const code = self->classifyException(std::current_exception());
+                    OP_SCHEDULER_LOG(WARNING)
+                        << LOG_DESC("eth_call at block failed") << LOG_KV("block", blockNumber)
+                        << LOG_KV("detail", self->describeException(std::current_exception()));
+                    callback(BCOS_ERROR_PTR(
+                                 code, fmt::format("eth_call at block {} failed: {} (see node log)",
+                                           blockNumber, rpcSafeReason(code))),
+                        nullptr);
+                }
+            }(this, std::move(transaction), blockNumber, std::move(callback)));
     }
 
     /// Contract code at the latest committed height. Do not use getLedgerConfig (header.hash()
@@ -237,92 +251,94 @@ public:
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
     {
-        task::wait([this, contract = std::string(contract),
-                       cb = std::move(callback)]() -> task::Task<void> {
-            try
-            {
-                auto view = m_multiLayerStorage->forkCommitted();
-                auto blockNumber =
-                    co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
-                bcos::ledger::Features features;
-                co_await bcos::ledger::readFromStorage(features, view, blockNumber);
-
-                bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
-                    features.get(bcos::ledger::Features::Flag::feature_raw_address));
-                auto code = co_await account.code();
-                if (!code)
+        task::wait(
+            [](decltype(this) self, std::string contract,
+                std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) -> task::Task<void> {
+                try
                 {
-                    cb(nullptr, {});
-                    co_return;
+                    auto view = self->m_multiLayerStorage->forkCommitted();
+                    auto blockNumber = co_await bcos::ledger::getCurrentBlockNumber(
+                        view, bcos::ledger::fromStorage);
+                    bcos::ledger::Features features;
+                    co_await bcos::ledger::readFromStorage(features, view, blockNumber);
+
+                    bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
+                        features.get(bcos::ledger::Features::Flag::feature_raw_address));
+                    auto code = co_await account.code();
+                    if (!code)
+                    {
+                        callback(nullptr, {});
+                        co_return;
+                    }
+                    auto bytesView = code->get();
+                    callback(nullptr, bcos::bytes(bytesView.begin(), bytesView.end()));
                 }
-                auto bytesView = code->get();
-                cb(nullptr, bcos::bytes(bytesView.begin(), bytesView.end()));
-            }
-            catch (const std::exception& e)
-            {
-                auto const code = classifyException(std::current_exception());
-                OP_SCHEDULER_LOG(WARNING)
-                    << LOG_DESC("getCode failed") << LOG_KV("detail", e.what());
-                cb(BCOS_ERROR_PTR(
-                       code, fmt::format("getCode failed: {} (see node log)", rpcSafeReason(code))),
-                    {});
-            }
-            catch (...)
-            {
-                auto const code = classifyException(std::current_exception());
-                OP_SCHEDULER_LOG(WARNING)
-                    << LOG_DESC("getCode failed")
-                    << LOG_KV("detail", describeException(std::current_exception()));
-                cb(BCOS_ERROR_PTR(
-                       code, fmt::format("getCode failed: {} (see node log)", rpcSafeReason(code))),
-                    {});
-            }
-        }());
+                catch (const std::exception& e)
+                {
+                    auto const code = self->classifyException(std::current_exception());
+                    OP_SCHEDULER_LOG(WARNING)
+                        << LOG_DESC("getCode failed") << LOG_KV("detail", e.what());
+                    callback(BCOS_ERROR_PTR(code, fmt::format("getCode failed: {} (see node log)",
+                                                      rpcSafeReason(code))),
+                        {});
+                }
+                catch (...)
+                {
+                    auto const code = self->classifyException(std::current_exception());
+                    OP_SCHEDULER_LOG(WARNING)
+                        << LOG_DESC("getCode failed")
+                        << LOG_KV("detail", self->describeException(std::current_exception()));
+                    callback(BCOS_ERROR_PTR(code, fmt::format("getCode failed: {} (see node log)",
+                                                      rpcSafeReason(code))),
+                        {});
+                }
+            }(this, std::string(contract), std::move(callback)));
     }
 
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override
     {
-        task::wait([this, contract = std::string(contract),
-                       cb = std::move(callback)]() -> task::Task<void> {
-            try
-            {
-                auto view = m_multiLayerStorage->forkCommitted();
-                auto blockNumber =
-                    co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
-                bcos::ledger::Features features;
-                co_await bcos::ledger::readFromStorage(features, view, blockNumber);
-
-                bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
-                    features.get(bcos::ledger::Features::Flag::feature_raw_address));
-                auto abi = co_await account.abi();
-                if (!abi)
+        task::wait(
+            [](decltype(this) self, std::string contract,
+                std::function<void(bcos::Error::Ptr, std::string)> callback) -> task::Task<void> {
+                try
                 {
-                    cb(nullptr, {});
-                    co_return;
+                    auto view = self->m_multiLayerStorage->forkCommitted();
+                    auto blockNumber = co_await bcos::ledger::getCurrentBlockNumber(
+                        view, bcos::ledger::fromStorage);
+                    bcos::ledger::Features features;
+                    co_await bcos::ledger::readFromStorage(features, view, blockNumber);
+
+                    bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
+                        features.get(bcos::ledger::Features::Flag::feature_raw_address));
+                    auto abi = co_await account.abi();
+                    if (!abi)
+                    {
+                        callback(nullptr, {});
+                        co_return;
+                    }
+                    callback(nullptr, std::string(abi->get()));
                 }
-                cb(nullptr, std::string(abi->get()));
-            }
-            catch (const std::exception& e)
-            {
-                auto const code = classifyException(std::current_exception());
-                OP_SCHEDULER_LOG(WARNING)
-                    << LOG_DESC("getABI failed") << LOG_KV("detail", e.what());
-                cb(BCOS_ERROR_PTR(
-                       code, fmt::format("getABI failed: {} (see node log)", rpcSafeReason(code))),
-                    {});
-            }
-            catch (...)
-            {
-                auto const code = classifyException(std::current_exception());
-                OP_SCHEDULER_LOG(WARNING)
-                    << LOG_DESC("getABI failed")
-                    << LOG_KV("detail", describeException(std::current_exception()));
-                cb(BCOS_ERROR_PTR(
-                       code, fmt::format("getABI failed: {} (see node log)", rpcSafeReason(code))),
-                    {});
-            }
-        }());
+                catch (const std::exception& e)
+                {
+                    auto const code = self->classifyException(std::current_exception());
+                    OP_SCHEDULER_LOG(WARNING)
+                        << LOG_DESC("getABI failed") << LOG_KV("detail", e.what());
+                    callback(BCOS_ERROR_PTR(code, fmt::format("getABI failed: {} (see node log)",
+                                                      rpcSafeReason(code))),
+                        {});
+                }
+                catch (...)
+                {
+                    auto const code = self->classifyException(std::current_exception());
+                    OP_SCHEDULER_LOG(WARNING)
+                        << LOG_DESC("getABI failed")
+                        << LOG_KV("detail", self->describeException(std::current_exception()));
+                    callback(BCOS_ERROR_PTR(code, fmt::format("getABI failed: {} (see node log)",
+                                                      rpcSafeReason(code))),
+                        {});
+                }
+            }(this, std::string(contract), std::move(callback)));
     }
 
     task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
@@ -415,7 +431,13 @@ private:
             }
 
             // One execute at a time. Also take m_commitMutex so pushView / popFrontStorage
-            // cannot race mergeBackStorage (reset() already takes all three).
+            // cannot race mergeBackStorage (reset() already takes all three). NOTE: these
+            // std::unique_lock objects span the co_awaits below, which is safe ONLY while the
+            // whole task::wait chain runs synchronously to completion on the calling thread
+            // (bcos::task's symmetric transfer: Wait.h starts an AsyncTask and returns at the
+            // first real suspension). If a future awaitable genuinely suspends, the closure
+            // fix above (parameter-form task::wait) is not enough here — the locks must be
+            // narrowed or replaced with a coroutine-aware lock.
             std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
             if (!executeLock.owns_lock())
             {
