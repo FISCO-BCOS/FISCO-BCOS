@@ -188,9 +188,9 @@ static bytes makeHeaderRlpWith(uint64_t number, uint64_t timestamp)
     EthBlockHeaderData h = makeLondonHeader();
     bytes payload;
     codec::rlp::encode(payload, h.parentInfo.blockHash, h.uncleHash, h.coinbase, h.stateRoot,
-        h.txsRoot, h.receiptsRoot,
-        bytesConstRef(h.logsBloom.data(), h.logsBloom.size()), h.difficulty, number,
-        h.gasLimit, h.gasUsed, timestamp, h.extraData, h.prevRandao, h.nonce, h.baseFee);
+        h.txsRoot, h.receiptsRoot, bytesConstRef(h.logsBloom.data(), h.logsBloom.size()),
+        h.difficulty, number, h.gasLimit, h.gasUsed, timestamp, h.extraData, h.prevRandao, h.nonce,
+        h.baseFee);
     bytes out;
     codec::rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
     out.insert(out.end(), payload.begin(), payload.end());
@@ -222,7 +222,7 @@ BOOST_AUTO_TEST_CASE(goldenEncode)
     preShanghai.withdrawals.reset();
     EthBlock b(preShanghai);
     bytes out;
-    b.rlpEncode(out);
+    BOOST_REQUIRE(!b.rlpEncode(out));
     BOOST_CHECK_EQUAL(toHex(out), kPreShanghaiHex);
 
     EthBlockData shanghai;
@@ -231,7 +231,7 @@ BOOST_AUTO_TEST_CASE(goldenEncode)
     shanghai.withdrawals = std::vector<EthWithdrawalData>{makeWithdrawal()};
     EthBlock b2(shanghai);
     bytes out2;
-    b2.rlpEncode(out2);
+    BOOST_REQUIRE(!b2.rlpEncode(out2));
     BOOST_CHECK_EQUAL(toHex(out2), kShanghaiHex);
 
     EthBlockData emptyW;
@@ -239,7 +239,7 @@ BOOST_AUTO_TEST_CASE(goldenEncode)
     emptyW.withdrawals = std::vector<EthWithdrawalData>{};
     EthBlock b3(emptyW);
     bytes out3;
-    b3.rlpEncode(out3);
+    BOOST_REQUIRE(!b3.rlpEncode(out3));
     BOOST_CHECK_EQUAL(toHex(out3), kShanghaiEmptyWHex);
 }
 
@@ -284,7 +284,7 @@ BOOST_AUTO_TEST_CASE(roundTrip)
     body.withdrawals = std::vector<EthWithdrawalData>{makeWithdrawal()};
     EthBlock b(body);
     bytes out;
-    b.rlpEncode(out);
+    BOOST_REQUIRE(!b.rlpEncode(out));
     EthBlock decoded;
     BOOST_CHECK(!decoded.rlpDecode(ref(out)));
     BOOST_CHECK(decoded.data() == body);
@@ -306,7 +306,7 @@ BOOST_AUTO_TEST_CASE(legacyTxGolden)
     body.transactions = {legacyTx};
     EthBlock b(body);
     bytes out;
-    b.rlpEncode(out);
+    BOOST_REQUIRE(!b.rlpEncode(out));
 
     EthBlock decoded;
     BOOST_CHECK(!decoded.rlpDecode(ref(out)));
@@ -336,7 +336,7 @@ BOOST_AUTO_TEST_CASE(legacyAndTypedMixedRoundTrip)
     body.withdrawals = std::vector<EthWithdrawalData>{};
     EthBlock b(body);
     bytes out;
-    b.rlpEncode(out);
+    BOOST_REQUIRE(!b.rlpEncode(out));
     EthBlock decoded;
     BOOST_CHECK(!decoded.rlpDecode(ref(out)));
     BOOST_REQUIRE_EQUAL(decoded.data().transactions.size(), 2u);
@@ -354,9 +354,30 @@ BOOST_AUTO_TEST_CASE(rejectsReservedTypeByte)
     body.transactions = {fromHex("0080")};  // 0x00 || rlp(empty payload)
     EthBlock b(body);
     bytes out;
-    b.rlpEncode(out);
+    BOOST_REQUIRE(!b.rlpEncode(out));
     EthBlock decoded;
     BOOST_CHECK(decoded.rlpDecode(ref(out)) != nullptr);
+}
+
+// An empty transaction element must be rejected by the encoder (round-6 lower bound
+// landed only on decode; the encoder must not silently drop it into a hash input).
+BOOST_AUTO_TEST_CASE(rejectsEmptyTransactionElement)
+{
+    EthBlockData body;
+    body.header = makeLondonHeader();
+    body.transactions = {{}};  // one empty element
+    EthBlock b(body);
+    bytes out;
+    BOOST_REQUIRE(b.rlpEncode(out) != nullptr);
+}
+
+// Trailing bytes after the top-level RLP item must be rejected (round-6 F3 guard).
+BOOST_AUTO_TEST_CASE(rlpDecodeRejectsTrailingBytes)
+{
+    bytes wire = fromHex(kPreShanghaiHex);
+    wire.push_back(0xff);
+    EthBlock decoded;
+    BOOST_REQUIRE(decoded.rlpDecode(ref(wire)) != nullptr);
 }
 
 // A 5-element body [header, txs, ommers, withdrawals, extra] must be rejected

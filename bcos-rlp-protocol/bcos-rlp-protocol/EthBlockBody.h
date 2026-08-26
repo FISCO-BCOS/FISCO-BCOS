@@ -66,7 +66,10 @@ public:
     EthBlock() = default;
     explicit EthBlock(EthBlockData data) : m_data(std::move(data)) {}
 
-    void rlpEncode(bcos::bytes& out) const;
+    // Encode the block. Returns nullptr on success; fails closed (with an Error) on
+    // transaction elements the decoder would reject, so encode and decode accept the
+    // same set and no element is silently dropped into a hash input.
+    bcos::Error::UniquePtr rlpEncode(bcos::bytes& out) const;
     // Decodes a single block body (a 3- or 4-element list) from `data`.
     bcos::Error::UniquePtr rlpDecode(bcos::bytesConstRef data);
 

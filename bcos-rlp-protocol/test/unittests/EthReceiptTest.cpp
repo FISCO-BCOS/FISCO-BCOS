@@ -198,6 +198,23 @@ BOOST_AUTO_TEST_CASE(roundTrip)
     BOOST_CHECK(decoded.data() == typed2);
 }
 
+// Trailing bytes after the top-level RLP item must be rejected (round-6 F3 guard).
+BOOST_AUTO_TEST_CASE(rlpDecodeRejectsTrailingBytes)
+{
+    EthReceiptData typed2;
+    typed2.type = 2;
+    typed2.status = 1;
+    typed2.cumulativeGasUsed = 21000;
+    typed2.logsBloom = makeBloom();
+    typed2.logs.push_back(makeLog1());
+    EthReceipt r(typed2);
+    bytes out;
+    r.rlpEncode(out);
+    out.push_back(0xff);
+    EthReceipt decoded;
+    BOOST_REQUIRE(decoded.rlpDecode(ref(out)) != nullptr);
+}
+
 BOOST_AUTO_TEST_CASE(malformedRejected)
 {
     // A type-prefixed receipt whose inner list is empty (no status/cumGas/bloom/logs) is
@@ -277,7 +294,19 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedBloom)
     BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, 1, eth) != nullptr);
 }
 
-// Fail closed on cumulativeGasUsed: empty / non-numeric values must be rejected,
+// An out-of-range EIP-2718 type byte (>= 0x80) must be rejected, not written as a
+// prefix that would be read back as a legacy RLP item head.
+BOOST_AUTO_TEST_CASE(toEthReceiptDataRejectsBadType)
+{
+    auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+    auto& inner = receipt->inner();
+    inner.data.status = 0;
+    inner.data.gasUsed = "21000";
+    inner.cumulativeGasUsed = "42000";
+    inner.logsBloom.assign(256, static_cast<char>(0xab));
+    protocol::EthReceiptData eth;
+    BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, 0x80, eth) != nullptr);
+}
 // because the value feeds the receipts root; the 0x-prefixed hex producer form
 // (opstack-executor) must parse.
 BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedGas)
@@ -311,6 +340,29 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedGas)
         inner.data.status = 0;
         inner.data.gasUsed = "21000";
         inner.cumulativeGasUsed = "0x5208";  // 21000 in hex
+        inner.logsBloom.assign(256, static_cast<char>(0xab));
+        protocol::EthReceiptData eth;
+        BOOST_REQUIRE(!protocol::toEthReceiptData(*receipt, 1, eth));
+        BOOST_CHECK_EQUAL(eth.cumulativeGasUsed, u256(21000));
+    }
+    // Bare "0x" with no digits must fail closed (fromHex("") would yield 0).
+    {
+        auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        auto& inner = receipt->inner();
+        inner.data.status = 0;
+        inner.data.gasUsed = "21000";
+        inner.cumulativeGasUsed = "0x";
+        inner.logsBloom.assign(256, static_cast<char>(0xab));
+        protocol::EthReceiptData eth;
+        BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, 1, eth) != nullptr);
+    }
+    // Leading-zero decimal must not be interpreted as octal: "021000" == 21000.
+    {
+        auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        auto& inner = receipt->inner();
+        inner.data.status = 0;
+        inner.data.gasUsed = "21000";
+        inner.cumulativeGasUsed = "021000";
         inner.logsBloom.assign(256, static_cast<char>(0xab));
         protocol::EthReceiptData eth;
         BOOST_REQUIRE(!protocol::toEthReceiptData(*receipt, 1, eth));

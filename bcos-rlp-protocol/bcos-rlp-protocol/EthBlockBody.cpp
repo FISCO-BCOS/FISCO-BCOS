@@ -24,9 +24,33 @@ using namespace bcos::codec::rlp;
 
 namespace bcos::protocol
 {
-void EthBlock::rlpEncode(bcos::bytes& out) const
+bcos::Error::UniquePtr EthBlock::rlpEncode(bcos::bytes& out) const
 {
+    // Enforce the same invariants the decoder does (empty or too-short transaction
+    // elements) so encode and decode accept the same set — a silently dropped element
+    // would produce a wire form that does not represent the object it was given.
+    for (auto const& tx : m_data.transactions)
+    {
+        if (tx.empty())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
+                "EthBlock::rlpEncode: empty transaction element");
+        }
+        if (tx.front() >= LIST_HEAD_BASE)
+        {
+            // Mirror detail::decodeTx's lower bound: a legacy transaction list has nine
+            // fields, so a declared payload shorter than 9 bytes cannot be one.
+            bytesRef view(const_cast<bcos::byte*>(tx.data()), tx.size());
+            auto [err, header] = bcos::codec::rlp::decodeHeader(view);
+            if (err || !header.isList || header.payloadLength < 9)
+            {
+                return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedListElements,
+                    "EthBlock::rlpEncode: invalid legacy transaction element");
+            }
+        }
+    }
     codec::rlp::encode(out, m_data);
+    return nullptr;
 }
 
 bcos::Error::UniquePtr EthBlock::rlpDecode(bcos::bytesConstRef data)

@@ -188,6 +188,14 @@ bcos::Error::UniquePtr toEthReceiptData(
     // Reset the destination at entry so no stale field (notably postState) can
     // survive from a previous call when the caller reuses the object.
     eth = EthReceiptData{};
+    // EIP-2718 confines the transaction type to 0x00..0x7f; a type byte >= 0x80 would be
+    // written verbatim as the prefix and then read back as the head of a legacy RLP item,
+    // so the receipt would not round-trip. Fail closed like the other inputs here.
+    if (txType >= BYTES_HEAD_BASE)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
+            "toEthReceiptData: invalid EIP-2718 type " + std::to_string(txType));
+    }
     eth.type = txType;
     // The BCOS receipt carries the FISCO TransactionStatus convention (None = 0 = success,
     // per mapEvmcStatusToBcosStatus); the Ethereum receipt commits EIP-658 status 1 for
@@ -215,6 +223,13 @@ bcos::Error::UniquePtr toEthReceiptData(
     auto const isHexDigit = [](char c) {
         return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
     };
+    // Reject an empty digit run ("0x" with no digits): all_of over an empty range
+    // returns true, and fromHex("")/u256 would silently yield 0.
+    if (digits.empty())
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::InvalidFieldset,
+            "toEthReceiptData: empty cumulativeGasUsed payload: " + cumStr);
+    }
     bool const shapeOk = hexForm ? std::all_of(digits.begin(), digits.end(), isHexDigit) :
                                    std::all_of(digits.begin(), digits.end(), isDecimalDigit);
     if (!shapeOk)
@@ -230,7 +245,19 @@ bcos::Error::UniquePtr toEthReceiptData(
         }
         else
         {
-            eth.cumulativeGasUsed = bcos::u256(digits);
+            // Normalise the decimal form so boost's implicit-base rule (a leading 0
+            // selects octal) can never fire: strip leading zeros, keep at least one digit.
+            auto decimalDigits = digits;
+            auto const firstNonZero = decimalDigits.find_first_not_of('0');
+            if (firstNonZero == std::string::npos)
+            {
+                decimalDigits = "0";
+            }
+            else if (firstNonZero > 0)
+            {
+                decimalDigits.erase(0, firstNonZero);
+            }
+            eth.cumulativeGasUsed = bcos::u256(decimalDigits);
         }
     }
     catch (std::exception const&)

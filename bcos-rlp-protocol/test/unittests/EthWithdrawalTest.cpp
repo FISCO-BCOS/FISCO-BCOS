@@ -71,6 +71,18 @@ BOOST_AUTO_TEST_CASE(roundTrip)
     BOOST_CHECK(decoded.data() == wd);
 }
 
+// Trailing bytes after the top-level RLP item must be rejected (round-6 F3 guard).
+BOOST_AUTO_TEST_CASE(rlpDecodeRejectsTrailingBytes)
+{
+    auto wd = makeWithdrawal();
+    EthWithdrawal w(wd);
+    bytes out;
+    w.rlpEncode(out);
+    out.push_back(0xff);
+    EthWithdrawal decoded;
+    BOOST_REQUIRE(decoded.rlpDecode(ref(out)) != nullptr);
+}
+
 // std::vector<EthWithdrawalData> through the generic list codec (used by EthBlock).
 BOOST_AUTO_TEST_CASE(vectorRoundTrip)
 {
