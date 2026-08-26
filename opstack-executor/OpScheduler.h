@@ -167,17 +167,12 @@ public:
             {
                 cb(nullptr, co_await coCallLatest(std::move(tx)));
             }
-            catch (const bcos::evm::engine::OpStorageError& e)
-            {
-                // Log the detail; return a generic RPC message.
-                OP_SCHEDULER_LOG(WARNING)
-                    << LOG_DESC("eth_call failed (storage fault)") << LOG_KV("detail", e.what());
-                cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-                       "eth_call failed: internal error (see node log)"),
-                    nullptr);
-            }
             catch (const std::exception& e)
             {
+                // Round-4 F1: no dedicated OpStorageError clause — a storage fault must classify
+                // as OpStorageFault ("storage fault") exactly like callAtBlock's
+                // catch(std::exception&) arm, so latest and historical calls report the same
+                // node-local fault identically.
                 auto const code = classifyException(std::current_exception());
                 OP_SCHEDULER_LOG(WARNING) << LOG_DESC("eth_call failed")
                                           << LOG_KV("detail", boost::diagnostic_information(e));

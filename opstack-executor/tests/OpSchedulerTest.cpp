@@ -1705,7 +1705,8 @@ BOOST_AUTO_TEST_CASE(CallAtBlockCorruptTrieNodeIsStorageFault)
 /// The latest-path poison tripwire (coCallLatest shares coCallOnView with the historical path —
 /// round-2 F1): a wrong-length slot row at the call target poisons the executor's internal
 /// Storage2State during the getter's SLOAD, the sharedError check throws, and call()'s catch
-/// returns a generic UnknownError (round-2 F4) instead of a status-ok receipt on zero values.
+/// returns OpStorageFault ("storage fault", round-4 F1) instead of a status-ok receipt on zero
+/// values.
 BOOST_AUTO_TEST_CASE(CallLatestStorageReadFaultFailsLoudly)
 {
     const bcos::Address kContract{"0x3000000000000000000000000000000000000000"};
@@ -1744,10 +1745,11 @@ BOOST_AUTO_TEST_CASE(CallLatestStorageReadFaultFailsLoudly)
         err != nullptr, "latest call on a corrupt slot must fail loudly, not return slot 0 = 0");
     BOOST_TEST_CONTEXT("err message: " << err->errorMessage())
     {
-        // call()'s catch(std::exception&) maps every fault to UnknownError with a generic
-        // message (round-2 F4: the diagnostic detail goes to the node log).
-        BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::UnknownError);
-        BOOST_CHECK(err->errorMessage().find("internal error") != std::string::npos);
+        // Round-4 F1: call() no longer has a dedicated OpStorageError clause — the fault
+        // classifies as OpStorageFault ("storage fault") exactly like callAtBlock, so latest
+        // and historical calls report the same node-local fault identically.
+        BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::OpStorageFault);
+        BOOST_CHECK(err->errorMessage().find("storage fault") != std::string::npos);
     }
     BOOST_CHECK(receipt == nullptr);
 }
