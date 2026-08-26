@@ -60,13 +60,15 @@ static std::string staticEncode(T const& in, T2 const& in2, const Args&... args)
 }
 
 template <typename T>
-static T decode(std::string_view hex, int32_t expectedErrorCode = 0)
+static T decode(std::string_view hex, int32_t expectedErrorCode = -1)
 {
     bcos::bytes bytes = fromHex(hex);
     auto bytesRef = bcos::ref(bytes);
     T result{};
     auto&& error = bcos::codec::rlp::decode(bytesRef, result);
-    if (expectedErrorCode == 0)
+    // expectedErrorCode < 0 means "expect success"; note DecodingError::Overflow
+    // is enum value 0, so 0 must mean "expect Overflow" (not success).
+    if (expectedErrorCode < 0)
     {
         BOOST_CHECK(!error);
     }
@@ -81,14 +83,15 @@ static T decode(std::string_view hex, int32_t expectedErrorCode = 0)
 }
 
 template <typename T, typename T2>
-static std::tuple<T, T2> decode(std::string_view hex, int32_t expectedErrorCode = 0)
+static std::tuple<T, T2> decode(std::string_view hex, int32_t expectedErrorCode = -1)
 {
     bcos::bytes bytes = fromHex(hex);
     auto bytesRef = bcos::ref(bytes);
     T r1{};
     T2 r2{};
     auto&& error = bcos::codec::rlp::decode(bytesRef, r1, r2);
-    if (expectedErrorCode == 0)
+    // expectedErrorCode < 0 means "expect success"; see the single-arg helper.
+    if (expectedErrorCode < 0)
     {
         BOOST_CHECK(!error);
     }

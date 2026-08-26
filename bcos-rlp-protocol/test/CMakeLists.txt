@@ -23,5 +23,5 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} rlp-protocol protocol-tars Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} rlp-protocol protocol-tars bcos-protocol Boost::unit_test_framework)
 add_test(NAME test-bcos-rlp-protocol WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

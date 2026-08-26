@@ -93,8 +93,9 @@ BOOST_AUTO_TEST_CASE(rlpEncodeDecodeRoundTrip)
     // header -> Eth
     EthBlockHeader ethHeader(*header);
     BOOST_CHECK_EQUAL(ethHeader.data().number, 77);
-    // The bridge struct mirrors the internal millisecond domain; only the RLP bytes are seconds.
-    BOOST_CHECK_EQUAL(ethHeader.data().timestamp, 1700000000000LL);
+    // The codec struct is wire seconds; the internal millisecond domain lives in timestampMs().
+    BOOST_CHECK_EQUAL(ethHeader.data().timestamp, 1700000000);
+    BOOST_CHECK_EQUAL(ethHeader.timestampMs(), 1700000000000LL);
     BOOST_CHECK_EQUAL(ethHeader.data().gasLimit, u256(30000000));
     BOOST_CHECK_EQUAL(ethHeader.data().gasUsed, u256(21000));
     BOOST_CHECK_EQUAL(ethHeader.data().uncleHash,
@@ -116,7 +117,8 @@ BOOST_AUTO_TEST_CASE(rlpEncodeDecodeRoundTrip)
     BOOST_CHECK(!ethError);
     BOOST_CHECK_EQUAL(decodedEth.data().number, 77);
     // rlpDecode converts the wire's seconds back into internal milliseconds.
-    BOOST_CHECK_EQUAL(decodedEth.data().timestamp, 1700000000000LL);
+    BOOST_CHECK_EQUAL(decodedEth.data().timestamp, 1700000000);
+    BOOST_CHECK_EQUAL(decodedEth.timestampMs(), 1700000000000LL);
     BOOST_CHECK_EQUAL(decodedEth.data().gasLimit, u256(30000000));
     BOOST_CHECK_EQUAL(decodedEth.data().gasUsed, u256(21000));
     BOOST_CHECK(decodedEth.data().baseFee.has_value());
@@ -654,15 +656,16 @@ BOOST_AUTO_TEST_CASE(toTarsHeaderClearsResidual)
 
 // A wire header whose seconds timestamp would overflow int64 milliseconds must be rejected
 // by the decode bridge (rlpDecode) before its x1000 conversion, surfacing through
-// decodeTarsHeader as an error (regression for the seconds->ms bridge).
+// decodeTarsHeader as an error (regression for the seconds->ms bridge). INT64_MAX seconds
+// passes the codec's int64 width gate (round-6) but has no int64 millisecond representation.
 BOOST_AUTO_TEST_CASE(decodeTarsHeaderRejectsOverflowingTimestamp)
 {
-    // Re-encode a valid header's fields with a hostile timestamp: 2^63 encodes fine as a
-    // uint64 RLP scalar but has no int64 millisecond representation.
+    // Re-encode a valid header's fields with a hostile timestamp: INT64_MAX encodes fine as a
+    // uint64 RLP scalar but ×1000 has no int64 millisecond representation.
     auto header = makeEthHeader();
     EthBlockHeader ethHeader(*header);
     auto const& d = ethHeader.data();
-    constexpr uint64_t hostileTimestamp = 0x8000000000000000ULL;
+    constexpr uint64_t hostileTimestamp = 0x7FFFFFFFFFFFFFFFULL;
 
     bytes rlp;
     codec::rlp::encode(rlp, d.parentInfo.blockHash, d.uncleHash, d.coinbase, d.stateRoot, d.txsRoot,
