@@ -18,6 +18,7 @@
 #include <string>
 
 using bcos::executor_v1::eth::toEvmoneTransaction;
+using bcos::executor_v1::opstack::blockPathSenderMissing;
 using bcos::executor_v1::opstack::envelopeChainIdMismatch;
 using bcos::executor_v1::opstack::envelopeExecutionFieldsMismatch;
 namespace rlp = bcos::codec::rlp;
@@ -104,7 +105,8 @@ public:
 /// gasLimit, to, value, data, accessList]).
 bcos::bytes eip1559Envelope(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
     std::string_view toHex, bcos::u256 value, bcos::bytes const& data, bool toIsList = false,
-    bool dataIsList = false)
+    bool dataIsList = false, bool nonceIsList = false, bool gasIsList = false,
+    bool valueIsList = false)
 {
     auto item = [](bcos::bytes const& payload) {
         bcos::bytes out;
@@ -116,21 +118,33 @@ bcos::bytes eip1559Envelope(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
         rlp::encode(out, v);
         return out;
     };
+    // 1-byte list 0xc1 0x05: payloadLength==1 passes the integer width guard, so the kind
+    // check (not decode's UnexpectedList) is what must reject it.
+    auto shortList = []() -> bcos::bytes { return {0xc1, 0x05}; };
     bcos::bytes payload;
     auto append = [&payload](
                       bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(intItem(chainId));
-    append(intItem(nonce));
+    if (nonceIsList)
+        append(shortList());
+    else
+        append(intItem(nonce));
     append(intItem(30000000000));
     append(intItem(30000000000));
-    append(intItem(gasLimit));
+    if (gasIsList)
+        append(shortList());
+    else
+        append(intItem(gasLimit));
     auto toBytes = bcos::fromHex(toHex.substr(2));
     if (toIsList)
         payload.push_back(0xc0);
     else
         append(item(toBytes));
     // Test values are small; encode the u256 as an RLP integer via its low 64 bits.
-    append(intItem(static_cast<uint64_t>(value)));
+    if (valueIsList)
+        append(shortList());
+    else
+        append(intItem(static_cast<uint64_t>(value)));
     if (dataIsList)
         payload.push_back(0xc0);
     else
@@ -473,8 +487,8 @@ BOOST_AUTO_TEST_CASE(ContractCreationEnvelopeToDivergenceRejected)
     BOOST_CHECK(std::string(*mismatch).find("to mismatch") != std::string::npos);
 }
 
-// Ethereum transaction `to` and `data` are byte strings, never RLP lists. Empty-list payloads
-// must not be mistaken for empty byte strings and pass the mirror gate.
+// Ethereum transaction `to` / `data` / nonce / gasLimit / value are byte strings or scalars,
+// never RLP lists. Empty-list or 1-byte-list payloads must not pass the mirror gate.
 BOOST_AUTO_TEST_CASE(ListShapedToAndDataAreRejected)
 {
     FakeTx tx;
@@ -491,6 +505,34 @@ BOOST_AUTO_TEST_CASE(ListShapedToAndDataAreRejected)
     mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
     BOOST_REQUIRE(mismatch.has_value());
     BOOST_CHECK_EQUAL(*mismatch, "data field is an RLP list");
+}
+
+BOOST_AUTO_TEST_CASE(ListShapedIntegerFieldsAreRejected)
+{
+    auto run = [](bool nonceIsList, bool gasIsList, bool valueIsList, char const* needle) {
+        FakeTx tx;
+        tx.m_extraBytes = eip1559Envelope(10, 7, 5000000, "0x", bcos::u256{5}, {}, false, false,
+            nonceIsList, gasIsList, valueIsList);
+        tx.m_value = bcos::u256{5};
+        tx.m_nonce = "0x7";
+        tx.m_gasLimit = 5000000;
+        auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+        BOOST_REQUIRE(mismatch.has_value());
+        BOOST_CHECK_EQUAL(*mismatch, needle);
+    };
+    run(true, false, false, "nonce field is an RLP list");
+    run(false, true, false, "gasLimit field is an RLP list");
+    run(false, false, true, "value field is an RLP list");
+}
+
+BOOST_AUTO_TEST_CASE(BlockPathRejectsEmptySender)
+{
+    FakeTx tx;
+    tx.m_sender.clear();
+    BOOST_REQUIRE(blockPathSenderMissing(tx).has_value());
+    BOOST_CHECK_EQUAL(*blockPathSenderMissing(tx), "empty sender");
+    tx.m_sender.assign(sizeof(evmc_address), '\xaa');
+    BOOST_CHECK(!blockPathSenderMissing(tx).has_value());
 }
 
 BOOST_AUTO_TEST_CASE(LegacyFixtureIsAFullUnprotectedSignedEnvelope)

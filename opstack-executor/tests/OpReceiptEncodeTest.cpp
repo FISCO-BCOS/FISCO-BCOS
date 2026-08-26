@@ -36,35 +36,14 @@ bcos::protocol::TransactionReceipt::Ptr minimalDepositReceipt(
     return r;
 }
 
-/// This binary links the wedprcrypto chain (protocol-tars/bcos-crypto/ledger) that breaks
-/// libc++ typed exception matching binary-wide (the same issue bcos-rpc/test/CMakeLists.txt
-/// documents) — a `catch (const std::exception&)` does NOT bind a thrown OpConsensusError here
-/// and the exception escapes as a Boost.Test fatal. Use catch(...) so a consensus reject can
-/// never escape; then try rethrowing into std::exception to pin the message when RTTI still
-/// works (on the non-wedprcrypto presets), falling back to "rejected, message unverified".
-template <class Fn>
-bool consensusRejectPins(Fn&& fn, std::string_view needle)
+/// Receipt-suite exception pin. Measured on this binary (links protocol-tars / bcos-crypto /
+/// ledger, i.e. the wedprcrypto closure): `catch (const OpConsensusError&)` binds. A
+/// catch(...) that treats any throw as success would false-green these consensus guards.
+inline auto consensusWhatContains(std::string_view needle)
 {
-    try
-    {
-        fn();
-        return false;
-    }
-    catch (...)
-    {
-        try
-        {
-            throw;
-        }
-        catch (const std::exception& e)
-        {
-            return std::string(e.what()).find(std::string{needle}) != std::string::npos;
-        }
-        catch (...)
-        {
-            return true;
-        }
-    }
+    return [needle](bcos::evm::OpConsensusError const& e) {
+        return std::string(e.what()).find(std::string{needle}) != std::string::npos;
+    };
 }
 }  // namespace
 
@@ -361,12 +340,8 @@ BOOST_AUTO_TEST_CASE(ShortLogsBloomIsConsensusReject)
     bcos::bytes shortBloom(128, 0xab);
     dep->setLogsBloom(bcos::ref(shortBloom));
 
-    // This target links protocol-tars/bcos-crypto/ledger — the chain the lightweight suite's
-    // own comment marks as breaking libc++ typed catch binary-wide. The catch(...) ladder
-    // below is what actually binds here (a plain catch(std::exception) escapes as a fatal).
-    BOOST_CHECK(consensusRejectPins(
-        [&] { (void)encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType)); },
-        "logsBloom must be 256 bytes"));
+    BOOST_CHECK_EXCEPTION((void)encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType)),
+        bcos::evm::OpConsensusError, consensusWhatContains("logsBloom must be 256 bytes"));
 }
 
 // Isthmus+ deposit receipts always carry both tail fields. A lost optional must reject instead
@@ -383,25 +358,28 @@ BOOST_AUTO_TEST_CASE(DepositMissingNonceOrVersionIsConsensusReject)
     };
 
     auto missingMeta = makeReceipt();
-    BOOST_CHECK(consensusRejectPins(
-        [&] { (void)encodeReceiptForRoot(*missingMeta, static_cast<uint8_t>(kDepositTxType)); },
-        "missing deposit nonce/receipt version"));
+    BOOST_CHECK_EXCEPTION(
+        (void)encodeReceiptForRoot(*missingMeta, static_cast<uint8_t>(kDepositTxType)),
+        bcos::evm::OpConsensusError,
+        consensusWhatContains("missing deposit nonce/receipt version"));
 
     auto missingVersion = makeReceipt();
     bcos::protocol::OpStackReceiptMeta partialMeta;
     partialMeta.deposit_nonce = 5;
     missingVersion->setOpStackMeta(std::move(partialMeta));
-    BOOST_CHECK(consensusRejectPins(
-        [&] { (void)encodeReceiptForRoot(*missingVersion, static_cast<uint8_t>(kDepositTxType)); },
-        "missing deposit nonce/receipt version"));
+    BOOST_CHECK_EXCEPTION(
+        (void)encodeReceiptForRoot(*missingVersion, static_cast<uint8_t>(kDepositTxType)),
+        bcos::evm::OpConsensusError,
+        consensusWhatContains("missing deposit nonce/receipt version"));
 
     auto missingNonce = makeReceipt();
     bcos::protocol::OpStackReceiptMeta versionOnly;
     versionOnly.deposit_receipt_version = 1;
     missingNonce->setOpStackMeta(std::move(versionOnly));
-    BOOST_CHECK(consensusRejectPins(
-        [&] { (void)encodeReceiptForRoot(*missingNonce, static_cast<uint8_t>(kDepositTxType)); },
-        "missing deposit nonce/receipt version"));
+    BOOST_CHECK_EXCEPTION(
+        (void)encodeReceiptForRoot(*missingNonce, static_cast<uint8_t>(kDepositTxType)),
+        bcos::evm::OpConsensusError,
+        consensusWhatContains("missing deposit nonce/receipt version"));
 }
 
 // Engaged optional 0 is present, not absent: RLP integer 0 is the empty item 0x80 (not 0x00),
@@ -421,6 +399,67 @@ BOOST_AUTO_TEST_CASE(DepositExplicitZeroNonceEncodesEmptyRlpItem)
     expected.insert(expected.end(), {0xc0, 0x80, 0x01});
     BOOST_REQUIRE_EQUAL(enc.size(), 270u);
     BOOST_CHECK_EQUAL(enc, expected);
+}
+
+// Measure the "wedprcrypto breaks libc++ typed catch binary-wide" claim on THIS target.
+// If BOOST_CHECK_THROW binds OpConsensusError, the processOpBlock catch (const OpConsensusError&)
+// ladder is executable in a binary that already links ledger + protocol-tars + bcos-crypto.
+BOOST_AUTO_TEST_CASE(TypedCatchBindsOpConsensusErrorOnReceiptSuite)
+{
+    auto receipt = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
+        std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{}, 1);
+    receipt->setCumulativeGasUsed("21000");
+    bcos::bytes bloom(256, 0x00);
+    receipt->setLogsBloom(bcos::ref(bloom));
+    BOOST_CHECK_THROW((void)encodeReceiptForRoot(*receipt, static_cast<uint8_t>(kDepositTxType)),
+        bcos::evm::OpConsensusError);
+}
+
+// Jovian blobGasUsed is Σ da_footprint over non-deposit receipts. Missing optional ≠ 0.
+BOOST_AUTO_TEST_CASE(JovianMissingDaFootprintIsConsensusReject)
+{
+    auto makeNormal = [] {
+        auto receipt = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
+            std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{}, 1);
+        receipt->setCumulativeGasUsed("21000");
+        bcos::bytes bloom(256, 0x00);
+        receipt->setLogsBloom(bcos::ref(bloom));
+        return receipt;
+    };
+
+    bcos::evm::opstack::OpBlockResult missing;
+    missing.receipts.push_back(makeNormal());
+    missing.txTypes.push_back(static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+    BOOST_CHECK_EXCEPTION(
+        (void)bcos::evm::opstack::sealOpBlock(missing, bcos::evm::opstack::jovianConfig(), {}),
+        bcos::evm::OpConsensusError, consensusWhatContains("missing da_footprint under Jovian"));
+
+    auto zeroFootprint = makeNormal();
+    bcos::protocol::OpStackReceiptMeta zeroMeta;
+    zeroMeta.da_footprint = uint64_t{0};
+    zeroFootprint->setOpStackMeta(std::move(zeroMeta));
+    bcos::evm::opstack::OpBlockResult explicitZero;
+    explicitZero.receipts.push_back(zeroFootprint);
+    explicitZero.txTypes.push_back(static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+    auto const zeroSeal =
+        bcos::evm::opstack::sealOpBlock(explicitZero, bcos::evm::opstack::jovianConfig(), {});
+    BOOST_REQUIRE(zeroSeal.blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(*zeroSeal.blobGasUsed, 0u);
+
+    auto present = makeNormal();
+    bcos::protocol::OpStackReceiptMeta presentMeta;
+    presentMeta.da_footprint = uint64_t{7};
+    present->setOpStackMeta(std::move(presentMeta));
+    bcos::evm::opstack::OpBlockResult presentResult;
+    presentResult.receipts.push_back(minimalDepositReceipt(0, "21000"));
+    presentResult.receipts.push_back(present);
+    presentResult.txTypes.push_back(static_cast<uint8_t>(kDepositTxType));
+    presentResult.txTypes.push_back(
+        static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+    auto const presentSeal =
+        bcos::evm::opstack::sealOpBlock(presentResult, bcos::evm::opstack::jovianConfig(), {});
+    BOOST_REQUIRE(presentSeal.blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(*presentSeal.blobGasUsed, 7u);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

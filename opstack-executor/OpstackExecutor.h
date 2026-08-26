@@ -291,6 +291,9 @@ namespace engine = bcos::evm::engine;
     std::optional<bcos::bytesRef> nonceItem, gasItem, valueItem;
     std::optional<size_t> noncePlen, gasPlen, valuePlen;
     std::optional<bcos::bytesRef> toPayload, dataPayload;
+    bool nonceIsList = false;
+    bool gasIsList = false;
+    bool valueIsList = false;
     bool toIsList = false;
     bool dataIsList = false;
     size_t idx = 0;
@@ -307,16 +310,19 @@ namespace engine = bcos::evm::engine;
         {
             nonceItem = wholeItem;
             noncePlen = itemHeader.payloadLength;
+            nonceIsList = itemHeader.isList;
         }
         if (idx == gasIdx)
         {
             gasItem = wholeItem;
             gasPlen = itemHeader.payloadLength;
+            gasIsList = itemHeader.isList;
         }
         if (idx == valueIdx)
         {
             valueItem = wholeItem;
             valuePlen = itemHeader.payloadLength;
+            valueIsList = itemHeader.isList;
         }
         if (idx == toIdx)
         {
@@ -334,8 +340,12 @@ namespace engine = bcos::evm::engine;
     if (!nonceItem || !gasItem || !valueItem || !toPayload || !dataPayload)
         return "envelope has fewer fields than the type requires";
 
-    // nonce (uint64: over-wide payloads would truncate — reject instead)
+    // nonce (uint64: over-wide payloads would truncate — reject instead). List-shaped items
+    // are rejected here rather than relying on rlp::decode's UnexpectedList: a 1-byte list
+    // (0xc1 0x05) passes the width guard, so the kind check must be explicit like to/data.
     {
+        if (nonceIsList)
+            return "nonce field is an RLP list";
         if (*noncePlen > sizeof(uint64_t))
             return "nonce over-wide";
         uint64_t envNonce = 0;
@@ -346,6 +356,8 @@ namespace engine = bcos::evm::engine;
     }
     // gasLimit (uint64)
     {
+        if (gasIsList)
+            return "gasLimit field is an RLP list";
         if (*gasPlen > sizeof(uint64_t))
             return "gasLimit over-wide";
         uint64_t envGas = 0;
@@ -371,6 +383,8 @@ namespace engine = bcos::evm::engine;
     }
     // value (uint256: over-wide payloads would truncate — reject instead)
     {
+        if (valueIsList)
+            return "value field is an RLP list";
         if (*valuePlen > sizeof(intx::uint256))
             return "value over-wide";
         bcos::u256 envValue{};
@@ -425,6 +439,17 @@ namespace engine = bcos::evm::engine;
     bcos::protocol::Transaction const& tx, uint64_t nodeChainId)
 {
     return envelopeChainIdMismatch(tx.extraTransactionBytes(), nodeChainId);
+}
+
+/// Block-path only: an omitted sender is address(0) for eth_call, but a sealed block must not
+/// execute with that default. Empty is the one remaining sender shape toEvmoneTransaction still
+/// accepts; reject it here so the call path keeps the default.
+[[nodiscard]] inline std::optional<std::string> blockPathSenderMissing(
+    bcos::protocol::Transaction const& tx)
+{
+    if (tx.sender().empty())
+        return "empty sender";
+    return std::nullopt;
 }
 
 /// BlockHashes that answers zero for every block number — the eth_call / standalone-tx paths
@@ -1132,6 +1157,10 @@ private:
         // eth_call passes nullopt (lenient, like op-geth eth_call).
         if (chainId.has_value())
         {
+            if (auto missing = blockPathSenderMissing(transaction))
+            {
+                throw bcos::evm::OpConsensusError("op block: " + *missing);
+            }
             if (auto gate = envelopeChainIdMismatch(transaction, *chainId))
             {
                 throw bcos::evm::OpConsensusError("op block: " + *gate);

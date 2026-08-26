@@ -2,9 +2,11 @@ find_package(Boost REQUIRED unit_test_framework)
 find_package(jsoncpp CONFIG REQUIRED)
 find_package(evmone REQUIRED)
 
-# Lightweight suite: FakeTransaction / header-only surfaces. Do not link ledger / rpc /
-# protocol-tars — that chain pulls wedprcrypto and breaks libc++ typed catch binary-wide
-# (bcos-rpc/test/CMakeLists.txt:29-34).
+# Lightweight suite: FakeTransaction / header-only surfaces.
+# This binary links ledger via opstack-executor's PUBLIC closure (OpBlockExecute.cpp needs
+# the trie builders). The older "do not link ledger — wedprcrypto breaks libc++ typed catch
+# binary-wide" instruction is false on this preset: BOOST_CHECK_THROW(..., OpConsensusError)
+# is what CI runs. Receipt tests use the same typed catch (BOOST_CHECK_EXCEPTION).
 #
 # BOOST_TEST_MODULE lives in TestMain.cpp (the single main for this suite).
 add_executable(opstack-executor-tests

@@ -409,16 +409,22 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
             seal.withdrawalsRoot.bytes, emptyRoot.data(), sizeof(seal.withdrawalsRoot.bytes));
     }
 
-    // Jovian: header blobGasUsed slot = DA footprint (Σ da_footprint over non-deposit receipts;
-    // deposits carry nullopt, so summing every receipt is equivalent).
+    // Jovian: header blobGasUsed slot = DA footprint (Σ da_footprint over non-deposit receipts).
+    // Deposits legitimately carry nullopt and are skipped. A missing optional on a non-deposit
+    // receipt must not silently contribute 0 — that under-counts the header commitment the
+    // same way a missing deposit nonce used to under-encode the receipts-root leaf.
     if (cfg.has_da_footprint)
     {
         uint64_t footprint = 0;
-        for (const auto& r : result.receipts)
+        for (size_t i = 0; i < result.receipts.size(); ++i)
         {
-            const auto& meta = r->opStackMeta();
-            if (meta && meta->da_footprint)
-                footprint += *meta->da_footprint;
+            if (result.txTypes[i] == static_cast<uint8_t>(kDepositTxType))
+                continue;
+            const auto& meta = result.receipts[i]->opStackMeta();
+            if (!meta || !meta->da_footprint)
+                throw OpConsensusError(
+                    "op block: non-deposit receipt missing da_footprint under Jovian");
+            footprint += *meta->da_footprint;
         }
         seal.blobGasUsed = footprint;
     }

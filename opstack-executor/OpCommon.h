@@ -51,9 +51,11 @@ struct OpBlockSeal
     std::optional<evmone::hash256> requestsHash;  // Isthmus+ has a value; CANCUN-family fork
                                                   // headers lack this field
     /// Jovian block-header BlobGasUsed reuse slot = DA footprint (only non-deposit txs accumulate,
-    /// each tx = EstimatedDASize × scalar). Implemented as Σ of the meta.da_footprint over
-    /// receipts; a deposits-only block sums no terms and is always 0 ≡ op-geth's first-Jovian-block
-    /// special case. When has_da_footprint is false there is always no value.
+    /// each tx = EstimatedDASize × scalar). Implemented as Σ of meta.da_footprint over non-deposit
+    /// receipts (deposits carry nullopt and are skipped); a missing optional on a non-deposit
+    /// receipt is a consensus reject, not a silent 0. A deposits-only block sums no terms and is
+    /// always 0 ≡ op-geth's first-Jovian-block special case. When has_da_footprint is false there
+    /// is always no value.
     std::optional<uint64_t> blobGasUsed;
 };
 
