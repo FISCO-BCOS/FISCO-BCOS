@@ -245,6 +245,56 @@ namespace engine = bcos::evm::engine;
 /// construct a Transaction whose mirror diverges from its envelope would otherwise execute
 /// forged code/caller/value. Returns a mismatch description, or nullopt when consistent.
 /// Consensus-critical: field indices and RLP decoding must mirror op-geth's UnmarshalBinary
+/// Integer RLP canonicality (op-geth): reject 0x00 for zero (zero must be the empty item
+/// 0x80) and leading-zero multi-byte ints. rlp::decode already rejects over-wide payloads
+/// (UnexpectedLength); this helper is the canonicality gate, not a width substitute for a
+/// truncating decoder. Shared by the deposit decoder and the envelope↔mirror walker so both
+/// treat a non-canonical integer the same way. Returns nullopt for anything that is not a
+/// canonical integer (list, truncated, non-canonical form); otherwise the payload length.
+[[nodiscard]] inline std::optional<size_t> integerPayloadLength(bcos::bytesConstRef const& ref)
+{
+    if (ref.empty())
+        return std::nullopt;
+    uint8_t const b = ref[0];
+    if (b < 0x80)
+    {
+        // Byte item: 0x00 is non-canonical (integer zero must be the empty item 0x80);
+        // a bare byte 0x01..0x7f is a single payload byte.
+        return b == 0 ? std::nullopt : std::optional<size_t>{1};
+    }
+    if (b <= 0xb7)
+    {  // short string
+        size_t const pl = static_cast<size_t>(b - 0x80);
+        if (ref.size() < 1 + pl)
+            return std::nullopt;  // truncated length prefix
+        if (pl == 1 && ref[1] < 0x80)
+            return std::nullopt;  // single-byte payload < 0x80 must be a bare Byte
+        if (pl >= 2 && ref[1] == 0)
+            return std::nullopt;  // leading zero byte
+        return pl;                // pl == 0: the empty item 0x80, canonical zero
+    }
+    if (b <= 0xbf)
+    {  // long string
+        size_t const n = b - 0xb7;
+        if (ref.size() < 1 + n)
+            return std::nullopt;  // truncated length prefix
+        size_t len = 0;
+        for (size_t i = 0; i < n; ++i)
+            len = (len << 8) | ref[1 + i];
+        // Addition-free comparison: ref.size() >= 1 + n is established above, so the
+        // subtraction cannot underflow — whereas `ref.size() < 1 + n + len` wraps for
+        // len >= 2^64 - 9 and would skip the truncation check entirely.
+        if (len > ref.size() - 1 - n)
+            return std::nullopt;  // truncated payload
+        if (len == 1 && ref[1 + n] < 0x80)
+            return std::nullopt;  // single-byte payload < 0x80 must be a bare Byte
+        if (len >= 2 && ref[1 + n] == 0)
+            return std::nullopt;  // leading zero byte
+        return len;               // decodeHeader rejects a long-string length < 56
+    }
+    return std::nullopt;  // list (not an integer)
+}
+
 /// (legacy = bare list; typed 0x01..0x04 = type byte + list, field order per EIP-2718/2930/1559).
 /// BOUND COVERAGE: type byte, nonce, gasLimit, to, value, data. NOT bound: sender (needs
 /// ecrecover), the fee fields, accessList, blobVersionedHashes, authorizationList — part-5
@@ -346,10 +396,14 @@ namespace engine = bcos::evm::engine;
     // nonce (uint64). rlp::decode rejects over-wide payloads (UnexpectedLength); the plen
     // pre-check keeps the gate's "nonce over-wide" string. List-shaped items are rejected
     // here rather than relying on rlp::decode's UnexpectedList: a 1-byte list (0xc1 0x05)
-    // passes the width guard, so the kind check must be explicit like to/data.
+    // passes the width guard, so the kind check must be explicit like to/data. The
+    // canonicality gate (integerPayloadLength) is the same one the deposit decoder applies,
+    // so a non-canonical integer cannot slip the mirror↔envelope cross-check as a "match".
     {
         if (nonceIsList)
             return "nonce field is an RLP list";
+        if (!integerPayloadLength(*nonceItem).has_value())
+            return "nonce is not a canonical integer";
         if (*noncePlen > sizeof(uint64_t))
             return "nonce over-wide";
         uint64_t envNonce = 0;
@@ -362,6 +416,8 @@ namespace engine = bcos::evm::engine;
     {
         if (gasIsList)
             return "gasLimit field is an RLP list";
+        if (!integerPayloadLength(*gasItem).has_value())
+            return "gasLimit is not a canonical integer";
         if (*gasPlen > sizeof(uint64_t))
             return "gasLimit over-wide";
         uint64_t envGas = 0;
@@ -390,6 +446,8 @@ namespace engine = bcos::evm::engine;
     {
         if (valueIsList)
             return "value field is an RLP list";
+        if (!integerPayloadLength(*valueItem).has_value())
+            return "value is not a canonical integer";
         if (*valuePlen > sizeof(intx::uint256))
             return "value over-wide";
         bcos::u256 envValue{};
@@ -422,18 +480,27 @@ namespace engine = bcos::evm::engine;
 /// chainId — never the forgeable tars mirror. Typed envelopes always carry chainId (RLP field 0);
 /// nullopt there is malformed, not a pre-EIP-155 exemption. Both execution paths call this
 /// envelope-bytes core so parser semantics and rejection text cannot drift.
+/// Legacy envelopes: only a genuinely unprotected form (6-field preimage or v=27/28) is exempt;
+/// a malformed v (0/1, 29-34) or unparseable tail fails closed instead of being folded into the
+/// unprotected exemption (op-geth rejects such signatures).
 [[nodiscard]] inline std::optional<std::string> envelopeChainIdMismatch(
     bcos::bytesConstRef envelope, uint64_t nodeChainId)
 {
-    auto const envelopeChainId = bcos::rlp::protocol::web3ChainIdFromEnvelope(envelope);
-    if (envelopeChainId.has_value() && *envelopeChainId != nodeChainId)
+    namespace protocol = bcos::rlp::protocol;
+    auto const classified = protocol::classifyWeb3EnvelopeChainId(envelope);
+    if (classified.kind == protocol::Web3EnvelopeChainIdKind::Malformed)
     {
-        return "tx envelope chain_id " + std::to_string(*envelopeChainId) +
-               " does not match node chainId " + std::to_string(nodeChainId);
+        if (protocol::isTypedWeb3Envelope(envelope))
+        {
+            return "typed tx envelope is missing a parseable chainId";
+        }
+        return "legacy tx envelope has a malformed chainId/v field";
     }
-    if (!envelopeChainId.has_value() && bcos::rlp::protocol::isTypedWeb3Envelope(envelope))
+    if (classified.kind == protocol::Web3EnvelopeChainIdKind::Protected &&
+        classified.chainId != nodeChainId)
     {
-        return "typed tx envelope is missing a parseable chainId";
+        return "tx envelope chain_id " + std::to_string(classified.chainId) +
+               " does not match node chainId " + std::to_string(nodeChainId);
     }
     return std::nullopt;
 }
@@ -490,51 +557,7 @@ public:
     auto fail = [](std::string const& msg) {
         BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(msg));
     };
-    // Integer RLP canonicality (op-geth): reject 0x00 for zero and leading-zero multi-byte
-    // ints. rlp::decode already rejects over-wide payloads (UnexpectedLength); this helper
-    // is the canonicality gate, not a width substitute for a truncating decoder.
-    auto integerPayloadLength = [&](bcos::bytesConstRef const& ref) -> std::optional<size_t> {
-        if (ref.empty())
-            return std::nullopt;
-        uint8_t const b = ref[0];
-        if (b < 0x80)
-        {
-            // Byte item: 0x00 is non-canonical (integer zero must be the empty item 0x80);
-            // a bare byte 0x01..0x7f is a single payload byte.
-            return b == 0 ? std::nullopt : std::optional<size_t>{1};
-        }
-        if (b <= 0xb7)
-        {  // short string
-            size_t const pl = static_cast<size_t>(b - 0x80);
-            if (ref.size() < 1 + pl)
-                return std::nullopt;  // truncated length prefix
-            if (pl == 1 && ref[1] < 0x80)
-                return std::nullopt;  // single-byte payload < 0x80 must be a bare Byte
-            if (pl >= 2 && ref[1] == 0)
-                return std::nullopt;  // leading zero byte
-            return pl;                // pl == 0: the empty item 0x80, canonical zero
-        }
-        if (b <= 0xbf)
-        {  // long string
-            size_t const n = b - 0xb7;
-            if (ref.size() < 1 + n)
-                return std::nullopt;  // truncated length prefix
-            size_t len = 0;
-            for (size_t i = 0; i < n; ++i)
-                len = (len << 8) | ref[1 + i];
-            // Addition-free comparison: ref.size() >= 1 + n is established above, so the
-            // subtraction cannot underflow — whereas `ref.size() < 1 + n + len` wraps for
-            // len >= 2^64 - 9 and would skip the truncation check entirely.
-            if (len > ref.size() - 1 - n)
-                return std::nullopt;  // truncated payload
-            if (len == 1 && ref[1 + n] < 0x80)
-                return std::nullopt;  // single-byte payload < 0x80 must be a bare Byte
-            if (len >= 2 && ref[1 + n] == 0)
-                return std::nullopt;  // leading zero byte
-            return len;               // decodeHeader rejects a long-string length < 56
-        }
-        return std::nullopt;  // list (not an integer)
-    };
+    // Canonicality gate shared with the envelope↔mirror walker (integerPayloadLength above).
     if (env.size() < 2 || env[0] != static_cast<uint8_t>(op::kDepositTxType))
         fail("deposit envelope: not a 0x7e deposit");
     bcos::bytesRef body{const_cast<bcos::byte*>(env.data() + 1), env.size() - 1};
@@ -954,6 +977,14 @@ public:
     {
         (void)contextID;
 
+        // Same fail-loud guard as ExecuteContext::execute: a missing block-hashes source on the
+        // block path would silently degrade BLOCKHASH to zeros (NullBlockHashes is the documented
+        // eth_call/standalone fallback) — fail loud instead of executing a deterministic-but-wrong
+        // state transition.
+        if (blockHashes == nullptr && !call)
+            throw bcos::evm::OpConsensusError(
+                "OpstackExecutor: block execution requires wired RecentBlockHashes");
+
         if (transaction.isDepositTx())
         {
             bcos::evm::opstack::DepositTx dep;
@@ -1019,6 +1050,12 @@ public:
         namespace op = bcos::evm::opstack;
 
         checkForkRevision(ledgerConfig);
+
+        // Same fail-loud guard as ExecuteContext::execute / executeTransaction: a missing
+        // block-hashes source on the block path would silently degrade BLOCKHASH to zeros.
+        if (blockHashes == nullptr && !call)
+            throw bcos::evm::OpConsensusError(
+                "OpstackExecutor: block execution requires wired RecentBlockHashes");
 
         auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)), call);

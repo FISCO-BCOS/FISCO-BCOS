@@ -189,28 +189,42 @@ BOOST_AUTO_TEST_SUITE(PreBlockOpStepsTest)
 BOOST_AUTO_TEST_CASE(RejectsEmptyBlock)
 {
     Fixture f;
-    BOOST_CHECK_THROW(f.run(op::jovianConfig(), {}, {}), OpConsensusError);
+    BOOST_CHECK_EXCEPTION(
+        f.run(op::jovianConfig(), {}, {}), OpConsensusError, [](OpConsensusError const& e) {
+            return std::string(e.what()).find("missing L1 attributes deposit (empty block)") !=
+                   std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(RejectsEmptyFirstEnvelope)
 {
     Fixture f;
-    BOOST_CHECK_THROW(
-        f.run(op::jovianConfig(), {bcos::bytes{}}, {depositWithData({})}), OpConsensusError);
+    BOOST_CHECK_EXCEPTION(f.run(op::jovianConfig(), {bcos::bytes{}}, {depositWithData({})}),
+        OpConsensusError, [](OpConsensusError const& e) {
+            return std::string(e.what()).find("no deposit transaction to seed the block") !=
+                   std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(RejectsNonDepositFirstEnvelope)
 {
     Fixture f;
-    BOOST_CHECK_THROW(
-        f.run(op::jovianConfig(), {kTypedEnvelope}, {depositWithData({})}), OpConsensusError);
+    BOOST_CHECK_EXCEPTION(f.run(op::jovianConfig(), {kTypedEnvelope}, {depositWithData({})}),
+        OpConsensusError, [](OpConsensusError const& e) {
+            return std::string(e.what()).find("no deposit transaction to seed the block") !=
+                   std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(RejectsMissingDeposits)
 {
     Fixture f;
     // The envelope says deposit, but the decoded deposit vector is empty.
-    BOOST_CHECK_THROW(f.run(op::jovianConfig(), {kDepositEnvelope}, {}), OpConsensusError);
+    BOOST_CHECK_EXCEPTION(f.run(op::jovianConfig(), {kDepositEnvelope}, {}), OpConsensusError,
+        [](OpConsensusError const& e) {
+            return std::string(e.what()).find("no deposit transaction to seed the block") !=
+                   std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(JovianActivationRejectsTrailingNonDeposit)

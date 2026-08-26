@@ -312,6 +312,172 @@ BOOST_AUTO_TEST_CASE(EnvelopeChainIdWinsOverMirror)
                 std::string::npos);
 }
 
+// Round-12 B: a legacy full envelope with malformed v (0/1, 29-34) must NOT be treated as an
+// unprotected-legacy exemption — it fails closed. op-geth's EIP-155 signer rejects such v; the
+// gate must not let a malformed-signature tx execute as "pre-EIP-155".
+BOOST_AUTO_TEST_CASE(MalformedLegacyVRejectedByChainIdGate)
+{
+    // Reuse the legacyEnvelope shape (6 fields + v, r, s) with each malformed v value.
+    for (uint64_t badV : {0u, 1u, 29u, 30u, 34u})
+    {
+        FakeTx tx;
+        tx.m_kind = 0;
+        tx.m_extraBytes = legacyEnvelope(
+            7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+        // Patch the v field (field index 6, the 7th item) to the malformed value.
+        auto env = tx.m_extraBytes;
+        // RLP list header: single-byte 0xc0|len for <56 payloads; patch by rebuilding via the
+        // raw field walk is overkill — the classifier reads v from field 7, so rewrite the
+        // envelope with the v we want using the same builder shape as legacyEnvelope.
+        auto item = [](bcos::bytes const& payload) {
+            bcos::bytes out;
+            rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+            return out;
+        };
+        auto intItem = [](uint64_t v) {
+            bcos::bytes out;
+            rlp::encode(out, v);
+            return out;
+        };
+        bcos::bytes payload;
+        auto append = [&payload](bcos::bytes const& b) {
+            payload.insert(payload.end(), b.begin(), b.end());
+        };
+        append(intItem(7));
+        append(intItem(1000000000));  // gasPrice
+        append(intItem(5000000));     // gasLimit
+        auto toBytes = bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7");
+        append(item(toBytes));
+        append(intItem(5));
+        append(item({}));
+        append(intItem(badV));  // v
+        append(intItem(1));     // r (non-empty: full signed-envelope shape)
+        append(intItem(2));     // s
+        bcos::bytes rebuilt;
+        rlp::encodeHeader(rebuilt, {.isList = true, .payloadLength = payload.size()});
+        rebuilt.insert(rebuilt.end(), payload.begin(), payload.end());
+        tx.m_extraBytes = rebuilt;
+        auto const gate = envelopeChainIdMismatch(tx, 10);
+        BOOST_CHECK_MESSAGE(gate.has_value(), "malformed v=" << badV << " must fail closed");
+        if (gate.has_value())
+        {
+            BOOST_CHECK(std::string(*gate).find("malformed chainId/v") != std::string::npos);
+        }
+    }
+}
+
+// Round-12 B: the two legitimate unprotected forms (6-field preimage, and full envelope with
+// v=27/28) remain exempt; a full envelope with v>=35 is protected and must match the node.
+BOOST_AUTO_TEST_CASE(ValidLegacyVFormsPassChainIdGate)
+{
+    // 6-field preimage (no v/r/s) → unprotected exemption.
+    {
+        FakeTx tx;
+        tx.m_kind = 0;
+        // Build a 6-field legacy list.
+        auto item = [](bcos::bytes const& payload) {
+            bcos::bytes out;
+            rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+            return out;
+        };
+        auto intItem = [](uint64_t v) {
+            bcos::bytes out;
+            rlp::encode(out, v);
+            return out;
+        };
+        bcos::bytes payload;
+        auto append = [&payload](bcos::bytes const& b) {
+            payload.insert(payload.end(), b.begin(), b.end());
+        };
+        append(intItem(7));
+        append(intItem(1000000000));  // gasPrice
+        append(intItem(5000000));     // gasLimit
+        auto toBytes = bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7");
+        append(item(toBytes));
+        append(intItem(5));
+        append(item({}));
+        bcos::bytes preimage;
+        rlp::encodeHeader(preimage, {.isList = true, .payloadLength = payload.size()});
+        preimage.insert(preimage.end(), payload.begin(), payload.end());
+        tx.m_extraBytes = preimage;
+        BOOST_CHECK(!envelopeChainIdMismatch(tx, 10).has_value());
+    }
+    // Full envelope v=27/28 → unprotected exemption. legacyEnvelope hardcodes v=27, so the
+    // v=28 arm is rebuilt explicitly with v=28 (both must pass the gate).
+    auto buildLegacyWithV = [&](uint64_t v) {
+        auto item = [](bcos::bytes const& payload) {
+            bcos::bytes out;
+            rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+            return out;
+        };
+        auto intItem = [](uint64_t val) {
+            bcos::bytes out;
+            rlp::encode(out, val);
+            return out;
+        };
+        bcos::bytes payload;
+        auto append = [&payload](bcos::bytes const& b) {
+            payload.insert(payload.end(), b.begin(), b.end());
+        };
+        append(intItem(7));
+        append(intItem(1000000000));  // gasPrice
+        append(intItem(5000000));     // gasLimit
+        auto toBytes = bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7");
+        append(item(toBytes));
+        append(intItem(5));
+        append(item({}));
+        append(intItem(v));  // v
+        append(intItem(1));  // r
+        append(intItem(2));  // s
+        bcos::bytes out;
+        rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+        out.insert(out.end(), payload.begin(), payload.end());
+        return out;
+    };
+    for (uint64_t okV : {27u, 28u})
+    {
+        FakeTx tx;
+        tx.m_kind = 0;
+        tx.m_extraBytes = buildLegacyWithV(okV);
+        BOOST_CHECK(!envelopeChainIdMismatch(tx, 10).has_value());
+    }
+    // Full envelope v=37 → chainId 1; node chainId 1 passes, node chainId 10 fails.
+    {
+        FakeTx tx;
+        tx.m_kind = 0;
+        auto item = [](bcos::bytes const& payload) {
+            bcos::bytes out;
+            rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+            return out;
+        };
+        auto intItem = [](uint64_t v) {
+            bcos::bytes out;
+            rlp::encode(out, v);
+            return out;
+        };
+        bcos::bytes payload;
+        auto append = [&payload](bcos::bytes const& b) {
+            payload.insert(payload.end(), b.begin(), b.end());
+        };
+        append(intItem(7));
+        append(intItem(1000000000));
+        append(intItem(5000000));
+        auto toBytes = bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7");
+        append(item(toBytes));
+        append(intItem(5));
+        append(item({}));
+        append(intItem(37));  // v → chainId (37-35)>>1 = 1
+        append(intItem(1));
+        append(intItem(2));
+        bcos::bytes protectedEnv;
+        rlp::encodeHeader(protectedEnv, {.isList = true, .payloadLength = payload.size()});
+        protectedEnv.insert(protectedEnv.end(), payload.begin(), payload.end());
+        tx.m_extraBytes = protectedEnv;
+        BOOST_CHECK(!envelopeChainIdMismatch(tx, 1).has_value());
+        BOOST_CHECK(envelopeChainIdMismatch(tx, 10).has_value());
+    }
+}
+
 // Matching envelope chainId passes the gate even when the mirror differs.
 BOOST_AUTO_TEST_CASE(EnvelopeChainIdMatchesNode)
 {
@@ -359,6 +525,101 @@ BOOST_AUTO_TEST_CASE(MirrorValueDivergenceRejected)
     auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
     BOOST_REQUIRE(mismatch.has_value());
     BOOST_CHECK(std::string(*mismatch).find("value mismatch") != std::string::npos);
+}
+
+// Round-12 K: a forged mirror nonce must be rejected with the nonce-specific message (not just
+// any mismatch) — the gate must compare nonce, not only to/value/data.
+BOOST_AUTO_TEST_CASE(MirrorNonceDivergenceRejected)
+{
+    FakeTx tx;
+    tx.m_extraBytes = eip1559Envelope(
+        10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x8";  // mirror forged (envelope says nonce 7)
+    tx.m_gasLimit = 5000000;
+    tx.m_value = bcos::u256{5};  // mirror value must match the envelope value
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("nonce mismatch") != std::string::npos);
+}
+
+// Round-12 K: a forged mirror gasLimit must be rejected with the gasLimit-specific message.
+BOOST_AUTO_TEST_CASE(MirrorGasLimitDivergenceRejected)
+{
+    FakeTx tx;
+    tx.m_extraBytes = eip1559Envelope(
+        10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000001;     // mirror forged (envelope says 5000000)
+    tx.m_value = bcos::u256{5};  // mirror value must match the envelope value
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("gasLimit mismatch") != std::string::npos);
+}
+
+// Round-12 K: a forged mirror data must be rejected with the data-specific message. The FakeTx
+// input() is the mirror's data; the envelope carries empty data, so any non-empty mirror data is
+// a divergence.
+BOOST_AUTO_TEST_CASE(MirrorDataDivergenceRejected)
+{
+    FakeTx tx;
+    tx.m_extraBytes = eip1559Envelope(
+        10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_value = bcos::u256{5};  // mirror value must match the envelope value
+    tx.m_input = {0xde, 0xad};   // mirror forged (envelope data is empty)
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("data mismatch") != std::string::npos);
+}
+
+// Round-12 A: a non-canonical RLP integer in the envelope (leading-zero multi-byte nonce) must
+// be rejected by the canonicality gate, matching the deposit decoder's treatment. The 0x02
+// envelope's nonce is encoded as 0x82 0x00 0x07 (2-byte payload with a leading zero) instead of
+// the canonical bare byte 0x07.
+BOOST_AUTO_TEST_CASE(NonCanonicalEnvelopeIntegerRejected)
+{
+    // Hand-build a 0x02 envelope whose nonce item is 0x82 0x00 0x07 (non-canonical).
+    auto item = [](bcos::bytes const& payload) {
+        bcos::bytes out;
+        rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+        return out;
+    };
+    auto intItem = [](uint64_t v) {
+        bcos::bytes out;
+        rlp::encode(out, v);
+        return out;
+    };
+    bcos::bytes payload;
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(10));         // chainId
+    append({0x82, 0x00, 0x07});  // nonce: leading-zero 2-byte encoding of 7 (non-canonical)
+    append(intItem(10));         // maxPriorityFeePerGas
+    append(intItem(100));        // maxFeePerGas
+    append(intItem(5000000));    // gasLimit
+    auto toBytes = bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7");
+    append(item(toBytes));
+    append(intItem(5));       // value
+    append(item({}));         // data
+    payload.push_back(0xc0);  // empty accessList
+
+    bcos::bytes out{static_cast<bcos::byte>(0x02)};
+    rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+    out.insert(out.end(), payload.begin(), payload.end());
+
+    FakeTx tx;
+    tx.m_extraBytes = out;
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";  // mirror value is the canonical 7
+    tx.m_gasLimit = 5000000;
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(
+        std::string(*mismatch).find("nonce is not a canonical integer") != std::string::npos);
 }
 
 // A forged mirror `to` must be rejected.

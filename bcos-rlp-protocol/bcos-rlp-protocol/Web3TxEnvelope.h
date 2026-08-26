@@ -43,4 +43,30 @@ namespace bcos::rlp::protocol
 /// A malformed tail is normally rejected upstream by reassembleWeb3RawTransaction /
 /// verify() — keep the walkers' strictness in sync if that ordering ever changes.
 [[nodiscard]] std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload);
+
+/// Three-way classification of an envelope's chainId binding:
+///   Unprotected — pre-EIP-155 legacy (6-field preimage, or full envelope v=27/28): exempt
+///                 from the chainId gate (op-geth HomesteadSigner).
+///   Protected   — chainId recovered from the envelope (typed field 0, EIP-155 v>=35, or the
+///                 preimage form's field 7).
+///   Malformed   — a legacy envelope whose tail is neither a valid unprotected form nor a
+///                 recoverable protected one (e.g. v in {0,1} or [29,34], or an unparseable
+///                 tail). A chainId gate that accepts these as "unprotected" would execute a
+///                 transaction whose signature op-geth would reject — the exemption must be
+///                 fail-closed.
+/// `chainId` is meaningful only when the kind is Protected. Defined in the rlp-protocol TU.
+enum class Web3EnvelopeChainIdKind : uint8_t
+{
+    Unprotected,
+    Protected,
+    Malformed,
+};
+
+struct Web3EnvelopeChainIdResult
+{
+    Web3EnvelopeChainIdKind kind;
+    uint64_t chainId = 0;
+};
+
+[[nodiscard]] Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payload);
 }  // namespace bcos::rlp::protocol
