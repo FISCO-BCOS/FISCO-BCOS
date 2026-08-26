@@ -71,8 +71,8 @@ namespace bcos::codec::rlp
 // Overloads so EthWithdrawalData works as an item inside the generic list/vector codecs.
 inline size_t length(const protocol::EthWithdrawalData& _withdrawal) noexcept
 {
-    return length(_withdrawal.index, _withdrawal.validatorIndex, _withdrawal.address,
-        _withdrawal.amount);
+    return length(
+        _withdrawal.index, _withdrawal.validatorIndex, _withdrawal.address, _withdrawal.amount);
 }
 inline void encode(bcos::bytes& _out, const protocol::EthWithdrawalData& _withdrawal) noexcept
 {
@@ -82,8 +82,8 @@ inline void encode(bcos::bytes& _out, const protocol::EthWithdrawalData& _withdr
 inline bcos::Error::UniquePtr decode(
     bcos::bytesRef& _in, protocol::EthWithdrawalData& _withdrawal) noexcept
 {
-    return decode(
-        _in, _withdrawal.index, _withdrawal.validatorIndex, _withdrawal.address, _withdrawal.amount);
+    return decode(_in, _withdrawal.index, _withdrawal.validatorIndex, _withdrawal.address,
+        _withdrawal.amount);
 }
 }  // namespace bcos::codec::rlp
 
@@ -99,8 +99,7 @@ inline void encode(bcos::bytes& _out, const EthWithdrawalData& _withdrawal) noex
 {
     codec::rlp::encode(_out, _withdrawal);
 }
-inline bcos::Error::UniquePtr decode(
-    bcos::bytesRef& _in, EthWithdrawalData& _withdrawal) noexcept
+inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, EthWithdrawalData& _withdrawal) noexcept
 {
     return codec::rlp::decode(_in, _withdrawal);
 }

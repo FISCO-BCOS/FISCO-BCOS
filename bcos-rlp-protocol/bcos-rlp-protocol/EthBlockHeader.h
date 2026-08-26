@@ -54,10 +54,10 @@ struct EthBlockHeaderData
     bcos::Address coinbase;
     bcos::h64 nonce;
     int64_t number{0};
-    // WIRE seconds (the domain of the EthBlockHeaderData codec, of EthBlock and of the
-    // devp2p sync layer). EthBlockHeader::m_data mirrors the internal BlockHeader and is
-    // MILLISECONDS instead — that ms↔s conversion happens ONLY at the EthBlockHeader
-    // rlpEncode/rlpDecode bridge (/1000 on encode, ×1000 on decode), never in the codec.
+    // WIRE SECONDS, unconditionally — the same unit in every owner (the EthBlockHeaderData
+    // codec, EthBlock, ommers, and EthBlockHeader::data()). The internal BlockHeader's
+    // millisecond timestamp lives in EthBlockHeader::m_timestampMs and is converted to/from
+    // this field only at the rlpEncode/rlpDecode bridge (rlpEncode /1000, rlpDecode ×1000).
     int64_t timestamp{0};
 
     // Optional fields (16–23)
@@ -134,17 +134,23 @@ public:
     /// Compute keccak256(rlp(header)) WITHOUT validation or state mutation — usable for
     /// FISCO-native/OP headers (EthBlockVersion::NON_ETH) that calculateRLPHash's
     /// validateHeader rejects. Returns the 32-byte Ethereum block hash. The header's
-    /// timestamp is internal milliseconds (every version); rlpEncode divides by 1000
-    /// unconditionally and throws std::invalid_argument if it is not a whole number of
-    /// seconds (ms not divisible by 1000) — callers that cannot tolerate exceptions
-    /// should use calculateRLPHash (which returns Error::UniquePtr) instead.
+    /// The header's timestamp is internal milliseconds (every version); the RLP surface
+    /// carries seconds, converted at the rlpEncode/rlpDecode bridge — rlpEncode throws
+    /// std::invalid_argument if the internal timestamp is not a whole number of seconds.
+    /// Callers that cannot tolerate exceptions should use calculateRLPHash (which returns
+    /// Error::UniquePtr) instead.
     static bcos::crypto::HashType computeHash(const bcos::protocol::BlockHeader& header) noexcept(
         false);
 
     const EthBlockHeaderData& data() const { return m_data; }
 
+    // Internal-domain (milliseconds) timestamp, mirroring the base BlockHeader. The
+    // EthBlockHeaderData::timestamp member above is always wire seconds.
+    int64_t timestampMs() const { return m_timestampMs; }
+
 private:
     EthBlockHeaderData m_data;
+    int64_t m_timestampMs{0};
     EthBlockVersion m_version{EthBlockVersion::NON_ETH};
 };
 

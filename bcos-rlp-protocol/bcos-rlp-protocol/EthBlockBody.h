@@ -154,10 +154,12 @@ inline bcos::Error::UniquePtr decodeTx(bcos::bytesRef& _in, bcos::bytes& _out) n
         {
             return err;
         }
-        if (_out.empty())
+        // geth's decodeTyped rejects len(b) <= 1 (errShortTypedTx): a one-byte payload is
+        // not decodable as any transaction type (e.g. the canonical element 81 80 -> {0x80}).
+        if (_out.size() <= 1)
         {
-            return BCOS_ERROR_UNIQUE_PTR(
-                DecodingError::UnsupportedTransactionType, "empty typed transaction in block body");
+            return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
+                "typed transaction too short in block body (errShortTypedTx)");
         }
         if (_out[0] == 0)
         {
@@ -168,12 +170,21 @@ inline bcos::Error::UniquePtr decodeTx(bcos::bytesRef& _in, bcos::bytes& _out) n
     }
     if (_in[0] >= LIST_HEAD_BASE)
     {
-        // Legacy tx: a standalone RLP list — take the whole element raw.
+        // Legacy tx: a standalone RLP list — take the whole element raw. Give it the
+        // lower bound geth gets from its struct: a legacy transaction list has nine
+        // fields, so a payload shorter than 9 bytes cannot be one (this also rejects the
+        // bare 0xc0 empty-list element that would otherwise cause ~50x memory
+        // amplification via one-element-per-input-byte).
         size_t const originalSize = _in.size();
         auto [error, header] = decodeHeader(_in);
         if (error)
         {
             return std::move(error);
+        }
+        if (header.payloadLength < 9)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedListElements,
+                "legacy transaction element too short in block body");
         }
         size_t const prefixLen = originalSize - _in.size();
         size_t const payloadLen = header.payloadLength;

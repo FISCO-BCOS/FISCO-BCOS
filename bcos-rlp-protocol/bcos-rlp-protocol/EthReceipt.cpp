@@ -19,9 +19,8 @@
  */
 #include "EthReceipt.h"
 #include <bcos-protocol/TransactionStatus.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <boost/lexical_cast.hpp>
+#include <algorithm>
 #include <cstring>
 
 using namespace bcos;
@@ -169,7 +168,18 @@ bcos::Error::UniquePtr EthReceipt::rlpDecode(bcos::bytesConstRef data)
     // The codec's decode only advances a view cursor and never writes the buffer, so
     // take the view directly; the const_cast is confined to this read-only entry point.
     bytesRef in(const_cast<bcos::byte*>(data.data()), data.size());
-    return codec::rlp::decode(in, m_data);
+    if (auto err = codec::rlp::decode(in, m_data))
+    {
+        return err;
+    }
+    // geth's rlp.DecodeBytes rejects trailing bytes (ErrMoreThanOneValue); mirror that so
+    // two distinct wire encodings cannot map to the same decoded object.
+    if (!in.empty())
+    {
+        return BCOS_ERROR_UNIQUE_PTR(
+            DecodingError::UnexpectedListElements, "trailing bytes after top-level RLP item");
+    }
+    return nullptr;
 }
 
 bcos::Error::UniquePtr toEthReceiptData(
@@ -195,16 +205,32 @@ bcos::Error::UniquePtr toEthReceiptData(
         return BCOS_ERROR_UNIQUE_PTR(
             DecodingError::InputTooShort, "toEthReceiptData: empty cumulativeGasUsed");
     }
+    // Validate the string shape before parsing: boost's implicit base rules (a leading 0
+    // selects octal) and an empty 0x payload would otherwise silently produce a wrong
+    // value, which feeds the receipts root.
+    bool const hexForm =
+        cumStr.size() >= 2 && cumStr[0] == '0' && (cumStr[1] == 'x' || cumStr[1] == 'X');
+    auto const digits = hexForm ? cumStr.substr(2) : cumStr;
+    auto const isDecimalDigit = [](char c) { return c >= '0' && c <= '9'; };
+    auto const isHexDigit = [](char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+    };
+    bool const shapeOk = hexForm ? std::all_of(digits.begin(), digits.end(), isHexDigit) :
+                                   std::all_of(digits.begin(), digits.end(), isDecimalDigit);
+    if (!shapeOk)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::InvalidFieldset,
+            "toEthReceiptData: non-numeric cumulativeGasUsed: " + cumStr);
+    }
     try
     {
-        if (cumStr.size() >= 2 && cumStr[0] == '0' && (cumStr[1] == 'x' || cumStr[1] == 'X'))
+        if (hexForm)
         {
-            eth.cumulativeGasUsed =
-                bcos::fromBigEndian<bcos::u256>(bcos::fromHex(cumStr.substr(2)));
+            eth.cumulativeGasUsed = bcos::fromBigEndian<bcos::u256>(bcos::fromHex(digits));
         }
         else
         {
-            eth.cumulativeGasUsed = bcos::u256(cumStr);
+            eth.cumulativeGasUsed = bcos::u256(digits);
         }
     }
     catch (std::exception const&)

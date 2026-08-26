@@ -91,7 +91,7 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     header->setGasUsed(ethHeader.data().gasUsed);
     header->setNumber(ethHeader.data().number);
     // rlpDecode already converted the wire's seconds into internal milliseconds.
-    header->setTimestamp(ethHeader.data().timestamp);
+    header->setTimestamp(ethHeader.timestampMs());
     header->setPrevRandao(ethHeader.data().prevRandao);
     header->setNonce(ethHeader.data().nonce);
     header->setExtraData(ethHeader.data().extraData);
@@ -190,7 +190,7 @@ bcos::Error::UniquePtr EthBlockHeader::decodeTarsHeader(
     header->setGasLimit(ethHeader.data().gasLimit);
     header->setGasUsed(ethHeader.data().gasUsed);
     header->setNumber(ethHeader.data().number);
-    header->setTimestamp(ethHeader.data().timestamp);  // already ms (rlpDecode converted)
+    header->setTimestamp(ethHeader.timestampMs());  // already ms (rlpDecode converted)
     header->setPrevRandao(ethHeader.data().prevRandao);
     header->setNonce(ethHeader.data().nonce);
     header->setExtraData(ethHeader.data().extraData);
@@ -419,7 +419,8 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     m_data.gasLimit = _header.gasLimit();
     m_data.gasUsed = _header.gasUsed();
     m_data.number = _header.number();
-    m_data.timestamp = _header.timestamp();
+    m_timestampMs = _header.timestamp();
+    m_data.timestamp = _header.timestamp() / 1000;  // internal ms -> wire seconds
     m_data.prevRandao = _header.prevRandao();
     m_data.nonce = _header.nonce();
 
@@ -475,14 +476,14 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
     // Engine API boundary, the eth-genesis path and rlpDecode all multiply seconds by
     // 1000); sub-second input would produce an RLP hash not reproducible from the decoded
     // form. Throw (not assert — assert is compiled out under NDEBUG).
-    if (m_data.timestamp % 1000 != 0)
+    if (m_timestampMs % 1000 != 0)
     {
         BOOST_THROW_EXCEPTION(std::invalid_argument(
             "timestamp must be a whole number of seconds (ms divisible by 1000)"));
     }
-    auto data = m_data;
-    data.timestamp /= 1000;
-    codec::rlp::encode(out, data);
+    // m_data.timestamp is already wire seconds (the codec's domain); the internal
+    // millisecond value lives in m_timestampMs. Encode directly — no copy, no conversion.
+    codec::rlp::encode(out, m_data);
 }
 
 bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
@@ -503,9 +504,9 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
         return error;
     }
 
-    // The wire timestamp is seconds; the internal domain (m_data mirrors the internal
-    // BlockHeader) is milliseconds for every version — convert unconditionally, bounded by
-    // int64 first so a hostile wire value cannot trigger signed overflow on the ×1000.
+    // The wire timestamp is seconds; the internal domain (m_timestampMs) is milliseconds
+    // — convert unconditionally, bounded by int64 first so a hostile wire value cannot
+    // trigger signed overflow on the ×1000.
     constexpr auto c_maxWireTimestampSeconds =
         static_cast<uint64_t>(std::numeric_limits<int64_t>::max() / 1000);
     if (static_cast<uint64_t>(m_data.timestamp) > c_maxWireTimestampSeconds)
@@ -513,7 +514,7 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
         return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeader),
             "EthBlockHeader: timestamp out of representable millisecond range");
     }
-    m_data.timestamp = m_data.timestamp * 1000;
+    m_timestampMs = m_data.timestamp * 1000;
 
     // Optional fork fields are decoded positionally, so the set of present optionals is
     // always a contiguous prefix — a later field can only be present if the view was still
@@ -594,6 +595,14 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthBlockHeaderData&
     {
         return BCOS_ERROR_UNIQUE_PTR(
             DecodingError::UnexpectedLength, "block number exceeds int64 range");
+    }
+    // The timestamp arm of the same narrowing: a wire value in (INT64_MAX, UINT64_MAX]
+    // would otherwise become a negative int64 (EthBlock and the ommers list decode via
+    // this codec with no bridge to catch it).
+    if (timestamp > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+    {
+        return BCOS_ERROR_UNIQUE_PTR(
+            DecodingError::UnexpectedLength, "block timestamp exceeds int64 range");
     }
     _header.number = static_cast<int64_t>(number);
     _header.timestamp = static_cast<int64_t>(timestamp);

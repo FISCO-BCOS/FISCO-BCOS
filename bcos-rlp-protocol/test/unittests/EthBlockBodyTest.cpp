@@ -23,6 +23,7 @@
 #include "bcos-rlp-protocol/EthWithdrawal.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+#include <limits>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -57,20 +58,19 @@ static const std::string kShanghaiHeaderHex =
     "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd804d8401c9c380825208846553f10080a04444444444"
     "444444444444444444444444444444444444444444444444444444880000000000000000843b9aca00a06666666666"
     "666666666666666666666666666666666666666666666666666666";
-static const std::string
-    kPreShanghaiHex =
-        "f90201f901fca05555555555555555555555555555555555555555555555555555555555555555a0eeeeeeeeee"
-        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee94ababababababababababababababababab"
-        "abababa01111111111111111111111111111111111111111111111111111111111111111a02222222222222222"
-        "222222222222222222222222222222222222222222222222a03333333333333333333333333333333333333333"
-        "333333333333333333333333b90100cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-        "cd804d8401c9c380825208846553f10080a0444444444444444444444444444444444444444444444444444444"
-        "4444444444880000000000000000843b9aca00c0c0";  // [header, [], []]
+static const std::string kPreShanghaiHex =
+    "f90201f901fca05555555555555555555555555555555555555555555555555555555555555555a0eeeeeeeeee"
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee94ababababababababababababababababab"
+    "abababa01111111111111111111111111111111111111111111111111111111111111111a02222222222222222"
+    "222222222222222222222222222222222222222222222222a03333333333333333333333333333333333333333"
+    "333333333333333333333333b90100cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    "cd804d8401c9c380825208846553f10080a0444444444444444444444444444444444444444444444444444444"
+    "4444444444880000000000000000843b9aca00c0c0";  // [header, [], []]
 static const std::string kShanghaiHex =
     "f90245f9021da05555555555555555555555555555555555555555555555555555555555555555a0eeeeeeeeeeeeee"
     "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee94ababababababababababababababababababababa0"
@@ -179,6 +179,40 @@ BOOST_AUTO_TEST_CASE(headerCodecRoundTrip)
     bytesRef in(mutableData.data(), mutableData.size());
     BOOST_CHECK(!codec::rlp::decode(in, decoded));
     BOOST_CHECK(decoded == shanghai);
+}
+
+// Build a header RLP list whose number/timestamp fields carry the given wire values
+// (bypassing the int64 members so the over-wide case is reachable).
+static bytes makeHeaderRlpWith(uint64_t number, uint64_t timestamp)
+{
+    EthBlockHeaderData h = makeLondonHeader();
+    bytes payload;
+    codec::rlp::encode(payload, h.parentInfo.blockHash, h.uncleHash, h.coinbase, h.stateRoot,
+        h.txsRoot, h.receiptsRoot,
+        bytesConstRef(h.logsBloom.data(), h.logsBloom.size()), h.difficulty, number,
+        h.gasLimit, h.gasUsed, timestamp, h.extraData, h.prevRandao, h.nonce, h.baseFee);
+    bytes out;
+    codec::rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+    out.insert(out.end(), payload.begin(), payload.end());
+    return out;
+}
+
+// The header codec must reject a wire number/timestamp above INT64_MAX instead of
+// narrowing into a negative value (number fixed in round 5; timestamp arm added now).
+BOOST_AUTO_TEST_CASE(headerCodecRejectsOverwideNumberAndTimestamp)
+{
+    {
+        auto rlp = makeHeaderRlpWith(std::numeric_limits<uint64_t>::max(), 0);
+        EthBlockHeaderData data;
+        bytesRef in(const_cast<bcos::byte*>(rlp.data()), rlp.size());
+        BOOST_REQUIRE(codec::rlp::decode(in, data) != nullptr);
+    }
+    {
+        auto rlp = makeHeaderRlpWith(0, std::numeric_limits<uint64_t>::max());
+        EthBlockHeaderData data;
+        bytesRef in(const_cast<bcos::byte*>(rlp.data()), rlp.size());
+        BOOST_REQUIRE(codec::rlp::decode(in, data) != nullptr);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(goldenEncode)
