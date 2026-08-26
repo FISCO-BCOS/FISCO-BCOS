@@ -161,6 +161,10 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             {
                 throw OpConsensusError("op block: " + *missing);
             }
+            if (auto unbound = bcos::executor_v1::opstack::blockPathUnboundAuthorizationList(tx))
+            {
+                throw OpConsensusError("op block: " + *unbound);
+            }
             auto v = opValidate(view, block, tx, env, cfg, fee, blockGasLeft);
             if (const auto* err = std::get_if<std::error_code>(&v))
                 // No failed-receipt mechanism for normal txs: void the whole block (op-geth).
@@ -405,7 +409,10 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
             if (!meta || !meta->da_footprint)
                 throw OpConsensusError(
                     "op block: non-deposit receipt missing da_footprint under Jovian");
-            footprint += *meta->da_footprint;
+            const auto term = *meta->da_footprint;
+            if (footprint > std::numeric_limits<uint64_t>::max() - term)
+                throw OpConsensusError("op block: DA footprint overflows uint64");
+            footprint += term;
         }
         seal.blobGasUsed = footprint;
     }

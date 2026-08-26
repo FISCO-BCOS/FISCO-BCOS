@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
+#include <limits>
 #include <optional>
 #include <system_error>
 #include <variant>
@@ -62,11 +63,55 @@ struct OpTxProperties
 
 /// Reuses evmone validate_transaction then applies OP checks: reject blob tx; balance cap
 /// = gasLimit*maxGasPrice + value + l1Cost + operatorCost(gasLimit) (gasFeeCap pricing).
+/// The 512-bit cap always runs. eth_call/estimateGas must wrap the view with
+/// CallSimulationView so the comparison sees a funded sender — do not skip it.
 [[nodiscard]] std::variant<OpTxProperties, std::error_code> opValidate(
     const evmone::state::StateView& view, const evmone::state::BlockInfo& block,
     const evmone::state::Transaction& tx, evmc::bytes_view signedTxEnvelope,
-    const OpForkConfig& cfg, const OpFeeParams& fee, int64_t blockGasLeft,
-    bool skipBalanceCheck = false);
+    const OpForkConfig& cfg, const OpFeeParams& fee, int64_t blockGasLeft);
+
+/// eth_call/estimateGas view mask: the simulated sender reports uint256::max() balance so
+/// validate_transaction's INSUFFICIENT_FUNDS check and opValidate's 512-bit cap both pass
+/// without skipping the comparison. Unlike DepositValidationView this does not blank code
+/// (EIP-3607 still applies; a contract-sender call must execute real bytecode).
+/// Pass the same wrapper to opValidate and opTransition so the unchecked uint256
+/// subtractions in opTransition cannot wrap. Writes are discarded with the call overlay.
+class CallSimulationView final : public evmone::state::StateView
+{
+public:
+    CallSimulationView(const StateView& base, const evmc::address& sender) noexcept
+      : m_base{base}, m_sender{sender}
+    {}
+
+    std::optional<Account> get_account(const evmc::address& addr) const noexcept override
+    {
+        auto acc = m_base.get_account(addr);
+        if (addr != m_sender)
+            return acc;
+        if (!acc.has_value())
+        {
+            acc.emplace();
+            acc->code_hash = evmone::state::Account::EMPTY_CODE_HASH;
+        }
+        acc->balance = std::numeric_limits<intx::uint256>::max();
+        return acc;
+    }
+
+    evmone::state::bytes get_account_code(const evmc::address& addr) const noexcept override
+    {
+        return m_base.get_account_code(addr);
+    }
+
+    evmone::state::bytes32 get_storage(
+        const evmc::address& addr, const evmone::state::bytes32& key) const noexcept override
+    {
+        return m_base.get_storage(addr, key);
+    }
+
+private:
+    const StateView& m_base;
+    evmc::address m_sender;
+};
 
 /// Pairing constraint: the *FromState functions must be used as a pair; they must not be
 /// interleaved with the injection-style ones (opValidate/opTransition).

@@ -175,8 +175,8 @@ inline constexpr auto OP_EMPTY_REQUESTS_HASH =
 
 namespace bcos::evm::engine
 {
-// DepositTx is built from the block's tars Transaction objects (OpstackExecutor::
-// depositFromTransaction, OpstackExecutor.h) — no raw-envelope RLP parse.
+// DepositTx is built from the block's 0x7e envelope (OpstackExecutor::depositFromTransaction
+// → decodeDepositEnvelope(extraTransactionBytes())). Never from tars mint/value mirrors.
 
 // Forward-declared; defined at the end of this block.
 template <class RawTxRange>
@@ -231,20 +231,13 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
     if (hashErr.has_value())
         throw OpStorageError("block-hash lookup failed: " + *hashErr);
 
-    // Commitments: MessagePasser snapshot → seal → stateRoot → txRoot. visitAccounts'
-    // AccountView.storage is the complete, tombstone-filtered live slot map built by
-    // fetchAllStorage, so this is consensus-correct for withdrawalsRoot (but currently O(total
-    // historical MessagePasser slots); storage2 has no maintained per-account trie root to query).
+    // Commitments: MessagePasser snapshot → seal → stateRoot → txRoot. accountStorage
+    // returns the complete, tombstone-filtered live slot map for one address (same
+    // fetchAllStorage used by visitAccounts). visitAccounts would still fetchAllStorage
+    // every preceding /apps/ account before the visitor could stop at MessagePasser.
     std::map<evmc::bytes32, evmc::bytes32> mpStorage;
     bcos::evm::evmstate::Storage2State<Storage> bridge(view, executor.sharedError());
-    bridge.visitAccounts([&](auto const& acc) {
-        if (acc.addr == op::OP_L2_TO_L1_MESSAGE_PASSER)
-        {
-            mpStorage = acc.storage;
-            return false;
-        }
-        return true;
-    });
+    mpStorage = bridge.accountStorage(op::OP_L2_TO_L1_MESSAGE_PASSER);
     if (bridge.poisoned())
         throw OpStorageError("poisoned: " + std::string(bridge.firstError()));
     auto seal = op::sealOpBlock(result, cfg, mpStorage);
@@ -375,6 +368,9 @@ inline OpBlockCommitments announcedCommitmentsOf(const bcos::engine::ExecutionPa
 /// Matches op-geth's DeriveSha because the raw-tx decoders reject non-canonical encodings
 /// (assertCanonicalRoundTrip fails closed if that lapses). Two call sites: the engine's
 /// pre-execution blockHash check and finalizeOpBlockResult's txRoot.
+/// Values are copied into owned bytes: computeTrieRootVarKey takes
+/// span<pair<bytes, bytes>>, not a non-owning bytesConstRef. A non-owning overload
+/// would drop this copy; not rewritten in this slice.
 template <class RawTxRange>
 [[nodiscard]] bcos::h256 computeOpTxRoot(RawTxRange const& rawTxBytes)
 {

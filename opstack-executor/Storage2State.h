@@ -321,6 +321,32 @@ public:
         return false;
     }
 
+    /// Single-account live slot map (tombstone/zero filtered), same contract as
+    /// visitAccounts' AccountView.storage but without scanning SYS_TABLES or any other
+    /// account. Used by finalizeOpBlockResult for the MessagePasser withdrawalsRoot.
+    /// Consumer contract: after this returns, check poisoned() before trusting the map.
+    [[nodiscard]] std::map<evmc::bytes32, evmc::bytes32> accountStorage(
+        const evmc::address& addr) const noexcept
+    {
+        try
+        {
+            return task::syncWait(fetchAllStorage(accountTableName(addr)));
+        }
+        catch (const std::runtime_error& e)
+        {
+            poison(e.what());
+        }
+        catch (const std::exception& e)
+        {
+            poison(e.what());
+        }
+        catch (...)
+        {
+            poison("Storage2State::accountStorage: unknown exception");
+        }
+        return {};
+    }
+
 private:
     task::Task<void> applyModifiedEntry(const evmone::state::StateDiff::Entry& entry, bool seeding)
     {

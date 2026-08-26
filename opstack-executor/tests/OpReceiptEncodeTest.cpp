@@ -7,6 +7,7 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
+#include <limits>
 #include <map>
 #include <sstream>
 #include <test/utils/rlp.hpp>
@@ -460,6 +461,30 @@ BOOST_AUTO_TEST_CASE(JovianMissingDaFootprintIsConsensusReject)
         bcos::evm::opstack::sealOpBlock(presentResult, bcos::evm::opstack::jovianConfig(), {});
     BOOST_REQUIRE(presentSeal.blobGasUsed.has_value());
     BOOST_CHECK_EQUAL(*presentSeal.blobGasUsed, 7u);
+}
+
+BOOST_AUTO_TEST_CASE(JovianDaFootprintOverflowIsConsensusReject)
+{
+    auto makeWithFootprint = [](uint64_t fp) {
+        auto receipt = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
+            std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{}, 1);
+        receipt->setCumulativeGasUsed("21000");
+        bcos::bytes bloom(256, 0x00);
+        receipt->setLogsBloom(bcos::ref(bloom));
+        bcos::protocol::OpStackReceiptMeta meta;
+        meta.da_footprint = fp;
+        receipt->setOpStackMeta(std::move(meta));
+        return receipt;
+    };
+
+    bcos::evm::opstack::OpBlockResult overflow;
+    overflow.receipts.push_back(makeWithFootprint(std::numeric_limits<uint64_t>::max()));
+    overflow.receipts.push_back(makeWithFootprint(1));
+    overflow.txTypes.push_back(static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+    overflow.txTypes.push_back(static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+    BOOST_CHECK_EXCEPTION(
+        (void)bcos::evm::opstack::sealOpBlock(overflow, bcos::evm::opstack::jovianConfig(), {}),
+        bcos::evm::OpConsensusError, consensusWhatContains("DA footprint overflows uint64"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -250,7 +250,8 @@ namespace engine = bcos::evm::engine;
 /// ecrecover), the fee fields, accessList, blobVersionedHashes, authorizationList — part-5
 /// wiring must close those before this gate is the sole trust boundary.
 /// The envelope-bytes core below is shared by the per-tx path (m_prepare) and the block path
-/// (processOpBlock) — both run the same gate, so no execution path trusts an unbound mirror.
+/// (processOpBlock). Unbound fields are not trusted as a signature: the block path rejects
+/// a missing sender and a non-empty authorizationList until ecrecover lands in part-5.
 [[nodiscard]] inline std::optional<std::string> envelopeExecutionFieldsMismatch(
     bcos::bytesConstRef extraBytes, evmone::state::Transaction const& evmTx)
 {
@@ -286,8 +287,10 @@ namespace engine = bcos::evm::engine;
     size_t const dataIdx = typed ? (envelopeKind == 0x01 ? 6 : 7) : 5;
 
     // Walk once, capturing each target item: whole item (header + payload) for the uint
-    // fields (with the payload width, to reject over-wide integers that rlp::decode would
-    // silently truncate), bare payload for the byte fields.
+    // fields (with the payload width, so this gate can report "nonce/value over-wide"
+    // instead of a generic decode failure), bare payload for the byte fields.
+    // rlp::decode already rejects over-wide integers (UnexpectedLength); the plen
+    // pre-check is a more specific error, not a substitute for a truncating decoder.
     std::optional<bcos::bytesRef> nonceItem, gasItem, valueItem;
     std::optional<size_t> noncePlen, gasPlen, valuePlen;
     std::optional<bcos::bytesRef> toPayload, dataPayload;
@@ -340,9 +343,10 @@ namespace engine = bcos::evm::engine;
     if (!nonceItem || !gasItem || !valueItem || !toPayload || !dataPayload)
         return "envelope has fewer fields than the type requires";
 
-    // nonce (uint64: over-wide payloads would truncate — reject instead). List-shaped items
-    // are rejected here rather than relying on rlp::decode's UnexpectedList: a 1-byte list
-    // (0xc1 0x05) passes the width guard, so the kind check must be explicit like to/data.
+    // nonce (uint64). rlp::decode rejects over-wide payloads (UnexpectedLength); the plen
+    // pre-check keeps the gate's "nonce over-wide" string. List-shaped items are rejected
+    // here rather than relying on rlp::decode's UnexpectedList: a 1-byte list (0xc1 0x05)
+    // passes the width guard, so the kind check must be explicit like to/data.
     {
         if (nonceIsList)
             return "nonce field is an RLP list";
@@ -381,7 +385,8 @@ namespace engine = bcos::evm::engine;
             return "to mismatch";
         }
     }
-    // value (uint256: over-wide payloads would truncate — reject instead)
+    // value (uint256). Same as nonce: plen pre-check is a specific error string;
+    // rlp::decode would also reject over-wide payloads.
     {
         if (valueIsList)
             return "value field is an RLP list";
@@ -451,6 +456,17 @@ namespace engine = bcos::evm::engine;
     return std::nullopt;
 }
 
+/// Block-path only: 7702 authorizationList[].signer is copied from the tars mirror and is
+/// not recovered from the signed envelope (part-5 ecrecover). A non-empty list would let
+/// processAuthorizationList apply unbound signers. Used by both m_prepare and processOpBlock.
+[[nodiscard]] inline std::optional<std::string> blockPathUnboundAuthorizationList(
+    evmone::state::Transaction const& evmTx)
+{
+    if (!evmTx.authorization_list.empty())
+        return "authorizationList is not bound to the signed envelope";
+    return std::nullopt;
+}
+
 /// BlockHashes that answers zero for every block number — the eth_call / standalone-tx paths
 /// have no block-hash source (the BLOCKHASH opcode then reads zero, as an out-of-window lookup).
 class NullBlockHashes final : public evmone::state::BlockHashes
@@ -469,8 +485,9 @@ public:
     auto fail = [](std::string const& msg) {
         BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(msg));
     };
-    // Integer RLP width + canonicality. rlp::decode does not reject over-wide payloads
-    // (they truncate). Match op-geth: reject 0x00 for zero and leading-zero multi-byte ints.
+    // Integer RLP canonicality (op-geth): reject 0x00 for zero and leading-zero multi-byte
+    // ints. rlp::decode already rejects over-wide payloads (UnexpectedLength); this helper
+    // is the canonicality gate, not a width substitute for a truncating decoder.
     auto integerPayloadLength = [&](bcos::bytesConstRef const& ref) -> std::optional<size_t> {
         if (ref.empty())
             return std::nullopt;
@@ -833,7 +850,7 @@ public:
                     ledgerConfig, m_props, m_diff, m_ctx->chainId, m_ctx->blockGasLeft,
                     m_ctx->blockHashes,  // Real block history; only eth_call uses the null
                                          // fallback.
-                    m_blockInfo.has_value() ? &*m_blockInfo : nullptr);
+                    m_blockInfo.has_value() ? &*m_blockInfo : nullptr, call);
             }
         }
         task::Task<protocol::TransactionReceipt::Ptr> finish()
@@ -915,6 +932,7 @@ public:
         throw bcos::evm::OpConsensusError(
             "OpstackExecutor: executeTransaction 6-arg form is unsupported for OP execution "
             "(use createExecuteContext + prepare/execute/finish instead)");
+        co_return {};  // unreachable; satisfies the coroutine's declared return type
     }
 
     /// Execute a single OP normal transaction (injection-style, mirroring processOpBlock).
@@ -982,7 +1000,7 @@ public:
         }
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(stateView, blockHeader, transaction, ledgerConfig, props,
-            diff, chainId, blockGasLeft, blockHashes, &blockInfo);
+            diff, chainId, blockGasLeft, blockHashes, &blockInfo, call);
         co_return co_await m_finish(storage, blockHeader, ledgerConfig, receipt, diff);
     }
 
@@ -1122,7 +1140,7 @@ private:
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpFeeParams const& fee,
         int64_t blockGasLeft, std::optional<uint64_t> chainId,
-        evmone::state::BlockInfo const* prebuiltBlockInfo, bool skipBalanceCheck = false)
+        evmone::state::BlockInfo const* prebuiltBlockInfo, bool call = false)
     {
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
@@ -1141,13 +1159,14 @@ private:
         // envelopeExecutionFieldsMismatch — type byte, nonce, gasLimit, to, value, data are
         // fail-closed (OpConsensusError) on both the scheduler and block paths. NOT bound at
         // this head: sender (needs ecrecover), the fee fields, accessList, blobVersionedHashes,
-        // authorizationList — part-5 wiring must close those before the executor becomes the
-        // live block-execution path.
-        // eth_call (call=true, skipBalanceCheck) simulates without fee constraints — op-geth's
-        // eth_call does not enforce max_gas_price >= base_fee. A pricing-less call (e.g. the RPC
-        // default 2 gwei cap) would fail MAX_FEE_PER_GAS_TOO_LOW once the OP base fee exceeds it,
-        // so clamp the cap to the block base fee for the simulation.
-        if (skipBalanceCheck)
+        // authorizationList. The block path (chainId.has_value()) additionally rejects a
+        // zero sender and a non-empty authorizationList; ecrecover of sender/auth signers is
+        // part-5. Do not read this gate as "no execution path trusts an unbound mirror".
+        // eth_call (call=true) simulates without fee constraints — op-geth's eth_call does
+        // not enforce max_gas_price >= base_fee. A pricing-less call (e.g. the RPC default
+        // 2 gwei cap) would fail MAX_FEE_PER_GAS_TOO_LOW once the OP base fee exceeds it, so
+        // clamp the cap to the block base fee for the simulation.
+        if (call)
         {
             evmTx.max_gas_price = std::max(evmTx.max_gas_price, intx::uint256{blockInfo.base_fee});
         }
@@ -1159,6 +1178,10 @@ private:
             if (auto missing = blockPathZeroSender(evmTx.sender))
             {
                 throw bcos::evm::OpConsensusError("op block: " + *missing);
+            }
+            if (auto unbound = blockPathUnboundAuthorizationList(evmTx))
+            {
+                throw bcos::evm::OpConsensusError("op block: " + *unbound);
             }
             if (auto gate = envelopeChainIdMismatch(transaction, *chainId))
             {
@@ -1175,13 +1198,14 @@ private:
         auto envRef = transaction.extraTransactionBytes();
         evmc::bytes_view env{envRef.data(), envRef.size()};
 
-        // skipBalanceCheck: eth_call/estimateGas simulations must not balance-validate —
-        // op-geth never balance-validates a call (its simulated sender routinely carries no
-        // funds). opValidate's flag was designed for exactly this but was never wired to the
-        // call path, so every eth_call failed validation and surfaced as an opaque "unknown
-        // exception" at the RPC boundary (see OpScheduler::call).
-        auto validated = op::opValidate(
-            stateView, blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft, skipBalanceCheck);
+        // eth_call/estimateGas wrap the view so the sender reports uint256::max() — that
+        // lets validate_transaction and the OP 512-bit cap both run (and pass) for an
+        // unfunded simulated sender. Skipping the cap used to leave INSUFFICIENT_FUNDS
+        // and opTransition's unchecked subtractions unguarded. Block path uses the raw view.
+        auto validated = call ? op::opValidate(op::CallSimulationView{stateView, evmTx.sender},
+                                    blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft) :
+                                op::opValidate(stateView, blockInfo, evmTx, env, m_forkConfig, fee,
+                                    blockGasLeft);
         if (auto const* err = std::get_if<std::error_code>(&validated))
         {
             // DEBUG not WARNING: this path is reachable from unauthenticated eth_call /
@@ -1192,8 +1216,7 @@ private:
                             << LOG_KV(
                                    "sender", bcos::toHex(std::span<uint8_t const>(
                                                  evmTx.sender.bytes, sizeof(evmTx.sender.bytes))))
-                            << LOG_KV("nonce", evmTx.nonce)
-                            << LOG_KV("skipBalanceCheck", skipBalanceCheck);
+                            << LOG_KV("nonce", evmTx.nonce) << LOG_KV("call", call);
             BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(err->message()));
         }
         auto props = std::move(std::get<op::OpTxProperties>(validated));
@@ -1210,7 +1233,7 @@ private:
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpTxProperties const& props,
         evmone::state::StateDiff& diff, uint64_t chainId = 0, int64_t blockGasLeft = 0,
         evmone::state::BlockHashes const* blockHashes = nullptr,
-        evmone::state::BlockInfo const* prebuiltBlockInfo = nullptr)
+        evmone::state::BlockInfo const* prebuiltBlockInfo = nullptr, bool call = false)
     {
         namespace op = bcos::evm::opstack;
 
@@ -1228,6 +1251,12 @@ private:
         // deposit path so callers never see an unclassified escape.
         try
         {
+            if (call)
+            {
+                op::CallSimulationView masked{stateView, evmTx.sender};
+                co_return op::opTransition(masked, blockInfo, bh, evmTx, m_forkConfig, m_vm, props,
+                    chainId, m_receiptFactory, diff);
+            }
             co_return op::opTransition(stateView, blockInfo, bh, evmTx, m_forkConfig, m_vm, props,
                 chainId, m_receiptFactory, diff);
         }

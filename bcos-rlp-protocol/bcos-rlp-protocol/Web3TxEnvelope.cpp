@@ -87,6 +87,9 @@ std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload)
         return std::nullopt;
     }
     // Peek field 8 (without consuming field 7 yet) to classify preimage vs full envelope.
+    // Only field 8 is checked here — field 9 validation is deferred to
+    // reassembleWeb3RawTransaction (which validates the full 0,0 tail). This keeps the
+    // walker simple and avoids cursor arithmetic pitfalls with multi-field lookahead.
     // field7Item keeps the WHOLE field-7 item (header + payload): decodeHeader advances the
     // walker to the payload start, and decoding that payload as a fresh item mis-reads any
     // multi-byte chainId/v (e.g. chainId 8453 -> 33) or classifies it as a list header

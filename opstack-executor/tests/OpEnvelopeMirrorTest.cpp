@@ -18,6 +18,7 @@
 #include <string>
 
 using bcos::executor_v1::eth::toEvmoneTransaction;
+using bcos::executor_v1::opstack::blockPathUnboundAuthorizationList;
 using bcos::executor_v1::opstack::blockPathZeroSender;
 using bcos::executor_v1::opstack::envelopeChainIdMismatch;
 using bcos::executor_v1::opstack::envelopeExecutionFieldsMismatch;
@@ -643,6 +644,16 @@ BOOST_AUTO_TEST_CASE(BlobEnvelopeValueDivergenceRejected)
     auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
     BOOST_REQUIRE(mismatch.has_value());
     BOOST_CHECK(std::string(*mismatch).find("value mismatch") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(BlockPathRejectsUnboundAuthorizationList)
+{
+    evmone::state::Transaction tx;
+    BOOST_CHECK(!blockPathUnboundAuthorizationList(tx).has_value());
+    tx.authorization_list.emplace_back();
+    auto const gate = blockPathUnboundAuthorizationList(tx);
+    BOOST_REQUIRE(gate.has_value());
+    BOOST_CHECK_EQUAL(*gate, "authorizationList is not bound to the signed envelope");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

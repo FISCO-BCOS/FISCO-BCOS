@@ -296,12 +296,14 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
     const auto tx_max_cost = tx.gas_limit * effective_gas_price;
 
     // The three subtractions below are unchecked, and what makes them safe lives in another
-    // function: opValidate's 512-bit cap (:230-235) has already verified
+    // function: opValidate's 512-bit cap has already verified
     //   balance >= gasLimit*maxGasPrice + value + l1Cost + opCost(gasLimit).
-    // That is a runtime comparison, not an assert, so it still holds under NDEBUG. What is
-    // deducted here is gasLimit*effective + l1 + opCost(gasLimit) with effective <= maxGasPrice,
-    // so the amount taken never exceeds the bound that was checked. Changing either side means
-    // changing both.
+    // That comparison always runs (there is no skip flag). eth_call/estimateGas wrap this
+    // view with CallSimulationView so the sender reports uint256::max() and the cap still
+    // holds. That is a runtime comparison, not an assert, so it still holds under NDEBUG.
+    // What is deducted here is gasLimit*effective + l1 + opCost(gasLimit) with
+    // effective <= maxGasPrice, so the amount taken never exceeds the bound that was
+    // checked. Changing either side means changing both.
     sender_acc.balance -= tx_max_cost;
 
     sender_acc.balance -= props.l1_cost;
@@ -371,7 +373,7 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
 std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::Transaction& tx,
     evmc::bytes_view signedTxEnvelope, const OpForkConfig& cfg, const OpFeeParams& fee,
-    int64_t blockGasLeft, bool skipBalanceCheck)
+    int64_t blockGasLeft)
 {
     // Whitelist, not a blacklist. Transaction::Type has uint8_t as its underlying type and
     // validate_transaction's type switch (state.cpp:365-383) carries no default label, so EVERY
@@ -417,15 +419,14 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     // gasLimit*maxGasPrice + value + l1Cost + opCost pass the cap when it exceeds 2^256, and
     // opTransition's unchecked balance subtractions would then underflow (mint). The asserts
     // there compile away under NDEBUG, so this comparison is the only guard they have.
+    // Always run it. eth_call/estimateGas wrap the view (CallSimulationView) so the sender
+    // reports uint256::max(); skipping the comparison used to leave validate_transaction's
+    // INSUFFICIENT_FUNDS check and these subtractions unguarded.
     auto maxCost = intx::umul(intx::uint256{static_cast<uint64_t>(tx.gas_limit)}, tx.max_gas_price);
     maxCost += tx.value;
     maxCost += l1Cost;
     maxCost += opCost;
-    // Balance cap for real transactions. Simulations (eth_call/estimateGas) skip it: op-geth
-    // never balance-validates a call — its simulated sender (the request's `from`, or the
-    // dummy-signature recovery when absent) routinely carries no funds, and the check would
-    // reject read-only contract probes the chain should answer.
-    if (!skipBalanceCheck && intx::uint512{balance} < maxCost)
+    if (intx::uint512{balance} < maxCost)
         return make_error_code(std::errc::result_out_of_range);
 
     OpTxProperties props{std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee,
