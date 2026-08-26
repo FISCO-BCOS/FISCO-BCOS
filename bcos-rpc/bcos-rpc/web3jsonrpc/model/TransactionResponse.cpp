@@ -1,6 +1,6 @@
 #include "TransactionResponse.h"
+#include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rpc/web3jsonrpc/model/DepositTransaction.h"
-#include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-rpc/jsonrpc/Common.h>  // WEB3_LOG
 

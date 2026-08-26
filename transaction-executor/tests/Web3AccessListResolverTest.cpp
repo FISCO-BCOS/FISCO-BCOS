@@ -14,7 +14,7 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>

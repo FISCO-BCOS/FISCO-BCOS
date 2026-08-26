@@ -92,7 +92,7 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
     bcos::bytesConstRef payload, bcos::bytesConstRef signature)
 {
     // The byte-splice logic mirrors Web3Transaction::encode() / txHash() in
-    // bcos-rpc/bcos-rpc/web3jsonrpc/model/Web3Transaction.h (the reference implementation used
+    // bcos-rlp-protocol/bcos-rlp-protocol/Web3Transaction.h (the reference implementation used
     // on the RPC ingress path). Keep the two in sync when adding new transaction types.
     //
     // NB: rlp free functions are fully qualified below -- TransactionImpl has member encode()/

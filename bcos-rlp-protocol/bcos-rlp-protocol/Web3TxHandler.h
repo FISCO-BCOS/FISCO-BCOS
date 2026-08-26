@@ -1,4 +1,4 @@
-// bcos-rpc/bcos-rpc/web3jsonrpc/model/Web3TxHandler.h
+// bcos-rlp-protocol/bcos-rlp-protocol/Web3TxHandler.h
 // ⚠️ isSystemTransaction encoding workaround: DepositTxHandler::encode() encodes it as uint32_t
 // (not uint8_t) because RLPEncode.h's generic uint8_t encoding odr-uses the non-template
 // toCompactBigEndian(byte, unsigned), defined only in DataConvertUtility.cpp (a pre-existing

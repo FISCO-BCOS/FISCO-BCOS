@@ -19,19 +19,27 @@
  */
 
 #pragma once
-#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-rpc/web3jsonrpc/utils/util.h>
-#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <magic_enum/magic_enum.hpp>
 #include <optional>
 #include <ostream>
 #include <string_view>
+
+// Forward declaration only. takeToTarsTransaction() is the single member that touches tars, and
+// its definition lives in bcos-tars-protocol (protocol/Web3TarsBridge.cpp), which already links
+// rlp-protocol. Declaring the return type here rather than including the generated tars header
+// is what keeps this module free of any tars dependency, so modules below bcos-rpc -- the
+// admission layer above all -- can decode a signed Web3 envelope.
+namespace bcostars
+{
+struct Transaction;
+}
+
 namespace bcos
 {
 namespace rpc

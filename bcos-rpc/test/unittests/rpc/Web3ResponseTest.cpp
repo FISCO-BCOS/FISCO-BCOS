@@ -10,10 +10,10 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-crypto/ChecksumAddress.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 
