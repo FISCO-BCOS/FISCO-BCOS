@@ -39,10 +39,14 @@ bcos::Error::UniquePtr EthBlock::rlpEncode(bcos::bytes& out) const
         if (tx.front() >= LIST_HEAD_BASE)
         {
             // Mirror detail::decodeTx's lower bound: a legacy transaction list has nine
-            // fields, so a declared payload shorter than 9 bytes cannot be one.
+            // fields, so a declared payload shorter than 9 bytes cannot be one. Also
+            // require the declared list to span the WHOLE element (payloadLength ==
+            // view.size() after the prefix) so two concatenated minimal lists cannot
+            // pass as one element — encode-then-decode would then yield a different set.
             bytesRef view(const_cast<bcos::byte*>(tx.data()), tx.size());
             auto [err, header] = bcos::codec::rlp::decodeHeader(view);
-            if (err || !header.isList || header.payloadLength < 9)
+            if (err || !header.isList || header.payloadLength < 9 ||
+                header.payloadLength != view.size())
             {
                 return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedListElements,
                     "EthBlock::rlpEncode: invalid legacy transaction element");

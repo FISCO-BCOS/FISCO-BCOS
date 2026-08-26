@@ -83,7 +83,10 @@ public:
     EthReceipt() = default;
     explicit EthReceipt(EthReceiptData data) : m_data(std::move(data)) {}
 
-    void rlpEncode(bcos::bytes& out) const;
+    // Encode the receipt. Returns nullptr on success; fails closed (with an Error) on a
+    // type byte >= 0x80 that the decoder would misread as a legacy RLP item head, so
+    // encode and decode accept the same set.
+    bcos::Error::UniquePtr rlpEncode(bcos::bytes& out) const;
     // Decodes a single receipt item (possibly with an EIP-2718 type prefix) from `data`.
     bcos::Error::UniquePtr rlpDecode(bcos::bytesConstRef data);
 

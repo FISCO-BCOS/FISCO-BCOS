@@ -158,9 +158,18 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthReceiptData& _re
 
 namespace bcos::protocol
 {
-void EthReceipt::rlpEncode(bcos::bytes& out) const
+bcos::Error::UniquePtr EthReceipt::rlpEncode(bcos::bytes& out) const
 {
+    // A type byte >= 0x80 would be written verbatim and then misread by the decoder
+    // as a legacy RLP item head; reject it here so encode/decode accept the same set
+    // (mirrors EthBlock::rlpEncode's typed-arm check).
+    if (m_data.type >= BYTES_HEAD_BASE)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnsupportedTransactionType,
+            "EthReceipt::rlpEncode: invalid EIP-2718 type byte");
+    }
     codec::rlp::encode(out, m_data);
+    return nullptr;
 }
 
 bcos::Error::UniquePtr EthReceipt::rlpDecode(bcos::bytesConstRef data)
@@ -264,6 +273,16 @@ bcos::Error::UniquePtr toEthReceiptData(
             else if (firstNonZero > 0)
             {
                 decimalDigits.erase(0, firstNonZero);
+            }
+            // 2^256-1 has 78 decimal digits; 78-digit strings above it still truncate
+            // silently under boost's unchecked u256, so reject them lexicographically
+            // (equal-length digit strings compare correctly as strings).
+            if (decimalDigits.size() == 78 && decimalDigits >
+                                                  "115792089237316195423570985008687907853269984665"
+                                                  "640564039457584007913129639935")
+            {
+                return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedLength,
+                    "toEthReceiptData: cumulativeGasUsed exceeds 256 bits: " + cumStr);
             }
             eth.cumulativeGasUsed = bcos::u256(decimalDigits);
         }

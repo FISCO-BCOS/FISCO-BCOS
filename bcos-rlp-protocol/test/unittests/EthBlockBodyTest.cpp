@@ -400,6 +400,19 @@ BOOST_AUTO_TEST_CASE(rejectsShortTypedTransaction)
     BOOST_REQUIRE(codec::rlp::detail::decodeTx(in, out) != nullptr);
 }
 
+// Two concatenated minimal legacy lists must be rejected by the encoder: the declared
+// list must span the whole element (payloadLength == remaining view), not just the
+// first list, or encode-then-decode would yield a different transaction set.
+BOOST_AUTO_TEST_CASE(rejectsConcatenatedLegacyLists)
+{
+    EthBlockData body;
+    body.header = makeLondonHeader();
+    body.transactions = {fromHex("c9808080808080808080c9808080808080808080")};
+    EthBlock b(body);
+    bytes out;
+    BOOST_REQUIRE(b.rlpEncode(out) != nullptr);
+}
+
 // An empty transaction element must be rejected by the encoder (round-6 lower bound
 // landed only on decode; the encoder must not silently drop it into a hash input).
 BOOST_AUTO_TEST_CASE(rejectsEmptyTransactionElement)

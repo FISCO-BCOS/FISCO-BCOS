@@ -103,7 +103,7 @@ BOOST_AUTO_TEST_CASE(goldenEncode)
     typed2.logsBloom = makeBloom();
     EthReceipt r(typed2);
     bytes out;
-    r.rlpEncode(out);
+    BOOST_REQUIRE(!r.rlpEncode(out));
     BOOST_CHECK_EQUAL(toHex(out), kTyped2Hex);
 
     EthReceiptData typed1 = typed2;
@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(goldenEncode)
     typed1.logs.push_back(makeLog1());
     EthReceipt r1(typed1);
     bytes out1;
-    r1.rlpEncode(out1);
+    BOOST_REQUIRE(!r1.rlpEncode(out1));
     BOOST_CHECK_EQUAL(toHex(out1), kTyped1Hex);
 
     EthReceiptData legacy;
@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(goldenEncode)
     legacy.status = 0;
     EthReceipt rl(legacy);
     bytes outl;
-    rl.rlpEncode(outl);
+    BOOST_REQUIRE(!rl.rlpEncode(outl));
     BOOST_CHECK_EQUAL(toHex(outl), kLegacyHex);
 
     EthReceiptData postState;
@@ -131,14 +131,14 @@ BOOST_AUTO_TEST_CASE(goldenEncode)
     postState.cumulativeGasUsed = 100000;
     EthReceipt rp(postState);
     bytes outp;
-    rp.rlpEncode(outp);
+    BOOST_REQUIRE(!rp.rlpEncode(outp));
     BOOST_CHECK_EQUAL(toHex(outp), kPostStateHex);
 
     EthReceiptData typed3 = typed2;
     typed3.type = 3;
     EthReceipt r3(typed3);
     bytes out3;
-    r3.rlpEncode(out3);
+    BOOST_REQUIRE(!r3.rlpEncode(out3));
     BOOST_CHECK_EQUAL(toHex(out3), kTyped3Hex);
 }
 
@@ -192,7 +192,7 @@ BOOST_AUTO_TEST_CASE(roundTrip)
     typed2.logs.push_back(makeLog1());
     EthReceipt r(typed2);
     bytes out;
-    r.rlpEncode(out);
+    BOOST_REQUIRE(!r.rlpEncode(out));
     EthReceipt decoded;
     BOOST_CHECK(!decoded.rlpDecode(ref(out)));
     BOOST_CHECK(decoded.data() == typed2);
@@ -209,10 +209,24 @@ BOOST_AUTO_TEST_CASE(rlpDecodeRejectsTrailingBytes)
     typed2.logs.push_back(makeLog1());
     EthReceipt r(typed2);
     bytes out;
-    r.rlpEncode(out);
+    BOOST_REQUIRE(!r.rlpEncode(out));
     out.push_back(0xff);
     EthReceipt decoded;
     BOOST_REQUIRE(decoded.rlpDecode(ref(out)) != nullptr);
+}
+
+// A receipt with a type byte >= 0x80 must be rejected by the encoder (the decoder
+// would misread it as a legacy RLP item head).
+BOOST_AUTO_TEST_CASE(rlpEncodeRejectsBadType)
+{
+    EthReceiptData data;
+    data.type = 0x80;
+    data.status = 1;
+    data.cumulativeGasUsed = 21000;
+    data.logsBloom = makeBloom();
+    EthReceipt r(data);
+    bytes out;
+    BOOST_REQUIRE(r.rlpEncode(out) != nullptr);
 }
 
 BOOST_AUTO_TEST_CASE(malformedRejected)
@@ -307,6 +321,8 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataRejectsBadType)
     protocol::EthReceiptData eth;
     BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, 0x80, eth) != nullptr);
 }
+
+// Fail closed: a malformed cumulativeGasUsed must be rejected, not substituted,
 // because the value feeds the receipts root; the 0x-prefixed hex producer form
 // (opstack-executor) must parse.
 BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedGas)
@@ -386,6 +402,18 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedGas)
         inner.data.status = 0;
         inner.data.gasUsed = "21000";
         inner.cumulativeGasUsed = std::string(79, '9');  // 79 decimal digits > 256 bits
+        inner.logsBloom.assign(256, static_cast<char>(0xab));
+        protocol::EthReceiptData eth;
+        BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, 1, eth) != nullptr);
+    }
+    // A 78-digit decimal above 2^256-1 must fail closed (unchecked u256 would
+    // truncate silently — the 78-digit length bound alone is not tight).
+    {
+        auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        auto& inner = receipt->inner();
+        inner.data.status = 0;
+        inner.data.gasUsed = "21000";
+        inner.cumulativeGasUsed = "2" + std::string(77, '0');  // 78 digits > 2^256-1
         inner.logsBloom.assign(256, static_cast<char>(0xab));
         protocol::EthReceiptData eth;
         BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, 1, eth) != nullptr);
