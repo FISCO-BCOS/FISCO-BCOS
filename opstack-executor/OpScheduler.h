@@ -5,15 +5,18 @@
 // OpScheduler — SchedulerInterface for OP. Linear only: blockGasLeft, state-diff
 // visibility, and deposit order forbid a parallel scheduler.
 // executeBlock: preBlockOpSteps → SchedulerSerialImpl(serial=true) →
-// finalizeOpBlockResult → commitment check → m_pending.
+// finalizeOpBlockResult → commitment check → stash m_pending only if verify=true.
+// One pending slot: commit (or same-height replace) before execute of another height —
+// MLS mergeBackStorage is FIFO oldest, not the just-pushed layer.
 // commitBlock: prewriteBlockToBuffer(announcedHash) → mergeBackStorage.
+// Committed-tip sibling reorg (ReorgUndo / one-level rollback) is a follow-up.
 
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpCommitments.h>
+#include <opstack-executor/OpSchedulerPolicy.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
-#include <opstack-executor/ReorgUndo.h>
 
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
@@ -41,7 +44,6 @@
 #include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/MPTBuilder.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
-#include <bcos-storage/KeyPrefixes.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/HistoricalCallStorage.h>
@@ -52,7 +54,6 @@
 #include <fmt/format.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 
 #include <algorithm>
@@ -60,7 +61,6 @@
 #include <cstdint>
 #include <exception>
 #include <functional>
-#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -72,7 +72,6 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace bcos::executor_v1::opstack
@@ -104,14 +103,6 @@ public:
         bcos::crypto::HashType announcedBlockHash;
     };
 
-    /// One-level tip rollback: replaced tip's undo journal, stashed with m_pending.
-    struct RollbackContext
-    {
-        protocol::BlockNumber replacedHeight{};
-        ReorgUndoBlob replacedUndo;
-    };
-
-public:
     // ---- SchedulerInterface overrides ----
 
     /// Engine newPayload drives this; PBFT/sync do not.
@@ -152,7 +143,6 @@ public:
                 m_multiLayerStorage->popFrontStorage();
             }
             m_pending.reset();
-            m_rollbackContext.reset();
             m_lastExecutedBlockNumber.store(-1);
         }
         callback(nullptr);
@@ -186,10 +176,11 @@ public:
             }
             catch (const std::exception& e)
             {
-                // Keep e.what() on the RPC callback.
+                auto const code = classifyException(std::current_exception());
                 OP_SCHEDULER_LOG(WARNING) << LOG_DESC("eth_call failed")
                                           << LOG_KV("detail", boost::diagnostic_information(e));
-                cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError, e.what()),
+                cb(BCOS_ERROR_PTR(code,
+                       fmt::format("eth_call failed: {} (see node log)", rpcSafeReason(code))),
                     nullptr);
             }
             catch (...)
@@ -314,12 +305,14 @@ public:
     task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
         std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) override
     {
+        auto const addressOwned = std::string(address);
+        auto const keyOwned = std::string(key);
         auto view = this->m_multiLayerStorage->fork();
         bcos::ledger::Features features;
         co_await bcos::ledger::readFromStorage(features, view, number);
         bcos::ledger::account::EVMAccount account(
-            view, address, features.get(bcos::ledger::Features::Flag::feature_raw_address));
-        co_return co_await account.storageEntry(key);
+            view, addressOwned, features.get(bcos::ledger::Features::Flag::feature_raw_address));
+        co_return co_await account.storageEntry(keyOwned);
     }
 
     /// Pending execute result, if any.
@@ -396,33 +389,76 @@ private:
                     nullptr, false};
             }
 
-            // Replace an uncommitted pending at this height.
+            // One pending slot: refuse another height, replace only verify=true at this height.
+            auto conflict = PendingConflict::None;
             if (number > 0)
             {
                 std::lock_guard<std::mutex> lock(m_pendingMutex);
-                if (m_pending && m_pending->executedHeader->number() == number)
+                if (m_pending)
                 {
-                    OP_SCHEDULER_LOG(WARNING) << "Replacing uncommitted pending block " << number
-                                              << " with a divergent block at the same height";
-                    auto const pushed = m_pending->verified;
-                    m_pending.reset();
-                    m_rollbackContext.reset();
-                    m_lastExecutedBlockNumber.store(number - 1);
-                    if (pushed)
+                    conflict = classifyPendingConflict(
+                        true, m_pending->executedHeader->number(), number, verify);
+                    if (conflict == PendingConflict::RefuseOtherHeight)
                     {
-                        m_multiLayerStorage->popFrontStorage();
+                        auto const pendingHeight = m_pending->executedHeader->number();
+                        auto message = fmt::format(
+                            "Uncommitted pending block {}; commit or replace at that height "
+                            "before execute {}",
+                            pendingHeight, number);
+                        OP_SCHEDULER_LOG(INFO) << message;
+                        co_return {BCOS_ERROR_UNIQUE_PTR(
+                                       scheduler::SchedulerError::InvalidStatus, message),
+                            nullptr, false};
+                    }
+                    if (conflict == PendingConflict::ReplaceSameHeight)
+                    {
+                        OP_SCHEDULER_LOG(WARNING)
+                            << "Replacing uncommitted pending block " << number
+                            << " with a divergent block at the same height";
+                        auto const pushed = m_pending->verified;
+                        m_pending.reset();
+                        m_lastExecutedBlockNumber.store(number - 1);
+                        if (pushed)
+                        {
+                            m_multiLayerStorage->popFrontStorage();
+                        }
                     }
                 }
             }
 
-            // Same height as the committed tip: candidate for one-level rollback.
-            bool const rollbackCandidate =
-                number > 0 && number == m_lastCommittedBlockNumber.load();
+            co_await hydrateCommittedTip();
 
-            // Continuity vs last executed number.
+            // Continuity vs last executed number. A verify=false probe at the pending
+            // height keeps the stash and runs on a throwaway view.
             auto const lastExecuted = m_lastExecutedBlockNumber.load();
-            if (lastExecuted != -1 && number - lastExecuted != 1 &&
-                !(rollbackCandidate && number == lastExecuted))
+            auto const lastCommitted = m_lastCommittedBlockNumber.load();
+            bool const probeAtPending = conflict == PendingConflict::KeepProbe;
+            if (number > 0 && number == lastCommitted)
+            {
+                auto tipView = m_multiLayerStorage->fork();
+                auto const canonicalAtHeight =
+                    co_await ledger::getBlockHash(tipView, number, ledger::fromStorage);
+                if (canonicalAtHeight.has_value() &&
+                    *canonicalAtHeight == bcos::protocol::EthBlockHeader::computeHash(*blockHeader))
+                {
+                    OP_SCHEDULER_LOG(INFO)
+                        << "Block " << number
+                        << " is already the committed canonical tip; serving without re-execution";
+                    auto served = m_blockFactory->blockHeaderFactory()->populateBlockHeader(
+                        protocol::BlockHeader::ConstPtr{
+                            blockHeader.get(), [](protocol::BlockHeader const*) {}});
+                    co_return {nullptr, std::move(served), false};
+                }
+                auto message = fmt::format(
+                    "Block {} is a sibling of the committed tip; one-level tip reorg "
+                    "is not in this scheduler slice",
+                    number);
+                OP_SCHEDULER_LOG(WARNING) << message;
+                co_return {
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
+                    nullptr, false};
+            }
+            if (lastExecuted != -1 && number - lastExecuted != 1 && !probeAtPending)
             {
                 auto message =
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
@@ -436,77 +472,6 @@ private:
             // Writes go to this view.
             auto view = m_multiLayerStorage->fork();
             view.newMutable();
-
-            // Reorg sibling: apply the tip's undo journal so this view reads as the parent.
-            std::optional<RollbackContext> rollback;
-            if (rollbackCandidate)
-            {
-                auto const canonicalParent =
-                    co_await ledger::getBlockHash(view, number - 1, ledger::fromStorage);
-                auto const announcedParent = blockHeader->parentInfo().blockHash;
-                if (!canonicalParent.has_value() || *canonicalParent != announcedParent)
-                {
-                    auto message = fmt::format(
-                        "Block {} sits at the committed tip's height but is not its "
-                        "sibling: parent {} is not the canonical parent {}",
-                        number, announcedParent.hex(),
-                        canonicalParent.has_value() ? canonicalParent->hex() :
-                                                      std::string("<none>"));
-                    OP_SCHEDULER_LOG(WARNING) << message;
-                    co_return {BCOS_ERROR_UNIQUE_PTR(
-                                   scheduler::SchedulerError::InvalidBlockNumber, message),
-                        nullptr, false};
-                }
-                auto const canonicalAtHeight =
-                    co_await ledger::getBlockHash(view, number, ledger::fromStorage);
-                if (canonicalAtHeight.has_value() &&
-                    *canonicalAtHeight == bcos::protocol::EthBlockHeader::computeHash(*blockHeader))
-                {
-                    // Already the committed tip; do not re-execute.
-                    auto message = fmt::format(
-                        "Block {} is already the committed canonical tip; re-deliveries are "
-                        "served without re-execution",
-                        number);
-                    OP_SCHEDULER_LOG(INFO) << message;
-                    co_return {BCOS_ERROR_UNIQUE_PTR(
-                                   scheduler::SchedulerError::InvalidBlockNumber, message),
-                        nullptr, false};
-                }
-                ReorgUndoBlob replacedUndo;
-                if (auto undoEntry = co_await storage2::readOne(view,
-                        executor_v1::StateKey{ledger::SYS_REORG_UNDO, std::to_string(number)});
-                    undoEntry.has_value())
-                {
-                    replacedUndo = ReorgUndoCodec::decode(undoEntry->get());
-                }
-                else
-                {
-                    auto message = fmt::format(
-                        "Rollback to height {} has no undo journal (missing or "
-                        "pruned) — cannot rebuild the parent state as the execution base",
-                        number);
-                    OP_SCHEDULER_LOG(WARNING) << message;
-                    co_return {BCOS_ERROR_UNIQUE_PTR(
-                                   scheduler::SchedulerError::InvalidBlockNumber, message),
-                        nullptr, false};
-                }
-                OP_SCHEDULER_LOG(INFO)
-                    << "Executing the reorg sibling of committed tip " << number
-                    << " on the parent base (" << replacedUndo.rows.size() << " undo rows, "
-                    << "replaced txCount " << replacedUndo.txCount << ")";
-                for (auto const& row : replacedUndo.rows)
-                {
-                    if (row.oldValue.has_value())
-                    {
-                        co_await storage2::writeOne(view, row.key, *row.oldValue);
-                    }
-                    else
-                    {
-                        co_await storage2::removeOne(view, row.key);
-                    }
-                }
-                rollback.emplace(RollbackContext{number, std::move(replacedUndo)});
-            }
 
             auto transactions = co_await getTransactions(*block, view);
             if (std::any_of(transactions.begin(), transactions.end(),
@@ -559,7 +524,6 @@ private:
                     std::lock_guard<std::mutex> lock(m_pendingMutex);
                     m_pending = PendingBlock{std::move(block), std::move(outcome.result),
                         outcome.announcedBlockHash, executedHeader, true};
-                    m_rollbackContext = std::move(rollback);
                 }
                 m_lastExecutedBlockNumber.store(number);
             }
@@ -603,7 +567,6 @@ private:
 
             // Copy pending under the lock so later awaits do not race a replacing execute.
             PendingBlock pending;
-            std::optional<RollbackContext> rollback;
             {
                 std::lock_guard<std::mutex> lock(m_pendingMutex);
                 if (!m_pending || !m_pending->verified ||
@@ -614,28 +577,29 @@ private:
                         nullptr};
                 }
                 pending = *m_pending;
-                rollback = m_rollbackContext;
             }
 
-            // Reject already-committed / discontinuous numbers, except a rollback overwrite.
-            if (!co_await commitContinuityCheck(
-                    number, rollback.has_value() && rollback->replacedHeight == number))
+            if (!co_await commitContinuityCheck(number))
             {
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
                                "Commit block continuity check failed!"),
                     nullptr};
             }
 
-            auto storage = co_await commitPersist(pending, rollback);
+            auto storage = co_await commitPersist(pending);
 
             // Single merge: all-or-nothing.
             co_await m_multiLayerStorage->mergeBackStorage(*storage);
 
-            // Drop the slot only after merge succeeds (failed commit can retry).
+            // Drop the slot only after merge succeeds, and only if it is still this block.
             {
                 std::lock_guard<std::mutex> lock(m_pendingMutex);
-                m_pending.reset();
-                m_rollbackContext.reset();
+                if (m_pending && m_pending->verified &&
+                    m_pending->executedHeader->number() == number &&
+                    m_pending->announcedBlockHash == pending.announcedBlockHash)
+                {
+                    m_pending.reset();
+                }
             }
 
             auto ledgerConfig = co_await loadCommitLedgerConfig(header);
@@ -778,7 +742,8 @@ private:
             auto receipts = co_await serialScheduler.executeBlock(
                 view, executor, header, transactionsRefs, execLedgerConfig, ctx);
 
-            // Finalize receipts/seal. incrementalRoot skips the full state-root rebuild here.
+            // Finalize receipts/seal. incrementalRoot skips finalize's own full rebuild;
+            // this path still cross-checks buildAndCollect against stateRootOf.
             bool const incrementalRoot = persistTrieNodes && header.number() > 0;
             result =
                 bcos::evm::engine::finalizeOpBlockResult(executor, view, header, execLedgerConfig,
@@ -871,26 +836,12 @@ private:
             executedBlockHeader->setRequestsHash(detail::toBcosH256(*opResult.seal.requestsHash));
         if (opResult.seal.blobGasUsed.has_value())
             executedBlockHeader->setBlobGasUsed(bcos::u256(*opResult.seal.blobGasUsed));
-        else
-            executedBlockHeader->setBlobGasUsed(bcos::u256{0});
         co_return executedBlockHeader;
     }
 
-    /// Front MLS layer of the current execute view (used when journaling undo rows).
-    std::shared_ptr<typename MultiLayerStorage::MutableStorage> pendingDeltaLayer()
-    {
-        auto& mls = *m_multiLayerStorage;
-        std::unique_lock lock(mls.m_listMutex);
-        if (mls.m_storages.empty())
-        {
-            return nullptr;
-        }
-        return mls.m_storages.front();
-    }
-
-    /// prewriteBlockToBuffer(announcedHash) plus the undo journal for this height.
+    /// prewriteBlockToBuffer(announcedHash). Undo journal is a follow-up.
     task::Task<std::shared_ptr<typename MultiLayerStorage::MutableStorage>> commitPersist(
-        PendingBlock const& pending, std::optional<RollbackContext> const& rollback)
+        PendingBlock const& pending)
     {
         auto storage = std::make_shared<typename MultiLayerStorage::MutableStorage>();
 
@@ -901,7 +852,6 @@ private:
                                       "from the transaction count"});
 
         auto block = pending.block;
-        auto const number = block->blockHeader()->number();
         // Idempotency: retrying a failed commit re-appends the same pending result; clear first.
         block->clearReceipts();
         for (auto const& r : pending.result.receipts)
@@ -919,119 +869,31 @@ private:
 
         co_await bcos::ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, *storage,
             pending.announcedBlockHash, /*writeNonces=*/false);
-
-        // Journal pre-block values for keys this delta touched (skip /mpt/).
-        // On rollback, use the replaced tip's journal: the backend still has that tip.
-        if (auto deltaLayer = pendingDeltaLayer(); deltaLayer)
-        {
-            std::vector<executor_v1::StateKey> touched;
-            std::vector<std::optional<storage::Entry>> newValues;
-            for (auto const& bucket : deltaLayer->m_buckets)
-                for (auto const& data : bucket.container)
-                {
-                    if (executor_v1::StateKeyView{data.key}.m_table == storage2::kMPTTable)
-                    {
-                        continue;
-                    }
-                    touched.emplace_back(data.key);
-                    // NOT_EXISTS and DELETED both mean this commit removes the row.
-                    if (auto* entry = std::get_if<storage::Entry>(std::addressof(data.value)))
-                    {
-                        newValues.emplace_back(*entry);
-                    }
-                    else
-                    {
-                        newValues.emplace_back(std::nullopt);
-                    }
-                }
-            auto committed = m_multiLayerStorage->forkCommitted();
-            auto oldValues = co_await storage2::readSome(committed, touched);
-            std::map<executor_v1::StateKey, std::optional<storage::Entry> const*,
-                std::less<executor_v1::StateKey>>
-                replacedBase;
-            if (rollback.has_value())
-            {
-                for (auto const& row : rollback->replacedUndo.rows)
-                {
-                    replacedBase.emplace(row.key, std::addressof(row.oldValue));
-                }
-            }
-            ReorgUndoBlob undoBlob;
-            undoBlob.txCount = static_cast<int64_t>(block->transactionsSize());
-            undoBlob.failedCount = std::count_if(pending.result.receipts.begin(),
-                pending.result.receipts.end(), [](auto const& r) { return r->status() != 0; });
-            for (size_t i = 0; i < touched.size(); ++i)
-            {
-                auto old = [&]() -> std::optional<storage::Entry> {
-                    if (auto it = replacedBase.find(touched[i]); it != replacedBase.end())
-                    {
-                        // Parent value recorded when the replaced tip committed.
-                        return *it->second;
-                    }
-                    return oldValues[i];
-                }();
-                // Skip unchanged rows.
-                if (old.has_value() && newValues[i].has_value() &&
-                    old->get() == newValues[i]->get())
-                {
-                    continue;  // no-op write; nothing to undo
-                }
-                undoBlob.rows.push_back(ReorgUndoRow{touched[i], std::move(old)});
-            }
-            storage::Entry undoEntry;
-            undoEntry.set(ReorgUndoCodec::encode(undoBlob));
-            co_await storage2::writeOne(*storage,
-                executor_v1::StateKey{ledger::SYS_REORG_UNDO, std::to_string(number)},
-                std::move(undoEntry));
-            // Prune beyond the retention window (tombstone merges into the backend).
-            if (number > c_reorgUndoKeep)
-            {
-                co_await storage2::removeOne(
-                    *storage, executor_v1::StateKey{ledger::SYS_REORG_UNDO,
-                                  std::to_string(number - c_reorgUndoKeep)});
-            }
-
-            // prewrite totals still include the replaced tip; subtract them.
-            if (rollback.has_value())
-            {
-                auto adjust = [&](std::string_view key, int64_t delta) -> task::Task<void> {
-                    auto bufferRow = co_await storage2::readOne(
-                        *storage, executor_v1::StateKey{ledger::SYS_CURRENT_STATE, key});
-                    int64_t current = 0;
-                    if (bufferRow.has_value())
-                    {
-                        current = boost::lexical_cast<int64_t>(bufferRow->get());
-                    }
-                    else
-                    {
-                        auto committedRow = co_await storage2::readOne(
-                            committed, executor_v1::StateKey{ledger::SYS_CURRENT_STATE, key});
-                        if (committedRow.has_value())
-                        {
-                            current = boost::lexical_cast<int64_t>(committedRow->get());
-                        }
-                    }
-                    storage::Entry adjusted;
-                    adjusted.set(std::to_string(current + delta));
-                    co_await storage2::writeOne(*storage,
-                        executor_v1::StateKey{ledger::SYS_CURRENT_STATE, key}, std::move(adjusted));
-                };
-                co_await adjust(
-                    ledger::SYS_KEY_TOTAL_TRANSACTION_COUNT, -rollback->replacedUndo.txCount);
-                if (rollback->replacedUndo.failedCount != 0)
-                {
-                    co_await adjust(ledger::SYS_KEY_TOTAL_FAILED_TRANSACTION,
-                        -rollback->replacedUndo.failedCount);
-                }
-            }
-        }
-
         co_return storage;
     }
 
-    /// Reject already-committed or discontinuous heights, unless this is a same-height rollback.
-    task::Task<bool> commitContinuityCheck(
-        protocol::BlockNumber number, bool sameHeightOverwrite = false)
+    /// Load lastCommitted (and lastExecuted if still unset) from storage after restart.
+    task::Task<void> hydrateCommittedTip()
+    {
+        if (m_lastCommittedBlockNumber.load() != -1)
+        {
+            co_return;
+        }
+        auto view = m_multiLayerStorage->fork();
+        auto const tip =
+            co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
+        if (tip != -1)
+        {
+            m_lastCommittedBlockNumber.store(tip);
+            if (m_lastExecutedBlockNumber.load() == -1)
+            {
+                m_lastExecutedBlockNumber.store(tip);
+            }
+        }
+    }
+
+    /// Reject already-committed or discontinuous heights.
+    task::Task<bool> commitContinuityCheck(protocol::BlockNumber number)
     {
         if (!isSysContractDeploy(number))
         {
@@ -1043,11 +905,7 @@ private:
                     co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
                 m_lastCommittedBlockNumber.store(lastCommitted);
             }
-            if (lastCommitted != -1 && number == lastCommitted && sameHeightOverwrite)
-            {
-                // Same-height rollback overwrite.
-            }
-            else if (lastCommitted != -1 && number <= lastCommitted)
+            if (lastCommitted != -1 && number <= lastCommitted)
             {
                 OP_SCHEDULER_LOG(INFO)
                     << "Block already committed: " << number << "! latest: " << lastCommitted;
@@ -1369,11 +1227,6 @@ private:
     std::atomic<int64_t> m_lastCommittedBlockNumber{-1};
     std::mutex m_pendingMutex;
     std::optional<PendingBlock> m_pending;
-
-    /// Stashed when execute prepares a same-height rollback.
-    std::optional<RollbackContext> m_rollbackContext;
-    /// SYS_REORG_UNDO retention window (heights).
-    static constexpr int64_t c_reorgUndoKeep = 64;
 };
 
 

@@ -10,9 +10,9 @@
 #include <opstack-executor/OpCommitments.h>
 #include <opstack-executor/OpCommon.h>
 #include <opstack-executor/OpScheduler.h>
+#include <opstack-executor/OpSchedulerPolicy.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
-#include <opstack-executor/ReorgUndo.h>
 #include <opstack-executor/Storage2State.h>
 #include <opstack-executor/Storage2StateHelpers.h>
 
