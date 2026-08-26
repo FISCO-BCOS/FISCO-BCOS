@@ -187,8 +187,14 @@ public:
             }
             catch (...)
             {
-                cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-                       "OpScheduler::call: unknown exception"),
+                // Same shape as callAtBlock: classify the unrecognized object and log a trace —
+                // an unlogged "unknown exception" would leave the operator nothing to correlate.
+                auto const code = classifyException(std::current_exception());
+                OP_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("eth_call failed")
+                    << LOG_KV("detail", describeException(std::current_exception()));
+                cb(BCOS_ERROR_PTR(code,
+                       fmt::format("eth_call failed: {} (see node log)", rpcSafeReason(code))),
                     nullptr);
             }
         }());
@@ -268,8 +274,12 @@ public:
             }
             catch (...)
             {
-                cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-                       "OpScheduler::getCode: unknown exception"),
+                auto const code = classifyException(std::current_exception());
+                OP_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("getCode failed")
+                    << LOG_KV("detail", describeException(std::current_exception()));
+                cb(BCOS_ERROR_PTR(
+                       code, fmt::format("getCode failed: {} (see node log)", rpcSafeReason(code))),
                     {});
             }
         }());
@@ -309,8 +319,12 @@ public:
             }
             catch (...)
             {
-                cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-                       "OpScheduler::getABI: unknown exception"),
+                auto const code = classifyException(std::current_exception());
+                OP_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("getABI failed")
+                    << LOG_KV("detail", describeException(std::current_exception()));
+                cb(BCOS_ERROR_PTR(
+                       code, fmt::format("getABI failed: {} (see node log)", rpcSafeReason(code))),
                     {});
             }
         }());
@@ -873,6 +887,13 @@ private:
         }
         catch (const bcos::evm::OpConsensusError&)
         {
+            // A poisoned slot is a storage fault even when validation wrapped it as consensus:
+            // Storage2State reads are noexcept and swallow the fault into the shared slot while
+            // returning defaults, so a missing/corrupt trie row under the tx sender surfaces as
+            // an insufficient-funds-style OpConsensusError (OpstackExecutor::prepare wraps
+            // OpTxValidationFailed with no slot check). Same check coCallOnView runs for every
+            // exception type on the eth_call path.
+            rethrowStorageFaultIfPoisoned();
             throw;
         }
         catch (const bcos::evm::engine::OpStorageError&)

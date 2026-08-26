@@ -1180,8 +1180,8 @@ BOOST_AUTO_TEST_CASE(GetCodeEmpty)
 }
 
 /// Invalid call (maxFeePerGas=1 < baseFee(1e9)) → JSON-RPC Error, never a status-0 receipt.
-/// call() classifies a validation fault as UnknownError and returns rpcSafeReason ("internal
-/// error"); the evmone detail is only in the node log.
+/// call() classifies the validation fault (OpConsensusError → OpConsensusRejected) and returns
+/// rpcSafeReason ("consensus rejection"); the evmone detail is only in the node log.
 BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
 {
     Fixture f;
@@ -1194,10 +1194,13 @@ BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
         std::move(tx), [&](bcos::Error::Ptr err, bcos::protocol::TransactionReceipt::Ptr) {
             called = true;
             BOOST_REQUIRE(err != nullptr);  // Error (JSON-RPC), never a status-0 receipt
-            BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::UnknownError);
+            // maxFeePerGas=1 below the block base fee → FEE_CAP_LESS_THAN_BLOCKS. The
+            // OpConsensusError is classified by the call path's exception ladder (round-3 F3
+            // made the catch(...) arm classify like the catch(std::exception) arm already did).
+            BOOST_CHECK_EQUAL(
+                err->errorCode(), (int)bcos::scheduler::SchedulerError::OpConsensusRejected);
             const auto msg = err->errorMessage();
-            BOOST_CHECK_MESSAGE(msg.find("unknown exception") != std::string::npos ||
-                                    msg.find("internal error") != std::string::npos,
+            BOOST_CHECK_MESSAGE(msg.find("consensus rejection") != std::string::npos,
                 "invalid call must not return a status-0 receipt, got: " << msg);
         });
     BOOST_REQUIRE(called);
@@ -1342,6 +1345,67 @@ BOOST_AUTO_TEST_CASE(StorageReadFaultRejectsBlockAsStorageFault)
     BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::OpStorageFault);
     BOOST_CHECK(executedHeader == nullptr);
     // The message names the poison cause (diagnostic_information preserves what()).
+    BOOST_CHECK(err->errorMessage().find("poisoned") != std::string::npos);
+}
+
+// Round-3 F1: a storage fault under the TX SENDER surfaces at the VALIDATION stage (m_prepare's
+// opValidate reads the sender account; Storage2State swallows the fault into the shared slot and
+// returns a default, so validation fails as an insufficient-funds-style OpConsensusError). The
+// execute() catch ladder must reclassify that as OpStorageError — the same treatment coCallOnView
+// already gives every exception type on the eth_call path — not report the announced payload
+// INVALID on a local disk fault.
+BOOST_AUTO_TEST_CASE(SenderAccountFaultRejectsAsStorageFaultNotConsensus)
+{
+    Fixture f;
+    // Corrupt the sender's NONCE row: fetchAccount's intx::from_string throws on the 4-byte
+    // "abcd" value → poison → get_account returns nullopt → validation fails as "insufficient
+    // funds" (OpConsensusError). Before the fix, execute()'s catch(OpConsensusError) rethrew
+    // without consulting the slot, so the EL would classify the fault as a consensus rejection.
+    {
+        auto view = f.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::storage::Entry e;
+        e.set(std::string("abcd"));
+        bcos::task::syncWait(bcos::storage2::writeOne(view,
+            StateKey{bcos::evm::evmstate::accountTableName(
+                         bcos::evm::engine::detail::toEvmcAddress(kSender)),
+                std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE)},
+            std::move(e)));
+        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
+    }
+
+    // Minimal OP block: L1 attributes deposit + one eip1559 transfer whose sender is kSender
+    // (buildFiscoTx forceSenders kSender for non-deposit envelopes).
+    auto depTx = makeDeposit();
+    bcos::bytes depEnv = encodeDepositEnvelope(depTx);
+    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
+
+    auto header = makeHeader();
+    auto block = f.blockFactory->createBlock();
+    block->setBlockHeader(header);
+    auto depFiscoTx = buildFiscoTx(depEnv, f.hashImpl);
+    auto eipFiscoTx = buildFiscoTx(eipEnvBytes, f.hashImpl);
+    BOOST_REQUIRE(depFiscoTx != nullptr);
+    BOOST_REQUIRE(eipFiscoTx != nullptr);
+    block->appendTransaction(depFiscoTx);
+    block->appendTransaction(eipFiscoTx);
+
+    bcos::Error::Ptr err;
+    bcos::protocol::BlockHeader::Ptr executedHeader;
+    bool called = false;
+    f.scheduler->executeBlock(
+        block, /*verify=*/true, [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr h, bool) {
+            called = true;
+            err = std::move(e);
+            executedHeader = std::move(h);
+        });
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE(err != nullptr);
+    // Validation-stage poison → OpStorageError, classified OpStorageFault — never a consensus
+    // INVALID for a local disk fault.
+    BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::OpStorageFault);
+    BOOST_CHECK(executedHeader == nullptr);
     BOOST_CHECK(err->errorMessage().find("poisoned") != std::string::npos);
 }
 
@@ -1869,6 +1933,11 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
 {
     Fixture f;
     seedL2CompatFeature(f.multiLayerStorage);
+    // Round-3 F2: drive execute()'s ①a path with the full-rebuild cross-check ENABLED (the
+    // scheduler-side branch at OpScheduler.h:840-860 — shared-error Storage2State, poisoned()
+    // check, divergence throw). Default off means nothing else exercises it; the blocks below
+    // then assert both that the branch runs and that the incremental root matches.
+    f.scheduler->setCrossCheckIncrementalRoot(true);
     fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
     const bcos::Address kContract{"0x3000000000000000000000000000000000000000"};
     seedContractWithSlot(f.multiLayerStorage, kContract,
