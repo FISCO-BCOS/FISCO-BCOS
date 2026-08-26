@@ -380,7 +380,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                     {
                         AMOP_LOG(DEBUG)
                             << LOG_BADGE("RetrySender::sendMessage")
-                            << LOG_DESC("asyncSendMessageByNodeID callback response failed")
+                            << LOG_DESC("asyncSendMessageByP2PNodeID callback response failed")
                             << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
                             << LOG_KV("code", _error->errorCode())
                             << LOG_KV("msg", _error->errorMessage());
@@ -545,8 +545,31 @@ void AMOPImpl::dispatcherAMOPMessage(
                 responseP2PMsg->setRespPacket();
                 responseP2PMsg->setPayload(*_responseData);
                 responseP2PMsg->setPacketType(_type);
-                m_network->asyncSendMessageByNodeID(
-                    responseP2PMsg->dstP2PNodeID(), responseP2PMsg, nullptr);
+                // send the AMOP response through the coroutine fast path: the message is passed as
+                // a coroutine parameter so it is copied into the frame and stays alive for the
+                // (possibly deferred) send; its payload rides as a view (zero-copy).
+                auto network = m_network;
+                task::wait([](P2PInterface::Ptr _network,
+                               std::shared_ptr<P2PMessage> _responseP2PMsg) -> task::Task<void> {
+                    try
+                    {
+                        co_await _network->sendMessageByNodeID(_responseP2PMsg->dstP2PNodeID(),
+                            *_responseP2PMsg,
+                            ::ranges::views::single(_responseP2PMsg->payload()), Options{});
+                    }
+                    catch (std::exception const& e)
+                    {
+                        // A synchronous pre-send rejection (rate limit / max size) or an async
+                        // write failure on the AMOP response path is expected during bandwidth
+                        // saturation — log the dst and seq so the response-loss investigation
+                        // keeps the routing dimension.
+                        AMOP_LOG(WARNING) << LOG_BADGE("onReceiveAMOPMessage")
+                                          << LOG_DESC("send response failed")
+                                          << LOG_KV("seq", _responseP2PMsg->seq())
+                                          << LOG_KV("dst", _responseP2PMsg->dstP2PNodeID())
+                                          << LOG_KV("what", boost::diagnostic_information(e));
+                    }
+                }(network, responseP2PMsg));
             });
         break;
     case AMOPMessage::Type::AMOPBroadcast:

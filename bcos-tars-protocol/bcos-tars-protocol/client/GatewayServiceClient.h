@@ -41,17 +41,14 @@ public:
 
     void setKeyFactory(bcos::crypto::KeyFactory::Ptr keyFactory);
 
-    void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bcos::bytesConstRef _payload, bcos::gateway::ErrorRespFunc _errorRespFunc) override;
-
     void asyncGetPeers(std::function<void(
             bcos::Error::Ptr, bcos::gateway::GatewayInfo::Ptr, bcos::gateway::GatewayInfosPtr)>
             _callback) override;
 
-    void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
-        bcos::bytesConstRef _payload) override;
+    // (coroutine) send message to a single node by awaiting the gateway-service RPC
+    bcos::task::Task<bcos::Error::Ptr> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
+        ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> _payloads) override;
 
     bcos::task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID,

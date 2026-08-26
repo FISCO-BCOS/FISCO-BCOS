@@ -28,8 +28,6 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
-#include <atomic>
-#include <coroutine>
 #include <memory>
 #include <range/v3/view/any_view.hpp>
 
@@ -82,23 +80,6 @@ public:
      * @param _payload: message content
      * @return void
      */
-    virtual void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload, ErrorRespFunc _errorRespFunc) = 0;
-
-    /**
-     * @brief: send message to multiple nodes
-     * @param _groupID: groupID
-     * @param _moduleID: moduleID
-     * @param _srcNodeID: the sender nodeID
-     * @param _nodeIDs: the receiver nodeIDs
-     * @param _payload: message content
-     * @param _errorRespFunc: error func
-     * @return void
-     */
-    virtual void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
-        bytesConstRef _payload) = 0;
 
     virtual task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID,
@@ -111,13 +92,6 @@ public:
      *         exhausted / a terminal error occurred); it returns nullptr on success or an
      *         Error::Ptr describing the failure.
      *
-     * Default implementation: joins the payload views into a buffer and bridges to the borrowed
-     * asyncSendMessageByNodeID. The completion state and the payload buffer are owned by the
-     * completion callback (see the implementation below): the borrowed TARS client may keep
-     * reading the payload after the callback returns, and it may even invoke the callback twice —
-     * the implementation guards the resume/result delivery accordingly. The production Gateway
-     * overrides it with a zero-copy coroutine implementation.
-     *
      * @param _groupID: groupID
      * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
@@ -126,83 +100,7 @@ public:
      */
     virtual task::Task<Error::Ptr> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads)
-    {
-        // Both the payload buffer and the completion state are owned by shared_ptrs captured by the
-        // completion callback, NOT by this coroutine frame: the borrowed TARS client may keep
-        // reading the payload after the callback returns (e.g. a synchronous connection-check error
-        // followed by an async send setup), and it may even invoke the callback twice
-        // (synchronously for the connection check AND later for the async completion). The
-        // shared state survives
-        // the frame so the second completion is detected instead of double-resuming a destroyed
-        // coroutine.
-        auto buffer = std::make_shared<bcos::bytes>();
-        for (auto const& data : _payloads)
-        {
-            buffer->insert(buffer->end(), data.begin(), data.end());
-        }
-        struct SendAwaitable
-        {
-            struct CompletionState
-            {
-                std::atomic<bool> completed{false};
-                std::coroutine_handle<> handle;
-                Error::Ptr error;
-            };
-
-            GatewayInterface* m_self;
-            // owned by the completion callback so it outlives this frame: asyncSendMessageByNodeID
-            // takes the groupID by const-ref, and a synchronous completion (TARS connection check)
-            // resumes (and destroys) the frame while the borrowed client is still using it
-            std::shared_ptr<std::string> m_groupID;
-            int m_moduleID;
-            bcos::crypto::NodeIDPtr m_srcNodeID;
-            bcos::crypto::NodeIDPtr m_dstNodeID;
-            std::shared_ptr<bcos::bytes> m_buffer;
-            std::shared_ptr<CompletionState> m_state;
-
-            constexpr static bool await_ready() noexcept { return false; }
-            void await_suspend(std::coroutine_handle<> _handle)
-            {
-                m_state->handle = _handle;
-                auto state = m_state;
-                auto buffer = m_buffer;
-                auto groupID = m_groupID;
-                // Materialize what the call arguments need (groupID / payload) BEFORE the lambda
-                // argument below: the lambda's init-captures move buffer/groupID/state, and C++17
-                // leaves the evaluation order of function arguments unspecified — if the lambda ran
-                // first, *groupID / bcos::ref(*buffer) would dereference the moved-from (null)
-                // shared_ptrs. The string stays alive because the lambda's captured shared_ptr
-                // keeps it alive.
-                std::string const& groupIDRef = *groupID;
-                auto payload = bcos::ref(*buffer);
-                m_self->asyncSendMessageByNodeID(groupIDRef, m_moduleID, m_srcNodeID, m_dstNodeID,
-                    payload,
-                    [state = std::move(state), buffer = std::move(buffer),
-                        groupID = std::move(groupID)](bcos::Error::Ptr _error) mutable {
-                        // The completion guard protects both the resume and the result delivery:
-                        // the documented contract above says the borrowed TARS client may invoke
-                        // this callback twice (synchronous connection check + async completion) —
-                        // only the first completion may deliver the result, otherwise the caller
-                        // is called back twice.
-                        if (!state->completed.exchange(true))
-                        {
-                            state->error = std::move(_error);
-                            // keep the payload buffer and groupID alive until after the resume: the
-                            // borrowed caller may still be reading them on this stack
-                            (void)buffer;
-                            (void)groupID;
-                            state->handle.resume();
-                        }
-                    });
-            }
-            Error::Ptr await_resume() { return std::move(m_state->error); }
-        };
-        SendAwaitable awaitable{this, std::make_shared<std::string>(_groupID), _moduleID,
-            std::move(_srcNodeID), std::move(_dstNodeID), std::move(buffer),
-            std::make_shared<SendAwaitable::CompletionState>()};
-        co_return co_await awaitable;
-    }
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads) = 0;
 
     /// multi-group related interfaces
 

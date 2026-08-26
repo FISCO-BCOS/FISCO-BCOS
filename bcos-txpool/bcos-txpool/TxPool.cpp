@@ -209,8 +209,16 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
             }
             for (const auto& node : (*selectedNode))
             {
-                m_transactionSync->config()->frontService()->asyncSendMessageByNodeID(
-                    protocol::TREE_PUSH_TRANSACTION, node, _data, 0, front::CallbackFunc());
+                // fire-and-forget point-to-point send through the coroutine fast path: the
+                // borrowed payload view stays alive for the (blocking) co_await
+                task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, int _moduleID,
+                               bcos::crypto::NodeIDPtr _nodeID,
+                               bytesConstRef _data) -> task::Task<void> {
+                    auto result = co_await _frontService->sendMessageByNodeID(_moduleID,
+                        std::move(_nodeID), ::ranges::views::single(_data), 0);
+                    (void)result;
+                }(m_transactionSync->config()->frontService(), protocol::TREE_PUSH_TRANSACTION,
+                    node, _data));
             }
         }
     }

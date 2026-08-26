@@ -9,6 +9,7 @@
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Task.h>
+#include <range/v3/view/single.hpp>
 #include <random>
 
 namespace bcos::p2p
@@ -35,67 +36,21 @@ public:
         bcos::bytes requestBuffer;
         bcos::concepts::serialize::encode(request, requestBuffer);
 
-        using ResponseType = std::remove_cvref_t<decltype(response)>;
-        struct Awaitable
+        LIGHTNODE_LOG(DEBUG) << "P2P client send message: " << moduleID << " | "
+                             << nodeID->hex() << " | " << requestBuffer.size();
+        auto result = co_await m_front->sendMessageByNodeID(moduleID, nodeID,
+            ::ranges::views::single(bcos::ref(requestBuffer)), 30000);
+        LIGHTNODE_LOG(DEBUG) << "P2P client receive message: " << moduleID << " | "
+                             << nodeID->hex() << " | " << result.payload.size() << " | "
+                             << (result.error ? result.error->errorCode() : 0) << " | "
+                             << (result.error ? result.error->errorMessage() : "");
+        if (result.error)
         {
-            Awaitable(bcos::front::FrontServiceInterface::Ptr& front, int moduleID,
-                crypto::NodeIDPtr nodeID, bcos::bytes buffer, ResponseType& response)
-              : m_front(front),
-                m_moduleID(moduleID),
-                m_nodeID(std::move(nodeID)),
-                m_requestBuffer(std::move(buffer)),
-                m_response(response)
-            {}
-            constexpr bool await_ready() const { return false; }
-
-            void await_suspend(std::coroutine_handle<task::Task<void>::promise_type> handle)
-            {
-                LIGHTNODE_LOG(DEBUG) << "P2P client send message: " << m_moduleID << " | "
-                                     << m_nodeID->hex() << " | " << m_requestBuffer.size();
-                bcos::concepts::getRef(m_front).asyncSendMessageByNodeID(m_moduleID, m_nodeID,
-                    bcos::ref(m_requestBuffer), 30000,
-                    [m_handle = std::move(handle), this](Error::Ptr error, bcos::crypto::NodeIDPtr,
-                        bytesConstRef data, const std::string&, front::ResponseFunc) mutable {
-                        LIGHTNODE_LOG(DEBUG) << "P2P client receive message: " << m_moduleID
-                                             << " | " << m_nodeID->hex() << " | " << data.size()
-                                             << " | " << (error ? error->errorCode() : 0) << " | "
-                                             << (error ? error->errorMessage() : "");
-                        if (!error)
-                        {
-                            bcos::concepts::serialize::decode(data, m_response);
-                            LIGHTNODE_LOG(DEBUG) << LOG_DESC("P2P client receive message success: ")
-                                                 << LOG_KV("data size", data.size());
-                        }
-                        else
-                        {
-                            m_error = std::move(error);
-                        }
-
-                        m_handle.resume();
-                    });
-            }
-
-            constexpr void await_resume() const
-            {
-                if (m_error)
-                {
-                    BOOST_THROW_EXCEPTION(*m_error);
-                }
-            }
-
-            // Request params
-            bcos::front::FrontServiceInterface::Ptr& m_front;
-            int m_moduleID;
-            crypto::NodeIDPtr m_nodeID;
-            bcos::bytes m_requestBuffer;
-
-            // Response params
-            Error::Ptr m_error;
-            ResponseType& m_response;
-        };
-
-        auto awaitable = Awaitable(m_front, moduleID, nodeID, std::move(requestBuffer), response);
-        co_await awaitable;
+            BOOST_THROW_EXCEPTION(*result.error);
+        }
+        bcos::concepts::serialize::decode(bcos::ref(result.payload), response);
+        LIGHTNODE_LOG(DEBUG) << LOG_DESC("P2P client receive message success: ")
+                             << LOG_KV("data size", result.payload.size());
     }
 
     task::Task<crypto::NodeIDPtr> randomSelectNode()

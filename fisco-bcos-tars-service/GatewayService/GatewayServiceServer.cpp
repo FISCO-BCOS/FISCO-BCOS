@@ -117,12 +117,20 @@ bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeID(const s
         bcos::bytesConstRef((const bcos::byte*)srcNodeID.data(), srcNodeID.size()));
     auto bcosDstNodeID = keyFactory->createKey(
         bcos::bytesConstRef((const bcos::byte*)dstNodeID.data(), dstNodeID.size()));
-
-    m_gatewayInitializer->gateway()->asyncSendMessageByNodeID(groupID, moduleID, bcosSrcNodeID,
-        bcosDstNodeID, bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size()),
-        [current](bcos::Error::Ptr error) {
-            async_response_asyncSendMessageByNodeID(current, toTarsError(error));
-        });
+    auto gateway = m_gatewayInitializer->gateway();
+    // keep the payload alive and pass all state as coroutine parameters so it is copied into the
+    // frame and stays alive for the whole (possibly deferred) send; the send result is delivered
+    // through the async RPC response
+    auto payloadData = std::make_shared<std::vector<tars::Char>>(payload);
+    bcos::task::wait([](auto _gateway, auto _groupID, auto _moduleID, auto _srcNodeID,
+                         auto _dstNodeID, auto _payloadData,
+                         auto _current) -> bcos::task::Task<void> {
+        auto error = co_await _gateway->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID,
+            _dstNodeID,
+            ::ranges::views::single(bcos::bytesConstRef(
+                (const bcos::byte*)_payloadData->data(), _payloadData->size())));
+        async_response_asyncSendMessageByNodeID(_current, toTarsError(error));
+    }(gateway, groupID, moduleID, bcosSrcNodeID, bcosDstNodeID, payloadData, current));
     return {};
 }
 bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeIDs(
@@ -142,8 +150,17 @@ bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeIDs(
             keyFactory->createKey(bcos::bytesConstRef((const bcos::byte*)it.data(), it.size())));
     }
 
-    m_gatewayInitializer->gateway()->asyncSendMessageByNodeIDs(groupID, moduleID, bcosSrcNodeID,
-        nodeIDs, bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size()));
+    auto gateway = m_gatewayInitializer->gateway();
+    auto payloadData = std::make_shared<std::vector<tars::Char>>(payload);
+    bcos::task::wait([](auto _gateway, auto _groupID, auto _moduleID, auto _srcNodeID,
+                         auto _nodeIDs, auto _payloadData) -> bcos::task::Task<void> {
+        for (auto const& dstNodeID : _nodeIDs)
+        {
+            co_await _gateway->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID, dstNodeID,
+                ::ranges::views::single(bcos::bytesConstRef(
+                    (const bcos::byte*)_payloadData->data(), _payloadData->size())));
+        }
+    }(gateway, groupID, moduleID, bcosSrcNodeID, nodeIDs, payloadData));
 
     async_response_asyncSendMessageByNodeIDs(current, toTarsError<bcos::Error::Ptr>(nullptr));
     return bcostars::Error();

@@ -48,31 +48,38 @@ bcostars::Error FrontServiceServer::asyncSendMessageByNodeID(tars::Int32 moduleI
 
     auto bcosNodeID = m_frontServiceInitializer->keyFactory()->createKey(
         bcos::bytesConstRef((bcos::byte*)nodeID.data(), nodeID.size()));
-    if (requireRespCallback)
-    {
-        m_frontServiceInitializer->front()->asyncSendMessageByNodeID(moduleID, bcosNodeID,
-            bcos::bytesConstRef((bcos::byte*)data.data(), data.size()), timeout,
-            [current](bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-                bcos::bytesConstRef _data, const std::string& _id,
-                bcos::front::ResponseFunc _respFunc) {
-                boost::ignore_unused(_respFunc);
-                auto encodedNodeID = _nodeID->encode();
-                async_response_asyncSendMessageByNodeID(current, toTarsError(_error),
-                    std::vector<char>(encodedNodeID.begin(), encodedNodeID.end()),
-                    std::vector<char>(_data.begin(), _data.end()), _id);
-            });
-    }
-    else
-    {
-        m_frontServiceInitializer->front()->asyncSendMessageByNodeID(moduleID, bcosNodeID,
-            bcos::bytesConstRef((bcos::byte*)data.data(), data.size()), timeout, nullptr);
+    auto front = m_frontServiceInitializer->front();
+    // keep the payload and the request nodeID alive by passing them as coroutine parameters (they
+    // are copied into the frame and stay alive for the whole send)
+    auto payloadData = std::make_shared<std::vector<tars::Char>>(data);
+    auto requestNodeID = std::make_shared<std::vector<tars::Char>>(nodeID);
 
-        // response directly
-        bcos::bytesConstRef respData;
-        async_response_asyncSendMessageByNodeID(current, toTarsError<bcos::Error::Ptr>(nullptr),
-            std::vector<char>(nodeID.begin(), nodeID.end()),
-            std::vector<char>(respData.begin(), respData.end()), seq);
-    }
+    bcos::task::wait([](auto _front, auto _moduleID, auto _bcosNodeID, auto _payloadData,
+                         auto _requestNodeID, auto _timeout, auto _requireRespCallback,
+                         auto _current) -> bcos::task::Task<void> {
+        // requireRespCallback == false maps to a fire-and-forget send (timeout 0); the send result
+        // (module response, timeout or gateway failure) is delivered through the async RPC response
+        auto result = co_await _front->sendMessageByNodeID(_moduleID, _bcosNodeID,
+            ::ranges::views::single(bcos::bytesConstRef(
+                (const bcos::byte*)_payloadData->data(), _payloadData->size())),
+            _requireRespCallback ? _timeout : 0);
+
+        bcos::bytes encodedNodeID;
+        if (result.nodeID)
+        {
+            encodedNodeID = result.nodeID->encode();
+        }
+        else
+        {
+            // fire-and-forget (or failed) send: echo the request nodeID, matching the previous
+            // handler behaviour
+            encodedNodeID.assign(_requestNodeID->begin(), _requestNodeID->end());
+        }
+        async_response_asyncSendMessageByNodeID(_current, toTarsError(result.error),
+            std::vector<char>(encodedNodeID.begin(), encodedNodeID.end()),
+            std::vector<char>(result.payload.begin(), result.payload.end()), result.uuid);
+    }(front, moduleID, bcosNodeID, payloadData, requestNodeID, timeout, requireRespCallback,
+        current));
 
     return bcostars::Error();
 }
@@ -88,9 +95,18 @@ void FrontServiceServer::asyncSendMessageByNodeIDs(tars::Int32 moduleID,
         bcosNodeIDs.push_back(m_frontServiceInitializer->keyFactory()->createKey(
             bcos::bytesConstRef((bcos::byte*)it.data(), it.size())));
     }
-
-    m_frontServiceInitializer->front()->asyncSendMessageByNodeIDs(
-        moduleID, bcosNodeIDs, bcos::bytesConstRef((bcos::byte*)data.data(), data.size()));
+    auto front = m_frontServiceInitializer->front();
+    auto payloadData = std::make_shared<std::vector<tars::Char>>(data);
+    bcos::task::wait([](auto _front, auto _moduleID, auto _bcosNodeIDs,
+                         auto _payloadData) -> bcos::task::Task<void> {
+        for (auto const& nodeID : _bcosNodeIDs)
+        {
+            co_await _front->sendMessageByNodeID(_moduleID, nodeID,
+                ::ranges::views::single(bcos::bytesConstRef(
+                    (const bcos::byte*)_payloadData->data(), _payloadData->size())),
+                0);
+        }
+    }(front, moduleID, bcosNodeIDs, payloadData));
 }
 
 bcostars::Error FrontServiceServer::asyncSendResponse(const std::string& id, tars::Int32 moduleID,

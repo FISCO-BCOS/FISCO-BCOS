@@ -66,14 +66,16 @@ public:
         co_return;
     }
 
-    void asyncSendMessageByNodeID(const std::string&, int, bcos::crypto::NodeIDPtr,
-        bcos::crypto::NodeIDPtr, bytesConstRef, bcos::gateway::ErrorRespFunc) override
+    task::Task<Error::Ptr> sendMessageByNodeID(const std::string&, int, bcos::crypto::NodeIDPtr,
+        bcos::crypto::NodeIDPtr,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward>) override
     {
         if (!m_p2pCaptured.exchange(true))
         {
             m_p2pRanOn.set_value(std::this_thread::get_id());
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(c_blockMs));
+        co_return nullptr;
     }
 };
 

@@ -64,20 +64,6 @@ public:
     void asyncGetGroupNodeInfo(
         const std::string& _groupID, GetGroupNodeInfoFunc _onGetGroupNodeInfo) override;
     /**
-     * @brief: send message
-     * @param _groupID: groupID
-     * @param _moduleID: moduleID
-     * @param _srcNodeID: the sender nodeID
-     * @param _dstNodeID: the receiver nodeID
-     * @param _payload: message payload
-     * @param _errorRespFunc: error func
-     * @return void
-     */
-    void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload, ErrorRespFunc _errorRespFunc) override;
-
-    /**
      * @brief: send message to multiple nodes
      * @param _groupID: groupID
      * @param _moduleID: moduleID
@@ -86,10 +72,6 @@ public:
      * @param _payload: message payload
      * @return void
      */
-    void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _nodeIDs,
-        bytesConstRef _payload) override;
-
     task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override;

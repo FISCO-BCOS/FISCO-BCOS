@@ -21,8 +21,10 @@
 
 #include "../common/FrontServiceBuilder.h"
 #include "bcos-framework/protocol/CommonError.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
+#include <range/v3/view/single.hpp>
 
 using namespace bcos;
 using namespace bcos::test;
@@ -84,24 +86,14 @@ BOOST_AUTO_TEST_CASE(test_FrontServiceEcho)
 
                 auto payload = bcos::bytesConstRef((bcos::byte*)sendStr.data(), sendStr.size());
 
-                std::promise<bool> p;
-                auto f = p.get_future();
+                auto result = task::syncWait(frontService->sendMessageByNodeID(
+                    bcos::protocol::ModuleID::AMOP, nodeID, ::ranges::views::single(payload),
+                    10000));
 
-                frontService->asyncSendMessageByNodeID(bcos::protocol::ModuleID::AMOP, nodeID,
-                    payload, 10000,
-                    [sendStr, &p](Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-                        bytesConstRef _data, const std::string& _id,
-                        bcos::front::ResponseFunc _respFunc) {
-                        p.set_value(true);
-                        (void)_respFunc;
-                        (void)_nodeID;
-                        BOOST_CHECK(!_id.empty());
-                        BOOST_CHECK(_error == nullptr);
-                        std::string retStr = std::string(_data.begin(), _data.end());
-                        BOOST_CHECK_EQUAL(sendStr, retStr);
-                    });
-
-                f.get();
+                BOOST_CHECK(!result.uuid.empty());
+                BOOST_CHECK(result.error == nullptr);
+                std::string retStr(result.payload.begin(), result.payload.end());
+                BOOST_CHECK_EQUAL(sendStr, retStr);
             }
         });
     }
@@ -127,25 +119,14 @@ BOOST_AUTO_TEST_CASE(test_FrontServiceTimeout)
 
                 auto payload = bcos::bytesConstRef((bcos::byte*)sendStr.data(), sendStr.size());
 
-                std::promise<bool> p;
-                auto f = p.get_future();
+                auto result = task::syncWait(frontService->sendMessageByNodeID(
+                    bcos::protocol::ModuleID::AMOP + 1, nodeID, ::ranges::views::single(payload),
+                    10000));
 
-                frontService->asyncSendMessageByNodeID(bcos::protocol::ModuleID::AMOP + 1, nodeID,
-                    payload, 10000,
-                    [sendStr, &p](Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-                        bytesConstRef _data, const std::string& _id,
-                        bcos::front::ResponseFunc _respFunc) {
-                        p.set_value(true);
-                        (void)_respFunc;
-                        (void)_nodeID;
-                        (void)_data;
-                        BOOST_CHECK(!_id.empty());
-                        BOOST_CHECK(_error != nullptr);
-                        BOOST_CHECK_EQUAL(
-                            _error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
-                    });
-
-                f.get();
+                BOOST_CHECK(!result.uuid.empty());
+                BOOST_CHECK(result.error != nullptr);
+                BOOST_CHECK_EQUAL(
+                    result.error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
             }
         });
     }

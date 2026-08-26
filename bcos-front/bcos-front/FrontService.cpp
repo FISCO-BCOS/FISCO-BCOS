@@ -422,46 +422,6 @@ std::string FrontService::registerCallback(
     return uuid;
 }
 
-void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
-    bytesConstRef _data, uint32_t _timeout, CallbackFunc _callbackFunc)
-{
-    try
-    {
-        std::string uuid = registerCallback(_nodeID, _timeout, _callbackFunc);
-        if (_callbackFunc)
-        {
-            FRONT_LOG(DEBUG) << LOG_DESC("asyncSendMessageByNodeID") << LOG_KV("groupID", m_groupID)
-                             << LOG_KV("moduleID", _moduleID) << LOG_KV("uuid", uuid)
-                             << LOG_KV("nodeID", _nodeID->hex())
-                             << LOG_KV("data.size()", _data.size()) << LOG_KV("timeout", _timeout);
-        }  // if (_callback)
-
-        auto self = weak_from_this();
-        sendMessage(_moduleID, _nodeID, uuid, _data, false,
-            [self, _moduleID, _nodeID, uuid](const Error::Ptr& _error) {
-                auto front = self.lock();
-                if (!front)
-                {
-                    return;
-                }
-                if (_error && (_error->errorCode() != CommonError::SUCCESS))
-                {
-                    /*
-                    FRONT_LOG(ERROR) << LOG_BADGE("sendMessage callback") << LOG_KV("uuid", uuid)
-                                     << LOG_KV("errorCode", _error->errorCode())
-                                     << LOG_KV("errorMessage", _error->errorMessage());
-                */
-                    front->handleCallback(_error, bytesConstRef(), uuid, _moduleID, _nodeID);
-                }
-            });
-    }
-    catch (std::exception& e)
-    {
-        FRONT_LOG(ERROR) << LOG_BADGE("asyncSendMessageByNodeID")
-                         << LOG_KV("failed", boost::diagnostic_information(e));
-    }
-}
-
 /**
  * @brief: send response
  * @param _id: the request uuid
@@ -472,22 +432,6 @@ void FrontService::asyncSendResponse(const std::string& _id, int _moduleID,
     bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback)
 {
     sendMessage(_moduleID, _nodeID, _id, _data, true, _receiveMsgCallback);
-}
-
-/**
- * @brief: send message to multiple nodes
- * @param _moduleID: moduleID
- * @param _nodeIDs: the receiver nodeIDs
- * @param _data: send message data
- * @return void
- */
-void FrontService::asyncSendMessageByNodeIDs(
-    int _moduleID, const crypto::NodeIDs& _nodeIDs, bytesConstRef _data)
-{
-    for (const auto& _nodeID : _nodeIDs)
-    {
-        asyncSendMessageByNodeID(_moduleID, _nodeID, _data, 0, CallbackFunc());
-    }
 }
 
 task::Task<void> FrontService::broadcastMessage(
@@ -905,23 +849,32 @@ void FrontService::sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
     FrontMessage message;
     message.setModuleID(_moduleID);
     message.setUuid(bytesConstRef(reinterpret_cast<const bcos::byte*>(_uuid.data()), _uuid.size()));
-    message.setPayload(_data);
     if (isResponse)
     {
         message.setResponse();
     }
 
-    bytes buffer;
-    message.encode(buffer);
+    // zero-copy: only the header is encoded; the payload rides as a view that stays alive for the
+    // (blocking) co_await below
+    bytes header;
+    message.encodeHeader(header);
 
-    // call gateway interface to send the message
-    m_gatewayInterface->asyncSendMessageByNodeID(m_groupID, _moduleID, m_nodeID, std::move(_nodeID),
-        bytesConstRef(buffer.data(), buffer.size()), [_receiveMsgCallback](Error::Ptr _error) {
-            if (_receiveMsgCallback)
-            {
-                _receiveMsgCallback(std::move(_error));
-            }
-        });
+    // bridge the coroutine gateway send to the borrowed callback
+    auto gateway = m_gatewayInterface;
+    auto hdr = std::make_shared<bytes>(std::move(header));
+    task::wait([](gateway::GatewayInterface::Ptr _gateway, std::string _groupID, int _moduleID,
+                   bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _nodeID,
+                   std::shared_ptr<bytes> _hdr, bytesConstRef _data,
+                   ReceiveMsgFunc _receiveMsgCallback) -> task::Task<void> {
+        auto error = co_await _gateway->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID,
+            std::move(_nodeID),
+            ::ranges::views::concat(::ranges::views::single(bcos::ref(std::as_const(*_hdr))),
+                ::ranges::views::single(_data)));
+        if (_receiveMsgCallback)
+        {
+            _receiveMsgCallback(std::move(error));
+        }
+    }(gateway, m_groupID, _moduleID, m_nodeID, std::move(_nodeID), hdr, _data, _receiveMsgCallback));
 }
 
 /**

@@ -53,13 +53,8 @@ public:
     void sendRespMessageBySession(
         bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
 
-    void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
-        CallbackFuncWithSession callback, Options options = Options()) override;
-
     task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& header,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
-
-    void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
 
     /**
      * @brief: (coroutine) broadcast a message to all connected sessions. The message is handed
@@ -124,9 +119,6 @@ public:
 
     void eraseHandlerByMsgType(uint16_t _type) override;
 
-    void asyncSendMessageByEndPoint(NodeIPEndpoint const& _endPoint, P2PMessage::Ptr message,
-        CallbackFuncWithSession callback, Options options = Options());
-
     void setOnMessageHandler(
         std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> _handler);
 
@@ -140,8 +132,6 @@ public:
 
 protected:
     std::shared_ptr<P2PSession> getP2PSessionByNodeIdWithoutLock(P2pID const& _nodeID) const;
-    virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
-        Options = Options(), CallbackFuncWithSession = CallbackFuncWithSession());
 
     std::shared_ptr<P2PMessage> newP2PMessage(uint16_t _type, bytesConstRef _payload);
     // handshake protocol

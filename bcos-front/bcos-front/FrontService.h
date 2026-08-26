@@ -58,18 +58,6 @@ public:
      */
     void asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInfoFunc) override;
     /**
-     * @brief: send message
-     * @param _moduleID: moduleID
-     * @param _nodeID: the receiver nodeID
-     * @param _data: send message data
-     * @param _timeout: timeout, in milliseconds.
-     * @param _callbackFunc: callback
-     * @return void
-     */
-    void asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
-        bytesConstRef _data, uint32_t _timeout, CallbackFunc _callbackFunc) override;
-
-    /**
      * @brief: send response
      * @param _id: the request id
      * @param _moduleID: moduleID
@@ -79,16 +67,6 @@ public:
      */
     void asyncSendResponse(const std::string& _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback) override;
-
-    /**
-     * @brief: send message to multiple nodes
-     * @param _moduleID: moduleID
-     * @param _nodeIDs: the receiver nodeIDs
-     * @param _data: send message data
-     * @return void
-     */
-    void asyncSendMessageByNodeIDs(
-        int _moduleID, const crypto::NodeIDs& _nodeIDs, bytesConstRef _data) override;
 
     task::Task<void> broadcastMessage(
         uint16_t type, int moduleID,
