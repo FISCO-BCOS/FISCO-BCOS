@@ -67,6 +67,28 @@ bcos::h256 bcos::scheduler_v1::calculateTransactionRoot(
     return *::ranges::rbegin(merkleTrie);
 }
 
+bcos::h256 bcos::scheduler_v1::calculateEthereumTransactionRoot(protocol::Block const& block)
+{
+    // Commit to the tx trie over each transaction's full EIP-2718 wire bytes (the canonical
+    // tx trie value). reassembleWeb3RawTransaction throws std::invalid_argument for a
+    // non-web3 payload or a non-65-byte signature — on a v2 (Ethereum-executor) chain those
+    // are malformed by construction, so failing loudly beats a silently wrong txsRoot.
+    std::vector<bcos::bytes> txRlps;
+    txRlps.reserve(block.transactionsSize());
+    for (auto const& tx : block.transactions())
+    {
+        txRlps.push_back(bcostars::protocol::reassembleWeb3RawTransaction(
+            tx->extraTransactionBytes(), tx->signatureData()));
+    }
+    std::vector<bcos::bytesConstRef> refs;
+    refs.reserve(txRlps.size());
+    for (auto const& rlp : txRlps)
+    {
+        refs.emplace_back(bcos::ref(rlp));
+    }
+    return ledger::mpt::calculateTransactionsRoot(refs);
+}
+
 std::chrono::milliseconds::rep bcos::scheduler_v1::current()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
