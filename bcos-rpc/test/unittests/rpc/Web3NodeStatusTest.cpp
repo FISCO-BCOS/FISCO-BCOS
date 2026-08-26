@@ -9,6 +9,7 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <boost/test/unit_test.hpp>
@@ -70,7 +71,9 @@ public:
     {
         std::promise<bcos::bytes> promise;
         web3JsonRpc->onRPCRequest(
-            request, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+            request, [&promise](bcos::bytes resp, boost::beast::http::status) {
+                promise.set_value(std::move(resp));
+            });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;
@@ -112,9 +115,23 @@ BOOST_AUTO_TEST_CASE(netPeerCountUsesSyncPeerStatus)
 
 BOOST_AUTO_TEST_CASE(netVersionReadsChainIdFromLedger)
 {
-    // net_version co_awaits the ledger system-config for the web3 chain id.
-    auto resp = call(req("net_version"));
-    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+    // Decimal config — same parser as TxValidator / sendRawTransaction.
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "1337");
+    auto decimal = call(req("net_version"));
+    BOOST_REQUIRE(decimal.isMember("result"));
+    BOOST_CHECK_EQUAL(decimal["result"].asString(), "0x539");
+
+    // 0x-prefixed config must not be truncated by std::stoull (which would yield 0).
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "0x539");
+    auto hex = call(req("net_version"));
+    BOOST_REQUIRE(hex.isMember("result"));
+    BOOST_CHECK_EQUAL(hex["result"].asString(), "0x539");
+
+    // Corrupt config falls back to the historical default rather than throwing.
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "not-a-number");
+    auto bad = call(req("net_version"));
+    BOOST_REQUIRE(bad.isMember("result"));
+    BOOST_CHECK_EQUAL(bad["result"].asString(), "0x4ee8");
 }
 
 BOOST_AUTO_TEST_CASE(netListeningIsConstantTrue)

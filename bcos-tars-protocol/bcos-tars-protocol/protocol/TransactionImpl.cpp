@@ -305,10 +305,9 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             if (bcos::rlp::protocol::isLegacyPreimageTail(item7, item8.empty(), item9.empty()))
             {
                 // preimage: item7 is the signed chainId (items 8,9 are the 0,0
-                // placeholders). Homestead v (27/28) with emptied r/s is a crafted wire,
-                // not a preimage — treating it as chainId would fabricate
-                // v = 27*2+35+parity. High chainIds (>=35) remain preimages; admission
-                // (TxValidator::validateChainId / EthEndpoint) binds them to the node.
+                // placeholders). This includes chainId 27/28: those bytes are ambiguous
+                // with an invalid Homestead envelope whose r/s were erased, so admission
+                // binds the preimage chainId to the configured node chainId.
                 v = item7 * 2 + 35 + yParity;
             }
             else

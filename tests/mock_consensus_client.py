@@ -268,6 +268,12 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         # *uint64 without hexutil (op-service/eth/types.go:523, v1.19.3), so the mock
         # must put the same wire shape on the wire ("minBaseFee": 0).
         "minBaseFee": 0,
+        # Holocene Bytes8 wire shape: an 8-byte hex string, u32 BE denominator in
+        # [0:4] and u32 BE elasticity in [4:8] (op-service/eth/types.go:521,
+        # EIP1559Params *Bytes8, v1.19.3). All-zero means "SystemConfig has not set
+        # the params"; the EL translates 0,0 to the Canyon constants (250, 6) in the
+        # built extraData.
+        "eip1559Params": "0x0000000000000000",
     }
 
     fcu = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, payload_attrs])
@@ -412,6 +418,128 @@ def run_v2_block_flow() -> None:
     if status["status"] != "VALID":
         _log_fail(f"newPayloadV2 rejected the V2 payload it just built: {status}")
         return
+    _log_pass()
+
+
+def test_eip1559_fields_are_v3_only() -> None:
+    """eip1559Params / minBaseFee must be refused on a pre-Holocene FCU version.
+
+    op-node only ever puts these on a forkchoiceUpdatedV3: Config.ForkchoiceUpdatedVersion
+    (op-node/rollup/types.go:727-745, v1.19.3) answers FCUV3 from Ecotone onwards, FCUV2
+    for Canyon and FCUV1 before it, and there is no FCUV4 — while Holocene (eip1559Params)
+    and Jovian (minBaseFee) both activate after Ecotone. If a V1/V2 FCU carrying them were
+    accepted, the build would stamp Holocene/Jovian extraData on a pre-Holocene block and
+    a spec-conformant CL would reject the header on read-back ("extraData must be empty
+    before Holocene", op-core/eip1559/eip1559.go:27-28).
+
+    Attribute errors surface through the payloadStatus channel, not as a JSON-RPC error.
+    """
+    _log_test("eip1559Params / minBaseFee are rejected below forkchoiceUpdatedV3")
+
+    head_hash = get_head_hash()
+    fc_state = {
+        "headBlockHash": head_hash,
+        "safeBlockHash": head_hash,
+        "finalizedBlockHash": head_hash,
+    }
+
+    def v2_attrs(**extra: object) -> dict:
+        attrs = {
+            "timestamp": next_timestamp(),
+            "prevRandao": PREV_RANDAO,
+            "suggestedFeeRecipient": FEE_RECIPIENT,
+            "withdrawals": [],
+        }
+        attrs.update(extra)
+        return attrs
+
+    # Control: the same attributes without the two fields still build on V2, so a
+    # rejection below is attributable to the new gate and not to an unrelated V2 error.
+    control = rpc_result("engine_forkchoiceUpdatedV2", [fc_state, v2_attrs()])
+    if control["payloadStatus"]["status"] != "VALID" or not control.get("payloadId"):
+        _log_fail(f"control V2 FCU did not build a payload: {control}")
+        return
+
+    for field, value in (
+        ("eip1559Params", "0x000000fa00000006"),
+        ("minBaseFee", 0),
+    ):
+        fcu = rpc_result("engine_forkchoiceUpdatedV2", [fc_state, v2_attrs(**{field: value})])
+        status = fcu["payloadStatus"]["status"]
+        if status != "INVALID" or fcu.get("payloadId"):
+            _log_fail(
+                f"forkchoiceUpdatedV2 accepted {field}: status={status}, "
+                f"payloadId={fcu.get('payloadId')}"
+            )
+            return
+        _log_info(f"V2 + {field} -> INVALID ({fcu['payloadStatus'].get('validationError')})")
+
+    _log_pass()
+
+
+def test_new_payload_rejects_tampered_extra_data() -> None:
+    """newPayload must not wave through a payload whose extraData was altered.
+
+    extraData is a block-hash input from this change onwards, so a CL returning a
+    payload under the blockHash it was handed must return the same extraData. op-geth
+    catches this by re-deriving the block hash from the payload fields it received
+    (beacon/engine/types.go:287-288); this node cannot re-derive an Ethereum block hash,
+    so it compares against the payload it handed out. A malformed shape is rejected too,
+    mirroring op-geth's header verification (consensus/beacon/consensus.go:240-243).
+    """
+    _log_test("newPayload rejects altered / malformed extraData")
+
+    head_hash = get_head_hash()
+    fc_state = {
+        "headBlockHash": head_hash,
+        "safeBlockHash": head_hash,
+        "finalizedBlockHash": head_hash,
+    }
+    attrs = {
+        "timestamp": next_timestamp(),
+        "prevRandao": PREV_RANDAO,
+        "suggestedFeeRecipient": FEE_RECIPIENT,
+        "withdrawals": [],
+        "parentBeaconBlockRoot": ZERO_HASH,
+        "noTxPool": True,
+        "minBaseFee": 0,
+        "eip1559Params": "0x0000000000000000",
+    }
+
+    fcu = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, attrs])
+    payload_id = fcu.get("payloadId")
+    if not payload_id:
+        _log_fail(f"FCU built no payload: {fcu}")
+        return
+    payload = rpc_result("engine_getPayloadV3", [payload_id])["executionPayload"]
+
+    # The build must have stamped the 17-byte Jovian form (0,0 -> Canyon 250/6).
+    if payload["extraData"].lower() != "0x01000000fa000000060000000000000000":
+        _log_fail(f"built extraData is not the Jovian vector: {payload['extraData']}")
+        return
+
+    for label, extra_data in (
+        # Same shape, different minBaseFee byte: this is the built-payload comparison.
+        ("altered", "0x01000000fa000000060000000000000009"),
+        # 17 bytes carrying the Holocene version byte: this is the shape gate.
+        ("malformed", "0x00000000fa000000060000000000000000"),
+        # Zero denominator/elasticity is illegal on a header (legal only in attributes).
+        ("zero-params", "0x010000000000000000" + "00" * 8),
+    ):
+        tampered = dict(payload, extraData=extra_data)
+        status = rpc_result("engine_newPayloadV3", [tampered, [], ZERO_HASH])
+        if status["status"] == "VALID":
+            _log_fail(f"newPayload accepted {label} extraData {extra_data}")
+            return
+        _log_info(f"{label} -> {status['status']} ({status.get('validationError')})")
+
+    # Control: the untouched payload still commits, so the checks above are not simply
+    # rejecting everything.
+    status = rpc_result("engine_newPayloadV3", [payload, [], ZERO_HASH])
+    if status["status"] != "VALID":
+        _log_fail(f"newPayload rejected the untouched payload it built: {status}")
+        return
+    _log_info("untouched payload -> VALID")
     _log_pass()
 
 
@@ -574,10 +702,16 @@ def main() -> int:
         # 6. The pre-Karst surface is still live.
         run_v2_block_flow()
 
-        # 7. Known gap: attributes.gasLimit does not reach the built block.
+        # 7. Holocene/Jovian attribute fields are forkchoiceUpdatedV3-only.
+        test_eip1559_fields_are_v3_only()
+
+        # 8. Commit-side extraData gates: altered / malformed shapes are not VALID.
+        test_new_payload_rejects_tampered_extra_data()
+
+        # 9. Known gap: attributes.gasLimit does not reach the built block.
         test_attributes_gas_limit_is_ignored()
 
-        # 8. Error semantics.
+        # 10. Error semantics.
         test_negative_cases()
 
     except requests.ConnectionError:

@@ -140,14 +140,13 @@ struct ExecutionPayload
     u256 baseFeePerGas = 0;
     h256 blockHash;
     /// Transaction envelopes: each `EngineTransaction::raw` carries the EIP-2718
-    /// encoded bytes (including the OP 0x7E deposit envelope). Single authoritative
-    /// carrier for both generic and OP engine paths.
+    /// encoded bytes (including the OP 0x7E deposit envelope). This is the single
+    /// authoritative carrier for both generic and OP engine paths.
     std::vector<EngineTransaction> transactions;
-    /// OP-mode carrier: the block's transactions as raw EIP-2718 envelope bytes.
-    /// getPayload must echo these exact bytes for the op-node handshake; the OP
-    /// execution path reads this instead of `transactions` (both are populated from
-    /// the same source bytes at the RPC boundary — EngineHelper.cpp). Unread by the
-    /// generic (non-OP) engine path.
+    /// Temporary synchronized mirror of `transactions[i].raw` for the stacked OP
+    /// executor seam (#5495). Always derived from `transactions` at construction /
+    /// parse time — never an independent source of truth. Prefer consuming
+    /// `transactions[].raw`; remove this field once the OP path does.
     std::optional<std::vector<bytes>> rawTransactions;
     bytes extraData;
     Address feeRecipient;

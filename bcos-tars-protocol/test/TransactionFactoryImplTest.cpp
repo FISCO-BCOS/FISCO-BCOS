@@ -536,7 +536,7 @@ BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
     auto const s = bcos::bytes(32, 0x22);
     uint64_t const v = 37;  // chainId 1, parity 0
 
-    auto buildWire = [&](bcos::bytes const& rSig, bcos::bytes const& sSig, uint64_t vParam = v) {
+    auto buildWire = [&](bcos::bytes const& rSig, bcos::bytes const& sSig, uint64_t vParam) {
         bcos::bytes items;
         rlp::encode(items, static_cast<uint64_t>(0));  // nonce
         rlp::encode(items, static_cast<uint64_t>(1));  // gasPrice
@@ -558,13 +558,13 @@ BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
     std::copy(s.begin(), s.end(), sig.begin() + 32);
     sig[64] = 0;  // parity 0
 
-    auto wire = buildWire(r, s);
+    auto wire = buildWire(r, s, v);
     auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
         bcos::ref(wire), bcos::bytesConstRef(sig.data(), sig.size()));
     BOOST_CHECK(reassembled == wire);
 
     // Tampered r -> rejected.
-    auto tamperedR = buildWire(bcos::bytes(32, 0x33), s);
+    auto tamperedR = buildWire(bcos::bytes(32, 0x33), s, v);
     BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
                           bcos::ref(tamperedR), bcos::bytesConstRef(sig.data(), sig.size())),
         std::invalid_argument);
@@ -578,36 +578,54 @@ BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
         std::invalid_argument);
 }
 
-// Homestead v=27 with emptied r/s (0x80) must NOT be read as an EIP-155 preimage
-// (that would fabricate v=27*2+35+parity). Cross-check against a nonempty tars sig rejects.
-BOOST_AUTO_TEST_CASE(reassembleLegacyEmptyRSHomesteadVIsNotPreimage)
+// A signing preimage with chainId 27/28 has the same trailer bytes as an invalid Homestead
+// envelope with empty r/s. extraTransactionBytes stores signing preimages on the admission path,
+// so these valid chain IDs must not be excluded merely because they equal Homestead v values.
+BOOST_AUTO_TEST_CASE(reassembleLegacyChainId27And28Preimages)
 {
     namespace rlp = bcos::codec::rlp;
     auto const r = bcos::bytes(32, 0x11);
     auto const s = bcos::bytes(32, 0x22);
-
-    bcos::bytes items;
-    rlp::encode(items, static_cast<uint64_t>(0));
-    rlp::encode(items, static_cast<uint64_t>(1));
-    rlp::encode(items, static_cast<uint64_t>(21000));
-    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
-    rlp::encode(items, static_cast<uint64_t>(0));
-    rlp::encode(items, bcos::bytes{});
-    rlp::encode(items, static_cast<uint64_t>(27));  // homestead v
-    rlp::encode(items, static_cast<uint64_t>(0));   // empty r
-    rlp::encode(items, static_cast<uint64_t>(0));   // empty s
-    bcos::bytes env;
-    rlp::encodeHeader(env, rlp::Header{true, items.size()});
-    env.insert(env.end(), items.begin(), items.end());
 
     bcos::bytes sig(65, 0x00);
     std::copy(r.begin(), r.end(), sig.begin());
     std::copy(s.begin(), s.end(), sig.begin() + 32);
     sig[64] = 0;
 
-    BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
-                          bcos::ref(env), bcos::bytesConstRef(sig.data(), sig.size())),
-        std::invalid_argument);
+    auto buildEnvelope = [&](uint64_t chainId, bool signedForm) {
+        bcos::bytes items;
+        rlp::encode(items, uint64_t{0});
+        rlp::encode(items, uint64_t{1});
+        rlp::encode(items, uint64_t{21000});
+        rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+        rlp::encode(items, uint64_t{0});
+        rlp::encode(items, bcos::bytes{});
+        if (signedForm)
+        {
+            rlp::encode(items, chainId * 2 + 35);  // parity 0
+            rlp::encode(items, r);
+            rlp::encode(items, s);
+        }
+        else
+        {
+            rlp::encode(items, chainId);
+            rlp::encode(items, uint64_t{0});
+            rlp::encode(items, uint64_t{0});
+        }
+        bcos::bytes envelope;
+        rlp::encodeHeader(envelope, rlp::Header{true, items.size()});
+        envelope.insert(envelope.end(), items.begin(), items.end());
+        return envelope;
+    };
+
+    for (auto const chainId : {uint64_t{27}, uint64_t{28}})
+    {
+        auto preimage = buildEnvelope(chainId, false);
+        auto expected = buildEnvelope(chainId, true);
+        auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
+            bcos::ref(preimage), bcos::bytesConstRef(sig.data(), sig.size()));
+        BOOST_CHECK(reassembled == expected);
+    }
 }
 
 // calculateHash must key the deposit path on extraBytes[0]==0x7e, never the forgeable

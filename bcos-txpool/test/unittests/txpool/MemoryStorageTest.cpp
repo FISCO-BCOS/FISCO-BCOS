@@ -3,6 +3,7 @@
  *  SPDX-License-Identifier: Apache-2.0
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include "bcos-codec/rlp/RLPEncode.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
@@ -110,6 +111,26 @@ struct MemoryStorageFixture
         // since FIB-New1 the Web3 branch of calculateHash() unconditionally recomputes the
         // canonical hash from them (throwing on absence). hash() reads the value set above.
         return tx;
+    }
+
+    void setLegacySigningPreimage(bcostars::protocol::TransactionImpl& tx, uint64_t envelopeChainId)
+    {
+        namespace rlp = bcos::codec::rlp;
+        bytes items;
+        rlp::encode(items, uint64_t{0});      // nonce
+        rlp::encode(items, uint64_t{0});      // gasPrice
+        rlp::encode(items, uint64_t{21000});  // gasLimit
+        rlp::encode(items, bytes{});          // to
+        rlp::encode(items, uint64_t{0});      // value
+        rlp::encode(items, bytes{});          // data
+        rlp::encode(items, envelopeChainId);
+        rlp::encode(items, uint64_t{0});
+        rlp::encode(items, uint64_t{0});
+
+        bytes envelope;
+        rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+        envelope.insert(envelope.end(), items.begin(), items.end());
+        tx.mutableInner().extraTransactionBytes.assign(envelope.begin(), envelope.end());
     }
 
     fakeit::Mock<bcos::txpool::TxValidatorInterface> mockValidator;
@@ -549,8 +570,10 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         auto tx7Impl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx7);
         if (tx7Impl)
         {
-            std::string invalidChainId = "123";
-            tx7Impl->mutableInner().data.chainID = invalidChainId;
+            setLegacySigningPreimage(*tx7Impl, 123);
+            // The forgeable mirror deliberately matches the node. Admission must still reject
+            // the signed envelope's chainId rather than trusting this field.
+            tx7Impl->mutableInner().data.chainID = "321";
         }
 
         fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))

@@ -45,15 +45,14 @@ namespace bcos::rlp::protocol
 
 /// Classify a legacy 3-item trailer as the EIP-155 signing preimage (chainId, 0, 0) or a
 /// sealed wire envelope (v, r, s). SINGLE HOME for the three walk sites — Web3TxHandler's
-/// decode, TransactionImpl's reassemble, web3ChainIdFromEnvelope — so a crafted Homestead
-/// v (27/28) with emptied r/s is classified the same everywhere: it is a wire-shaped
-/// envelope, NOT a preimage. Reading it as a chainId would fabricate
-/// v = 27*2+35+yParity and a second txHash for the same signature (bypassing hash-based
-/// pool dedup). RLP encodes the integer 0 as an empty payload while secp256k1 r/s are
-/// never empty, so emptiness of fields 8/9 discriminates the shapes unambiguously.
+/// decode, TransactionImpl's reassemble, web3ChainIdFromEnvelope. RLP encodes integer zero as
+/// an empty payload while valid secp256k1 r/s are never empty. A `(27|28, 0, 0)` trailer is
+/// necessarily treated as an EIP-155 preimage: chain IDs 27 and 28 are valid, and the stored
+/// bytes alone cannot distinguish those preimages from an invalid Homestead envelope whose
+/// signature scalars were erased.
 [[nodiscard]] constexpr bool isLegacyPreimageTail(
-    uint64_t field7, bool field8Empty, bool field9Empty) noexcept
+    [[maybe_unused]] uint64_t field7, bool field8Empty, bool field9Empty) noexcept
 {
-    return field8Empty && field9Empty && field7 != 27 && field7 != 28;
+    return field8Empty && field9Empty;
 }
 }  // namespace bcos::rlp::protocol

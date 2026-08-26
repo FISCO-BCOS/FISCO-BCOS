@@ -246,6 +246,11 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
                 BOOST_THROW_EXCEPTION(JsonRpcException(
                     InvalidParams, "rewardPercentiles entries must be in [0, 100]"));
             }
+            if (!percentiles.empty() && percentile <= percentiles.back()) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InvalidParams, "rewardPercentiles entries must be strictly increasing"));
+            }
             percentiles.push_back(percentile);
         }
     }
@@ -303,7 +308,8 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
                 BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
                     "feeHistory: receipts unavailable at height " + std::to_string(n)));
             }
-            std::vector<bcos::u256> priorities;
+            std::vector<std::pair<bcos::u256, bcos::u256>> priorities;
+            bcos::u256 totalGasUsed{0};
             for (auto const& receipt : receiptsBlock->receipts())
             {
                 auto const& effective = receipt->effectiveGasPrice();
@@ -312,24 +318,38 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
                     continue;
                 }
                 bcos::u256 effectiveFee{std::string(effective)};
-                priorities.push_back(
-                    effectiveFee > baseFee ? effectiveFee - baseFee : bcos::u256(0));
+                auto const priority =
+                    effectiveFee > baseFee ? effectiveFee - baseFee : bcos::u256(0);
+                auto const gasUsed = receipt->gasUsed();
+                priorities.emplace_back(priority, gasUsed);
+                totalGasUsed += gasUsed;
             }
-            std::sort(priorities.begin(), priorities.end());
+            std::sort(priorities.begin(), priorities.end(),
+                [](auto const& lhs, auto const& rhs) { return lhs.first < rhs.first; });
             Json::Value rewards(Json::arrayValue);
             for (auto const p : percentiles)
             {
-                auto index = priorities.empty() ?
-                                 std::size_t(0) :
-                                 static_cast<std::size_t>(priorities.size() * p / 100.0);
-                if (index >= priorities.size())
+                if (priorities.empty() || totalGasUsed == 0)
                 {
-                    index = priorities.size() - 1;
+                    // geth emits null for a percentile of an empty reward set — an all-zero
+                    // entry would be misread as a real floor by fee-suggestion tooling.
+                    rewards.append(Json::Value(Json::nullValue));
+                    continue;
                 }
-                // geth emits null for a percentile of an empty reward set — an all-zero
-                // entry would be misread as a real floor by fee-suggestion tooling.
-                rewards.append(priorities.empty() ? Json::Value(Json::nullValue) :
-                                                    Json::Value(toQuantity(priorities[index])));
+                auto const threshold =
+                    totalGasUsed * bcos::u256(static_cast<uint64_t>(p)) / bcos::u256(100);
+                bcos::u256 cumulative{0};
+                auto selected = priorities.front().first;
+                for (auto const& [priority, gasUsed] : priorities)
+                {
+                    cumulative += gasUsed;
+                    selected = priority;
+                    if (cumulative >= threshold)
+                    {
+                        break;
+                    }
+                }
+                rewards.append(Json::Value(toQuantity(selected)));
             }
             result["reward"].append(std::move(rewards));
         }
@@ -1140,8 +1160,17 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
             }
         }
     }
-    auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
-        isEstimate ? scheduler : nullptr, blockBaseFee);
+    auto tx = [&]() {
+        try
+        {
+            return call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
+                isEstimate ? scheduler : nullptr, blockBaseFee);
+        }
+        catch (std::invalid_argument const& e)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, e.what()));
+        }
+    }();
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;
@@ -1240,17 +1269,27 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     // viable limit, mirroring op-geth. Only object-form params carry an
     // overridable gas field; a raw signed tx embeds its own.
     auto const objectForm = tx.isObject();
+    // Shared RPC gas cap for the estimator: an explicit request gas may raise the known-good
+    // ceiling, but never beyond this — unbounded uint64 ceilings would otherwise drive the
+    // upward doubling search into dozens of EVM simulations per unauthenticated request.
+    constexpr uint64_t kRpcGasCap = 30'000'000;
     auto const effectiveFirstRunLimit = [&]() -> u256 {
         if (objectForm && tx.isMember("gas"))
         {
-            try
+            if (!tx["gas"].isString()) [[unlikely]]
             {
-                return u256(fromQuantity(tx["gas"].asString()));
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "transaction gas must be a hex quantity"));
             }
-            catch (...)
-            {}
+            auto const parsed = safeFromQuantity(tx["gas"].asString());
+            if (!parsed) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "invalid transaction gas quantity"));
+            }
+            return u256(std::min(*parsed, kRpcGasCap));
         }
-        return u256(30'000'000);
+        return u256(kRpcGasCap);
     }();
 
     // Resolve the head base fee ONCE: every call() below would otherwise re-read the header
@@ -1281,43 +1320,52 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     // the gas field is rewritten per iteration.
     Json::Value bounded = request;
     auto estimate = gasUsed;
-    if (objectForm && !co_await simulateAtGasLimit(bounded, estimate, blockBaseFee))
+    // Doubling and binary search share one hard budget with the gasUsed re-simulation —
+    // an uncapped doubling loop before a separately capped binary search lets a single
+    // unauthenticated request drive ~64 + 16 EVM simulations when the caller supplies a
+    // huge gas ceiling.
+    constexpr size_t kMaxEstimateSimulations = 16;
+    size_t remaining = kMaxEstimateSimulations;
+    if (objectForm && remaining > 0)
     {
-        auto lowerBound = estimate;  // known-bad
-        // op-geth starts the upward search at gasUsed*2 and doubles until viable
-        // (eth/api.go DoEstimateGas); the 30M first-run limit is only the known-good
-        // ceiling. Starting at gasUsed*2 instead of 30M shrinks the search range from
-        // 30M to ~gasUsed: typical estimates converge to the exact limit within the
-        // 16-round cap (log2(gasUsed) ≈ 15 for 60k gas) instead of stopping at the
-        // cap with a ~458-gas residual on the old 30M range.
-        auto upperBound = effectiveFirstRunLimit;
-        auto candidate = std::max(gasUsed * 2, lowerBound + 1);
-        while (candidate < upperBound)
+        --remaining;
+        if (!co_await simulateAtGasLimit(bounded, estimate, blockBaseFee))
         {
-            if (co_await simulateAtGasLimit(bounded, candidate, blockBaseFee))
+            auto lowerBound = estimate;  // known-bad
+            // op-geth starts the upward search at gasUsed*2 and doubles until viable
+            // (eth/api.go DoEstimateGas); the 30M first-run limit is only the known-good
+            // ceiling. Starting at gasUsed*2 instead of 30M shrinks the search range from
+            // 30M to ~gasUsed: typical estimates converge to the exact limit within the
+            // shared simulation budget instead of stopping at the cap with a residual.
+            auto upperBound = effectiveFirstRunLimit;
+            auto candidate = std::max(gasUsed * 2, lowerBound + 1);
+            while (candidate < upperBound && remaining > 0)
             {
-                upperBound = candidate;
-                break;
+                --remaining;
+                if (co_await simulateAtGasLimit(bounded, candidate, blockBaseFee))
+                {
+                    upperBound = candidate;
+                    break;
+                }
+                candidate = std::min(candidate * 2, upperBound);
             }
-            candidate = std::min(candidate * 2, upperBound);
+            // else: effectiveFirstRunLimit stays the upper bound — the first run already
+            // proved it viable, no re-simulation needed.
+            while (upperBound - lowerBound > 1 && remaining > 0)
+            {
+                --remaining;
+                auto const mid = lowerBound + (upperBound - lowerBound) / 2;
+                if (co_await simulateAtGasLimit(bounded, mid, blockBaseFee))
+                {
+                    upperBound = mid;
+                }
+                else
+                {
+                    lowerBound = mid;
+                }
+            }
+            estimate = upperBound;
         }
-        // else: effectiveFirstRunLimit stays the upper bound — the first run already
-        // proved it viable, no re-simulation needed.
-        size_t iterations = 0;
-        while (upperBound - lowerBound > 1 && iterations < 16)
-        {
-            auto const mid = lowerBound + (upperBound - lowerBound) / 2;
-            if (co_await simulateAtGasLimit(bounded, mid, blockBaseFee))
-            {
-                upperBound = mid;
-            }
-            else
-            {
-                lowerBound = mid;
-            }
-            ++iterations;
-        }
-        estimate = upperBound;
     }
 
     Json::Value result = toQuantity(estimate);
@@ -1421,6 +1469,14 @@ task::Task<void> EthEndpoint::getTransactionByHash(
             co_return;
         }
         auto blockHash = co_await ledger::getBlockHash(*ledger, receipt->blockNumber());
+        if (blockHash == crypto::HashType{})
+        {
+            if (auto block = co_await ledger::getBlockData(
+                    *ledger, receipt->blockNumber(), bcos::ledger::HEADER))
+            {
+                blockHash = bcos::rpc::opAwareBlockHash(*block->blockHeader());
+            }
+        }
         combineTxResponse(result, *txs->at(0), *receipt, blockHash);
     }
     catch (std::exception const& e)
@@ -1531,6 +1587,14 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
                 JsonRpcException(InvalidParams, "Invalid transaction hash: " + hash.hexPrefixed()));
         }
         auto blockHash = co_await ledger::getBlockHash(*ledger, receipt->blockNumber());
+        if (blockHash == crypto::HashType{})
+        {
+            if (auto block = co_await ledger::getBlockData(
+                    *ledger, receipt->blockNumber(), bcos::ledger::HEADER))
+            {
+                blockHash = bcos::rpc::opAwareBlockHash(*block->blockHeader());
+            }
+        }
         combineReceiptResponse(result, *receipt, *txs->at(0), blockHash);
     }
     catch (std::exception const& e)

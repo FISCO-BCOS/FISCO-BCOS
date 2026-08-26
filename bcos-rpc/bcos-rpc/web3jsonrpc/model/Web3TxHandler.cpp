@@ -254,9 +254,9 @@ struct LegacyTxHandler : Web3TxHandler
             else
             {
                 // Tail is either the signing preimage (chainId, 0, 0) or a sealed-block
-                // wire envelope (v, r, s). The shared discriminator (isLegacyPreimageTail)
-                // also excludes Homestead v 27/28 with emptied r/s — a crafted wire that a
-                // naive "empty-empty = preimage" rule would read as chainId 27/28.
+                // wire envelope (v, r, s). Empty r/s means a preimage, including valid
+                // chain IDs 27/28; an erased Homestead signature has identical bytes and
+                // cannot be distinguished without external layout context.
                 uint64_t item7 = 0;
                 bcos::bytesRef item8;
                 bcos::bytesRef item9;

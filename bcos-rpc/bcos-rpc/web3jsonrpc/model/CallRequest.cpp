@@ -24,15 +24,31 @@
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-task/Wait.h"
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <boost/throw_exception.hpp>
 #include <algorithm>
 
 using namespace bcos;
 using namespace bcos::rpc;
 
+namespace
+{
+std::optional<u256> parsePresentQuantity(std::optional<std::string> const& s)
+{
+    if (!s || s->empty())
+    {
+        return std::nullopt;
+    }
+    if (auto value = safeFromBigQuantity(*s))
+    {
+        return *value;
+    }
+    BOOST_THROW_EXCEPTION(std::invalid_argument("invalid quantity: " + *s));
+}
+}  // namespace
+
 bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     bcos::protocol::TransactionFactory::Ptr const& factory,
-    bcos::scheduler::SchedulerInterface::Ptr const& scheduler,
-    std::optional<u256> blockBaseFee) noexcept
+    bcos::scheduler::SchedulerInterface::Ptr const& scheduler, std::optional<u256> blockBaseFee)
 {
     std::string nonce;
     if (to.empty() && scheduler) [[unlikely]]
@@ -52,11 +68,10 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
                 // gets its decimal "12" misread as hex 0x12 = 18 (NONCE_TOO_HIGH). 0-9
                 // coincide in both bases, which is why only the 11th+ deployment would break.
                 //
-                // The all-digits guard keeps this noexcept-safe: bcos::u256 throws on an
-                // unparseable string (std::terminate out of noexcept), and an empty or
-                // non-numeric stored nonce is left unset (empty nonce string) — a corrupt
-                // row falls back to the executor reading the sender's state nonce rather
-                // than aborting the RPC.
+                // The all-digits guard keeps this path safe: bcos::u256 throws on an
+                // unparseable string, and an empty or non-numeric stored nonce is left unset
+                // (empty nonce string) — a corrupt row falls back to the executor reading the
+                // sender's state nonce rather than aborting the RPC.
                 if (auto const raw = entry->get();
                     !raw.empty() && std::all_of(raw.begin(), raw.end(),
                                         [](char c) { return c >= '0' && c <= '9'; }))
@@ -81,70 +96,52 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     // Pricing-less eth_call: op-geth skips the fee-cap check. We cannot skip it here, so
     // default max_gas_price to max(head.baseFee*2, 2 gwei) — a fixed 2 gwei loses after a
     // few Holocene full blocks. The head baseFee is always available on this path.
-    auto quantity = [](std::optional<std::string> const& s) -> std::optional<u256> {
-        if (!s || s->empty())
-        {
-            return std::nullopt;
-        }
-        try
-        {
-            return fromBigQuantity(*s);
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    };
+    //
+    // Explicit malformed quantities must fail closed (InvalidParams upstream): never treat
+    // "0xzz" as absent and silently substitute defaults, and never fall back to a plain BCOS
+    // factory tx that changes execution semantics.
     if (blockBaseFee.has_value())
     {
-        try
+        Web3Transaction w3{};
+        w3.type = TransactionType::Legacy;
+        w3.chainId = std::nullopt;
+        if (!to.empty())
         {
-            Web3Transaction w3{};
-            w3.type = TransactionType::Legacy;
-            w3.chainId = std::nullopt;
-            if (!to.empty())
-            {
-                w3.to = Address(to);
-            }
-            w3.data = data;
-            w3.value = quantity(value).value_or(u256(0));
-            // Envelope and mirror must agree (the cross-check's premise): the parsed nonce
-            // goes INTO the envelope, not just the mirror — an envelope nonce of 0 next to a
-            // real mirror nonce is exactly the divergence the PR's trust-boundary narrative
-            // rejects, and it makes the deployment nonce fix above moot for anything that
-            // reads the envelope (kyonRay #5496 R1-11). Unknown stays 0 (the mirror keeps
-            // the empty string; the executor falls back to the sender's state nonce).
-            w3.nonce = safeFromQuantity(nonce).value_or(0);
-            // op-geth caps a gas-less eth_call at its RPC gas cap; default to the 30M block-gas
-            // convention so a pricing-less simulation passes the intrinsic-gas check.
-            w3.gasLimit = gas.value_or(30'000'000);
-            u256 const defaultFee = std::max(*blockBaseFee * 2, u256(2'000'000'000));
-            w3.maxPriorityFeePerGas =
-                quantity(gasPrice).value_or(quantity(maxFeePerGas).value_or(defaultFee));
-            w3.signatureV = 0;
-            w3.signatureR = bcos::bytes(32, 0x01);
-            w3.signatureS = bcos::bytes(32, 0x02);
-            auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
-            // takeToTarsTransaction renders the numeric nonce; restore the passthrough semantics
-            // the RPC contract has (converted hex quantity, or empty when unknown — the executor
-            // then falls back to the sender's state nonce).
-            tarsHolder->data.nonce = nonce;
-            auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-                [tarsHolder]() { return tarsHolder.get(); });
-            if (from.has_value())
-            {
-                if (auto const sender = safeFromHexWithPrefix(from.value()))
-                {
-                    tx->forceSender(sender.value());
-                }
-            }
-            return tx;
+            w3.to = Address(to);
         }
-        catch (...)
+        w3.data = data;
+        w3.value = parsePresentQuantity(value).value_or(u256(0));
+        // Envelope and mirror must agree (the cross-check's premise): the parsed nonce
+        // goes INTO the envelope, not just the mirror — an envelope nonce of 0 next to a
+        // real mirror nonce is exactly the divergence the PR's trust-boundary narrative
+        // rejects, and it makes the deployment nonce fix above moot for anything that
+        // reads the envelope (kyonRay #5496 R1-11). Unknown stays 0 (the mirror keeps
+        // the empty string; the executor falls back to the sender's state nonce).
+        w3.nonce = safeFromQuantity(nonce).value_or(0);
+        // op-geth caps a gas-less eth_call at its RPC gas cap; default to the 30M block-gas
+        // convention so a pricing-less simulation passes the intrinsic-gas check.
+        w3.gasLimit = gas.value_or(30'000'000);
+        u256 const defaultFee = std::max(*blockBaseFee * 2, u256(2'000'000'000));
+        w3.maxPriorityFeePerGas = parsePresentQuantity(gasPrice).value_or(
+            parsePresentQuantity(maxFeePerGas).value_or(defaultFee));
+        w3.signatureV = 0;
+        w3.signatureR = bcos::bytes(32, 0x01);
+        w3.signatureS = bcos::bytes(32, 0x02);
+        auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
+        // takeToTarsTransaction renders the numeric nonce; restore the passthrough semantics
+        // the RPC contract has (converted hex quantity, or empty when unknown — the executor
+        // then falls back to the sender's state nonce).
+        tarsHolder->data.nonce = nonce;
+        auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
+            [tarsHolder]() { return tarsHolder.get(); });
+        if (from.has_value())
         {
-            // noexcept guard: any conversion surprise falls back to the plain factory tx (the
-            // pre-envelope behavior) rather than aborting the RPC.
+            if (auto const sender = safeFromHexWithPrefix(from.value()))
+            {
+                tx->forceSender(sender.value());
+            }
         }
+        return tx;
     }
     auto tx = factory->createTransaction(1, std::move(this->to), this->data, nonce, 0, {}, {}, 0,
         "", value.value_or(""), gasPrice.value_or(""), gas.value_or(0), maxFeePerGas.value_or(""),
@@ -174,38 +171,69 @@ std::tuple<bool, CallRequest> rpc::decodeCallRequest(Json::Value const& _root)
     }
     if (dataValue != nullptr)
     {
-        if (auto dataBytes = bcos::safeFromHexWithPrefix(dataValue->asString()))
+        if (!dataValue->isString())
         {
-            _request.data = std::move(*dataBytes);
+            return {false, {}};
         }
+        auto dataBytes = bcos::safeFromHexWithPrefix(dataValue->asString());
+        if (!dataBytes)
+        {
+            // Present but malformed DATA must fail closed — never silently drop to empty.
+            return {false, {}};
+        }
+        _request.data = std::move(*dataBytes);
     }
     if (const auto* value = _root.find("to"))
     {
+        if (!value->isString())
+        {
+            return {false, {}};
+        }
         _request.to = value->asString();
     }
     if (const auto* value = _root.find("from"))
     {
+        if (!value->isString())
+        {
+            return {false, {}};
+        }
         _request.from = value->asString();
     }
     if (const auto* value = _root.find("gas"))
     {
-        _request.gas = fromQuantity(value->asString());
+        if (!value->isString())
+        {
+            return {false, {}};
+        }
+        auto gas = safeFromQuantity(value->asString());
+        if (!gas)
+        {
+            return {false, {}};
+        }
+        _request.gas = *gas;
     }
-    if (const auto* value = _root.find("gasPrice"))
+    auto takeQuantityField = [&](char const* key, std::optional<std::string>& field) -> bool {
+        if (const auto* value = _root.find(key); value != nullptr)
+        {
+            if (!value->isString())
+            {
+                return false;
+            }
+            auto const& raw = value->asString();
+            if (!safeFromBigQuantity(raw))
+            {
+                return false;
+            }
+            field = raw;
+        }
+        return true;
+    };
+    if (!takeQuantityField("gasPrice", _request.gasPrice) ||
+        !takeQuantityField("value", _request.value) ||
+        !takeQuantityField("maxPriorityFeePerGas", _request.maxPriorityFeePerGas) ||
+        !takeQuantityField("maxFeePerGas", _request.maxFeePerGas))
     {
-        _request.gasPrice = value->asString();
-    }
-    if (const auto* value = _root.find("value"))
-    {
-        _request.value = value->asString();
-    }
-    if (const auto* value = _root.find("maxPriorityFeePerGas"))
-    {
-        _request.maxPriorityFeePerGas = value->asString();
-    }
-    if (const auto* value = _root.find("maxFeePerGas"))
-    {
-        _request.maxFeePerGas = value->asString();
+        return {false, {}};
     }
     return {true, std::move(_request)};
 }

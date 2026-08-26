@@ -25,6 +25,7 @@
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <string>
+#include <vector>
 
 namespace bcos::test
 {
@@ -128,6 +129,23 @@ BOOST_AUTO_TEST_CASE(PercentileBoundsAreEnforced)
         tooLong["error"]["message"].asString().find("at most 100 entries") != std::string::npos);
 }
 
+BOOST_AUTO_TEST_CASE(PercentilesMustBeStrictlyIncreasing)
+{
+    for (auto const& values : {std::vector<double>{10.0, 10.0}, std::vector<double>{80.0, 20.0}})
+    {
+        Json::Value percentiles(Json::arrayValue);
+        for (auto const value : values)
+        {
+            percentiles.append(value);
+        }
+        auto response = request(params("0x1", percentiles));
+        BOOST_REQUIRE(response.isMember("error"));
+        BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), -32602);
+        BOOST_CHECK(response["error"]["message"].asString().find("strictly increasing") !=
+                    std::string::npos);
+    }
+}
+
 // PBFT headers never write the tars baseFee field: every baseFeePerGas entry — including
 // the trailing prediction, which must stay 0x0 instead of calcOpBaseFee's 1-for-zero — is
 // 0x0. reward is absent when no percentiles were requested.
@@ -168,6 +186,36 @@ BOOST_AUTO_TEST_CASE(EmptyPrioritiesEmitNullRewards)
         BOOST_REQUIRE_EQUAL(result["reward"][i].size(), 1U);
         BOOST_CHECK(result["reward"][i][0U].isNull());
     }
+}
+
+BOOST_AUTO_TEST_CASE(RewardPercentilesAreWeightedByGasUsed)
+{
+    auto const block = m_ledger->ledgerData().back();
+    auto const header = block->blockHeader();
+    header->setBaseFee(bcos::u256(100));
+    header->setGasLimit(bcos::u256(100'000));
+    header->setGasUsed(bcos::u256(100'000));
+
+    auto const receiptFactory = m_blockFactory->receiptFactory();
+    auto makeReceipt = [&](bcos::u256 gasUsed, std::string effectiveGasPrice) {
+        std::vector<bcos::protocol::LogEntry> logs;
+        auto receipt = receiptFactory->createReceipt(
+            gasUsed, "", logs, /*status=*/0, bcos::bytesConstRef{}, header->number());
+        receipt->setEffectiveGasPrice(std::move(effectiveGasPrice));
+        return receipt;
+    };
+    block->clearReceipts();
+    block->appendReceipt(makeReceipt(bcos::u256(90'000), "0x65"));  // priority fee 1
+    block->appendReceipt(makeReceipt(bcos::u256(10'000), "0xc8"));  // priority fee 100
+
+    Json::Value percentiles(Json::arrayValue);
+    percentiles.append(50.0);
+    auto response = request(params("0x1", percentiles));
+    BOOST_REQUIRE(response.isMember("result"));
+    auto const& rewards = response["result"]["reward"];
+    BOOST_REQUIRE_EQUAL(rewards.size(), 1U);
+    BOOST_REQUIRE_EQUAL(rewards[0U].size(), 1U);
+    BOOST_TEST(rewards[0U][0U].asString() == "0x1");
 }
 
 // An OP header (baseFee present) drives the trailing entry through calcOpBaseFee; a Holocene

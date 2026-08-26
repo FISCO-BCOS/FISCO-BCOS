@@ -19,6 +19,11 @@
 #include "EngineServiceImpl.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <boost/assert.hpp>
+#include <boost/throw_exception.hpp>
+#include <span>
+#include <stdexcept>
+#include <utility>
 
 namespace
 {
@@ -129,6 +134,153 @@ std::optional<std::string> validateRawTransactionKind(
 }
 }  // namespace
 
+namespace
+{
+/// extraData version bytes (op-core/eip1559/eip1559.go:10-13). Note the Jovian version
+/// byte is 0x01, not 0x00: ValidateJovianExtraData (eip1559.go:167-176) rejects any
+/// other value on every post-Jovian block op-node reads back.
+constexpr bcos::byte c_holoceneExtraDataVersion = 0x00;
+constexpr bcos::byte c_jovianExtraDataVersion = 0x01;
+constexpr std::size_t c_holoceneExtraDataBytes = 9;
+constexpr std::size_t c_jovianExtraDataBytes = 17;
+
+/// Canyon EIP-1559 constants used to translate all-zero attribute params. op-node sends
+/// eip1559Params = 0,0 while the SystemConfig has not set the parameters, and expects
+/// the EL to translate them to the chain's Canyon constants (op-node/rollup/attributes/
+/// engine_consolidate.go checkExtraDataParamsMatch: "Translate 0,0 to the pre-Holocene
+/// protocol constants, like the EL does too", using ChainOpConfig
+/// .EIP1559DenominatorCanyon / .EIP1559Elasticity). This node has no rollup config to
+/// read them from, so they are pinned to the OP Stack defaults (250, 6) that our
+/// deployment's rollup.json chain_op_config carries (tools/opstack-genesis/
+/// gen_rollup_config.py defaults, emitted into tools/opnode-check/rollup.json).
+///
+/// DEPLOYMENT CONSTRAINT: a chain whose rollup.json sets different chain_op_config
+/// values would fail op-node's consolidation match and stall. Making these
+/// configurable is deliberately NOT done here: chain_op_config is a chain-level
+/// constant, so a per-node ini key would let two nodes stamp different extraData on
+/// the same height and split the chain. The correct home is a consensus-pinned
+/// value (the genesis config / SYS_CONFIG lane, alongside the eth genesis header),
+/// which changes the genesis artifact and belongs to that lane's PR.
+constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
+constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;
+
+/// Width of the eip1559Params attribute field and of the parameter half of a
+/// non-empty extraData (op-service/eth/types.go:521 declares it as a Bytes8).
+constexpr std::size_t c_eip1559ParamsBytes = 8;
+
+/// Big-endian read of the two u32 halves of an 8-byte eip1559Params field
+/// (op-core/eip1559/eip1559.go DecodeHolocene1559Params: denominator [0:4],
+/// elasticity [4:8]).
+///
+/// Precondition: params.size() >= 8. std::span::first / ::subspan state that as a
+/// hard precondition ([span.sub]), so a shorter span is undefined behaviour here,
+/// NOT a std::out_of_range — every caller must establish the length first. The two
+/// callers that take CL-supplied bytes do: validatePayloadAttributes and
+/// validateOptimismExtraDataShape both check the length before decoding, and
+/// encodeOptimismExtraData rejects anything else at its entry.
+std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(std::span<const bcos::byte> params)
+{
+    BOOST_ASSERT(params.size() >= c_eip1559ParamsBytes);
+    auto denominator = bcos::fromBigEndian<std::uint32_t>(params.first(4));
+    auto elasticity = bcos::fromBigEndian<std::uint32_t>(params.subspan(4, 4));
+    return {denominator, elasticity};
+}
+
+/// OP-Stack header extraData shapes, as op-geth validates them on every block it
+/// imports — including the ones a CL hands back through newPayload
+/// (consensus/beacon/consensus.go:240-243 calls eip1559.ValidateOptimismExtraData,
+/// which picks the rule from the chain's fork schedule and skips only the genesis
+/// block). This service has no fork schedule to pick with, so it accepts any of the
+/// three legal shapes and rejects everything else: empty (pre-Holocene,
+/// eip1559.go:27-28), 9 bytes with version byte 0x00 (ValidateHoloceneExtraData,
+/// eip1559.go:119-127), 17 bytes with version byte 0x01 (ValidateJovianExtraData,
+/// eip1559.go:167-176). Both non-empty forms carry the denominator/elasticity pair
+/// in [1, 9), which must be non-zero on a header — unlike the attribute side, where
+/// 0,0 is legal and gets translated (validateHoloceneExtraDataPart,
+/// eip1559.go:105-113, and the note above ValidateHoloceneExtraData spelling out the
+/// difference).
+std::optional<std::string> validateOptimismExtraDataShape(const bcos::bytes& extraData)
+{
+    if (extraData.empty())
+    {
+        return std::nullopt;
+    }
+    if (extraData.size() != c_holoceneExtraDataBytes && extraData.size() != c_jovianExtraDataBytes)
+    {
+        return "executionPayload.extraData must be empty (pre-Holocene), " +
+               std::to_string(c_holoceneExtraDataBytes) + " bytes (Holocene) or " +
+               std::to_string(c_jovianExtraDataBytes) + " bytes (Jovian), got " +
+               std::to_string(extraData.size());
+    }
+    auto const expectedVersion = extraData.size() == c_jovianExtraDataBytes ?
+                                     c_jovianExtraDataVersion :
+                                     c_holoceneExtraDataVersion;
+    if (extraData[0] != expectedVersion)
+    {
+        return "executionPayload.extraData version byte must be " +
+               std::to_string(static_cast<unsigned>(expectedVersion)) + " for a " +
+               std::to_string(extraData.size()) + "-byte extraData, got " +
+               std::to_string(static_cast<unsigned>(extraData[0]));
+    }
+    auto [denominator, elasticity] = decodeEip1559Params(
+        std::span<const bcos::byte>(extraData).subspan(1, c_eip1559ParamsBytes));
+    if (denominator == 0 || elasticity == 0)
+    {
+        return std::string(
+            "executionPayload.extraData must encode a non-zero EIP-1559 denominator and "
+            "elasticity");
+    }
+    return std::nullopt;
+}
+}  // namespace
+
+bcos::bytes bcos::engine::detail::encodeOptimismExtraData(
+    const PayloadAttributes& payloadAttributes)
+{
+    if (!payloadAttributes.eip1559Params.has_value())
+    {
+        // Pre-Holocene: extraData must be empty (op-core/eip1559/eip1559.go:27-28).
+        return {};
+    }
+    if (payloadAttributes.eip1559Params->size() != c_eip1559ParamsBytes)
+    {
+        // A precondition, not a wire error: the RPC parse layer and then
+        // validatePayloadAttributes both reject any other length, so reaching this
+        // means an in-process PayloadAttributes producer bypassed the gate. Fail
+        // loudly rather than read out of bounds (decodeEip1559Params' span
+        // arithmetic is UB on a short span), and rather than return empty, which
+        // would silently stamp pre-Holocene extraData on a Holocene block and stall
+        // op-node at read-back.
+        BOOST_THROW_EXCEPTION(std::invalid_argument{
+            "encodeOptimismExtraData requires exactly 8 bytes of eip1559Params"});
+    }
+    auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
+    if (denominator == 0 && elasticity == 0)
+    {
+        denominator = c_eip1559DenominatorCanyon;
+        elasticity = c_eip1559ElasticityCanyon;
+    }
+
+    // Jovian 17-byte form (EncodeJovianExtraData, eip1559.go:152-162) when the CL sent
+    // minBaseFee, Holocene 9-byte form (EncodeHoloceneExtraData, eip1559.go:74-83)
+    // otherwise. checkExtraDataParamsMatch requires the block to carry minBaseFee iff
+    // the attributes did.
+    bool jovian = payloadAttributes.minBaseFee.has_value();
+    bcos::bytes extraData(jovian ? c_jovianExtraDataBytes : c_holoceneExtraDataBytes, 0);
+    extraData[0] = jovian ? c_jovianExtraDataVersion : c_holoceneExtraDataVersion;
+    auto out = std::span(extraData);
+    auto denominatorOut = out.subspan(1, 4);
+    bcos::toBigEndian(denominator, denominatorOut);
+    auto elasticityOut = out.subspan(5, 4);
+    bcos::toBigEndian(elasticity, elasticityOut);
+    if (jovian)
+    {
+        auto minBaseFeeOut = out.subspan(9, 8);
+        bcos::toBigEndian(*payloadAttributes.minBaseFee, minBaseFeeOut);
+    }
+    return extraData;
+}
+
 std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version)
 {
@@ -167,6 +319,69 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     if (version == 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
     {
         return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3");
+    }
+    // eip1559Params (Holocene) and minBaseFee (Jovian) reach the EL only on a
+    // forkchoiceUpdatedV3. op-node's FCU version ladder tops out at V3 — Config
+    // ::ForkchoiceUpdatedVersion (op-node/rollup/types.go:727-745, v1.19.3) answers
+    // FCUV3 from Ecotone onwards, FCUV2 for Canyon and FCUV1 before it, and there is
+    // no FCUV4 constant at all (op-service/eth/types.go:799-801) — while Holocene and
+    // Jovian both activate after Ecotone. So a conforming CL carries both fields on V3
+    // and only V3.
+    //
+    // Note this is NOT how op-geth expresses the same rule, and the difference is worth
+    // recording. op-geth has a single engine.PayloadAttributes shared by all three FCU
+    // versions, and it does carry EIP1559Params / MinBaseFee at every version
+    // (beacon/engine/types.go:83-89); its ForkchoiceUpdatedV1/V2/V3 wrappers check only
+    // withdrawals, the beacon root and the fork window (eth/catalyst/api.go:166-214) and
+    // never look at these two fields. The rejection happens later, in the shared path:
+    // checkOptimismPayloadAttributes (eth/catalyst/api_optimism.go:40-64, called from
+    // api.go:254) answers "non-empty eip155Params pre-Holocene" as a -38003
+    // InvalidPayloadAttributes, keyed off the FORK SCHEDULE (cfg.IsHolocene(timestamp)),
+    // not off the Engine API method version. This service has no fork schedule to key
+    // off, so the FCU version is the only equivalent signal available — sound precisely
+    // because op-node's version ladder above pins these fields to V3.
+    //
+    // Without this gate a V1/V2 forkchoiceUpdated carrying
+    // eip1559Params would stamp Holocene extraData on a pre-Holocene build, which a
+    // spec-conformant CL then rejects on read-back ("extraData must be empty before
+    // Holocene", op-core/eip1559/eip1559.go:27-28).
+    if (version <= 2 && payloadAttributes.eip1559Params.has_value())
+    {
+        return std::string("eip1559Params is only valid for PayloadAttributesV3");
+    }
+    if (version <= 2 && payloadAttributes.minBaseFee.has_value())
+    {
+        return std::string("minBaseFee is only valid for PayloadAttributesV3");
+    }
+    // Jovian attributes always pair minBaseFee with eip1559Params: op-node fills both
+    // once Jovian is active (op-service/eth/types.go PayloadAttributes), and a
+    // post-Jovian block must carry the 17-byte extraData whose [1:9) params come from
+    // eip1559Params — minBaseFee alone leaves the params half undefined. op-geth rejects
+    // such attributes as invalid rather than guessing (engine error -38003
+    // InvalidPayloadAttributes); this service reports attribute errors through the
+    // INVALID payload status channel instead (see updateForkchoice).
+    if (payloadAttributes.minBaseFee.has_value() && !payloadAttributes.eip1559Params.has_value())
+    {
+        return std::string("minBaseFee requires eip1559Params (Jovian attributes carry both)");
+    }
+    if (payloadAttributes.eip1559Params.has_value())
+    {
+        // The RPC parse layer already enforces exactly 8 bytes (EngineHelper.cpp), but
+        // this gate is the precondition encodeOptimismExtraData and the decode below
+        // rely on, so enforce it here too for in-process PayloadAttributes producers.
+        if (payloadAttributes.eip1559Params->size() != 8)
+        {
+            return std::string("eip1559Params must be exactly 8 bytes");
+        }
+        // ValidateHolocene1559Params (op-core/eip1559/eip1559.go:89-100): denominator
+        // and elasticity must be both zero or both non-zero. 0,0 is valid attribute
+        // input and is translated to the Canyon constants by encodeOptimismExtraData.
+        auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
+        if ((denominator == 0) != (elasticity == 0))
+        {
+            return std::string(
+                "eip1559Params denominator and elasticity must be both zero or both non-zero");
+        }
     }
     return std::nullopt;
 }
@@ -221,6 +436,25 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
     if (version >= 4 && !executionPayload.withdrawalsRoot.has_value())
     {
         return std::string("withdrawalsRoot is required for ExecutionPayloadV4 and later");
+    }
+    // extraData is a V1-onwards field, so this applies at every newPayload version.
+    // Since this PR makes extraData part of the block hash, an unchecked extraData is
+    // an unchecked block-hash input.
+    if (auto error = validateOptimismExtraDataShape(executionPayload.extraData))
+    {
+        return error;
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> bcos::engine::detail::compareWithBuiltPayload(
+    const ExecutionPayload& submitted, const ExecutionPayload& built)
+{
+    if (submitted.extraData != built.extraData)
+    {
+        return std::string(
+            "executionPayload.extraData does not match the payload this node built under the "
+            "submitted blockHash");
     }
     return std::nullopt;
 }

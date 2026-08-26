@@ -11,7 +11,9 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include <bcos-framework/engine/OpBaseFee.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <optional>
+#include <stdexcept>
 
 using namespace bcostars::protocol;
 
@@ -142,6 +144,25 @@ BOOST_AUTO_TEST_CASE(DecreaseFromMinimalBaseFeeTruncatesToZero)
         makeParent(bcos::u256(30'000'000), bcos::u256(0), bcos::u256(1), holoceneParams());
     // deltaFee = 1 * 15e6 / 15e6 / 8 = 0 (integer division); result stays 1.
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(1));
+}
+
+BOOST_AUTO_TEST_CASE(InvalidFeeParametersFailClosed)
+{
+    auto zeroDenominator = holoceneParams();
+    std::fill(zeroDenominator.begin() + 1, zeroDenominator.begin() + 5, 0);
+    auto const denominatorParent = makeParent(bcos::u256(30'000'000), bcos::u256(20'000'000),
+        bcos::u256(1'000'000'000), std::move(zeroDenominator));
+    BOOST_CHECK_THROW(bcos::engine::calcOpBaseFee(denominatorParent, false), std::invalid_argument);
+
+    auto zeroElasticity = holoceneParams();
+    std::fill(zeroElasticity.begin() + 5, zeroElasticity.end(), 0);
+    auto const elasticityParent = makeParent(bcos::u256(30'000'000), bcos::u256(20'000'000),
+        bcos::u256(1'000'000'000), std::move(zeroElasticity));
+    BOOST_CHECK_THROW(bcos::engine::calcOpBaseFee(elasticityParent, false), std::invalid_argument);
+
+    auto const zeroTargetParent =
+        makeParent(bcos::u256(1), bcos::u256(1), bcos::u256(1'000'000'000), holoceneParams());
+    BOOST_CHECK_THROW(bcos::engine::calcOpBaseFee(zeroTargetParent, false), std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

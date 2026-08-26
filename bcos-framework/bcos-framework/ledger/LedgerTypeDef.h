@@ -27,8 +27,10 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <string_view>
 #include <optional>
+#include <string>
 #include <oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/lexical_cast.hpp>
 #include <magic_enum/magic_enum.hpp>
@@ -52,11 +54,21 @@ using MerkleProof = std::vector<crypto::HashType>;
 /// verified: lexical_cast<u256>("-5") returns 2^256-5, no throw); a leading '-' is rejected
 /// explicitly here so a mistyped negative config surfaces as a clear per-config error instead
 /// of a wrapped value that fail-closes confusingly at every tx gate.
+///
+/// Hex (`0x`/`0X` prefix) is accepted via the same strict digit rules as QUANTITY parsing so a
+/// config written as "0x539" matches the envelope chainId 1337 on every admission point —
+/// plain lexical_cast rejects the prefix, and std::stoull stops at 'x' yielding 0.
 [[nodiscard]] inline std::optional<u256> parseWeb3ChainId(std::string_view chainIdStr)
 {
-    if (!chainIdStr.empty() && chainIdStr[0] == '-') [[unlikely]]
+    if (chainIdStr.empty() || chainIdStr[0] == '-') [[unlikely]]
     {
         return std::nullopt;
+    }
+    if (chainIdStr.size() >= 2 && chainIdStr[0] == '0' &&
+        (chainIdStr[1] == 'x' || chainIdStr[1] == 'X'))
+    {
+        // Hex QUANTITY form — same digit/width rules as safeFromBigQuantity.
+        return safeFromBigQuantity(chainIdStr);
     }
     try
     {

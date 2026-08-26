@@ -23,6 +23,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-utilities/Common.h>
 #include <optional>
+#include <stdexcept>
 
 namespace bcos::engine
 {
@@ -69,6 +70,10 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
         denominator = readU32BE(1);
         elasticity = readU32BE(5);
     }
+    if (denominator == 0 || elasticity == 0) [[unlikely]]
+    {
+        throw std::invalid_argument("invalid OP base-fee parameters: zero denominator/elasticity");
+    }
 
     // Jovian minBaseFee floor — only meaningful when the 8-byte tail exists.
     std::optional<bcos::u256> minBaseFee;
@@ -86,6 +91,10 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
     // and the previous engine copy's u64 narrowing bought nothing but a
     // truncation surface.
     bcos::u256 const gasTarget = parent.gasLimit() / elasticity;
+    if (gasTarget == 0) [[unlikely]]
+    {
+        throw std::invalid_argument("invalid OP base-fee parameters: zero gas target");
+    }
 
     // Jovian meters baseFee on max(gasUsed, DA footprint); the DA footprint
     // lives in the blobGasUsed header slot (op-geth eip1559.go:99-107).

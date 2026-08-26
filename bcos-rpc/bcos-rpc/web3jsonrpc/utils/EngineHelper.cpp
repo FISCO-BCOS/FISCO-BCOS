@@ -358,25 +358,24 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 InvalidParams, "Expected array of hex strings for executionPayload.transactions"));
         }
-        // Raw EIP-2718 bytes, hex-decoded verbatim, kept in BOTH carriers:
-        //   - payload.transactions (EngineTransaction{raw, decoded=nullptr}) — the Engine-API
-        //     wire form; getPayload must later return exactly these raw bytes. No decoding
-        //     happens here — classification/decoding of the raw bytes is the dispatch table's
-        //     job (bcos-framework/engine/RawTransactionDispatch.h), matching upstream.
-        //   - payload.rawTransactions (vector<bytes>) — the OP path's sole tx carrier (raw
-        //     EIP-2718 envelope bytes incl. the 0x7E deposit), consumed by OpSchedulerSeam.
+        // Raw EIP-2718 bytes, hex-decoded verbatim into the authoritative carrier
+        // (`transactions[].raw`). `rawTransactions` is then derived as a byte-for-byte
+        // mirror for the temporary stacked OP seam (#5495) — never filled from a second
+        // decode path, so the two cannot drift at the RPC boundary.
         payload.transactions.reserve(ep["transactions"].size());
-        payload.rawTransactions.emplace();
-        payload.rawTransactions->reserve(ep["transactions"].size());
         for (Json::ArrayIndex i = 0; i < ep["transactions"].size(); ++i)
         {
             auto txData = parseRawTransactionElement(ep["transactions"][i], "executionPayload", i);
-            payload.rawTransactions->push_back(txData);  // keep unconditionally: OP carrier is
-                                                         // decoupled from decode
             payload.transactions.push_back(engine::EngineTransaction{
                 .raw = std::move(txData),
                 .decoded = nullptr,
             });
+        }
+        payload.rawTransactions.emplace();
+        payload.rawTransactions->reserve(payload.transactions.size());
+        for (auto const& tx : payload.transactions)
+        {
+            payload.rawTransactions->push_back(tx.raw);
         }
     }
     if (ep.isMember("withdrawals") && !ep["withdrawals"].isNull())
