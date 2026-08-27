@@ -124,13 +124,6 @@ public:
     /// EthBlockHeaderData keeps the RLP domain — timestamp in seconds).
     static bcos::Error::UniquePtr toEthBlockHeader(
         EthBlockHeader& ethHeader, bcos::bytesConstRef _data);
-    /// Like toTarsHeader but WITHOUT validateHeader — usable for FISCO-native/OP (NON_ETH)
-    /// headers that validateHeader rejects. Unlike toTarsHeader, ethBlockVersion is PINNED to
-    /// NON_ETH (not copied). The produced header's timestamp is MILLISECONDS like every other
-    /// internal header (EthBlockHeaderData stores seconds; the ×1000 conversion to the
-    /// internal BlockHeader domain happens here, unconditionally for every version).
-    static bcos::Error::UniquePtr decodeTarsHeader(
-        bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data);
     static bcos::Error::UniquePtr calculateRLPHash(bcos::protocol::BlockHeader& header);
 
     const EthBlockHeaderData& data() const { return m_data; }
