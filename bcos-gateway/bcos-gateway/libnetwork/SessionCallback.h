@@ -10,10 +10,8 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include <boost/asio/steady_timer.hpp>
 #include <array>
-#include <iterator>
 #include <mutex>
 #include <unordered_map>
-#include <vector>
 
 namespace bcos::gateway
 {
@@ -48,8 +46,6 @@ public:
     virtual SessionResponseCallback::Ptr getCallback(uint32_t seq, bool isRemove) = 0;
     virtual bool addCallback(uint32_t seq, SessionResponseCallback::Ptr callback) = 0;
     virtual bool removeCallback(uint32_t seq) = 0;
-    // drain all pending callbacks (used by Session::drop to fail response waiters on teardown)
-    virtual std::vector<SessionResponseCallback::Ptr> popAllCallbacks() = 0;
 };
 
 class SessionCallbackManager : public SessionCallbackManagerInterface
@@ -98,19 +94,6 @@ public:
         return result > 0;
     }
 
-    std::vector<SessionResponseCallback::Ptr> popAllCallbacks() override
-    {
-        std::lock_guard<std::mutex> lockGuard(x_sessionCallbackMap);
-        std::vector<SessionResponseCallback::Ptr> callbacks;
-        callbacks.reserve(m_sessionCallbackMap.size());
-        for (auto& [seq, callback] : m_sessionCallbackMap)
-        {
-            callbacks.emplace_back(std::move(callback));
-        }
-        m_sessionCallbackMap.clear();
-        return callbacks;
-    }
-
 private:
     std::mutex x_sessionCallbackMap;
     std::unordered_map<uint32_t, SessionResponseCallback::Ptr> m_sessionCallbackMap;
@@ -146,19 +129,6 @@ public:
     {
         auto bucket = (seq % SessionCallbackBucketNum);
         return m_sessionCallbackBucket.at(bucket).removeCallback(seq);
-    }
-
-    std::vector<SessionResponseCallback::Ptr> popAllCallbacks() override
-    {
-        std::vector<SessionResponseCallback::Ptr> callbacks;
-        for (auto& bucket : m_sessionCallbackBucket)
-        {
-            auto bucketCallbacks = bucket.popAllCallbacks();
-            callbacks.insert(callbacks.end(),
-                std::make_move_iterator(bucketCallbacks.begin()),
-                std::make_move_iterator(bucketCallbacks.end()));
-        }
-        return callbacks;
     }
 
 private:

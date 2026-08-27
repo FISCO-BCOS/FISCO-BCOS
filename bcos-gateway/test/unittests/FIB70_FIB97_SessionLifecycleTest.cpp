@@ -345,4 +345,76 @@ BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
     fakeSocket->close();
 }
 
+// The response-callback manager is shared host-wide (GatewayFactory creates one
+// SessionCallbackManagerBucket for the Host and injects it into every session), so drop() must
+// fail only the seqs registered through the dropped session — popping the whole manager would
+// spuriously fail every in-flight request/response on every other session.
+BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeSocketA = std::make_shared<FakeSocket_FIB>();
+    auto fakeSocketB = std::make_shared<FakeSocket_FIB>();
+
+    {
+        auto fakeAsio = std::make_shared<FakeASIO_FIB>();
+        auto fakeHost = std::make_shared<FakeHost_FIB>(
+            hashImpl, fakeAsio, nullptr, std::make_shared<P2PMessageFactory>());
+        // one manager shared by both sessions, as in production
+        auto callbackManager = std::make_shared<SessionCallbackManagerBucket>();
+
+        auto sessionA = std::make_shared<Session>(fakeSocketA, *fakeHost, 2, true);
+        sessionA->setMessageFactory(fakeHost->messageFactory());
+        sessionA->setSessionCallbackManager(callbackManager);
+        auto sessionB = std::make_shared<Session>(fakeSocketB, *fakeHost, 2, true);
+        sessionB->setMessageFactory(fakeHost->messageFactory());
+        sessionB->setSessionCallbackManager(callbackManager);
+
+        const uint32_t seqA = 1001;
+        const uint32_t seqB = 1002;
+        std::atomic<int> firedA{0};
+        std::atomic<int> firedB{0};
+        auto handlerA = std::make_shared<ResponseCallback>();
+        handlerA->callback = [&firedA](NetworkException e, Message::Ptr) {
+            if (e.errorCode() != 0)
+            {
+                ++firedA;
+            }
+        };
+        auto handlerB = std::make_shared<ResponseCallback>();
+        handlerB->callback = [&firedB](NetworkException e, Message::Ptr) {
+            if (e.errorCode() != 0)
+            {
+                ++firedB;
+            }
+        };
+        callbackManager->addCallback(seqA, handlerA);
+        sessionA->addPendingResponseSeq(seqA);
+        callbackManager->addCallback(seqB, handlerB);
+        sessionB->addPendingResponseSeq(seqB);
+
+        // skip the socket teardown tail; the flush runs before the null-socket check
+        sessionA->setSocket(nullptr);
+        sessionA->drop(DisconnectReason::UserReason);
+
+        // the flush fires on the posted executor — wait for it
+        size_t retryCount = 0;
+        while (firedA == 0 && retryCount < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            retryCount++;
+        }
+
+        // session A's waiter is failed with an error; session B's is left untouched
+        BOOST_CHECK_EQUAL(firedA, 1);
+        BOOST_CHECK_EQUAL(firedB, 0);
+        BOOST_CHECK(callbackManager->getCallback(seqA, false) == nullptr);
+        BOOST_CHECK(callbackManager->getCallback(seqB, false) != nullptr);
+
+        sessionB->setSocket(nullptr);
+    }
+
+    fakeSocketA->close();
+    fakeSocketB->close();
+}
+
 BOOST_AUTO_TEST_SUITE_END()

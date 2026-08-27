@@ -403,7 +403,11 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
         // finite response timeout: Options{0, true} waits forever (Session registers no timer
         // for a zero timeout), so a peer that accepts the request but never answers would suspend
         // this detached coroutine indefinitely — the remaining candidates would never be tried
-        // and the caller would never see the terminal AMOPSendMsgFailed.
+        // and the caller would never see the terminal AMOPSendMsgFailed. Tradeoff: a subscriber
+        // that answers slower than this timeout makes the gateway retry the NEXT subscriber while
+        // the first may still be processing, so one request can be delivered to (and handled by)
+        // two subscribers — delivery is possibly-duplicated, not at-most-once. If deployments
+        // need a different value this should become a gateway config option.
         constexpr uint32_t c_amopResponseTimeoutMs = 30000;
         // shuffle the candidate list once, then take-and-erase the front per attempt: the node
         // attempted is always the one removed, so a dead node is never retried while a live one
