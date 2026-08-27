@@ -155,14 +155,29 @@ BOOST_AUTO_TEST_CASE(IncreaseFromZeroBaseFeeYieldsOne)
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(1));
 }
 
-// A decrease from a minimal base fee truncates to zero delta and keeps the parent fee:
-// the fee never drops below 1 on a decrease either.
+// A decrease from a minimal base fee truncates to zero delta and keeps the parent fee
+// (denominator-8 integer division). This is NOT a floor on the decrease arm itself: with a
+// unit denominator the delta need not truncate and the result can reach 0 — see the
+// DecreaseWithUnitDenominatorReachesZero fixture below (#5496 finding AQ).
 BOOST_AUTO_TEST_CASE(DecreaseFromMinimalBaseFeeTruncatesToZero)
 {
     auto const parent =
         makeParent(bcos::u256(30'000'000), bcos::u256(0), bcos::u256(1), holoceneParams());
     // deltaFee = 1 * 15e6 / 15e6 / 8 = 0 (integer division); result stays 1.
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(1));
+}
+
+// The decrease arm CAN reach 0: denominator=1 is governance-reachable (the parameter
+// decoder only rejects 0), and with a 1-wei parent fee the un-truncated delta consumes it
+// entirely. The Holocene arm has no minBaseFee floor, so the old "never drops below 1 on a
+// decrease" invariant was false (#5496 finding AQ).
+BOOST_AUTO_TEST_CASE(DecreaseWithUnitDenominatorReachesZero)
+{
+    bcos::bytes const unitDenominator{0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02};
+    auto const parent =
+        makeParent(bcos::u256(30'000'000), bcos::u256(0), bcos::u256(1), unitDenominator);
+    // deltaFee = 1 * 15e6 / 15e6 / 1 = 1; deltaFee >= parentBaseFee -> result 0.
+    BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(0));
 }
 
 BOOST_AUTO_TEST_CASE(InvalidFeeParametersFailClosed)
