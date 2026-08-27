@@ -308,7 +308,6 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
                 {
                     // Same posture as ReceiptResponse.cpp (R1-12): a corrupt receipt must
                     // skip one feeHistory row + warn, never -32603 the whole response
-                    // (round-2 F3).
                     WEB3_LOG(WARNING) << LOG_DESC("feeHistory: unparseable effectiveGasPrice")
                                       << LOG_KV("value", effective) << LOG_KV("msg", e.what());
                     continue;
@@ -1272,7 +1271,6 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     if (objectForm && tx.isMember("gas"))
     {
         if (!tx["gas"].isString()) [[unlikely]]
-(fix(rpc): clamp estimateGas gas cap before run #1; advance lowerBound on failed doubling (round-2 F2/F4))
         {
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(InvalidParams, "transaction gas must be a hex quantity"));
@@ -1303,8 +1301,8 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     }
 
     // ONE deep copy of the request for the whole estimation (the data field can be MBs) —
-    // object-form ONLY (#5496 finding BC): the gas field is the only thing ever rewritten,
-    // clamped to kRpcGasCap BEFORE run #1 when the caller self-declared more (round-2 F2),
+    // object-form ONLY: the gas field is the only thing ever rewritten, clamped to
+    // kRpcGasCap BEFORE run #1 when the caller self-declared more,
     // then set per candidate during the search. A raw signed tx embeds its own gas, is never
     // rewritten, and is simulated in place without the copy.
     Json::Value bounded;
@@ -1358,7 +1356,7 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
                     break;
                 }
                 // Failed probe is known-bad: advance lowerBound so the binary search does
-                // not re-probe proven-failed gas within the shared budget (round-2 F4).
+                // not re-probe proven-failed gas within the shared budget.
                 lowerBound = candidate;
                 candidate = std::min(candidate * 2, upperBound);
             }

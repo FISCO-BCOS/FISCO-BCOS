@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(legacyGarbageTrailerRejected)
     Web3Transaction tx{};
     auto error = codec::rlp::decodeFromPayload(ref, tx);
     BOOST_REQUIRE(error != nullptr);
-    // Pin the cause class (#5496 finding BJ): the failure must be the v<35 band
+    // Pin the cause class: the failure must be the v<35 band
     // (InvalidVInSignature), not a generic or trailing-bytes error — a regression that
     // moves the rejection cause would otherwise pass this null-check unnoticed.
     BOOST_CHECK(

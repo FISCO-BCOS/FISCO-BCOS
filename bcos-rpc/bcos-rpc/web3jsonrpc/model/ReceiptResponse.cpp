@@ -31,7 +31,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         }
         catch (std::exception const& e)
         {
-            // Throttle to the first occurrence per process (#5496 finding BI): this sits on
+            // Throttle to the first occurrence per process: this sits on
             // the polled eth_getTransactionReceipt path — a poller hitting a corrupt receipt
             // would otherwise repeat the warning indefinitely.
             static std::atomic<bool> warnedOnce{false};

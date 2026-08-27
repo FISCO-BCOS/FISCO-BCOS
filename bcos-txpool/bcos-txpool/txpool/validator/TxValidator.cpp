@@ -323,7 +323,6 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
         co_return TransactionStatus::InvalidChainId;
     }
     // Deposits have no chainId; they enter via the rollup pipeline, not the pool.
-(fix(txpool): reject blob envelopes at pool admission; explicit secp256k1 include (findings AP/BE))
     if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Deposit)
     {
         co_return TransactionStatus::InvalidChainId;

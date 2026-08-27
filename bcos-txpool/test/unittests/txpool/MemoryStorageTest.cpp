@@ -666,7 +666,7 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         // Result depends on other validation steps
     }
 
-    // Test 11 (finding AK): the EIP-2 low-s hook in TxValidator::verify is the ONLY low-s
+    // Test 11: the EIP-2 low-s hook in TxValidator::verify is the ONLY low-s
     // enforcement a P2P-synced tars-form Web3 tx ever meets — the raw-bytes decode funnel,
     // which rejects high-s inline, is not on this path. Sign genuinely, then flip s to
     // n-s: recovery still derives the same sender, so without the hook this tx would enter
@@ -722,7 +722,7 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         BOOST_CHECK(result == TransactionStatus::InvalidSignature);
     }
 
-    // Test 12 (finding AL): the pool-surface Malformed class — empty extraTransactionBytes
+    // Test 12: the pool-surface Malformed class — empty extraTransactionBytes
     // classifies Malformed and must reject InvalidChainId at pool level. tx7 pins the
     // chainId-mismatch class and tx8 the accept path; this pins the unreadable-envelope
     // class so a regression folding it back into the unprotected exemption flips this test.

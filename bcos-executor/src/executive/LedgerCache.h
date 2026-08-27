@@ -130,7 +130,7 @@ public:
                 ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID)))
         {
             // Same shared parser as every other web3_chain_id reader (executor fallback is
-            // the fourth consumer, #5496 finding AS): raw lexical_cast would throw uncaught
+            // the fourth consumer): raw lexical_cast would throw uncaught
             // on a "0x"-prefixed config and wrap a negative one modulo 2^256.
             auto const parsedChainId = ledger::parseWeb3ChainId(std::get<0>(*value));
             if (!parsedChainId.has_value()) [[unlikely]]

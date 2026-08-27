@@ -158,7 +158,7 @@ BOOST_AUTO_TEST_CASE(IncreaseFromZeroBaseFeeYieldsOne)
 // A decrease from a minimal base fee truncates to zero delta and keeps the parent fee
 // (denominator-8 integer division). This is NOT a floor on the decrease arm itself: with a
 // unit denominator the delta need not truncate and the result can reach 0 — see the
-// DecreaseWithUnitDenominatorReachesZero fixture below (#5496 finding AQ).
+// DecreaseWithUnitDenominatorReachesZero fixture below.
 BOOST_AUTO_TEST_CASE(DecreaseFromMinimalBaseFeeTruncatesToZero)
 {
     auto const parent =
@@ -170,7 +170,7 @@ BOOST_AUTO_TEST_CASE(DecreaseFromMinimalBaseFeeTruncatesToZero)
 // The decrease arm CAN reach 0: denominator=1 is governance-reachable (the parameter
 // decoder only rejects 0), and with a 1-wei parent fee the un-truncated delta consumes it
 // entirely. The Holocene arm has no minBaseFee floor, so the old "never drops below 1 on a
-// decrease" invariant was false (#5496 finding AQ).
+// decrease" invariant was false.
 BOOST_AUTO_TEST_CASE(DecreaseWithUnitDenominatorReachesZero)
 {
     bcos::bytes const unitDenominator{0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02};
