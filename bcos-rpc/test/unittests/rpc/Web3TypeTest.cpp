@@ -1559,6 +1559,60 @@ BOOST_AUTO_TEST_CASE(classifyWeb3EnvelopeChainIdKinds)
         BOOST_CHECK(c.kind == Kind::Unprotected);  // v=27 => Unprotected, no chainId binding
         BOOST_CHECK(envelope::toString(c.kind) == "Unprotected");
     }
+
+    // (Y) The documented Malformed v-bands of the legacy full form — 0/1 (Homestead parity
+    // slots must not gain a chainId binding) and 29..34 (below the EIP-155 base) — must NOT
+    // ride the 27/28 unprotected exemption. Only 27/28 and >=35 are exempt/protected.
+    {
+        for (uint64_t v : {0u, 1u, 26u, 29u, 34u})
+        {
+            bcos::bytes vItem;
+            rlp::encode(vItem, v);
+            BOOST_CHECK(envelope::classifyWeb3EnvelopeChainId(bcos::ref(legacyFull(vItem))).kind ==
+                        Kind::Malformed);
+        }
+        // Preimage-tail canonicality: a non-canonical chainId in the legacy PREIMAGE tail
+        // (fields 8/9 empty) hits the same canonical walker as the full-form branch and
+        // must fail closed rather than classify Protected.
+        {
+            bcos::bytes items;
+            for (int i = 0; i < 6; ++i)
+            {
+                rlp::encode(items, static_cast<uint64_t>(0));
+            }
+            bcos::bytes const nonCanonical{0x82, 0x00, 0x25};  // padded "37"
+            items.insert(items.end(), nonCanonical.begin(), nonCanonical.end());
+            items.push_back(0x80);  // r placeholder (empty)
+            items.push_back(0x80);  // s placeholder (empty)
+            bcos::bytes env;
+            rlp::encodeHeader(env, {.isList = true, .payloadLength = items.size()});
+            env.insert(env.end(), items.begin(), items.end());
+            BOOST_CHECK(
+                envelope::classifyWeb3EnvelopeChainId(bcos::ref(env)).kind == Kind::Malformed);
+        }
+        // Over-wide preimage chainId (9-byte payload, above uint64 width): the shared
+        // walker cannot decode it, so the classifier fails closed.
+        {
+            bcos::bytes items;
+            for (int i = 0; i < 6; ++i)
+            {
+                rlp::encode(items, static_cast<uint64_t>(0));
+            }
+            items.push_back(0x89);  // 9-byte string item — canonical RLP but > uint64 width
+            items.push_back(0x01);
+            for (int i = 0; i < 8; ++i)
+            {
+                items.push_back(0x00);
+            }
+            items.push_back(0x80);
+            items.push_back(0x80);
+            bcos::bytes env;
+            rlp::encodeHeader(env, {.isList = true, .payloadLength = items.size()});
+            env.insert(env.end(), items.begin(), items.end());
+            BOOST_CHECK(
+                envelope::classifyWeb3EnvelopeChainId(bcos::ref(env)).kind == Kind::Malformed);
+        }
+    }
 }
 
 BOOST_AUTO_TEST_CASE(decodeCanonicalRlpUintAcceptsOnlyMinimalEncodings)
