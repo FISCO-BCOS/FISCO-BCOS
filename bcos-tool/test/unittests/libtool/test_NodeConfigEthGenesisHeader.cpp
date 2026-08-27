@@ -24,6 +24,7 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -137,26 +138,89 @@ BOOST_AUTO_TEST_CASE(AllFieldsParsed)
     BOOST_CHECK_EQUAL(header->m_extraData.size(), 17U);  // Jovian format
     BOOST_CHECK_EQUAL(header->m_mixHash, bcos::h256{});
     BOOST_CHECK_EQUAL(header->m_nonce, bcos::h64{});
-    BOOST_CHECK_EQUAL(header->m_baseFeePerGas, bcos::u256(1'000'000'000));
-    BOOST_CHECK_EQUAL(header->m_withdrawalsRoot.hexPrefixed(), std::string(kEthEmptyTrieRoot));
-    BOOST_CHECK_EQUAL(header->m_blobGasUsed, bcos::u256(0));
-    BOOST_CHECK_EQUAL(header->m_excessBlobGas, bcos::u256(0));
-    BOOST_CHECK_EQUAL(header->m_parentBeaconBlockRoot, bcos::h256{});
-    BOOST_CHECK_EQUAL(header->m_requestsHash.hexPrefixed(),
+    BOOST_REQUIRE(header->m_baseFeePerGas.has_value());
+    BOOST_CHECK_EQUAL(*header->m_baseFeePerGas, bcos::u256(1'000'000'000));
+    BOOST_REQUIRE(header->m_withdrawalsRoot.has_value());
+    BOOST_CHECK_EQUAL(header->m_withdrawalsRoot->hexPrefixed(), std::string(kEthEmptyTrieRoot));
+    BOOST_REQUIRE(header->m_blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(*header->m_blobGasUsed, bcos::u256(0));
+    BOOST_REQUIRE(header->m_excessBlobGas.has_value());
+    BOOST_CHECK_EQUAL(*header->m_excessBlobGas, bcos::u256(0));
+    BOOST_REQUIRE(header->m_parentBeaconBlockRoot.has_value());
+    BOOST_CHECK_EQUAL(*header->m_parentBeaconBlockRoot, bcos::h256{});
+    BOOST_REQUIRE(header->m_requestsHash.has_value());
+    BOOST_CHECK_EQUAL(header->m_requestsHash->hexPrefixed(),
         "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     BOOST_CHECK_EQUAL(header->m_hash.hexPrefixed(),
         "0xb153f41d2651441ace825becbfe2f2b6bf89092864a0ae04b7e0d40a5cf64cc1");
 }
 
-BOOST_AUTO_TEST_CASE(EachMissingFieldFailsFast)
+BOOST_AUTO_TEST_CASE(EachMissingRequiredFieldFailsFast)
 {
-    // Remove every one of the 22 keys in turn: parsing must throw
-    // InvalidConfig each time (all fields are required).
+    // Remove every REQUIRED key in turn: parsing must throw InvalidConfig each
+    // time. The fork-gated keys (base_fee_per_gas, withdrawals_root,
+    // blob_gas_used, excess_blob_gas, parent_beacon_block_root, requests_hash)
+    // are OPTIONAL — removing one of those must instead succeed (covered by
+    // OptionalFieldsMayBeOmitted below).
+    const std::set<std::string> kOptionalKeys = {
+        "base_fee_per_gas", "withdrawals_root", "blob_gas_used",
+        "excess_blob_gas", "parent_beacon_block_root", "requests_hash",
+    };
     for (auto const& [key, value] : kEthHeaderFields)
     {
+        if (kOptionalKeys.count(key) > 0)
+        {
+            continue;
+        }
         auto cfg = makeEthNodeConfig();
         BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection(key)))),
             bcos::tool::InvalidConfig);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(OptionalFieldsMayBeOmitted)
+{
+    // A pre-Cancun chain (e.g. Sepolia's London-era genesis) omits the
+    // fork-gated keys. Each omission must parse cleanly and surface as a
+    // nullopt optional, so the ledger's RLP re-encoding leaves the field out.
+    const std::set<std::string> kOptionalKeys = {
+        "base_fee_per_gas", "withdrawals_root", "blob_gas_used",
+        "excess_blob_gas", "parent_beacon_block_root", "requests_hash",
+    };
+    for (auto const& [key, value] : kEthHeaderFields)
+    {
+        if (kOptionalKeys.count(key) == 0)
+        {
+            continue;
+        }
+        auto cfg = makeEthNodeConfig();
+        cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection(key))));
+        auto const& header = cfg->genesisConfig().m_ethGenesisHeader;
+        BOOST_REQUIRE(header.has_value());
+        if (key == "base_fee_per_gas")
+        {
+            BOOST_CHECK(!header->m_baseFeePerGas.has_value());
+        }
+        else if (key == "withdrawals_root")
+        {
+            BOOST_CHECK(!header->m_withdrawalsRoot.has_value());
+        }
+        else if (key == "blob_gas_used")
+        {
+            BOOST_CHECK(!header->m_blobGasUsed.has_value());
+        }
+        else if (key == "excess_blob_gas")
+        {
+            BOOST_CHECK(!header->m_excessBlobGas.has_value());
+        }
+        else if (key == "parent_beacon_block_root")
+        {
+            BOOST_CHECK(!header->m_parentBeaconBlockRoot.has_value());
+        }
+        else if (key == "requests_hash")
+        {
+            BOOST_CHECK(!header->m_requestsHash.has_value());
+        }
     }
 }
 
