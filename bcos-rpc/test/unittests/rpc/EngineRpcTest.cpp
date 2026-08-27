@@ -1032,6 +1032,13 @@ BOOST_AUTO_TEST_CASE(engineErrorMapperOutOfWindowVersion)
     // the mapper must not drop it to -32603 — part-5's forkchoice path throws it.
     BOOST_CHECK_EQUAL(bcos::rpc::mapEngineErrorCode(bcos::engine::UnknownForkchoiceHeadBlock{}),
         EngineError::InvalidForkchoiceState);
+    // Remaining mapped families (round-2 finding AX): IncompatiblePayloadVersion shares
+    // -38005 with UnsupportedFork; UnsupportedOpPayloadAttributes carries -38003. Both must
+    // stay pinned so a mapper refactor cannot silently drop them to -32603.
+    BOOST_CHECK_EQUAL(bcos::rpc::mapEngineErrorCode(bcos::engine::IncompatiblePayloadVersion{}),
+        EngineError::UnsupportedFork);
+    BOOST_CHECK_EQUAL(bcos::rpc::mapEngineErrorCode(bcos::engine::UnsupportedOpPayloadAttributes{}),
+        EngineError::InvalidPayloadAttributes);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
