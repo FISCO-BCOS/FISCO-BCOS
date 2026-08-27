@@ -1302,18 +1302,27 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         }
     }
 
-    // ONE deep copy of the request for the whole estimation (the data field can be MBs); the
-    // gas field is the only thing ever rewritten — clamped to kRpcGasCap BEFORE run #1 when
-    // the caller self-declared more (round-2 F2), then set per candidate during the search.
-    Json::Value bounded = request;
-    if (explicitGas && *explicitGas > firstRunLimit)
-    {
-        bounded[0U]["gas"] = toQuantity(firstRunLimit);
-    }
-
+    // ONE deep copy of the request for the whole estimation (the data field can be MBs) —
+    // object-form ONLY (#5496 finding BC): the gas field is the only thing ever rewritten,
+    // clamped to kRpcGasCap BEFORE run #1 when the caller self-declared more (round-2 F2),
+    // then set per candidate during the search. A raw signed tx embeds its own gas, is never
+    // rewritten, and is simulated in place without the copy.
+    Json::Value bounded;
     u256 gasUsed;
     Json::Value callResponse;
-    co_await call(bounded, callResponse, std::addressof(gasUsed), true, blockBaseFee);
+    if (objectForm)
+    {
+        bounded = request;
+        if (explicitGas && *explicitGas > firstRunLimit)
+        {
+            bounded[0U]["gas"] = toQuantity(firstRunLimit);
+        }
+        co_await call(bounded, callResponse, std::addressof(gasUsed), true, blockBaseFee);
+    }
+    else
+    {
+        co_await call(request, callResponse, std::addressof(gasUsed), true, blockBaseFee);
+    }
 
     if (callResponse.isMember("error"))
     {
