@@ -51,7 +51,9 @@ using MerkleProof = std::vector<crypto::HashType>;
 /// verified: lexical_cast<u256>("-5") returns 2^256-5, no throw); a leading '-' is rejected
 /// explicitly here so a mistyped negative config surfaces as a clear per-config error instead
 /// of a wrapped value that fail-closes confusingly at every tx gate.
-/// Hex (`0x`/`0X`) uses the same digit rules as QUANTITY (`0x539` == 1337).
+/// Hex (`0x`/`0X`) uses the same digit rules as QUANTITY (`0x539` == 1337); like the
+/// QUANTITY parser, leading zeros are tolerated ("0x0539") — values are compared as u256,
+/// never re-stringified, so the tolerance is benign.
 [[nodiscard]] inline std::optional<u256> parseWeb3ChainId(std::string_view chainIdStr)
 {
     if (chainIdStr.empty() || chainIdStr[0] == '-') [[unlikely]]
