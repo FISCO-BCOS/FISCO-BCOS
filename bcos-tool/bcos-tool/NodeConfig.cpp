@@ -72,7 +72,11 @@ bool isHex(std::string_view sv)
 // Require that `value` (the raw config value of `field` in `section`) is a
 // 0x-prefixed hex string. If expectedLen > 0, the hex body (after 0x) must be
 // exactly that many chars; otherwise it must merely be valid hex of even
-// length when `evenLength` is set. Throws InvalidConfig naming section+field.
+// length when `evenLength` is set. An empty body ("0x") is accepted only for
+// variable-length byte fields (expectedLen == 0 && evenLength, e.g.
+// extra_data/code): it decodes to zero bytes — canonical Ethereum geneses do
+// carry an empty extraData. Fixed-width and quantity fields still require
+// digits. Throws InvalidConfig naming section+field.
 void requireHexField(std::string const& section, std::string const& field, std::string const& value,
     size_t expectedLen, bool evenLength)
 {
@@ -89,7 +93,8 @@ void requireHexField(std::string const& section, std::string const& field, std::
                                   "[" + section + "]." + field + " must be " +
                                   std::to_string(expectedLen) + " hex chars: " + value));
     }
-    if (!isHex(body))
+    bool const emptyBodyAllowed = (expectedLen == 0 && evenLength);
+    if (body.empty() ? !emptyBodyAllowed : !isHex(body))
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "[" + section + "]." + field + " is not valid hex: " + value));

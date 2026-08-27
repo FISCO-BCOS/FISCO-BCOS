@@ -1843,48 +1843,51 @@ static task::Task<void> importGenesisState(
     ::ranges::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
 {
     // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
-    // a prefix. Strip a leading 0x so both shapes unhex cleanly.
+    // a prefix. Strip a leading 0x so both shapes unhex cleanly. The exact-width /
+    // even-length unhex guards are shared with the genesis trie hasher and the
+    // Ethereum genesis loader (ledger::unhexAllocExact / unhexAllocBytes), so the
+    // state root can never be computed over hex this importer would reject.
     auto strip0x = [](std::string_view hex) { return hex.starts_with("0x") ? hex.substr(2) : hex; };
-    // unhex into a fixed-size buffer requires an EXACT digit count:
-    // boost::algorithm::unhex writes past the buffer on over-long input and
-    // silently zero-pads on short input — either one corrupts the genesis state
-    // (or worse) instead of failing loudly. NodeConfig::loadAllocs guards the
-    // INI path; direct GenesisConfig callers (tests, tools) reach the unhex
-    // unguarded.
-    auto unhexExact = [](std::string_view hex, std::string_view field, uint8_t* out,
-                          size_t expectedBytes) {
-        if (hex.size() != expectedBytes * 2)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "genesis alloc " + std::string(field) + " must be exactly " +
-                                      std::to_string(expectedBytes * 2) + " hex digits, got " +
-                                      std::to_string(hex.size())));
-        }
-        boost::algorithm::unhex(hex.begin(), hex.end(), out);
-    };
 
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
 
     for (auto&& importAccount : allocs)
     {
+        // Decode & validate EVERY hex field of the alloc BEFORE the first
+        // write: genesis import is not transactional, so a bad code/slot hex
+        // discovered after create() would leave a partially-written account in
+        // the genesis batch.
         auto addressHex = strip0x(importAccount.address);
         evmc_address address{};
-        unhexExact(addressHex, "address", address.bytes, sizeof(address.bytes));
+        ledger::unhexAllocExact(addressHex, "address", address.bytes, sizeof(address.bytes));
+
+        bcos::bytes binaryCode;
+        std::optional<crypto::HashType> codeHash;
+        if (!strip0x(importAccount.code).empty())
+        {
+            binaryCode = ledger::unhexAllocBytes(importAccount.code, "code");
+            codeHash = hashImpl.hash(binaryCode);
+        }
+        std::vector<std::pair<evmc_bytes32, evmc_bytes32>> slots;
+        slots.reserve(importAccount.storage.size());
+        for (auto const& [key, value] : importAccount.storage)
+        {
+            evmc_bytes32 evmKey{};
+            ledger::unhexAllocExact(key, "storage slot key", evmKey.bytes, sizeof(evmKey.bytes));
+            evmc_bytes32 evmValue{};
+            ledger::unhexAllocExact(
+                value, "storage slot value", evmValue.bytes, sizeof(evmValue.bytes));
+            slots.emplace_back(evmKey, evmValue);
+        }
 
         account::EVMAccount account(
             storage, address, features.get(Features::Flag::feature_raw_address));
         co_await account.create();
 
-        if (!importAccount.code.empty())
+        if (codeHash.has_value())
         {
-            auto codeHex = strip0x(importAccount.code);
-            bcos::bytes binaryCode;
-            binaryCode.reserve(codeHex.size() / 2);
-            boost::algorithm::unhex(codeHex.begin(), codeHex.end(), std::back_inserter(binaryCode));
-
-            auto codeHash = hashImpl.hash(binaryCode);
-            co_await account.setCode(std::move(binaryCode), std::string{}, codeHash);
+            co_await account.setCode(std::move(binaryCode), std::string{}, *codeHash);
         }
 
         if (!importAccount.nonce.empty())
@@ -1897,19 +1900,9 @@ static task::Task<void> importGenesisState(
             co_await account.setBalance(importAccount.balance);
         }
 
-        if (!importAccount.storage.empty())
+        for (auto const& [evmKey, evmValue] : slots)
         {
-            for (auto const& [key, value] : importAccount.storage)
-            {
-                auto keyHex = strip0x(key);
-                auto valueHex = strip0x(value);
-                evmc_bytes32 evmKey{};
-                unhexExact(keyHex, "storage slot key", evmKey.bytes, sizeof(evmKey.bytes));
-                evmc_bytes32 evmValue{};
-                unhexExact(valueHex, "storage slot value", evmValue.bytes, sizeof(evmValue.bytes));
-
-                co_await account.setStorage(evmKey, evmValue);
-            }
+            co_await account.setStorage(evmKey, evmValue);
         }
 
         // Normalize before comparing: NodeConfig lowercases alloc addresses,
@@ -1973,7 +1966,7 @@ static task::Task<void> importGenesisState(
             }
             auto valueHex = strip0x(featureFlagsSlot->second);
             std::array<uint8_t, 32> actualValue{};
-            unhexExact(
+            ledger::unhexAllocExact(
                 valueHex, "feature_flags slot value", actualValue.data(), actualValue.size());
             if (actualValue != expectedValue)
             {

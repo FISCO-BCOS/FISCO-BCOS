@@ -121,9 +121,9 @@ BOOST_AUTO_TEST_CASE(CodeChangeChangesRoot)
 BOOST_AUTO_TEST_CASE(StorageChangeChangesRoot)
 {
     auto x = gsrBaseConfig();
-    x.m_allocs[0].storage = {{gsrKey32('0'), "0x01"}};
+    x.m_allocs[0].storage = {{gsrKey32('0'), "0x" + std::string(63, '0') + "1"}};
     auto y = gsrBaseConfig();
-    y.m_allocs[0].storage = {{gsrKey32('0'), "0x02"}};
+    y.m_allocs[0].storage = {{gsrKey32('0'), "0x" + std::string(63, '0') + "2"}};
     BOOST_CHECK_NE(gsrStateRoot(x), gsrStateRoot(y));
 }
 
@@ -152,6 +152,37 @@ BOOST_AUTO_TEST_CASE(GoldenVector)
     auto root = gsrStateRoot(genesis).hex();
     BOOST_TEST_MESSAGE("GoldenVector eth state root (freeze + verify vs op-deployer): " + root);
     BOOST_CHECK_EQUAL(root.size(), 64u);  // 32-byte root = 64 hex chars
+}
+
+// The hasher shares the importers' exact-width / even-length unhex guards: a
+// short or odd-width alloc hex must fail loudly here instead of being padded
+// into a trie root the importer would then reject (or disagree with).
+BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
+{
+    // short address (38 hex digits)
+    {
+        auto config = gsrBaseConfig();
+        config.m_allocs[0].address = "0x430000000000000000000000000000000000c0";
+        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+    }
+    // odd-length code
+    {
+        auto config = gsrBaseConfig();
+        config.m_allocs[0].code = "0x608060405";
+        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+    }
+    // short storage slot value (2 hex digits)
+    {
+        auto config = gsrBaseConfig();
+        config.m_allocs[0].storage = {{gsrKey32('0'), "0x01"}};
+        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+    }
+    // over-long storage slot key (66 hex digits)
+    {
+        auto config = gsrBaseConfig();
+        config.m_allocs[0].storage = {{"0x" + std::string(66, '0'), gsrKey32('0')}};
+        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

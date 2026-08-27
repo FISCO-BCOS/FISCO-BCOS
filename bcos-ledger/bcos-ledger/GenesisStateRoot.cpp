@@ -24,6 +24,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/lexical_cast.hpp>
 #include <cstdint>
+#include <evmc/evmc.h>
 #include <map>
 
 using namespace bcos;
@@ -47,14 +48,21 @@ bcos::task::Task<mpt::TrieBuildResult> storageTrieOf(std::vector<Alloc::State> c
     std::map<bcos::h256, bcos::bytes> entries;
     for (auto const& [slotHex, valueHex] : storage)
     {
-        auto valueBytes = bcos::fromHex(valueHex);
-        auto rlpValue = mpt::encodeStorageValue(bcos::ref(valueBytes));
+        // Exact-width decode shared with the importers, BEFORE the zero-value
+        // skip: a padded/truncated slot here would root the trie over bytes the
+        // import later rejects — and a malformed key must fail even when its
+        // value is zero (the importer validates it before writing).
+        evmc_bytes32 slotValue{};
+        unhexAllocExact(valueHex, "storage slot value", slotValue.bytes, sizeof(slotValue.bytes));
+        evmc_bytes32 slot{};
+        unhexAllocExact(slotHex, "storage slot key", slot.bytes, sizeof(slot.bytes));
+        auto rlpValue =
+            mpt::encodeStorageValue(bcos::bytesConstRef(slotValue.bytes, sizeof(slotValue.bytes)));
         if (rlpValue.empty())
         {
             continue;  // zero value: not part of the storage trie
         }
-        auto slotBytes = bcos::fromHex(slotHex);
-        auto slotKeyHash = keccak(bcos::bytesConstRef(slotBytes.data(), slotBytes.size()));
+        auto slotKeyHash = keccak(bcos::bytesConstRef(slot.bytes, sizeof(slot.bytes)));
         entries[slotKeyHash] = std::move(rlpValue);
     }
     if (entries.empty())
@@ -84,7 +92,7 @@ bcos::task::Task<bcos::ledger::GenesisStateTrie> bcos::ledger::computeGenesisSta
         auto storageRoot = storageTrie.root;
         nodes.merge(storageTrie.newNodes);
 
-        auto codeBytes = bcos::fromHex(alloc.code);
+        auto codeBytes = unhexAllocBytes(alloc.code, "code");
         bcos::h256 codeHash = codeBytes.empty() ?
                                   mpt::emptyCodeHash() :
                                   keccak(bcos::bytesConstRef(codeBytes.data(), codeBytes.size()));
@@ -98,8 +106,9 @@ bcos::task::Task<bcos::ledger::GenesisStateTrie> bcos::ledger::computeGenesisSta
         codec::rlp::encode(accountRlp, nonce, alloc.balance, storageRoot, codeHash);
 
         // Secure state trie: leaf key = keccak256(address20).
-        auto addrBytes = bcos::fromHex(alloc.address);
-        auto addrKeyHash = keccak(bcos::bytesConstRef(addrBytes.data(), addrBytes.size()));
+        evmc_address addr{};
+        unhexAllocExact(alloc.address, "address", addr.bytes, sizeof(addr.bytes));
+        auto addrKeyHash = keccak(bcos::bytesConstRef(addr.bytes, sizeof(addr.bytes)));
         stateEntries[addrKeyHash] = std::move(accountRlp);
     }
 

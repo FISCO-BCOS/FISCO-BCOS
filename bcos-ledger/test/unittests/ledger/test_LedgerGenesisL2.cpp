@@ -26,6 +26,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-ledger/GenesisStateLoader.h"
 #include "bcos-ledger/GenesisStateRoot.h"
 #include "bcos-ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
@@ -177,6 +178,50 @@ BOOST_AUTO_TEST_CASE(PbftBranchUnchanged)
         ledger::Features features;
         co_await features.readFromStorage(*storage, 0);
         BOOST_CHECK(!features.get(ledger::Features::Flag::feature_l2_ethereum_compat));
+    }());
+}
+
+// A bad hex field deep inside an alloc must abort BEFORE any row for that
+// account is written: genesis import is not transactional, so discovering it
+// at write time (after create()) would leave a partially-created account in
+// the genesis batch.
+BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto storage = makeStorage();
+
+        ledger::Features features;
+        features.set(Features::Flag::feature_raw_address);
+
+        std::string goodAddress = "43000000000000000000000000000000000000c0";
+        std::string badAddress = "43000000000000000000000000000000000000c1";
+        std::vector<Alloc> allocs;
+        allocs.push_back(Alloc{.address = goodAddress,
+            .balance = u256(1),
+            .nonce = "1",
+            .code = "6080604052",
+            .storage = {{std::string(64, '0'), std::string(64, '1')}}});
+        // short storage slot value (2 hex digits) in the SECOND alloc
+        allocs.push_back(Alloc{.address = badAddress,
+            .balance = u256(2),
+            .nonce = "2",
+            .code = "",
+            .storage = {{std::string(64, '0'), "01"}}});
+
+        BOOST_CHECK_THROW(
+            co_await importEthereumGenesisState(*storage, allocs, *hashImpl, features),
+            bcos::tool::InvalidConfig);
+
+        // The first (well-formed) alloc may be written; the offending account
+        // must not exist at all — not even the create() row in s_tables.
+        auto badTable = fmt::format("{}{}", SYS_DIRECTORY::USER_APPS, badAddress);
+        auto createRow =
+            co_await storage2::readOne(*storage, executor_v1::StateKeyView(SYS_TABLES, badTable));
+        BOOST_CHECK(!createRow);
+        auto codeHashRow = co_await storage2::readOne(
+            *storage, executor_v1::StateKeyView(badTable, ACCOUNT_TABLE_FIELDS::CODE_HASH));
+        BOOST_CHECK(!codeHashRow);
     }());
 }
 

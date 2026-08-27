@@ -252,6 +252,27 @@ BOOST_AUTO_TEST_CASE(NonZeroNumberRejected)
         bcos::tool::InvalidConfig);
 }
 
+BOOST_AUTO_TEST_CASE(EmptyExtraDataAccepted)
+{
+    // Canonical Ethereum geneses carry an empty extraData ("0x"); it decodes to
+    // zero bytes and must not fail the hex check.
+    auto section = ethHeaderSection();
+    boost::replace_first(
+        section, "extra_data=0x00000000fa000000060000000000000000\n", "extra_data=0x\n");
+    auto cfg = makeEthNodeConfig();
+    cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section)));
+    auto const& header = cfg->genesisConfig().m_ethGenesisHeader;
+    BOOST_REQUIRE(header.has_value());
+    BOOST_CHECK(header->m_extraData.empty());
+
+    // ...but a quantity field still requires digits: "0x" is not a number.
+    auto badQuantity = ethHeaderSection();
+    boost::replace_first(badQuantity, "gas_limit=0x1c9c380\n", "gas_limit=0x\n");
+    auto cfg2 = makeEthNodeConfig();
+    BOOST_CHECK_THROW(cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(badQuantity))),  //
+        bcos::tool::InvalidConfig);
+}
+
 BOOST_AUTO_TEST_CASE(BadWidthRejected)
 {
     // 31-byte state_root
