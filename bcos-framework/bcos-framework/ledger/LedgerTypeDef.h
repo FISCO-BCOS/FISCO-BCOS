@@ -28,14 +28,14 @@
 #include "bcos-task/Task.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <string_view>
-#include <optional>
-#include <string>
 #include <oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/lexical_cast.hpp>
 #include <magic_enum/magic_enum.hpp>
+#include <optional>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
+#include <string>
+#include <string_view>
 
 namespace bcos::ledger
 {
@@ -43,9 +43,9 @@ using MerkleProof = std::vector<crypto::HashType>;
 
 /// Parse the web3 chain-id system-config string as u256. nullopt on a corrupted value (non
 /// numeric, empty, negative, or an unparsed remainder) — the single shared parse for the three
-/// config consumers (TxValidator::validateChainId — exists in base (reads the tars mirror);
-/// its envelope-keyed implementation migrates with part 4b, PR #5477 — EthEndpoint's
-/// chainId gate, LedgerMethods::loadChainConfig [part 4b]) so width semantics and error
+/// config consumers (TxValidator::validateChainId, EthEndpoint::sendRawTransaction's chainId
+/// gate, and the ledgerConfig assembly in LedgerMethods.cpp/.h that feeds the EVM CHAINID
+/// opcode) so width semantics and error
 /// behavior cannot drift. Note: the envelope side (web3ChainIdFromEnvelope / Web3TxHandler
 /// decodes) is uint64-capped with the RLP width gate, so in practice chainIds > 2^64-1 are
 /// rejected at decode (fail-closed) — the u256 parse here exists so a misconfigured

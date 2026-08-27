@@ -150,17 +150,24 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
     //
     // Chain-mode dispatch is intrinsic rather than configured: EIP-1559 chains (the OP
     // path) always carry baseFee on the header, PBFT headers never write the tars field.
-    // Suggested tip is this node's eth_maxPriorityFeePerGas (currently 0). Single builder,
+    // Suggested tip is this node's eth_maxPriorityFeePerGas (currently 0) — so on OP headers
+    // the returned value IS the head baseFee exactly (the formula degenerates to
+    // suggested-tip + baseFee with tip=0). Single builder,
     // so tips do not change inclusion while blocks have capacity.
     auto const ledger = m_nodeService->ledger();
     if (auto const latest = co_await ledger::getCurrentBlockNumber(*ledger); latest >= 0)
     {
+        // Null-guarded like the feeHistory twin (#5496 finding R): a pruned or mid-commit
+        // tip must degrade to the legacy knob path, not crash the RPC worker on a bare deref.
         auto block = co_await ledger::getBlockData(*ledger, latest, bcos::ledger::HEADER);
-        if (auto const& baseFee = block->blockHeader()->baseFee(); baseFee.has_value())
+        if (block)
         {
-            Json::Value result = toQuantity(*baseFee);
-            buildJsonContent(result, response);
-            co_return;
+            if (auto const& header = block->blockHeader(); header && header->baseFee())
+            {
+                Json::Value result = toQuantity(*header->baseFee());
+                buildJsonContent(result, response);
+                co_return;
+            }
         }
     }
     // Legacy PBFT path (headers without baseFee): keep serving the static
@@ -186,7 +193,8 @@ namespace
 // OP-stack Holocene/Jovian next-baseFee prediction for eth_feeHistory's trailing entry.
 // predictNextBaseFee was a hand-mirrored port of the engine's calcOpBaseFee;
 // both layers now share ONE implementation: bcos-framework/engine/OpBaseFee.h
-// (linked by both bcos-engine and bcos-rpc). The RPC's fork detection stays
+// (included — header-only inline — by both bcos-rpc and bcos-engine). The RPC's
+// fork detection stays
 // local — extraData length sniffing (>= 17 bytes => Jovian tail) — and feeds
 // the shared formula's parentIsJovian parameter.
 
@@ -310,6 +318,7 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
                     "feeHistory: receipts unavailable at height " + std::to_string(n)));
             }
             std::vector<std::pair<bcos::u256, bcos::u256>> priorities;
+            priorities.reserve(receiptsBlock->receipts().size());  // #5496 AD: no regrowth
             bcos::u256 totalGasUsed{0};
             for (auto const& receipt : receiptsBlock->receipts())
             {
@@ -1268,8 +1277,9 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
 
     // op-geth's estimator answers the smallest gas limit at which the call still
     // succeeds, found by simulating at candidate limits. The run below executes
-    // at the gas-less default cap (CallRequest defaults an absent gas field to
-    // 30M), so its gasUsed is mere consumption. A tx that hops through a proxy
+    // AT the object-form request's own gas when one is supplied (it passes through
+    // to the EVM uncapped), and at CallRequest's absent-gas default of 30M
+    // otherwise, so its gasUsed is mere consumption. A tx that hops through a proxy
     // DELEGATECALL or any internal CALL retains 1/64 of the available gas at
     // each hop (EIP-150), making the minimum viable limit strictly greater than
     // the consumed gas — measured on the C2 devnet, the MessagePasser withdrawal
@@ -1948,7 +1958,3 @@ bcos::rpc::EthEndpoint::EthEndpoint(
     m_filterSystem(std::move(filterSystem)),
     m_syncTransaction(syncTransaction)
 {}
-
-// Lazy shared-cap resolution: prefer the engine-shared instance from NodeService;
-// fall back to a detached local one so unset wiring (tars nodes, unit fixtures)
-// still records+logs instead of crashing.

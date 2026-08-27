@@ -12,6 +12,7 @@
 #include <bcos-framework/engine/OpBaseFee.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <functional>
 #include <optional>
 #include <stdexcept>
 
@@ -19,6 +20,25 @@ using namespace bcostars::protocol;
 
 namespace bcos::test
 {
+// Message-pinned throw probe (#5496 finding X): the three guards here share one exception
+// type; matching the what() text attributes regressions to the right parameter family.
+static void expectThrowMessage(const std::function<void()>& call, std::string_view expectedText)
+{
+    bool threw = false;
+    try
+    {
+        call();
+    }
+    catch (std::invalid_argument const& e)
+    {
+        threw = true;
+        BOOST_CHECK_MESSAGE(std::string_view(e.what()).find(expectedText) != std::string_view::npos,
+            "expected \"" << expectedText << "\" in what(): " << e.what());
+    }
+    BOOST_CHECK_MESSAGE(
+        threw, "expected std::invalid_argument containing \"" << expectedText << "\"");
+}
+
 namespace
 {
 // Build a parent header carrying the OP-Stack 1559 parameters in extraData:
@@ -152,17 +172,20 @@ BOOST_AUTO_TEST_CASE(InvalidFeeParametersFailClosed)
     std::fill(zeroDenominator.begin() + 1, zeroDenominator.begin() + 5, 0);
     auto const denominatorParent = makeParent(bcos::u256(30'000'000), bcos::u256(20'000'000),
         bcos::u256(1'000'000'000), std::move(zeroDenominator));
-    BOOST_CHECK_THROW(bcos::engine::calcOpBaseFee(denominatorParent, false), std::invalid_argument);
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(denominatorParent, false); },
+        "zero denominator/elasticity");
 
     auto zeroElasticity = holoceneParams();
     std::fill(zeroElasticity.begin() + 5, zeroElasticity.end(), 0);
     auto const elasticityParent = makeParent(bcos::u256(30'000'000), bcos::u256(20'000'000),
         bcos::u256(1'000'000'000), std::move(zeroElasticity));
-    BOOST_CHECK_THROW(bcos::engine::calcOpBaseFee(elasticityParent, false), std::invalid_argument);
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(elasticityParent, false); },
+        "zero denominator/elasticity");
 
     auto const zeroTargetParent =
         makeParent(bcos::u256(1), bcos::u256(1), bcos::u256(1'000'000'000), holoceneParams());
-    BOOST_CHECK_THROW(bcos::engine::calcOpBaseFee(zeroTargetParent, false), std::invalid_argument);
+    expectThrowMessage(
+        [&] { (void)bcos::engine::calcOpBaseFee(zeroTargetParent, false); }, "zero gas target");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

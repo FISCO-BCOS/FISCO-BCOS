@@ -16,6 +16,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
+#include <functional>
 #include <stdexcept>
 
 using namespace bcos;
@@ -24,6 +25,25 @@ using namespace bcostars::protocol;
 
 namespace bcos::test
 {
+// Message-pinned throw probe (#5496 finding X): type-only BOOST_CHECK_THROW cannot attribute
+// regressions when multiple invalid_argument sites guard the same call; match the what() text.
+static void expectThrowMessage(const std::function<void()>& call, std::string_view expectedText)
+{
+    bool threw = false;
+    try
+    {
+        call();
+    }
+    catch (std::invalid_argument const& e)
+    {
+        threw = true;
+        BOOST_CHECK_MESSAGE(std::string_view(e.what()).find(expectedText) != std::string_view::npos,
+            "expected \"" << expectedText << "\" in what(): " << e.what());
+    }
+    BOOST_CHECK_MESSAGE(
+        threw, "expected std::invalid_argument containing \"" << expectedText << "\"");
+}
+
 namespace
 {
 CryptoSuite::Ptr makeSuite()
@@ -189,9 +209,10 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonHexQuantityV1)
     bcos::bytes encoded;
     impl->encode(encoded);
 
-    BOOST_CHECK_THROW(
-        factory.createTransaction(bcos::ref(encoded), false, false), std::invalid_argument);
-    BOOST_CHECK_THROW(factory.decodeTransaction(bcos::ref(encoded)), std::invalid_argument);
+    expectThrowMessage([&] { (void)factory.createTransaction(bcos::ref(encoded), false, false); },
+        "is not hex string");
+    expectThrowMessage(
+        [&] { (void)factory.decodeTransaction(bcos::ref(encoded)); }, "is not hex string");
 }
 
 // isHexStringV2 is deliberately lenient: an empty quantity is treated as valid.
@@ -227,9 +248,12 @@ BOOST_AUTO_TEST_CASE(decodeRejectsHashMismatch)
     bcos::bytes encoded;
     impl->encode(encoded);
 
-    BOOST_CHECK_THROW(factory.createTransaction(bcos::ref(encoded), /*checkSig=*/false,
-                          /*checkHash=*/true),
-        std::invalid_argument);
+    expectThrowMessage(
+        [&] {
+            (void)factory.createTransaction(
+                bcos::ref(encoded), /*checkSig=*/false, /*checkHash=*/true);
+        },
+        "hash mismatching");
     // With checkHash disabled the same bytes decode without complaint.
     BOOST_CHECK_NO_THROW(
         factory.createTransaction(bcos::ref(encoded), /*checkSig=*/false, /*checkHash=*/false));
@@ -240,9 +264,12 @@ BOOST_AUTO_TEST_CASE(builderRejectsNonHexQuantityV1)
 {
     auto suite = makeSuite();
     TransactionFactoryImpl factory(suite);
-    BOOST_CHECK_THROW(factory.createTransaction(1, "0xto", bcos::bytes{0x01}, "0x1", 100, "chain0",
-                          "group0", 0, "abi", /*value=*/"100"),
-        std::invalid_argument);
+    expectThrowMessage(
+        [&] {
+            (void)factory.createTransaction(1, "0xto", bcos::bytes{0x01}, "0x1", 100, "chain0",
+                "group0", 0, "abi", /*value=*/"100");
+        },
+        "not hex string");
 }
 
 // A V0 transaction ignores the gas/fee fields: the builder forces them to
@@ -437,7 +464,7 @@ BOOST_AUTO_TEST_CASE(typedUnknownTypeReassembleThrows)
     inner.web3TypedTxKind = 0x05;
     inner.extraTransactionBytes.assign(env.begin(), env.end());
     inner.signature.assign(65, 0);
-    BOOST_CHECK_THROW(tx->calculateHash(*suite->hashImpl()), std::invalid_argument);
+    expectThrowMessage([&] { tx->calculateHash(*suite->hashImpl()); }, "typed unknown type");
 }
 
 

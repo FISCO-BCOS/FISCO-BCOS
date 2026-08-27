@@ -30,11 +30,10 @@ namespace bcos::engine
 
 /// Next-block baseFee for an OP-Stack chain, mirroring op-geth
 /// consensus/misc/eip1559/eip1559.go (CalcBaseFee with the Holocene/Jovian
-/// extraData parameters). This used to exist as TWO hand-mirrored copies — the
-/// engine's authoritative calcOpBaseFee and an RPC port for eth_feeHistory —
-/// maintained by a "MUST mirror any change" comment; they had already drifted
-/// in mechanism (flag vs extraData length sniffing for the Jovian tail). It
-/// now lives here, in bcos-framework, the one layer both consumers link.
+/// extraData parameters). THE single home for this formula: both bcos-engine
+/// (payload building) and bcos-rpc (eth_feeHistory's trailing entry) include
+/// this header directly, so fork detection and arithmetic cannot drift between
+/// the two consumers.
 ///
 /// Parameters are read from the parent header's extraData:
 ///   9 bytes  = Holocene: version || denominator(u32 BE) || elasticity(u32 BE)

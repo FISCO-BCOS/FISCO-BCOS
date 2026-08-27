@@ -25,8 +25,6 @@
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <json/json.h>
 
-#include <atomic>
-
 namespace bcos::rpc
 {
 

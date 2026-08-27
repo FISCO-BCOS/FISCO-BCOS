@@ -12,6 +12,7 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"  // parseWeb3ChainId (#5496 S)
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
@@ -24,12 +25,12 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "generated/bcos-tars-protocol/tars/LedgerConfig.h"
+#include <bcos-utilities/BoostLog.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <concepts>
 #include <optional>
 #include <type_traits>
-#include <bcos-utilities/BoostLog.h>
 
 #define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
 namespace bcos::ledger
@@ -391,7 +392,17 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     auto auth = sysConfig.getOrDefault(ledger::SystemConfig::auth_check_status, "0");
     ledgerConfig.setAuthCheckStatus(boost::lexical_cast<uint32_t>(auth.first));
     auto [chainId, _] = sysConfig.getOrDefault(ledger::SystemConfig::web3_chain_id, "0");
-    ledgerConfig.setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
+    // Unified parser + 0 fallback on corruption — twin of the LedgerMethods.cpp site (#5496 S).
+    if (auto const parsedChainId = ledger::parseWeb3ChainId(chainId); parsedChainId.has_value())
+    {
+        ledgerConfig.setChainId(bcos::toEvmC(*parsedChainId));
+    }
+    else
+    {
+        BCOS_LOG(WARNING) << LOG_DESC(
+            "web3_chain_id system config is malformed; serving 0 to the EVM CHAINID opcode");
+        ledgerConfig.setChainId(bcos::toEvmC(bcos::u256(0)));
+    }
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 

@@ -62,6 +62,10 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         result["to"] = "0x" + std::move(to);
     }
     result["cumulativeGasUsed"] = toQuantity(cumulativeGasUsed);
+    // Deliberate passthrough (#5496 AD): effectiveGasPrice is written by the scheduler's
+    // receipt factory as a canonical quantity at seal time, so this emit path trusts it and
+    // only degrades the absent case to 0x0 — unlike cumulativeGasUsed above, which must
+    // recover from pre-quantity legacy rows and therefore re-derives with its own detection.
     result["effectiveGasPrice"] =
         receipt.effectiveGasPrice().empty() ? "0x0" : std::string(receipt.effectiveGasPrice());
     result["gasUsed"] = toQuantity(receipt.gasUsed());

@@ -486,7 +486,22 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     auto auth = sysConfig.getOrDefault(ledger::SystemConfig::auth_check_status, "0");
     ledgerConfig.setAuthCheckStatus(boost::lexical_cast<uint32_t>(auth.first));
     auto [chainId, _] = sysConfig.getOrDefault(ledger::SystemConfig::web3_chain_id, "0");
-    ledgerConfig.setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
+    // Unified parser (#5496 finding S): lexical_cast<u256> rejects the "0x" prefix and throws
+    // on a hex config, diverging from every other web3_chain_id reader. The shared parser
+    // accepts decimal or 0x-prefixed values; a corrupted string falls back to 0 with a WARN —
+    // the same value an UNSET config produces — instead of aborting config assembly.
+    if (auto const parsedChainId = ledger::parseWeb3ChainId(chainId); parsedChainId.has_value())
+    {
+        ledgerConfig.setChainId(bcos::toEvmC(*parsedChainId));
+    }
+    else
+    {
+        BCOS_LOG(WARNING) << LOG_DESC(
+                                 "web3_chain_id system config is malformed; serving 0 to "
+                                 "the EVM CHAINID opcode")
+                          << LOG_KV("configured", chainId);
+        ledgerConfig.setChainId(bcos::toEvmC(bcos::u256(0)));
+    }
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
