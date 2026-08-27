@@ -114,7 +114,18 @@ static void send(Session& session, ::ranges::input_range auto payloads,
         if (callback)
         {
             session.m_server.get().asioInterface()->post([callback = std::move(callback)]() {
-                callback(boost::asio::error::not_connected);
+                // the callback resumes a suspended coroutine whose await_resume may throw; keep
+                // the exception out of io_context::run() (same containment as the write-
+                // completion post)
+                try
+                {
+                    callback(boost::asio::error::not_connected);
+                }
+                catch (std::exception const& e)
+                {
+                    SESSION_LOG(WARNING) << LOG_DESC("early-return write callback exception")
+                                         << LOG_KV("what", boost::diagnostic_information(e));
+                }
             });
         }
         return;
@@ -148,7 +159,18 @@ static void send(Session& session, ::ranges::input_range auto payloads,
             {
                 session.m_server.get().asioInterface()->post(
                     [callback = std::move(pending.m_callback)]() {
-                        callback(boost::asio::error::not_connected);
+                        // same containment as the early-return branch above: the callback
+                        // resumes a coroutine whose await_resume may throw
+                        try
+                        {
+                            callback(boost::asio::error::not_connected);
+                        }
+                        catch (std::exception const& e)
+                        {
+                            SESSION_LOG(WARNING)
+                                << LOG_DESC("drained write callback exception")
+                                << LOG_KV("what", boost::diagnostic_information(e));
+                        }
                     });
             }
         }
@@ -1125,14 +1147,36 @@ task::Task<Message::Ptr> fastSendMessageWithResponse(
                             }
                             m_result.emplace<NetworkException>(
                                 NetworkException(errorCode.value(), errorCode.message()));
-                            gate->handle.resume();
+                            // wrap the resume: an exception escaping the resumed coroutine
+                            // (a with-response caller that does not catch) must not unwind
+                            // this asio handler — same containment as the drop flush
+                            try
+                            {
+                                gate->handle.resume();
+                            }
+                            catch (std::exception const& e)
+                            {
+                                SESSION_LOG(WARNING)
+                                    << LOG_DESC("write-error resume exception")
+                                    << LOG_KV("what", boost::diagnostic_information(e));
+                            }
                         }
                         // else: the event fired concurrently and resumes via the gate
                     }
                     else if (toResume)
                     {
-                        // resume last: the coroutine frame (this awaitable included) dies inside
-                        toResume.resume();
+                        // resume last: the coroutine frame (this awaitable included) dies inside;
+                        // wrapped for the same reason as above
+                        try
+                        {
+                            toResume.resume();
+                        }
+                        catch (std::exception const& e)
+                        {
+                            SESSION_LOG(WARNING)
+                                << LOG_DESC("write-complete resume exception")
+                                << LOG_KV("what", boost::diagnostic_information(e));
+                        }
                     }
                 });
             return true;

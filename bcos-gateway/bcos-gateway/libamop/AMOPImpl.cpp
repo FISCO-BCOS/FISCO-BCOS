@@ -452,32 +452,39 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                     auto amopMsg = messageFactory->buildMessage();
                     if (amopMsg->decode(responseData) < 0)
                     {
-                        // a malformed reply is a transport-level failure: try the next candidate
+                        // the peer answered, so the request was DELIVERED and its handler ran —
+                        // retrying the next subscriber would replay the same payload (instant
+                        // at-least-once, worse than the documented 30s-timeout duplicate). Fail
+                        // the caller instead; retry is reserved for sends that never reached a
+                        // peer (null response / send exception).
                         AMOP_LOG(WARNING)
-                            << LOG_DESC(
-                                   "asyncSendMessageByTopic: decode response failed, retry next "
-                                   "node")
+                            << LOG_DESC("asyncSendMessageByTopic: decode response failed")
                             << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
                             << LOG_KV("size", responseData.size());
-                        continue;
+                        error = BCOS_ERROR_PTR(CommonError::AMOPSendMsgFailed,
+                            "unable to decode the AMOP response from the peer");
+                        responseData = bytesConstRef();
                     }
-                    auto errorMessage =
-                        std::string(amopMsg->data().begin(), amopMsg->data().end());
-                    auto errorCode = amopMsg->status();
-                    // tars error
-                    if (amopMsg->status() == (uint16_t)(-8) ||
-                        amopMsg->status() == (uint16_t)(-7))
+                    else
                     {
-                        errorMessage =
-                            "Access to the remote RPC service timed out, please make sure it "
-                            "is online";
-                        errorCode = -1;
-                    }
-                    error = BCOS_ERROR_PTR(errorCode, errorMessage);
+                        auto errorMessage =
+                            std::string(amopMsg->data().begin(), amopMsg->data().end());
+                        auto errorCode = amopMsg->status();
+                        // tars error
+                        if (amopMsg->status() == (uint16_t)(-8) ||
+                            amopMsg->status() == (uint16_t)(-7))
+                        {
+                            errorMessage =
+                                "Access to the remote RPC service timed out, please make sure it "
+                                "is online";
+                            errorCode = -1;
+                        }
+                        error = BCOS_ERROR_PTR(errorCode, errorMessage);
 
-                    AMOP_LOG(INFO)
-                        << LOG_DESC("asyncSendMessageByTopic error: receive responseData")
-                        << LOG_KV("status", amopMsg->status()) << LOG_KV("msg", errorMessage);
+                        AMOP_LOG(INFO)
+                            << LOG_DESC("asyncSendMessageByTopic error: receive responseData")
+                            << LOG_KV("status", amopMsg->status()) << LOG_KV("msg", errorMessage);
+                    }
                 }
                 if (_callback)
                 {

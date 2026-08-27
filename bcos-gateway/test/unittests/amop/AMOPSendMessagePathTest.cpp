@@ -258,38 +258,62 @@ BOOST_AUTO_TEST_CASE(test_nullResponseRetriesNextNode)
     BOOST_CHECK(result.responseData == expectedPayload);
 }
 
-// an AMOP reply whose payload is too short to decode is a failure: retry the next node
-BOOST_AUTO_TEST_CASE(test_malformedAMOPResponseRetriesNextNode)
+// an AMOP reply that cannot be decoded means the request was DELIVERED (the peer answered):
+// the caller is failed, the payload is NOT replayed to another subscriber
+BOOST_AUTO_TEST_CASE(test_malformedAMOPResponseFailsWithoutRetry)
 {
     AMOPSendFixture fixture;
     std::vector<P2pID> nodeIDs = {std::string(128, 'a'), std::string(128, 'b'),
         std::string(128, 'c')};
     fixture.subscribeTopic("topic_malformed_response", nodeIDs);
 
-    auto expectedPayload = encodeAMOPResponse(0, "ok");
     auto attempts = fixture.attempts;
     When(Method(fixture.networkMock, sendMessageByNodeID))
-        .AlwaysDo([attempts, expectedPayload](P2pID nodeID, P2PMessage&,
-                      ::ranges::any_view<bytesConstRef>, Options) -> task::Task<Message::Ptr> {
+        .AlwaysDo([attempts](P2pID nodeID, P2PMessage&, ::ranges::any_view<bytesConstRef>,
+                      Options) -> task::Task<Message::Ptr> {
             attempts->push_back(nodeID);
-            if (attempts->size() == 1)
-            {
-                // AMOPMessage::decode needs at least the 6-byte header
-                co_return buildP2PResponse(bcos::bytes{0x1, 0x2, 0x3});
-            }
-            co_return buildP2PResponse(expectedPayload);
+            // AMOPMessage::decode needs at least the 6-byte header
+            co_return buildP2PResponse(bcos::bytes{0x1, 0x2, 0x3});
         });
 
     SendResult result;
     fixture.send("topic_malformed_response", result);
 
-    BOOST_CHECK_EQUAL(attempts->size(), 2);
-    BOOST_CHECK((*attempts)[0] != (*attempts)[1]);
+    // exactly one node is tried; the caller is failed without replaying the payload
+    BOOST_CHECK_EQUAL(attempts->size(), 1);
     BOOST_CHECK(result.called);
     BOOST_CHECK(result.error != nullptr);
-    BOOST_CHECK_EQUAL(result.error->errorCode(), 0);
+    BOOST_CHECK_EQUAL(result.error->errorCode(), CommonError::AMOPSendMsgFailed);
     BOOST_CHECK_EQUAL(result.packetType, GatewayMessageType::AMOPMessageType);
-    BOOST_CHECK(result.responseData == expectedPayload);
+    BOOST_CHECK(result.responseData.empty());
+}
+
+// the retry loop must wait for responses with a finite timeout: Options{0, true} never times
+// out (Session registers no timer for a zero timeout), which is the round-3 Finding A hang.
+// Pin the contract so reverting to a zero timeout fails this test.
+BOOST_AUTO_TEST_CASE(test_sendUsesFiniteResponseTimeout)
+{
+    AMOPSendFixture fixture;
+    std::vector<P2pID> nodeIDs = {std::string(128, 'a')};
+    fixture.subscribeTopic("topic_finite_timeout", nodeIDs);
+
+    auto expectedPayload = encodeAMOPResponse(0, "ok");
+    auto observedOptions = std::make_shared<std::vector<Options>>();
+    When(Method(fixture.networkMock, sendMessageByNodeID))
+        .AlwaysDo([observedOptions, expectedPayload](P2pID, P2PMessage&,
+                      ::ranges::any_view<bytesConstRef>, Options options)
+                      -> task::Task<Message::Ptr> {
+            observedOptions->push_back(options);
+            co_return buildP2PResponse(expectedPayload);
+        });
+
+    SendResult result;
+    fixture.send("topic_finite_timeout", result);
+
+    BOOST_CHECK(result.called);
+    BOOST_REQUIRE_EQUAL(observedOptions->size(), 1);
+    BOOST_CHECK((*observedOptions)[0].response);
+    BOOST_CHECK_EQUAL((*observedOptions)[0].timeout, 30000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -23,9 +23,11 @@
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <queue>
+#include <thread>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -415,6 +417,81 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
 
     fakeSocketA->close();
     fakeSocketB->close();
+}
+
+// The with-response send must fail exactly once when the async write itself fails, claiming the
+// response callback back (the claimOnWriteError branch) or via the teardown flush — onWrite()
+// drops the session on a write error, so the drop flush legitimately races the write callback
+// and either the raw asio write error or NetworkTimeout is a valid outcome; what must hold is
+// exactly-once completion, no leftover callback, and no hang. The fake socket's SSL stream sits
+// on a TCP pair whose peer closed at construction, so the write (and its implicit handshake)
+// fails deterministically once the socket's io_context runs.
+BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeSocket = std::make_shared<FakeSocket_FIB>();
+
+    std::atomic<int> completions{0};
+    std::atomic<int64_t> errorCode{0};
+    const uint32_t seq = 4321;
+    {
+        auto fakeAsio = std::make_shared<FakeASIO_FIB>();
+        auto fakeHost = std::make_shared<FakeHost_FIB>(
+            hashImpl, fakeAsio, nullptr, std::make_shared<P2PMessageFactory>());
+        auto callbackManager = std::make_shared<SessionCallbackManagerBucket>();
+
+        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        session->setMessageFactory(fakeHost->messageFactory());
+        session->setSessionCallbackManager(callbackManager);
+        session->setMessageHandler(
+            [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
+        session->start();
+
+        // the socket's io_context is never run by the fixture: drive it so the posted
+        // async_write actually executes (and fails against the closed peer)
+        std::thread ioThread([&]() { fakeSocket->ioService().run(); });
+
+        auto message = std::static_pointer_cast<P2PMessage>(fakeHost->messageFactory()->buildMessage());
+        message->setPacketType(1);
+        message->setSeq(seq);
+        bcos::bytes payload = {'x'};
+        task::wait([](std::shared_ptr<Session> _session, std::shared_ptr<P2PMessage> _message,
+                       bcos::bytes _payload, std::atomic<int>& _completions,
+                       std::atomic<int64_t>& _errorCode) -> task::Task<void> {
+            try
+            {
+                co_await _session->fastSendMessage(*_message,
+                    ::ranges::views::single(bcos::ref(_payload)), Options{2000, true});
+                ++_completions;
+            }
+            catch (NetworkException const& e)
+            {
+                _errorCode.store(e.errorCode());
+                ++_completions;
+            }
+        }(session, message, payload, completions, errorCode));
+
+        // task::wait detaches: the coroutine completes on the io threads once the write fails
+        // (or the 2s response timer fires as backstop) — poll for the completion
+        size_t retryCount = 0;
+        while (completions.load() == 0 && retryCount < 500)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            retryCount++;
+        }
+
+        fakeSocket->ioService().stop();
+        ioThread.join();
+
+        // exactly one completion, always a failure, and the response callback is gone
+        BOOST_CHECK_EQUAL(completions.load(), 1);
+        BOOST_CHECK(errorCode.load() != 0);
+        BOOST_CHECK(callbackManager->getCallback(seq, false) == nullptr);
+
+        session->setSocket(nullptr);
+    }
+
+    fakeSocket->close();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
