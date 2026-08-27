@@ -392,7 +392,10 @@ public:
     /// Optional RPC block-number callback; commitBlock invokes it after a successful merge.
     void setBlockNumberNotifier(std::function<void(bcos::protocol::BlockNumber)> notifier)
     {
-        m_blockNumberNotifier = std::move(notifier);
+        if (notifier)  // symmetric with setTransactionNotifier: an empty std::function would
+        {              // throw bad_function_call inside the commit task's try block.
+            m_blockNumberNotifier = std::move(notifier);
+        }
     }
 
     /// Optional txpool eviction callback; commitBlock invokes it after a successful merge.
@@ -930,7 +933,8 @@ private:
                 "raw tx decode or block-level consensus fault");
         }
 
-        // Commit uses this hash. Do not hash executedHeader (optional fields incomplete).
+        // Commit keys on the announced payload hash; finishExecute() mirrors announced
+        // metadata + execution commitments onto executedHeader, which stays out of this identity.
         bcos::crypto::HashType announcedBlockHash =
             bcos::protocol::EthBlockHeader::computeHash(header);
         co_return ExecuteOutcome{std::move(result), announcedBlockHash};
@@ -950,6 +954,18 @@ private:
 
         auto executedBlockHeader = m_blockFactory->blockHeaderFactory()->populateBlockHeader(
             protocol::BlockHeader::ConstPtr{&blockHeader, [](protocol::BlockHeader const*) {}});
+        // populateBlockHeader mirrors the 13 framework fields only; the six Ethereum metadata
+        // fields are not in its copy set, so mirror them here (identity, not just commitments).
+        // Optional fields follow announced presence — never invent a value the payload lacks.
+        executedBlockHeader->setCoinbase(blockHeader.coinbase());
+        executedBlockHeader->setGasLimit(blockHeader.gasLimit());
+        executedBlockHeader->setPrevRandao(blockHeader.prevRandao());
+        if (blockHeader.baseFee())
+            executedBlockHeader->setBaseFee(*blockHeader.baseFee());
+        if (blockHeader.excessBlobGas())
+            executedBlockHeader->setExcessBlobGas(*blockHeader.excessBlobGas());
+        if (blockHeader.parentBeaconBlockRoot())
+            executedBlockHeader->setParentBeaconBlockRoot(*blockHeader.parentBeaconBlockRoot());
         executedBlockHeader->setStateRoot(opResult.stateRoot);
         executedBlockHeader->setTxsRoot(opResult.txRoot);
         executedBlockHeader->setReceiptsRoot(detail::toBcosH256(opResult.seal.receiptsRoot));

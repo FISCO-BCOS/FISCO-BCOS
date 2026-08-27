@@ -134,3 +134,10 @@ target_link_libraries(opstack-executor-scheduler-tests PRIVATE
     Boost::unit_test_framework
 )
 add_test(NAME OpstackExecutorSchedulerTests COMMAND opstack-executor-scheduler-tests)
+
+# OP templates instantiate in the consuming test TUs while opstack-executor marks its GNU
+# downgrades PRIVATE — re-add the same flags here, identical to the sibling targets above.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    target_compile_options(opstack-executor-scheduler-tests PRIVATE
+        -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
+endif()

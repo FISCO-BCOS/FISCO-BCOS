@@ -2068,4 +2068,121 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
     }
 }
 
+namespace
+{
+/// Deterministic corruption marker de.ad.00...00.<tag>: pins "this value differs" without
+/// hand-counted hex literals, and names uniquely so rejections can assert the exact field.
+bcos::h256 commitmentCorruption(unsigned char tag)
+{
+    bcos::h256 out{};
+    out.data()[0] = 0xde;
+    out.data()[1] = 0xad;
+    out.data()[bcos::h256::SIZE - 1] = tag;
+    return out;
+}
+}  // namespace
+
+/// N2 regression: with verify=true, tampering exactly ONE back-filled commitment field on the
+/// announced header must be rejected with OpConsensusRejected, naming that field
+/// ("commitment mismatch on field <name>"). Exercises five discriminated names from
+/// mismatchedFieldOf's ordered chain; withdrawalsRoot is tampered in VALUE (presence stays
+/// equal) so it hits the comparison arm after the dedicated presence gate passes.
+BOOST_AUTO_TEST_CASE(VerifyRejectsMismatchedAnnouncedCommitments)
+{
+    using Mutator = void (*)(bcostars::protocol::BlockHeaderImpl&);
+    struct Case
+    {
+        const char* fieldName;
+        Mutator mutate;
+    };
+    Fixture f;
+    const std::vector<Case> cases{
+        {"stateRoot",
+            [](bcostars::protocol::BlockHeaderImpl& h) {
+                h.setStateRoot(commitmentCorruption(0xa1));
+            }},
+        {"transactionsRoot",
+            [](bcostars::protocol::BlockHeaderImpl& h) {
+                h.setTxsRoot(commitmentCorruption(0xa2));
+            }},
+        {"receiptsRoot",
+            [](bcostars::protocol::BlockHeaderImpl& h) {
+                h.setReceiptsRoot(commitmentCorruption(0xa3));
+            }},
+        {"gasUsed", [](bcostars::protocol::BlockHeaderImpl& h) { h.setGasUsed(h.gasUsed() + 1); }},
+        {"withdrawalsRoot",
+            [](bcostars::protocol::BlockHeaderImpl& h) {
+                h.setWithdrawalsRoot(commitmentCorruption(0xa4));
+            }},
+    };
+
+    std::vector<bcos::bytes> const rawTxBytes{encodeDepositEnvelope(makeDeposit())};
+    for (auto const& [fieldName, mutate] : cases)
+    {
+        // Every execute below fails by construction, so nothing ever pushes a view or commits:
+        // the committed parent state stays stable across iterations and the probe stays valid.
+        auto announced = makeHeader();
+        auto view = f.multiLayerStorage.forkCommitted();
+        view.newMutable();
+        auto const result = runExecutionProbe(f, view, *announced, rawTxBytes);
+        BOOST_REQUIRE_EQUAL(result.receipts.size(), rawTxBytes.size());
+        fillAnnouncedHeader(announced, result);  // true commitments back-filled...
+        mutate(*announced);                      // ...then exactly one field corrupted
+
+        auto cb = invokeExecute(f, assembleBlock(f, announced, rawTxBytes), /*verify=*/true);
+        BOOST_CHECK_MESSAGE(
+            cb.err != nullptr, fieldName << ": mismatched announcement must be rejected");
+        if (cb.err == nullptr)
+            continue;
+        BOOST_CHECK_EQUAL(
+            cb.err->errorCode(), (int)bcos::scheduler::SchedulerError::OpConsensusRejected);
+        BOOST_CHECK_MESSAGE(
+            cb.err->errorMessage().find(std::string{"commitment mismatch on field "} + fieldName) !=
+                std::string::npos,
+            fieldName << ": rejection must name the corrupt field, got: "
+                      << cb.err->errorMessage());
+    }
+}
+
+/// N1 regression: executedHeader must mirror the announced header's six Ethereum metadata
+/// fields (coinbase/gasLimit/prevRandao/baseFee/excessBlobGas/parentBeaconBlockRoot).
+/// populateBlockHeader copies only the 13 framework fields and the verify gate does not
+/// compare these — without this pin, finishExecute silently returned factory defaults.
+/// Optional presence is asserted too: a copied-absent value must stay absent, not zeroed.
+BOOST_AUTO_TEST_CASE(ExecutedHeaderMirrorsAnnouncedEthMetadataFields)
+{
+    Fixture f;
+    std::vector<bcos::bytes> const rawTxBytes{encodeDepositEnvelope(makeDeposit())};
+
+    auto announced = makeHeader();
+    // De-default prevRandao/excessBlobGas so an unmirrored clone cannot pass by coinciding
+    // with factory zero-values; the rest of makeHeader already carries distinctive payload.
+    bcos::h256 wantPrevRandao{};
+    std::memset(wantPrevRandao.data(), 0x10, bcos::h256::SIZE);
+    bcos::u256 const wantExcessBlobGas{0x1234};
+    announced->setPrevRandao(wantPrevRandao);
+    announced->setExcessBlobGas(wantExcessBlobGas);
+
+    auto cb = executeOpBlock(f, announced, rawTxBytes, /*verify=*/true);
+    BOOST_REQUIRE_MESSAGE(cb.err == nullptr,
+        "verify=true execute must succeed: " << (cb.err ? cb.err->errorMessage() : ""));
+    BOOST_REQUIRE(cb.header != nullptr);
+
+    const auto& executed = *cb.header;
+    BOOST_CHECK_MESSAGE(
+        executed.coinbase() == announced->coinbase(), "executed coinbase must mirror announced");
+    BOOST_CHECK_MESSAGE(
+        executed.gasLimit() == announced->gasLimit(), "executed gasLimit must mirror announced");
+    BOOST_CHECK_MESSAGE(
+        executed.prevRandao() == wantPrevRandao, "executed prevRandao must mirror announced");
+    BOOST_REQUIRE_MESSAGE(executed.baseFee().has_value(), "baseFee presence must survive");
+    BOOST_CHECK(*executed.baseFee() == *announced->baseFee());
+    BOOST_REQUIRE_MESSAGE(
+        executed.excessBlobGas().has_value(), "excessBlobGas presence must survive");
+    BOOST_CHECK(*executed.excessBlobGas() == wantExcessBlobGas);
+    BOOST_REQUIRE_MESSAGE(executed.parentBeaconBlockRoot().has_value(),
+        "parentBeaconBlockRoot presence must survive");
+    BOOST_CHECK(*executed.parentBeaconBlockRoot() == *announced->parentBeaconBlockRoot());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
