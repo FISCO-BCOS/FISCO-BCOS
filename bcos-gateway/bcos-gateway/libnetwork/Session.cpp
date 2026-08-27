@@ -383,6 +383,52 @@ void Session::drop(DisconnectReason _reason)
         }
     }
 
+    // Fail any pending response waiters: a request/response send (fastSendMessageWithResponse)
+    // suspends until a matching-seq reply arrives or its timeout fires, and neither happens once
+    // the session is gone (a zero timeout never even registers a timer). Mirror the writeQueue
+    // drain above: fail them with NetworkTimeout, off the caller's stack when an executor is
+    // available, since drop() is reachable from inside a sender's own await_suspend.
+    // The callback manager is injected by the p2p layer; a bare Session (unit tests) has none.
+    if (m_sessionCallbackManager)
+    {
+        auto pendingCallbacks = m_sessionCallbackManager->popAllCallbacks();
+        for (auto& callback : pendingCallbacks)
+        {
+            if (!callback || !callback->callback)
+            {
+                continue;
+            }
+            if (callback->timeoutHandler)
+            {
+                callback->timeoutHandler->cancel();
+            }
+            if (m_server.get().haveNetwork())
+            {
+                m_server.get().asioInterface()->post(
+                    [callback = std::move(callback)]() mutable {
+                        callback->callback(
+                            NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
+                            Message::Ptr());
+                    });
+            }
+            else
+            {
+                try
+                {
+                    callback->callback(
+                        NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
+                        Message::Ptr());
+                }
+                catch (std::exception const& e)
+                {
+                    SESSION_LOG(WARNING)
+                        << LOG_DESC("response callback exception during drop")
+                        << LOG_KV("what", boost::diagnostic_information(e));
+                }
+            }
+        }
+    }
+
     int errorCode = P2PExceptionType::Disconnect;
     std::string errorMsg = "Disconnect";
     if (_reason == DuplicatePeer)

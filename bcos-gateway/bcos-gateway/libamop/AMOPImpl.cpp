@@ -113,7 +113,7 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
         auto buffer = buildAndEncodeMessage(AMOPMessage::Type::RequestTopic, bytesConstRef());
         auto network = m_network;
         // fire-and-forget through the coroutine fast path: the message is built in the frame and
-        // the payload is copied into it (the caller's buffer does not outlive the deferred send);
+        // the payload is moved into it (the caller's buffer does not outlive the deferred send);
         // an unreachable peer is an expected, recoverable state.
         task::wait([](P2PInterface::Ptr _network, uint16_t _type, P2pID _nodeID,
                        bcos::bytes _payload) -> task::Task<void> {
@@ -198,7 +198,7 @@ void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::P
             bytesConstRef((byte*)topicJson.data(), topicJson.size()));
         auto network = m_network;
         // fire-and-forget through the coroutine fast path: the message is built in the frame and
-        // the payload is copied into it (the caller's buffer does not outlive the deferred send);
+        // the payload is moved into it (the caller's buffer does not outlive the deferred send);
         // a send failure is logged here (the old async callback only logged errors too).
         task::wait([](P2PInterface::Ptr _network, uint16_t _type, P2pID _nodeID,
                        bcos::bytes _payload) -> task::Task<void> {
@@ -400,34 +400,63 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                    -> task::Task<void> {
         auto network = _self->m_network;
         auto messageFactory = _self->m_messageFactory;
+        // finite response timeout: Options{0, true} waits forever (Session registers no timer
+        // for a zero timeout), so a peer that accepts the request but never answers would suspend
+        // this detached coroutine indefinitely — the remaining candidates would never be tried
+        // and the caller would never see the terminal AMOPSendMsgFailed.
+        constexpr uint32_t c_amopResponseTimeoutMs = 30000;
         // shuffle the candidate list once, then take-and-erase the front per attempt: the node
         // attempted is always the one removed, so a dead node is never retried while a live one
         // is dropped untried (randomChoose+erase(begin()) removed a different node than tried).
         auto seed = std::chrono::system_clock::now().time_since_epoch().count();
         std::shuffle(_nodeIDs.begin(), _nodeIDs.end(), std::default_random_engine(seed));
+        // build the message once and re-stamp only the seq per attempt (each attempt is a fresh
+        // request on another session); the payload is moved in once instead of being lvalue-copied
+        // into a rebuilt message every iteration.
+        auto message = std::static_pointer_cast<P2PMessage>(
+            network->messageFactory()->buildMessage());
+        message->setPacketType(GatewayMessageType::AMOPMessageType);
+        message->setPayload(std::move(_payload));
         while (!_nodeIDs.empty())
         {
             auto choosedNodeID = _nodeIDs.front();
             _nodeIDs.erase(_nodeIDs.begin());
             AMOP_LOG(INFO) << LOG_DESC("asyncSendMessageByTopic")
                            << LOG_KV("choosedNodeID", printShortP2pID(choosedNodeID));
-            auto message = std::static_pointer_cast<P2PMessage>(
-                network->messageFactory()->buildMessage());
-            message->setPacketType(GatewayMessageType::AMOPMessageType);
             message->setSeq(network->messageFactory()->newSeq());
-            message->setPayload(_payload);
             try
             {
                 auto resp = co_await network->sendMessageByNodeID(choosedNodeID, *message,
-                    ::ranges::views::single(message->payload()), Options{0, true});
+                    ::ranges::views::single(message->payload()),
+                    Options{c_amopResponseTimeoutMs, true});
                 auto respMessage = std::dynamic_pointer_cast<P2PMessage>(resp);
-                auto packetType = respMessage ? respMessage->packetType() : (uint16_t)0;
-                auto responseData = respMessage ? respMessage->payload() : bytesConstRef{};
+                if (!respMessage)
+                {
+                    // self-id sends and sessions expiring before the write co_return a null
+                    // response: treat it as a (retryable) send failure, not a silent success
+                    AMOP_LOG(INFO)
+                        << LOG_DESC("asyncSendMessageByTopic: no response, retry next node")
+                        << LOG_KV("nodeID", printShortP2pID(choosedNodeID));
+                    continue;
+                }
+                auto packetType = respMessage->packetType();
+                auto responseData = respMessage->payload();
                 bcos::Error::Ptr error = nullptr;
                 if (packetType == bcos::gateway::GatewayMessageType::AMOPMessageType)
                 {
                     // zero copy overhead
-                    auto amopMsg = messageFactory->buildMessage(responseData);
+                    auto amopMsg = messageFactory->buildMessage();
+                    if (amopMsg->decode(responseData) < 0)
+                    {
+                        // a malformed reply is a transport-level failure: try the next candidate
+                        AMOP_LOG(WARNING)
+                            << LOG_DESC(
+                                   "asyncSendMessageByTopic: decode response failed, retry next "
+                                   "node")
+                            << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
+                            << LOG_KV("size", responseData.size());
+                        continue;
+                    }
                     auto errorMessage =
                         std::string(amopMsg->data().begin(), amopMsg->data().end());
                     auto errorCode = amopMsg->status();
@@ -451,7 +480,16 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                     AMOP_LOG(INFO)
                         << LOG_DESC("asyncSendMessageByTopic: receive responseData")
                         << LOG_KV("size", responseData.size()) << LOG_KV("type", packetType);
-                    _callback(std::move(error), packetType, responseData);
+                    try
+                    {
+                        _callback(std::move(error), packetType, responseData);
+                    }
+                    catch (std::exception const& e)
+                    {
+                        AMOP_LOG(WARNING)
+                            << LOG_DESC("asyncSendMessageByTopic: response callback exception")
+                            << LOG_KV("msg", boost::diagnostic_information(e));
+                    }
                 }
                 co_return;
             }
@@ -462,13 +500,32 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                                 << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
                                 << LOG_KV("code", e.errorCode()) << LOG_KV("msg", e.what());
             }
+            catch (std::exception const& e)
+            {
+                // a non-network throw must not escape onto the io thread that resumed this
+                // detached coroutine (aborting the process and losing the terminal callback):
+                // log it and fall through to the next candidate
+                AMOP_LOG(WARNING) << LOG_BADGE("asyncSendMessageByTopic")
+                                  << LOG_DESC("unexpected exception, retry next node")
+                                  << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
+                                  << LOG_KV("msg", boost::diagnostic_information(e));
+            }
         }
         // all candidate nodes failed
         auto errorPtr = BCOS_ERROR_PTR(
             CommonError::AMOPSendMsgFailed, "unable to send message to peer by topic");
         if (_callback)
         {
-            _callback(std::move(errorPtr), 0, {});
+            try
+            {
+                _callback(std::move(errorPtr), 0, {});
+            }
+            catch (std::exception const& e)
+            {
+                AMOP_LOG(WARNING)
+                    << LOG_DESC("asyncSendMessageByTopic: failure callback exception")
+                    << LOG_KV("msg", boost::diagnostic_information(e));
+            }
         }
     }(self, std::move(buffer), nodeIDs, _respFunc));
 }
@@ -519,7 +576,7 @@ void AMOPImpl::asyncSendBroadcastMessageByTopic(
     auto buffer = buildAndEncodeMessage(AMOPMessage::Type::AMOPBroadcast, _data);
     auto network = m_network;
     // fire-and-forget through the coroutine fast path: the message is built in the coroutine and
-    // the payload is copied into it (the caller's buffer does not outlive the deferred send); a
+    // the payload is moved into it (the caller's buffer does not outlive the deferred send); a
     // failed/unreachable node is logged and skipped by sendMessageByNodeIDs.
     task::wait([](P2PInterface::Ptr _network, uint16_t _type, std::vector<P2pID> _nodeIDs,
                    bcos::bytes _payload) -> task::Task<void> {

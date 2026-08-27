@@ -593,6 +593,15 @@ bcos::task::Task<void> Service::sendMessageByNodeIDs(uint16_t _type,
                                   << LOG_KV("nodeid", printShortP2pID(_nodeID))
                                   << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.what());
             }
+            catch (std::exception const& e)
+            {
+                // a non-network throw must not escape this detached fan-out task onto the io
+                // thread that resumed it: log and skip the node, as for a send failure
+                SERVICE_LOG(WARNING)
+                    << LOG_DESC("sendMessageByNodeIDs unexpected exception, skip node")
+                    << LOG_KV("nodeid", printShortP2pID(_nodeID))
+                    << LOG_KV("message", boost::diagnostic_information(e));
+            }
         }(self, nodeID, message, _options));
     }
     co_return;
