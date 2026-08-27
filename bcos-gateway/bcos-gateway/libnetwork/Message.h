@@ -28,17 +28,6 @@
 namespace bcos::gateway
 {
 
-struct EncodedMessage
-{
-    bcos::bytes header;
-    bcos::bytes payload;
-    bool compress = true;
-
-    std::size_t dataSize() const;
-    std::size_t headerSize() const;
-    std::size_t payloadSize() const;
-};
-
 class Message
 {
 public:
@@ -60,11 +49,10 @@ public:
     virtual uint16_t ext() const = 0;
     virtual bool isRespPacket() const = 0;
 
-    [[deprecated("Use encode(EncodedMessage& _buffer)")]] virtual bool encode(
+    [[deprecated("Use encodeHeader(bytes& _buffer)")]] virtual bool encode(
         bcos::bytes& _buffer) = 0;
 
     virtual int32_t decode(const bytesConstRef& _buffer) = 0;
-    virtual bool encode(EncodedMessage& _buffer) const = 0;
     virtual bool encodeHeader(bytes& _buffer) const = 0;
     virtual const std::any& extAttributes() const = 0;
 

@@ -45,20 +45,35 @@ public:
     virtual void onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
-    virtual std::optional<bcos::Error> onBeforeMessage(SessionFace& _session, Message& _message);
+    virtual std::optional<bcos::Error> onBeforeMessage(
+        SessionFace& _session, const Message& _message, uint32_t _wireLength);
 
     virtual void registerUnreachableHandler(std::function<void(std::string)> /*unused*/);
 
     void sendRespMessageBySession(
         bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
 
-    void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
-        CallbackFuncWithSession callback, Options options = Options()) override;
-
     task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& header,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
-    void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
+    /**
+     * @brief: (coroutine) broadcast a message to all connected sessions. The message is handed
+     *         over as a shared_ptr: broadcastMessageToAll fans out one coroutine per peer and each
+     *         task keeps the message alive (the payload rides as a view, zero-copy).
+     */
+    task::Task<void> broadcastMessageToAll(P2PMessage::Ptr message,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
+        Options options = Options()) override;
+
+    /**
+     * @brief: (coroutine) broadcast a message to the directly connected sessions only (m_sessions),
+     *         without going through the router table. Used for router-table seq gossip which must
+     *         only be exchanged between neighbors and propagated hop-by-hop. The message is handed
+     *         over as a shared_ptr and kept alive by the per-peer fan-out tasks.
+     */
+    virtual task::Task<void> broadcastMessageToNeighbors(P2PMessage::Ptr message,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
+        Options options = Options());
 
     virtual std::map<NodeIPEndpoint, P2pID> staticNodes();
     virtual void setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes);
@@ -89,6 +104,9 @@ public:
     void asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
         Options options = Options(), P2PResponseCallback _callback = nullptr) override;
 
+    void setBeforeMessageHandler(
+        std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)> _handler);
+
     void asyncBroadcastMessageToP2PNodes(
         uint16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options) override;
 
@@ -100,12 +118,6 @@ public:
     MessageHandler getMessageHandlerByMsgType(uint16_t _type);
 
     void eraseHandlerByMsgType(uint16_t _type) override;
-
-    void asyncSendMessageByEndPoint(NodeIPEndpoint const& _endPoint, P2PMessage::Ptr message,
-        CallbackFuncWithSession callback, Options options = Options());
-
-    void setBeforeMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace&, Message&)> _handler);
 
     void setOnMessageHandler(
         std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> _handler);
@@ -120,8 +132,6 @@ public:
 
 protected:
     std::shared_ptr<P2PSession> getP2PSessionByNodeIdWithoutLock(P2pID const& _nodeID) const;
-    virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
-        Options = Options(), CallbackFuncWithSession = CallbackFuncWithSession());
 
     std::shared_ptr<P2PMessage> newP2PMessage(uint16_t _type, bytesConstRef _payload);
     // handshake protocol
@@ -171,7 +181,8 @@ protected:
     // handlers called when delete-session
     std::vector<std::function<void(P2PSession::Ptr)>> m_deleteSessionHandlers;
 
-    std::function<std::optional<bcos::Error>(SessionFace&, Message&)> m_beforeMessageHandler;
+    std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)>
+        m_beforeMessageHandler;
     std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> m_onMessageHandler;
 };
 

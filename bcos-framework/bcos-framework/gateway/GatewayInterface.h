@@ -28,6 +28,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
+#include <memory>
 #include <range/v3/view/any_view.hpp>
 
 namespace bcos
@@ -79,26 +80,27 @@ public:
      * @param _payload: message content
      * @return void
      */
-    virtual void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload, ErrorRespFunc _errorRespFunc) = 0;
+
+    virtual task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
+        const bcos::crypto::NodeID& srcNodeID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) = 0;
 
     /**
-     * @brief: send message to multiple nodes
+     * @brief: (coroutine) send message to a single node, zero-copy. The payload is passed as views
+     *         that the caller must keep alive for the duration of the co_await. The coroutine
+     *         completes once the peer gateway acknowledges the message (or the retries are
+     *         exhausted / a terminal error occurred); it returns nullptr on success or an
+     *         Error::Ptr describing the failure.
+     *
      * @param _groupID: groupID
      * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
-     * @param _nodeIDs: the receiver nodeIDs
-     * @param _payload: message content
-     * @param _errorRespFunc: error func
-     * @return void
+     * @param _dstNodeID: the receiver nodeID
+     * @param _payloads: message content (views, kept alive by the caller)
      */
-    virtual void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
-        bytesConstRef _payload) = 0;
-
-    virtual task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
-        const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) = 0;
+    virtual task::Task<Error::Ptr> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads) = 0;
 
     /// multi-group related interfaces
 

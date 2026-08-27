@@ -5,7 +5,7 @@
 
 #include "../src/Web3AccessListResolver.h"
 #include <bcos-codec/rlp/RLPDecode.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>

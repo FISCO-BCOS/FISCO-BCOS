@@ -38,11 +38,15 @@ public:
 
     virtual P2pID id() const = 0;
 
-    virtual void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
-        CallbackFuncWithSession callback, Options options = {}) = 0;
     virtual task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& header,
         ::ranges::any_view<bytesConstRef> payloads, Options options = {}) = 0;
-    virtual void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) = 0;
+
+    // (coroutine) broadcast a message to all connected/reachable nodes. The message is handed over
+    // as a shared_ptr: the per-peer fan-out tasks keep it alive (the payload rides as a view,
+    // zero-copy).
+    virtual task::Task<void> broadcastMessageToAll(P2PMessage::Ptr message,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
+        Options options = {}) = 0;
 
     virtual P2PInfos sessionInfos() = 0;
     virtual P2PInfo localP2pInfo() = 0;

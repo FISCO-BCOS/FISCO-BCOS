@@ -10,6 +10,8 @@
 #include <evmone/evmone.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <cstring>
+#include <limits>
 #include <test/utils/test_state.hpp>
 #include <vector>
 
@@ -559,6 +561,69 @@ BOOST_AUTO_TEST_CASE(L1CostIsDebitedFromSenderAndConserves)
     BOOST_CHECK_MESSAGE(
         (ts.at(OP_L1_FEE_VAULT).balance) == (props.l1_cost), "L1 vault must receive l1_cost");
     BOOST_CHECK_MESSAGE((totalSupply(ts)) == (before), "fees only move value between accounts");
+}
+
+// Round-11 F2: the CallSimulationView mask is visible to the EVM — a contract reading
+// msg.sender.balance during a simulation observes the fabricated 2^256-1, so the behaviour is a
+// decision on record rather than something found from a bug report. The contract returns
+// BALANCE(CALLER); the receipt output carries the fabricated value.
+BOOST_AUTO_TEST_CASE(CallSimulationMaskVisibleToBalanceOpcode)
+{
+    constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
+    constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[sender] = {.nonce = 0, .balance = 0, .storage = {}, .code = {}};
+    // returns msg.sender.balance: CALLER; BALANCE; PUSH0; MSTORE; PUSH1 0x20; PUSH0; RETURN
+    ts[dest] = {.nonce = 1,
+        .balance = 0,
+        .storage = {},
+        .code = evmc::from_hex("33315f5260205ff3").value()};
+    seedOpPredeploys(ts);
+    test::TestBlockHashes hashes;
+
+    state::BlockInfo block;
+    block.number = 1;
+    block.gas_limit = 30000000;
+    block.base_fee = 7;
+    block.coinbase = OP_SEQUENCER_FEE_VAULT;
+
+    state::Transaction tx;
+    tx.type = state::Transaction::Type::eip1559;
+    tx.sender = sender;
+    tx.to = dest;
+    tx.gas_limit = 100000;
+    tx.max_gas_price = 1000;
+    tx.max_priority_gas_price = 10;
+    tx.value = intx::uint256{0};
+    tx.nonce = 0;
+
+    OpFeeParams fee{};
+    std::vector<uint8_t> env{0x02, 0x11};
+    CallSimulationView masked{ts, sender};
+    const auto v =
+        opValidate(masked, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
+    const auto& props = std::get<OpTxProperties>(v);
+
+    evmone::state::StateDiff diff;
+    const auto txR = opTransition(
+        masked, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
+    BOOST_REQUIRE_EQUAL(txR->status(), 0);
+    // The contract returned msg.sender.balance. BALANCE runs after the simulation's fee
+    // pre-charge (gas_limit * effective_gas_price) is deducted from the masked balance, so the
+    // observable value is exactly 2^256-1 minus that pre-charge — the fabricated balance, not
+    // the sender's real 0. This pins that the mask is visible to the EVM (a decision on record,
+    // not an accident).
+    const auto out = txR->output();
+    BOOST_REQUIRE_EQUAL(out.size(), 32u);
+    const auto effective = intx::uint256{block.base_fee} +
+                           std::min(intx::uint256{tx.max_priority_gas_price},
+                               intx::uint256{tx.max_gas_price} - intx::uint256{block.base_fee});
+    const auto expectedBalance = std::numeric_limits<intx::uint256>::max() -
+                                 intx::uint256{static_cast<uint64_t>(tx.gas_limit)} * effective;
+    const auto expectedBe = intx::be::store<evmc::uint256be>(expectedBalance);
+    BOOST_CHECK_EQUAL(std::memcmp(expectedBe.bytes, out.data(), sizeof(expectedBe.bytes)), 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

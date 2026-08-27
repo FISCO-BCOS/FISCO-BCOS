@@ -91,15 +91,18 @@ public:
             m_accountCache.emplace(addr, fetched);
             return fetched;
         }
-        // Exception-matching ladder shared by all read methods (and applyDiff): this repo's
-        // binaries have unreliable typed-catch behavior — bcos-crypto PUBLICly links
-        // wedprcrypto's Rust static libs, whose bundled runtime breaks libc++ exception matching
-        // binary-wide (documented at bcos-rpc/test/CMakeLists.txt:29-34). Empirically in the
-        // bcos-evm-opstack-tests binary, std::runtime_error-family throws only bind at an
-        // exact-type runtime_error handler (they escape catch(std::exception) into catch(...)),
-        // while std::logic_error-family throws do bind at catch(std::exception). Keep the
-        // runtime_error level so firstError() retains the original message for triage;
-        // catch(...) guarantees the poison flag is always set.
+        // Exception-matching ladder shared by all read methods (and applyDiff). The reason for
+        // the explicit runtime_error arm (rather than just catch(std::exception)): wedprcrypto's
+        // Rust static libs, PUBLICly linked by bcos-crypto, have been observed to corrupt libc++
+        // exception matching in binaries that link that chain (bcos-rpc/test/CMakeLists.txt:
+        // 29-34 records the symptom and the "don't link" fix). When matching is corrupted,
+        // typed handlers may fail to bind and only catch(...) is reliable, so this ladder's
+        // catch(...) arm guarantees the poison flag is set no matter how broken matching is.
+        // The runtime_error arm exists so that, on a binary where matching DOES work, the
+        // original message reaches firstError() for triage; it is harmless when matching is
+        // broken (the handler then never fires and catch(...) still poisons). This comment does
+        // not claim a specific per-type matching behavior — the corrupted-matching mechanism is
+        // binary-wide, not per-exception-class.
         catch (const std::runtime_error& e)
         {
             poison(e.what());
@@ -319,6 +322,41 @@ public:
             poison("Storage2State::visitAccounts: unknown exception");
         }
         return false;
+    }
+
+    /// Single-account live slot map (tombstone/zero filtered). Same account-level liveness
+    /// filters as visitAccounts' AccountView.storage — the SYS_TABLES marker must pass the
+    /// existsOne/liveContent gate (fetchAccountForVisit) — and the scan is narrowed to one
+    /// account instead of walking every /apps/ entry. Used by finalizeOpBlockResult for the
+    /// MessagePasser withdrawalsRoot.
+    /// Consumer contract: after this returns, check poisoned() before trusting the map.
+    [[nodiscard]] std::map<evmc::bytes32, evmc::bytes32> accountStorage(
+        const evmc::address& addr) const noexcept
+    {
+        try
+        {
+            const std::string tableName = accountTableName(addr);
+            // Same liveness gate as visitAccountsImpl: a tombstoned or deleted SYS_TABLES
+            // marker must contribute no slots (visitAccounts skips such rows via
+            // fetchAccountForVisit). The scan is the only thing that is narrower here.
+            auto account = task::syncWait(fetchAccountForVisit(addr, tableName));
+            if (!account.has_value())
+                return {};
+            return task::syncWait(fetchAllStorage(tableName));
+        }
+        catch (const std::runtime_error& e)
+        {
+            poison(e.what());
+        }
+        catch (const std::exception& e)
+        {
+            poison(e.what());
+        }
+        catch (...)
+        {
+            poison("Storage2State::accountStorage: unknown exception");
+        }
+        return {};
     }
 
 private:

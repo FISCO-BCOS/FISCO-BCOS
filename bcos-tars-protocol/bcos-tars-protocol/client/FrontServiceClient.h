@@ -31,18 +31,18 @@ public:
     void onReceiveBroadcastMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
         bcos::bytesConstRef _data, bcos::front::ReceiveMsgFunc _receiveMsgCallback) override;
 
-    // Note: the _callback maybe null in some cases
-    void asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::bytesConstRef _data, uint32_t _timeout, bcos::front::CallbackFunc _callback) override;
-
     void asyncSendResponse(const std::string& _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
         bcos::bytesConstRef _data, bcos::front::ReceiveMsgFunc _receiveMsgCallback) override;
 
-    void asyncSendMessageByNodeIDs(int _moduleID,
-        const std::vector<bcos::crypto::NodeIDPtr>& _nodeIDs, bcos::bytesConstRef _data) override;
+    // (coroutine) send message to one node and await the module-level response via the
+    // front-service RPC
+    bcos::task::Task<bcos::front::SendResult> sendMessageByNodeID(int _moduleID,
+        bcos::crypto::NodeIDPtr _nodeID,
+        ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> _payloads,
+        uint32_t _timeout) override;
 
-    bcos::task::Task<void> broadcastMessage(
-        uint16_t _type, int _moduleID, ::ranges::any_view<bcos::bytesConstRef> payloads) override;
+    bcos::task::Task<void> broadcastMessage(uint16_t _type, int _moduleID,
+        ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads) override;
 
 private:
     // 30s

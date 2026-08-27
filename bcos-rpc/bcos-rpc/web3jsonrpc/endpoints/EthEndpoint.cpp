@@ -39,6 +39,7 @@
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>  // isTypedWeb3Envelope (envelope-sourced chainId gate)
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
@@ -46,9 +47,9 @@
 #include <bcos-rpc/web3jsonrpc/model/CallRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>

@@ -10,6 +10,8 @@
 // system_call_block_start is a no-op (no code at the system-contract addresses), so every case
 // reaches the shape checks.
 
+#include "OpTestReceiptFactory.h"
+
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
@@ -20,6 +22,7 @@
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Wait.h>
+#include <evmone/evmone.h>
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
 
@@ -29,7 +32,7 @@
 #include <string>
 #include <vector>
 
-using bcos::evm::engine::OpConsensusError;
+using bcos::evm::OpConsensusError;
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
 namespace memory_storage = bcos::storage2::memory_storage;
@@ -189,28 +192,42 @@ BOOST_AUTO_TEST_SUITE(PreBlockOpStepsTest)
 BOOST_AUTO_TEST_CASE(RejectsEmptyBlock)
 {
     Fixture f;
-    BOOST_CHECK_THROW(f.run(op::jovianConfig(), {}, {}), OpConsensusError);
+    BOOST_CHECK_EXCEPTION(
+        f.run(op::jovianConfig(), {}, {}), OpConsensusError, [](OpConsensusError const& e) {
+            return std::string(e.what()).find("missing L1 attributes deposit (empty block)") !=
+                   std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(RejectsEmptyFirstEnvelope)
 {
     Fixture f;
-    BOOST_CHECK_THROW(
-        f.run(op::jovianConfig(), {bcos::bytes{}}, {depositWithData({})}), OpConsensusError);
+    BOOST_CHECK_EXCEPTION(f.run(op::jovianConfig(), {bcos::bytes{}}, {depositWithData({})}),
+        OpConsensusError, [](OpConsensusError const& e) {
+            return std::string(e.what()).find("no deposit transaction to seed the block") !=
+                   std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(RejectsNonDepositFirstEnvelope)
 {
     Fixture f;
-    BOOST_CHECK_THROW(
-        f.run(op::jovianConfig(), {kTypedEnvelope}, {depositWithData({})}), OpConsensusError);
+    BOOST_CHECK_EXCEPTION(f.run(op::jovianConfig(), {kTypedEnvelope}, {depositWithData({})}),
+        OpConsensusError, [](OpConsensusError const& e) {
+            return std::string(e.what()).find("no deposit transaction to seed the block") !=
+                   std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(RejectsMissingDeposits)
 {
     Fixture f;
     // The envelope says deposit, but the decoded deposit vector is empty.
-    BOOST_CHECK_THROW(f.run(op::jovianConfig(), {kDepositEnvelope}, {}), OpConsensusError);
+    BOOST_CHECK_EXCEPTION(f.run(op::jovianConfig(), {kDepositEnvelope}, {}), OpConsensusError,
+        [](OpConsensusError const& e) {
+            return std::string(e.what()).find("no deposit transaction to seed the block") !=
+                   std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(JovianActivationRejectsTrailingNonDeposit)
@@ -299,6 +316,33 @@ BOOST_AUTO_TEST_CASE(PrePoisonedSharedSlotFailsAtSystemCallStep)
     BOOST_CHECK_THROW(engine::preBlockOpSteps(f.storage, f.header, op::jovianConfig(), rawTxs, deps,
                           executor, f.hashes, f.hashErr, f.scalar),
         engine::OpStorageError);
+}
+
+// Round-14 F1: processOpBlock's four applyDiff call sites must normalize a storage write-back
+// failure to OpStorageError, exactly like the per-tx path (m_finish / executeDeposit /
+// finalizeBlock). Storage2State::applyDiff poisons AND rethrows raw, so without the block-path
+// wrapper a bare std::runtime_error would escape processOpBlock and break the documented
+// "OpStorageError (-32603), never a bare runtime_error" contract. The first applyDiff (the
+// pre-block system call) runs before the empty-block reject, so an empty tx span is enough to
+// reach the wrapper.
+BOOST_AUTO_TEST_CASE(ProcessOpBlockNormalizesWritebackFailure)
+{
+    MutableStorage storage;
+    bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
+    evmone::state::BlockInfo block;
+    block.gas_limit = 30'000'000;
+    bcos::executor_v1::opstack::NullBlockHashes hashes;
+    auto vm = evmc::VM{evmc_create_evmone()};
+
+    BOOST_CHECK_EXCEPTION(
+        op::processOpBlock(view, block, hashes, /*txs=*/{}, op::jovianConfig(), vm,
+            /*chainId=*/10, bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+            [](const evmone::state::StateDiff&) {
+                throw std::runtime_error("storage fault injected for the write-back test");
+            }),
+        bcos::evm::engine::OpStorageError, [](bcos::evm::engine::OpStorageError const& e) {
+            return std::string(e.what()).find("storage write-back failed") != std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -224,41 +224,6 @@ bool bcos::gateway::P2PMessage::encodeHeaderImpl(bytes& _buffer) const
     return true;
 }
 
-bool P2PMessage::encode(EncodedMessage& _buffer) const
-{
-    bool isCompressSuccess = false;
-    if (_buffer.compress)
-    {
-        bcos::bytes compressData;
-        if (tryToCompressPayload(compressData))
-        {
-            isCompressSuccess = true;
-            // set compress flag
-            m_ext |= bcos::protocol::MessageExtFieldFlag::COMPRESS;
-            _buffer.payload = std::move(compressData);
-        }
-    }
-
-    // No data compression is performed
-    if (!isCompressSuccess)
-    {
-        _buffer.payload = m_payload;
-    }
-
-    bytes headerBuffer;
-    // encode header
-    if (!encodeHeader(headerBuffer))
-    {
-        return false;
-    }
-
-    *(uint32_t*)headerBuffer.data() = boost::asio::detail::socket_ops::host_to_network_long(
-        headerBuffer.size() + _buffer.payload.size());
-
-    _buffer.header = std::move(headerBuffer);
-    return true;
-}
-
 bool P2PMessage::encode(bcos::bytes& _buffer)
 {
     bytes emptyBuffer;
@@ -531,6 +496,9 @@ uint16_t bcos::gateway::P2PMessage::ext() const
 }
 void bcos::gateway::P2PMessage::setExt(uint16_t _ext)
 {
+    // Accumulate (OR) semantics: the fast send path no longer touches this setter (the COMPRESS
+    // flag is stamped onto the encoded wire header, not the message), so callers that want to
+    // clear bits must do so explicitly — this matches the pre-PR base behaviour.
     m_ext |= _ext;
 }
 const bcos::gateway::P2PMessageOptions& bcos::gateway::P2PMessage::options() const
@@ -609,9 +577,10 @@ bcos::gateway::Message::Ptr bcos::gateway::P2PMessageFactory::buildMessage()
 }
 std::ostream& bcos::gateway::operator<<(std::ostream& _out, const P2PMessage& _p2pMessage)
 {
-    _out << "P2PMessage {" << " length: " << _p2pMessage.length()
-         << " version: " << _p2pMessage.version() << " packetType: " << _p2pMessage.packetType()
-         << " seq: " << _p2pMessage.seq() << " ext: " << _p2pMessage.ext() << " }";
+    _out << "P2PMessage {"
+         << " length: " << _p2pMessage.length() << " version: " << _p2pMessage.version()
+         << " packetType: " << _p2pMessage.packetType() << " seq: " << _p2pMessage.seq()
+         << " ext: " << _p2pMessage.ext() << " }";
     return _out;
 }
 std::ostream& bcos::gateway::operator<<(std::ostream& _out, P2PMessage::Ptr& _p2pMessage)

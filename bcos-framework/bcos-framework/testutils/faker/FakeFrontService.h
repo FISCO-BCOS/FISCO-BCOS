@@ -238,13 +238,20 @@ public:
         m_gateWay->addConsensusInterface(std::move(_nodeId), std::move(_consensusInterface));
     }
 
-    void asyncSendMessageByNodeID(const std::string&, int _moduleID,
+    bcos::task::Task<Error::Ptr> sendMessageByNodeID(const std::string&, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload, gateway::ErrorRespFunc _errorRespFunc) override
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads) override
     {
-        m_gateWay->asyncSendMessageByNodeID(_moduleID, _srcNodeID, _dstNodeID, _payload, 0,
-            [func = std::move(_errorRespFunc)](Error::Ptr _e, const bcos::crypto::NodeIDPtr&,
-                bytesConstRef, const std::string&, const ResponseFunc&) { func(std::move(_e)); });
+        bytes buffer;
+        for (auto const& data : _payloads)
+        {
+            buffer.insert(buffer.end(), data.begin(), data.end());
+        }
+        // simulate the gateway delivering the message to the local front (no remote gateway)
+        m_gateWay->asyncSendMessageByNodeID(_moduleID, _srcNodeID, _dstNodeID, bcos::ref(buffer), 0,
+            [](Error::Ptr, const bcos::crypto::NodeIDPtr&, bytesConstRef, const std::string&,
+                const ResponseFunc&) {});
+        co_return nullptr;
     }
 
     void asyncSendResponse(const std::string& _id, int _moduleId, NodeIDPtr _nodeID,
@@ -261,12 +268,9 @@ public:
         std::function<void(Error::Ptr, gateway::GatewayInfo::Ptr, gateway::GatewayInfosPtr)>
             _callback) override
     {}
-    void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, const NodeIDs& _dstNodeIDs,
-        bytesConstRef _payload) override
-    {}
     task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
-        const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) override
+        const bcos::crypto::NodeID& srcNodeID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override
     {
         co_return;
     };
@@ -312,21 +316,8 @@ public:
     void onReceiveMessage(
         const std::string&, const NodeIDPtr&, bytesConstRef, ReceiveMsgFunc) override
     {}
-    void asyncSendMessageByNodeIDs(
-        int _moduleId, const std::vector<NodeIDPtr>& _nodeIdList, bytesConstRef _data) override
-    {
-        for (const auto& node : _nodeIdList)
-        {
-            if (node->data() == m_nodeId->data())
-            {
-                continue;
-            }
-            asyncSendMessageByNodeID(_moduleId, node, _data, 0, nullptr);
-        }
-    }
-
-    bcos::task::Task<void> broadcastMessage(
-        uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override
+    bcos::task::Task<void> broadcastMessage(uint16_t type, int moduleID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override
     {
         for (const auto& node : m_nodeIDList)
         {
@@ -339,7 +330,8 @@ public:
             {
                 buffer.insert(buffer.end(), view.begin(), view.end());
             }
-            asyncSendMessageByNodeID(moduleID, node, bcos::ref(buffer), 0, nullptr);
+            co_await sendMessageByNodeID(
+                moduleID, node, ::ranges::views::single(bcos::ref(buffer)), 0);
         }
         co_return;
     }
@@ -363,13 +355,42 @@ public:
         }
     }
 
-    void asyncSendMessageByNodeID(int _moduleId, NodeIDPtr _nodeId, bytesConstRef _data,
-        uint32_t _timeout, CallbackFunc _responseCallback) override
+    bcos::task::Task<SendResult> sendMessageByNodeID(int _moduleId, bcos::crypto::NodeIDPtr _nodeId,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
+        uint32_t _timeout) override
     {
+        bytes buffer;
+        for (auto view : _payloads)
+        {
+            buffer.insert(buffer.end(), view.begin(), view.end());
+        }
+        SendResult result;
         if (m_fakeGateWay)
         {
-            m_fakeGateWay->asyncSendMessageByNodeID(
-                _moduleId, m_nodeId, _nodeId, _data, _timeout, _responseCallback);
+            if (_timeout == 0)
+            {
+                // fire-and-forget: no module-level response expected
+                m_fakeGateWay->asyncSendMessageByNodeID(
+                    _moduleId, m_nodeId, _nodeId, bcos::ref(buffer), 0, nullptr);
+            }
+            else
+            {
+                // bridge the fake gateway's module-level callback to the co_await
+                auto state = std::make_shared<SendResponseAwaitable::State>();
+                m_fakeGateWay->asyncSendMessageByNodeID(_moduleId, m_nodeId, _nodeId,
+                    bcos::ref(buffer), _timeout,
+                    [state](Error::Ptr _error, const bcos::crypto::NodeIDPtr& _nodeID,
+                        bytesConstRef _data, const std::string& _id, const ResponseFunc& _resp) {
+                        SendResult r;
+                        r.error = std::move(_error);
+                        r.nodeID = _nodeID;
+                        r.payload.assign(_data.begin(), _data.end());
+                        r.uuid = _id;
+                        r.respond = _resp;
+                        SendResponseAwaitable::complete(state, std::move(r));
+                    });
+                result = co_await SendResponseAwaitable{std::move(state)};
+            }
         }
 
         if (m_nodeId2AsyncSendSize.contains(_nodeId))
@@ -381,6 +402,7 @@ public:
             m_nodeId2AsyncSendSize[_nodeId] = 1;
         }
         m_totalSendMsgSize++;
+        co_return result;
     }
 
     size_t getAsyncSendSizeByNodeID(NodeIDPtr _nodeId)

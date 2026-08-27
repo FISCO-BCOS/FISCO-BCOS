@@ -20,9 +20,9 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>  // c_secp256k1n* + Secp256k1Crypto
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>  // web3ChainIdFromEnvelope (F4 unit tests)
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3TxHandler.h>
+#include <bcos-rlp-protocol/Web3TxHandler.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 

@@ -24,11 +24,11 @@
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-rpc/jwtAuth/JwtConfig.h>
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-task/Task.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>

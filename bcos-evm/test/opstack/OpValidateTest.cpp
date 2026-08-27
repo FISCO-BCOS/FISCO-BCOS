@@ -260,4 +260,41 @@ BOOST_AUTO_TEST_CASE(BalanceCapCountsEveryTermExactlyOnce)
     }
 }
 
+// eth_call must not skip the 512-bit cap or validate_transaction's INSUFFICIENT_FUNDS check.
+// CallSimulationView makes the sender look funded so both comparisons still run (and pass)
+// for a zero-balance simulated sender. The unmasked view must still reject.
+BOOST_AUTO_TEST_CASE(CallSimulationViewLetsZeroBalanceSenderPass)
+{
+    test::TestState ts;  // sender absent → balance 0
+    auto tx = baseTx();
+    tx.to = 0x0000000000000000000000000000000000001234_address;
+    const std::vector<uint8_t> env{0x02};
+
+    const auto unmasked = opValidate(
+        ts, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
+    BOOST_REQUIRE_MESSAGE(std::holds_alternative<std::error_code>(unmasked),
+        "zero-balance sender must fail validate_transaction without a view mask");
+
+    CallSimulationView masked{ts, tx.sender};
+    const auto ok = opValidate(masked, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(),
+        OpFeeParams{}, 30000000);
+    BOOST_CHECK_MESSAGE(std::holds_alternative<OpTxProperties>(ok),
+        "CallSimulationView must let a zero-balance sender pass validate_transaction and the OP "
+        "cap");
+}
+
+// Masking balance must not blank code: a contract sender is still EIP-3607 SENDER_NOT_EOA.
+BOOST_AUTO_TEST_CASE(CallSimulationViewDoesNotBlankSenderCode)
+{
+    test::TestState ts;
+    ts[kSenderValidate] = {.nonce = 0, .balance = 0, .storage = {}, .code = evmc::bytes{0x00}};
+    auto tx = baseTx();
+    tx.to = 0x0000000000000000000000000000000000001234_address;
+    const std::vector<uint8_t> env{0x02};
+    CallSimulationView masked{ts, tx.sender};
+    const auto r = opValidate(masked, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(),
+        OpFeeParams{}, 30000000);
+    BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

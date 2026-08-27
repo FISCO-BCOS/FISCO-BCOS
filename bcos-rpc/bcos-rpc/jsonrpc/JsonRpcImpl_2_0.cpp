@@ -28,9 +28,9 @@
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/validator/CallValidator.h"
-#include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 #include "bcos-utilities/BoostLog.h"
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
