@@ -7,6 +7,7 @@
 // with a FakeTransaction whose envelope bytes and mirror fields can be set independently,
 // and pin the rejection messages so a deleted gate fails the test.
 
+#include <opstack-executor/OpDepositEncode.h>
 #include <opstack-executor/OpstackExecutor.h>
 
 #include <bcos-codec/rlp/RLPEncode.h>
@@ -510,6 +511,25 @@ BOOST_AUTO_TEST_CASE(TypedEnvelopeWithoutParseableChainIdRejected)
     auto const gate = envelopeChainIdMismatch(tx, 10);
     BOOST_REQUIRE(gate.has_value());
     BOOST_CHECK_EQUAL(*gate, "typed tx envelope is missing a parseable chainId");
+}
+
+// 0x7E deposit envelopes are typed-looking (type byte < 0x80) but carry no chainId: field 0 is
+// sourceHash. The skip is unconditional (field 0 is never a chainId), so a deposit must pass
+// the gate exactly where a 0x02 with an unparseable field 0 is rejected — deleting the skip
+// branch fails this test.
+BOOST_AUTO_TEST_CASE(DepositEnvelopeSkipsChainIdGate)
+{
+    FakeTx tx;
+    bcos::evm::opstack::DepositTx dep{};
+    std::fill(std::begin(dep.source_hash.bytes), std::end(dep.source_hash.bytes), 0x11);
+    std::fill(std::begin(dep.from.bytes), std::end(dep.from.bytes), 0x22);
+    dep.to = std::nullopt;
+    dep.value = 0;
+    dep.gas_limit = 100000;
+    tx.m_extraBytes = bcos::evm::opstack::encodeDepositEnvelope(dep);
+    BOOST_REQUIRE(!tx.m_extraBytes.empty());
+    BOOST_CHECK_EQUAL(tx.m_extraBytes.front(), 0x7e);
+    BOOST_CHECK(!envelopeChainIdMismatch(tx, 10).has_value());
 }
 
 // A forged mirror value must be rejected by the execution-fields cross-check.

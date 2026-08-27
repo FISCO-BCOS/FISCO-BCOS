@@ -15,6 +15,7 @@ add_executable(opstack-executor-tests
     OpDepositEnvelopeTest.cpp
     OpTxConvertTest.cpp
     SmokeCompileTest.cpp
+    OpSchedulerPolicyTest.cpp
     OpCommonTest.cpp
     OpCommitmentsTest.cpp
     RecentBlockHashesTest.cpp
@@ -46,12 +47,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 endif()
 add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 
-# Runtime suite: real tars TransactionImpl / Web3Transaction / receipt factory.
-# SPLIT OUT (tracks in the next PR): it compiles base bcos-rpc model TUs
-# (Web3Transaction.cpp / Web3TxHandler.cpp) whose EIP-7702 auth-list RLP support lands
-# in the RPC split (#5496) — building them here breaks the gcc build. The end-to-end
-# executor tests (OpstackExecutorTest.cpp, incl. the envelope-vs-mirror chainId cases)
-# return with the web3-model decoupling in the follow-up PR.
+# Runtime suite (OpstackExecutorTest.cpp) stays with the web3-model decoupling follow-up.
+# Scheduler execute/commit/call coverage is opstack-executor-scheduler-tests below.
 
 
 # Receipts-root leaf encoding (encodeReceiptForRoot / sealOpBlock). Needs evmone's packaged RLP
@@ -112,3 +109,35 @@ target_include_directories(opstack-executor-receipt-tests PRIVATE
     ${CMAKE_SOURCE_DIR}/bcos-ledger
 )
 add_test(NAME OpstackExecutorReceiptTests COMMAND opstack-executor-receipt-tests)
+
+# Scheduler suite: real executeBlock / commitBlock / call / callAtBlock against OpScheduler<MLS>.
+# Isolated from the lightweight binary (ledger / protocol-tars / wedprcrypto typed-catch).
+# Call fixtures use a FakeCallTx (no Web3Transaction.cpp — that RLP bind is #5496).
+# ReorgUndo codec cases return with the tip-reorg follow-up.
+add_executable(opstack-executor-scheduler-tests
+    TestMain.cpp
+    OpSchedulerTest.cpp
+)
+set_target_properties(opstack-executor-scheduler-tests PROPERTIES UNITY_BUILD OFF)
+target_include_directories(opstack-executor-scheduler-tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/bcos-ledger
+)
+target_link_libraries(opstack-executor-scheduler-tests PRIVATE
+    opstack-executor
+    protocol-tars
+    bcos-crypto
+    codec
+    ledger
+    evmone::evmone
+    Boost::unit_test_framework
+)
+add_test(NAME OpstackExecutorSchedulerTests COMMAND opstack-executor-scheduler-tests)
+
+# OP templates instantiate in the consuming test TUs while opstack-executor marks its GNU
+# downgrades PRIVATE — re-add the same flags here, identical to the sibling targets above.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    target_compile_options(opstack-executor-scheduler-tests PRIVATE
+        -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
+endif()
