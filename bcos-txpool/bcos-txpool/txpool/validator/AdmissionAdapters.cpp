@@ -109,14 +109,14 @@ txvalidator::AccountNonceReader makeAccountNonceReader(Web3NonceChecker::Ptr web
 }
 
 txvalidator::PoolNonceQuery makePoolNonceQuery(
-    NonceCheckerInterface::Ptr txPoolNonceChecker, TxValidatorInterface::Ptr validator)
+    NonceCheckerInterface::Ptr txPoolNonceChecker, LedgerNonceCheckerProvider ledgerNonceChecker)
 {
     return txvalidator::PoolNonceQuery{
         .checkBcosNonce = [txPoolNonceChecker = std::move(txPoolNonceChecker),
-                              validator = std::move(validator)](
+                              ledgerNonceCheckerOf = std::move(ledgerNonceChecker)](
                               Transaction const& tx, bool onlyCheckLedgerNonce) {
             // Resolved per call, not captured: setLedgerNonceChecker runs after the pool is built.
-            auto ledgerNonceChecker = validator ? validator->ledgerNonceChecker() : nullptr;
+            auto ledgerNonceChecker = ledgerNonceCheckerOf ? ledgerNonceCheckerOf() : nullptr;
             // Body of the old TxValidator::checkTransaction, minus the Web3 branch (Web3 nonce
             // rules need only the account nonce and now live in the admission layer).
             if (!onlyCheckLedgerNonce && txPoolNonceChecker)

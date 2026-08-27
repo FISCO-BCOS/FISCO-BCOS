@@ -37,14 +37,13 @@
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-txpool/sync/TransactionSync.h>
 #include <bcos-txpool/txpool/storage/MemoryStorage.h>
-#include <bcos-txpool/txpool/validator/TxValidator.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
-#include <thread>
 #include <list>
-#include <bcos-utilities/BoostLog.h>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -74,15 +73,6 @@ public:
     explicit FakeTransactionSync(TransactionSyncConfig::Ptr _config) : FakeTransactionSync1(_config)
     {}
     ~FakeTransactionSync() override {}
-};
-
-class FakeMemoryStorage : public MemoryStorage
-{
-public:
-    FakeMemoryStorage(TxPoolConfig::Ptr _config, boost::asio::io_context& _ioContext,
-        size_t _notifyWorkerNum = 2)
-      : MemoryStorage(_config, _ioContext, _notifyWorkerNum)
-    {}
 };
 
 class TxPoolFixture
@@ -192,7 +182,8 @@ public:
                 auto txPoolFactoryTemp = std::make_shared<TxPoolFactory>(nodeId, _cryptoSuite,
                     m_txResultFactory, m_blockFactory, frontService, m_ledger, m_groupId, m_chainId,
                     m_blockLimit, bcos::txpool::DEFAULT_POOL_LIMIT, true);
-                txpool = txPoolFactoryTemp->createTxPool(*ioServicePool->getIOService(), ioServicePool);
+                txpool =
+                    txPoolFactoryTemp->createTxPool(*ioServicePool->getIOService(), ioServicePool);
             }
             else
             {
@@ -341,8 +332,7 @@ public:
     FakeGateWay::Ptr m_fakeGateWay;
     // ioServicePool MUST be declared before m_txpool and m_sync to ensure it
     // outlives Timer objects they create that reference its io_context.
-    bcos::IOServicePool::Ptr ioServicePool =
-        std::make_shared<bcos::IOServicePool>(1, "txpoolTest");
+    bcos::IOServicePool::Ptr ioServicePool = std::make_shared<bcos::IOServicePool>(1, "txpoolTest");
     TxPool::Ptr m_txpool;
     TransactionSync::Ptr m_sync;
 

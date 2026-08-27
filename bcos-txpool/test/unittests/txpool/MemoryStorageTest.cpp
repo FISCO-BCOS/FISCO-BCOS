@@ -18,11 +18,9 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
-#include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
 #include "bcos-txpool/txpool/validator/AdmissionAdapters.h"
 #include "bcos-txpool/txpool/validator/LedgerNonceChecker.h"
 #include "bcos-txpool/txpool/validator/TxPoolNonceChecker.h"
-#include "bcos-txpool/txpool/validator/TxValidator.h"
 #include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/IOServicePool.h"
@@ -43,20 +41,16 @@ using namespace bcos::crypto;
 
 namespace
 {
-/// MemoryStorage now routes admission through bcos-tx-validator, so every TxPoolConfig built in
-/// this file needs one wired -- the production path does it in TxPoolFactory. Readers return
-/// "account absent", which is what these storage-level tests want: they are about insertion,
-/// dedup and pool limits, not about account state.
-void wireAdmission(std::shared_ptr<TxPoolConfig> const& config,
+/// MemoryStorage owns its admission layer, so every storage built in this file needs one --
+/// the production path builds it in TxPoolFactory. Readers return "account absent", which is
+/// what these storage-level tests want: they are about insertion, dedup and pool limits, not
+/// about account state.
+bcos::txvalidator::TxValidator makeAdmission(
     std::shared_ptr<bcos::ledger::LedgerInterface> const& ledger,
-    bcos::crypto::CryptoSuite::Ptr const& cryptoSuite,
-    bcos::txpool::NonceCheckerInterface::Ptr const& nonceChecker,
-    bcos::txpool::TxValidatorInterface::Ptr const& validator,
-    std::optional<bcos::txvalidator::PoolNonceQuery> poolQuery = std::nullopt,
-    std::string groupId = "", std::string chainId = "")
+    bcos::crypto::CryptoSuite::Ptr const& cryptoSuite, std::string groupId = "",
+    std::string chainId = "")
 {
-    auto admission = std::make_shared<bcos::txvalidator::TxValidator>(
-        cryptoSuite, ledger,
+    return bcos::txvalidator::TxValidator{cryptoSuite, ledger,
         []() -> task::Task<bcos::ledger::LedgerConfig::Ptr> {
             co_return std::make_shared<bcos::ledger::LedgerConfig>();
         },
@@ -64,45 +58,35 @@ void wireAdmission(std::shared_ptr<TxPoolConfig> const& config,
             co_return std::nullopt;
         },
         [](std::string_view) -> task::Task<std::optional<u256>> { co_return std::nullopt; },
-        [](Transaction const&) { return false; }, std::move(groupId), std::move(chainId));
-    config->setAdmission(std::move(admission),
-        poolQuery.value_or(bcos::txpool::makePoolNonceQuery(nonceChecker, validator)));
+        [](Transaction const&) { return false; }, std::move(groupId), std::move(chainId)};
 }
 }  // namespace
 
 struct MemoryStorageFixture
 {
     MemoryStorageFixture()
-      : txValidator(&mockValidator.get(), [](bcos::txpool::TxValidatorInterface*) {}),
-        txPoolNonceChecker(&mockNonceChecker.get(), [](bcos::txpool::NonceCheckerInterface*) {}),
+      : txPoolNonceChecker(&mockNonceChecker.get(), [](bcos::txpool::NonceCheckerInterface*) {}),
         ledgerNonceChecker(&mockLedgerNonceChecker.get(), [](bcos::txpool::LedgerNonceChecker*) {}),
         ledger(&mockLedger.get(), [](bcos::ledger::LedgerInterface*) {}),
-        config(std::make_shared<TxPoolConfig>(txValidator,
+        // Web3NonceChecker: a real instance (its structures are in-memory only, so a null
+        // ledger is fine). It hangs off TxPoolConfig now that the legacy validator is gone.
+        web3NonceChecker(std::make_shared<bcos::txpool::Web3NonceChecker>(nullptr)),
+        config(std::make_shared<TxPoolConfig>(web3NonceChecker,
             std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>(), nullptr,
             nullptr, txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ 1024,
             /*checkSig*/ false)),
-        storage(config, *ioServicePool->getIOService())
-    {
-        fakeit::When(Method(mockValidator, checkTransaction))
-            .AlwaysReturn(bcos::protocol::TransactionStatus::None);
-
-        auto cryptoSuite =
+        m_cryptoSuite(
             std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
-                std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
-        m_cryptoSuite = cryptoSuite;
-        wireAdmission(config, ledger, cryptoSuite, txPoolNonceChecker, txValidator);
-
-        // Web3NonceChecker: return a usable instance (internal structures are in-memory only; pass
-        // nullptr for ledger)
-        auto web3Checker = std::make_shared<bcos::txpool::Web3NonceChecker>(nullptr);
-        fakeit::When(Method(mockValidator, web3NonceChecker)).AlwaysReturn(web3Checker);
-
-        // LedgerNonceChecker: set all methods to no-op implementations
-        fakeit::When(Method(mockValidator, ledgerNonceChecker)).AlwaysReturn(ledgerNonceChecker);
+                std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr)),
+        storage(config, makeAdmission(ledger, m_cryptoSuite),
+            makePoolNonceQuery(
+                txPoolNonceChecker, [config = config] { return config->ledgerNonceChecker(); }),
+            *ioServicePool->getIOService())
+    {
+        config->setLedgerNonceChecker(ledgerNonceChecker);
         fakeit::When(Method(mockLedgerNonceChecker, batchInsert)).AlwaysDo([](auto, auto const&) {
         });
-        // Reached directly now: admission's BcosPoolNonce check calls into this checker, where
-        // the old code stopped at the TxValidatorInterface::checkTransaction mock above.
+        // Reached directly: admission's BcosPoolNonce check calls into this checker.
         fakeit::When(Method(mockLedgerNonceChecker, checkNonce))
             .AlwaysReturn(bcos::protocol::TransactionStatus::None);
 
@@ -153,14 +137,13 @@ struct MemoryStorageFixture
         return tx;
     }
 
-    fakeit::Mock<bcos::txpool::TxValidatorInterface> mockValidator;
     fakeit::Mock<bcos::txpool::NonceCheckerInterface> mockNonceChecker;
     fakeit::Mock<bcos::txpool::LedgerNonceChecker> mockLedgerNonceChecker;
     fakeit::Mock<bcos::ledger::LedgerInterface> mockLedger;
-    std::shared_ptr<bcos::txpool::TxValidatorInterface> txValidator;
     std::shared_ptr<bcos::txpool::NonceCheckerInterface> txPoolNonceChecker;
     std::shared_ptr<bcos::txpool::LedgerNonceChecker> ledgerNonceChecker;
     std::shared_ptr<bcos::ledger::LedgerInterface> ledger;
+    std::shared_ptr<bcos::txpool::Web3NonceChecker> web3NonceChecker;
     std::shared_ptr<TxPoolConfig> config;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     bcos::IOServicePool::Ptr ioServicePool =
@@ -356,7 +339,7 @@ BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsUpdatesWeb3NonceCache)
     // - sender2: nonce {3} -> max nonce 3+1=4
 
     // Verify the web3 nonce cache was updated correctly by checking pending nonce
-    const auto web3Checker = config->txValidator()->web3NonceChecker();
+    const auto web3Checker = config->web3NonceChecker();
 
     // After removing sealed txs with nonce 5 and 7 for sender1,
     // the ledger nonce should be updated to 8 (7+1)
@@ -473,7 +456,7 @@ BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsMixedTypes)
     BOOST_CHECK_EQUAL(storage.size(), 0U);
 
     // Verify Web3 nonce updated correctly (max nonce 12, so pending should be 13)
-    auto web3Checker = config->txValidator()->web3NonceChecker();
+    auto web3Checker = config->web3NonceChecker();
     // Note: getPendingNonce expects hex string format
     auto pendingNonce = task::syncWait(web3Checker->getPendingNonce(web3SenderHex));
     BOOST_CHECK(pendingNonce.has_value());
@@ -492,11 +475,12 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     // transaction is now refused at normalization instead of being carried far enough to fail a
     // later check. What remains here is what belongs to storage: dedup, pool limit, and that
     // admission is actually consulted.
-    auto configNoSig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, ledger,
+    auto configNoSig = std::make_shared<TxPoolConfig>(web3NonceChecker, nullptr, nullptr, ledger,
         txPoolNonceChecker, /*blockLimit*/ 1000,
         /*poolLimit*/ 1024, /*checkSig*/ false);
-    wireAdmission(configNoSig, ledger, m_cryptoSuite, txPoolNonceChecker, txValidator);
-    MemoryStorage storageNoSig(configNoSig, *ioServicePool->getIOService());
+    MemoryStorage storageNoSig(configNoSig, makeAdmission(ledger, m_cryptoSuite),
+        makePoolNonceQuery(txPoolNonceChecker, [c = config] { return c->ledgerNonceChecker(); }),
+        *ioServicePool->getIOService());
 
     // Step 1: a transaction already in the pool is reported as such, before any validation.
     {
@@ -616,10 +600,11 @@ BOOST_AUTO_TEST_CASE(FIB55_PoolLimitEnforced)
     // The fix moves the pool limit check (Step 1.5) before signature verification and nonce
     // checks so that TxPoolIsFull is returned early.
     constexpr size_t kLimit = 3;
-    auto limitedConfig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, nullptr,
+    auto limitedConfig = std::make_shared<TxPoolConfig>(web3NonceChecker, nullptr, nullptr, nullptr,
         txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ kLimit, /*checkSig*/ false);
-    wireAdmission(limitedConfig, ledger, m_cryptoSuite, txPoolNonceChecker, txValidator);
-    MemoryStorage limitedStorage(limitedConfig, *ioServicePool->getIOService());
+    MemoryStorage limitedStorage(limitedConfig, makeAdmission(ledger, m_cryptoSuite),
+        makePoolNonceQuery(txPoolNonceChecker, [c = config] { return c->ledgerNonceChecker(); }),
+        *ioServicePool->getIOService());
 
     // Insert kLimit txs directly (bypasses validator, fills the pool)
     for (size_t i = 0; i < kLimit; ++i)
@@ -720,7 +705,10 @@ BOOST_AUTO_TEST_CASE(FIB48_SubmitTransactionResumesOnce)
 
     // submitTransaction() uses shared_from_this(), so this instance must be owned by shared_ptr.
     auto ioServicePool = std::make_shared<IOServicePool>(1, "memStorageTest");
-    auto sharedStorage = std::make_shared<MemoryStorage>(config, *ioServicePool->getIOService());
+    auto sharedStorage = std::make_shared<MemoryStorage>(config,
+        makeAdmission(ledger, m_cryptoSuite),
+        makePoolNonceQuery(txPoolNonceChecker, [c = config] { return c->ledgerNonceChecker(); }),
+        *ioServicePool->getIOService());
 
     auto tx = makeTx("fib48_submit_once", false);
     BOOST_CHECK_EQUAL(sharedStorage->insert(tx), TransactionStatus::None);
@@ -804,16 +792,15 @@ BOOST_AUTO_TEST_CASE(FIB50_NonceNotInsertedOnValidationFailure)
     const std::string badNonce = "fib50_bad_nonce";
 
     auto cfg = std::make_shared<TxPoolConfig>(
-        txValidator, nullptr, nullptr, ledger, realNC, 1000, 1024, /*checkSig=*/true);
-    wireAdmission(cfg, ledger, m_cryptoSuite, realNC, txValidator,
+        web3NonceChecker, nullptr, nullptr, ledger, realNC, 1000, 1024, /*checkSig=*/true);
+    MemoryStorage stor(cfg, makeAdmission(ledger, m_cryptoSuite, "groupId", "chainId"),
         bcos::txvalidator::PoolNonceQuery{.checkBcosNonce =
                                               [badNonce](Transaction const& tx, bool) {
                                                   return std::string(tx.nonce()) == badNonce ?
                                                              TransactionStatus::OverFlowValue :
                                                              TransactionStatus::None;
                                               }},
-        "groupId", "chainId");
-    MemoryStorage stor(cfg, *ioServicePool->getIOService());
+        *ioServicePool->getIOService());
 
     auto badTx =
         bcos::test::fakeTransaction(m_cryptoSuite, badNonce, 1000023, "chainId", "groupId");

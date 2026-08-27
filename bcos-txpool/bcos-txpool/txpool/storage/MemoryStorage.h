@@ -38,9 +38,13 @@ class MemoryStorage : public TxPoolStorageInterface,
 {
 public:
     // the default txsExpirationTime is 10 minutes
-    explicit MemoryStorage(TxPoolConfig::Ptr _config,
-        boost::asio::io_context& _ioContext, size_t _notifyWorkerNum = 2,
-        uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
+    //
+    // The admission layer is owned here, by value, rather than reached through TxPoolConfig:
+    // this is its only consumer in the pool, nothing shares ownership of it, and holding it here
+    // removes a two-phase initialisation (config had to be built, then handed a validator).
+    explicit MemoryStorage(TxPoolConfig::Ptr _config, txvalidator::TxValidator _admission,
+        txvalidator::PoolNonceQuery _poolNonceQuery, boost::asio::io_context& _ioContext,
+        size_t _notifyWorkerNum = 2, uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
     ~MemoryStorage() override;
     MemoryStorage(const MemoryStorage&) = delete;
     MemoryStorage(MemoryStorage&&) = delete;
@@ -113,7 +117,14 @@ protected:
 
     void printPendingTxs() override;
 
+    /// Re-check the nonce of a transaction ALREADY in the pool (sealing, cleanup): another node
+    /// may have committed that nonce since it was admitted. Ledger side only -- the pool index
+    /// still holds these transactions by construction, so consulting it would reject every one.
+    protocol::TransactionStatus recheckPooledNonce(protocol::Transaction const& tx) const;
+
     TxPoolConfig::Ptr m_config;
+    txvalidator::TxValidator m_admission;
+    txvalidator::PoolNonceQuery m_poolNonceQuery;
 
     using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr>;
     struct BcosTransactions

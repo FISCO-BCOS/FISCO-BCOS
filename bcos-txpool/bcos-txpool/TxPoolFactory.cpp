@@ -20,14 +20,15 @@
  */
 #include "TxPoolFactory.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-txpool/sync/TransactionSync.h"
 #include "bcos-txpool/sync/protocol/PB/TxsSyncMsgFactoryImpl.h"
 #include "bcos-txpool/txpool/validator/AdmissionAdapters.h"
-#include "bcos-txpool/txpool/validator/TxValidator.h"
 #include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include "txpool/storage/MemoryStorage.h"
 #include "txpool/validator/TxPoolNonceChecker.h"
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -58,28 +59,24 @@ TxPool::Ptr TxPoolFactory::createTxPool(boost::asio::io_context& _ioContext,
     bcos::IOServicePool::Ptr _ioServicePool, size_t _notifyWorkerNum, size_t _verifierWorkerNum,
     uint64_t _txsExpirationTime)
 {
-    TXPOOL_LOG(INFO) << LOG_DESC("create transaction validator");
+    TXPOOL_LOG(INFO) << LOG_DESC("create transaction config");
     auto txpoolNonceChecker = std::make_shared<TxPoolNonceChecker>();
     auto web3NonceChecker = std::make_shared<Web3NonceChecker>(m_ledger);
-    auto validatorWeb3NonceChecker = web3NonceChecker;
-    auto validator = std::make_shared<TxValidator>(txpoolNonceChecker, std::move(web3NonceChecker),
-        m_cryptoSuite, m_groupId, m_chainId, m_scheduler);
-
-    TXPOOL_LOG(INFO) << LOG_DESC("create transaction config");
-    auto txpoolConfig = std::make_shared<TxPoolConfig>(validator, m_txResultFactory, m_blockFactory,
-        m_ledger, txpoolNonceChecker, m_blockLimit, m_txpoolLimit, m_checkTransactionSignature);
+    auto txpoolConfig =
+        std::make_shared<TxPoolConfig>(web3NonceChecker, m_txResultFactory, m_blockFactory,
+            m_ledger, txpoolNonceChecker, m_blockLimit, m_txpoolLimit, m_checkTransactionSignature);
 
     // The consolidated admission layer. m_scheduler is normally still empty here -- createTxPool
     // runs before setScheduler -- so the readers capture a holder and pick it up when it arrives.
     m_schedulerHolder = std::make_shared<SchedulerHolder>();
     m_schedulerHolder->scheduler = m_scheduler;
-    auto admissionValidator = std::make_shared<txvalidator::TxValidator>(
+    txvalidator::TxValidator admissionValidator(
         m_cryptoSuite, m_ledger,
         [ledger = m_ledger]() -> task::Task<ledger::LedgerConfig::Ptr> {
             co_return co_await ledger::getLedgerConfig(*ledger);
         },
-        makeAccountStateReader(m_schedulerHolder, m_ledger, validatorWeb3NonceChecker),
-        makeAccountNonceReader(validatorWeb3NonceChecker),
+        makeAccountStateReader(m_schedulerHolder, m_ledger, web3NonceChecker),
+        makeAccountNonceReader(web3NonceChecker),
         [](protocol::Transaction const& tx) {
             // Same rule as the old validator's isSystemTransaction, injected so the admission
             // module needs no dependency on bcos-executor.
@@ -92,12 +89,12 @@ TxPool::Ptr TxPoolFactory::createTxPool(boost::asio::io_context& _ioContext,
             return !to.empty() && precompiled::contains(bcos::precompiled::c_systemTxsAddress, to);
         },
         m_groupId, m_chainId);
-    txpoolConfig->setAdmission(
-        std::move(admissionValidator), makePoolNonceQuery(txpoolNonceChecker, validator));
-
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction storage");
-    auto txpoolStorage = std::make_shared<MemoryStorage>(
-        txpoolConfig, _ioContext, _notifyWorkerNum, _txsExpirationTime);
+    auto txpoolStorage =
+        std::make_shared<MemoryStorage>(txpoolConfig, std::move(admissionValidator),
+            makePoolNonceQuery(txpoolNonceChecker,
+                [config = txpoolConfig] { return config->ledgerNonceChecker(); }),
+            _ioContext, _notifyWorkerNum, _txsExpirationTime);
 
     auto syncMsgFactory = std::make_shared<TxsSyncMsgFactoryImpl>();
     TXPOOL_LOG(INFO) << LOG_DESC("create sync config");
@@ -119,13 +116,5 @@ void TxPoolFactory::setScheduler(std::shared_ptr<bcos::scheduler::SchedulerInter
     if (m_schedulerHolder)
     {
         m_schedulerHolder->scheduler = _scheduler;
-    }
-    if (m_txpool)
-    {
-        if (auto txValidator =
-                std::dynamic_pointer_cast<TxValidator>(m_txpool->txpoolConfig()->txValidator()))
-        {
-            txValidator->setScheduler(_scheduler);
-        }
     }
 }

@@ -206,6 +206,24 @@ BOOST_AUTO_TEST_CASE(intrinsicGasBoundaryMatchesTheExecutorsCostModel)
     BOOST_CHECK(harness.run(*belowFloor) == TransactionStatus::OutOfGasLimit);
 }
 
+// EIP-3860. The cap applies to contract CREATION only. The implementation this replaces keyed
+// on transaction type alone, so a large call to an already-deployed contract was rejected as if
+// its calldata were initcode.
+BOOST_AUTO_TEST_CASE(oversizedInitCodeIsRejectedOnCreationOnly)
+{
+    AdmitHarness harness;
+    const auto oversized = bcos::bytes(MAX_INITCODE_SIZE + 1, 0x01);
+
+    auto creation = admitTx({.to = std::nullopt, .data = oversized});
+    BOOST_CHECK(harness.run(*creation) == TransactionStatus::MaxInitCodeSizeExceeded);
+
+    // The same payload as calldata to a deployed contract is not initcode. It still fails --
+    // this gasLimit cannot pay for that much calldata -- but not with the initcode code, which
+    // is the distinction under test.
+    auto call = admitTx({.data = oversized});
+    BOOST_CHECK(harness.run(*call) != TransactionStatus::MaxInitCodeSizeExceeded);
+}
+
 // EIP-3607. A contract address must not be able to originate a transaction.
 BOOST_AUTO_TEST_CASE(contractSenderIsRejected)
 {

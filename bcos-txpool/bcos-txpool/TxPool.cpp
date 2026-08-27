@@ -25,7 +25,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include "txpool/validator/LedgerNonceChecker.h"
-#include "txpool/validator/TxValidator.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-utilities/ITTAPI.h>
 #include <oneapi/tbb/parallel_for.h>
@@ -218,12 +217,10 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
                                std::shared_ptr<bcos::bytes> _owned) -> task::Task<void> {
                     auto result = co_await _frontService->sendMessageByNodeID(_moduleID,
                         std::move(_nodeID),
-                        ::ranges::views::single(
-                            bytesConstRef(_owned->data(), _owned->size())),
-                        0);
+                        ::ranges::views::single(bytesConstRef(_owned->data(), _owned->size())), 0);
                     (void)result;
                 }(m_transactionSync->config()->frontService(), protocol::TREE_PUSH_TRANSACTION,
-                    node, owned));
+                                                                        node, owned));
             }
         }
     }
@@ -652,8 +649,7 @@ void TxPool::init()
     auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(
         nonceList, ledgerConfig->blockNumber(), blockLimit, m_checkBlockLimit);
 
-    auto validator = std::dynamic_pointer_cast<TxValidator>(m_config->txValidator());
-    validator->setLedgerNonceChecker(ledgerNonceChecker);
+    m_config->setLedgerNonceChecker(std::move(ledgerNonceChecker));
     TXPOOL_LOG(INFO) << LOG_DESC("init txs validator success");
 
     // init syncConfig
@@ -794,7 +790,7 @@ void bcos::txpool::TxPool::tryToSyncTxsFromPeers()
 
 task::Task<std::optional<u256>> bcos::txpool::TxPool::getWeb3PendingNonce(std::string_view address)
 {
-    co_return co_await m_config->txValidator()->web3NonceChecker()->getPendingNonce(address);
+    co_return co_await m_config->web3NonceChecker()->getPendingNonce(address);
 }
 
 void bcos::txpool::TxPool::asyncGetPendingTransactionSize(

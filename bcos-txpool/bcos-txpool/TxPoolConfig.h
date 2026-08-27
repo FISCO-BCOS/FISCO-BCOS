@@ -22,8 +22,9 @@
 #pragma once
 #include "bcos-tx-validator/TxValidator.h"
 #include "txpool/interfaces/NonceCheckerInterface.h"
-#include "txpool/interfaces/TxValidatorInterface.h"
 #include "txpool/utilities/Common.h"
+#include "txpool/validator/LedgerNonceChecker.h"
+#include "txpool/validator/Web3NonceChecker.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionMetaData.h>
@@ -35,7 +36,7 @@ class TxPoolConfig
 {
 public:
     using Ptr = std::shared_ptr<TxPoolConfig>;
-    TxPoolConfig(TxValidatorInterface::Ptr _txValidator,
+    TxPoolConfig(Web3NonceChecker::Ptr _web3NonceChecker,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
@@ -48,21 +49,17 @@ public:
 
     NonceCheckerInterface::Ptr txPoolNonceChecker();
 
-    TxValidatorInterface::Ptr txValidator();
-
-    /// The consolidated admission layer. Set once by TxPoolFactory, together with the
-    /// PoolNonceQuery that binds the two BCOS nonce checkers this pool owns privately -- the one
-    /// seam between the pool and bcos-tx-validator, so no public pool interface changes.
-    std::shared_ptr<txvalidator::TxValidator> admissionValidator() const
+    /// The two BCOS nonce indexes this pool owns. They used to hang off the legacy
+    /// TxValidatorInterface, whose only remaining job was to hold them -- its checking methods
+    /// were superseded by bcos-tx-validator. Owned here directly instead.
+    ///
+    /// ledgerNonceChecker is null until TxPool::init learns the chain's block limit; callers
+    /// must resolve it per use rather than capture it.
+    Web3NonceChecker::Ptr web3NonceChecker() const { return m_web3NonceChecker; }
+    LedgerNonceChecker::Ptr ledgerNonceChecker() const { return m_ledgerNonceChecker; }
+    void setLedgerNonceChecker(LedgerNonceChecker::Ptr ledgerNonceChecker)
     {
-        return m_admissionValidator;
-    }
-    txvalidator::PoolNonceQuery const& poolNonceQuery() const { return m_poolNonceQuery; }
-    void setAdmission(std::shared_ptr<txvalidator::TxValidator> validator,
-        txvalidator::PoolNonceQuery poolNonceQuery)
-    {
-        m_admissionValidator = std::move(validator);
-        m_poolNonceQuery = std::move(poolNonceQuery);
+        m_ledgerNonceChecker = std::move(ledgerNonceChecker);
     }
 
     /// SignaturePolicy for this chain, from experimental.check_transaction_signature.
@@ -83,9 +80,8 @@ public:
     bool checkTransactionSignature() const;
 
 private:
-    TxValidatorInterface::Ptr m_txValidator;
-    std::shared_ptr<txvalidator::TxValidator> m_admissionValidator;
-    txvalidator::PoolNonceQuery m_poolNonceQuery;
+    Web3NonceChecker::Ptr m_web3NonceChecker;
+    LedgerNonceChecker::Ptr m_ledgerNonceChecker;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;

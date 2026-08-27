@@ -297,9 +297,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     BOOST_TEST(_txpoolStorage->size() == originTxsSize - sealedTxs->size());
     // check the txpoolNonce
     auto txPoolNonceChecker = _faker->txpool()->txpoolConfig()->txPoolNonceChecker();
-    auto validator =
-        std::dynamic_pointer_cast<TxValidator>(_faker->txpool()->txpoolConfig()->txValidator());
-    auto ledgerNonceChecker = validator->ledgerNonceChecker();
+    auto ledgerNonceChecker = _faker->txpool()->txpoolConfig()->ledgerNonceChecker();
     for (const auto& tx : notifiedTxs | ::ranges::views::filter([](auto const& tx) {
              return tx->type() != static_cast<uint8_t>(TransactionType::Web3Transaction);
          }))
@@ -348,7 +346,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     // check the txpool config
     auto txpoolConfig = faker->txpool()->txpoolConfig();
     BOOST_TEST(txpoolConfig->txPoolNonceChecker());
-    BOOST_TEST(txpoolConfig->txValidator());
+    BOOST_TEST(txpoolConfig->web3NonceChecker());
     BOOST_TEST(txpoolConfig->blockFactory());
     BOOST_TEST(txpoolConfig->txFactory());
     BOOST_TEST(txpoolConfig->ledger());
@@ -629,7 +627,7 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     testAsyncFillBlock(faker, txpool, txpoolStorage, _cryptoSuite);
     std::cout << "#### testAsyncSealTxs" << std::endl;
     testAsyncSealTxs(faker, txpool, txpoolStorage, blockLimit, _cryptoSuite, [&]() {
-        txpool->txpoolConfig()->txValidator()->web3NonceChecker()->insert(
+        txpool->txpoolConfig()->web3NonceChecker()->insert(
             std::string(tx->sender()), u256("0xffffffffffffffffffffffffff"));
     });
     // clear all the txs before exit
@@ -679,7 +677,6 @@ BOOST_AUTO_TEST_CASE(fillWithSubmit)
     // // check the txpool config
     // auto txpoolConfig = faker->txpool()->txpoolConfig();
     // BOOST_TEST(txpoolConfig->txPoolNonceChecker());
-    // BOOST_TEST(txpoolConfig->txValidator());
     // BOOST_TEST(txpoolConfig->blockFactory());
     // BOOST_TEST(txpoolConfig->txFactory());
     // BOOST_TEST(txpoolConfig->ledger());

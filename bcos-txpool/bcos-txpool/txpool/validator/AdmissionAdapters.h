@@ -24,7 +24,6 @@
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-tx-validator/TxValidator.h"
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
-#include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
 #include "bcos-txpool/txpool/validator/LedgerNonceChecker.h"
 #include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include <memory>
@@ -68,7 +67,11 @@ txvalidator::AccountNonceReader makeAccountNonceReader(Web3NonceChecker::Ptr web
 /// Takes the validator rather than a LedgerNonceChecker: that checker is created later, once the
 /// chain's block limit is known (setLedgerNonceChecker), so capturing it here would capture null
 /// and silently disable blockLimit checking for the life of the process. Resolved per call.
+/// Resolves the LedgerNonceChecker at call time. It does not exist until TxPool::init learns
+/// the chain's block limit, so it cannot be captured by value when the query is built.
+using LedgerNonceCheckerProvider = std::function<LedgerNonceChecker::Ptr()>;
+
 txvalidator::PoolNonceQuery makePoolNonceQuery(
-    NonceCheckerInterface::Ptr txPoolNonceChecker, TxValidatorInterface::Ptr validator);
+    NonceCheckerInterface::Ptr txPoolNonceChecker, LedgerNonceCheckerProvider ledgerNonceChecker);
 
 }  // namespace bcos::txpool
