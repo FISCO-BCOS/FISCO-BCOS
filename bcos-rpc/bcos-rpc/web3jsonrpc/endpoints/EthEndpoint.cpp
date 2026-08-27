@@ -299,7 +299,20 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
                 {
                     continue;
                 }
-                bcos::u256 effectiveFee{std::string(effective)};
+                bcos::u256 effectiveFee{};
+                try
+                {
+                    effectiveFee = bcos::u256(std::string(effective));
+                }
+                catch (std::exception const& e)
+                {
+                    // Same posture as ReceiptResponse.cpp (R1-12): a corrupt receipt must
+                    // skip one feeHistory row + warn, never -32603 the whole response
+                    // (round-2 F3).
+                    WEB3_LOG(WARNING) << LOG_DESC("feeHistory: unparseable effectiveGasPrice")
+                                      << LOG_KV("value", effective) << LOG_KV("msg", e.what());
+                    continue;
+                }
                 auto const priority =
                     effectiveFee > baseFee ? effectiveFee - baseFee : bcos::u256(0);
                 auto const gasUsed = receipt->gasUsed();
