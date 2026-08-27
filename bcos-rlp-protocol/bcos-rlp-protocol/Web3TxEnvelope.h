@@ -140,7 +140,9 @@ struct Web3EnvelopeChainIdResult
     uint64_t chainId = 0;
 };
 
-/// Log names; spelled out so this header does not pull in magic_enum.
+/// Log names; spelled out so this header does not pull in magic_enum. The trailing
+/// "Unknown" return is unreachable today (MSVC C4715 totality) and does NOT mask -Wswitch:
+/// a kind added later fires that warning, since there is no default: label.
 [[nodiscard]] inline std::string_view toString(Web3EnvelopeChainIdKind kind) noexcept
 {
     switch (kind)
