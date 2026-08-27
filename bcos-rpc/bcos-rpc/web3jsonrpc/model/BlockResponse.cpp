@@ -19,7 +19,10 @@ void bcos::rpc::combineBlockResponse(Json::Value& result, const bcos::protocol::
     bool fullTxs, std::optional<bcos::crypto::HashType> canonicalHash)
 {
     auto blockHeader = block.blockHeader();
-    auto blockHash = canonicalHash.value_or(opAwareBlockHash(*blockHeader));
+    // Lazy fallback (#5496 finding BB): value_or's argument is evaluated eagerly, and both
+    // production callers always pass a canonical hash — the eager form made every OP header
+    // pay conversion+RLP+keccak once discarded per getBlockBy* response.
+    auto blockHash = canonicalHash ? *canonicalHash : opAwareBlockHash(*blockHeader);
     auto blockNumber = blockHeader->number();
     result["number"] = toQuantity(blockNumber);
     result["hash"] = blockHash.hexPrefixed();
