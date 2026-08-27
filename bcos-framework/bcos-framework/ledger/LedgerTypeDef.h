@@ -42,9 +42,11 @@ namespace bcos::ledger
 using MerkleProof = std::vector<crypto::HashType>;
 
 /// Parse the web3 chain-id system-config string as u256. nullopt on a corrupted value (non
-/// numeric, empty, negative, or an unparsed remainder) — the single shared parse for the three
-/// config consumers (TxValidator, sendRawTransaction, LedgerMethods CHAINID) so width
-/// semantics cannot drift. Envelope decode is uint64-capped. Also note: boost::
+/// numeric, empty, negative, or an unparsed remainder) — the single shared parse for the four
+/// config consumers (TxValidator, sendRawTransaction, LedgerMethods CHAINID, LedgerCache
+/// executor fallback) so width semantics cannot drift. Envelope decode is uint64-capped.
+/// Also note: boost::
+(fix(executor): route LedgerCache chainId fallback through parseWeb3ChainId (finding AS))
 /// multiprecision's u256 stream-in ACCEPTS a negative sign and wraps modulo 2^256 (probe-
 /// verified: lexical_cast<u256>("-5") returns 2^256-5, no throw); a leading '-' is rejected
 /// explicitly here so a mistyped negative config surfaces as a clear per-config error instead
