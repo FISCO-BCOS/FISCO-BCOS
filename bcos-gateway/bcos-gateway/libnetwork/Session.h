@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 
@@ -262,6 +263,20 @@ public:
     std::function<std::optional<bcos::Error>(
         SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
 
+    // Seqs of with-response sends registered through this session. The callback manager above is
+    // shared host-wide, so drop() uses this set to fail only THIS session's pending response
+    // waiters instead of popping callbacks that belong to other sessions.
+    void addPendingResponseSeq(uint32_t seq)
+    {
+        std::lock_guard lock(x_pendingResponseSeqs);
+        m_pendingResponseSeqs.emplace(seq);
+    }
+    void removePendingResponseSeq(uint32_t seq)
+    {
+        std::lock_guard lock(x_pendingResponseSeqs);
+        m_pendingResponseSeqs.erase(seq);
+    }
+
     uint64_t m_shutDownTimeThres = 50000;
     // 1min
     uint64_t m_idleTimeInterval = 60 * 1000;
@@ -288,6 +303,9 @@ public:
         std::vector<boost::asio::const_buffer> buffers;
     };
     std::shared_ptr<Writings> m_writings;
+
+    std::mutex x_pendingResponseSeqs;
+    std::unordered_set<uint32_t> m_pendingResponseSeqs;
 };
 
 class SessionFactory

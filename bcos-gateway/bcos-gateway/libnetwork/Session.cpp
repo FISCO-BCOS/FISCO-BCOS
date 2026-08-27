@@ -114,7 +114,18 @@ static void send(Session& session, ::ranges::input_range auto payloads,
         if (callback)
         {
             session.m_server.get().asioInterface()->post([callback = std::move(callback)]() {
-                callback(boost::asio::error::not_connected);
+                // the callback resumes a suspended coroutine whose await_resume may throw; keep
+                // the exception out of io_context::run() (same containment as the write-
+                // completion post)
+                try
+                {
+                    callback(boost::asio::error::not_connected);
+                }
+                catch (std::exception const& e)
+                {
+                    SESSION_LOG(WARNING) << LOG_DESC("early-return write callback exception")
+                                         << LOG_KV("what", boost::diagnostic_information(e));
+                }
             });
         }
         return;
@@ -148,7 +159,18 @@ static void send(Session& session, ::ranges::input_range auto payloads,
             {
                 session.m_server.get().asioInterface()->post(
                     [callback = std::move(pending.m_callback)]() {
-                        callback(boost::asio::error::not_connected);
+                        // same containment as the early-return branch above: the callback
+                        // resumes a coroutine whose await_resume may throw
+                        try
+                        {
+                            callback(boost::asio::error::not_connected);
+                        }
+                        catch (std::exception const& e)
+                        {
+                            SESSION_LOG(WARNING)
+                                << LOG_DESC("drained write callback exception")
+                                << LOG_KV("what", boost::diagnostic_information(e));
+                        }
                     });
             }
         }
@@ -378,6 +400,81 @@ void Session::drop(DisconnectReason _reason)
                 {
                     SESSION_LOG(WARNING) << LOG_DESC("write callback exception during drop")
                                          << LOG_KV("what", boost::diagnostic_information(e));
+                }
+            }
+        }
+    }
+
+    // Fail this session's pending response waiters: a request/response send
+    // (fastSendMessageWithResponse) suspends until a matching-seq reply arrives or its timeout
+    // fires, and neither happens once the session is gone. The callback manager is shared
+    // host-wide, so the flush is scoped to the seqs registered through THIS session
+    // (m_pendingResponseSeqs) — popping the whole manager would spuriously fail every in-flight
+    // request/response on every other session. Mirror the writeQueue drain above: fire
+    // NetworkTimeout off the caller's stack when an executor is available, since drop() is
+    // reachable from inside a sender's own await_suspend. Waiters registered after this flush
+    // are caught by the active() re-check in the awaitable; the callback manager is injected by
+    // the p2p layer and a bare Session (unit tests) has none.
+    if (m_sessionCallbackManager)
+    {
+        std::vector<SessionResponseCallback::Ptr> pendingCallbacks;
+        {
+            std::lock_guard lock(x_pendingResponseSeqs);
+            pendingCallbacks.reserve(m_pendingResponseSeqs.size());
+            for (auto seq : m_pendingResponseSeqs)
+            {
+                if (auto handler = m_sessionCallbackManager->getCallback(seq, true))
+                {
+                    pendingCallbacks.emplace_back(std::move(handler));
+                }
+            }
+            m_pendingResponseSeqs.clear();
+        }
+        for (auto& callback : pendingCallbacks)
+        {
+            if (!callback || !callback->callback)
+            {
+                continue;
+            }
+            if (callback->timeoutHandler)
+            {
+                callback->timeoutHandler->cancel();
+            }
+            if (m_server.get().haveNetwork())
+            {
+                m_server.get().asioInterface()->post(
+                    [callback = std::move(callback)]() mutable {
+                        // the callback resumes a coroutine whose await_resume may rethrow; keep
+                        // the exception out of io_context::run() (same containment as onMessage /
+                        // onTimeout / the write-completion post)
+                        try
+                        {
+                            callback->callback(
+                                NetworkException(
+                                    P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
+                                Message::Ptr());
+                        }
+                        catch (std::exception const& e)
+                        {
+                            SESSION_LOG(WARNING)
+                                << LOG_DESC("response callback exception during drop")
+                                << LOG_KV("what", boost::diagnostic_information(e));
+                        }
+                    });
+            }
+            else
+            {
+                try
+                {
+                    callback->callback(
+                        NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
+                        Message::Ptr());
+                }
+                catch (std::exception const& e)
+                {
+                    SESSION_LOG(WARNING)
+                        << LOG_DESC("response callback exception during drop")
+                        << LOG_KV("what", boost::diagnostic_information(e));
                 }
             }
         }
@@ -814,6 +911,13 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
                         << LOG_KV("seq", message->seq()) << LOG_KV("resp", message->isRespPacket());
                     return;
                 }
+                // erase on the session that REGISTERED the seq: the callback manager is
+                // host-shared, so a routed response can arrive on a different session than the
+                // request went out on — erasing here would miss the owner's bookkeeping
+                if (auto owner = callbackPtr->owner.lock())
+                {
+                    owner->removePendingResponseSeq(message->seq());
+                }
 
                 // with callback
                 if (callbackPtr->timeoutHandler)
@@ -848,6 +952,7 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
     {
         return;
     }
+    removePendingResponseSeq(seq);
     NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
     callback->callback(e, Message::Ptr());
 }
@@ -900,11 +1005,31 @@ task::Task<Message::Ptr> fastSendMessageWithResponse(
         std::reference_wrapper<View> m_view;
         std::variant<NetworkException, Message::Ptr> m_result;
 
-        constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(std::coroutine_handle<> handle)
+        // Resume gate: the zero-copy write enqueues raw views into this coroutine frame's buffers
+        // (header/payload), so the frame may only unwind once the write has completed. The
+        // coroutine is therefore resumed only when BOTH the write completion has fired AND a
+        // terminal event (response / timeout / teardown flush) has fired; resuming on the event
+        // alone would let a timeout or drop() destroy the frame while the write queue or an
+        // in-flight async_write still references it (use-after-free on the stalled-peer path).
+        struct ResumeGate
         {
+            std::mutex mutex;
+            bool writeDone = false;
+            bool eventFired = false;
+            std::coroutine_handle<> handle;
+        };
+        std::shared_ptr<ResumeGate> m_gate = std::make_shared<ResumeGate>();
+
+        constexpr static bool await_ready() noexcept { return false; }
+        bool await_suspend(std::coroutine_handle<> handle)
+        {
+            auto session = m_self.lock();
+            auto gate = m_gate;
+            gate->handle = handle;
+            auto seq = m_message.get().seq();
+
             auto handler = std::make_shared<ResponseCallback>();
-            handler->callback = [this, handle](NetworkException exception, Message::Ptr response) {
+            handler->callback = [this, gate](NetworkException exception, Message::Ptr response) {
                 if (exception.errorCode() != 0)
                 {
                     m_result.emplace<NetworkException>(std::move(exception));
@@ -913,9 +1038,21 @@ task::Task<Message::Ptr> fastSendMessageWithResponse(
                 {
                     m_result.emplace<Message::Ptr>(std::move(response));
                 }
-                handle.resume();
+                std::coroutine_handle<> toResume;
+                {
+                    std::lock_guard lock(gate->mutex);
+                    gate->eventFired = true;
+                    if (gate->writeDone)
+                    {
+                        toResume = gate->handle;
+                    }
+                }
+                if (toResume)
+                {
+                    // resume last: the coroutine frame (this awaitable included) dies inside
+                    toResume.resume();
+                }
             };
-            auto seq = m_message.get().seq();
             if (m_options.get().timeout > 0)
             {
                 handler->timeoutHandler.emplace(
@@ -937,8 +1074,112 @@ task::Task<Message::Ptr> fastSendMessageWithResponse(
                 });
                 handler->startTime = utcSteadyTime();
             }
+            handler->owner = m_self;
             m_sessionCallbackManager.get().addCallback(seq, std::move(handler));
-            ::send(*m_self.lock(), ::ranges::views::all(m_view.get()), {});
+            session->addPendingResponseSeq(seq);
+            // Teardown race: drop()'s flush may already have run before this callback was
+            // registered (drop is CAS single-shot, so it will not flush again). Fail the waiter
+            // fast instead of leaving it to the response timer.
+            if (!session->active())
+            {
+                session->removePendingResponseSeq(seq);
+                auto claimed = m_sessionCallbackManager.get().getCallback(seq, true);
+                if (claimed)
+                {
+                    // we still own the callback: complete inline — returning false means the
+                    // coroutine is never suspended and await_resume runs synchronously
+                    if (claimed->timeoutHandler)
+                    {
+                        claimed->timeoutHandler->cancel();
+                    }
+                    m_result.emplace<NetworkException>(
+                        NetworkException(P2PExceptionType::NetworkTimeout, "session dropped"));
+                    return false;
+                }
+                // the flush claimed the callback; no write will happen, so mark the write side
+                // done. The flush's event may already have fired (its posted lambda can run
+                // before this lock is taken): then m_result already holds its NetworkException
+                // (written before eventFired under this same mutex, hence visible here) —
+                // complete synchronously instead of suspending with no resume source left.
+                std::lock_guard lock(gate->mutex);
+                gate->writeDone = true;
+                return !gate->eventFired;
+            }
+
+            ::send(*session, ::ranges::views::all(m_view.get()),
+                // capture the manager by reference up front: after writeDone is stored, a
+                // concurrent event may resume and destroy this frame before the claim below
+                // runs, so the claim path must not load through `this` (the Host-owned manager
+                // outlives every session). Frame access is safe again once the claim is won —
+                // winning the manager pop excludes every event channel.
+                [this, gate, seq, &manager = m_sessionCallbackManager.get()](
+                    boost::system::error_code errorCode) {
+                    std::coroutine_handle<> toResume;
+                    bool claimOnWriteError = false;
+                    {
+                        std::lock_guard lock(gate->mutex);
+                        gate->writeDone = true;
+                        if (gate->eventFired)
+                        {
+                            toResume = gate->handle;
+                        }
+                        else if (errorCode.failed())
+                        {
+                            claimOnWriteError = true;
+                        }
+                    }
+                    if (claimOnWriteError)
+                    {
+                        // The write failed before any response/timeout/flush: no response can
+                        // arrive, so claim the callback back (cancelling its timer) and fail the
+                        // waiter now — otherwise the registered handler (which points into this
+                        // frame) would dangle after the frame unwinds.
+                        auto claimed = manager.getCallback(seq, true);
+                        if (claimed)
+                        {
+                            if (auto session = m_self.lock())
+                            {
+                                session->removePendingResponseSeq(seq);
+                            }
+                            if (claimed->timeoutHandler)
+                            {
+                                claimed->timeoutHandler->cancel();
+                            }
+                            m_result.emplace<NetworkException>(
+                                NetworkException(errorCode.value(), errorCode.message()));
+                            // wrap the resume: an exception escaping the resumed coroutine
+                            // (a with-response caller that does not catch) must not unwind
+                            // this asio handler — same containment as the drop flush
+                            try
+                            {
+                                gate->handle.resume();
+                            }
+                            catch (std::exception const& e)
+                            {
+                                SESSION_LOG(WARNING)
+                                    << LOG_DESC("write-error resume exception")
+                                    << LOG_KV("what", boost::diagnostic_information(e));
+                            }
+                        }
+                        // else: the event fired concurrently and resumes via the gate
+                    }
+                    else if (toResume)
+                    {
+                        // resume last: the coroutine frame (this awaitable included) dies inside;
+                        // wrapped for the same reason as above
+                        try
+                        {
+                            toResume.resume();
+                        }
+                        catch (std::exception const& e)
+                        {
+                            SESSION_LOG(WARNING)
+                                << LOG_DESC("write-complete resume exception")
+                                << LOG_KV("what", boost::diagnostic_information(e));
+                        }
+                    }
+                });
+            return true;
         }
         Message::Ptr await_resume()
         {

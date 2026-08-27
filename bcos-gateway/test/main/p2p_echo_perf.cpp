@@ -110,8 +110,22 @@ int main(int argc, const char** argv)
                     // update rate stat
                     reporter->update(_message->length(), true);
                     _message->setRespPacket();
-                    // echo message
-                    _session->asyncSendP2PMessage(_message, Options());
+                    // echo message through the coroutine fast path: the message (shared_ptr) is
+                    // passed as a coroutine parameter so it stays alive for the (possibly
+                    // deferred) send; its payload rides as a view (zero-copy).
+                    task::wait([](std::shared_ptr<P2PSession> _session,
+                                   P2PMessage::Ptr _message) -> task::Task<void> {
+                        try
+                        {
+                            co_await _session->fastSendP2PMessage(
+                                *_message, ::ranges::views::single(_message->payload()), Options());
+                        }
+                        catch (std::exception const& e)
+                        {
+                            std::cerr << "\t[Server] echo send exception: " << e.what()
+                                      << std::endl;
+                        }
+                    }(_session, _message));
                 });
 
             while (true)

@@ -134,7 +134,7 @@ protected:
         bcos::gateway::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
 
 private:
-    std::shared_ptr<bytes> buildAndEncodeMessage(uint32_t _type, bcos::bytesConstRef _data);
+    bcos::bytes buildAndEncodeMessage(uint32_t _type, bcos::bytesConstRef _data);
     virtual void onReceiveAMOPMessage(bcos::gateway::P2pID const& _nodeID,
         std::string const& _topic, bytesConstRef _data,
         std::function<void(bytesPointer, int16_t)> const& _responseCallback);
