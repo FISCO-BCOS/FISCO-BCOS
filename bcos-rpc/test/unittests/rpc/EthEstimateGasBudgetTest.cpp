@@ -72,11 +72,14 @@ BOOST_AUTO_TEST_CASE(UpwardAndBinarySearchShareSimulationBudget)
     // estimator enters the upward + binary search. Without a shared budget a uint64-scale
     // ceiling would drive ~64 doubling probes; the shared 16-sim budget must bound it.
     std::atomic<size_t> simulations{0};
-    instrumented->callHandler = [&](protocol::Transaction::Ptr, FakeScheduler2::CallCallback cb) {
+    std::atomic<int64_t> firstGasLimit{0};
+    instrumented->callHandler = [&](protocol::Transaction::Ptr tx,
+                                    FakeScheduler2::CallCallback cb) {
         auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
         auto n = ++simulations;
         if (n == 1)
         {
+            firstGasLimit.store(tx->gasLimit());
             receipt->inner().data.gasUsed = "21000";
             receipt->inner().data.status = 0;
         }
@@ -93,6 +96,10 @@ BOOST_AUTO_TEST_CASE(UpwardAndBinarySearchShareSimulationBudget)
     // First run + at most 16 search simulations.
     BOOST_CHECK_LE(simulations.load(), 17U);
     BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+    // Round-2 F2: the caller-declared gas (2^64-1) must be clamped to kRpcGasCap BEFORE
+    // run #1 (op-geth "Caller gas above allowance, capping") — not merely projected for
+    // the search bounds while the simulation itself runs at the self-declared gas.
+    BOOST_CHECK_EQUAL(firstGasLimit.load(), int64_t{30'000'000});
 }
 
 BOOST_AUTO_TEST_CASE(MalformedGasIsRejected)
@@ -103,37 +110,41 @@ BOOST_AUTO_TEST_CASE(MalformedGasIsRejected)
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
 }
 
-// estimateSearchBounds: explicit gas above the cap must not invert [lower, upper].
+// Pure bounds initializer table. Regression anchor: upperBound must be the limit run #1
+// ACTUALLY executed at. The caller gas is clamped to kRpcGasCap BEFORE run #1, so an
+// over-cap projection can no longer coexist with a higher honored limit — any ceiling
+// run #1 did not execute at would place upperBound below the known-bad lowerBound and
+// wrap the unsigned width test.
 BOOST_AUTO_TEST_CASE(EstimateSearchBoundsOrderingTable)
 {
     using bcos::rpc::estimateSearchBounds;
     const u256 cap{30'000'000};
 
-    // (1) Gas-less request: both projections equal the 30M default; ordinary ordered range.
+    // (1) Gas-less request: run #1 executes at the 30M default; ordinary ordered range.
     {
-        auto const bounds = estimateSearchBounds(u256{59'186}, cap, cap);
+        auto const bounds = estimateSearchBounds(u256{59'186}, cap);
         BOOST_CHECK(bounds.lowerBound == u256{59'186} && bounds.upperBound == cap);
         BOOST_CHECK_GE(bounds.upperBound, bounds.lowerBound);
     }
-    // (2) Explicit gas within cap: capped projection == actual limit; consumption below the
-    //     honored limit keeps the range ordered without touching the floor.
+    // (2) Explicit gas within cap: run #1 executes at the honored limit; consumption below
+    //     it keeps the range ordered without touching the floor.
     {
-        auto const bounds = estimateSearchBounds(u256{15'000}, u256{21'000}, u256{21'000});
+        auto const bounds = estimateSearchBounds(u256{15'000}, u256{21'000});
         BOOST_CHECK(bounds.lowerBound == u256{15'000});
         BOOST_CHECK(bounds.upperBound == u256{21'000});
     }
-    // (3) THE P REGRESSION: explicit 50M honored uncapped by run #1 while the ceiling stayed
-    //     at min(50M,30M)=30M. Pre-fix shape was [45M, 30M] — INVERTED. The clamp must seed
-    //     from the proven 50M anchor instead.
+    // (3) THE P REGRESSION, post-F2 shape: an over-cap request is clamped upstream, so run
+    //     #1 executes at the cap. If charge-reporting drift ever reports consumption ABOVE
+    //     that clamped limit, the shape would be [45M, 30M] — INVERTED — and the floor must
+    //     collapse the width so the search loops no-op instead of wrapping.
     {
-        auto const bounds = estimateSearchBounds(u256{45'000'000}, cap, u256{50'000'000});
-        BOOST_CHECK_GE(bounds.upperBound, bounds.lowerBound);
-        BOOST_CHECK_EQUAL(bounds.upperBound, u256{50'000'000});
+        auto const bounds = estimateSearchBounds(u256{45'000'000}, cap);
+        BOOST_CHECK(bounds.lowerBound == u256{45'000'000} && bounds.upperBound == u256{45'000'000});
     }
-    // (4) Defensive floor: consumption reported above even the uncapped request (charge
+    // (4) Defensive floor, generic shape: consumption above the run #1 limit (charge
     //     drift). Width collapses so the search loops no-op instead of wrapping.
     {
-        auto const bounds = estimateSearchBounds(u256{60'000'000}, cap, u256{50'000'000});
+        auto const bounds = estimateSearchBounds(u256{60'000'000}, u256{50'000'000});
         BOOST_CHECK(bounds.lowerBound == u256{60'000'000} && bounds.upperBound == u256{60'000'000});
     }
 }

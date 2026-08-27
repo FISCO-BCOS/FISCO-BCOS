@@ -101,23 +101,25 @@ inline std::string_view toView(const Json::Value& value)
     return view;
 }
 
-/// estimateGas search interval. upperBound is max(cap, first-run limit) so an explicit
-/// gas above the cap cannot invert the bounds.
+/// Pure initializer for the eth_estimateGas upward-search interval, regression-tested in
+/// EthEstimateGasBudgetTest. Given the first-run consumption (known bad) and the limit
+/// run #1 actually executed at (cap-clamped upstream), returns a well-ordered
+/// [lowerBound, upperBound] pair. Passing any ceiling run #1 did not execute at once
+/// inverted the bounds and wrapped the unsigned width test.
 struct EstimateSearchBounds
 {
     u256 lowerBound;
     u256 upperBound;
 };
-inline EstimateSearchBounds estimateSearchBounds(
-    const u256& gasUsed, const u256& searchCeiling, const u256& firstRunLimit)
+inline EstimateSearchBounds estimateSearchBounds(const u256& gasUsed, const u256& firstRunLimit)
 {
-    EstimateSearchBounds bounds{.lowerBound = gasUsed,          // known-bad
-        .upperBound = std::max(searchCeiling, firstRunLimit)};  // proven-viable anchor
+    EstimateSearchBounds bounds{.lowerBound = gasUsed,  // known-bad
+        .upperBound = firstRunLimit};                   // proven-viable anchor
     if (bounds.upperBound < bounds.lowerBound) [[unlikely]]
     {
         // Defensive floor: only reachable if the reported consumption exceeded even the
-        // uncapped request limit (charge-reporting drift). Clamp so every width subtraction
-        // below stays non-negative; the loops then no-op.
+        // cap-clamped run #1 limit (charge-reporting drift). Clamp so every width
+        // subtraction below stays non-negative; the loops then no-op.
         bounds.upperBound = bounds.lowerBound;
     }
     return bounds;

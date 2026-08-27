@@ -1252,29 +1252,41 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
 
-    // Smallest viable gas (op-geth). First run uses request gas if set (uncapped), else 30M.
-    // EIP-150 1/64 leftover means gasUsed may still revert; then search upward.
+    // op-geth's estimator answers the smallest viable limit found by simulation. Run #1
+    // executes at min(object-form request gas, kRpcGasCap) (op-geth: "Caller gas above
+    // allowance, capping"), or at CallRequest's absent-gas default of 30M otherwise.
+    // A tx hopping through a proxy DELEGATECALL or internal CALL keeps 1/64 of available
+    // gas per hop (EIP-150), so the minimum viable limit can strictly exceed consumption —
+    // re-simulate at gasUsed first, then binary-search upward, mirroring op-geth. Only
+    // object-form params carry an overridable gas field; a raw signed tx embeds its own.
     auto const objectForm = tx.isObject();
+    // Explicit request gas never raises the ceiling — it is clamped to kRpcGasCap BEFORE
+    // the first simulation, bounding both the run count and each run's workload for an
+    // unauthenticated request. A raw signed tx embeds its own gas and cannot be rewritten;
+    // its bound is the execution layer's (#5495).
     constexpr uint64_t kRpcGasCap = 30'000'000;
-    // searchCeiling caps the search; firstRunLimit is what run #1 actually used (may exceed cap).
-    auto const [effectiveFirstRunLimit, firstRunLimit] = [&]() -> std::pair<u256, u256> {
-        if (objectForm && tx.isMember("gas"))
+    // firstRunLimit is what run #1 actually executes at, hence the proven-viable upper
+    // anchor of the search: seeding the ceiling from anything the first run did not
+    // execute at once inverted the search bounds and wrapped the u256 width test.
+    std::optional<u256> explicitGas;
+    if (objectForm && tx.isMember("gas"))
+    {
+        if (!tx["gas"].isString()) [[unlikely]]
+(fix(rpc): clamp estimateGas gas cap before run #1; advance lowerBound on failed doubling (round-2 F2/F4))
         {
-            if (!tx["gas"].isString()) [[unlikely]]
-            {
-                BOOST_THROW_EXCEPTION(
-                    JsonRpcException(InvalidParams, "transaction gas must be a hex quantity"));
-            }
-            auto const parsed = safeFromQuantity(tx["gas"].asString());
-            if (!parsed) [[unlikely]]
-            {
-                BOOST_THROW_EXCEPTION(
-                    JsonRpcException(InvalidParams, "invalid transaction gas quantity"));
-            }
-            return {u256(std::min(*parsed, kRpcGasCap)), u256(*parsed)};
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "transaction gas must be a hex quantity"));
         }
-        return {u256(kRpcGasCap), u256(kRpcGasCap)};
-    }();
+        auto const parsed = safeFromQuantity(tx["gas"].asString());
+        if (!parsed) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "invalid transaction gas quantity"));
+        }
+        explicitGas = *parsed;
+    }
+    auto const firstRunLimit =
+        u256{std::min(explicitGas.value_or(u256{kRpcGasCap}), u256{kRpcGasCap})};
 
     // Resolve the head base fee ONCE: every call() below would otherwise re-read the header
     // (one storage read per EVM execution — up to 18 reads for a single request).
@@ -1290,9 +1302,18 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         }
     }
 
+    // ONE deep copy of the request for the whole estimation (the data field can be MBs); the
+    // gas field is the only thing ever rewritten — clamped to kRpcGasCap BEFORE run #1 when
+    // the caller self-declared more (round-2 F2), then set per candidate during the search.
+    Json::Value bounded = request;
+    if (explicitGas && *explicitGas > firstRunLimit)
+    {
+        bounded[0U]["gas"] = toQuantity(firstRunLimit);
+    }
+
     u256 gasUsed;
     Json::Value callResponse;
-    co_await call(request, callResponse, std::addressof(gasUsed), true, blockBaseFee);
+    co_await call(bounded, callResponse, std::addressof(gasUsed), true, blockBaseFee);
 
     if (callResponse.isMember("error"))
     {
@@ -1300,9 +1321,6 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         co_return;
     }
 
-    // ONE deep copy of the request for the whole search (the data field can be MBs); only
-    // the gas field is rewritten per iteration.
-    Json::Value bounded = request;
     auto estimate = gasUsed;
     // Doubling and binary search share one hard budget with the gasUsed re-simulation —
     // an uncapped doubling loop before a separately capped binary search lets a single
@@ -1315,9 +1333,10 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         --remaining;
         if (!co_await simulateAtGasLimit(bounded, estimate, blockBaseFee))
         {
-            // Search from gasUsed*2 (op-geth), not 30M.
-            auto searchBounds =
-                bcos::rpc::estimateSearchBounds(gasUsed, effectiveFirstRunLimit, firstRunLimit);
+            // op-geth starts the upward search at gasUsed*2: typical estimates converge to
+            // the exact limit within the shared simulation budget instead of stopping at
+            // the cap with a residual.
+            auto searchBounds = bcos::rpc::estimateSearchBounds(gasUsed, firstRunLimit);
             auto& lowerBound = searchBounds.lowerBound;
             auto& upperBound = searchBounds.upperBound;
             auto candidate = std::max(gasUsed * 2, lowerBound + 1);
@@ -1329,12 +1348,14 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
                     upperBound = candidate;
                     break;
                 }
+                // Failed probe is known-bad: advance lowerBound so the binary search does
+                // not re-probe proven-failed gas within the shared budget (round-2 F4).
+                lowerBound = candidate;
                 candidate = std::min(candidate * 2, upperBound);
             }
-            // else: upperBound stays put — when it equals firstRunLimit the first run already
-            // proved THAT limit viable; when the explicit-gas raise above kicked in, firstRunLimit
-            // IS that proven anchor too. (The pre-P comment claimed viability for a ceiling the
-            // first run never executed at whenever X > kRpcGasCap.)
+            // else: upperBound stays put — when it equals firstRunLimit the cap-clamped
+            // run #1 already proved THAT limit viable. (The pre-P comment claimed
+            // viability for a ceiling the first run never executed at.)
             while (upperBound - lowerBound > 1 && remaining > 0)
             {
                 --remaining;
