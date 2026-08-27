@@ -12,9 +12,9 @@
 
 #pragma once
 
-#include "EthereumState.h"
 #include "EVMPrecompiles.h"
 #include "EVMSupport.h"
+#include "EthereumState.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-utilities/BoostLog.h"
 #include <evmc/evmc.hpp>
@@ -48,7 +48,7 @@ struct EthBlockInfo
     std::optional<uint64_t> blob_gas_used;
     std::optional<uint64_t> excess_blob_gas;
     /// Blob gas price computed from excess_blob_gas (EIP-4844).
-    std::optional<intx::uint256> blob_base_fee;
+    std::optional<uint256> blob_base_fee;
 };
 
 /// Overrides applied only for the eth_call / eth_estimateGas dry-run path
@@ -78,20 +78,19 @@ inline address ethSender(protocol::Transaction const& tx)
 }
 
 /// Effective max gas price (EIP-1559 maxFeePerGas, legacy gasPrice fallback).
-inline intx::uint256 ethMaxGasPrice(
-    protocol::Transaction const& tx, EthCallParams const& callParams)
+inline uint256 ethMaxGasPrice(protocol::Transaction const& tx, EthCallParams const& callParams)
 {
     if (callParams.free)
         return 0;
     if (auto mf = tx.maxFeePerGas(); mf.has_value())
-        return evm::toIntxU256(*mf);
+        return *mf;
     if (auto gp = tx.gasPrice(); gp.has_value())
-        return evm::toIntxU256(*gp);
+        return *gp;
     return 0;
 }
 
 /// Effective max priority gas price (EIP-1559).
-inline intx::uint256 ethMaxPriorityGasPrice(
+inline uint256 ethMaxPriorityGasPrice(
     protocol::Transaction const& tx, EthCallParams const& callParams)
 {
     if (callParams.free)
@@ -104,15 +103,15 @@ inline intx::uint256 ethMaxPriorityGasPrice(
     if (tx.web3TypedTxKind() <= 1)
         return ethMaxGasPrice(tx, callParams);
     if (auto mp = tx.maxPriorityFeePerGas(); mp.has_value())
-        return evm::toIntxU256(*mp);
+        return *mp;
     return 0;
 }
 
 /// Max blob gas price (EIP-4844).
-inline intx::uint256 ethMaxBlobGasPrice(protocol::Transaction const& tx)
+inline uint256 ethMaxBlobGasPrice(protocol::Transaction const& tx)
 {
     if (auto mb = tx.maxFeePerBlobGas(); mb.has_value())
-        return evm::toIntxU256(*mb);
+        return *mb;
     return 0;
 }
 
@@ -175,8 +174,8 @@ class EthereumHost : public evmc::Host
 
 public:
     EthereumHost(evmc_revision rev, evmc::VM& vm, EthereumState<Storage>& state,
-        EthBlockInfo const& block, BlockHashLookup blockHashLookup,
-        protocol::Transaction const& tx, EthCallParams const& callParams, uint64_t chainId)
+        EthBlockInfo const& block, BlockHashLookup blockHashLookup, protocol::Transaction const& tx,
+        EthCallParams const& callParams, uint64_t chainId)
       : m_rev{rev},
         m_vm{vm},
         m_state{state},
@@ -201,7 +200,8 @@ public:
 private:
     [[nodiscard]] bool account_exists(const address& addr) const noexcept override;
 
-    [[nodiscard]] bytes32 get_storage(const address& addr, const bytes32& key) const noexcept override;
+    [[nodiscard]] bytes32 get_storage(
+        const address& addr, const bytes32& key) const noexcept override;
 
     evmc_storage_status set_storage(
         const address& addr, const bytes32& key, const bytes32& value) noexcept override;
@@ -329,7 +329,7 @@ template <class Storage>
 evmc::uint256be EthereumHost<Storage>::get_balance(const address& addr) const noexcept
 {
     const auto* const acc = m_state.find(addr);
-    return (acc != nullptr) ? intx::be::store<evmc::uint256be>(acc->balance) : evmc::uint256be{};
+    return (acc != nullptr) ? evm::toEvmcBE<evmc::uint256be>(acc->balance) : evmc::uint256be{};
 }
 
 namespace eth_host_detail
@@ -369,8 +369,8 @@ bytes32 EthereumHost<Storage>::get_code_hash(const address& addr) const noexcept
 }
 
 template <class Storage>
-size_t EthereumHost<Storage>::copy_code(const address& addr, size_t code_offset, uint8_t* buffer_data,
-    size_t buffer_size) const noexcept
+size_t EthereumHost<Storage>::copy_code(const address& addr, size_t code_offset,
+    uint8_t* buffer_data, size_t buffer_size) const noexcept
 {
     const auto code = m_state.get_code(addr);
     const auto code_slice = code.substr(std::min(code_offset, code.size()));
@@ -380,8 +380,7 @@ size_t EthereumHost<Storage>::copy_code(const address& addr, size_t code_offset,
 }
 
 template <class Storage>
-bool EthereumHost<Storage>::selfdestruct(
-    const address& addr, const address& beneficiary) noexcept
+bool EthereumHost<Storage>::selfdestruct(const address& addr, const address& beneficiary) noexcept
 {
     if (m_state.find(beneficiary) == nullptr)
         m_state.journal_create(beneficiary, false);
@@ -447,13 +446,12 @@ std::optional<evmc_message> EthereumHost<Storage>::prepare_message(evmc_message 
             assert(sender_acc.nonce != 0);
             const auto creation_sender_nonce = sender_acc.nonce - 1;
             if (msg.kind == EVMC_CREATE)
-                msg.recipient =
-                    evm::compute_create_address(msg.sender, creation_sender_nonce);
+                msg.recipient = evm::compute_create_address(msg.sender, creation_sender_nonce);
             else
             {
                 assert(msg.kind == EVMC_CREATE2);
-                msg.recipient = evm::compute_create2_address(msg.sender, msg.create2_salt,
-                    {msg.input_data, msg.input_size});
+                msg.recipient = evm::compute_create2_address(
+                    msg.sender, msg.create2_salt, {msg.input_data, msg.input_size});
             }
 
             // By EIP-2929, the access to new created address is never reverted.
@@ -486,7 +484,7 @@ evmc::Result EthereumHost<Storage>::create(const evmc_message& msg) noexcept
     new_acc->just_created = true;
 
     auto& sender_acc = m_state.get(msg.sender);  // TODO: Duplicated account lookup.
-    const auto value = intx::be::load<intx::uint256>(msg.value);
+    const auto value = evm::fromEvmcBE(msg.value);
     assert(sender_acc.balance >= value && "EVM must guarantee balance");
     m_state.journal_balance_change(msg.sender, sender_acc.balance);
     m_state.journal_balance_change(msg.recipient, new_acc->balance);
@@ -563,7 +561,7 @@ evmc::Result EthereumHost<Storage>::execute_message(const evmc_message& msg) noe
 
             // Transfer value: sender → recipient.
             // The sender's balance is already checked therefore the sender account must exist.
-            const auto value = intx::be::load<intx::uint256>(msg.value);
+            const auto value = evm::fromEvmcBE(msg.value);
             assert(m_state.get(msg.sender).balance >= value);
             m_state.journal_balance_change(msg.sender, m_state.get(msg.sender).balance);
             m_state.journal_balance_change(msg.recipient, dst_acc.balance);
@@ -626,23 +624,22 @@ evmc_tx_context EthereumHost<Storage>::get_tx_context() const noexcept
     const auto max_gas_price = ethMaxGasPrice(m_tx, m_callParams);
     const auto max_priority_gas_price = ethMaxPriorityGasPrice(m_tx, m_callParams);
     assert(max_gas_price >= base_fee || max_gas_price == 0);
-    const auto priority_gas_price =
-        std::min(max_priority_gas_price, max_gas_price - base_fee);
+    const auto priority_gas_price = std::min(max_priority_gas_price, max_gas_price - base_fee);
     const auto effective_gas_price = base_fee + priority_gas_price;
 
     const auto sender = ethSender(m_tx);
 
     return evmc_tx_context{
-        intx::be::store<evmc::uint256be>(effective_gas_price),  // By EIP-1559.
+        evm::toEvmcBE<evmc::uint256be>(effective_gas_price),  // By EIP-1559.
         sender,
         m_block.coinbase,
         m_block.number,
         m_block.timestamp,
         m_block.gas_limit,
         m_block.prev_randao,
-        intx::be::store<evmc::uint256be>(intx::uint256(static_cast<uint64_t>(m_chainId))),  // Chain ID (EIP-155).
+        evmc::uint256be{static_cast<uint64_t>(m_chainId)},  // Chain ID (EIP-155).
         evmc::uint256be{base_fee},
-        intx::be::store<evmc::uint256be>(m_block.blob_base_fee.value_or(0)),
+        evm::toEvmcBE<evmc::uint256be>(m_block.blob_base_fee.value_or(0)),
         m_blobHashes.data(),
         m_blobHashes.size(),
         nullptr,  // initcodes (TXCREATE) — not used by this executor.

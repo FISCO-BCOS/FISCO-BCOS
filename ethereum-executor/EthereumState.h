@@ -31,13 +31,12 @@
 #pragma once
 
 #include "EVMSupport.h"
-#include "bcos-framework/storage2/RollbackableStorage.h"
 #include "bcos-framework/ledger/EVMAccount.h"
+#include "bcos-framework/storage2/RollbackableStorage.h"
 #include "bcos-task/TBBWait.h"
-#include <cassert>
 #include <evmc/evmc.h>
+#include <cassert>
 #include <evmc/evmc.hpp>
-#include <intx/intx.hpp>
 #include <limits>
 #include <optional>
 #include <string>
@@ -52,7 +51,7 @@ using evmc::address;
 using evmc::bytes;
 using evmc::bytes32;
 using evmc::bytes_view;
-using intx::uint256;
+using uint256 = bcos::u256;
 
 /// The representation of the account storage value (ported evmone StorageValue).
 struct EthStorageValue
@@ -73,16 +72,15 @@ struct EthAccount
     static constexpr auto NonceMax = std::numeric_limits<uint64_t>::max();
 
     /// The keccak256 hash of the empty input. Used to identify empty account's code.
-    static constexpr auto EMPTY_CODE_HASH =
-        evmc::bytes32{{0xc5, 0xd2, 0x46, 0x01, 0x86, 0xf7, 0x23, 0x3c, 0x92, 0x7e, 0x7d, 0xb2,
-            0xdc, 0xc7, 0x03, 0xc0, 0xe5, 0x00, 0xb6, 0x53, 0xca, 0x82, 0x27, 0x3b, 0x7b, 0xfa,
-            0xd8, 0x04, 0x5d, 0x85, 0xa4, 0x70}};
+    static constexpr auto EMPTY_CODE_HASH = evmc::bytes32{{0xc5, 0xd2, 0x46, 0x01, 0x86, 0xf7, 0x23,
+        0x3c, 0x92, 0x7e, 0x7d, 0xb2, 0xdc, 0xc7, 0x03, 0xc0, 0xe5, 0x00, 0xb6, 0x53, 0xca, 0x82,
+        0x27, 0x3b, 0x7b, 0xfa, 0xd8, 0x04, 0x5d, 0x85, 0xa4, 0x70}};
 
     /// The account nonce.
     uint64_t nonce = 0;
 
     /// The account balance.
-    intx::uint256 balance;
+    uint256 balance;
 
     bytes32 code_hash = EMPTY_CODE_HASH;
 
@@ -129,7 +127,7 @@ namespace eth_state_detail
 struct ReadAccount
 {
     uint64_t nonce = 0;
-    intx::uint256 balance;
+    uint256 balance;
     bytes32 code_hash = EthAccount::EMPTY_CODE_HASH;
     bool has_storage = false;
 };
@@ -184,7 +182,7 @@ class EthereumState
 
     struct JournalBalanceChange : JournalBase
     {
-        intx::uint256 prev_balance;
+        uint256 prev_balance;
     };
 
     struct JournalTouched : JournalBase
@@ -271,7 +269,7 @@ class EthereumState
         if (nonceVal.has_value())
             acc.nonce = static_cast<uint64_t>(bcos::u256(nonceVal.value()));
 
-        acc.balance = evm::toIntxU256(balance);
+        acc.balance = balance;
 
         if (hasCodeHash)
             std::copy_n(codeHashVal.data(), sizeof(evmc_bytes32), acc.code_hash.bytes);
@@ -314,8 +312,8 @@ class EthereumState
         auto tableName = co_await evmAccount.path();
 
         bool hasStorage = false;
-        auto it = co_await storage2::range(storage, storage2::RANGE_SEEK,
-            executor_v1::StateKey{tableName, std::string_view{}});
+        auto it = co_await storage2::range(
+            storage, storage2::RANGE_SEEK, executor_v1::StateKey{tableName, std::string_view{}});
 
         while (auto kv = co_await it.next())
         {
@@ -435,7 +433,7 @@ public:
     /// Touches (as in EIP-161) an existing account or inserts new erasable account.
     EthAccount& touch(const address& addr);
 
-    void journal_balance_change(const address& addr, const intx::uint256& prev_balance);
+    void journal_balance_change(const address& addr, const uint256& prev_balance);
 
     void journal_storage_change(
         const address& addr, const bytes32& key, const EthStorageValue& value);
@@ -545,7 +543,7 @@ EthStorageValue& EthereumState<Storage>::get_storage(const address& addr, const 
 
 template <class Storage>
 void EthereumState<Storage>::journal_balance_change(
-    const address& addr, const intx::uint256& prev_balance)
+    const address& addr, const uint256& prev_balance)
 {
     m_journal.emplace_back(JournalBalanceChange{{addr}, prev_balance});
 }
@@ -674,7 +672,7 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
         if (!co_await bcosAcc.exists())
             co_await bcosAcc.create();
         co_await bcosAcc.setNonce(std::to_string(acc.nonce));
-        co_await bcosAcc.setBalance(evm::toBcosU256(acc.balance));
+        co_await bcosAcc.setBalance(acc.balance);
         // ALWAYS write the codeHash row, not just on code_changed. A previous
         // transaction in the same block may have self-destructed this address
         // (clearAccountStorage deletes EVERY account row incl. codeHash as
