@@ -719,6 +719,11 @@ packages:
   - "."
 overrides:
   snappy: 7.3.3
+# pnpm >= 10.16 blocks dependency build scripts by default and fails the
+# install with ERR_PNPM_IGNORED_BUILDS. classic-level (Lodestar's native
+# LevelDB binding) must run its prebuild-install script to be usable.
+onlyBuiltDependencies:
+  - classic-level
 WS_EOF
         if ! (cd "${LODESTAR_DIR}" && pnpm install --reporter=append-only) > "${LODESTAR_OUT}" 2>&1; then
             log_info "Lodestar install output (last 20 lines):"
