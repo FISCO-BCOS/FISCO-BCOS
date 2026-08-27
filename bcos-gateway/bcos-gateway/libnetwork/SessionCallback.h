@@ -16,6 +16,8 @@
 namespace bcos::gateway
 {
 
+class Session;
+
 using SessionCallbackFunc = std::function<void(NetworkException, Message::Ptr)>;
 
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
@@ -25,6 +27,10 @@ struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
     uint64_t startTime;
     SessionCallbackFunc callback;
     std::optional<boost::asio::steady_timer> timeoutHandler;
+    // the session the request was registered through: the manager is shared host-wide, so a
+    // routed response can be claimed on a different session than the owner — the owner's
+    // pending-seq bookkeeping must be updated through this pointer, not the claiming session
+    std::weak_ptr<Session> owner;
 };
 
 using SessionResponseCallback = ResponseCallback;

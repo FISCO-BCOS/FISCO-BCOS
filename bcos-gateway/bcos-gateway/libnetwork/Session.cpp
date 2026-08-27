@@ -888,7 +888,13 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
                         << LOG_KV("seq", message->seq()) << LOG_KV("resp", message->isRespPacket());
                     return;
                 }
-                session->removePendingResponseSeq(message->seq());
+                // erase on the session that REGISTERED the seq: the callback manager is
+                // host-shared, so a routed response can arrive on a different session than the
+                // request went out on — erasing here would miss the owner's bookkeeping
+                if (auto owner = callbackPtr->owner.lock())
+                {
+                    owner->removePendingResponseSeq(message->seq());
+                }
 
                 // with callback
                 if (callbackPtr->timeoutHandler)
@@ -1045,9 +1051,9 @@ task::Task<Message::Ptr> fastSendMessageWithResponse(
                 });
                 handler->startTime = utcSteadyTime();
             }
+            handler->owner = m_self;
             m_sessionCallbackManager.get().addCallback(seq, std::move(handler));
             session->addPendingResponseSeq(seq);
-
             // Teardown race: drop()'s flush may already have run before this callback was
             // registered (drop is CAS single-shot, so it will not flush again). Fail the waiter
             // fast instead of leaving it to the response timer.
@@ -1067,11 +1073,14 @@ task::Task<Message::Ptr> fastSendMessageWithResponse(
                         NetworkException(P2PExceptionType::NetworkTimeout, "session dropped"));
                     return false;
                 }
-                // the flush claimed the callback and will fire the event; no write will happen,
-                // so mark the write side done and let the event resume the coroutine
+                // the flush claimed the callback; no write will happen, so mark the write side
+                // done. The flush's event may already have fired (its posted lambda can run
+                // before this lock is taken): then m_result already holds its NetworkException
+                // (written before eventFired under this same mutex, hence visible here) —
+                // complete synchronously instead of suspending with no resume source left.
                 std::lock_guard lock(gate->mutex);
                 gate->writeDone = true;
-                return true;
+                return !gate->eventFired;
             }
 
             ::send(*session, ::ranges::views::all(m_view.get()),
