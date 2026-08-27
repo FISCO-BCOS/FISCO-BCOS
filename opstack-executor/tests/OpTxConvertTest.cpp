@@ -13,11 +13,12 @@
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
 
-using bcos::evm::engine::OpConsensusError;
+using bcos::evm::OpConsensusError;
 using bcos::executor_v1::eth::toEvmoneTransaction;
 
 namespace
@@ -39,6 +40,9 @@ public:
     std::string m_chainId;        // DECIMAL string (Web3Transaction.cpp writes std::to_string)
     std::string m_nonce = "0x0";  // hex quantity
     bcos::bytes m_extraBytes;
+    bcos::protocol::Web3AccessList m_accessList;
+    bcos::protocol::VersionedHashes m_blobHashes;
+    bcos::protocol::AuthorizationList m_authList;
 
     uint8_t web3TypedTxKind() const override { return m_kind; }
     bcos::bytesConstRef input() const override
@@ -62,6 +66,9 @@ public:
     {
         return bcos::bytesConstRef{m_extraBytes.data(), m_extraBytes.size()};
     }
+    bcos::protocol::Web3AccessList web3AccessList() const override { return m_accessList; }
+    bcos::protocol::AuthorizationList authorizationList() const override { return m_authList; }
+    bcos::protocol::VersionedHashes blobVersionedHashes() const override { return m_blobHashes; }
 
     // ---- unused stubs ----
     void decode(bcos::bytesConstRef) override {}
@@ -206,6 +213,69 @@ BOOST_AUTO_TEST_CASE(ValueSenderAndInputPassThrough)
         BOOST_CHECK_EQUAL(evmTx.sender.bytes[i], 0xaa);
     BOOST_REQUIRE_EQUAL(evmTx.data.size(), 2u);
     BOOST_CHECK_EQUAL(evmTx.data[0], 0xde);
+}
+
+BOOST_AUTO_TEST_CASE(SenderLengthRejectsPartialAddressButAllowsCallDefault)
+{
+    {
+        FakeTransaction tx;
+        tx.m_sender.clear();  // eth_call without `from`: intentional address(0)
+        auto const evmTx = toEvmoneTransaction(tx);
+        BOOST_CHECK(evmc::is_zero(evmTx.sender));
+    }
+    {
+        FakeTransaction tx;
+        tx.m_sender.resize(sizeof(evmc_address) - 1);
+        BOOST_CHECK_THROW(toEvmoneTransaction(tx), OpConsensusError);
+    }
+    {
+        FakeTransaction tx;
+        tx.m_sender.resize(sizeof(evmc_address) + 1);
+        BOOST_CHECK_THROW(toEvmoneTransaction(tx), OpConsensusError);
+    }
+}
+
+// T01: access-list / blob / auth are FixedBytes — N-1/N+1 cannot exist on this API.
+// Pin that every byte of the N-byte value reaches evmone (no copy_n truncation).
+BOOST_AUTO_TEST_CASE(FixedWidthFieldsCopyEveryByte)
+{
+    FakeTransaction tx;
+    tx.m_kind = 4;
+
+    bcos::protocol::Web3AccessListEntry entry;
+    std::fill(entry.account.begin(), entry.account.end(), static_cast<bcos::byte>(0x11));
+    bcos::h256 storageKey;
+    std::fill(storageKey.begin(), storageKey.end(), static_cast<bcos::byte>(0x22));
+    entry.storageKeys.push_back(storageKey);
+    tx.m_accessList.push_back(entry);
+
+    bcos::h256 blob;
+    std::fill(blob.begin(), blob.end(), static_cast<bcos::byte>(0x33));
+    tx.m_blobHashes.push_back(blob);
+
+    bcos::protocol::Authorization auth;
+    std::fill(auth.address.begin(), auth.address.end(), static_cast<bcos::byte>(0x44));
+    std::fill(auth.signer.begin(), auth.signer.end(), static_cast<bcos::byte>(0x55));
+    tx.m_authList.push_back(auth);
+
+    auto const evmTx = toEvmoneTransaction(tx);
+    BOOST_REQUIRE_EQUAL(evmTx.access_list.size(), 1u);
+    BOOST_CHECK_EQUAL(evmTx.access_list[0].first.bytes[0], 0x11);
+    BOOST_CHECK_EQUAL(evmTx.access_list[0].first.bytes[19], 0x11);
+    BOOST_REQUIRE_EQUAL(evmTx.access_list[0].second.size(), 1u);
+    BOOST_CHECK_EQUAL(evmTx.access_list[0].second[0].bytes[0], 0x22);
+    BOOST_CHECK_EQUAL(evmTx.access_list[0].second[0].bytes[31], 0x22);
+
+    BOOST_REQUIRE_EQUAL(evmTx.blob_hashes.size(), 1u);
+    BOOST_CHECK_EQUAL(evmTx.blob_hashes[0].bytes[0], 0x33);
+    BOOST_CHECK_EQUAL(evmTx.blob_hashes[0].bytes[31], 0x33);
+
+    BOOST_REQUIRE_EQUAL(evmTx.authorization_list.size(), 1u);
+    BOOST_CHECK_EQUAL(evmTx.authorization_list[0].addr.bytes[0], 0x44);
+    BOOST_CHECK_EQUAL(evmTx.authorization_list[0].addr.bytes[19], 0x44);
+    BOOST_REQUIRE(evmTx.authorization_list[0].signer.has_value());
+    BOOST_CHECK_EQUAL(evmTx.authorization_list[0].signer->bytes[0], 0x55);
+    BOOST_CHECK_EQUAL(evmTx.authorization_list[0].signer->bytes[19], 0x55);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

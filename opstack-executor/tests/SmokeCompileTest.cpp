@@ -1,9 +1,10 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// SmokeCompileTest — opstack-executor is a pure INTERFACE (header-only) library whose templates
-// compile ONLY at instantiation. This TU includes every public header and EXPLICITLY
-// INSTANTIATES the template surface, so a base-API break fails this build immediately.
+// SmokeCompileTest — opstack-executor is a compiled library (OpBlockExecute.cpp and friends),
+// but its template surface is header-only and compiles ONLY at instantiation. This TU includes
+// every public header and EXPLICITLY INSTANTIATES that surface, so a base-API break fails this
+// build immediately.
 
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpCommitments.h>
@@ -45,7 +46,7 @@ bcos::executor_v1::opstack::OpstackExecutor::executeTransaction<MutableStorage>(
 template bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr>
 bcos::executor_v1::opstack::OpstackExecutor::executeDeposit<MutableStorage>(MutableStorage&,
     bcos::protocol::BlockHeader const&, bcos::evm::opstack::DepositTx const&, uint64_t, int64_t,
-    bcos::ledger::LedgerConfig const&, evmone::state::BlockHashes const*);
+    bcos::ledger::LedgerConfig const&, evmone::state::BlockHashes const*, bool);
 
 // The block-pre template from OpBlockExecute.h.
 template void bcos::evm::engine::preBlockOpSteps<MutableStorage, std::vector<bcos::bytes>>(

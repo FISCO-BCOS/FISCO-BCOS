@@ -54,9 +54,10 @@ struct EthBlockHeaderData
     bcos::Address coinbase;
     bcos::h64 nonce;
     int64_t number{0};
-    // Always MILLISECONDS — mirrors the internal BlockHeader domain for every version.
-    // The RLP surface always carries seconds; rlpEncode (/1000) and rlpDecode (×1000)
-    // convert unconditionally at that bridge.
+    // WIRE SECONDS, unconditionally — the same unit in every owner (the EthBlockHeaderData
+    // codec, EthBlock, ommers, and EthBlockHeader::data()). The internal BlockHeader's
+    // millisecond timestamp lives in EthBlockHeader::m_timestampMs and is converted to/from
+    // this field only at the rlpEncode/rlpDecode bridge (rlpEncode /1000, rlpDecode ×1000).
     int64_t timestamp{0};
 
     // Optional fields (16–23)
@@ -66,6 +67,20 @@ struct EthBlockHeaderData
     std::optional<bcos::u256> excessBlobGas;
     std::optional<bcos::h256> parentBeaconRoot;
     std::optional<bcos::h256> requestsHash;
+
+    bool operator==(const EthBlockHeaderData& rhs) const
+    {
+        return logsBloom == rhs.logsBloom && parentInfo == rhs.parentInfo &&
+               uncleHash == rhs.uncleHash && stateRoot == rhs.stateRoot && txsRoot == rhs.txsRoot &&
+               receiptsRoot == rhs.receiptsRoot && difficulty == rhs.difficulty &&
+               gasLimit == rhs.gasLimit && gasUsed == rhs.gasUsed && prevRandao == rhs.prevRandao &&
+               extraData == rhs.extraData && coinbase == rhs.coinbase && nonce == rhs.nonce &&
+               number == rhs.number && timestamp == rhs.timestamp && baseFee == rhs.baseFee &&
+               withdrawalsHash == rhs.withdrawalsHash && blobGasUsed == rhs.blobGasUsed &&
+               excessBlobGas == rhs.excessBlobGas && parentBeaconRoot == rhs.parentBeaconRoot &&
+               requestsHash == rhs.requestsHash;
+    }
+    bool operator!=(const EthBlockHeaderData& rhs) const { return !(*this == rhs); }
 };
 
 // Error codes for EthBlockHeader conversion failures.
@@ -118,19 +133,55 @@ public:
     static bcos::Error::UniquePtr calculateRLPHash(bcos::protocol::BlockHeader& header);
     /// Compute keccak256(rlp(header)) WITHOUT validation or state mutation — usable for
     /// FISCO-native/OP headers (EthBlockVersion::NON_ETH) that calculateRLPHash's
-    /// validateHeader rejects. Returns the 32-byte Ethereum block hash. The header's
-    /// timestamp is internal milliseconds (every version); rlpEncode divides by 1000
-    /// unconditionally and throws std::invalid_argument if it is not a whole number of
-    /// seconds (ms not divisible by 1000) — callers that cannot tolerate exceptions
-    /// should use calculateRLPHash (which returns Error::UniquePtr) instead.
+    /// validateHeader rejects. Returns the 32-byte Ethereum block hash.
+    /// The header's timestamp is internal milliseconds (every version); the RLP surface
+    /// carries seconds, converted at the rlpEncode/rlpDecode bridge — rlpEncode throws
+    /// std::invalid_argument if the internal timestamp is not a whole number of seconds.
+    /// Callers that cannot tolerate exceptions should use calculateRLPHash (which returns
+    /// Error::UniquePtr) instead.
     static bcos::crypto::HashType computeHash(const bcos::protocol::BlockHeader& header) noexcept(
         false);
 
     const EthBlockHeaderData& data() const { return m_data; }
 
+    // Internal-domain (milliseconds) timestamp, mirroring the base BlockHeader. The
+    // EthBlockHeaderData::timestamp member above is always wire seconds.
+    int64_t timestampMs() const { return m_timestampMs; }
+
 private:
     EthBlockHeaderData m_data;
+    int64_t m_timestampMs{0};
     EthBlockVersion m_version{EthBlockVersion::NON_ETH};
 };
 
+}  // namespace bcos::protocol
+
+namespace bcos::codec::rlp
+{
+// Codec overloads for the pure-data header struct, so EthBlockHeaderData can be embedded in
+// larger Ethereum structures (block bodies, uncle lists, ...) with the same canonical field
+// order as EthBlockHeader::rlpEncode/rlpDecode. EthBlockHeader::rlpEncode/rlpDecode delegate
+// here, so the field order lives in exactly one place.
+size_t length(const protocol::EthBlockHeaderData& _headerData) noexcept;
+void encode(bcos::bytes& _out, const protocol::EthBlockHeaderData& _headerData) noexcept;
+bcos::Error::UniquePtr decode(
+    bcos::bytesRef& _in, protocol::EthBlockHeaderData& _headerData) noexcept;
+}  // namespace bcos::codec::rlp
+
+namespace bcos::protocol
+{
+// ADL-visible delegators (see EthLog.h): let EthBlockHeaderData participate in
+// std::vector<EthBlockHeaderData> (ommers) / variadic-list encode/decode.
+inline size_t length(const EthBlockHeaderData& _headerData) noexcept
+{
+    return codec::rlp::length(_headerData);
+}
+inline void encode(bcos::bytes& _out, const EthBlockHeaderData& _headerData) noexcept
+{
+    codec::rlp::encode(_out, _headerData);
+}
+inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, EthBlockHeaderData& _headerData) noexcept
+{
+    return codec::rlp::decode(_in, _headerData);
+}
 }  // namespace bcos::protocol

@@ -1,6 +1,6 @@
-// OpCommon.h 工具函数单元测试——bounds-checked 窄化、hex 格式化、fixed-size 转换。
-// 这些是 block-execution 的转换面（narrowGasUsed 防回执 gas 污染 gas 池、hexCumulative 是
-// 回执根叶子编码输入、toEvmc* 是 bcos↔evmc 的 memcpy 契约），此前零测试。
+// OpCommon.h 工具函数单元测试——bounds-checked 窄化与 fixed-size 转换。
+// 这些是 block-execution 的转换面（narrowGasUsed 防回执 gas 污染 gas 池、toEvmc* 是
+// bcos↔evmc 的 memcpy 契约），此前零测试。
 #include <opstack-executor/OpCommon.h>
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
@@ -8,6 +8,7 @@
 
 using namespace bcos::evm::opstack;
 using namespace bcos::evm::engine;
+using bcos::evm::OpConsensusError;
 using namespace bcos::evm::engine::detail;
 using intx::operator""_u256;
 
@@ -34,15 +35,6 @@ BOOST_AUTO_TEST_CASE(narrowGasUsed_bounds)
         threw = true;
     }
     BOOST_CHECK(threw);
-}
-
-// hexCumulative："0x" + 小写 hex，最小表示（op-geth hexutil.Uint64 语义）。
-BOOST_AUTO_TEST_CASE(hexCumulative_format)
-{
-    BOOST_CHECK_EQUAL(hexCumulative(0), "0x0");
-    BOOST_CHECK_EQUAL(hexCumulative(1), "0x1");
-    BOOST_CHECK_EQUAL(hexCumulative(21000), "0x5208");
-    BOOST_CHECK_EQUAL(hexCumulative(0xffffffffffffffffULL), "0xffffffffffffffff");
 }
 
 // narrowU256ToU64：界内直通、超 uint64 throw OpConsensusError。
