@@ -1019,7 +1019,9 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
     BOOST_CHECK_EQUAL(result["executionRequests"].size(), 0);
 }
 
-// UnsupportedEngineApiVersion maps to -38005, not -32603. FCU itself stops at V3.
+// UnsupportedEngineApiVersion maps to -38005, not -32603. The FCU window tops out at V3;
+// V4 requests answer -38005 by design (Karst payload building is FCU V3 / getPayload V5 /
+// newPayload V4), so ops configuring Isthmus op-node must not expect V4 support.
 BOOST_AUTO_TEST_CASE(engineErrorMapperOutOfWindowVersion)
 {
     BOOST_CHECK_EQUAL(bcos::rpc::mapEngineErrorCode(bcos::engine::UnsupportedEngineApiVersion{}),
