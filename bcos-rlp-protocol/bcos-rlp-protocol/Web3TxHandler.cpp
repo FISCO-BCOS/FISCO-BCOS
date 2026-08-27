@@ -309,6 +309,11 @@ struct LegacyTxHandler : Web3TxHandler
                     out.signatureV = normalizedV;
                     out.signatureR = bcos::bytes(item8.begin(), item8.end());
                     out.signatureS = bcos::bytes(item9.begin(), item9.end());
+                    // Pad on adoption too: a minimal-width RLP item
+                    // (leading-zero r/s) stored trimmed would flow into sender()'s 65-byte
+                    // r||s||v recovery input as 64 bytes and break it. padSignature is
+                    // idempotent, so the withSig re-pad below is a no-op now.
+                    padSignature(out.signatureR, out.signatureS);
                 }
             }
         }
@@ -508,6 +513,10 @@ struct EIP2930TxHandler : Web3TxHandler
         if (withSig || !in.empty())
         {
             // Dual-form: consume (yParity, r, s) when present. yParity must be 0x80 or 0x01.
+            // NOTE the unsigned spelling this admits when withSig is false: an all-empty
+            // trailer (0x80 0x80 0x80) decodes to parity 0 with empty r/s — the typed twin
+            // of the legacy chainId 27/28 preimage ambiguity, hashing differently from the
+            // bare field-only preimage wherever these bytes are committed verbatim.
             decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             if (decodeError == nullptr)
             {
@@ -725,6 +734,10 @@ struct EIP1559TxHandler : Web3TxHandler
         if (withSig || !in.empty())
         {
             // Dual-form: consume (yParity, r, s) when present. yParity must be 0x80 or 0x01.
+            // NOTE the unsigned spelling this admits when withSig is false: an all-empty
+            // trailer (0x80 0x80 0x80) decodes to parity 0 with empty r/s — the typed twin
+            // of the legacy chainId 27/28 preimage ambiguity, hashing differently from the
+            // bare field-only preimage wherever these bytes are committed verbatim.
             decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             if (decodeError == nullptr)
             {
@@ -1107,6 +1120,10 @@ struct EIP4844TxHandler : Web3TxHandler
         if (withSig || !in.empty())
         {
             // Dual-form: consume (yParity, r, s) when present. yParity must be 0x80 or 0x01.
+            // NOTE the unsigned spelling this admits when withSig is false: an all-empty
+            // trailer (0x80 0x80 0x80) decodes to parity 0 with empty r/s — the typed twin
+            // of the legacy chainId 27/28 preimage ambiguity, hashing differently from the
+            // bare field-only preimage wherever these bytes are committed verbatim.
             decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             if (decodeError == nullptr)
             {
@@ -1332,6 +1349,10 @@ struct EIP7702TxHandler : Web3TxHandler
         if (withSig || !in.empty())
         {
             // Dual-form: consume (yParity, r, s) when present. yParity must be 0x80 or 0x01.
+            // NOTE the unsigned spelling this admits when withSig is false: an all-empty
+            // trailer (0x80 0x80 0x80) decodes to parity 0 with empty r/s — the typed twin
+            // of the legacy chainId 27/28 preimage ambiguity, hashing differently from the
+            // bare field-only preimage wherever these bytes are committed verbatim.
             decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             if (decodeError == nullptr)
             {
