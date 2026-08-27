@@ -10,7 +10,7 @@
 // system_call_block_start is a no-op (no code at the system-contract addresses), so every case
 // reaches the shape checks.
 
-#include "OpTestReceiptFactory.h"
+#include <bcos-evm/test/opstack/OpTestReceiptFactory.h>
 
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpstackExecutor.h>
