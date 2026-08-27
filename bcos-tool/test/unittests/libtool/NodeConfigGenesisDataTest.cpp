@@ -359,7 +359,8 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     BOOST_REQUIRE_NO_THROW(cfg2.loadGenesisConfigFromString(
         base + "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\n"
                "cancun_time=1710338135\nprague_time=1746612312\n"));
-    BOOST_CHECK(data != bcos::tool::generateGenesisData(cfg2.genesisConfig(), *cfg2.ledgerConfig()));
+    BOOST_CHECK(
+        data != bcos::tool::generateGenesisData(cfg2.genesisConfig(), *cfg2.ledgerConfig()));
 
     // No [fork_timestamps] section -> no [forkTimestamps] emission (legacy chains stay
     // byte-identical); an explicit evm_revision satisfies the v2 guard instead.
