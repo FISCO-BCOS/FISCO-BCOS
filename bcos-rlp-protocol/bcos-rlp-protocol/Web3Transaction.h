@@ -42,12 +42,8 @@ struct Transaction;
 
 namespace bcos
 {
-/// EIP-2 canonical-s gate, exported so every admission funnel enforces it (#5496 finding O):
-/// the raw-bytes decode (Web3Transaction::decode) and the tars/P2P import (TxValidator)
-/// share this one rule. Returns a decode error when r/s fall outside EIP-2's valid range
-/// (r,s in [1, n-1], s <= n/2), or when either scalar exceeds 32 bytes; nullptr otherwise.
-/// r/s are raw big-endian scalars; inputs shorter than 32 bytes are zero-padded by callers
-/// (padSignature) before the range math. Unsigned forms (deposits) skip the call entirely.
+/// EIP-2 low-s check for decode and TxValidator. r,s in [1, n-1], s <= n/2, each <= 32 bytes.
+/// Callers pad short scalars. Returns an error, or nullptr if ok. Deposits skip this.
 [[nodiscard]] bcos::Error::UniquePtr checkEip2Signature(
     bcos::bytes const& signatureR, bcos::bytes const& signatureS);
 

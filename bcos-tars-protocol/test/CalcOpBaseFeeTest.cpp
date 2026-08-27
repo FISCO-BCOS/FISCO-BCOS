@@ -20,8 +20,7 @@ using namespace bcostars::protocol;
 
 namespace bcos::test
 {
-// Message-pinned throw probe (#5496 finding X): the three guards here share one exception
-// type; matching the what() text attributes regressions to the right parameter family.
+// Three guards share one exception type; match what() to tell them apart.
 static void expectThrowMessage(const std::function<void()>& call, std::string_view expectedText)
 {
     bool threw = false;

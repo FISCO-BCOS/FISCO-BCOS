@@ -19,7 +19,7 @@
  */
 
 #include "bcos-rlp-protocol/Web3Transaction.h"
-#include "bcos-rlp-protocol/Web3TxEnvelope.h"  // canonical scalar walkers (#5496 AG-a)
+#include "bcos-rlp-protocol/Web3TxEnvelope.h"
 #include "bcos-rlp-protocol/Web3TxHandler.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -33,12 +33,7 @@
 
 namespace bcos
 {
-// EIP-2 canonical-s guard: s > n/2 is "malleable" — flipping s -> n - s recovers the same
-// sender, so op-geth rejects it at both admission and block processing. Threshold shared via
-// Secp256k1Crypto.h (c_secp256k1n / c_secp256k1nOver2). Declared in Web3Transaction.h (NOT
-// file-local anymore) so the tars-form import funnel — TxValidator, #5496 finding O, the one
-// admission surface whose P2P submissions never pass this TU's decode() — enforces the same
-// rule the raw-bytes funnel applies here.
+// EIP-2: s > n/2 is malleable. Shared with TxValidator (P2P tars never hits decode()).
 
 /// Returns a decode error if r/s fall outside EIP-2's valid range (r,s in [1, n-1], s <= n/2),
 /// else nullptr. r/s are the raw 32-byte big-endian scalars (already zero-padded by the handler).
@@ -131,9 +126,7 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
     // decode path feeding block execution, part 5/5) — so the check covers admission AND block
     // processing, matching op-geth. Deposits (0x7e) are unsigned; the EIP-7702 authorization
     // entries are gated separately (Eip7702Recover.h) and left untouched here.
-    // EIP-2 whenever a (y,r,s) trailer was decoded: withSig, or the leftover sealed-envelope
-    // path (withSig=false but r/s/v populated). A signing-preimage leftover leaves r/s empty
-    // and v=0, so it stays exempt. Deposits are unsigned.
+    // EIP-2 on any decoded (y,r,s). Preimage leftovers have empty r/s and stay exempt.
     bool const decodedSigTrailer =
         withSig || !signatureR.empty() || !signatureS.empty() || signatureV != 0;
     if (err == nullptr && decodedSigTrailer && type != TransactionType::Deposit)
@@ -250,10 +243,7 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) n
 {
     // Each authorization entry is itself an RLP list:
     // [chain_id, address, nonce, y_parity, r, s]
-    // Scalars go through the canonical integer / strict yParity walkers (#5496 finding AG-a,
-    // closing the N/M sweep gap on this tuple): the authority hash is later re-encoded from
-    // these values, so a non-minimal spelling must not round-trip into a different
-    // authorization identity than strict peers derive.
+    // Canonical integers / yParity: authority hash is re-encoded from these values.
     auto&& [error, header] = decodeHeader(in);
     if (error != nullptr)
     {

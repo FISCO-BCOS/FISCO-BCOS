@@ -67,12 +67,7 @@ using namespace bcos::rpc;
 
 namespace
 {
-// op-geth eth_call revert semantics (internal/ethapi): a reverted call is a JSON-RPC
-// error with code 3 and message "execution reverted"; when the revert data carries a
-// solidity Error(string) (selector 0x08c379a0) the decoded reason is appended.
-// A bare receipt status as the code and an empty message is unusable by clients.
-// The message decoding lives in web3jsonrpc/utils/util.h (decodeRevertMessage), shared
-// with the unit test that pins its accepted/rejected payload shapes.
+// eth_call revert: JSON-RPC code 3 + decodeRevertMessage (Error(string) when present).
 constexpr int32_t c_executionReverted = 3;
 }  // namespace
 
@@ -141,24 +136,12 @@ task::Task<void> EthEndpoint::hashrate(const Json::Value&, Json::Value& response
 }
 task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response)
 {
-    // eth_gasPrice is a SUGGESTION for pricing legacy (type 0) transactions, not a chain
-    // parameter. op-geth (internal/ethapi/api.go GasPrice) computes it as suggested-tip +
-    // current-head-baseFee, and mainstream clients rely on the implicit contract that the
-    // value is >= the head baseFee: foundry's `cast send --legacy` signs with whatever
-    // this returns, and a below-baseFee legacy tx is silently rejected at seal time and
-    // evicted from the pool ("broadcast accepted, never confirmed").
-    //
-    // Chain-mode dispatch is intrinsic rather than configured: EIP-1559 chains (the OP
-    // path) always carry baseFee on the header, PBFT headers never write the tars field.
-    // Suggested tip is this node's eth_maxPriorityFeePerGas (currently 0) — so on OP headers
-    // the returned value IS the head baseFee exactly (the formula degenerates to
-    // suggested-tip + baseFee with tip=0). Single builder,
-    // so tips do not change inclusion while blocks have capacity.
+    // Legacy gas suggestion. OP headers (baseFee present) return head baseFee (tip is 0).
+    // Must be >= head baseFee or cast --legacy txs never confirm. PBFT uses the static knob.
     auto const ledger = m_nodeService->ledger();
     if (auto const latest = co_await ledger::getCurrentBlockNumber(*ledger); latest >= 0)
     {
-        // Null-guarded like the feeHistory twin (#5496 finding R): a pruned or mid-commit
-        // tip must degrade to the legacy knob path, not crash the RPC worker on a bare deref.
+        // Missing header (pruned / mid-commit) falls back to the static gas-price knob.
         auto block = co_await ledger::getBlockData(*ledger, latest, bcos::ledger::HEADER);
         if (block)
         {
@@ -190,13 +173,7 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
 
 namespace
 {
-// OP-stack Holocene/Jovian next-baseFee prediction for eth_feeHistory's trailing entry.
-// predictNextBaseFee was a hand-mirrored port of the engine's calcOpBaseFee;
-// both layers now share ONE implementation: bcos-framework/engine/OpBaseFee.h
-// (included — header-only inline — by both bcos-rpc and bcos-engine). The RPC's
-// fork detection stays
-// local — extraData length sniffing (>= 17 bytes => Jovian tail) — and feeds
-// the shared formula's parentIsJovian parameter.
+// feeHistory trailing entry: extraData >= 17 => Jovian. Formula is calcOpBaseFee.
 
 bool jovianFromExtraData(bcos::protocol::BlockHeader const& parent)
 {
@@ -270,12 +247,7 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
     }
     auto const newest = static_cast<uint64_t>(newestNumber);
     auto const wantReward = !percentiles.empty();
-    // Amplification bound: a rewardPercentiles request loads the FULL receipts set of every
-    // block in the range (each load is a storage read + a per-block sort of all priorities).
-    // geth serves 1024 too but behind a fee-history cache; this endpoint hits storage every
-    // time, so when rewards are wanted the effective range is clamped to a practical window
-    // (geth's commonly used 128). All response arrays share the loop below, so the clamp
-    // keeps them consistent (kyonRay #5496 R1-6).
+    // Reward queries load every block's receipts; clamp to 128 so arrays stay aligned.
     auto const resolvedBlockCount = wantReward ? (std::min)(blockCount, uint64_t(128)) : blockCount;
     auto const oldest = newest >= resolvedBlockCount - 1 ? newest - (resolvedBlockCount - 1) : 0;
 
@@ -318,7 +290,7 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
                     "feeHistory: receipts unavailable at height " + std::to_string(n)));
             }
             std::vector<std::pair<bcos::u256, bcos::u256>> priorities;
-            priorities.reserve(receiptsBlock->receipts().size());  // #5496 AD: no regrowth
+            priorities.reserve(receiptsBlock->receipts().size());
             bcos::u256 totalGasUsed{0};
             for (auto const& receipt : receiptsBlock->receipts())
             {
@@ -1031,13 +1003,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
         if (!chainIdConfig)
         {
-            // Fail closed when web3_chain_id is unconfigured: without a node chainId to
-            // compare against, an EIP-155 tx signed for a foreign chain would execute here
-            // and consume the sender's nonce (EIP-155 replay-protection bypass). op-geth
-            // always has a genesis chainId, so it has no such open default. Only pre-EIP-155
-            // legacy (classifier: Unprotected) is exempt — there is nothing to compare.
-            // (#5496 finding K: kind table shared with TxValidator/executor via the classifier;
-            // malformed envelopes and deposits no longer depend on a handwritten typed mask.)
+            // No web3_chain_id: reject anything that binds a chainId. Only Unprotected is exempt.
             auto const classified =
                 bcos::rlp::protocol::classifyWeb3EnvelopeChainId(tx->extraTransactionBytes());
             if (classified.kind != bcos::rlp::protocol::Web3EnvelopeChainIdKind::Unprotected)
@@ -1052,9 +1018,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         else
         {
             auto [chainIdStr, _] = chainIdConfig.value();
-            // Match the signed envelope. Typed txs have no "0" exemption; only pre-EIP-155
-            // legacy (classifier: Unprotected) is exempt. Bad web3_chain_id config rejects
-            // the tx. Same kind table as TxValidator::validateChainId (#5496 finding K).
+            // Envelope chainId vs parseWeb3ChainId. Unprotected only is exempt.
             auto expected = ledger::parseWeb3ChainId(chainIdStr);
             if (!expected.has_value())
             {
@@ -1275,32 +1239,11 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
 
-    // op-geth's estimator answers the smallest gas limit at which the call still
-    // succeeds, found by simulating at candidate limits. The run below executes
-    // AT the object-form request's own gas when one is supplied (it passes through
-    // to the EVM uncapped), and at CallRequest's absent-gas default of 30M
-    // otherwise, so its gasUsed is mere consumption. A tx that hops through a proxy
-    // DELEGATECALL or any internal CALL retains 1/64 of the available gas at
-    // each hop (EIP-150), making the minimum viable limit strictly greater than
-    // the consumed gas — measured on the C2 devnet, the MessagePasser withdrawal
-    // (proxy predeploy) consumed 59186 but reverted on-chain at exactly that
-    // limit, while direct (non-proxy) calls are exact. So re-simulate at
-    // gasUsed first, and when that fails binary-search upward for the smallest
-    // viable limit, mirroring op-geth. Only object-form params carry an
-    // overridable gas field; a raw signed tx embeds its own.
+    // Smallest viable gas (op-geth). First run uses request gas if set (uncapped), else 30M.
+    // EIP-150 1/64 leftover means gasUsed may still revert; then search upward.
     auto const objectForm = tx.isObject();
-    // Shared RPC gas cap for the estimator: an explicit request gas may raise the known-good
-    // ceiling, but never beyond this — unbounded uint64 ceilings would otherwise drive the
-    // upward doubling search into dozens of EVM simulations per unauthenticated request.
     constexpr uint64_t kRpcGasCap = 30'000'000;
-    // {searchCeiling, firstRunLimit}: searchCeiling caps this estimator's upward search;
-    // firstRunLimit records what run #1 ACTUALLY executed at — objectForm passes the
-    // request's own gas through to the EVM UNCHANGED (the cap does not bound the
-    // simulation) and a gas-less request runs at CallRequest's 30M default. Tracking it
-    // separately matters because that run is the only thing PROVEN viable so far (#5496
-    // finding P): seeding upperBound from the capped projection while an explicit gas above
-    // the cap was honored inverted the search bounds (lowerBound=consumed >
-    // upperBound=min(X, cap)) and wrapped the u256 width test.
+    // searchCeiling caps the search; firstRunLimit is what run #1 actually used (may exceed cap).
     auto const [effectiveFirstRunLimit, firstRunLimit] = [&]() -> std::pair<u256, u256> {
         if (objectForm && tx.isMember("gas"))
         {
@@ -1359,12 +1302,7 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         --remaining;
         if (!co_await simulateAtGasLimit(bounded, estimate, blockBaseFee))
         {
-            // op-geth starts the upward search at gasUsed*2 and doubles until viable
-            // (eth/api.go DoEstimateGas); the 30M first-run limit is only the known-good
-            // ceiling. Starting at gasUsed*2 instead of 30M shrinks the search range from
-            // 30M to ~gasUsed: typical estimates converge to the exact limit within the
-            // shared simulation budget instead of stopping at the cap with a residual.
-            // Bounds initializer is pure and unit-tested (#5496 finding P / AJ).
+            // Search from gasUsed*2 (op-geth), not 30M.
             auto searchBounds =
                 bcos::rpc::estimateSearchBounds(gasUsed, effectiveFirstRunLimit, firstRunLimit);
             auto& lowerBound = searchBounds.lowerBound;
@@ -1428,9 +1366,7 @@ task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::V
         auto flag = bcos::ledger::HEADER | bcos::ledger::RECEIPTS;
         flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
         auto block = co_await ledger::getBlockData(*ledger, number, flag);
-        // Single authoritative hash for the whole response: OP blocks' hash is the announced
-        // (registered) one, not the stored tars header's own derivation; per-tx blockHash
-        // entries must use the SAME value or clients see two hashes for one block (R1-4).
+        // One hash for the block and every full-tx entry. Prefer the registered OP hash.
         auto blockHash = co_await ledger::getBlockHash(*ledger, number);
         if (blockHash == crypto::HashType{})
         {
@@ -1460,11 +1396,7 @@ task::Task<void> EthEndpoint::getBlockByNumber(const Json::Value& request, Json:
         auto flag = bcos::ledger::HEADER | bcos::ledger::RECEIPTS;
         flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
         auto block = co_await ledger::getBlockData(*ledger, blockNumber, flag);
-        // Single authoritative hash for the whole response: OP blocks' canonical hash is the
-        // announced one (keccak of the 21-field RLP header) registered in s_number_2_hash;
-        // the stored tars header's hash() is a different derivation and would break
-        // parentHash chains and byHash round-trips. Per-tx blockHash entries must use the
-        // SAME value or clients see two hashes for one block (R1-4).
+        // One hash for the block and every full-tx entry. Prefer the registered OP hash.
         auto blockHash = co_await ledger::getBlockHash(*ledger, blockNumber);
         if (blockHash == crypto::HashType{})
         {
@@ -1580,9 +1512,7 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
         auto receipt = co_await ledger::getReceipt(*ledger, txHash);
-        // Single authoritative hash, same resolution as getBlockByHash/getBlockByNumber:
-        // the announced (registered) OP hash when present, else the OP-aware header
-        // derivation — never a third source for the same block (R1-4).
+        // Same hash resolution as getBlockByHash / getBlockByNumber.
         auto blockHash = co_await ledger::getBlockHash(*ledger, blockNumber);
         if (blockHash == crypto::HashType{})
         {
@@ -1814,16 +1744,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     ledger::mpt::EIP1186Proof proof;
     if (block->blockHeader()->baseFee().has_value())
     {
-        // OP-stack execution path: its headers always carry baseFee (PBFT headers never write
-        // the tars field — the same discriminator gasPrice/feeHistory use). Pre-①a that path
-        // computed each block's stateRoot from the flat state at seal time and persisted no
-        // MPT node rows. With ①a (feature_l2_ethereum_compat: OpScheduler's incremental
-        // buildAndCollect at commit + the l2EthereumCompat genesis import) runtime blocks DO
-        // persist their trie nodes, so try the node-backed proof FIRST — it serves ANY height
-        // (historical tags included) and is O(path). Roots without rows (a chain segment
-        // produced before ①a landed) cannot be served in this slice: the flat-state fallback
-        // lands with the eth_getProof PR, so we fail closed with -32004 (never a fabricated
-        // proof).
+        // OP headers have baseFee. Serve MPT proofs only; no rows => -32004, never a fake proof.
         if (auto const mptReader = m_nodeService->mptNodeReader())
         {
             auto const fullTrie = co_await ledger::getFeature(
@@ -1836,9 +1757,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
             }
             else
             {
-                // No flat-state fallback in this slice — it lands with the eth_getProof PR.
-                // A root without node rows is an honest "cannot serve" here, not an empty
-                // proof.
+                // Root has no node rows.
                 BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
                     "Proof unavailable for this block (flat rebuild lands with the "
                     "eth_getProof PR)"));
@@ -1846,8 +1765,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         }
         else [[unlikely]]
         {
-            // Same fail-closed contract as the PBFT branch below: a node without the MPT
-            // node reader must not answer with a fabricated all-zero proof.
+            // No MPT reader: fail closed.
             BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
         }
     }

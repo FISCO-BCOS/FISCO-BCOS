@@ -1134,10 +1134,7 @@ BOOST_AUTO_TEST_CASE(testNoSigLeftoverHighSRejected)
         BOOST_REQUIRE(rlp::decodeFromPayload(bRef, tx) == nullptr);
         BOOST_CHECK(tx.type == rpc::TransactionType::EIP1559);
     }
-    // Legacy sealed envelope (6 fields + v,r,s): the no-sig branch must land the trailer's
-    // r/s in signature* so the same EIP-2 gate fires — before the R1-3 fix the legacy
-    // leftover was consumed as scratch and the gate was silently skipped (a fork vs
-    // op-geth Sender, exactly the shape the typed case above pins).
+    // Legacy sealed leftover must populate signature* so EIP-2 still runs.
     {
         auto makeLegacy = [](bcos::bytes const& s) {
             bcos::bytes items;
@@ -1476,18 +1473,14 @@ BOOST_AUTO_TEST_CASE(testWeb3ChainIdFromEnvelope)
     }
 }
 
-// ============================================================================
-// #5496 r4-fix regression grid: classifier KINDS (Deposit/Malformed), the
-// canonical-integer walker gate (finding N), strict typed yParity helpers
-// (finding M), and the exported EIP-2 funnel (finding O).
+// Classifier kinds, canonical integers, yParity, EIP-2.
 BOOST_AUTO_TEST_CASE(classifyWeb3EnvelopeChainIdKinds)
 {
     namespace rlp = bcos::codec::rlp;
     namespace envelope = bcos::rlp::protocol;
     using Kind = envelope::Web3EnvelopeChainIdKind;
 
-    // Deposit is its OWN kind — admission gates key a deliberate policy on it instead of
-    // re-deriving "deposit vs junk" from first bytes (finding K).
+    // Deposit is its own kind.
     {
         bcos::bytes deposit;
         deposit.push_back(static_cast<byte>(bcos::rpc::TransactionType::Deposit));
@@ -1496,9 +1489,7 @@ BOOST_AUTO_TEST_CASE(classifyWeb3EnvelopeChainIdKinds)
             "Deposit");
     }
 
-    // Empty payload and junk-first-byte payloads classify Malformed. The handwritten
-    // admission predicates used to fold both into the unprotected exemption, admitting them
-    // at pool/RPC while the executor's classifier rejected the same bytes at execution.
+    // Empty / junk-first-byte envelopes are Malformed, not Unprotected.
     BOOST_CHECK(
         envelope::classifyWeb3EnvelopeChainId(bcos::bytesConstRef{}).kind == Kind::Malformed);
     {
@@ -1506,9 +1497,7 @@ BOOST_AUTO_TEST_CASE(classifyWeb3EnvelopeChainIdKinds)
         BOOST_CHECK(envelope::classifyWeb3EnvelopeChainId(bcos::ref(junk)).kind == Kind::Malformed);
     }
 
-    // Leading-zero chainId in a typed envelope: previously Protected under the width gate
-    // alone; now Malformed via decodeCanonicalRlpUint (finding N). Only field 0 is walked,
-    // so a minimal tail suffices.
+    // Non-minimal typed chainId is Malformed.
     {
         bcos::bytes items{0x82, 0x00, 0x01};  // non-canonical "1"
         bcos::bytes env{static_cast<byte>(bcos::rpc::TransactionType::EIP1559)};
@@ -1551,9 +1540,7 @@ BOOST_AUTO_TEST_CASE(classifyWeb3EnvelopeChainIdKinds)
         BOOST_CHECK(c.kind == Kind::Protected && c.chainId == 1u);  // 37 -> chainId 1
     }
 
-    // (AI) Unprotected fixtures — the exemption kind previously had ZERO explicit assertions,
-    // so a regression that mis-sorted Homestead forms into Malformed would have flipped the
-    // admission gates silently. Both legal unprotected spellings must classify Unprotected.
+    // Both Homestead unprotected spellings must classify Unprotected.
     {
         bcos::bytes items;
         for (int i = 0; i < 6; ++i)
@@ -1636,7 +1623,7 @@ BOOST_AUTO_TEST_CASE(decodeCanonicalYParityStrictItemForms)
     BOOST_CHECK(!probeParity({0xc1, 0x80}).first);
 }
 
-// EIP-2 funnel export (finding O): low-s / range math on raw scalars.
+// EIP-2: low-s and range on raw scalars.
 BOOST_AUTO_TEST_CASE(checkEip2SignatureBoundaryScalars)
 {
     using bcos::crypto::c_secp256k1n;

@@ -498,12 +498,7 @@ namespace engine = bcos::evm::engine;
         }
         return "legacy tx envelope has a malformed chainId/v field";
     }
-    // Deposit envelopes (0x7E) classify as their own kind and deliberately SKIP this gate:
-    // dispatch to executeDeposit happens before any chainId binding applies, the rollup
-    // pipeline is their only legitimate source, and public admission (pool validateChainId,
-    // sendRawTransaction) already rejects them. OpEnvelopeMirrorTest::DepositEnvelopeSkips-
-    // ChainIdGate pins exactly this contract; the pre-classifier enum this code expressed
-    // via a first-byte check inside the Malformed branch (superseded by the explicit kind).
+    // Deposit (0x7E): no chainId field. executeDeposit skips this gate; pool/RPC reject.
     if (classified.kind == protocol::Web3EnvelopeChainIdKind::Protected &&
         classified.chainId != nodeChainId)
     {

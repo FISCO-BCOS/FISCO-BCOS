@@ -58,12 +58,9 @@
 
 namespace bcos::engine
 {
-// UnsupportedEngineApiVersion / UnknownPayload / IncompatiblePayloadVersion moved to
-// bcos-framework/engine/Types.h so the RPC endpoint can map them to Engine error codes;
-// UnknownForkchoiceHeadBlock / InvalidForkchoiceState / UnsupportedFork /
-// UnsupportedOpPayloadAttributes come from bcos-framework/engine/Errors.h (the RPC
-// EngineErrorMapper dynamic_casts those exact types — local DERIVEs here would be a
-// distinct ODR type the mapper cannot catch).
+// UnsupportedEngineApiVersion / UnknownPayload / IncompatiblePayloadVersion live in
+// Types.h. Forkchoice / payload-attribute errors live in Errors.h so EngineErrorMapper
+// can dynamic_cast them (a local DERIVE would be a different type).
 DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
 
 namespace detail

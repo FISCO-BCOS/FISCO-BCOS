@@ -43,21 +43,13 @@ using MerkleProof = std::vector<crypto::HashType>;
 
 /// Parse the web3 chain-id system-config string as u256. nullopt on a corrupted value (non
 /// numeric, empty, negative, or an unparsed remainder) — the single shared parse for the three
-/// config consumers (TxValidator::validateChainId, EthEndpoint::sendRawTransaction's chainId
-/// gate, and the ledgerConfig assembly in LedgerMethods.cpp/.h that feeds the EVM CHAINID
-/// opcode) so width semantics and error
-/// behavior cannot drift. Note: the envelope side (web3ChainIdFromEnvelope / Web3TxHandler
-/// decodes) is uint64-capped with the RLP width gate, so in practice chainIds > 2^64-1 are
-/// rejected at decode (fail-closed) — the u256 parse here exists so a misconfigured
-/// over-wide value never silently matches; real chains are far below the cap. Also note: boost::
+/// config consumers (TxValidator, sendRawTransaction, LedgerMethods CHAINID) so width
+/// semantics cannot drift. Envelope decode is uint64-capped. Also note: boost::
 /// multiprecision's u256 stream-in ACCEPTS a negative sign and wraps modulo 2^256 (probe-
 /// verified: lexical_cast<u256>("-5") returns 2^256-5, no throw); a leading '-' is rejected
 /// explicitly here so a mistyped negative config surfaces as a clear per-config error instead
 /// of a wrapped value that fail-closes confusingly at every tx gate.
-///
-/// Hex (`0x`/`0X` prefix) is accepted via the same strict digit rules as QUANTITY parsing so a
-/// config written as "0x539" matches the envelope chainId 1337 on every admission point —
-/// plain lexical_cast rejects the prefix, and std::stoull stops at 'x' yielding 0.
+/// Hex (`0x`/`0X`) uses the same digit rules as QUANTITY (`0x539` == 1337).
 [[nodiscard]] inline std::optional<u256> parseWeb3ChainId(std::string_view chainIdStr)
 {
     if (chainIdStr.empty() || chainIdStr[0] == '-') [[unlikely]]
@@ -67,7 +59,7 @@ using MerkleProof = std::vector<crypto::HashType>;
     if (chainIdStr.size() >= 2 && chainIdStr[0] == '0' &&
         (chainIdStr[1] == 'x' || chainIdStr[1] == 'X'))
     {
-        // Hex QUANTITY form — same digit/width rules as safeFromBigQuantity.
+        // Hex QUANTITY; same rules as safeFromBigQuantity.
         return safeFromBigQuantity(chainIdStr);
     }
     try

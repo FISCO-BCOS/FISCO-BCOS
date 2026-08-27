@@ -202,19 +202,14 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                     {
                         throwDecode("typed trailer");
                     }
-                    // decodeHeader may consume the item's own header bytes (string forms),
-                    // leaving only the payload ahead; capture BOTH views so the strict
-                    // yParity gate below can inspect the whole canonical item (#5496 M).
+                    // Keep the whole item (header + payload) for the yParity check.
                     whole3[n % 3] = bcos::bytesConstRef{itemStart,
                         static_cast<size_t>(tail.data() - itemStart) + itemHeader.payloadLength};
                     last3[n % 3] = tail.getCroppedData(0, itemHeader.payloadLength);
                     tail = tail.getCroppedData(itemHeader.payloadLength);
                     ++n;
                 }
-                // STRICT typed yParity (#5496 finding M): the only canonical whole-item forms
-                // are 0x80 (parity 0) and 0x01. The previous read accepted any single payload
-                // byte — including the bare 0x00 non-minimal zero that strict references
-                // (op-geth rlp.Uint) reject.
+                // yParity must be whole-item 0x80 or 0x01.
                 auto const wireYParity =
                     bcos::rlp::protocol::canonicalTypedYParityItem(whole3[(n - 3) % 3]);
                 if (!wireYParity.has_value()) [[unlikely]]
@@ -229,10 +224,7 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                 {
                     throwDecode("typed signature mismatch");
                 }
-                // Residual-shape gate mirroring the legacy sibling below (#5496 finding L):
-                // everything above walks and cross-checks within header.payloadLength, so bytes
-                // AFTER the inner list would be adopted verbatim into txHash while being covered
-                // by neither signature nor cross-check.
+                // Bytes after the inner list must not enter txHash.
                 if (cursor.size() != header.payloadLength) [[unlikely]]
                 {
                     throwDecode("typed trailing garbage");
@@ -295,16 +287,10 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         }
         else
         {
-            // Dual layout: the trailer is either the preimage's (chainId, 0, 0) or — for
-            // sealed OP blocks, whose extraTransactionBytes the engine overwrote with the
-            // full envelope — the wire (v, r, s). RLP encodes the integer 0 as an empty
-            // payload while secp256k1 r/s never are, so emptiness of items 8/9
-            // discriminates the two shapes unambiguously.
+            // Empty r/s => preimage (chainId, 0, 0); otherwise sealed (v, r, s).
             uint64_t item7 = 0;
             bcos::bytes item8, item9;
-            // Canonical integer form for the scalar trailer field (#5496 finding N): a
-            // leading-zero / non-minimal v or chainId must not reassemble into a txHash that
-            // strict peers decode differently.
+            // Canonical v / chainId; non-minimal RLP would fork txHash.
             auto trailerError = bcos::rlp::protocol::decodeCanonicalRlpUint(walker, item7);
             if (trailerError == nullptr)
             {
@@ -320,22 +306,12 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             }
             if (bcos::rlp::protocol::isLegacyPreimageTail(item7, item8.empty(), item9.empty()))
             {
-                // preimage: item7 is the signed chainId (items 8,9 are the 0,0
-                // placeholders). This includes chainId 27/28: those bytes are ambiguous
-                // with an invalid Homestead envelope whose r/s were erased, so admission
-                // binds the preimage chainId to the configured node chainId.
+                // Preimage: item7 is chainId (includes 27/28).
                 v = item7 * 2 + 35 + yParity;
             }
             else
             {
-                // wire: item7 is the EIP-155 v. Cross-check the trailer's r/s against the
-                // tars signature before adopting its v — the reassembled form must be the
-                // canonical assembly of (fields, tars signature), not just any stored
-                // bytes that happen to end in a signature-shaped trailer. v itself is part
-                // of the signature: it must match the tars yParity (27+yParity unprotected,
-                // chainId*2+35+yParity protected) or the same signature would hash to two
-                // different txs — a relabeled v slips past chainId admission yet changes
-                // the reassembled txHash (kyonRay #5496 R1-2).
+                // Sealed: adopt v only if r/s and yParity match the tars signature.
                 if (!std::equal(item8.begin(), item8.end(), r.begin(), r.end()) ||
                     !std::equal(item9.begin(), item9.end(), s.begin(), s.end())) [[unlikely]]
                 {

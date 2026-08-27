@@ -18,13 +18,8 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     result["status"] = toQuantity(status);
     auto txHashHex = tx.hash().hexPrefixed();
     result["transactionHash"] = txHashHex;
-    // OP receipts store cumulativeGasUsed as decimal (decimalCumulative in the executor's
-    // finish(), e.g. "21000"); pre-existing hex receipts ("0x5208") stay on chain in the old
-    // format. safeCastToU256's boost::lexical_cast parses decimal only and rejects the 0x
-    // prefix — so parse via direct u256 construction, which auto-detects the base (0x → hex,
-    // otherwise decimal) for both formats. The string ctor THROWS on unparseable input; a
-    // corrupt receipt must degrade to 0x0 + a warning, never -32603 the whole
-    // eth_getTransactionReceipt (same posture as TransactionImpl::mint, kyonRay #5496 R1-12).
+    // cumulativeGasUsed is decimal on new receipts, hex on old ones. u256() accepts both;
+    // a corrupt value becomes 0x0 + WARN, not -32603.
     bcos::u256 cumulativeGasUsed{};
     auto const& cgs = receipt.cumulativeGasUsed();
     if (!cgs.empty())
@@ -62,10 +57,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         result["to"] = "0x" + std::move(to);
     }
     result["cumulativeGasUsed"] = toQuantity(cumulativeGasUsed);
-    // Deliberate passthrough (#5496 AD): effectiveGasPrice is written by the scheduler's
-    // receipt factory as a canonical quantity at seal time, so this emit path trusts it and
-    // only degrades the absent case to 0x0 — unlike cumulativeGasUsed above, which must
-    // recover from pre-quantity legacy rows and therefore re-derives with its own detection.
+    // effectiveGasPrice is already a quantity at seal time; missing => 0x0.
     result["effectiveGasPrice"] =
         receipt.effectiveGasPrice().empty() ? "0x0" : std::string(receipt.effectiveGasPrice());
     result["gasUsed"] = toQuantity(receipt.gasUsed());

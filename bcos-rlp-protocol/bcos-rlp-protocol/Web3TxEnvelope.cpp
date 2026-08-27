@@ -42,19 +42,14 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     // decode() requires a mutable bytesRef cursor even for read-only parsing; the cast is safe
     // because this function never writes through the cursor — only reads via decodeHeader/decode.
     bcos::bytesRef cursor(const_cast<bcos::byte*>(payload.data()), payload.size());
-    // 0x7E (Deposit) has no chainId field — field 0 is sourceHash (h256). Classified as its own
-    // kind (NOT Malformed, NOT nullopt): chainId gates key a deliberate per-surface policy on
-    // this shape instead of re-deriving "deposit vs junk" from first bytes (#5496 finding K).
+    // 0x7E deposit: field 0 is sourceHash, not chainId.
     if (firstByte == 0x7E) [[unlikely]]
     {
         return {.kind = Web3EnvelopeChainIdKind::Deposit};
     }
     if (firstByte > 0 && firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
     {
-        // Typed (EIP-2718: 0x01-0x04): chainId is RLP field 0 of the inner list. Canonical
-        // integer form enforced (#5496 finding N): a leading-zero/non-minimal field encodes
-        // fine but strict references reject it, and admitting it here would let pool/RPC/executor
-        // disagree with any strict peer on the SAME bytes.
+        // Typed: chainId is inner-list field 0. Non-minimal RLP is Malformed.
         cursor = cursor.getCroppedData(1);
         auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
         if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
@@ -98,13 +93,8 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         // op-geth HomesteadSigner.
         return unprotected();
     }
-    // Peek fields 8/9 (without consuming field 7 yet) via the shared isLegacyPreimageTail
-    // rule — the same rule Web3TxHandler decode and TransactionImpl reassemble apply, so
-    // the three walk sites cannot classify the same trailer differently. field7Item keeps
-    // the WHOLE field-7 item (header + payload): decodeHeader advances the walker to the
-    // payload start, and decoding that payload as a fresh item mis-reads any multi-byte
-    // chainId/v (e.g. chainId 8453 -> 33) or classifies it as a list header (chainId 200 ->
-    // Unprotected exemption). Decode from the item start.
+    // Peek r/s emptiness before consuming field 7. Decode field 7 from the item start
+    // (header + payload); a payload-only decode misreads multi-byte chainId/v.
     bcos::bytesRef field7Item = walker;
     auto [field7Error, field7Header] = bcos::codec::rlp::decodeHeader(walker);
     if (field7Error || field7Header.payloadLength > walker.size()) [[unlikely]]
@@ -132,7 +122,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     }();
     if (isPreimageTail)
     {
-        // preimage form: field 7 is the EIP-155 chainId. Canonical form enforced (finding N).
+        // Preimage: field 7 is the EIP-155 chainId.
         uint64_t chainId = 0;
         if (auto e = decodeCanonicalRlpUint(field7Item, chainId); e != nullptr) [[unlikely]]
         {

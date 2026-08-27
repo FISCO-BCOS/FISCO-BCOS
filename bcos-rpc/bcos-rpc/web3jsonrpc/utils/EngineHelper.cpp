@@ -358,10 +358,7 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 InvalidParams, "Expected array of hex strings for executionPayload.transactions"));
         }
-        // Raw EIP-2718 bytes, hex-decoded verbatim into the authoritative carrier
-        // (`transactions[].raw`). `rawTransactions` is then derived as a byte-for-byte
-        // mirror for the temporary stacked OP seam (#5495) — never filled from a second
-        // decode path, so the two cannot drift at the RPC boundary.
+        // Hex-decode into transactions[].raw; rawTransactions is a derived mirror.
         payload.transactions.reserve(ep["transactions"].size());
         for (Json::ArrayIndex i = 0; i < ep["transactions"].size(); ++i)
         {

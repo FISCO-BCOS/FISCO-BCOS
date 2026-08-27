@@ -27,10 +27,7 @@
 
 namespace bcos::rpc
 {
-/// Map engine-service exceptions to the execution-apis JSON-RPC error codes the Engine API
-/// assigns (specs.optimism.io exec-engine.md references the execution-apis error table).
-/// Unmapped conditions stay -32603 InternalError: a mapped code must be unambiguous.
-/// `bcos::Error` (storage/service faults) intentionally maps to InternalError.
+/// Map engine exceptions to Engine API JSON-RPC codes. Unmapped / bcos::Error => -32603.
 inline int32_t mapEngineErrorCode(bcos::Exception const& e) noexcept
 {
     if (dynamic_cast<bcos::engine::UnsupportedFork const*>(&e) ||

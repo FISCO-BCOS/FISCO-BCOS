@@ -18,7 +18,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
-#include <bcos-rpc/web3jsonrpc/utils/util.h>  // estimateSearchBounds (#5496 AJ)
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -103,10 +103,7 @@ BOOST_AUTO_TEST_CASE(MalformedGasIsRejected)
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
 }
 
-// Pure bounds initializer table (#5496 finding P / AJ). Regression anchor for the inverted-
-// bounds regime: an explicit request gas ABOVE kRpcGasCap passes run #1 uncapped, so the
-// proven-viable anchor is that FULL limit — seeding the ceiling from min(X, cap) alone used
-// to place upperBound BELOW the known-bad lowerBound and wrapped the unsigned width test.
+// estimateSearchBounds: explicit gas above the cap must not invert [lower, upper].
 BOOST_AUTO_TEST_CASE(EstimateSearchBoundsOrderingTable)
 {
     using bcos::rpc::estimateSearchBounds;

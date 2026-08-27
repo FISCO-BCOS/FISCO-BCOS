@@ -25,8 +25,7 @@ using namespace bcostars::protocol;
 
 namespace bcos::test
 {
-// Message-pinned throw probe (#5496 finding X): type-only BOOST_CHECK_THROW cannot attribute
-// regressions when multiple invalid_argument sites guard the same call; match the what() text.
+// Match exception what() — several sites throw the same type.
 static void expectThrowMessage(const std::function<void()>& call, std::string_view expectedText)
 {
     bool threw = false;
@@ -554,9 +553,7 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireFormYParityZero)
     BOOST_CHECK(reassembled == wire);  // verbatim adoption, parity 0 preserved
 }
 
-// Message-pinned reassemble-throw probe (#5496 finding AH): BOOST_CHECK_THROW with only the
-// exception TYPE cannot attribute regressions across throwDecode stages, so these two anchors
-// additionally match the stage text inside what().
+// Match throwDecode stage text, not just the exception type.
 static void expectReassembleThrows(
     bcos::bytesConstRef payload, bcos::bytesConstRef sig, std::string_view expectedStage)
 {
@@ -576,9 +573,7 @@ static void expectReassembleThrows(
         threw, "expected std::invalid_argument for stage \"" << expectedStage << "\", got success");
 }
 
-// Post-list trailing bytes on the typed WIRE form must be rejected (finding L): everything
-// in the verbatim-adoption branch is bounded by header.payloadLength, so junk appended after
-// the inner list would otherwise ride into txHash covered by neither signature nor cross-check.
+// Bytes after the typed inner list must be rejected.
 BOOST_AUTO_TEST_CASE(reassembleTypedWireTrailingGarbageThrows)
 {
     namespace rlp = bcos::codec::rlp;
@@ -624,8 +619,7 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireTrailingGarbageThrows)
         bcos::ref(tampered), bcos::bytesConstRef(sig.data(), sig.size()), "typed trailing garbage");
 }
 
-// The bare 0x00 yParity spelling (non-minimal zero) must be rejected (finding M) even though
-// the tars mirror carries parity 0 — strict references accept only whole-item 0x80/0x01.
+// Bare 0x00 yParity is rejected; only 0x80 / 0x01 are valid.
 BOOST_AUTO_TEST_CASE(reassembleTypedWireBareZeroYParityThrows)
 {
     namespace rlp = bcos::codec::rlp;
@@ -700,9 +694,7 @@ BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
                           bcos::ref(tamperedR), bcos::bytesConstRef(sig.data(), sig.size())),
         std::invalid_argument);
 
-    // v relabeled from 37 (parity 0) to 38 (parity 1) with r/s unchanged -> rejected: v is
-    // part of the signature, and adopting a relabeled v would reassemble a SECOND txHash for
-    // the same signature (kyonRay #5496 R1-2).
+    // Relabeled v (parity flip) with the same r/s must be rejected.
     auto relabeledV = buildWire(r, s, /*v=*/38);  // parity 1 vs tars parity 0
     BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
                           bcos::ref(relabeledV), bcos::bytesConstRef(sig.data(), sig.size())),

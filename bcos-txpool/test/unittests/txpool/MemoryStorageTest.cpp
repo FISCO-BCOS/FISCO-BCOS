@@ -603,11 +603,7 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         {
             std::string smallValue = "0x100";
             tx8Impl->mutableInner().data.value.assign(smallValue.begin(), smallValue.end());
-            // A Web3-type transaction must carry a WELL-FORMED envelope since #5496 K: the
-            // kind-table gate classifies empty/unreadable extra bytes as Malformed instead of
-            // folding them into the unprotected exemption. Install an EIP-155 signing preimage
-            // whose envelope chainId MATCHES the mocked web3_chain_id ("321") while leaving the
-            // forgeable tars mirror clean — admission binds against the signed envelope only.
+            // Well-formed EIP-155 preimage matching mocked web3_chain_id; tars chainID left empty.
             setLegacySigningPreimage(*tx8Impl, 321);
             tx8Impl->mutableInner().data.chainID = "";
         }

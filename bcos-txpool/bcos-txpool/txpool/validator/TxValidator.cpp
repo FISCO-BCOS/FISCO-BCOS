@@ -24,8 +24,8 @@
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-rlp-protocol/Web3Transaction.h"  // checkEip2Signature (#5496 finding O)
-#include "bcos-rlp-protocol/Web3TxEnvelope.h"   // classifyWeb3EnvelopeChainId (#5496 finding K)
+#include "bcos-rlp-protocol/Web3Transaction.h"
+#include "bcos-rlp-protocol/Web3TxEnvelope.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/DataConvertUtility.h"
 
@@ -84,12 +84,7 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
         // signature recovery even when the input transaction was previously clean.
         _tx.clearSenderAndHash();
         _tx.verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
-        // EIP-2 malleability gate on the tars import funnel (#5496 finding O): the raw-bytes
-        // hex funnel enforces low-s inside Web3Transaction::decode, but P2P-synchronized
-        // tars-form transactions reach the pool without ever passing that decoder — without
-        // this hook a high-s variant (s' = n - s) enters under a distinct txHash for the same
-        // logical transaction. Unsigned forms (deposits carry an empty signature blob) skip
-        // the gate naturally via the width requirement.
+        // P2P tars skips decode(); apply EIP-2 here. Empty sig (deposits) skips the width check.
         if (_tx.type() == TransactionType::Web3Transaction)
         {
             auto const sig = _tx.signatureData();
@@ -313,17 +308,10 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
     {
         co_return TransactionStatus::None;
     }
-    // SINGLE-HOME classification (#5496 finding K): the kind table below consumes the canonical
-    // classifier directly, exactly like OpstackExecutor::envelopeChainIdMismatch and (via the
-    // same shared kinds) EthEndpoint::sendRawTransaction. The previous handwritten predicate
-    // (`typed = first<0x80 && !=0x7e` + nullopt-fold) mis-sorted malformed envelopes — e.g. a
-    // payload starting at/above 0x80 or an empty extra-bytes field fell into the "unprotected
-    // legacy" exemption and was admitted here while the executor's classifier rejected it as
-    // Malformed at execution time.
+    // Same classifier as sendRawTransaction / the executor.
     namespace rlp_protocol = bcos::rlp::protocol;
     auto const classified = rlp_protocol::classifyWeb3EnvelopeChainId(_tx.extraTransactionBytes());
-    // Deposit envelopes are structurally chainId-less; they enter blocks through the rollup
-    // pipeline (executeDeposit bypasses every chainId gate), never through pool admission.
+    // Deposits have no chainId; they enter via the rollup pipeline, not the pool.
     if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Deposit)
     {
         co_return TransactionStatus::InvalidChainId;
@@ -339,10 +327,7 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
     if (auto config = co_await ledger::getSystemConfig(*_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
     {
         auto [chainId, _] = config.value();
-        // SAME parser as EthEndpoint::sendRawTransaction (ledger::parseWeb3ChainId): a config
-        // written as hex ("0x539") or wider than uint64 must parse identically on both
-        // admission points — two different parsers would admit on the RPC and reject every
-        // Web3 tx in the txpool with a misleading "InvalidChainId" (kyonRay #5496 R1-7).
+        // Same parseWeb3ChainId as sendRawTransaction (decimal or 0x).
         auto expected = ledger::parseWeb3ChainId(chainId);
         if (!expected.has_value())
         {

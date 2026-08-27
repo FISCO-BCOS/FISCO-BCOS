@@ -30,13 +30,10 @@ using namespace bcos::rpc;
 
 namespace
 {
-/// Convert an engine-service exception into the JSON-RPC error the Engine API assigns to the
-/// condition. bcos::Exception-derived engine errors previously escaped to Web3JsonRpcImpl's
-/// catch(...) and came back as -32603; converting at the endpoint keeps Web3JsonRpcImpl generic.
+/// Map engine exceptions to Engine API JSON-RPC codes (else they become -32603).
 [[noreturn]] void rethrowAsJsonRpcError(bcos::Exception const& e)
 {
-    // bcos::Error stores its message in errorMessage() (not what()); fall back so a
-    // storage/service fault never surfaces as -32603 with an empty message.
+    // bcos::Error message is errorMessage(), not what().
     auto msg = dynamic_cast<bcos::Error const*>(&e);
     auto message = msg ? msg->errorMessage() : std::string(e.what());
     throw JsonRpcException(mapEngineErrorCode(e), std::move(message));
@@ -95,13 +92,8 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
 void EngineEndpoint::buildUnimplementedVersionError(
     std::string_view method, Json::Value& response) const
 {
-    // -38005 Unsupported fork for a method version this node does not implement at all
-    // (currently only forkchoiceUpdatedV4: isForkchoiceVersionSupported tops out at V3,
-    // and getPayload V4/V5 only accept payloadVersion==3 builds — raising the FCU window
-    // alone would tag builds as V4 and break the getPayload round-trip). This is NOT a
-    // declaration that older versions are incompatible: every version that IS implemented
-    // stays served, so a pre-Karst CL — the v1 Engine API harness kept alive by
-    // unsafe_allow_v1_executor, or a stock Lodestar driving V1-V3 — keeps working.
+    // -38005: method version not implemented. FCU stops at V3; raising it would break
+    // getPayload (payloadVersion==3 only). V1–V3 stay served.
     //
     // Built inline instead of through buildJsonError(request, ...) because a handler only
     // ever receives the params array, never the request envelope: the JSON-RPC id is
@@ -136,9 +128,7 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
 task::Task<void> EngineEndpoint::forkchoiceUpdatedV4(
     const Json::Value& /*request*/, Json::Value& response)
 {
-    // Not implemented: Karst payload building is FCU V3 / getPayload V5 / newPayload V4.
-    // Do not route V4 into updateForkchoice — the engine window is still V3 and a V4-tagged
-    // build is incompatible with isGetPayloadVersionCompatible (payloadVersion == 3).
+    // FCU V4 unused: builds stay V3; getPayload only accepts payloadVersion==3.
     buildUnimplementedVersionError("engine_forkchoiceUpdatedV4", response);
     co_return;
 }

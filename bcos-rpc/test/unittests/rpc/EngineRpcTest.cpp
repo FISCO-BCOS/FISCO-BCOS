@@ -220,8 +220,7 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 3);
 }
 
-// FCU V4 is not implemented: Karst builds on V3, and getPayload V4/V5 only accept
-// payloadVersion==3. The endpoint must answer -38005 without reaching the engine.
+// FCU V4 is unimplemented: -38005, engine not called.
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
 {
     Json::Value params(Json::arrayValue);
@@ -1020,9 +1019,7 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
     BOOST_CHECK_EQUAL(result["executionRequests"].size(), 0);
 }
 
-// The engine throws UnsupportedEngineApiVersion for out-of-window version requests (the
-// forkchoice window tops out at V4 for the OP path). The mapper must surface it as the
-// execution-apis -38005 UnsupportedFork contract, not a bare -32603 InternalError.
+// UnsupportedEngineApiVersion maps to -38005, not -32603. FCU itself stops at V3.
 BOOST_AUTO_TEST_CASE(engineErrorMapperOutOfWindowVersion)
 {
     BOOST_CHECK_EQUAL(bcos::rpc::mapEngineErrorCode(bcos::engine::UnsupportedEngineApiVersion{}),

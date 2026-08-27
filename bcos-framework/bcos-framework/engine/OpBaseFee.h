@@ -14,8 +14,7 @@
  *  limitations under the License.
  *
  * @file OpBaseFee.h
- * @brief OP-Stack EIP-1559 next-block baseFee — the SINGLE implementation shared by
- *        the engine (block production) and the RPC (eth_feeHistory's predicted entry).
+ * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). Shared by engine and RPC.
  */
 
 #pragma once
@@ -28,30 +27,10 @@
 namespace bcos::engine
 {
 
-/// Next-block baseFee for an OP-Stack chain, mirroring op-geth
-/// consensus/misc/eip1559/eip1559.go (CalcBaseFee with the Holocene/Jovian
-/// extraData parameters). THE single home for this formula: both bcos-engine
-/// (payload building) and bcos-rpc (eth_feeHistory's trailing entry) include
-/// this header directly, so fork detection and arithmetic cannot drift between
-/// the two consumers.
-///
-/// Parameters are read from the parent header's extraData:
+/// Next-block baseFee (op-geth CalcBaseFee). extraData layout:
 ///   9 bytes  = Holocene: version || denominator(u32 BE) || elasticity(u32 BE)
-///   17 bytes = Jovian adds an 8-byte minBaseFee floor (u64 BE)
-/// A parent with fewer than 9 bytes gets the Holocene defaults (8/2) — the
-/// engine never produces such headers (its own payload validation enforces
-/// the shape), but the RPC may observe foreign/malformed ones and must not
-/// read out of bounds.
-///
-/// @param parent        the parent block header (extraData carries the 1559
-///                      parameters; blobGasUsed carries the Jovian DA
-///                      footprint).
-/// @param parentIsJovian whether the Jovian rules apply to the parent. The
-///                      engine passes its scheduler feature flag; the RPC
-///                      passes its extraData length sniff (>= 17). The fork
-///                      DETECTION stays with the caller — only the formula is
-///                      shared.
-/// @return the predicted baseFee of the child block.
+///   17 bytes = Jovian adds minBaseFee (u64 BE)
+/// Shorter extraData uses Holocene defaults (8/2). Caller decides parentIsJovian.
 inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool parentIsJovian)
 {
     auto const extra = parent.extraData();
@@ -74,7 +53,7 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
         throw std::invalid_argument("invalid OP base-fee parameters: zero denominator/elasticity");
     }
 
-    // Jovian minBaseFee floor — only meaningful when the 8-byte tail exists.
+    // Jovian minBaseFee, only when the 8-byte tail is present.
     std::optional<bcos::u256> minBaseFee;
     if (parentIsJovian && extra.size() >= 17)
     {
@@ -86,17 +65,13 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
         minBaseFee = bcos::u256(floor);
     }
 
-    // The arithmetic is done entirely in u256 — op-geth computes in big.Int,
-    // and the previous engine copy's u64 narrowing bought nothing but a
-    // truncation surface.
     bcos::u256 const gasTarget = parent.gasLimit() / elasticity;
     if (gasTarget == 0) [[unlikely]]
     {
         throw std::invalid_argument("invalid OP base-fee parameters: zero gas target");
     }
 
-    // Jovian meters baseFee on max(gasUsed, DA footprint); the DA footprint
-    // lives in the blobGasUsed header slot (op-geth eip1559.go:99-107).
+    // Jovian meters max(gasUsed, blobGasUsed DA footprint).
     bcos::u256 gasMetered = parent.gasUsed();
     if (parentIsJovian && parent.blobGasUsed().has_value() && *parent.blobGasUsed() > gasMetered)
     {
@@ -127,7 +102,7 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
         result = deltaFee < parentBaseFee ? parentBaseFee - deltaFee : bcos::u256(0);
     }
 
-    // Jovian minBaseFee floor (op-geth eip1559.go:86-91).
+    // Jovian minBaseFee floor.
     if (minBaseFee.has_value() && result < *minBaseFee)
     {
         result = *minBaseFee;

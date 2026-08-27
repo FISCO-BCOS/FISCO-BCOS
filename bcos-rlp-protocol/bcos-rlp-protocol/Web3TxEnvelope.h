@@ -36,11 +36,8 @@ namespace bcos::rlp::protocol
     return !payload.empty() && payload[0] > 0 && payload[0] < bcos::codec::rlp::BYTES_HEAD_BASE;
 }
 
-/// Decode an RLP unsigned integer REJECTING non-canonical encodings (#5496 finding N):
-/// leading-zero payloads ("0x80 00" for 0), bare zero bytes (zero must be the empty string
-/// 0x80), and oversized length prefixes ("0x81 05" for 5). geth's strict rlp decoder rejects
-/// these everywhere; equality against the value's own minimal encoding pins every case at
-/// once, so walk sites cannot drift on which corner they enforce.
+/// Decode an RLP unsigned integer; reject non-minimal encodings (leading zeros, bare 0x00,
+/// oversized prefixes). Re-encode must match the source bytes.
 template <typename T>
 [[nodiscard]] inline bcos::Error::UniquePtr decodeCanonicalRlpUint(
     bcos::bytesRef& from, T& to) noexcept
@@ -55,19 +52,14 @@ template <typename T>
     if (encoded.size() != static_cast<size_t>(from.data() - start) ||
         std::memcmp(start, encoded.data(), encoded.size()) != 0)
     {
-        // NonCanonicalSize, not UnexpectedLength: the payload is in-range but spelled
-        // non-minimally (#5496 finding AN/N family).
+        // In-range but non-minimal spelling.
         return BCOS_ERROR_UNIQUE_PTR(
             bcos::codec::rlp::DecodingError::NonCanonicalSize, "non-canonical RLP integer");
     }
     return nullptr;
 }
 
-/// Typed-transaction yParity in STRICT wire form (#5496 finding M): the whole item (header
-/// byte included) must be exactly 0x80 (parity 0) or 0x01 (parity 1). Anything else — the
-/// bare 0x00 non-minimal zero, any other single byte, multi-byte payloads — is rejected,
-/// matching strict references (op-geth rlp.Uint). Operating on the WHOLE item span avoids
-/// depending on how this codec's header parser normalizes sub-0x80 inline items.
+/// Typed yParity: whole item must be 0x80 (0) or 0x01 (1). Bare 0x00 is rejected.
 [[nodiscard]] inline std::optional<uint64_t> canonicalTypedYParityItem(
     bcos::bytesConstRef item) noexcept
 {
@@ -82,12 +74,7 @@ template <typename T>
     return std::nullopt;
 }
 
-/// Stream-form twin of canonicalTypedYParityItem: parses ONE whole yParity item from the
-/// cursor with identical strictness and consumes it on success (#5496 finding M). Both RLP
-/// spellings of the legal values arrive as a 1-byte whole item — 0x01 inline for parity 1,
-/// 0x80 (empty-string header) for parity 0 — because decodeHeader leaves sub-0x80 items
-/// uncropped while advancing past string headers. Anything else (the bare 0x00 non-minimal
-/// zero, other values, length-prefixed/list shapes) is rejected.
+/// Consume one canonical yParity item (0x80 / 0x01) from the cursor.
 [[nodiscard]] inline bcos::Error::UniquePtr decodeCanonicalYParity(
     bcos::bytesRef& from, uint64_t& to) noexcept
 {
@@ -115,13 +102,8 @@ template <typename T>
 }
 
 
-/// Classify a legacy 3-item trailer as the EIP-155 signing preimage (chainId, 0, 0) or a
-/// sealed wire envelope (v, r, s). SINGLE HOME for the three walk sites — Web3TxHandler's
-/// decode, TransactionImpl's reassemble, classifyWeb3EnvelopeChainId. RLP encodes integer zero as
-/// an empty payload while valid secp256k1 r/s are never empty. A `(27|28, 0, 0)` trailer is
-/// necessarily treated as an EIP-155 preimage: chain IDs 27 and 28 are valid, and the stored
-/// bytes alone cannot distinguish those preimages from an invalid Homestead envelope whose
-/// signature scalars were erased.
+/// Empty r/s => EIP-155 preimage (chainId, 0, 0); otherwise sealed (v, r, s).
+/// chainId 27/28 is indistinguishable from an erased Homestead signature.
 [[nodiscard]] constexpr bool isLegacyPreimageTail(
     [[maybe_unused]] uint64_t field7, bool field8Empty, bool field9Empty) noexcept
 {
@@ -139,25 +121,11 @@ template <typename T>
 /// verify() — keep the walkers' strictness in sync if that ordering ever changes.
 [[nodiscard]] std::optional<uint64_t> web3ChainIdFromEnvelope(bcos::bytesConstRef payload);
 
-/// Three-way-plus-one classification of an envelope's chainId binding:
-///   Unprotected — pre-EIP-155 legacy (6-field preimage, or full envelope v=27/28): exempt
-///                 from the chainId gate (op-geth HomesteadSigner).
-///   Protected   — chainId recovered from the envelope (typed field 0, EIP-155 v>=35, or the
-///                 preimage form's field 7).
-///   Malformed   — a legacy envelope whose tail is neither a valid unprotected form nor a
-///                 recoverable protected one (e.g. v in {0,1} or [29,34], or an unparseable
-///                 tail). A chainId gate that accepts these as "unprotected" would execute a
-///                 transaction whose signature op-geth would reject — the exemption must be
-///                 fail-closed.
-///   Deposit     — the 0x7E deposit envelope: structurally chainId-less (field 0 is
-///                 sourceHash). Its OWN kind so every gate keys an explicit policy on it
-///                 instead of overloading Malformed and re-deriving "deposit vs junk" from
-///                 first bytes (#5496 K). Policy: PUBLIC admission (txpool validateChainId,
-///                 sendRawTransaction) rejects — legitimate deposits are injected by the
-///                 rollup pipeline straight into block building, and a pool/RPC entry point
-///                 would let a peer forge sourceHash/mint fields; the executor's chainId gate
-///                 fail-closes too (executeDeposit bypasses it before dispatch).
-/// `chainId` is meaningful only when the kind is Protected. Defined in the rlp-protocol TU.
+/// Envelope chainId kind. chainId is set only for Protected.
+///   Unprotected — pre-EIP-155 (6-field or v=27/28); gate-exempt
+///   Protected   — typed field 0, EIP-155 v>=35, or preimage field 7
+///   Malformed   — unreadable v/chainId; must not use the unprotected exemption
+///   Deposit     — 0x7E, no chainId. Pool/RPC reject; executeDeposit skips the gate.
 enum class Web3EnvelopeChainIdKind : uint8_t
 {
     Unprotected,
@@ -172,8 +140,7 @@ struct Web3EnvelopeChainIdResult
     uint64_t chainId = 0;
 };
 
-/// Stable names for WARN logs at the three gate sites — spelled out rather than magic_enum
-/// so this lightweight header stays free of the table dependency.
+/// Log names; spelled out so this header does not pull in magic_enum.
 [[nodiscard]] inline std::string_view toString(Web3EnvelopeChainIdKind kind) noexcept
 {
     switch (kind)

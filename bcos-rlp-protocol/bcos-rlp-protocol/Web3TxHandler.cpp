@@ -217,11 +217,7 @@ struct LegacyTxHandler : Web3TxHandler
         }
         if (withSig)
         {
-            // Legacy v keeps its canonical integer gate (#5496 finding N). The r/s decoded
-            // right after it REMAIN plain byte-string decodes on purpose (#5496 AG-c): they
-            // are signature material, not committed integers here — every re-encode/length
-            // site pins trimLeadingZeroBytes and sealed-envelope adoption is signature-bound,
-            // so a non-minimal spelling cannot fork txHash or recover the same sender.
+            // Canonical v; r/s stay byte strings (signature material).
             if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.signatureV);
                 decodeError != nullptr)
             {
@@ -272,14 +268,11 @@ struct LegacyTxHandler : Web3TxHandler
             }
             else
             {
-                // Tail is either the signing preimage (chainId, 0, 0) or a sealed-block
-                // wire envelope (v, r, s). Empty r/s means a preimage, including valid
-                // chain IDs 27/28; an erased Homestead signature has identical bytes and
-                // cannot be distinguished without external layout context.
+                // Empty r/s => preimage (chainId, 0, 0); otherwise sealed (v, r, s).
                 uint64_t item7 = 0;
                 bcos::bytesRef item8;
                 bcos::bytesRef item9;
-                // Canonical integer form for the trailer's scalar field (#5496 finding N).
+                // Canonical trailer scalar.
                 if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, item7);
                     decodeError != nullptr)
                 {
@@ -296,12 +289,7 @@ struct LegacyTxHandler : Web3TxHandler
                 }
                 else
                 {
-                    // Wire envelope: item7 is v; the signed chainId field exists only in the
-                    // preimage layout, so derive it from v. The r/s ARE the signature: land
-                    // them (plus the normalized yParity) in out.signature* so the shared
-                    // EIP-2 low-s gate in Web3Transaction::decode fires for legacy sealed
-                    // envelopes too — a no-sig reader must not silently skip the check that
-                    // op-geth's Sender applies to every legacy tx (kyonRay #5496 R1-3).
+                    // Sealed: item7 is v. Put r/s/yParity in signature* so EIP-2 still runs.
                     uint64_t normalizedV = 0;
                     if (item7 == 27 || item7 == 28)
                     {
@@ -461,8 +449,7 @@ struct EIP2930TxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
-        // Canonical integer forms (#5496 finding N): every scalar in the typed header is
-        // pinned to its minimal RLP spelling.
+        // Canonical RLP integers.
         if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); error != nullptr)
         {
             return error;
@@ -520,11 +507,7 @@ struct EIP2930TxHandler : Web3TxHandler
         bcos::Error::UniquePtr decodeError = nullptr;
         if (withSig || !in.empty())
         {
-            // Consume trailing (yParity, r, s) when present so both the signing preimage
-            // and the sealed-block full envelope pass the leftover-bytes check.
-            // STRICT yParity item first (#5496 finding M): the whole-item span must be
-            // exactly 0x80 or 0x01; the former payload-only trio read admitted the bare 0x00
-            // non-minimal zero that strict references reject.
+            // Dual-form: consume (yParity, r, s) when present. yParity must be 0x80 or 0x01.
             decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             if (decodeError == nullptr)
             {
@@ -680,8 +663,7 @@ struct EIP1559TxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
-        // Canonical integer forms (#5496 finding N): every scalar in the typed header is
-        // pinned to its minimal RLP spelling.
+        // Canonical RLP integers.
         if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); error != nullptr)
         {
             return error;
@@ -742,11 +724,7 @@ struct EIP1559TxHandler : Web3TxHandler
         bcos::Error::UniquePtr decodeError = nullptr;
         if (withSig || !in.empty())
         {
-            // Consume trailing (yParity, r, s) when present so both the signing preimage
-            // and the sealed-block full envelope pass the leftover-bytes check.
-            // STRICT yParity item first (#5496 finding M): the whole-item span must be
-            // exactly 0x80 or 0x01; the former payload-only trio read admitted the bare 0x00
-            // non-minimal zero that strict references reject.
+            // Dual-form: consume (yParity, r, s) when present. yParity must be 0x80 or 0x01.
             decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             if (decodeError == nullptr)
             {
@@ -891,11 +869,7 @@ struct DepositTxHandler : Web3TxHandler
                 return err;
             out.to.emplace(addr);
         }
-        // Width + canonicality note: mint/value/gas go through decodeCanonicalRlpUint, which
-        // keeps the shared UnsignedIntegral width gate (RLPDecode.h: payloadLength >
-        // digits/8 → UnexpectedLength) AND pins minimal encodings — leading zeros and the
-        // bare 0x00 zero are rejected here exactly as the consensus path's
-        // decodeDepositEnvelope rejects them (#5496 finding N: no display-vs-consensus split).
+        // mint/value/gas: same canonical integers as the executor deposit decoder.
         if (auto err = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.mint); err != nullptr)
             return err;  // u256
         if (auto err = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value); err != nullptr)
@@ -903,16 +877,8 @@ struct DepositTxHandler : Web3TxHandler
         if (auto err = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
             err != nullptr)
             return err;  // uint64
-        // ⚠️ isSystemTransaction cannot use codec::rlp::decode(bool) (RLPDecode.h:200-217
-        // requires payloadLength==1 and would report UnexpectedLength for the golden 0x80 empty
-        // string). STRICT whole-item gate (#5496 finding AG-b): the only canonical forms are
-        // 0x80 (false, op-geth RLP nil) and 0x01 (true) — the same shapes the consensus-side
-        // deposit decoder accepts (OpstackExecutor integerPayloadLength path), closing the
-        // display-vs-consensus split that tolerated short-string spellings like 0x81'01'.
+        // isSystemTx: only 0x80 (false) or 0x01 (true). decode(bool) rejects 0x80.
         {
-            // Header-model-aware capture: decodeHeader consumes a string header's own byte
-            // but leaves sub-0x80 inline items in place, so the whole item spans from the
-            // pre-call cursor position.
             auto const* const start = in.data();
             auto&& [boolHeaderError, boolHeader] = codec::rlp::decodeHeader(in);
             if (boolHeaderError != nullptr)
@@ -927,9 +893,7 @@ struct DepositTxHandler : Web3TxHandler
                 return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::NonCanonicalSize,
                     "deposit: invalid isSystemTransaction value");
             }
-            // Advance past the item's own payload for inline forms: decodeHeader leaves
-            // sub-0x80 items uncropped, so the following field would otherwise re-read the
-            // same byte.
+            // decodeHeader leaves sub-0x80 items uncropped.
             in = in.getCroppedData(boolHeader.payloadLength);
             out.isSystemTx = systemFlag;
         }
@@ -1071,8 +1035,7 @@ struct EIP4844TxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
-        // Canonical integer forms (#5496 finding N): every scalar in the typed header is
-        // pinned to its minimal RLP spelling.
+        // Canonical RLP integers.
         if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); error != nullptr)
         {
             return error;
@@ -1143,11 +1106,7 @@ struct EIP4844TxHandler : Web3TxHandler
         bcos::Error::UniquePtr decodeError = nullptr;
         if (withSig || !in.empty())
         {
-            // Consume trailing (yParity, r, s) when present so both the signing preimage
-            // and the sealed-block full envelope pass the leftover-bytes check.
-            // STRICT yParity item first (#5496 finding M): the whole-item span must be
-            // exactly 0x80 or 0x01; the former payload-only trio read admitted the bare 0x00
-            // non-minimal zero that strict references reject.
+            // Dual-form: consume (yParity, r, s) when present. yParity must be 0x80 or 0x01.
             decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             if (decodeError == nullptr)
             {
@@ -1306,8 +1265,7 @@ struct EIP7702TxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
-        // Canonical integer forms (#5496 finding N): every scalar in the typed header is
-        // pinned to its minimal RLP spelling.
+        // Canonical RLP integers.
         if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); error != nullptr)
         {
             return error;
@@ -1373,11 +1331,7 @@ struct EIP7702TxHandler : Web3TxHandler
         bcos::Error::UniquePtr decodeError = nullptr;
         if (withSig || !in.empty())
         {
-            // Consume trailing (yParity, r, s) when present so both the signing preimage
-            // and the sealed-block full envelope pass the leftover-bytes check.
-            // STRICT yParity item first (#5496 finding M): the whole-item span must be
-            // exactly 0x80 or 0x01; the former payload-only trio read admitted the bare 0x00
-            // non-minimal zero that strict references reject.
+            // Dual-form: consume (yParity, r, s) when present. yParity must be 0x80 or 0x01.
             decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             if (decodeError == nullptr)
             {

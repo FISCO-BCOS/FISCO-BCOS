@@ -12,7 +12,6 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"  // parseWeb3ChainId (#5496 S)
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
@@ -392,7 +391,7 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     auto auth = sysConfig.getOrDefault(ledger::SystemConfig::auth_check_status, "0");
     ledgerConfig.setAuthCheckStatus(boost::lexical_cast<uint32_t>(auth.first));
     auto [chainId, _] = sysConfig.getOrDefault(ledger::SystemConfig::web3_chain_id, "0");
-    // Unified parser + 0 fallback on corruption — twin of the LedgerMethods.cpp site (#5496 S).
+    // parseWeb3ChainId; bad config -> 0 + WARN (same as unset).
     if (auto const parsedChainId = ledger::parseWeb3ChainId(chainId); parsedChainId.has_value())
     {
         ledgerConfig.setChainId(bcos::toEvmC(*parsedChainId));

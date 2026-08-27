@@ -101,13 +101,8 @@ inline std::string_view toView(const Json::Value& value)
     return view;
 }
 
-/// Pure initializer for the eth_estimateGas upward-search interval (#5496 finding P,
-/// regression-tested in EthEstimateGasBudgetTest). Given the first-run consumption (known
-/// bad — its re-simulation failed), the estimator's DoS ceiling, and the limit run #1
-/// actually executed at (an explicit request gas passes through uncapped), returns a
-/// well-ordered [lowerBound, upperBound] pair. The ordering invariant matters: seeding the
-/// ceiling from min(X, cap) alone while an X above cap was honored inverted the bounds and
-/// wrapped the unsigned width test.
+/// estimateGas search interval. upperBound is max(cap, first-run limit) so an explicit
+/// gas above the cap cannot invert the bounds.
 struct EstimateSearchBounds
 {
     u256 lowerBound;
