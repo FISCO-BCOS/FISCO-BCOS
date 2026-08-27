@@ -184,7 +184,7 @@ void ServiceV2::onReceiveRouterTableRequest(
         (!_message->srcP2PNodeID().empty()) ? _message->srcP2PNodeID() : _session->p2pID();
     auto self = std::static_pointer_cast<ServiceV2>(shared_from_this());
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
-    // router table payload is copied into it (the caller's buffer does not outlive the deferred
+    // router table payload is moved into it (the caller's buffer does not outlive the deferred
     // send); an unreachable peer is an expected, recoverable state.
     task::wait([](std::shared_ptr<ServiceV2> _self, uint16_t _type, P2pID _nodeID,
                    bcos::bytes _payload) -> task::Task<void> {
@@ -204,8 +204,7 @@ void ServiceV2::onReceiveRouterTableRequest(
                 << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", e.errorCode())
                 << LOG_KV("msg", e.what());
         }
-    }(self, GatewayMessageType::RouterTableResponse, dstP2PNodeID,
-        bcos::bytes(routerTableData->begin(), routerTableData->end())));
+    }(self, GatewayMessageType::RouterTableResponse, dstP2PNodeID, std::move(*routerTableData)));
 }
 
 void ServiceV2::broadcastRouterSeq()

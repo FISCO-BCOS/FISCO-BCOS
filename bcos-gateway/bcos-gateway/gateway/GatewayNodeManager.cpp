@@ -296,7 +296,7 @@ void GatewayNodeManager::onRequestNodeStatus(
                             << LOG_KV("from", printShortP2pID(from));
     auto p2pInterface = m_p2pInterface;
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
-    // node status payload is copied into it (the caller's buffer does not outlive the deferred
+    // node status payload is moved into it (the caller's buffer does not outlive the deferred
     // send); an unreachable peer is an expected, recoverable state.
     task::wait([](P2PInterface::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID,
                    bcos::bytes _payload) -> task::Task<void> {
