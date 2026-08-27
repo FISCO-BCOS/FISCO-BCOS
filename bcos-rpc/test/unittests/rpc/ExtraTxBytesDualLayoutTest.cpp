@@ -120,6 +120,11 @@ BOOST_AUTO_TEST_CASE(legacyGarbageTrailerRejected)
     Web3Transaction tx{};
     auto error = codec::rlp::decodeFromPayload(ref, tx);
     BOOST_REQUIRE(error != nullptr);
+    // Pin the cause class (#5496 finding BJ): the failure must be the v<35 band
+    // (InvalidVInSignature), not a generic or trailing-bytes error — a regression that
+    // moves the rejection cause would otherwise pass this null-check unnoticed.
+    BOOST_CHECK(
+        error->errorCode() == static_cast<int>(codec::rlp::DecodingError::InvalidVInSignature));
 }
 
 // EIP-1559 signing preimage (9 items) — txpool-stage layout.
