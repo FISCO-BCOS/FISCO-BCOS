@@ -19,6 +19,8 @@
  * @date 2021-05-11
  */
 #include "TxValidator.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"  // SECP256K1_SIGNATURE_*_LEN
+#include "bcos-framework/bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
@@ -311,7 +313,17 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
     // Same classifier as sendRawTransaction / the executor.
     namespace rlp_protocol = bcos::rlp::protocol;
     auto const classified = rlp_protocol::classifyWeb3EnvelopeChainId(_tx.extraTransactionBytes());
+    // Blob (0x03) is parseable but never admitted on L2: sendRawTransaction, the in-process
+    // mempool and the engine payload validators all reject it through the shared dispatch
+    // table — the P2P sync funnel must not become the one entry that lets a blob into the
+    // pool. Same status as the Deposit exclusion below.
+    if (bcos::engine::dispatchRawTransaction(_tx.extraTransactionBytes()) ==
+        bcos::engine::RawTransactionKind::Blob)
+    {
+        co_return TransactionStatus::InvalidChainId;
+    }
     // Deposits have no chainId; they enter via the rollup pipeline, not the pool.
+(fix(txpool): reject blob envelopes at pool admission; explicit secp256k1 include (findings AP/BE))
     if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Deposit)
     {
         co_return TransactionStatus::InvalidChainId;
