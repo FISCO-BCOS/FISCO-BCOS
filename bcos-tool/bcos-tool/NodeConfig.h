@@ -584,16 +584,9 @@ private:
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;
     uint64_t m_ethereumChainId = 1;
-    // EL-mode fork schedule ([fork_timestamps] in config.genesis); 0 = active from genesis
-    uint64_t m_ethereumForkLondonTime = 0;
-    uint64_t m_ethereumForkParisTime = 0;
-    uint64_t m_ethereumForkShanghaiTime = 0;
-    uint64_t m_ethereumForkCancunTime = 0;
-    uint64_t m_ethereumForkPragueTime = 0;
-    uint64_t m_ethereumForkOsakaTime = 0;
-    uint64_t m_ethereumForkBpo1Time = 0;
-    uint64_t m_ethereumForkBpo2Time = 0;
-    bool m_ethereumForkScheduleSet = false;
+    // The EL-mode fork schedule ([fork_timestamps] in config.genesis) lives on
+    // m_genesisConfig.m_ethereumForkSchedule so it is part of the genesis pin;
+    // the ethereumFork*Time() getters below forward to it (0 when unset).
 
     // config for cert
     std::string m_certPath;

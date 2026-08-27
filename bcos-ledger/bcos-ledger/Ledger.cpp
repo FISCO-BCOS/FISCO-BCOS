@@ -2001,9 +2001,14 @@ static void applyEthGenesisHeader(
     header.setDifficulty(ethHeader.m_difficulty);
     header.setGasLimit(ethHeader.m_gasLimit);
     header.setGasUsed(ethHeader.m_gasUsed);
-    // B0's timestamp is artifact-authoritative and in SECONDS (the Ethereum
-    // header domain): the RLP hash must reproduce the artifact byte-for-byte.
-    header.setTimestamp(ethHeader.m_timestamp);
+    // The artifact carries B0's timestamp in SECONDS (the Ethereum header
+    // domain); internal BlockHeader timestamps are MILLISECONDS everywhere, so
+    // convert on the way in. The RLP bridge (EthBlockHeader) divides by 1000 on
+    // encode, so keccak256(rlp(header)) still reproduces the artifact hash
+    // byte-for-byte. No int64 overflow: the config parser bounds the artifact
+    // seconds by INT64_MAX/1000 (NodeConfig's [eth_genesis_header].timestamp
+    // check), so the x1000 cannot wrap.
+    header.setTimestamp(ethHeader.m_timestamp * 1000);
     header.setExtraData(bcos::bytes(ethHeader.m_extraData));
     header.setPrevRandao(ethHeader.m_mixHash);
     header.setNonce(ethHeader.m_nonce);

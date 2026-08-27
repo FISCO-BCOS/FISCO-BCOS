@@ -101,6 +101,25 @@ struct EthGenesisHeader
     crypto::HashType m_hash;  // expected keccak256(rlp(header)); checked, never trusted
 };
 
+// EL-mode (Ethereum L1 self-sync) timestamp fork schedule, parsed from the
+// [fork_timestamps] section of config.genesis: L1 PoS chains fork on
+// timestamps rather than block heights. 0 means "active from genesis";
+// std::numeric_limits<uint64_t>::max() means "not yet active". Stored in
+// GenesisConfig (not NodeConfig) so generateGenesisData emits it into the
+// genesis pin — two nodes with different schedules then fail the genesis
+// comparison instead of silently running different EVM rules.
+struct EthereumForkSchedule
+{
+    uint64_t m_londonTime = 0;
+    uint64_t m_parisTime = 0;
+    uint64_t m_shanghaiTime = 0;
+    uint64_t m_cancunTime = 0;
+    uint64_t m_pragueTime = 0;
+    uint64_t m_osakaTime = 0;
+    uint64_t m_bpo1Time = 0;
+    uint64_t m_bpo2Time = 0;
+};
+
 class GenesisConfig
 {
 public:
@@ -158,6 +177,11 @@ public:
     // (L2 mode, B0 built as a full Ethereum header). Absent on every legacy
     // chain — Ledger then keeps the native Tars genesis-header path.
     std::optional<EthGenesisHeader> m_ethGenesisHeader;
+
+    // Present iff config.genesis carries a [fork_timestamps] section (EL mode).
+    // Part of the genesis pin via generateGenesisData; absent on every legacy
+    // chain, keeping their genesis strings byte-identical.
+    std::optional<EthereumForkSchedule> m_ethereumForkSchedule;
 
 };  // namespace genesisConfig
 }  // namespace bcos::ledger

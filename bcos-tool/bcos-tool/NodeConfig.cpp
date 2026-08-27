@@ -41,6 +41,7 @@
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <charconv>
 #include <cctype>
 #include <cstdint>
 #include <limits>
@@ -199,7 +200,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
 
     loadLedgerConfig(_genesisConfig);
     // EL-mode fork schedule must be parsed BEFORE loadExecutorConfig: its v2 EVMC-revision
-    // guard exempts chains with a [fork_timestamps] section (m_ethereumForkScheduleSet).
+    // guard exempts chains with a [fork_timestamps] section (m_ethereumForkSchedule).
     loadForkTimestamps(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
 
@@ -1013,6 +1014,30 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     {
         return;
     }
+    // Parse one timestamp value: decimal or 0x-prefixed hex. std::from_chars rejects
+    // sign characters ('-' would silently wrap to "never activates" under
+    // std::stoull) and the ENTIRE string must be consumed (std::stoull silently
+    // truncates trailing garbage like "1677557088abc") — a typo'd config must fail
+    // fast like every neighbouring parse, not yield a wrong fork schedule (geth's
+    // EIP-2124 fork-id chains every activated fork, so a silently-wrong schedule
+    // announces a stale checksum and gets the node rejected by peers).
+    auto parseTs = [](std::string const& key, std::string const& value) -> uint64_t {
+        std::string_view digits = value;
+        int base = 10;
+        if (digits.rfind("0x", 0) == 0 || digits.rfind("0X", 0) == 0)
+        {
+            base = 16;
+            digits.remove_prefix(2);
+        }
+        uint64_t out = 0;
+        auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), out, base);
+        if (ec != std::errc{} || ptr != digits.data() + digits.size())
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[fork_timestamps]." + key + " invalid timestamp: " + value));
+        }
+        return out;
+    };
     auto readTs = [&](std::string const& key) -> uint64_t {
         auto value = section->get_optional<std::string>(key);
         if (!value)
@@ -1020,50 +1045,8 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("[fork_timestamps]." + key + " is required"));
         }
-        try
-        {
-            // Accept decimal or 0x-prefixed hex.
-            auto trimmed = *value;
-            if (trimmed.rfind("0x", 0) == 0 || trimmed.rfind("0X", 0) == 0)
-            {
-                return std::stoull(trimmed.substr(2), nullptr, 16);
-            }
-            return std::stoull(trimmed);
-        }
-        catch (std::exception const&)
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment("[fork_timestamps]." + key +
-                                                   " invalid timestamp: " + *value));
-        }
+        return parseTs(key, *value);
     };
-    m_ethereumForkLondonTime = readTs("london_time");
-    // Paris (The Merge) is timestamp-gated on chains with a PoW phase (Sepolia).
-    // A chain that is PoS from genesis (Holesky) can omit it; readOptionalTs
-    // leaves it at 0 (active from genesis) when absent.
-    if (auto value = section->get_optional<std::string>("paris_time"))
-    {
-        auto trimmed = *value;
-        try
-        {
-            m_ethereumForkParisTime =
-                (trimmed.rfind("0x", 0) == 0 || trimmed.rfind("0X", 0) == 0) ?
-                    std::stoull(trimmed.substr(2), nullptr, 16) :
-                    std::stoull(trimmed);
-        }
-        catch (std::exception const&)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[fork_timestamps].paris_time invalid: " + trimmed));
-        }
-    }
-    else
-    {
-        m_ethereumForkParisTime = 0;  // active from genesis (pure PoS chain)
-    }
-    m_ethereumForkShanghaiTime = readTs("shanghai_time");
-    m_ethereumForkCancunTime = readTs("cancun_time");
-    m_ethereumForkPragueTime = readTs("prague_time");
     // Post-Prague forks (osaka, bpo1, bpo2, ...) are optional: absent means "not yet
     // active". They MUST be configured once activated on the chain — geth's EIP-2124
     // fork-id checksum chains every activated fork, so a missing entry makes us
@@ -1071,38 +1054,43 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     auto readOptionalTs = [&](std::string const& key, uint64_t& out) {
         if (auto value = section->get_optional<std::string>(key))
         {
-            auto trimmed = *value;
-            try
-            {
-                out = (trimmed.rfind("0x", 0) == 0 || trimmed.rfind("0X", 0) == 0) ?
-                          std::stoull(trimmed.substr(2), nullptr, 16) :
-                          std::stoull(trimmed);
-            }
-            catch (std::exception const&)
-            {
-                BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                          "[fork_timestamps]." + key + " invalid: " + trimmed));
-            }
+            out = parseTs(key, *value);
         }
         else
         {
             out = std::numeric_limits<uint64_t>::max();  // not yet active
         }
     };
-    readOptionalTs("osaka_time", m_ethereumForkOsakaTime);
-    readOptionalTs("bpo1_time", m_ethereumForkBpo1Time);
-    readOptionalTs("bpo2_time", m_ethereumForkBpo2Time);
-    m_ethereumForkScheduleSet = true;
+
+    ledger::EthereumForkSchedule schedule;
+    schedule.m_londonTime = readTs("london_time");
+    // Paris (The Merge) is timestamp-gated on chains with a PoW phase (Sepolia).
+    // A chain that is PoS from genesis (Holesky) can omit it; absent leaves it at
+    // 0 (active from genesis).
+    if (auto value = section->get_optional<std::string>("paris_time"))
+    {
+        schedule.m_parisTime = parseTs("paris_time", *value);
+    }
+    schedule.m_shanghaiTime = readTs("shanghai_time");
+    schedule.m_cancunTime = readTs("cancun_time");
+    schedule.m_pragueTime = readTs("prague_time");
+    readOptionalTs("osaka_time", schedule.m_osakaTime);
+    readOptionalTs("bpo1_time", schedule.m_bpo1Time);
+    readOptionalTs("bpo2_time", schedule.m_bpo2Time);
+    // Stored on the GenesisConfig so generateGenesisData emits the schedule into
+    // the genesis pin: two nodes holding different schedules now fail the genesis
+    // comparison instead of silently running different EVM rules.
+    m_genesisConfig.m_ethereumForkSchedule = schedule;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadForkTimestamps")
-                         << LOG_KV("london", m_ethereumForkLondonTime)
-                         << LOG_KV("paris", m_ethereumForkParisTime)
-                         << LOG_KV("shanghai", m_ethereumForkShanghaiTime)
-                         << LOG_KV("cancun", m_ethereumForkCancunTime)
-                         << LOG_KV("prague", m_ethereumForkPragueTime)
-                         << LOG_KV("osaka", m_ethereumForkOsakaTime)
-                         << LOG_KV("bpo1", m_ethereumForkBpo1Time)
-                         << LOG_KV("bpo2", m_ethereumForkBpo2Time);
+                         << LOG_KV("london", schedule.m_londonTime)
+                         << LOG_KV("paris", schedule.m_parisTime)
+                         << LOG_KV("shanghai", schedule.m_shanghaiTime)
+                         << LOG_KV("cancun", schedule.m_cancunTime)
+                         << LOG_KV("prague", schedule.m_pragueTime)
+                         << LOG_KV("osaka", schedule.m_osakaTime)
+                         << LOG_KV("bpo1", schedule.m_bpo1Time)
+                         << LOG_KV("bpo2", schedule.m_bpo2Time);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -2033,10 +2021,12 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     // ([fork_timestamps], loaded by loadForkTimestamps) and EthereumBlockVerifier derives the
     // EVMC revision from the block timestamp via fillExecutionLedgerConfig — the revision is
     // never read from on-chain state in this mode, so an executor.evm_revision is not
-    // required (the [fork_timestamps] section itself pins the schedule in the config).
+    // required. The schedule itself IS part of the genesis pin: loadForkTimestamps stores it
+    // on the GenesisConfig and generateGenesisData emits it, so nodes holding different
+    // schedules fail the genesis comparison.
     if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
         !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty() &&
-        !m_ethereumForkScheduleSet)
+        !m_genesisConfig.m_ethereumForkSchedule)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
@@ -2081,7 +2071,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
         if (m_genesisConfig.m_authAdminAccount.empty() &&
             (m_genesisConfig.m_isAuthCheck ||
                 m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION) &&
-            !m_ethereumForkScheduleSet) [[unlikely]]
+            !m_genesisConfig.m_ethereumForkSchedule) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is empty, "
@@ -2092,7 +2082,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     {
         if ((m_genesisConfig.m_isAuthCheck ||
                 m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION) &&
-            !m_ethereumForkScheduleSet)
+            !m_genesisConfig.m_ethereumForkSchedule)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is null, "
@@ -2952,6 +2942,23 @@ std::string bcos::tool::generateGenesisData(
                       genesisConfig.m_evmcRevision, genesisConfig.m_evmcRevisionForks)
                << '\n';
         }
+        // The EL-mode fork schedule drives the EVM revision in EL mode, so it is
+        // part of the genesis pin for the same reason evmRevision is. Emitted only
+        // when present (mirroring the [ethGenesisHeader] pattern) so every legacy
+        // chain's genesis string stays byte-identical.
+        if (genesisConfig.m_ethereumForkSchedule.has_value())
+        {
+            auto const& schedule = *genesisConfig.m_ethereumForkSchedule;
+            ss << "[forkTimestamps]" << '\n'
+               << "london_time:" << schedule.m_londonTime << '\n'
+               << "paris_time:" << schedule.m_parisTime << '\n'
+               << "shanghai_time:" << schedule.m_shanghaiTime << '\n'
+               << "cancun_time:" << schedule.m_cancunTime << '\n'
+               << "prague_time:" << schedule.m_pragueTime << '\n'
+               << "osaka_time:" << schedule.m_osakaTime << '\n'
+               << "bpo1_time:" << schedule.m_bpo1Time << '\n'
+               << "bpo2_time:" << schedule.m_bpo2Time << '\n';
+        }
         if (genesisConfig.m_compatibilityVersion >=
             (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
         {
@@ -3006,8 +3013,8 @@ std::string bcos::tool::generateGenesisData(
             }
             if (ethHeader.m_parentBeaconBlockRoot.has_value())
             {
-                ss << "parent_beacon_block_root:" << ethHeader.m_parentBeaconBlockRoot->hexPrefixed()
-                   << '\n';
+                ss << "parent_beacon_block_root:"
+                   << ethHeader.m_parentBeaconBlockRoot->hexPrefixed() << '\n';
             }
             if (ethHeader.m_requestsHash.has_value())
             {
@@ -3130,35 +3137,51 @@ uint64_t bcos::tool::NodeConfig::ethereumChainId() const
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkLondonTime() const
 {
-    return m_ethereumForkLondonTime;
+    return m_genesisConfig.m_ethereumForkSchedule ?
+               m_genesisConfig.m_ethereumForkSchedule->m_londonTime :
+               0;
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkParisTime() const
 {
-    return m_ethereumForkParisTime;
+    return m_genesisConfig.m_ethereumForkSchedule ?
+               m_genesisConfig.m_ethereumForkSchedule->m_parisTime :
+               0;
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkShanghaiTime() const
 {
-    return m_ethereumForkShanghaiTime;
+    return m_genesisConfig.m_ethereumForkSchedule ?
+               m_genesisConfig.m_ethereumForkSchedule->m_shanghaiTime :
+               0;
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkCancunTime() const
 {
-    return m_ethereumForkCancunTime;
+    return m_genesisConfig.m_ethereumForkSchedule ?
+               m_genesisConfig.m_ethereumForkSchedule->m_cancunTime :
+               0;
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkPragueTime() const
 {
-    return m_ethereumForkPragueTime;
+    return m_genesisConfig.m_ethereumForkSchedule ?
+               m_genesisConfig.m_ethereumForkSchedule->m_pragueTime :
+               0;
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkOsakaTime() const
 {
-    return m_ethereumForkOsakaTime;
+    return m_genesisConfig.m_ethereumForkSchedule ?
+               m_genesisConfig.m_ethereumForkSchedule->m_osakaTime :
+               0;
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkBpo1Time() const
 {
-    return m_ethereumForkBpo1Time;
+    return m_genesisConfig.m_ethereumForkSchedule ?
+               m_genesisConfig.m_ethereumForkSchedule->m_bpo1Time :
+               0;
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkBpo2Time() const
 {
-    return m_ethereumForkBpo2Time;
+    return m_genesisConfig.m_ethereumForkSchedule ?
+               m_genesisConfig.m_ethereumForkSchedule->m_bpo2Time :
+               0;
 }
 bool bcos::tool::NodeConfig::singlePointConsensus() const
 {

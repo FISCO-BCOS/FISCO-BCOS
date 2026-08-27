@@ -13,6 +13,7 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
+#include <limits>
 #include <string>
 
 using namespace bcos;
@@ -309,6 +310,109 @@ BOOST_AUTO_TEST_CASE(legacyDashJoinedFormat)
     BOOST_CHECK(data.find("[chain]") == std::string::npos);  // not the sectioned form
     BOOST_CHECK(data.find(genesisConfig.m_authAdminAccount) != std::string::npos);
     BOOST_CHECK(data.find("1000-1-3000000000") != std::string::npos);  // txCount-period-gas
+}
+
+// The EL-mode fork schedule ([fork_timestamps]) drives the EVM revision in EL mode, so it
+// is part of the genesis pin: loadForkTimestamps stores it on the GenesisConfig and
+// generateGenesisData emits a [forkTimestamps] section — two nodes holding different
+// schedules produce different genesis data and fail the genesis comparison instead of
+// silently running different EVM rules. Chains without the section are byte-unaffected.
+BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string base =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=1\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n";
+    const std::string schedule =
+        "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\ncancun_time=1710338135\n"
+        "prague_time=1746612311\n";
+
+    // Parses into the GenesisConfig and lands in the genesis pin.
+    NodeConfig cfg(keyFactory);
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + schedule));
+    auto const& gc = cfg.genesisConfig();
+    BOOST_REQUIRE(gc.m_ethereumForkSchedule.has_value());
+    BOOST_CHECK_EQUAL(gc.m_ethereumForkSchedule->m_londonTime, 0u);
+    BOOST_CHECK_EQUAL(gc.m_ethereumForkSchedule->m_parisTime, 0u);  // omitted: PoS from genesis
+    BOOST_CHECK_EQUAL(gc.m_ethereumForkSchedule->m_shanghaiTime, 1681338455u);
+    BOOST_CHECK_EQUAL(gc.m_ethereumForkSchedule->m_osakaTime,
+        std::numeric_limits<uint64_t>::max());  // omitted: not yet active
+
+    auto data = bcos::tool::generateGenesisData(gc, *cfg.ledgerConfig());
+    BOOST_CHECK(data.find("[forkTimestamps]") != std::string::npos);
+    BOOST_CHECK(data.find("shanghai_time:1681338455") != std::string::npos);
+
+    // A node with a different schedule produces different genesis data.
+    NodeConfig cfg2(keyFactory);
+    BOOST_REQUIRE_NO_THROW(cfg2.loadGenesisConfigFromString(
+        base + "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\n"
+               "cancun_time=1710338135\nprague_time=1746612312\n"));
+    BOOST_CHECK(data != bcos::tool::generateGenesisData(cfg2.genesisConfig(), *cfg2.ledgerConfig()));
+
+    // No [fork_timestamps] section -> no [forkTimestamps] emission (legacy chains stay
+    // byte-identical); an explicit evm_revision satisfies the v2 guard instead.
+    NodeConfig cfg3(keyFactory);
+    BOOST_REQUIRE_NO_THROW(cfg3.loadGenesisConfigFromString(base + "evm_revision=cancun\n"));
+    BOOST_CHECK(!cfg3.genesisConfig().m_ethereumForkSchedule.has_value());
+    auto data3 = bcos::tool::generateGenesisData(cfg3.genesisConfig(), *cfg3.ledgerConfig());
+    BOOST_CHECK(data3.find("[forkTimestamps]") == std::string::npos);
+}
+
+// Fork timestamp parsing must fail fast: std::stoull accepted a leading '-' (wrapping to
+// "never activates") and silently truncated trailing garbage; the from_chars parser rejects
+// both, like every neighbouring parse.
+BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string base =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=1\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n"
+        "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=";
+
+    // A leading '-' must not wrap to 2^64-1 ("fork never activates").
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_THROW(
+            cfg.loadGenesisConfigFromString(base + "-1\n"), InvalidConfig);
+    }
+    // Trailing garbage must not be silently truncated to a wrong schedule.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_THROW(
+            cfg.loadGenesisConfigFromString(base + "1746612311abc\n"), InvalidConfig);
+    }
+    // 0x-prefixed hex is still accepted.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "0x67f9f25b\n"));
+        BOOST_CHECK_EQUAL(
+            cfg.genesisConfig().m_ethereumForkSchedule->m_pragueTime, 0x67f9f25bu);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
