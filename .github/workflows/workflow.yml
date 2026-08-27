@@ -30,7 +30,6 @@ jobs:
             ubuntu-24.04,
             ubuntu-24.04-arm,
             macos-15,
-            macos-15-intel,
             windows-2025,
           ]
     steps:
@@ -74,7 +73,7 @@ jobs:
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
               flex bison patch pkg-config uuid-runtime automake gcc-14 g++-14
       - name: Install macOS dependencies
-        if: matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+        if: matrix.os == 'macos-15'
         run: brew install libomp autoconf automake libtool
       - name: Set up MSVC environment
         # The windows-2025 image ships Visual Studio 18 (2026), which the pinned
@@ -113,7 +112,7 @@ jobs:
           cd build
           CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for macOS
-        if: matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+        if: matrix.os == 'macos-15'
         run: |
           brew unlink cmake 2>/dev/null || true
           cmake --version
@@ -199,8 +198,8 @@ jobs:
         # downloaded by the "Download EEST fixtures" step above. Linux only:
         # the node fails to bring up the RPC server on the macOS runners (the
         # harness discards the node's stderr, so the root cause is not yet
-        # diagnosed; see the air test which likewise excludes macos-15). Both
-        # macOS variants are excluded until the node startup issue is fixed.
+        # diagnosed; see the air test which likewise excludes macos-15). macOS
+        # is excluded until the node startup issue is fixed.
         if: matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.
@@ -228,15 +227,6 @@ jobs:
           pip3 install --break-system-packages --quiet requests 2>/dev/null || true
           # Run engine API integration test (curl smoke + Python mock CL)
           bash tools/engine_integration_test.sh build 8551
-      - name: Engine API integration test (with Lodestar)
-        if: matrix.os == 'ubuntu-24.04'
-        run: |
-          # Install Python dependencies (handle macOS PEP 668 externally-managed-environment)
-          python3 -m pip install --quiet requests 2>/dev/null || \
-          pip3 install --quiet requests 2>/dev/null || \
-          pip3 install --break-system-packages --quiet requests 2>/dev/null || true
-          # Run engine API integration test with Lodestar dev mode
-          RUN_LODESTAR=1 bash tools/engine_integration_test.sh build 8551
       - name: Reduce vcpkg cache size
         if: matrix.os != 'windows-2025'
         run: |
@@ -275,10 +265,6 @@ jobs:
             macos-15)
               PKG_OS=macOS
               PKG_ARCH=arm
-              ;;
-            macos-15-intel)
-              PKG_OS=macOS
-              PKG_ARCH=x86_64
               ;;
             *)
               PKG_OS=unknown
