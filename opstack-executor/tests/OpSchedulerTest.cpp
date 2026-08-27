@@ -2084,9 +2084,11 @@ bcos::h256 commitmentCorruption(unsigned char tag)
 
 /// N2 regression: with verify=true, tampering exactly ONE back-filled commitment field on the
 /// announced header must be rejected with OpConsensusRejected, naming that field
-/// ("commitment mismatch on field <name>"). Exercises five discriminated names from
-/// mismatchedFieldOf's ordered chain; withdrawalsRoot is tampered in VALUE (presence stays
-/// equal) so it hits the comparison arm after the dedicated presence gate passes.
+/// ("commitment mismatch on field <name>"). Exercises six discriminating rejections: five names
+/// from mismatchedFieldOf's ordered chain (withdrawalsRoot is tampered in VALUE — presence stays
+/// equal — so it hits the comparison arm after the dedicated presence gate passes) plus the
+/// blobGasUsed guard: pre-Jovian seals omit the field, so announcing a non-zero value is invalid
+/// rather than merely unequal to execution.
 BOOST_AUTO_TEST_CASE(VerifyRejectsMismatchedAnnouncedCommitments)
 {
     using Mutator = void (*)(bcostars::protocol::BlockHeaderImpl&);
@@ -2094,30 +2096,44 @@ BOOST_AUTO_TEST_CASE(VerifyRejectsMismatchedAnnouncedCommitments)
     {
         const char* fieldName;
         Mutator mutate;
+        // Message fragment each rejection must contain; defaults would all be the commitment
+        // prefix, but the blobGasUsed guard throws before any comparison happens.
+        std::string expectedFragment;
     };
     Fixture f;
+    auto commitmentMsg = [](const char* fieldName) {
+        return std::string{"commitment mismatch on field "} + fieldName;
+    };
     const std::vector<Case> cases{
         {"stateRoot",
             [](bcostars::protocol::BlockHeaderImpl& h) {
                 h.setStateRoot(commitmentCorruption(0xa1));
-            }},
+            },
+            {}},
         {"transactionsRoot",
             [](bcostars::protocol::BlockHeaderImpl& h) {
                 h.setTxsRoot(commitmentCorruption(0xa2));
-            }},
+            },
+            {}},
         {"receiptsRoot",
             [](bcostars::protocol::BlockHeaderImpl& h) {
                 h.setReceiptsRoot(commitmentCorruption(0xa3));
-            }},
-        {"gasUsed", [](bcostars::protocol::BlockHeaderImpl& h) { h.setGasUsed(h.gasUsed() + 1); }},
+            },
+            {}},
+        {"gasUsed", [](bcostars::protocol::BlockHeaderImpl& h) { h.setGasUsed(h.gasUsed() + 1); },
+            {}},
         {"withdrawalsRoot",
             [](bcostars::protocol::BlockHeaderImpl& h) {
                 h.setWithdrawalsRoot(commitmentCorruption(0xa4));
-            }},
+            },
+            {}},
+        {"blobGasUsed",
+            [](bcostars::protocol::BlockHeaderImpl& h) { h.setBlobGasUsed(bcos::u256{7}); },
+            "must announce blobGasUsed=0"},
     };
 
     std::vector<bcos::bytes> const rawTxBytes{encodeDepositEnvelope(makeDeposit())};
-    for (auto const& [fieldName, mutate] : cases)
+    for (auto const& [fieldName, mutate, expectedFragment] : cases)
     {
         // Every execute below fails by construction, so nothing ever pushes a view or commits:
         // the committed parent state stays stable across iterations and the probe stays valid.
@@ -2136,9 +2152,9 @@ BOOST_AUTO_TEST_CASE(VerifyRejectsMismatchedAnnouncedCommitments)
             continue;
         BOOST_CHECK_EQUAL(
             cb.err->errorCode(), (int)bcos::scheduler::SchedulerError::OpConsensusRejected);
-        BOOST_CHECK_MESSAGE(
-            cb.err->errorMessage().find(std::string{"commitment mismatch on field "} + fieldName) !=
-                std::string::npos,
+        BOOST_CHECK_MESSAGE(cb.err->errorMessage().find(expectedFragment.empty() ?
+                                                            commitmentMsg(fieldName) :
+                                                            expectedFragment) != std::string::npos,
             fieldName << ": rejection must name the corrupt field, got: "
                       << cb.err->errorMessage());
     }

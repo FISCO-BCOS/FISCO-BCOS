@@ -978,9 +978,18 @@ private:
             executedBlockHeader->setRequestsHash(detail::toBcosH256(*opResult.seal.requestsHash));
         if (opResult.seal.blobGasUsed.has_value())
             executedBlockHeader->setBlobGasUsed(bcos::u256(*opResult.seal.blobGasUsed));
-        else if (blockHeader.blobGasUsed())
-            // Seal omitted blobGasUsed (pre-Jovian): copy announced. Do not invent 0.
-            executedBlockHeader->setBlobGasUsed(*blockHeader.blobGasUsed());
+        else if (auto const announced = blockHeader.blobGasUsed())
+        {
+            // Seal omitted blobGasUsed (pre-Jovian): the OP spec fixes the field at 0 here, so a
+            // non-zero announcement is an invalid payload. Reject it instead of copying — the
+            // copy feeds headerCommitments, and comparing the announced value against its own
+            // copy makes that verify arm self-referential (always pass).
+            if (*announced != bcos::u256{0})
+                throw bcos::evm::OpConsensusError(
+                    "OpScheduler: pre-Jovian payload must announce blobGasUsed=0");
+            // Spec-valid zero: keep the identity back-fill so the header's shape stays faithful.
+            executedBlockHeader->setBlobGasUsed(*announced);
+        }
         co_return executedBlockHeader;
     }
 
