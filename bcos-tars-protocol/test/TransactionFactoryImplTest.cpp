@@ -515,6 +515,22 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireFormCrossChecksSignature)
     BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
                           bcos::ref(tampered), bcos::bytesConstRef(sig.data(), sig.size())),
         std::invalid_argument);
+
+    // Round-2 F6: leading-zero r. Tars stores the full 32-byte scalar (first byte 0x00),
+    // the wire trailer carries its MINIMAL 31-byte RLP form — trimLeadingZeros must bridge
+    // the two on this txHash contract path (~1/256 of real signatures hit it).
+    bcos::bytes rz(32, 0x11);
+    rz[0] = 0x00;
+    bcos::bytes const rzMinimal(rz.begin() + 1, rz.end());  // 31 bytes, first byte nonzero
+    bcos::bytes sigz(65, 0x00);
+    std::copy(rz.begin(), rz.end(), sigz.begin());
+    std::copy(s.begin(), s.end(), sigz.begin() + 32);
+    sigz[64] = yParity;
+
+    auto wirez = buildWire(rzMinimal, s, yParity);
+    auto reassembledz = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(wirez), bcos::bytesConstRef(sigz.data(), sigz.size()));
+    BOOST_CHECK(reassembledz == wirez);
 }
 
 // yParity=0 (RLP-encoded as the empty payload 0x80) must be read directly, not RLP-decoded —
@@ -699,6 +715,22 @@ BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
     BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
                           bcos::ref(relabeledV), bcos::bytesConstRef(sig.data(), sig.size())),
         std::invalid_argument);
+
+    // Round-2 F6: leading-zero r. Tars stores the full 32-byte scalar (first byte 0x00),
+    // the wire trailer carries its MINIMAL 31-byte RLP form — trimLeadingZeros must bridge
+    // the two on this txHash contract path (~1/256 of real signatures hit it).
+    bcos::bytes rz(32, 0x11);
+    rz[0] = 0x00;
+    bcos::bytes const rzMinimal(rz.begin() + 1, rz.end());  // 31 bytes, first byte nonzero
+    bcos::bytes sigz(65, 0x00);
+    std::copy(rz.begin(), rz.end(), sigz.begin());
+    std::copy(s.begin(), s.end(), sigz.begin() + 32);
+    sigz[64] = 0;  // parity 0
+
+    auto wirez = buildWire(rzMinimal, s, v);
+    auto reassembledz = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(wirez), bcos::bytesConstRef(sigz.data(), sigz.size()));
+    BOOST_CHECK(reassembledz == wirez);
 }
 
 // A signing preimage with chainId 27/28 has the same trailer bytes as an invalid Homestead
