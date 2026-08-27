@@ -5,6 +5,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-crypto/hash/Keccak256.h>
+#include <atomic>
 #include <cstdint>
 
 void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::TransactionReceipt& receipt,
@@ -30,8 +31,15 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         }
         catch (std::exception const& e)
         {
-            WEB3_LOG(WARNING) << LOG_DESC("ReceiptResponse: unparseable cumulativeGasUsed")
-                              << LOG_KV("value", cgs) << LOG_KV("msg", e.what());
+            // Throttle to the first occurrence per process (#5496 finding BI): this sits on
+            // the polled eth_getTransactionReceipt path — a poller hitting a corrupt receipt
+            // would otherwise repeat the warning indefinitely.
+            static std::atomic<bool> warnedOnce{false};
+            if (!warnedOnce.exchange(true))
+            {
+                WEB3_LOG(WARNING) << LOG_DESC("ReceiptResponse: unparseable cumulativeGasUsed")
+                                  << LOG_KV("value", cgs) << LOG_KV("msg", e.what());
+            }
         }
     }
     size_t logIndex = receipt.logIndex();
