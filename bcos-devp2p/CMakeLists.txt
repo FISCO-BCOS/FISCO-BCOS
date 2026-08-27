@@ -2,7 +2,6 @@ project(bcos-devp2p VERSION ${VERSION})
 
 file(GLOB_RECURSE ALL_SRCS bcos-devp2p/*.cpp)
 
-find_package(Snappy REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
 
