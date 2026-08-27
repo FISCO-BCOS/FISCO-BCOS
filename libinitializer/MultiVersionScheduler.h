@@ -18,7 +18,7 @@ DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
 /// it without depending on libinitializer); this keeps the scheduler_v1 spelling.
 constexpr static int ETHEREUM_EXECUTOR_VERSION = ledger::ETHEREUM_EXECUTOR_VERSION;
 
-/// OP-Stack executor version (spec D1): executor_version >= this enters OP mode.
+/// executor_version >= this enters OP mode.
 constexpr static int OPSTACK_EXECUTOR_VERSION = ledger::OPSTACK_EXECUTOR_VERSION;
 /// Version ordering invariant: OP sits strictly above the Ethereum executor.
 static_assert(OPSTACK_EXECUTOR_VERSION > ETHEREUM_EXECUTOR_VERSION,
@@ -27,9 +27,7 @@ static_assert(OPSTACK_EXECUTOR_VERSION > ETHEREUM_EXECUTOR_VERSION,
 class MultiVersionScheduler : public bcos::scheduler::SchedulerInterface
 {
 private:
-    // Slot layout: 0 = SchedulerManager (legacy), 1 = baseline scheduler, 2 = EthereumExecutor
-    // (pure Ethereum), 3 = OP scheduler (OpScheduler, executor_version >= 3; same instance as the
-    // engine's m_delegate — Task 5c wiring).
+    // Slots: 0 legacy, 1 baseline, 2 EthereumExecutor, 3 OP (same instance as the engine delegate).
     static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 4;
 
     std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> m_schedulers;

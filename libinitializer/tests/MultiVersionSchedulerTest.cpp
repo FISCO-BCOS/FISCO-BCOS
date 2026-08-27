@@ -1,10 +1,4 @@
-// MultiVersionSchedulerTest — slot-3 routing after the 3->4 slot extension (spec §5.4).
-// Proves: scheduler(3) returns the 4th (OP) scheduler; setVersion(3) selects slot 3; setVersion
-// above the top saturates to slot 3 (min(version, size-1)); scheduler(3) on a non-OP assembly
-// returns the refuse stub (non-null).
-// BOOST_TEST_MODULE must be defined in exactly one TU before the framework include: the compiled
-// Boost.Test library's default main() calls init_unit_test_suite(), which only exists when the
-// module macro is defined (same pattern as opstack-executor-block-tests' TestMain.cpp).
+// MultiVersionScheduler slot 3 (OP) routing and setVersion saturation.
 #define BOOST_TEST_MODULE LibinitializerTests
 #include <bcos-framework/storage/Entry.h>  // complete bcos::storage::Entry (fake's co_return nullopt)
 #include <libinitializer/MultiVersionScheduler.h>
@@ -94,11 +88,8 @@ BOOST_AUTO_TEST_CASE(Slot3Routing)
 {
     auto recorder = std::make_shared<int>(-1);
     bcos::scheduler_v1::MultiVersionScheduler mvs(fakes(recorder));
-    // scheduler(3) direct index (public, version-independent) returns the 4th slot.
     BOOST_CHECK_EQUAL(dynamic_cast<FakeScheduler&>(mvs.scheduler(3)).id, 3);
-    // Selection IS observable through call(): MultiVersionScheduler::call() forwards to
-    // getScheduler() (MultiVersionScheduler.cpp:34-39), the version-selected slot. setVersion(3)
-    // selects slot 3; setVersion(4) saturates to slot 3 (min(version, size-1)).
+    // setVersion(3) selects slot 3; setVersion(4) saturates to slot 3.
     mvs.setVersion(3, {});
     mvs.call(nullptr, [](bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr) {});
     BOOST_CHECK_EQUAL(*recorder, 3);

@@ -24,11 +24,7 @@ public:
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
-        /// Tier-2: the OP composition root raises the Engine API ceiling to V4 (Isthmus+
-        /// payloads are V4-only, EngineServiceImpl.h's opIsthmusPayloadVersion gate).
         std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3),
-        /// Shared with the RPC's miner_setMaxDASize (NodeService::setDACaps gets the SAME
-        /// instance — the Initializer is the only place both sides meet).
         std::shared_ptr<bcos::engine::DACaps> daCaps = nullptr)
     {
         auto initializer = Ptr(new EngineServiceInitializer());

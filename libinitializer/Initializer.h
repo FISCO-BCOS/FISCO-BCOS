@@ -98,8 +98,7 @@ public:
     }
     std::shared_ptr<bcos::engine::AnyEngineService> engineService();
 
-    /// The DA throttling caps shared between the OP engine build path and the RPC's
-    /// miner_setMaxDASize (created at the OP composition root; null in non-OP modes).
+    /// DA caps for the OP engine build path and miner_setMaxDASize. Null outside OP mode.
     std::shared_ptr<bcos::engine::DACaps> daCaps() const { return m_daCaps; }
 
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> singleNodeConsensus()
@@ -205,13 +204,9 @@ private:
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_ethereumSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setEthereumSchedulerBlockNumberNotifier;
-    /// OP scheduler (executor_version>=3) for MultiVersionScheduler slot 3. Kept as a member so
-    /// the OpBlockScheduler (which inherits OpSchedulerSeam's evmc::VM and holds the storage ref)
-    /// stays alive for the whole Initializer lifetime.
+    /// OP scheduler (executor_version>=3), MultiVersionScheduler slot 3.
     std::shared_ptr<scheduler::SchedulerInterface> m_opScheduler;
-    /// OP-mode RPC block-number push setter: installs the callback into the concrete OpScheduler
-    /// (typed, not the SchedulerInterface base); commitBlock fires it after a VALID OP block
-    /// merges. Only set in OP mode (executor_version>=3).
+    /// Installs the RPC block-number callback on the concrete OpScheduler. OP mode only.
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setOpSchedulerBlockNumberNotifier;
     /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,

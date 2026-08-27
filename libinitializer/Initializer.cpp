@@ -100,8 +100,7 @@ namespace fs = boost::filesystem;
 
 namespace
 {
-/// A loud refuse stub for the never-selected non-OP slot 3 (MultiVersionScheduler::scheduler(int)
-/// is a public direct-index call; a null slot would crash instead of refusing).
+/// Stub for MultiVersionScheduler slot 3 when OP mode is off.
 class OpRefusingStubScheduler : public bcos::scheduler::SchedulerInterface
 {
 public:
@@ -155,8 +154,7 @@ public:
         cb({}, {});
     }
     void reset(std::function<void(bcos::Error::Ptr)> cb) override { cb({}); }
-    // NOTE: no callAtBlock override — SchedulerInterface's defaulted virtual already forwards to
-    // call() (SchedulerInterface.h:59-72); a redundant override would be dead code (round-3 C8).
+    // callAtBlock uses the SchedulerInterface default (forwards to call).
 };
 }  // namespace
 
@@ -557,26 +555,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
     }
 
-    // OP composition root (spec 2026-08-07-op-composition-root-design.md §4): executor_version >=
-    // 3 enters OP mode. EngineService is assembled with OpSchedulerSeam so the engine's c_opMode
-    // SFINAE probe (EngineServiceImpl.h:200-201, on computeTxRoot) activates the OP branch
-    // (block execution via the delegate). engineApiForV1Only (<2) and opStackMode (>=3)
-    // are mutually exclusive;
-    // version 2 (pure EthereumExecutor) still has no Engine API. OP mode runs on
-    // SingleNodeConsensus (enable_single_node_consensus), so PBFT/RPBFT are never initialized
-    // here (see initConsensus); MultiVersionScheduler is untouched.
+    // executor_version >= 3: OP mode. EngineService uses OpSchedulerSeam so c_opMode is true.
+    // Mutually exclusive with engineApiForV1Only; version 2 has no Engine API.
     const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
     if (opStackMode)
     {
-        // OP fork selection is feature-driven (feature_op_jovian in genesis [features]), NOT
-        // timestamp-based — FISCO has no timestamp fork-activation mechanism. Isthmus is the
-        // OP-mode baseline; jovianActive selects Jovian semantics.
+        // Forks are feature-driven (feature_op_jovian). Isthmus is the OP baseline.
         auto forkFlags = bcos::evm::opstack::OpForkFlags{
             .jovianActive = m_nodeConfig->opJovianActive(),
         };
-        // chainId: NodeConfig::chainId() 返回经 isalNumStr 校验的数字串，按 base-0 解析
-        // （0x 前缀→hex，否则 decimal）；OP 模式下应为数字字符串。默认 genesis 值是 "chain"，
-        // stoull 对非数字串抛裸 STL 异常 → 转成带 FISCO 上下文的 InvalidConfig。
+        // chainId must be numeric (decimal or 0x-hex). Default genesis "chain" is rejected.
         uint64_t opChainId = 0;
         try
         {
@@ -597,26 +585,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto opScheduler =
             std::make_shared<bcos::evm::engine::OpSchedulerSeam<GlobalStateStorage::ViewType>>(
                 forkFlags);
-        // Wiring Task 5a/5c: engine block-execution delegate = OpScheduler (slot-3, same instance).
-        // A single OpSchedulerSeam serves the engine's SchedulerType seam surface (c_opMode probe /
-        // isJovianActive / computeTxRoot); OpScheduler itself owns the block
-        // execution path (preBlockOpSteps → SchedulerSerialImpl per-tx → finalizeOpBlockResult).
+        // Same OpScheduler instance is the engine delegate and MultiVersionScheduler slot 3.
         auto opDelegate =
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>>(
                 m_protocolInitializer->blockFactory()->receiptFactory(),
                 m_protocolInitializer->cryptoSuite()->hashImpl(), opChainId, forkFlags,
                 m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage(),
-                // Task 2: wire the OP delegate's ledger (same LedgerInterface::Ptr as the ethereum
-                // root) so Task 3's commit hook can call prewriteBlockToBuffer. The engine service
-                // below keeps /*ledger=*/nullptr — only the delegate consumes it, avoiding the
-                // EngineServiceImpl.h:714-748 local-build double-write path.
-                m_ledger,
-                // Task 4: SchedulerSerialImpl (serial mode) defers context destruction onto this
-                // pool — required, no default.
-                m_ioServicePool);
-        // DA throttling bridge: ONE DACaps instance shared by the engine's build path
-        // (ctor param below) and the RPC's miner_setMaxDASize (NodeService::setDACaps in
-        // AirNodeInitializer, via m_daCaps accessor).
+                m_ledger, m_ioServicePool);
         m_daCaps = std::make_shared<bcos::engine::DACaps>();
         m_engineServiceInitializer = EngineServiceInitializer::build(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
@@ -624,26 +599,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
             /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4),
             m_daCaps);
-        // Compile-time proof that this production composition root activates the OP engine branch.
-        // ⚠️ 必须用裸类型：decltype(*opScheduler) 是 OpSchedulerSeam<...>&（左值引用），若作
-        // SchedulerType 会使 c_opMode 的 requires 表达式对引用类型求值为 false（&T&::...病式），
-        // static_assert 编译失败。用 remove_reference_t 取裸类型，与 build 实际推导一致。
+        // decltype(*opScheduler) is a reference; c_opMode requires the value type.
         using OpEngineServiceT = bcos::engine::EngineServiceImpl<bcos::txpool::MemPoolImpl,
             GlobalStateStorage, executor_v1::TransactionExecutorImpl,
             std::remove_reference_t<decltype(*opScheduler)>>;
         static_assert(OpEngineServiceT::c_opMode,
-            "OP composition root must activate c_opMode (computeTxRoot SFINAE probe)");
+            "OP EngineServiceImpl must enable c_opMode (computeTxRoot probe)");
 
-        // Slot-3 RPC-face scheduler = OpScheduler (Task 5c): the SAME instance as the engine's
-        // m_delegate. Serves eth_call (OpScheduler::call, absorbed from OpBlockScheduler) and
-        // block execute/commit (via the shared SchedulerSkeleton). The RPC eth_call path routes
-        // via MultiVersionScheduler setVersion(m_executorVersion) -> getScheduler() -> slot 3.
         m_opScheduler = opDelegate;
-        // RPC block-number push (alignment plan problem 3): installs the callback into the
-        // concrete OpScheduler (typed ptr — the setter is not on SchedulerInterface); the
-        // delegate fires it from commitBlock after a VALID OP block merges.
-        // initNotificationHandlers consumes this setter; without it RPC block-number subscribers
-        // never see OP blocks.
         m_setOpSchedulerBlockNumberNotifier =
             [opDelegate](std::function<void(bcos::protocol::BlockNumber)> notifier) {
                 opDelegate->setBlockNumberNotifier(std::move(notifier));
@@ -665,10 +628,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager, m_ioServicePool),
                 m_baselineSchedulerHolder(), m_ethereumSchedulerHolder(),
-                // Slot 3 = OP scheduler (executor_version>=3). Non-OP mode: a loud refuse stub so
-                // scheduler(3) (public, direct .at() index, no saturation) fails loudly instead of
-                // null-dereferencing. version<3 never selects slot 3 via setVersion; the stub is
-                // insurance against any external scheduler(3) call.
                 m_opScheduler ? m_opScheduler : std::make_shared<OpRefusingStubScheduler>()}));
 
     // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
@@ -829,17 +788,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             consensus->clearExceptionProposalState(blockNumber);
         });
     }
-    // init the txpool / pbft.
-    // Engine-driven block production ([consensus] enable_single_node_consensus OR
-    // [op_engine_rpc] enable — engineDrivenBlockProduction) bypasses the legacy txpool/pbft/sealer
-    // lifecycle: PBFTInitializer is still constructed above so groupInfo / NodeService wiring stays
-    // intact, but txpool and pbft (and the sealer and block sync inside pbft) are never initialized
-    // or started — block production is driven instead by the EngineService (via the built-in
-    // single-node driver or an external op-node CL), and sendRawTransaction routes to the mempool.
-    // The front service is still wired for gateway bookkeeping, but its dispatchers are inert with
-    // no peers. Keeping txpool/PBFT dormant is what makes the EngineService the SOLE block producer
-    // — starting them next to an engine driver would let two producers write the same global
-    // storage concurrently (kyonRay review #5429 MUST-FIX).
+    // Engine-driven production skips txpool/PBFT start so only EngineService writes blocks.
     if (!m_nodeConfig->engineDrivenBlockProduction())
     {
         // init the txpool
@@ -888,8 +837,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 InvalidConfig() << errinfo_comment(
                     "enable_single_node_consensus requires the EngineService to be built"));
         }
-        // Tier-2: the OP engine branch is Isthmus+/V4-only, so the OP fixture's driver drives
-        // the engine at V4; the generic (v1-executor) composition keeps V1.
+        // OP Engine API is V4; the generic driver stays on V1.
         auto const driverEngineApiVersion =
             opStackMode ? static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4) :
                           static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1);

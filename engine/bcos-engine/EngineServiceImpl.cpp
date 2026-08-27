@@ -26,10 +26,7 @@
 #include <stdexcept>
 #include <utility>
 
-// OP receipt/tx queryability (option B) write-side conversion helper: raw EIP-2718 envelope ->
-// tars Transaction. Web3Transaction.h already pulls in RLPDecode/TransactionImpl; RLPDecode is
-// kept explicitly (rlp::decode is actually used, include self-sufficiency). Keccak256.h and
-// TransactionImpl.h are not used directly in this file, so they were removed.
+// EIP-2718 envelope -> tars Transaction (Web3Transaction decode).
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <optional>
@@ -80,21 +77,8 @@ namespace
 {
 constexpr std::size_t c_hashBytes = 32;
 
-// ---- ETH/OP header protocol constants ----
-//
-// These three header fields have no carrier in `ExecutionPayload` because they are fixed by the
-// protocol on post-merge OP chains; the header reconstruction below must still emit them (they
-// are real RLP fields — the header carries them via uncleHash()/difficulty()/nonce(),
-// populated by applyOpHeaderConstants).
-//
-// Values are byte-identical to the two other places in this repo that pin them:
-// `bcos-evm/test/opstack/EthBlockHeaderTest.cpp`'s `kEmptyOmmersHash`/`kPosNonce` (golden-
-// anchored by the 33-vector gate), and `opstack-executor/OpBlockExecute.h`'s
-// `OP_EMPTY_REQUESTS_HASH` for the third. The requests-hash copy here is *checked* rather than
-// merely trusted: the OP branch compares the seal's own `requestsHash` against the reconstructed
-// header's, so any drift between this copy and OpBlockExecute.h's surfaces as a comparison failure
-// instead of a silent wrong block hash. (They are re-declared rather than included because
-// `engine` must not depend on `bcos-evm` -- see EngineServiceImpl.h's `c_opMode` comment.)
+// Post-merge OP header constants (not in ExecutionPayload). Re-declared so engine
+// does not depend on bcos-evm.
 const bcos::h256 c_emptyOmmersHash{
     std::string{"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}};
 const bcos::h64 c_posNonce{std::string{"0x0000000000000000"}};
@@ -143,11 +127,7 @@ std::vector<std::string> bcos::engine::detail::supportedCapabilities()
 
 std::vector<std::string> bcos::engine::detail::supportedOpCapabilities()
 {
-    // Tier-2 (08-19): the V4 endpoints are wired (forkchoiceUpdatedV4 / getPayloadV4 /
-    // newPayloadV4 delegate to the version-parameterized handlers) and the OP face is
-    // Isthmus+/V4-only (the attrs build and newPayload both gate on V4), so the V4 trio is
-    // advertised — the historical V3-only downgrade would negotiate op-node onto a version the
-    // engine then refuses with -38005.
+    // OP Engine API is V4-only.
     auto caps = supportedCapabilities();
     caps.push_back("engine_forkchoiceUpdatedV4");
     caps.push_back("engine_getPayloadV4");
@@ -172,8 +152,7 @@ bool bcos::engine::detail::isGetPayloadVersionCompatible(
     }
     if (requestVersion == ApiVersion::V4)
     {
-        // Tier-2: V4-built payloads (the OP composition's attribute-driven builds) are
-        // served by getPayloadV4 only, mirroring the V3 rule's shape.
+        // getPayloadV4 serves payloads version <= 4.
         return payloadVersion <= 4;
     }
     if (requestVersion == ApiVersion::V5)
@@ -588,15 +567,7 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     {
         return std::string("gasLimit exceeds the uint64 range of the ETH header field");
     }
-    // gasLimit's *effective* ceiling is int64, not uint64: the execution side narrows it once
-    // more with a plain `static_cast<int64_t>` when filling `evmone::state::BlockInfo::gas_limit`
-    // (OpSchedulerSeam.h's `toBlockInfo`), so anything above 2^63-1 becomes a NEGATIVE block gas
-    // pool. Same "unchecked signed narrowing" class as the deposit `gas_limit` finding, fixed the
-    // same way -- explicitly, at the boundary. op-geth pins the identical bound as
-    // `params.MaxGasLimit` (consensus/beacon/consensus.go:262-264). No acceptance surface
-    // changes: such a block is rejected either way today (the first deposit cannot be paid out of
-    // a negative pool); what changes is that it is rejected for the stated reason instead of by
-    // accident.
+    // Execution stores gas_limit as int64; values above 2^63-1 wrap negative.
     if (*narrowU256ToU64(payload.gasLimit) >
         static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
     {

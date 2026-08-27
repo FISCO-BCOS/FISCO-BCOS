@@ -82,10 +82,7 @@ bcos::h256 syntheticHash(std::string_view seed);
 
 std::vector<std::string> supportedCapabilities();
 
-/// OP-mode capability list: `supportedCapabilities()` plus the V4 entries. Selected via
-/// `if constexpr` on `EngineServiceImpl::c_opMode` in `exchangeCapabilities` below -- never
-/// reached by the generic composition root, so the generic path's capability list stays
-/// byte-for-byte the pre-existing 10 entries.
+/// OP capability list: `supportedCapabilities()` plus the V4 methods.
 std::vector<std::string> supportedOpCapabilities();
 
 bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payloadVersion);
@@ -171,23 +168,7 @@ class EngineServiceImpl
 public:
     using ViewType = typename GlobalStateStorageType::ViewType;
 
-    /// Compile-time OP-mode probe (no runtime bool, matching this class's all-template style):
-    /// detects `SchedulerType::computeTxRoot` via an unevaluated `requires`-expression. Only the
-    /// OP scheduler exposes that member (OpSchedulerSeam.h:137), so `c_opMode` is false for every
-    /// scheduler used by the generic composition root (StubScheduler/BloomScheduler in
-    /// EngineServiceTest.cpp, SchedulerSerialImpl in production) and the generic path is
-    /// byte-for-byte unaffected.
-    ///
-    /// `computeTxRoot` is a static member function template over the raw-tx range; the explicit
-    /// `<std::vector<bcos::bytes>>` pins the sole `auto`-deduced parameter exactly as the removed
-    /// `executeOpBlock` probe did. Address-of is an unevaluated operand inside a
-    /// requires-expression ([expr.prim.req.simple]), so it does not odr-use the function body.
-    ///
-    /// OP block execution is always the delegate's path (`m_delegate->executeBlock` →
-    /// OpScheduler's preBlockOpSteps + SchedulerSerialImpl + finalizeOpBlockResult). `c_opMode` now
-    /// only means "this is an
-    /// OP scheduler": the engine reaches `computeTxRoot` / `isJovianActive` as dependent names
-    /// inside `if constexpr (c_opMode)`.
+    /// True when SchedulerType has computeTxRoot (OpSchedulerSeam). Generic schedulers stay false.
     static constexpr bool c_opMode =
         requires { &SchedulerType::template computeTxRoot<std::vector<bcos::bytes>>; };
 
@@ -426,15 +407,7 @@ public:
         }
         if constexpr (c_opMode)
         {
-            // Tier-2 (08-19): attribute-driven OP building. Everything above -- the storage
-            // lookups, the monotonicity checks, and the tracked-head/safe/finalized update under
-            // `x_state` -- has already run and is *kept* (the attrs validation and the V3+
-            // version gate ran BEFORE them). The build synthesizes the mandatory
-            // L1-attributes deposit, seals the mempool (raw EIP-2718 forms only), pre-executes
-            // via the delegate with verify=false (announced commitments are provisional), fills
-            // the real commitments from the executed header and caches the payload. The driver's
-            // newPayload(self payload) hits the self-built fast path (runOpNewPayloadSteps) and
-            // commits the delegate's pending block directly.
+            // Build from payload attributes; FCU checks above already ran.
             co_return co_await buildOpPayload(
                 forkchoiceState, *payloadAttributes, version, *headBlockNumber + 1);
         }
@@ -588,12 +561,7 @@ private:
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
     };
 
-    /// Version-gate upper bound is member state, not a compile-time/static constant: the generic
-    /// composition root leaves `m_maxEngineVersion` at its default (V3, identical to the
-    /// pre-existing `static` bound -- zero drift); only the OP composition root passes
-    /// `maxEngineVersion = 4` at construction. The lower bound (V1) stays a compile-time constant
-    /// -- only the upper bound is a runtime (per-instance, constructor-time-fixed) gate ("version
-    /// upper bound is member state").
+    /// Upper bound is per-instance (OP sets V4 at construction; default V3).
     bool isForkchoiceVersionSupported(std::uint32_t version) const
     {
         return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
@@ -623,11 +591,7 @@ private:
         };
     }
 
-    /// Maps a delegate-reported SchedulerError code back to a classified outcome (v3 P1-6):
-    /// OpConsensusRejected -> INVALID (with latestValidHash = the verified parent); OpStorageFault
-    /// / UnknownError / any other code -> JSON-RPC -32603 (OpExecutionInternalError, never
-    /// INVALID). The catch(...) fallback in handleOpNewPayload's barrier preserves the
-    /// unclassified -> -32603 semantics for exceptions that escape the delegate path entirely.
+    /// OpConsensusRejected -> INVALID; other scheduler errors -> -32603.
     static PayloadStatus mapDelegateError(
         bcos::Error const& error, std::optional<h256> latestValidHash)
     {
@@ -643,13 +607,7 @@ private:
                 std::to_string(error.errorCode()) + "): " + error.errorMessage()});
     }
 
-    /// Tier-2 attribute-driven OP payload build (08-19 design:
-    /// docs/superpowers/specs/2026-08-19-tier2-op-payload-building-design.md). Pre-executes via
-    /// the delegate with verify=false (announced commitments are provisional placeholders), then
-    /// fills the payload with the executed header's real commitments and the OP blockHash
-    /// (keccak of the 21-field RLP header). The delegate's pending block stays uncommitted; the
-    /// driver's newPayload(self payload) takes runOpNewPayloadSteps' self-built fast path and
-    /// commits it. An abandoned build is dropped by the next build's reset().
+    /// Build an OP payload: pre-execute with verify=false, then fill commitments and blockHash.
     bcos::task::Task<ForkchoiceUpdatedResult> buildOpPayload(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, std::uint32_t version,
         bcos::protocol::BlockNumber nextBlockNumber)
@@ -1023,10 +981,7 @@ private:
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
         {
-            // Tier-2 (08-19): OP mode builds payloads via the attribute path above and caches
-            // them exactly like the generic path, so getPayload serves the shared cache. The
-            // historical OP-mode refusal existed only because the cache could never be
-            // populated; an unknown payload still answers UnknownPayload below.
+            // OP and generic paths share the payload cache.
             std::shared_lock lock(x_state);
             auto it = m_payloadCache.find(payloadId);
             if (it == m_payloadCache.end())
@@ -1076,16 +1031,7 @@ private:
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
-        // ---- opMode dispatch note ----
-        //
-        // The generic composition root (no `computeTxRoot` on its scheduler) serves the
-        // full Karst method surface itself — newPayloadV4/getPayloadV5 with the
-        // V4 request-level validation below — exactly as the release lineage's unified
-        // engine did (#5427). A blanket non-OP V4 refusal here would break that surface;
-        // OP-mode builds never reach this branch (they take handleOpNewPayload above).
-        // OP branch. Compile-time dispatch on `c_opMode`: the generic composition root never
-        // instantiates `handleOpNewPayload`, and its own path below is the unconditional `else`,
-        // i.e. byte-for-byte the pre-existing body.
+        // c_opMode picks the OP path at compile time; the else branch is the generic engine.
         if constexpr (c_opMode)
         {
             co_return co_await handleOpNewPayload(request, version);
@@ -1106,7 +1052,7 @@ private:
                 co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                     std::string("parentBeaconBlockRoot is only valid for newPayloadV3"));
             }
-            // ---- V3+/V4 request-level validation (release #5427 lineage, op-geth parity) ----
+            // ---- V3+/V4 request-level validation ----
             // L2 forbids blob transactions: from V3 up, a non-empty expectedBlobVersionedHashes
             // can never match an L2 payload (op-geth answers the mismatch INVALID,
             // beacon/engine/types.go:311-322 -> api.invalid).
@@ -1200,12 +1146,7 @@ private:
                 m_globalStateStorage.get().pushView(std::move(*it->second.view));
                 if (m_ledger && it->second.header)
                 {
-                    // Locally built payload: persist the ledger block tables atomically with
-                    // the state merge, using the same FIB-104 prewriteBlockToBuffer pattern the
-                    // BaselineScheduler commit path uses. Without these rows a produced block is
-                    // invisible to eth_getBlockByNumber / eth_getBlockByHash /
-                    // eth_getTransactionReceipt and to ledger::getBlockHash /
-                    // getCurrentBlockNumber.
+                    // Persist ledger block tables with the state merge so RPC can see the block.
                     typename GlobalStateStorageType::MutableStorage prewriteStorage;
                     auto block = m_blockFactory->createBlock();
                     block->setBlockHeader(it->second.header);
@@ -1216,10 +1157,7 @@ private:
                     // this restores parity with that path (eth_getLogs uses it as a filter).
                     auto const& bloom = it->second.executionPayload.logsBloom;
                     block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
-                    // Raw-only entries (forced transactions) carry no decoded form and are
-                    // not modeled as ledger transactions until execution wiring lands; the
-                    // persisted transaction list therefore matches the receipts list, which
-                    // also only covers the executed (decoded) subset.
+                    // Persist only decoded txs; receipts cover the same subset.
                     for (auto const& tx : it->second.executionPayload.transactions)
                     {
                         if (tx.decoded)
@@ -1300,33 +1238,7 @@ private:
                     "Isthmus+ payloads require engine_newPayloadV4 (JSON-RPC -38005)"});
         }
 
-        // NOTE (audit v2, 2026-08-21): the historical "#5429 finding B" note claiming this
-        // V4-only gate is unreachable through the production composition root is obsolete --
-        // the OP root passes maxEngineVersion=4 (libinitializer/Initializer.cpp:620), the V4
-        // endpoints are registered (EndpointsMapping.cpp:63-71) and supportedOpCapabilities
-        // advertises the V4 trio (EngineServiceImpl.cpp:129-141).
-
-        // ---- Classification barrier ----
-        //
-        // The `catch (...)` added around the OP block-execution path in the first pass closed only
-        // ONE window. Everything else in the OP branch still ran outside any handler: step 2's
-        // `computeTxRoot` / `rebuildOpEthHeader` / `hash()`, step 5's `commitmentsOf` and the
-        // comparisons, and the whole of step 6's `registerOpBlock` -- whose `lexical_cast`,
-        // `Entry::set`, `ethHeader.encode()`, `receipt->encode()`, `hashImpl.hash()` and four
-        // `storage2::writeOne` calls can each raise something that is neither
-        // `OpExecutionInternalError` nor an execution-classified error (`bad_alloc`, a tars
-        // encoding error, ...). Such an escape would leave `handleOpNewPayload` entirely and
-        // surface at the caller's `co_await` as neither INVALID nor -32603 -- an outcome the
-        // error classification rules rule out. (The two
-        // `BOOST_THROW_EXCEPTION(OpExecutionInternalError)` calls inside `registerOpBlock` were
-        // never the problem: they arrive already classified, and the rethrow handler below
-        // preserves them verbatim.)
-        //
-        // The barrier is a wrapper rather than an outer try around the existing body so that the
-        // version gate above stays outside it, and so the already-classified paths keep their own
-        // (more specific) messages: `catch (const OpExecutionInternalError&) { throw; }` passes
-        // through the non-tip refusal, the receipt-count invariant, and the execution-phase
-        // fallback untouched, while `catch (...)` labels everything else.
+        // Version gate stays outside this try. Already-classified errors rethrow.
         try
         {
             co_return co_await runOpNewPayloadSteps(request);
@@ -1338,11 +1250,7 @@ private:
         }
         catch (...)
         {
-            // -32603 rather than INVALID, for the same reason as the execution-phase fallback: an
-            // unknown local failure must not make this node vote against a block. The marker
-            // distinguishes this barrier from that fallback, so a test can tell which window an
-            // escape came through (a bare `catch (...)` otherwise collapses every refusal into
-            // one indistinguishable type).
+            // Local failure: -32603, not INVALID.
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
                     "OP newPayload threw an unclassified exception outside block execution "
@@ -1350,10 +1258,7 @@ private:
         }
     }
 
-    /// Never called outside `handleOpNewPayload`'s classification barrier;
-    /// the signature carries no OP-dependent name, so the declaration instantiates harmlessly for
-    /// the generic composition root while the body (which is full of them) only instantiates in
-    /// OP mode.
+    /// OP newPayload body. Instantiated only when c_opMode is true.
     bcos::task::Task<PayloadStatus> runOpNewPayloadSteps(const NewPayloadRequest& request)
     {
         auto const& payload = request.executionPayload;
@@ -1389,13 +1294,7 @@ private:
                 std::string("blockHash does not match the reconstructed block header"));
         }
 
-        // ---- Tier-2 self-built fast path (08-19) ----
-        //
-        // A payload this engine built via attribute-driven OP building round-trips from
-        // getPayload; the delegate's pending block (pre-executed with verify=false at build
-        // time) is committed directly -- mirroring the generic path's locally-built shortcut.
-        // The static blockHash check above proved the payload matches its 21-field header, and
-        // the pending came from the same execution pipeline, so re-execution would reproduce it.
+        // Locally built payload: commit the pending block without re-execution.
         {
             auto it = m_blockHashToPayloadId.find(payload.blockHash);
             if (it != m_blockHashToPayloadId.end())
@@ -1668,24 +1567,15 @@ private:
             }
         }
 
-        // ---- Step 4: delegate block execution + commit (wiring Task 5b) ----
-        //
-        // The OP block's execution / six-way comparison / registerOpBlock are no longer
-        // driven inline here: they are absorbed by the delegate (OpScheduler's execute /
-        // verifyResult / commit hooks running on the shared SchedulerSkeleton). The engine keeps
-        // the static validation above (parentKnown / continuity / 3a / 3a-2 / 3b / 3c) and the
-        // classification barrier below, bridging the delegate's callback-async
-        // executeBlock/commitBlock back into this coroutine's PayloadStatus (v3 P1-6).
+        // Execute and commit through the OpScheduler delegate.
         if (!m_delegate)
         {
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
-                    "OP newPayload requires an m_delegate (OpScheduler) for block execution; "
-                    "the composition root did not wire one"});
+                    "OP newPayload requires an m_delegate (OpScheduler) for block execution"});
         }
 
-        // Block assembly (SEV-8: extraTransactionBytes = the full EIP-2718 envelope, not the
-        // signing preimage) — the delegate's execute hook re-derives rawTxBytes from it.
+        // extraTransactionBytes is the full envelope, not the signing preimage.
         auto block = buildOpBlock(payload, ethHeader);
 
         // SchedulerInterface executeBlock is synchronous from here (the skeleton runs task::wait
@@ -1714,19 +1604,12 @@ private:
             co_return mapDelegateError(*commitError, latestValidHash);
         }
 
-        // The delegate's commit hook (prewriteBlockToBuffer) wrote the 7 ledger tables including
-        // SYS_CURRENT_STATE, and the skeleton merged the execute view + commit storage atomically
-        // (FIB-104). The head-advance monotonic guard semantics the inline path kept
-        // (blockNumber > currentHead) are preserved by OpScheduler::commitContinuityCheck
-        // (v3 P1-6), which refuses already-committed / discontinuous commits on the same view.
+        // Delegate commit already persisted ledger tables and merged state.
         co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
     }
 
-    /// OP block assembly (wiring Task 5a, SEV-8). Build a `protocol::Block` carrying the
-    /// payload's raw EIP-2718 envelopes as each transaction's `extraTransactionBytes` -- the
-    /// FULL envelope, not the signing preimage (`takeToTarsTransaction` stores the preimage;
-    /// the delegate's execute hook re-derives rawTxBytes from extraTransactionBytes, so the
-    /// overwrite is load-bearing). Precedent: OpDualPathEquivalenceTest.cpp:566-568. Used only
+    /// Build a protocol::Block whose txs carry the payload's full EIP-2718 envelopes.
+    /// extraTransactionBytes must be the sealed envelope, not the signing preimage. Used only
     /// by the delegate path.
     [[maybe_unused]] bcos::protocol::Block::Ptr buildOpBlock(
         const ExecutionPayload& payload, bcos::protocol::BlockHeader::Ptr header)
@@ -1756,8 +1639,7 @@ private:
                 fallback.extraTransactionHash.assign(txHash.begin(), txHash.end());
                 tarsTx = std::move(fallback);
             }
-            // SEV-8: takeToTarsTransaction stores the signing preimage; overwrite with the full
-            // envelope so the delegate's execute hook decodes the exact wire bytes.
+            // takeToTarsTransaction stores the preimage; overwrite with the full envelope.
             tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
             auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
                 [tars = std::move(*tarsTx)]() mutable { return &tars; });
@@ -1903,30 +1785,8 @@ private:
         {
             executionPayload.blobGasUsed = u256(0);
             executionPayload.excessBlobGas = u256(0);
-            // Isthmus payload shape (V4/V5, fed by forkchoiceUpdatedV3 on Karst): the
-            // field must be present so getPayloadV5 -> newPayloadV4 round-trips.
-            //
-            // TODO(C4 header fields): this is a zero PLACEHOLDER, not a computed value.
-            // On OP Stack withdrawalsRoot is the storage root of the L2ToL1MessagePasser
-            // predeploy and is what L1 withdrawal proofs are checked against, so until
-            // the real header wiring lands, validateExecutionPayload can only check that
-            // the field is present — never that its value is right, and a malicious CL
-            // submitting a zero root is indistinguishable from this node's own builds.
-            //
-            // This is a KNOWN UNCONTAINED gap, not a test-harness-only one. The
-            // [op_engine_rpc] guard in libinitializer/Initializer.cpp REQUIRES
-            // executor_version >= 2 (it throws for executor_version < 2 unless the
-            // test-only escape hatch unsafe_allow_v1_executor is set); it does not keep
-            // this code off a production endpoint. EngineServiceInitializer::build
-            // instantiates this same template for the v2 EthereumExecutor, so the
-            // intended production configuration — executor_version >= 2 with
-            // [op_engine_rpc] enabled — serves exactly this placeholder: FCU V3 stamps it
-            // here, getPayloadV5 serializes it, and newPayloadV4 accepts it on presence
-            // alone. Until C4 computes and verifies the real L2ToL1MessagePasser storage
-            // root, no L1 withdrawal proof may be taken against a root produced by this
-            // node. The v2 instantiation serving the zero root is pinned by
-            // TestEthereumExecutorScheduler/engineServiceKarstServesZeroWithdrawalsRoot,
-            // which has to be updated when the real value lands.
+            // Placeholder: Isthmus requires the field. Real value is the L2ToL1MessagePasser
+            // storage root; only presence is checked today.
             executionPayload.withdrawalsRoot = h256{};
         }
 
@@ -2158,11 +2018,7 @@ private:
     /// is committed via newPayload(). Null in unit tests / for payloads without block
     /// persistence.
     bcos::ledger::LedgerInterface::Ptr m_ledger;
-    /// OP block-execution delegate (wiring Task 5): when non-null and `c_opMode`, newPayload
-    /// routes block execution + commit through `m_delegate->executeBlock/commitBlock`
-    /// (SchedulerInterface face) instead of any inline OP block-execution path. The delegate is
-    /// the composition root's `OpScheduler` (slot 3). Null for the generic composition root and
-    /// for OP fixtures that never drive block execution (ethereum instances).
+    /// OP execute/commit delegate (OpScheduler). Null on the generic engine and some fixtures.
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
 
     /// DA throttling caps shared with the RPC's miner_setMaxDASize (null = uncapped).
