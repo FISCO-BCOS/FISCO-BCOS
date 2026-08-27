@@ -140,5 +140,62 @@ BOOST_AUTO_TEST_CASE(SecondStartupChangedAllocAborts)
     }());
 }
 
+// unhex into the fixed 20/32-byte buffers requires an exact digit count: over-long
+// input would write PAST the buffer and short input would silently zero-pad — both
+// must fail loudly instead of corrupting the genesis state. NodeConfig::loadAllocs
+// guards the INI path; these drive buildGenesisBlock directly.
+BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto param = makeParam();
+
+        // short address (38 hex digits)
+        {
+            auto storage = makeStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            auto config = makeL2Config();
+            config.m_allocs[0].address = "430000000000000000000000000000000000c0";
+            appendGenesisFeatureFlagsSlot(config);
+            BOOST_CHECK_THROW(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
+                bcos::tool::InvalidConfig);
+        }
+        // over-long address (42 hex digits)
+        {
+            auto storage = makeStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            auto config = makeL2Config();
+            config.m_allocs[0].address = "4300000000000000000000000000000000000000c0";
+            appendGenesisFeatureFlagsSlot(config);
+            BOOST_CHECK_THROW(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
+                bcos::tool::InvalidConfig);
+        }
+        // short storage slot value (2 hex digits)
+        {
+            auto storage = makeStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            auto config = makeL2Config();
+            config.m_allocs[0].storage = {{"01", "02"}};
+            appendGenesisFeatureFlagsSlot(config);
+            BOOST_CHECK_THROW(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
+                bcos::tool::InvalidConfig);
+        }
+        // over-long storage slot key (66 hex digits)
+        {
+            auto storage = makeStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            auto config = makeL2Config();
+            config.m_allocs[0].storage = {{
+                "000000000000000000000000000000000000000000000000000000000000000065", "02"}};
+            appendGenesisFeatureFlagsSlot(config);
+            BOOST_CHECK_THROW(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
+                bcos::tool::InvalidConfig);
+        }
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

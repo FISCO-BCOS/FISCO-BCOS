@@ -1845,6 +1845,23 @@ static task::Task<void> importGenesisState(
     // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
     // a prefix. Strip a leading 0x so both shapes unhex cleanly.
     auto strip0x = [](std::string_view hex) { return hex.starts_with("0x") ? hex.substr(2) : hex; };
+    // unhex into a fixed-size buffer requires an EXACT digit count:
+    // boost::algorithm::unhex writes past the buffer on over-long input and
+    // silently zero-pads on short input — either one corrupts the genesis state
+    // (or worse) instead of failing loudly. NodeConfig::loadAllocs guards the
+    // INI path; direct GenesisConfig callers (tests, tools) reach the unhex
+    // unguarded.
+    auto unhexExact = [](std::string_view hex, std::string_view field, uint8_t* out,
+                          size_t expectedBytes) {
+        if (hex.size() != expectedBytes * 2)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "genesis alloc " + std::string(field) + " must be exactly " +
+                                      std::to_string(expectedBytes * 2) + " hex digits, got " +
+                                      std::to_string(hex.size())));
+        }
+        boost::algorithm::unhex(hex.begin(), hex.end(), out);
+    };
 
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
@@ -1853,7 +1870,7 @@ static task::Task<void> importGenesisState(
     {
         auto addressHex = strip0x(importAccount.address);
         evmc_address address{};
-        boost::algorithm::unhex(addressHex.begin(), addressHex.end(), address.bytes);
+        unhexExact(addressHex, "address", address.bytes, sizeof(address.bytes));
 
         account::EVMAccount account(
             storage, address, features.get(Features::Flag::feature_raw_address));
@@ -1887,9 +1904,9 @@ static task::Task<void> importGenesisState(
                 auto keyHex = strip0x(key);
                 auto valueHex = strip0x(value);
                 evmc_bytes32 evmKey{};
-                boost::algorithm::unhex(keyHex.begin(), keyHex.end(), evmKey.bytes);
+                unhexExact(keyHex, "storage slot key", evmKey.bytes, sizeof(evmKey.bytes));
                 evmc_bytes32 evmValue{};
-                boost::algorithm::unhex(valueHex.begin(), valueHex.end(), evmValue.bytes);
+                unhexExact(valueHex, "storage slot value", evmValue.bytes, sizeof(evmValue.bytes));
 
                 co_await account.setStorage(evmKey, evmValue);
             }
@@ -1956,7 +1973,8 @@ static task::Task<void> importGenesisState(
             }
             auto valueHex = strip0x(featureFlagsSlot->second);
             std::array<uint8_t, 32> actualValue{};
-            boost::algorithm::unhex(valueHex.begin(), valueHex.end(), actualValue.begin());
+            unhexExact(
+                valueHex, "feature_flags slot value", actualValue.data(), actualValue.size());
             if (actualValue != expectedValue)
             {
                 BOOST_THROW_EXCEPTION(

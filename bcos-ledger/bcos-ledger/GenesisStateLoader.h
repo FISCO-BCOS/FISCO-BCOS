@@ -30,7 +30,10 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-storage/KeyPrefixes.h"
 #include "bcos-task/Task.h"
+#include "bcos-tool/Exceptions.h"
+#include <bcos-utilities/Exceptions.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/throw_exception.hpp>
 #include <string>
 #include <vector>
 
@@ -52,12 +55,29 @@ task::Task<GenesisStateTrie> importEthereumGenesisState(
     auto strip0x = [](std::string_view hex) {
         return hex.starts_with("0x") ? hex.substr(2) : hex;
     };
+    // unhex into a fixed-size buffer requires an EXACT digit count:
+    // boost::algorithm::unhex writes past the buffer on over-long input and
+    // silently zero-pads on short input — either one corrupts the genesis state
+    // (or worse) instead of failing loudly. NodeConfig::loadAllocs guards the
+    // INI path; direct callers of this loader reach the unhex unguarded.
+    auto unhexExact = [](std::string_view hex, std::string_view field, uint8_t* out,
+                          size_t expectedBytes) {
+        if (hex.size() != expectedBytes * 2)
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "genesis alloc " + std::string(field) + " must be exactly " +
+                    std::to_string(expectedBytes * 2) + " hex digits, got " +
+                    std::to_string(hex.size())));
+        }
+        boost::algorithm::unhex(hex.begin(), hex.end(), out);
+    };
 
     for (auto const& alloc : allocs)
     {
         auto addressHex = strip0x(alloc.address);
         evmc_address address{};
-        boost::algorithm::unhex(addressHex.begin(), addressHex.end(), address.bytes);
+        unhexExact(addressHex, "address", address.bytes, sizeof(address.bytes));
 
         account::EVMAccount account(
             storage, address, features.get(Features::Flag::feature_raw_address));
@@ -86,9 +106,9 @@ task::Task<GenesisStateTrie> importEthereumGenesisState(
             auto keyHex = strip0x(key);
             auto valueHex = strip0x(value);
             evmc_bytes32 evmKey{};
-            boost::algorithm::unhex(keyHex.begin(), keyHex.end(), evmKey.bytes);
+            unhexExact(keyHex, "storage slot key", evmKey.bytes, sizeof(evmKey.bytes));
             evmc_bytes32 evmValue{};
-            boost::algorithm::unhex(valueHex.begin(), valueHex.end(), evmValue.bytes);
+            unhexExact(valueHex, "storage slot value", evmValue.bytes, sizeof(evmValue.bytes));
             co_await account.setStorage(evmKey, evmValue);
         }
     }
