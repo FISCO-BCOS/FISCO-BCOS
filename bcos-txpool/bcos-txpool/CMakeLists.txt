@@ -1,38 +1,35 @@
-file(GLOB_RECURSE SRC_LIST "*.cpp") file(
-    GLOB_RECURSE HEADERS "*.h") aux_source_directory(.SRC_LIST) include_directories(.)
+file(GLOB_RECURSE SRC_LIST "*.cpp")
+file(GLOB_RECURSE HEADERS "*.h")
+aux_source_directory(. SRC_LIST)
+include_directories(.)
 
-#generate sync protobuf files
+# generate sync protobuf files
 
-    set(MESSAGES_PROTOS TxsSync.proto) set(
-        SYNC_PROTO_GENERATE_DIR ${SYNC_PROTO_GENERATE_BASE_DIR} / ${SYNC_PROTO_SUB_DIR})
-        include(GenerateSources) protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${MESSAGES_PROTOS} $ {
-            PROTO_PATH
-        } "sync/protocol/proto" ${SYNC_PROTO_GENERATE_BASE_DIR} ${SYNC_PROTO_GENERATE_DIR})
+set(MESSAGES_PROTOS TxsSync.proto)
+set(SYNC_PROTO_GENERATE_DIR ${SYNC_PROTO_GENERATE_BASE_DIR}/${SYNC_PROTO_SUB_DIR})
+include(GenerateSources)
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${MESSAGES_PROTOS} ${PROTO_PATH} "sync/protocol/proto" ${SYNC_PROTO_GENERATE_BASE_DIR} ${SYNC_PROTO_GENERATE_DIR})
 
-            aux_source_directory(./ txpool SRC_LIST) include_directories(./ txpool)
-                aux_source_directory(./ txpool / storage SRC_LIST) include_directories(./ txpool /
-                                                                                       storage)
-                    aux_source_directory(./ txpool / validator SRC_LIST)
-                        include_directories(./ txpool / validator)
+aux_source_directory(./txpool SRC_LIST)
+include_directories(./txpool)
+aux_source_directory(./txpool/storage SRC_LIST)
+include_directories(./txpool/storage)
+aux_source_directory(./txpool/validator SRC_LIST)
+include_directories(./txpool/validator)
 
-                            aux_source_directory(./ sync / SRC_LIST) include_directories(./ sync /)
+aux_source_directory(./sync/ SRC_LIST)
+include_directories(./sync/)
 
-                                aux_source_directory(./ sync / protocol / PB SRC_LIST)
-                                    include_directories(./ sync / protocol / PB)
+aux_source_directory(./sync/protocol/PB SRC_LIST)
+include_directories(./sync/protocol/PB)
 
-                                        add_library(txpool ${SRC_LIST} ${PROTO_SRCS} ${HEADERS} ${
-                                            PROTO_HDRS})
+add_library(txpool ${SRC_LIST} ${PROTO_SRCS} ${HEADERS} ${PROTO_HDRS})
 
-                                            find_package(TBB CONFIG REQUIRED) find_package(
-                                                Protobuf CONFIG REQUIRED)
-                                                target_include_directories(
-                                                    txpool PUBLIC.${CMAKE_CURRENT_SOURCE_DIR} /
-                                                            ..${CMAKE_CURRENT_BINARY_DIR} / bcos -
-                                                    txpool ${CMAKE_CURRENT_BINARY_DIR} /..)
-                                                    target_link_libraries(
-                                                        txpool PUBLIC ledger rpc
-                                                            TBB::tbb protobuf::libprotobuf bcos -
-                                                        protocol bcos - utilities rlp -
-                                                        protocol tool)
-                                                        set_target_properties(
-                                                            txpool PROPERTIES UNITY_BUILD "ON")
+find_package(TBB CONFIG REQUIRED)
+find_package(Protobuf CONFIG REQUIRED)
+target_include_directories(txpool PUBLIC .
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_BINARY_DIR}/bcos-txpool
+    ${CMAKE_CURRENT_BINARY_DIR}/..)
+target_link_libraries(txpool PUBLIC ledger rpc TBB::tbb protobuf::libprotobuf bcos-protocol bcos-utilities rlp-protocol tool)
+set_target_properties(txpool PROPERTIES UNITY_BUILD "ON")
