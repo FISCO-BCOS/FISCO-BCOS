@@ -128,13 +128,8 @@ public:
 
     const EthBlockHeaderData& data() const { return m_data; }
 
-    // Internal-domain (milliseconds) timestamp, mirroring the base BlockHeader. The
-    // EthBlockHeaderData::timestamp member above is always wire seconds.
-    int64_t timestampMs() const { return m_timestampMs; }
-
 private:
     EthBlockHeaderData m_data;
-    int64_t m_timestampMs{0};
     EthBlockVersion m_version{EthBlockVersion::NON_ETH};
 };
 
@@ -144,8 +139,7 @@ namespace bcos::codec::rlp
 {
 // Codec overloads for the pure-data header struct, so EthBlockHeaderData can be embedded in
 // larger Ethereum structures (block bodies, uncle lists, ...) with the same canonical field
-// order as EthBlockHeader::rlpEncode/rlpDecode. EthBlockHeader::rlpEncode/rlpDecode delegate
-// here, so the field order lives in exactly one place.
+// order as EthBlockHeader::rlpEncode/rlpDecode.
 size_t length(const protocol::EthBlockHeaderData& _headerData) noexcept;
 void encode(bcos::bytes& _out, const protocol::EthBlockHeaderData& _headerData) noexcept;
 bcos::Error::UniquePtr decode(

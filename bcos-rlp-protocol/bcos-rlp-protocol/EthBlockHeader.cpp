@@ -345,6 +345,8 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     m_data.gasLimit = _header.gasLimit();
     m_data.gasUsed = _header.gasUsed();
     m_data.number = _header.number();
+    // EthBlockHeaderData::timestamp is wire seconds (ms /1000); the only conversion point
+    // to/from the internal BlockHeader milliseconds domain is the tar boundary.
     m_data.timestamp = _header.timestamp() / 1000;
     m_data.prevRandao = _header.prevRandao();
     m_data.nonce = _header.nonce();
@@ -395,9 +397,10 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
     // toTarsHeader ×1000).
     //
     // Defense-in-depth: a negative number/timestamp would wrap into a huge u64 on the
-    // static_cast below, silently corrupting the RLP. calculateRLPHash guards via
-    // validateHeader, but rlpEncode is public — reject here so a direct caller cannot
-    // produce a wrong encoding.
+    // encode below, silently corrupting the RLP. calculateRLPHash guards via validateHeader,
+    // but rlpEncode is public — reject here so a direct caller cannot produce a wrong
+    // encoding. The field order itself is delegated to the EthBlockHeaderData codec (shared
+    // with EthBlockBody).
     if (m_data.number < 0)
     {
         BOOST_THROW_EXCEPTION(std::invalid_argument("number must be non-negative"));
@@ -406,13 +409,7 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
     {
         BOOST_THROW_EXCEPTION(std::invalid_argument("timestamp must be non-negative"));
     }
-    codec::rlp::encode(out, m_data.parentInfo.blockHash, m_data.uncleHash, m_data.coinbase,
-        m_data.stateRoot, m_data.txsRoot, m_data.receiptsRoot,
-        bcos::bytesConstRef(m_data.logsBloom.data(), m_data.logsBloom.size()), m_data.difficulty,
-        static_cast<uint64_t>(m_data.number), m_data.gasLimit, m_data.gasUsed,
-        static_cast<uint64_t>(m_data.timestamp), m_data.extraData, m_data.prevRandao, m_data.nonce,
-        m_data.baseFee, m_data.withdrawalsHash, m_data.blobGasUsed, m_data.excessBlobGas,
-        m_data.parentBeaconRoot, m_data.requestsHash);
+    codec::rlp::encode(out, m_data);
 }
 
 bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
@@ -427,25 +424,14 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
     // take the view directly; the const_cast is confined to this read-only entry point.
     bytesRef out(const_cast<bcos::byte*>(data.data()), data.size());
 
+    // The EthBlockHeaderData codec decodes the full 21-field list and bounds number /
+    // timestamp to int64 (rejecting over-wide wire scalars). m_data.timestamp is the wire
+    // SECONDS value; the ×1000 to internal milliseconds happens at the tar boundary.
     auto error = codec::rlp::decode(out, m_data);
     if (error)
     {
         return error;
     }
-
-    m_data.number = static_cast<int64_t>(_number);
-
-    // The wire timestamp is seconds; the internal EthBlockHeaderData domain is also seconds
-    // for every version — no conversion here. Bound by int64 so a hostile wire value cannot
-    // wrap on the cast. The seconds->milliseconds conversion (×1000) happens only at the
-    // EthBlockHeader->BlockHeader boundary (toTarsHeader), where an
-    // overflow check guards the multiplication.
-    if (_timestamp > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
-    {
-        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeader),
-            "EthBlockHeader: timestamp out of representable range");
-    }
-    m_data.timestamp = static_cast<int64_t>(_timestamp);
 
     // Optional fork fields are decoded positionally, so the set of present optionals is
     // always a contiguous prefix — a later field can only be present if the view was still
@@ -483,9 +469,9 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
 namespace bcos::codec::rlp
 {
 // EthBlockHeaderData codec: the single source of truth for the 21-field canonical header
-// order. Reused by EthBlockHeader::rlpEncode/rlpDecode (which delegate here) and by
-// EthBlock for ommers. The timestamp here is the WIRE domain (seconds); the ms bridge
-// lives in EthBlockHeader::rlpEncode/rlpDecode.
+// order, shared by EthBlockHeader::rlpEncode/rlpDecode (which delegate here) and by
+// EthBlockBody (which embeds a header and an ommers list). The timestamp here is the WIRE
+// domain (seconds); the ms bridge lives at the EthBlockHeader<->BlockHeader boundary.
 size_t length(const protocol::EthBlockHeaderData& _header) noexcept
 {
     return length(_header.parentInfo.blockHash, _header.uncleHash, _header.coinbase,
@@ -520,8 +506,8 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthBlockHeaderData&
         return err;
     }
     // Block number is internal int64; reject wire values above INT64_MAX instead
-    // of narrowing into a negative number (decodeTarsHeader skips validation and
-    // downstream code assumes a non-negative BlockNumber).
+    // of narrowing into a negative number (downstream code assumes a non-negative
+    // BlockNumber).
     if (number > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
     {
         return BCOS_ERROR_UNIQUE_PTR(

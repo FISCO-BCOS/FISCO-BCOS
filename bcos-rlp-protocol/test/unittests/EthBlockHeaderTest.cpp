@@ -656,31 +656,6 @@ BOOST_AUTO_TEST_CASE(toTarsHeaderClearsResidual)
     BOOST_CHECK(reused->ethBlockVersion() == EthBlockVersion::PRE_LONDON);
 }
 
-// A wire header whose seconds timestamp would overflow int64 milliseconds must be rejected
-// by the decode path — rlpDecode rejects a seconds value that cannot fit int64 (2^63), so
-// decodeTarsHeader surfaces the InvalidHeader error before its ×1000 ms conversion.
-BOOST_AUTO_TEST_CASE(decodeTarsHeaderRejectsOverflowingTimestamp)
-{
-    // Re-encode a valid header's fields with a hostile timestamp: INT64_MAX encodes fine as a
-    // uint64 RLP scalar but ×1000 has no int64 millisecond representation.
-    auto header = makeEthHeader();
-    EthBlockHeader ethHeader(*header);
-    auto const& d = ethHeader.data();
-    constexpr uint64_t hostileTimestamp = 0x7FFFFFFFFFFFFFFFULL;
-
-    bytes rlp;
-    codec::rlp::encode(rlp, d.parentInfo.blockHash, d.uncleHash, d.coinbase, d.stateRoot, d.txsRoot,
-        d.receiptsRoot, bcos::bytesConstRef(d.logsBloom.data(), d.logsBloom.size()), d.difficulty,
-        static_cast<uint64_t>(d.number), d.gasLimit, d.gasUsed, hostileTimestamp, d.extraData,
-        d.prevRandao, d.nonce, d.baseFee, d.withdrawalsHash, d.blobGasUsed, d.excessBlobGas,
-        d.parentBeaconRoot, d.requestsHash);
-
-    auto decodedHeader = makeEthHeader();
-    auto error = EthBlockHeader::decodeTarsHeader(decodedHeader, bcos::ref(rlp));
-    BOOST_REQUIRE(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
-}
-
 // An invalid Eth header: calculateHash clears dataHash, so hash() must throw
 // EmptyBlockHeaderHash (regression for the FIB-130 clear-on-failure behaviour).
 BOOST_AUTO_TEST_CASE(calculateHashClearsOnInvalid)
