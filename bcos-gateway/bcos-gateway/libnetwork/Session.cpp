@@ -295,9 +295,10 @@ void Session::write()
                 auto cb = std::move(p.m_callback);
                 if (m_server.get().haveNetwork())
                 {
-                    m_server.get().asioInterface()->post([callback = std::move(cb)]() {
-                        callback(boost::asio::error::operation_aborted);
-                    });
+                    m_server.get().asioInterface()->post(
+                        [callback = std::move(cb)]() {
+                            callback(boost::asio::error::operation_aborted);
+                        });
                 }
                 else
                 {
@@ -307,8 +308,9 @@ void Session::write()
                     }
                     catch (std::exception const& e2)
                     {
-                        SESSION_LOG(WARNING) << LOG_DESC("write callback exception")
-                                             << LOG_KV("what", boost::diagnostic_information(e2));
+                        SESSION_LOG(WARNING)
+                            << LOG_DESC("write callback exception")
+                            << LOG_KV("what", boost::diagnostic_information(e2));
                     }
                 }
             }
@@ -361,9 +363,10 @@ void Session::drop(DisconnectReason _reason)
         {
             if (m_server.get().haveNetwork())
             {
-                m_server.get().asioInterface()->post([callback = std::move(payload.m_callback)]() {
-                    callback(boost::asio::error::operation_aborted);
-                });
+                m_server.get().asioInterface()->post(
+                    [callback = std::move(payload.m_callback)]() {
+                        callback(boost::asio::error::operation_aborted);
+                    });
             }
             else
             {
@@ -1039,7 +1042,8 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     bcos::bytes compressedPayload;
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> wirePayloads =
         ::ranges::views::all(payloadRefs);
-    if (m_enableCompress && message.version() >= (uint16_t)bcos::protocol::ProtocolVersion::V2)
+    if (m_enableCompress &&
+        message.version() >= (uint16_t)bcos::protocol::ProtocolVersion::V2)
     {
         uint32_t payloadSize = 0;
         for (auto const& ref : payloadRefs)
@@ -1062,7 +1066,8 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
                     message.ext() | bcos::protocol::MessageExtFieldFlag::COMPRESS);
                 *(uint16_t*)(headerBuffer.data() + c_p2pHeaderExtOffset) =
                     boost::asio::detail::socket_ops::host_to_network_short(compressedExt);
-                wirePayloads = ::ranges::views::single(bcos::ref(std::as_const(compressedPayload)));
+                wirePayloads =
+                    ::ranges::views::single(bcos::ref(std::as_const(compressedPayload)));
             }
             else
             {
@@ -1102,9 +1107,9 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     // path (asyncSendMessage) enforces; otherwise routing sends through fastSendMessage would
     // silently bypass outgoing bandwidth/QPS limiting. A rejection surfaces as a thrown
     // NetworkException (e.g. OutBWOverflow / InQPSOverflow) so coroutine retry loops can stop.
-    if (auto result =
-            (m_beforeMessageHandler ? m_beforeMessageHandler(*this, message, totalLength) :
-                                      std::nullopt))
+    if (auto result = (m_beforeMessageHandler ?
+                           m_beforeMessageHandler(*this, message, totalLength) :
+                           std::nullopt))
     {
         const auto& error = result.value();
         BOOST_THROW_EXCEPTION(NetworkException((int64_t)error.errorCode(), error.errorMessage()));
@@ -1135,8 +1140,8 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
 
 size_t bcos::gateway::Payload::size() const
 {
-    return ::ranges::accumulate(
-        m_data, size_t(0), [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
+    return ::ranges::accumulate(m_data, size_t(0),
+        [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
 }
 std::size_t bcos::gateway::SessionRecvBuffer::readPos() const
 {

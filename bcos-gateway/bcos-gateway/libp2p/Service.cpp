@@ -339,8 +339,8 @@ void Service::sendRespMessageBySession(
     // value message in frame; the (borrowed) response payload is copied into the frame because the
     // receive callback that passed it does not outlive the deferred send. The session/service are
     // passed as coroutine parameters so they are copied into the frame.
-    task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession, bcos::bytes _payload,
-                   uint32_t _seq, P2pID _p2pid) -> task::Task<void> {
+    task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession,
+                   bcos::bytes _payload, uint32_t _seq, P2pID _p2pid) -> task::Task<void> {
         try
         {
             P2PMessageV2 respMessage;
@@ -600,10 +600,10 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
         if (!_callback)
         {
             // fire-and-forget: an unreachable peer (session dropped between the isReachable check
-            // and the send) is an expected, recoverable state — log and continue.
-            // sendMessageByNodeID throws NetworkException for an inactive session instead of
-            // invoking a callback, so catching it here keeps task::wait from unwinding and aborting
-            // the remaining nodes in asyncSendMessageByP2PNodeIDs.
+            // and the send) is an expected, recoverable state — log and continue. sendMessageByNodeID
+            // throws NetworkException for an inactive session instead of invoking a callback, so
+            // catching it here keeps task::wait from unwinding and aborting the remaining nodes in
+            // asyncSendMessageByP2PNodeIDs.
             try
             {
                 co_await _self->sendMessageByNodeID(_dstNodeID, message,
@@ -613,7 +613,8 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
             {
                 SERVICE_LOG(INFO) << LOG_DESC("asyncSendMessageByP2PNodeID send failed")
                                   << LOG_KV("nodeid", printShortP2pID(_dstNodeID))
-                                  << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.what());
+                                  << LOG_KV("code", e.errorCode())
+                                  << LOG_KV("message", e.what());
             }
             co_return;
         }
@@ -623,14 +624,15 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
                 ::ranges::views::single(message.payload()), Options{_options.timeout, true});
             auto respMessage = std::dynamic_pointer_cast<P2PMessage>(resp);
             auto packetType = respMessage ? respMessage->packetType() : (uint16_t)0;
-            _callback(nullptr, packetType, respMessage ? respMessage->payload() : bytesConstRef{});
+            _callback(nullptr, packetType,
+                respMessage ? respMessage->payload() : bytesConstRef{});
         }
         catch (NetworkException& e)
         {
             _callback(e.toError(), 0, bytesConstRef{});
         }
-    }(self, _type, std::move(_dstNodeID), bcos::bytes(_payload.begin(), _payload.end()), _options,
-                                                              _callback));
+    }(self, _type, std::move(_dstNodeID),
+        bcos::bytes(_payload.begin(), _payload.end()), _options, _callback));
 }
 
 void Service::asyncBroadcastMessageToP2PNodes(
@@ -925,8 +927,8 @@ void bcos::gateway::Service::eraseHandlerByMsgType(uint16_t _type)
 {
     m_msgHandlers.at(_type) = nullptr;
 }
-void bcos::gateway::Service::setBeforeMessageHandler(
-    std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)> _handler)
+void bcos::gateway::Service::setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
+    SessionFace&, const Message&, uint32_t)> _handler)
 {
     m_beforeMessageHandler = std::move(_handler);
 }

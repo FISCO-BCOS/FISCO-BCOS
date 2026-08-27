@@ -76,10 +76,10 @@ bytes AesCtrCipher::update(bytesConstRef _data)
     }
     int outLen = 0;
     int ok = (m_direction == Direction::Encrypt) ?
-                 EVP_EncryptUpdate(
-                     m_ctx, out.data(), &outLen, _data.data(), static_cast<int>(_data.size())) :
-                 EVP_DecryptUpdate(
-                     m_ctx, out.data(), &outLen, _data.data(), static_cast<int>(_data.size()));
+                 EVP_EncryptUpdate(m_ctx, out.data(), &outLen, _data.data(),
+                     static_cast<int>(_data.size())) :
+                 EVP_DecryptUpdate(m_ctx, out.data(), &outLen, _data.data(),
+                     static_cast<int>(_data.size()));
     if (ok != 1)
     {
         throw std::runtime_error("AesCtrCipher: update failed");

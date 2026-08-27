@@ -181,7 +181,8 @@ bcos::task::Task<bcos::front::SendResult> bcostars::FrontServiceClient::sendMess
             }
 
         private:
-            void complete(const bcostars::Error& ret, const std::vector<tars::Char>& responseNodeID,
+            void complete(const bcostars::Error& ret,
+                const std::vector<tars::Char>& responseNodeID,
                 const std::vector<tars::Char>& responseData, const std::string& seq)
             {
                 bcos::front::SendResult result;
@@ -252,8 +253,8 @@ void bcostars::FrontServiceClient::asyncSendResponse(const std::string& _id, int
         ->asyncSendResponse(_id, _moduleID, std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
             std::vector<char>(_data.begin(), _data.end()));
 }
-bcos::task::Task<void> bcostars::FrontServiceClient::broadcastMessage(uint16_t _type, int _moduleID,
-    ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads)
+bcos::task::Task<void> bcostars::FrontServiceClient::broadcastMessage(uint16_t _type,
+    int _moduleID, ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads)
 {
     std::vector<char> data;
     for (auto payload : payloads)

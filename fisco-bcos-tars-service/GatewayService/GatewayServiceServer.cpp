@@ -109,9 +109,8 @@ bcostars::Error bcostars::GatewayServiceServer::asyncGetPeers(
     return {};
 }
 bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeID(const std::string& groupID,
-    tars::Int32 moduleID, const std::vector<tars::Char>& srcNodeID,
-    const std::vector<tars::Char>& dstNodeID, const std::vector<tars::Char>& payload,
-    tars::TarsCurrentPtr current)
+    tars::Int32 moduleID, const std::vector<tars::Char>& srcNodeID, const std::vector<tars::Char>& dstNodeID,
+    const std::vector<tars::Char>& payload, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     auto keyFactory = m_gatewayInitializer->keyFactory();
@@ -125,28 +124,28 @@ bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeID(const s
     // through the async RPC response. try/catch guarantees the RPC is always answered even if the
     // send throws (current->setResponse(false) already disabled the automatic reply).
     auto payloadData = std::make_shared<std::vector<tars::Char>>(payload);
-    bcos::task::wait(
-        [](auto _gateway, auto _groupID, auto _moduleID, auto _srcNodeID, auto _dstNodeID,
-            auto _payloadData, auto _current) -> bcos::task::Task<void> {
-            try
-            {
-                auto error = co_await _gateway->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID,
-                    _dstNodeID,
-                    ::ranges::views::single(bcos::bytesConstRef(
-                        (const bcos::byte*)_payloadData->data(), _payloadData->size())));
-                async_response_asyncSendMessageByNodeID(_current, toTarsError(error));
-            }
-            catch (std::exception const& e)
-            {
-                GATEWAYSERVICE_LOG(WARNING)
-                    << LOG_DESC("asyncSendMessageByNodeID send exception")
-                    << LOG_KV("groupID", _groupID) << LOG_KV("moduleID", _moduleID)
-                    << LOG_KV("dst", _dstNodeID->hex())
-                    << LOG_KV("what", boost::diagnostic_information(e));
-                async_response_asyncSendMessageByNodeID(
-                    _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))));
-            }
-        }(gateway, groupID, moduleID, bcosSrcNodeID, bcosDstNodeID, payloadData, current));
+    bcos::task::wait([](auto _gateway, auto _groupID, auto _moduleID, auto _srcNodeID,
+                         auto _dstNodeID, auto _payloadData,
+                         auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            auto error = co_await _gateway->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID,
+                _dstNodeID,
+                ::ranges::views::single(bcos::bytesConstRef(
+                    (const bcos::byte*)_payloadData->data(), _payloadData->size())));
+            async_response_asyncSendMessageByNodeID(_current, toTarsError(error));
+        }
+        catch (std::exception const& e)
+        {
+            GATEWAYSERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByNodeID send exception")
+                                        << LOG_KV("groupID", _groupID)
+                                        << LOG_KV("moduleID", _moduleID)
+                                        << LOG_KV("dst", _dstNodeID->hex())
+                                        << LOG_KV("what", boost::diagnostic_information(e));
+            async_response_asyncSendMessageByNodeID(
+                _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))));
+        }
+    }(gateway, groupID, moduleID, bcosSrcNodeID, bcosDstNodeID, payloadData, current));
     return {};
 }
 bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeIDs(

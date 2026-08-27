@@ -198,14 +198,14 @@ void ServiceV2::broadcastRouterSeq()
     // send). The router table should only be exchanged between neighbours and propagated
     // hop-by-hop, so broadcast to the directly connected sessions only (not all reachable nodes).
     // All state is passed as coroutine parameters so it is copied into the frame and stays alive.
-    task::wait(
-        [](std::shared_ptr<ServiceV2> _self, bcos::bytes _payload) mutable -> task::Task<void> {
-            auto message = std::make_shared<P2PMessageV2>();
-            message->setPacketType(GatewayMessageType::RouterTableSyncSeq);
-            message->setPayload(std::move(_payload));
-            co_await _self->broadcastMessageToNeighbors(
-                message, ::ranges::views::single(message->payload()), Options{});
-        }(self, std::move(payload)));
+    task::wait([](std::shared_ptr<ServiceV2> _self, bcos::bytes _payload) mutable
+                   -> task::Task<void> {
+        auto message = std::make_shared<P2PMessageV2>();
+        message->setPacketType(GatewayMessageType::RouterTableSyncSeq);
+        message->setPayload(std::move(_payload));
+        co_await _self->broadcastMessageToNeighbors(
+            message, ::ranges::views::single(message->payload()), Options{});
+    }(self, std::move(payload)));
 }
 
 void ServiceV2::markRouterSeqChanged()
@@ -426,9 +426,9 @@ bcos::task::Task<void> ServiceV2::broadcastMessageToAll(P2PMessage::Ptr message,
             }
             catch (std::exception const& e)
             {
-                SERVICE2_LOG(WARNING)
-                    << LOG_BADGE("broadcastMessageToAll") << LOG_KV("node", printShortP2pID(_node))
-                    << LOG_KV("what", boost::diagnostic_information(e));
+                SERVICE2_LOG(WARNING) << LOG_BADGE("broadcastMessageToAll")
+                                      << LOG_KV("node", printShortP2pID(_node))
+                                      << LOG_KV("what", boost::diagnostic_information(e));
             }
         }(selfV2, node, message, payloads, options));
     }
@@ -458,8 +458,9 @@ void ServiceV2::sendRespMessageBySession(
     // value message in frame; response payload copied into the frame (borrowed from the receive
     // callback which does not outlive the deferred send). All state is passed as coroutine
     // parameters so it is copied into the frame and stays alive.
-    task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession, bcos::bytes _payload,
-                   uint32_t _seq, std::string _dstP2PNodeID, P2pID _p2pid) -> task::Task<void> {
+    task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession,
+                   bcos::bytes _payload, uint32_t _seq, std::string _dstP2PNodeID,
+                   P2pID _p2pid) -> task::Task<void> {
         try
         {
             P2PMessageV2 respMessage;
@@ -473,7 +474,8 @@ void ServiceV2::sendRespMessageBySession(
                 respMessage, ::ranges::views::single(respMessage.payload()), Options{});
             if (c_fileLogLevel <= TRACE) [[unlikely]]
             {
-                SERVICE2_LOG(TRACE) << LOG_BADGE("sendRespMessageBySession") << LOG_KV("seq", _seq)
+                SERVICE2_LOG(TRACE) << LOG_BADGE("sendRespMessageBySession")
+                                    << LOG_KV("seq", _seq)
                                     << LOG_KV("from", respMessage.printSrcP2PNodeID())
                                     << LOG_KV("dst", respMessage.printDstP2PNodeID())
                                     << LOG_KV("payload size", respMessage.payload().size());
@@ -489,7 +491,8 @@ void ServiceV2::sendRespMessageBySession(
                                   << LOG_KV("dst", _dstP2PNodeID)
                                   << LOG_KV("what", boost::diagnostic_information(e));
         }
-    }(self, _p2pSession, bcos::bytes(_payload.begin(), _payload.end()), seq, dstP2PNodeID, p2pid));
+    }(self, _p2pSession, bcos::bytes(_payload.begin(), _payload.end()), seq, dstP2PNodeID,
+        p2pid));
 }
 
 bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(

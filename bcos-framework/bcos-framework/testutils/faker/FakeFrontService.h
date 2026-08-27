@@ -316,7 +316,8 @@ public:
     void onReceiveMessage(
         const std::string&, const NodeIDPtr&, bytesConstRef, ReceiveMsgFunc) override
     {}
-    bcos::task::Task<void> broadcastMessage(uint16_t type, int moduleID,
+    bcos::task::Task<void> broadcastMessage(
+        uint16_t type, int moduleID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override
     {
         for (const auto& node : m_nodeIDList)
@@ -355,7 +356,8 @@ public:
         }
     }
 
-    bcos::task::Task<SendResult> sendMessageByNodeID(int _moduleId, bcos::crypto::NodeIDPtr _nodeId,
+    bcos::task::Task<SendResult> sendMessageByNodeID(int _moduleId,
+        bcos::crypto::NodeIDPtr _nodeId,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
         uint32_t _timeout) override
     {

@@ -64,25 +64,24 @@ BOOST_AUTO_TEST_CASE(aes256CtrStateful)
     joined.insert(joined.end(), part2.begin(), part2.end());
     auto oneShot = aesCtrCrypt(ref(joined), ref(key), ref(iv));
     BOOST_CHECK(c1 == bytesConstRef(oneShot.data(), part1.size()).toBytes());
-    BOOST_CHECK(c2 == bytesConstRef(oneShot.data() + part1.size(), part2.size()).toBytes());
+    BOOST_CHECK(
+        c2 == bytesConstRef(oneShot.data() + part1.size(), part2.size()).toBytes());
     // Absolute anchor for AES-256-CTR itself (openssl-verified; NIST SP 800-38A
     // F.5.5 key, zero IV as used by RLPx): the two blocks above are
     //   8ea94863ba8fe940fe7032d13083bf7e  3f38940a1579b3875e60c37ceb91dfb5
-    BOOST_CHECK_EQUAL(
-        toHex(oneShot), "8ea94863ba8fe940fe7032d13083bf7e3f38940a1579b3875e60c37ceb91dfb5");
+    BOOST_CHECK_EQUAL(toHex(oneShot),
+        "8ea94863ba8fe940fe7032d13083bf7e3f38940a1579b3875e60c37ceb91dfb5");
 }
 
 // HMAC-SHA256 against RFC 4231 test case 2.
 BOOST_AUTO_TEST_CASE(hmacSha256Vector)
 {
     auto key = fromHex("4a656665");  // "Jefe"
-    auto data =
-        fromHex("7768617420646f2079612077616e7420666f72206e6f7468696e673f");  // "what do ya want
-                                                                              // for nothing?"
+    auto data = fromHex("7768617420646f2079612077616e7420666f72206e6f7468696e673f");  // "what do ya want for nothing?"
 
     auto mac = hmacSha256(ref(key), ref(data));
-    BOOST_CHECK_EQUAL(
-        toHex(mac), "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
+    BOOST_CHECK_EQUAL(toHex(mac),
+        "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
 }
 
 // secp256k1 ECDH with the raw-x hash against a fixed key pair.
@@ -91,8 +90,10 @@ BOOST_AUTO_TEST_CASE(ecdhCopyX)
     auto priv1 = fromHex("7ebbc6a8358bc76dd73ebc557056702c8cfc34e5cfcd90eb83af0347575fd2ad");
     auto priv2 = fromHex("6a3d6396903245bba5837752b9e0348874e72db0c4e11e9c485a81b4ea4353b9");
 
-    auto pub1 = bcos::crypto::secp256k1PriToPub(std::make_shared<bcos::crypto::KeyImpl>(priv1));
-    auto pub2 = bcos::crypto::secp256k1PriToPub(std::make_shared<bcos::crypto::KeyImpl>(priv2));
+    auto pub1 = bcos::crypto::secp256k1PriToPub(
+        std::make_shared<bcos::crypto::KeyImpl>(priv1));
+    auto pub2 = bcos::crypto::secp256k1PriToPub(
+        std::make_shared<bcos::crypto::KeyImpl>(priv2));
 
     bytesConstRef pub1Ref(pub1->data().data(), pub1->data().size());
     bytesConstRef pub2Ref(pub2->data().data(), pub2->data().size());
@@ -104,8 +105,8 @@ BOOST_AUTO_TEST_CASE(ecdhCopyX)
     // computed with an independent implementation (python ecdsa, SECP256k1). A
     // symmetry-only assertion would stay green for a wrong copy-x (hashed
     // compressed point, wrong endianness, wrong half).
-    BOOST_CHECK_EQUAL(
-        toHex(s1), "167ccc13ac5e8a26b131c3446030c60fbfac6aa8e31149d0869f93626a4cdf62");
+    BOOST_CHECK_EQUAL(toHex(s1),
+        "167ccc13ac5e8a26b131c3446030c60fbfac6aa8e31149d0869f93626a4cdf62");
 }
 
 // Secure random bytes differ and are non-trivial.
@@ -142,17 +143,20 @@ BOOST_AUTO_TEST_CASE(rejectsInvalidInputs)
     for (auto badPubLen : {63u, 65u})
     {
         auto badPub = bytes(badPubLen, 0x04);
-        BOOST_CHECK_THROW(secp256k1EcdhCopyX(ref(badPub), ref(priv32)), std::invalid_argument);
+        BOOST_CHECK_THROW(
+            secp256k1EcdhCopyX(ref(badPub), ref(priv32)), std::invalid_argument);
     }
     for (auto badPrivLen : {31u, 33u})
     {
         auto badPriv = bytes(badPrivLen, 0x11);
         auto pub = bytes(64, 0x02);
-        BOOST_CHECK_THROW(secp256k1EcdhCopyX(ref(pub), ref(badPriv)), std::invalid_argument);
+        BOOST_CHECK_THROW(
+            secp256k1EcdhCopyX(ref(pub), ref(badPriv)), std::invalid_argument);
     }
     // Off-curve / out-of-field public key: parsing must reject it.
     auto offCurvePub = bytes(64, 0x00);
-    BOOST_CHECK_THROW(secp256k1EcdhCopyX(ref(offCurvePub), ref(priv32)), std::invalid_argument);
+    BOOST_CHECK_THROW(
+        secp256k1EcdhCopyX(ref(offCurvePub), ref(priv32)), std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -166,8 +166,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_onRecieveNodeIDsAnd)
 
     // Use wait_for with timeout to avoid hanging indefinitely on CI
     auto status = f.wait_for(std::chrono::seconds(10));
-    BOOST_CHECK_MESSAGE(
-        status == std::future_status::ready, "Timed out waiting for group node info notification");
+    BOOST_CHECK_MESSAGE(status == std::future_status::ready,
+        "Timed out waiting for group node info notification");
     if (status == std::future_status::ready)
     {
         f.get();
@@ -186,9 +186,9 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendResponse_coroutine)
     // wrapper over the coroutine sendMessage(isResponse=true)
     auto resultPromise = std::make_shared<std::promise<SendResult>>();
     auto resultFuture = resultPromise->get_future();
-    frontService->registerModuleMessageDispatcher(
-        moduleID, [frontService, dstNodeID, moduleID, data](bcos::crypto::NodeIDPtr _nodeID,
-                      const std::string& _id, bytesConstRef _data) {
+    frontService->registerModuleMessageDispatcher(moduleID,
+        [frontService, dstNodeID, moduleID, data](bcos::crypto::NodeIDPtr _nodeID,
+            const std::string& _id, bytesConstRef _data) {
             (void)_nodeID;
             (void)_data;
             frontService->asyncSendResponse(_id, moduleID, dstNodeID,
@@ -201,8 +201,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendResponse_coroutine)
         [](decltype(self) _self, decltype(dstNodeID) _dstNodeID, int _moduleID, std::string _data,
             std::shared_ptr<std::promise<SendResult>> _resultPromise) -> task::Task<void> {
             auto result = co_await _self->sendMessageByNodeID(_moduleID, _dstNodeID,
-                ::ranges::views::single(
-                    bytesConstRef(reinterpret_cast<const bcos::byte*>(_data.data()), _data.size())),
+                ::ranges::views::single(bytesConstRef(
+                    reinterpret_cast<const bcos::byte*>(_data.data()), _data.size())),
                 5000);
             _resultPromise->set_value(std::move(result));
         }(self, dstNodeID, moduleID, data, resultPromise));
@@ -288,8 +288,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine)
     // timeout == 0: fire-and-forget send; the module-level dispatch (not a response) is what the
     // fake gateway loops back, so only the send completion matters here.
     auto result = task::syncWait(frontService->sendMessageByNodeID(moduleID, dstNodeID,
-        ::ranges::views::single(
-            bytesConstRef(reinterpret_cast<const bcos::byte*>(data.data()), data.size())),
+        ::ranges::views::single(bytesConstRef(
+            reinterpret_cast<const bcos::byte*>(data.data()), data.size())),
         0));
     (void)result;
     f.get();
@@ -334,8 +334,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine_withResponse
         [](decltype(self) _self, decltype(dstNodeID) _dstNodeID, int _moduleID, std::string _data,
             std::shared_ptr<std::promise<SendResult>> _resultPromise) -> task::Task<void> {
             auto result = co_await _self->sendMessageByNodeID(_moduleID, _dstNodeID,
-                ::ranges::views::single(
-                    bytesConstRef(reinterpret_cast<const bcos::byte*>(_data.data()), _data.size())),
+                ::ranges::views::single(bytesConstRef(
+                    reinterpret_cast<const bcos::byte*>(_data.data()), _data.size())),
                 5000);
             _resultPromise->set_value(std::move(result));
         }(self, dstNodeID, moduleID, data, resultPromise));
@@ -399,12 +399,14 @@ BOOST_AUTO_TEST_CASE(testFrontService_loopTimeout)
     {
         senders.emplace_back([frontService, moduleID, dstNodeID, data, &barrier]() {
             auto result = task::syncWait(frontService->sendMessageByNodeID(moduleID, dstNodeID,
-                ::ranges::views::single(bytesConstRef((unsigned char*)data.data(), data.size())),
+                ::ranges::views::single(
+                    bytesConstRef((unsigned char*)data.data(), data.size())),
                 2000));
             BOOST_CHECK(result.error);
             if (result.error)
             {
-                BOOST_CHECK_EQUAL(result.error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
+                BOOST_CHECK_EQUAL(
+                    result.error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
             }
             barrier.set_value();
         });

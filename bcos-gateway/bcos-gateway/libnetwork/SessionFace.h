@@ -54,8 +54,7 @@ public:
     // payload views — a zero-copy message does not carry its payload, so message.length() alone
     // under-counts.
     virtual void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
-            SessionFace&, const Message&, uint32_t _wireLength)>
-            handler) = 0;
+        SessionFace&, const Message&, uint32_t _wireLength)> handler) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 

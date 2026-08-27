@@ -34,9 +34,9 @@ namespace bcos::protocol
 // RLP form (Ethereum yellow paper, Appendix B): rlp([address, topics, data]).
 struct EthLogData
 {
-    bcos::Address address;                       // 20 bytes, the emitting contract
-    std::vector<bcos::crypto::HashType> topics;  // 0..n 32-byte topics
-    bcos::bytes data;                            // arbitrary-length payload
+    bcos::Address address;                        // 20 bytes, the emitting contract
+    std::vector<bcos::crypto::HashType> topics;   // 0..n 32-byte topics
+    bcos::bytes data;                             // arbitrary-length payload
 
     bool operator==(const EthLogData& rhs) const
     {

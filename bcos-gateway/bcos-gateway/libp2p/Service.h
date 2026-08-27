@@ -104,8 +104,8 @@ public:
     void asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
         Options options = Options(), P2PResponseCallback _callback = nullptr) override;
 
-    void setBeforeMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)> _handler);
+    void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
+        SessionFace&, const Message&, uint32_t)> _handler);
 
     void asyncBroadcastMessageToP2PNodes(
         uint16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options) override;
@@ -181,8 +181,8 @@ protected:
     // handlers called when delete-session
     std::vector<std::function<void(P2PSession::Ptr)>> m_deleteSessionHandlers;
 
-    std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)>
-        m_beforeMessageHandler;
+    std::function<std::optional<bcos::Error>(
+        SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
     std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> m_onMessageHandler;
 };
 

@@ -218,10 +218,12 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
                                std::shared_ptr<bcos::bytes> _owned) -> task::Task<void> {
                     auto result = co_await _frontService->sendMessageByNodeID(_moduleID,
                         std::move(_nodeID),
-                        ::ranges::views::single(bytesConstRef(_owned->data(), _owned->size())), 0);
+                        ::ranges::views::single(
+                            bytesConstRef(_owned->data(), _owned->size())),
+                        0);
                     (void)result;
                 }(m_transactionSync->config()->frontService(), protocol::TREE_PUSH_TRANSACTION,
-                                                                        node, owned));
+                    node, owned));
             }
         }
     }

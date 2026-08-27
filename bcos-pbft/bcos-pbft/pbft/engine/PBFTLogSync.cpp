@@ -104,8 +104,7 @@ void PBFTLogSync::requestPBFTData(
             auto front = config->frontService();
             auto networkTimeout = config->networkTimeoutInterval();
             task::wait([](decltype(front) _front, decltype(_from) _from,
-                           decltype(encodedData) _encodedData,
-                           decltype(networkTimeout) _networkTimeout,
+                           decltype(encodedData) _encodedData, decltype(networkTimeout) _networkTimeout,
                            decltype(_callback) _callback) mutable -> task::Task<void> {
                 try
                 {
@@ -129,9 +128,9 @@ void PBFTLogSync::requestPBFTData(
                                       << LOG_KV("message", boost::diagnostic_information(e));
                     if (_callback)
                     {
-                        _callback(
-                            BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed,
-                                "requestPBFTData exception: " + boost::diagnostic_information(e)),
+                        _callback(BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed,
+                                      "requestPBFTData exception: " +
+                                          boost::diagnostic_information(e)),
                             _from, bytesConstRef(), std::string(), ResponseFunc());
                     }
                 }

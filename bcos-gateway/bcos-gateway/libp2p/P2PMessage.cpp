@@ -577,10 +577,9 @@ bcos::gateway::Message::Ptr bcos::gateway::P2PMessageFactory::buildMessage()
 }
 std::ostream& bcos::gateway::operator<<(std::ostream& _out, const P2PMessage& _p2pMessage)
 {
-    _out << "P2PMessage {"
-         << " length: " << _p2pMessage.length() << " version: " << _p2pMessage.version()
-         << " packetType: " << _p2pMessage.packetType() << " seq: " << _p2pMessage.seq()
-         << " ext: " << _p2pMessage.ext() << " }";
+    _out << "P2PMessage {" << " length: " << _p2pMessage.length()
+         << " version: " << _p2pMessage.version() << " packetType: " << _p2pMessage.packetType()
+         << " seq: " << _p2pMessage.seq() << " ext: " << _p2pMessage.ext() << " }";
     return _out;
 }
 std::ostream& bcos::gateway::operator<<(std::ostream& _out, P2PMessage::Ptr& _p2pMessage)

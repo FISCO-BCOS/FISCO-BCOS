@@ -187,7 +187,8 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
                 auto buffer = m_buffer;
                 auto asioInterface = m_asioInterface;
                 bool accepted = m_table->sendMessage(m_groupID, m_srcNodeID, m_dstNodeID,
-                    bcos::ref(*buffer), [state, buffer, asioInterface](Error::Ptr _error) {
+                    bcos::ref(*buffer),
+                    [state, buffer, asioInterface](Error::Ptr _error) {
                         // completes exactly once; the buffer is kept alive until after the resume
                         // (the borrowed front may still be reading it). Post the resume off this
                         // stack — the callback may run inline on the caller's io thread.
@@ -213,12 +214,14 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
             Error::Ptr await_resume() { return std::move(m_state->error); }
         };
         GATEWAY_LOG(DEBUG) << LOG_DESC("local delivery of sendMessageByNodeID")
-                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
+                           << LOG_KV("groupID", _groupID)
+                           << LOG_KV("srcNodeID", _srcNodeID->hex())
                            << LOG_KV("dstNodeID", _dstNodeID->hex());
-        co_return co_await LocalSendAwaitable{m_gatewayNodeManager->localRouterTable().get(),
-            _groupID, std::move(_srcNodeID), std::move(_dstNodeID),
-            std::make_shared<bcos::bytes>(std::move(buffer)),
-            std::make_shared<LocalSendAwaitable::State>(), m_p2pInterface->host()->asioInterface()};
+        co_return co_await LocalSendAwaitable{
+            m_gatewayNodeManager->localRouterTable().get(), _groupID, std::move(_srcNodeID),
+            std::move(_dstNodeID), std::make_shared<bcos::bytes>(std::move(buffer)),
+            std::make_shared<LocalSendAwaitable::State>(),
+            m_p2pInterface->host()->asioInterface()};
     }
 
     // zero-copy: the message (header/options only) and the payload views both live in this frame
@@ -259,8 +262,8 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
                 continue;
             }
             auto payload = respMessage->payload();
-            int respCode = boost::lexical_cast<int>(
-                std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
+            int respCode = boost::lexical_cast<int>(std::string_view(
+                reinterpret_cast<const char*>(payload.data()), payload.size()));
             if (respCode == bcos::protocol::CommonError::SUCCESS)
             {
                 co_return nullptr;
@@ -279,7 +282,8 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
             }
             if (e.errorCode() == P2PExceptionType::InQPSOverflow)
             {
-                co_return BCOS_ERROR_PTR(bcos::protocol::CommonError::GatewayQPSOverFlow, e.what());
+                co_return BCOS_ERROR_PTR(
+                    bcos::protocol::CommonError::GatewayQPSOverFlow, e.what());
             }
             GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
                                << LOG_DESC("network callback")

@@ -86,9 +86,9 @@ BOOST_AUTO_TEST_CASE(test_FrontServiceEcho)
 
                 auto payload = bcos::bytesConstRef((bcos::byte*)sendStr.data(), sendStr.size());
 
-                auto result =
-                    task::syncWait(frontService->sendMessageByNodeID(bcos::protocol::ModuleID::AMOP,
-                        nodeID, ::ranges::views::single(payload), 10000));
+                auto result = task::syncWait(frontService->sendMessageByNodeID(
+                    bcos::protocol::ModuleID::AMOP, nodeID, ::ranges::views::single(payload),
+                    10000));
 
                 BOOST_CHECK(!result.uuid.empty());
                 BOOST_CHECK(result.error == nullptr);
@@ -119,13 +119,14 @@ BOOST_AUTO_TEST_CASE(test_FrontServiceTimeout)
 
                 auto payload = bcos::bytesConstRef((bcos::byte*)sendStr.data(), sendStr.size());
 
-                auto result = task::syncWait(
-                    frontService->sendMessageByNodeID(bcos::protocol::ModuleID::AMOP + 1, nodeID,
-                        ::ranges::views::single(payload), 10000));
+                auto result = task::syncWait(frontService->sendMessageByNodeID(
+                    bcos::protocol::ModuleID::AMOP + 1, nodeID, ::ranges::views::single(payload),
+                    10000));
 
                 BOOST_CHECK(!result.uuid.empty());
                 BOOST_CHECK(result.error != nullptr);
-                BOOST_CHECK_EQUAL(result.error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
+                BOOST_CHECK_EQUAL(
+                    result.error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
             }
         });
     }

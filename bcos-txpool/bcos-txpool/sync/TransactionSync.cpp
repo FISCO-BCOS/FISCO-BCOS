@@ -266,8 +266,7 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                    decltype(networkTimeout) _networkTimeout, decltype(protocolID) _protocolID,
                    decltype(_generatedNodeID) _generatedNodeID, decltype(encodedData) _encodedData,
                    decltype(_missedTxs) _missedTxs, decltype(_verifiedProposal) _verifiedProposal,
-                   decltype(_onVerifyFinished) _onVerifyFinished) mutable
-        -> task::Task<void> {
+                   decltype(_onVerifyFinished) _onVerifyFinished) mutable -> task::Task<void> {
         // result is declared outside the try so the catch below can still log the peer on a
         // synchronous send failure
         bcos::front::SendResult result;
@@ -299,7 +298,8 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                     SYNC_LOG(DEBUG)
                         << LOG_DESC("requestMissedTxs: response verify result")
                         << LOG_KV("propIndex", _verifiedProposal->blockHeader()->number())
-                        << LOG_KV("propHash", _verifiedProposal->blockHeader()->hash().abridged())
+                        << LOG_KV("propHash",
+                            _verifiedProposal->blockHeader()->hash().abridged())
                         << LOG_KV("_result", _result) << LOG_KV("networkT", networkT)
                         << LOG_KV("verifyAndSubmitT", (utcTime() - recordT));
                 });
@@ -312,14 +312,14 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                 << LOG_KV("_peer", result.nodeID ? result.nodeID->shortHex() : "unknown");
             if (_onVerifyFinished)
             {
-                _onVerifyFinished(
-                    BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed,
-                        "verifyFetchedTxs exception: " + boost::diagnostic_information(e)),
+                _onVerifyFinished(BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed,
+                                      "verifyFetchedTxs exception: " +
+                                          boost::diagnostic_information(e)),
                     false);
             }
         }
     }(front, self, startT, networkTimeout, protocolID, std::move(_generatedNodeID),
-            std::move(encodedData), _missedTxs, _verifiedProposal, _onVerifyFinished));
+        std::move(encodedData), _missedTxs, _verifiedProposal, _onVerifyFinished));
 }
 
 void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data,

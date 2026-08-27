@@ -70,8 +70,8 @@ bytes secp256k1EcdhImpl(
     }
 
     bytes sharedSecret(32, 0);
-    if (secp256k1_ecdh(secp256k1EcdhContext(), sharedSecret.data(), &publicKey, _privateKey.data(),
-            _hashFunction, nullptr) != 1)
+    if (secp256k1_ecdh(secp256k1EcdhContext(), sharedSecret.data(), &publicKey,
+            _privateKey.data(), _hashFunction, nullptr) != 1)
     {
         throw std::runtime_error("secp256k1Ecdh: ECDH computation failed");
     }

@@ -47,11 +47,11 @@ using CallbackFunc = std::function<void(
  */
 struct SendResult
 {
-    bcos::Error::Ptr error;                      // non-null on gateway send failure or timeout
-    bcos::crypto::NodeIDPtr nodeID;              // the node that sent the response
-    bcos::bytes payload;                         // owned copy of the response body
-    std::string uuid;                            // request uuid (echoed by the peer response)
-    std::function<void(bytesConstRef)> respond;  // optional follow-up response to the peer
+    bcos::Error::Ptr error;                     // non-null on gateway send failure or timeout
+    bcos::crypto::NodeIDPtr nodeID;             // the node that sent the response
+    bcos::bytes payload;                        // owned copy of the response body
+    std::string uuid;                           // request uuid (echoed by the peer response)
+    std::function<void(bytesConstRef)> respond; // optional follow-up response to the peer
 };
 
 /**
@@ -209,7 +209,8 @@ public:
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
         ReceiveMsgFunc _receiveMsgCallback) = 0;
 
-    virtual task::Task<void> broadcastMessage(uint16_t type, int moduleID,
+    virtual task::Task<void> broadcastMessage(
+        uint16_t type, int moduleID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) = 0;
 
     /**
@@ -285,9 +286,10 @@ public:
         int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload)
     {
         task::wait([](FrontServiceInterface::Ptr self, int _moduleID,
-                       bcos::crypto::NodeIDPtr _nodeID, bytesPointer _payload) -> task::Task<void> {
-            co_await self->sendMessageByNodeID(
-                _moduleID, std::move(_nodeID), ::ranges::views::single(bcos::ref(*_payload)), 0);
+                       bcos::crypto::NodeIDPtr _nodeID,
+                       bytesPointer _payload) -> task::Task<void> {
+            co_await self->sendMessageByNodeID(_moduleID, std::move(_nodeID),
+                ::ranges::views::single(bcos::ref(*_payload)), 0);
         }(shared_from_this(), moduleID, std::move(nodeID), std::move(payload)));
     }
 

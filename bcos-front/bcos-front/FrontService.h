@@ -68,7 +68,8 @@ public:
     void asyncSendResponse(const std::string& _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback) override;
 
-    task::Task<void> broadcastMessage(uint16_t type, int moduleID,
+    task::Task<void> broadcastMessage(
+        uint16_t type, int moduleID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override;
 
     /**

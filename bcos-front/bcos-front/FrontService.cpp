@@ -249,8 +249,8 @@ void FrontService::start()
     m_run = true;
 
     // try to getNodeIDs from gateway
-    auto self =
-        std::weak_ptr<FrontService>(std::static_pointer_cast<FrontService>(shared_from_this()));
+    auto self = std::weak_ptr<FrontService>(
+        std::static_pointer_cast<FrontService>(shared_from_this()));
     m_gatewayInterface->asyncGetGroupNodeInfo(m_groupID,
         [self](const Error::Ptr& _error, const bcos::gateway::GroupNodeInfo::Ptr& _groupNodeInfo) {
             if (_error)
@@ -389,7 +389,8 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
 std::string FrontService::registerCallback(
     bcos::crypto::NodeIDPtr _nodeID, uint32_t _timeout, CallbackFunc _callbackFunc)
 {
-    static thread_local auto uuid_gen = boost::uuids::basic_random_generator<std::random_device>();
+    static thread_local auto uuid_gen =
+        boost::uuids::basic_random_generator<std::random_device>();
     std::string uuid = boost::uuids::to_string(uuid_gen());
     if (!_callbackFunc)
     {
@@ -406,8 +407,8 @@ std::string FrontService::registerCallback(
             *m_ioService, std::chrono::milliseconds(_timeout));
 
         callback->timeoutHandler = timeoutHandler;
-        auto frontServiceWeakPtr =
-            std::weak_ptr<FrontService>(std::static_pointer_cast<FrontService>(shared_from_this()));
+        auto frontServiceWeakPtr = std::weak_ptr<FrontService>(
+            std::static_pointer_cast<FrontService>(shared_from_this()));
         // callback->startTime = utcSteadyTime();
         timeoutHandler->async_wait(
             [frontServiceWeakPtr, _nodeID, uuid](const boost::system::error_code& e) {
@@ -435,7 +436,8 @@ void FrontService::asyncSendResponse(const std::string& _id, int _moduleID,
     sendMessage(_moduleID, _nodeID, _id, _data, true, _receiveMsgCallback);
 }
 
-task::Task<void> FrontService::broadcastMessage(uint16_t type, int moduleID,
+task::Task<void> FrontService::broadcastMessage(
+    uint16_t type, int moduleID,
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads)
 {
     FrontMessage message;
@@ -480,18 +482,19 @@ void FrontService::asyncSendMessageByNodeIDByOwnedPayload(
     // launched coroutine -> the message body is sent as a view (zero-copy).
     enqueueSend([this, moduleID, nodeID = std::move(nodeID), payload = std::move(payload)]() {
         auto self = std::static_pointer_cast<FrontService>(shared_from_this());
-        task::wait([](FrontService::Ptr _self, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
-                       bytesPointer _payload) -> task::Task<void> {
-            // fire-and-forget owned-payload send: no module-level response is expected
-            auto result = co_await _self->sendMessageByNodeID(
-                _moduleID, _nodeID, ::ranges::views::single(bcos::ref(*_payload)), 0);
-            (void)result;
-        }(self, moduleID, nodeID, payload));
+        task::wait(
+            [](FrontService::Ptr _self, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+                bytesPointer _payload) -> task::Task<void> {
+                // fire-and-forget owned-payload send: no module-level response is expected
+                auto result = co_await _self->sendMessageByNodeID(_moduleID, _nodeID,
+                    ::ranges::views::single(bcos::ref(*_payload)), 0);
+                (void)result;
+            }(self, moduleID, nodeID, payload));
     });
 }
 
-bcos::task::Task<SendResult> FrontService::sendMessageByNodeID(int _moduleID,
-    bcos::crypto::NodeIDPtr _nodeID,
+bcos::task::Task<SendResult> FrontService::sendMessageByNodeID(
+    int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads, uint32_t _timeout)
 {
     // keep the service alive for the whole (possibly deferred) send
@@ -505,7 +508,7 @@ bcos::task::Task<SendResult> FrontService::sendMessageByNodeID(int _moduleID,
     std::string uuid = registerCallback(_nodeID, _timeout,
         (_timeout > 0) ?
             CallbackFunc([state](Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-                             bytesConstRef _data, const std::string& _uuid, ResponseFunc _resp) {
+                bytesConstRef _data, const std::string& _uuid, ResponseFunc _resp) {
                 SendResult result;
                 result.error = std::move(_error);
                 result.nodeID = std::move(_nodeID);
@@ -544,8 +547,8 @@ bcos::task::Task<SendResult> FrontService::sendMessageByNodeID(int _moduleID,
         // default (the TARS server echoes the request nodeID/seq in that case).
         SendResult result;
         result.error = (gatewayError && gatewayError->errorCode() != CommonError::SUCCESS) ?
-                           gatewayError :
-                           nullptr;
+            gatewayError :
+            nullptr;
         co_return result;
     }
     co_return co_await SendResponseAwaitable{std::move(state)};
@@ -719,8 +722,8 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
     {
         return;
     }
-    auto frontServiceWeakPtr =
-        std::weak_ptr<FrontService>(std::static_pointer_cast<FrontService>(shared_from_this()));
+    auto frontServiceWeakPtr = std::weak_ptr<FrontService>(
+        std::static_pointer_cast<FrontService>(shared_from_this()));
     auto respFunc = [frontServiceWeakPtr, _moduleID, _nodeID, _uuid](bytesConstRef _data) {
         auto frontService = frontServiceWeakPtr.lock();
         if (frontService)
@@ -876,13 +879,14 @@ void FrontService::sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
         auto error = co_await _gateway->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID,
             std::move(_nodeID),
             ::ranges::views::concat(::ranges::views::single(bcos::ref(std::as_const(*_hdr))),
-                ::ranges::views::single(bytesConstRef(_payload->data(), _payload->size()))));
+                ::ranges::views::single(
+                    bytesConstRef(_payload->data(), _payload->size()))));
         if (_receiveMsgCallback)
         {
             _receiveMsgCallback(std::move(error));
         }
     }(gateway, m_groupID, _moduleID, m_nodeID, std::move(_nodeID), hdr, payload,
-                                                           _receiveMsgCallback));
+        _receiveMsgCallback));
 }
 
 /**

@@ -380,7 +380,8 @@ void GatewayNodeManager::broadcastStatusSeq()
     // value message held by shared_ptr; the 4-byte seq payload is owned by it (zero-copy view
     // send). The p2p interface is passed as a coroutine parameter so it is copied into the frame
     // and stays alive for the whole (possibly deferred) send.
-    task::wait([](P2PInterface::Ptr _p2p, bcos::bytes _payload) mutable -> task::Task<void> {
+    task::wait([](P2PInterface::Ptr _p2p, bcos::bytes _payload) mutable
+                   -> task::Task<void> {
         auto message = std::make_shared<P2PMessageV2>();
         message->setPacketType(GatewayMessageType::SyncNodeSeq);
         message->setPayload(std::move(_payload));

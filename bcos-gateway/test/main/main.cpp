@@ -93,9 +93,9 @@ int main(int argc, const char** argv)
 
                         auto payload = bytesConstRef((bcos::byte*)randStr.data(), randStr.size());
 
-                        auto result = task::syncWait(
-                            frontService->sendMessageByNodeID(bcos::protocol::ModuleID::AMOP,
-                                nodeID, ::ranges::views::single(payload), 10000));
+                        auto result = task::syncWait(frontService->sendMessageByNodeID(
+                            bcos::protocol::ModuleID::AMOP, nodeID,
+                            ::ranges::views::single(payload), 10000));
 
                         if (result.error && (result.error->errorCode() != 0))
                         {

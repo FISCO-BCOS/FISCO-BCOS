@@ -18,19 +18,19 @@
  * @author: octopus
  * @date 2023-02-23
  */
-#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -55,8 +55,9 @@ public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
     FakeASIO()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
-        m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO")){};
-    virtual ~FakeASIO() noexcept override{};
+        m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"))
+    {};
+    virtual ~FakeASIO() noexcept override {};
 
     void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers,
         ReadWriteHandler handler)
@@ -545,8 +546,8 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     // The wire frame must actually be compressed: parse the header
     // [length:4][version:2][packetType:2][seq:4][ext:2] (P2PMessage::MESSAGE_HEADER_LENGTH = 14).
     BOOST_REQUIRE(received.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
-    uint16_t frameExt =
-        (static_cast<uint16_t>(received[12]) << 8) | static_cast<uint16_t>(received[13]);
+    uint16_t frameExt = (static_cast<uint16_t>(received[12]) << 8) |
+                        static_cast<uint16_t>(received[13]);
     BOOST_CHECK(frameExt & bcos::protocol::MessageExtFieldFlag::COMPRESS);
 }
 

@@ -109,8 +109,8 @@ BOOST_AUTO_TEST_CASE(BroadcastDoesNotHoldSessionsLockWhileSending)
     service->arm();
 
     auto message = std::make_shared<P2PMessage>();
-    task::wait([](std::shared_ptr<BroadcastProbeService> _service,
-                   P2PMessage::Ptr _message) -> task::Task<void> {
+    task::wait([](std::shared_ptr<BroadcastProbeService> _service, P2PMessage::Ptr _message)
+                   -> task::Task<void> {
         co_await _service->broadcastMessageToAll(
             _message, ::ranges::views::single(_message->payload()), Options{});
     }(service, message));
