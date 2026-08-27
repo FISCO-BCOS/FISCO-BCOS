@@ -26,8 +26,10 @@
 //
 // Lives in bcos-framework (not in the executor) because the admission layer must not link
 // ethereum-executor: EthereumTransition.h drags in EthereumHost.h / EthereumState.h / evmone,
-// and neither txpool nor rpc can reach evmone today. Dependencies here are limited to the evmc
-// and intx headers, both header-only.
+// and neither txpool nor rpc can reach evmone today. The only dependency here is the evmc
+// header, which is header-only. Balance arithmetic that must not wrap uses bcos::u512 from
+// bcos-utilities, NOT intx -- bcos-framework is the core interface library and must not pull
+// intx into every module that depends on it.
 
 #pragma once
 
@@ -38,7 +40,6 @@
 #include <array>
 #include <cstdint>
 #include <evmc/evmc.hpp>
-#include <intx/intx.hpp>
 #include <optional>
 #include <span>
 
@@ -50,19 +51,6 @@ constexpr auto MAX_TX_GAS_LIMIT = 0x1000000;  // 2**24
 
 /// EIP-7702: intrinsic cost charged per authorization-list entry.
 inline constexpr int64_t AUTHORIZATION_EMPTY_ACCOUNT_COST = 25000;
-
-/// Convert bcos::u256 to intx::uint256 (big-endian byte copy into a stack buffer; no string
-/// round-trip, no heap allocation). Single canonical home of this conversion.
-///
-/// Callers widen before arithmetic on purpose: bcos::u256 carries
-/// boost::multiprecision::unchecked, so `gasLimit * gasPrice + value` wraps silently on it,
-/// while intx::umul yields a 512-bit result that cannot.
-inline intx::uint256 toIntxU256(bcos::u256 const& val)
-{
-    std::array<bcos::byte, 32> be{};
-    bcos::toBigEndian(val, be);  // writes 32 big-endian bytes, no allocation.
-    return intx::be::unsafe::load<intx::uint256>(be.data());
-}
 
 /// Resolve the recipient of a bcos Transaction (Ethereum addresses are big-endian and
 /// right-aligned). std::nullopt means contract creation -- returned for an empty `to` or a

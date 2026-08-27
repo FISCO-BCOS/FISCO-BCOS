@@ -306,13 +306,13 @@ BOOST_AUTO_TEST_CASE(feeArithmeticDoesNotWrapAt256Bits)
     const auto gasPrice = std::numeric_limits<u256>::max();
 
     const u256 wrapped = u256(gasLimit) * gasPrice;
-    const auto wide = intx::umul(intx::uint256{gasLimit}, protocol::toIntxU256(gasPrice));
+    const u512 wide = u512{gasLimit} * u512{gasPrice};
 
-    BOOST_REQUIRE_MESSAGE(intx::uint512{protocol::toIntxU256(wrapped)} < wide,
-        "the 256-bit product must be strictly smaller than the true one");
+    BOOST_REQUIRE_MESSAGE(
+        u512{wrapped} < wide, "the 256-bit product must be strictly smaller than the true one");
 
     // A balance that clears the wrapped figure does not clear the real one.
-    const auto balance = intx::uint512{protocol::toIntxU256(wrapped)} + 1;
+    const u512 balance = u512{wrapped} + 1;
     BOOST_CHECK(balance < wide);
 }
 

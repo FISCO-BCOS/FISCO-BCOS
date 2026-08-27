@@ -41,10 +41,19 @@
 namespace bcos::executor_v1::eth::evm
 {
 
-// Defined in bcos-framework/protocol/TxGasModel.h so the admission layer can widen balances
-// with the same conversion the executor uses, without linking ethereum-executor. Re-imported
-// here so the ~20 existing `evm::toIntxU256(...)` call sites are unaffected.
-using bcos::protocol::toIntxU256;
+/// Convert bcos::u256 to intx::uint256 (big-endian byte copy into a stack
+/// buffer; no string round-trip, no heap allocation). Single canonical home of
+/// this conversion.
+///
+/// Stays in ethereum-executor, which already depends on intx. The admission
+/// layer deliberately does NOT use it: bcos::u512 (bcos-utilities/Common.h)
+/// widens balances there, so bcos-framework needs no intx dependency.
+inline intx::uint256 toIntxU256(bcos::u256 const& val)
+{
+    std::array<bcos::byte, 32> be{};
+    bcos::toBigEndian(val, be);  // writes 32 big-endian bytes, no allocation.
+    return intx::be::unsafe::load<intx::uint256>(be.data());
+}
 
 /// Convert intx::uint256 to bcos::u256 (big-endian byte copy; no string
 /// round-trip).
