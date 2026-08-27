@@ -32,12 +32,12 @@ class FramingCipher
 public:
     struct KeyMaterial
     {
-        bcos::bytes ephemeralSharedSecret;         // 32B raw ECDH x-coordinate
-        bool isInitiator;                          // true on the dialing side
-        bcos::bytes initiatorNonce;                // 32B
-        bcos::bytes recipientNonce;                // 32B
-        bcos::bytes initiatorFirstMessageData;     // full auth wire bytes
-        bcos::bytes recipientFirstMessageData;     // full ack wire bytes
+        bcos::bytes ephemeralSharedSecret;      // 32B raw ECDH x-coordinate
+        bool isInitiator;                       // true on the dialing side
+        bcos::bytes initiatorNonce;             // 32B
+        bcos::bytes recipientNonce;             // 32B
+        bcos::bytes initiatorFirstMessageData;  // full auth wire bytes
+        bcos::bytes recipientFirstMessageData;  // full ack wire bytes
     };
 
     explicit FramingCipher(KeyMaterial const& _keyMaterial);
@@ -45,8 +45,10 @@ public:
     FramingCipher(FramingCipher&&) noexcept;
     FramingCipher& operator=(FramingCipher&&) noexcept;
 
-    // Derive aes-secret and mac-secret from the handshake key material
-    // (exposed for tests; validated against geth's test vectors).
+    // Derive aes-secret and mac-secret from the handshake key material.
+    // Exposed for tests: EciesTest covers the ECIES scheme against independent
+    // vectors (incl. geth's TestHandshakeForwardCompatibility inputs); the
+    // deriveSecrets EIP-8 vector check ships with the handshake-layer tests.
     static void deriveSecrets(
         KeyMaterial const& _keyMaterial, bcos::bytes& _aesSecret, bcos::bytes& _macSecret);
 

@@ -21,6 +21,7 @@
 
 #include "Crypto.h"
 #include <bcos-crypto/encrypt/AesCtrCipher.h>
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <stdexcept>
 
@@ -80,16 +81,23 @@ class FramingCipher::Impl
 public:
     Impl(KeyMaterial const& _keyMaterial, bcos::bytes _aesSecret, bcos::bytes _macSecret)
       : m_macSecret(std::move(_macSecret)),
-        m_egressDataCipher(bytesConstRef(_aesSecret.data(), _aesSecret.size()),
-            zeroIv(), bcos::crypto::AesCtrCipher::Direction::Encrypt),
-        m_ingressDataCipher(bytesConstRef(_aesSecret.data(), _aesSecret.size()),
-            zeroIv(), bcos::crypto::AesCtrCipher::Direction::Decrypt)
+        m_egressDataCipher(bytesConstRef(_aesSecret.data(), _aesSecret.size()), zeroIv(),
+            bcos::crypto::AesCtrCipher::Direction::Encrypt),
+        m_ingressDataCipher(bytesConstRef(_aesSecret.data(), _aesSecret.size()), zeroIv(),
+            bcos::crypto::AesCtrCipher::Direction::Decrypt)
     {
         initMacHashers(_keyMaterial);
     }
 
     bcos::bytes encryptFrame(bcos::bytes _frameData)
     {
+        // The RLPx wire format encodes the frame size in 3 bytes (24 bits). A
+        // frame of 2^24 bytes or more would silently truncate mod 2^24 and
+        // corrupt the stream — fail closed like geth (errPlainMessageTooLarge).
+        if (_frameData.size() > 0xFFFFFF)
+        {
+            throw std::runtime_error("FramingCipher: frame too large (max 16MB)");
+        }
         bcos::bytes headerData(kZeroHeader.begin(), kZeroHeader.end());
 
         bcos::bytes header;
@@ -119,8 +127,9 @@ public:
     size_t decryptHeader(bytesConstRef _headerCipherText, bytesConstRef _headerMac)
     {
         auto expectedMac = headerMac(m_ingressMacHasher, _headerCipherText);
+        // Constant-time MAC comparison (mirrors geth's hmac.Equal).
         if (expectedMac.size() != _headerMac.size() ||
-            !std::equal(expectedMac.begin(), expectedMac.end(), _headerMac.begin()))
+            CRYPTO_memcmp(expectedMac.data(), _headerMac.data(), expectedMac.size()) != 0)
         {
             throw std::runtime_error("FramingCipher: invalid header MAC");
         }
@@ -132,8 +141,9 @@ public:
         bytesConstRef _frameCipherText, bytesConstRef _frameMac, size_t _frameSize)
     {
         auto expectedMac = frameMac(m_ingressMacHasher, _frameCipherText);
+        // Constant-time MAC comparison (mirrors geth's hmac.Equal).
         if (expectedMac.size() != _frameMac.size() ||
-            !std::equal(expectedMac.begin(), expectedMac.end(), _frameMac.begin()))
+            CRYPTO_memcmp(expectedMac.data(), _frameMac.data(), expectedMac.size()) != 0)
         {
             throw std::runtime_error("FramingCipher: invalid frame MAC");
         }
@@ -202,18 +212,18 @@ private:
 
 namespace
 {
-void makeSecrets(
-    FramingCipher::KeyMaterial const& _keyMaterial, bcos::bytes& _aesSecret, bcos::bytes& _macSecret)
+void makeSecrets(FramingCipher::KeyMaterial const& _keyMaterial, bcos::bytes& _aesSecret,
+    bcos::bytes& _macSecret)
 {
     // aes-secret = keccak256(ecdhe || keccak256(recipientNonce || initiatorNonce))
     // mac-secret = keccak256(ecdhe || aes-secret)
     auto nonceHash = keccak256(ref(_keyMaterial.recipientNonce), ref(_keyMaterial.initiatorNonce));
-    auto sharedSecret =
-        keccak256(ref(_keyMaterial.ephemeralSharedSecret), bytesConstRef(nonceHash.data(), nonceHash.size()));
-    _aesSecret = keccak256(
-        ref(_keyMaterial.ephemeralSharedSecret), bytesConstRef(sharedSecret.data(), sharedSecret.size()));
-    _macSecret = keccak256(
-        ref(_keyMaterial.ephemeralSharedSecret), bytesConstRef(_aesSecret.data(), _aesSecret.size()));
+    auto sharedSecret = keccak256(
+        ref(_keyMaterial.ephemeralSharedSecret), bytesConstRef(nonceHash.data(), nonceHash.size()));
+    _aesSecret = keccak256(ref(_keyMaterial.ephemeralSharedSecret),
+        bytesConstRef(sharedSecret.data(), sharedSecret.size()));
+    _macSecret = keccak256(ref(_keyMaterial.ephemeralSharedSecret),
+        bytesConstRef(_aesSecret.data(), _aesSecret.size()));
 }
 }  // namespace
 
@@ -269,8 +279,7 @@ size_t FramingCipher::decryptHeader(bytesConstRef _data)
     {
         throw std::runtime_error("FramingCipher: header data too short");
     }
-    return m_impl->decryptHeader(
-        bytesConstRef(_data.data(), kAesBlockSize),
+    return m_impl->decryptHeader(bytesConstRef(_data.data(), kAesBlockSize),
         bytesConstRef(_data.data() + kAesBlockSize, kAesBlockSize));
 }
 
@@ -286,8 +295,7 @@ bcos::bytes FramingCipher::decryptFrame(bytesConstRef _data, size_t _headerFrame
     {
         throw std::runtime_error("FramingCipher: frame data too short");
     }
-    return m_impl->decryptFrame(
-        bytesConstRef(_data.data(), _data.size() - kAesBlockSize),
+    return m_impl->decryptFrame(bytesConstRef(_data.data(), _data.size() - kAesBlockSize),
         bytesConstRef(_data.data() + _data.size() - kAesBlockSize, kAesBlockSize),
         _headerFrameSize);
 }

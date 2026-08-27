@@ -27,6 +27,7 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Ecdh.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <cstring>
 #include <stdexcept>
@@ -82,7 +83,10 @@ struct Sha3Hasher::Impl
 };
 
 Sha3Hasher::Sha3Hasher() : m_impl(new Impl()) {}
-Sha3Hasher::~Sha3Hasher() { delete m_impl; }
+Sha3Hasher::~Sha3Hasher()
+{
+    delete m_impl;
+}
 
 void Sha3Hasher::update(bytesConstRef _data)
 {
@@ -141,8 +145,8 @@ void xorBytes(bcos::bytes& _a, bytesConstRef _b)
 // ---------------------------------------------------------------------------
 namespace
 {
-constexpr size_t kEciesKeySize = 16;   // AES-128
-constexpr size_t kEciesMacSize = 32;   // HMAC-SHA256
+constexpr size_t kEciesKeySize = 16;     // AES-128
+constexpr size_t kEciesMacSize = 32;     // HMAC-SHA256
 constexpr size_t kEciesPubKeySize = 65;  // 0x04-prefixed uncompressed point
 
 // NIST SP 800-56 Concatenation KDF (one SHA-256 iteration yields 32 bytes).
@@ -180,9 +184,9 @@ EciesCipher::Message EciesCipher::encryptMessage(
 
     // MAC key = sha256(K[16:32]) — matches geth's deriveKeys (Km = sha256(Km_raw)).
     auto macKeyHash = bcos::crypto::sha256Hash(macKey).asBytes();
-    bcos::bytes mac = bcos::crypto::hmacSha256(
-        bytesConstRef(macKeyHash.data(), macKeyHash.size()), bytesConstRef(iv.data(), iv.size()),
-        bytesConstRef(cipherText.data(), cipherText.size()), _macExtraData);
+    bcos::bytes mac = bcos::crypto::hmacSha256(bytesConstRef(macKeyHash.data(), macKeyHash.size()),
+        bytesConstRef(iv.data(), iv.size()), bytesConstRef(cipherText.data(), cipherText.size()),
+        _macExtraData);
 
     return {ephemeralKeyPair.publicKey(), std::move(iv), std::move(cipherText), std::move(mac)};
 }
@@ -198,25 +202,27 @@ bcos::bytes EciesCipher::decryptMessage(
     bytesConstRef macKey(sharedSecret.data() + kEciesKeySize, kEciesKeySize);
 
     auto macKeyHash = bcos::crypto::sha256Hash(macKey).asBytes();
-    bcos::bytes mac = bcos::crypto::hmacSha256(
-        bytesConstRef(macKeyHash.data(), macKeyHash.size()),
+    bcos::bytes mac = bcos::crypto::hmacSha256(bytesConstRef(macKeyHash.data(), macKeyHash.size()),
         bytesConstRef(_message.iv.data(), _message.iv.size()),
         bytesConstRef(_message.cipherText.data(), _message.cipherText.size()), _macExtraData);
-    if (mac != _message.mac)
+    // Constant-time MAC comparison (geth uses hmac.Equal here): a byte-by-byte
+    // short-circuit on a network-facing ECIES MAC is a classic timing oracle.
+    if (mac.size() != _message.mac.size() ||
+        CRYPTO_memcmp(mac.data(), _message.mac.data(), mac.size()) != 0)
     {
         throw std::runtime_error("EciesCipher: invalid MAC");
     }
 
-    return bcos::crypto::aesCtrCrypt(bytesConstRef(_message.cipherText.data(),
-                                         _message.cipherText.size()),
-        aesKey, bytesConstRef(_message.iv.data(), _message.iv.size()));
+    return bcos::crypto::aesCtrCrypt(
+        bytesConstRef(_message.cipherText.data(), _message.cipherText.size()), aesKey,
+        bytesConstRef(_message.iv.data(), _message.iv.size()));
 }
 
 bcos::bytes EciesCipher::serializeMessage(Message const& _message)
 {
     bcos::bytes data;
-    data.reserve(kEciesPubKeySize + _message.iv.size() + _message.cipherText.size() +
-                 _message.mac.size());
+    data.reserve(
+        kEciesPubKeySize + _message.iv.size() + _message.cipherText.size() + _message.mac.size());
     // 0x04-prefixed uncompressed ephemeral public key.
     data.push_back(0x04);
     data.insert(data.end(), _message.ephemeralPublicKey.begin(), _message.ephemeralPublicKey.end());
@@ -243,10 +249,12 @@ EciesCipher::Message EciesCipher::deserializeMessage(bytesConstRef _messageData)
 
     Message message;
     message.ephemeralPublicKey.assign(_messageData.data() + 1, _messageData.data() + 1 + 64);
-    message.iv.assign(_messageData.data() + kEciesPubKeySize, _messageData.data() + kEciesPubKeySize + ivSize);
-    message.cipherText.assign(
-        _messageData.data() + kEciesPubKeySize + ivSize, _messageData.data() + kEciesPubKeySize + ivSize + cipherTextSize);
-    message.mac.assign(_messageData.data() + _messageData.size() - macSize, _messageData.data() + _messageData.size());
+    message.iv.assign(
+        _messageData.data() + kEciesPubKeySize, _messageData.data() + kEciesPubKeySize + ivSize);
+    message.cipherText.assign(_messageData.data() + kEciesPubKeySize + ivSize,
+        _messageData.data() + kEciesPubKeySize + ivSize + cipherTextSize);
+    message.mac.assign(_messageData.data() + _messageData.size() - macSize,
+        _messageData.data() + _messageData.size());
     return message;
 }
 
