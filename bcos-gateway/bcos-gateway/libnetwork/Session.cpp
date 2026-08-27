@@ -428,7 +428,8 @@ void Session::drop(DisconnectReason _reason)
                         try
                         {
                             callback->callback(
-                                NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
+                                NetworkException(
+                                    P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
                                 Message::Ptr());
                         }
                         catch (std::exception const& e)
@@ -1084,7 +1085,13 @@ task::Task<Message::Ptr> fastSendMessageWithResponse(
             }
 
             ::send(*session, ::ranges::views::all(m_view.get()),
-                [this, gate, seq](boost::system::error_code errorCode) {
+                // capture the manager by reference up front: after writeDone is stored, a
+                // concurrent event may resume and destroy this frame before the claim below
+                // runs, so the claim path must not load through `this` (the Host-owned manager
+                // outlives every session). Frame access is safe again once the claim is won —
+                // winning the manager pop excludes every event channel.
+                [this, gate, seq, &manager = m_sessionCallbackManager.get()](
+                    boost::system::error_code errorCode) {
                     std::coroutine_handle<> toResume;
                     bool claimOnWriteError = false;
                     {
@@ -1105,7 +1112,7 @@ task::Task<Message::Ptr> fastSendMessageWithResponse(
                         // arrive, so claim the callback back (cancelling its timer) and fail the
                         // waiter now — otherwise the registered handler (which points into this
                         // frame) would dangle after the frame unwinds.
-                        auto claimed = m_sessionCallbackManager.get().getCallback(seq, true);
+                        auto claimed = manager.getCallback(seq, true);
                         if (claimed)
                         {
                             if (auto session = m_self.lock())
