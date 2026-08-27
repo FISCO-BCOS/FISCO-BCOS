@@ -19,6 +19,7 @@ target_include_directories(opstack-executor PUBLIC
 # TU (typed catch was measured to bind even with bcos-crypto on the link line).
 target_link_libraries(opstack-executor PUBLIC
     bcos-evm-opstack ethereum-executor bcos-framework bcos-protocol ledger rlp-protocol
+    transaction-scheduler
     evmone::evmone intx::intx TBB::tbb)
 set_target_properties(opstack-executor PROPERTIES UNITY_BUILD OFF)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
