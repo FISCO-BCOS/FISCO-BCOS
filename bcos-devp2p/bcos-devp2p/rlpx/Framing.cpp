@@ -295,9 +295,12 @@ bcos::bytes FramingCipher::decryptFrame(bytesConstRef _data, size_t _headerFrame
     {
         throw std::runtime_error("FramingCipher: frame data too short");
     }
-    return m_impl->decryptFrame(bytesConstRef(_data.data(), _data.size() - kAesBlockSize),
-        bytesConstRef(_data.data() + _data.size() - kAesBlockSize, kAesBlockSize),
-        _headerFrameSize);
+    // Slice by the computed frame size, not the caller buffer length: a socket
+    // read buffer may hold coalesced bytes of the next frame, and MAC-ing them
+    // would desynchronize the running ingress MAC hasher.
+    auto const paddedSize = bcos::crypto::aesRoundUpToBlockSize(_headerFrameSize);
+    return m_impl->decryptFrame(bytesConstRef(_data.data(), paddedSize),
+        bytesConstRef(_data.data() + paddedSize, kAesBlockSize), _headerFrameSize);
 }
 
 }  // namespace bcos::devp2p::rlpx

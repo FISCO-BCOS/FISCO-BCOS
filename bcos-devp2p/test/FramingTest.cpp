@@ -20,6 +20,9 @@
 #include <bcos-devp2p/rlpx/Framing.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+#include <memory>
+#include <string>
+#include <vector>
 
 using namespace bcos;
 using namespace bcos::devp2p::rlpx;
@@ -110,7 +113,10 @@ BOOST_AUTO_TEST_CASE(tamperedHeaderMacThrows)
 
     auto wire = initiator.encrypt(fromHex("00112233445566778899aabbccddeeff"));
     wire[20] ^= 0x01;  // inside the 16B header MAC (bytes 16..31)
-    BOOST_CHECK_THROW(recipient.decrypt(wire), std::runtime_error);
+    BOOST_CHECK_EXCEPTION(
+        recipient.decrypt(wire), std::runtime_error, [](std::runtime_error const& error) {
+            return std::string(error.what()).find("invalid header MAC") != std::string::npos;
+        });
 }
 
 // A tampered frame MAC must fail the frame authentication.
@@ -121,7 +127,10 @@ BOOST_AUTO_TEST_CASE(tamperedFrameMacThrows)
 
     auto wire = initiator.encrypt(fromHex("00112233445566778899aabbccddeeff"));
     wire.back() ^= 0x01;  // last byte of the trailing frame MAC
-    BOOST_CHECK_THROW(recipient.decrypt(wire), std::runtime_error);
+    BOOST_CHECK_EXCEPTION(
+        recipient.decrypt(wire), std::runtime_error, [](std::runtime_error const& error) {
+            return std::string(error.what()).find("invalid frame MAC") != std::string::npos;
+        });
 }
 
 // A tampered frame ciphertext must fail the frame MAC check.
@@ -132,7 +141,44 @@ BOOST_AUTO_TEST_CASE(tamperedFrameCipherTextThrows)
 
     auto wire = initiator.encrypt(fromHex("00112233445566778899aabbccddeeff"));
     wire[FramingCipher::headerSize()] ^= 0x01;  // first byte of the frame ciphertext
-    BOOST_CHECK_THROW(recipient.decrypt(wire), std::runtime_error);
+    BOOST_CHECK_EXCEPTION(
+        recipient.decrypt(wire), std::runtime_error, [](std::runtime_error const& error) {
+            return std::string(error.what()).find("invalid frame MAC") != std::string::npos;
+        });
+}
+
+// A read buffer holding coalesced bytes of the next frame must still decrypt
+// the current frame, and the leftover frame must decrypt afterwards (the
+// running ingress MAC state stays in sync).
+BOOST_AUTO_TEST_CASE(trailingExtraBytesIgnored)
+{
+    CipherEnd initiator(true);
+    CipherEnd recipient(false);
+
+    auto payload = fromHex("00112233445566778899aabbccddeeff");
+    auto nextPayload = fromHex("deadbeefcafe");
+    auto wire = initiator.encrypt(payload);
+    auto nextWire = initiator.encrypt(nextPayload);
+    wire.insert(wire.end(), nextWire.begin(), nextWire.end());
+
+    auto framePayloadSize = recipient.cipher->decryptHeader(ref(wire));
+    auto wireFrameSize = FramingCipher::frameSize(framePayloadSize);
+    BOOST_REQUIRE(wire.size() >= FramingCipher::headerSize() + wireFrameSize + nextWire.size());
+    auto decrypted =
+        recipient.cipher->decryptFrame(bytesConstRef(wire.data() + FramingCipher::headerSize(),
+                                           wire.size() - FramingCipher::headerSize()),
+            framePayloadSize);
+    BOOST_CHECK(decrypted == payload);
+
+    auto nextFramePayloadSize = recipient.cipher->decryptHeader(
+        bytesConstRef(wire.data() + FramingCipher::headerSize() + wireFrameSize, nextWire.size()));
+    auto nextWireFrameSize = FramingCipher::frameSize(nextFramePayloadSize);
+    auto nextDecrypted = recipient.cipher->decryptFrame(
+        bytesConstRef(
+            wire.data() + FramingCipher::headerSize() + wireFrameSize + FramingCipher::headerSize(),
+            nextWireFrameSize),
+        nextFramePayloadSize);
+    BOOST_CHECK(nextDecrypted == nextPayload);
 }
 
 // Frames over the 24-bit size limit must be rejected, not silently truncated.
@@ -140,7 +186,10 @@ BOOST_AUTO_TEST_CASE(oversizedFrameThrows)
 {
     CipherEnd initiator(true);
     bcos::bytes oversized(0x1000000, 0);  // 2^24 bytes
-    BOOST_CHECK_THROW(initiator.encrypt(oversized), std::runtime_error);
+    BOOST_CHECK_EXCEPTION(initiator.cipher->encryptFrame(std::move(oversized)), std::runtime_error,
+        [](std::runtime_error const& error) {
+            return std::string(error.what()).find("frame too large") != std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_SUITE_END()
