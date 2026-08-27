@@ -19,6 +19,7 @@
  */
 
 #include "bcos-rlp-protocol/Web3Transaction.h"
+#include "bcos-rlp-protocol/Web3TxEnvelope.h"  // canonical scalar walkers (#5496 AG-a)
 #include "bcos-rlp-protocol/Web3TxHandler.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -249,6 +250,10 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) n
 {
     // Each authorization entry is itself an RLP list:
     // [chain_id, address, nonce, y_parity, r, s]
+    // Scalars go through the canonical integer / strict yParity walkers (#5496 finding AG-a,
+    // closing the N/M sweep gap on this tuple): the authority hash is later re-encoded from
+    // these values, so a non-minimal spelling must not round-trip into a different
+    // authorization identity than strict peers derive.
     auto&& [error, header] = decodeHeader(in);
     if (error != nullptr)
     {
@@ -260,24 +265,31 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) n
     }
     const uint64_t leftover{in.size() - header.payloadLength};
     u256 chainId = 0;
-    if (auto e = decodeItems(in, chainId, out.address); e != nullptr)
+    if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); e != nullptr)
+    {
+        return e;
+    }
+    if (auto e = decode(in, out.address); e != nullptr)
     {
         return e;
     }
     uint64_t nonce = 0;
-    if (auto e = decode(in, nonce); e != nullptr)
+    if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, nonce); e != nullptr)
     {
         return e;
     }
-    if (auto e = decode(in, out.yParity); e != nullptr)
+    uint64_t yParity = 0;
+    if (auto e = bcos::rlp::protocol::decodeCanonicalYParity(in, yParity); e != nullptr)
+    {
+        // Strict whole-item forms only (0x80/0x01) — an auth entry never carries the legacy
+        // wide-v spelling.
+        return e;
+    }
+    if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.r); e != nullptr)
     {
         return e;
     }
-    if (auto e = decode(in, out.r); e != nullptr)
-    {
-        return e;
-    }
-    if (auto e = decode(in, out.s); e != nullptr)
+    if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.s); e != nullptr)
     {
         return e;
     }
@@ -288,6 +300,7 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) n
     }
     out.chainId = chainId;
     out.nonce = nonce;
+    out.yParity = static_cast<uint8_t>(yParity);
     return nullptr;
 }
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept

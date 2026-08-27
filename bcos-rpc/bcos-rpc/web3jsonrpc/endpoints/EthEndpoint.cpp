@@ -1349,26 +1349,16 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         --remaining;
         if (!co_await simulateAtGasLimit(bounded, estimate, blockBaseFee))
         {
-            auto lowerBound = estimate;  // known-bad
             // op-geth starts the upward search at gasUsed*2 and doubles until viable
             // (eth/api.go DoEstimateGas); the 30M first-run limit is only the known-good
             // ceiling. Starting at gasUsed*2 instead of 30M shrinks the search range from
             // 30M to ~gasUsed: typical estimates converge to the exact limit within the
             // shared simulation budget instead of stopping at the cap with a residual.
-            // Bounds clamp (#5496 finding P): upperBound must never sit below lowerBound.
-            // When an explicit request gas above kRpcGasCap was honored by run #1, the
-            // proven-viable anchor is that FULL limit, not its capped projection — seeding
-            // from effectiveFirstRunLimit alone inverted these bounds and the unsigned
-            // width test wrapped.
-            auto upperBound = std::max(effectiveFirstRunLimit, firstRunLimit);
-            if (upperBound < lowerBound) [[unlikely]]
-            {
-                // Defensive floor: only reachable if run#1's consumed gas exceeded even the
-                // uncapped request limit (charge-reporting drift). Clamp to keep every
-                // subtraction below non-negative; the loops then no-op and C is returned
-                // with its failure already surfaced as the estimator's honest answer.
-                upperBound = lowerBound;
-            }
+            // Bounds initializer is pure and unit-tested (#5496 finding P / AJ).
+            auto searchBounds =
+                bcos::rpc::estimateSearchBounds(gasUsed, effectiveFirstRunLimit, firstRunLimit);
+            auto& lowerBound = searchBounds.lowerBound;
+            auto& upperBound = searchBounds.upperBound;
             auto candidate = std::max(gasUsed * 2, lowerBound + 1);
             while (candidate < upperBound && remaining > 0)
             {

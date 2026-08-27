@@ -100,4 +100,31 @@ inline std::string_view toView(const Json::Value& value)
     std::string_view view(begin, end - begin);
     return view;
 }
+
+/// Pure initializer for the eth_estimateGas upward-search interval (#5496 finding P,
+/// regression-tested in EthEstimateGasBudgetTest). Given the first-run consumption (known
+/// bad — its re-simulation failed), the estimator's DoS ceiling, and the limit run #1
+/// actually executed at (an explicit request gas passes through uncapped), returns a
+/// well-ordered [lowerBound, upperBound] pair. The ordering invariant matters: seeding the
+/// ceiling from min(X, cap) alone while an X above cap was honored inverted the bounds and
+/// wrapped the unsigned width test.
+struct EstimateSearchBounds
+{
+    u256 lowerBound;
+    u256 upperBound;
+};
+inline EstimateSearchBounds estimateSearchBounds(
+    const u256& gasUsed, const u256& searchCeiling, const u256& firstRunLimit)
+{
+    EstimateSearchBounds bounds{.lowerBound = gasUsed,          // known-bad
+        .upperBound = std::max(searchCeiling, firstRunLimit)};  // proven-viable anchor
+    if (bounds.upperBound < bounds.lowerBound) [[unlikely]]
+    {
+        // Defensive floor: only reachable if the reported consumption exceeded even the
+        // uncapped request limit (charge-reporting drift). Clamp so every width subtraction
+        // below stays non-negative; the loops then no-op.
+        bounds.upperBound = bounds.lowerBound;
+    }
+    return bounds;
+}
 }  // namespace bcos::rpc

@@ -1550,6 +1550,28 @@ BOOST_AUTO_TEST_CASE(classifyWeb3EnvelopeChainIdKinds)
         auto const c = envelope::classifyWeb3EnvelopeChainId(bcos::ref(legacyFull({0x25})));
         BOOST_CHECK(c.kind == Kind::Protected && c.chainId == 1u);  // 37 -> chainId 1
     }
+
+    // (AI) Unprotected fixtures — the exemption kind previously had ZERO explicit assertions,
+    // so a regression that mis-sorted Homestead forms into Malformed would have flipped the
+    // admission gates silently. Both legal unprotected spellings must classify Unprotected.
+    {
+        bcos::bytes items;
+        for (int i = 0; i < 6; ++i)
+        {
+            rlp::encode(items, static_cast<uint64_t>(i));  // nonce..data: exactly 6 fields
+        }
+        bcos::bytes env;
+        rlp::encodeHeader(env, {.isList = true, .payloadLength = items.size()});
+        env.insert(env.end(), items.begin(), items.end());
+        BOOST_CHECK(
+            envelope::classifyWeb3EnvelopeChainId(bcos::ref(env)).kind == Kind::Unprotected);
+    }
+    {
+        // Full legacy envelope with v=27 (parity 0): exempt pre-EIP-155 form.
+        auto const c = envelope::classifyWeb3EnvelopeChainId(bcos::ref(legacyFull({0x1b})));
+        BOOST_CHECK(c.kind == Kind::Unprotected);  // v=27 => Unprotected, no chainId binding
+        BOOST_CHECK(envelope::toString(c.kind) == "Unprotected");
+    }
 }
 
 BOOST_AUTO_TEST_CASE(decodeCanonicalRlpUintAcceptsOnlyMinimalEncodings)

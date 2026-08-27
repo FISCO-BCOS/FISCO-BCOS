@@ -51,13 +51,14 @@ template <typename T>
         return error;
     }
     bcos::bytes encoded;
-    (void)encoded;
     bcos::codec::rlp::encode(encoded, to);
     if (encoded.size() != static_cast<size_t>(from.data() - start) ||
         std::memcmp(start, encoded.data(), encoded.size()) != 0)
     {
+        // NonCanonicalSize, not UnexpectedLength: the payload is in-range but spelled
+        // non-minimally (#5496 finding AN/N family).
         return BCOS_ERROR_UNIQUE_PTR(
-            bcos::codec::rlp::DecodingError::UnexpectedLength, "non-canonical RLP integer");
+            bcos::codec::rlp::DecodingError::NonCanonicalSize, "non-canonical RLP integer");
     }
     return nullptr;
 }

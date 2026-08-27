@@ -492,29 +492,18 @@ namespace engine = bcos::evm::engine;
     auto const classified = protocol::classifyWeb3EnvelopeChainId(envelope);
     if (classified.kind == protocol::Web3EnvelopeChainIdKind::Malformed)
     {
-        // 0x7E deposits are typed-looking (type byte < 0x80) but carry no chainId: field 0 is
-        // sourceHash, which the classifier reports as Malformed. The skip is unconditional —
-        // field 0 is never a chainId on a deposit, so deleting this branch fails the pinned
-        // deposit gate test.
-        if (!envelope.empty() &&
-            envelope[0] == static_cast<uint8_t>(bcos::evm::opstack::kDepositTxType))
-        {
-            return std::nullopt;
-        }
         if (protocol::isTypedWeb3Envelope(envelope))
         {
             return "typed tx envelope is missing a parseable chainId";
         }
         return "legacy tx envelope has a malformed chainId/v field";
     }
-    if (classified.kind == protocol::Web3EnvelopeChainIdKind::Deposit)
-    {
-        // Deposits are dispatched to executeDeposit before any chainId gate, so reaching here
-        // means a chainId-binding context received a structurally chainId-less envelope —
-        // fail closed instead of silently exempting (same disposition the old
-        // Malformed-folding produced for 0x7E).
-        return "deposit envelope carries no chainId to bind against the node chainId";
-    }
+    // Deposit envelopes (0x7E) classify as their own kind and deliberately SKIP this gate:
+    // dispatch to executeDeposit happens before any chainId binding applies, the rollup
+    // pipeline is their only legitimate source, and public admission (pool validateChainId,
+    // sendRawTransaction) already rejects them. OpEnvelopeMirrorTest::DepositEnvelopeSkips-
+    // ChainIdGate pins exactly this contract; the pre-classifier enum this code expressed
+    // via a first-byte check inside the Malformed branch (superseded by the explicit kind).
     if (classified.kind == protocol::Web3EnvelopeChainIdKind::Protected &&
         classified.chainId != nodeChainId)
     {

@@ -217,8 +217,11 @@ struct LegacyTxHandler : Web3TxHandler
         }
         if (withSig)
         {
-            // Canonical integer form for legacy v too (#5496 finding N): multi-byte EIP-155
-            // values stay legal, but leading-zero / non-minimal spellings no longer decode.
+            // Legacy v keeps its canonical integer gate (#5496 finding N). The r/s decoded
+            // right after it REMAIN plain byte-string decodes on purpose (#5496 AG-c): they
+            // are signature material, not committed integers here — every re-encode/length
+            // site pins trimLeadingZeroBytes and sealed-envelope adoption is signature-bound,
+            // so a non-minimal spelling cannot fork txHash or recover the same sender.
             if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.signatureV);
                 decodeError != nullptr)
             {
@@ -902,26 +905,33 @@ struct DepositTxHandler : Web3TxHandler
             return err;  // uint64
         // ⚠️ isSystemTransaction cannot use codec::rlp::decode(bool) (RLPDecode.h:200-217
         // requires payloadLength==1 and would report UnexpectedLength for the golden 0x80 empty
-        // string). Byte semantics are required: empty string 0x80 → false (op-geth RLP nil);
-        // single byte 0x01 → true; anything else is an error.
+        // string). STRICT whole-item gate (#5496 finding AG-b): the only canonical forms are
+        // 0x80 (false, op-geth RLP nil) and 0x01 (true) — the same shapes the consensus-side
+        // deposit decoder accepts (OpstackExecutor integerPayloadLength path), closing the
+        // display-vs-consensus split that tolerated short-string spellings like 0x81'01'.
         {
-            // Zero-copy view into the input (not bcos::bytes, which heap-allocates per decode).
-            bcos::bytesRef raw{};
-            if (auto err = codec::rlp::decode(in, raw); err != nullptr)
-                return err;
-            if (raw.empty())
+            // Header-model-aware capture: decodeHeader consumes a string header's own byte
+            // but leaves sub-0x80 inline items in place, so the whole item spans from the
+            // pre-call cursor position.
+            auto const* const start = in.data();
+            auto&& [boolHeaderError, boolHeader] = codec::rlp::decodeHeader(in);
+            if (boolHeaderError != nullptr)
             {
-                out.isSystemTx = false;
+                return std::move(boolHeaderError);
             }
-            else if (raw.size() == 1 && raw[0] == 1)
+            size_t const itemLength =
+                static_cast<size_t>(in.data() - start) + boolHeader.payloadLength;
+            bool const systemFlag = (itemLength == 1 && start[0] == 0x01);
+            if (!systemFlag && !(itemLength == 1 && start[0] == 0x80)) [[unlikely]]
             {
-                out.isSystemTx = true;
-            }
-            else
-            {
-                return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedLength,
+                return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::NonCanonicalSize,
                     "deposit: invalid isSystemTransaction value");
             }
+            // Advance past the item's own payload for inline forms: decodeHeader leaves
+            // sub-0x80 items uncropped, so the following field would otherwise re-read the
+            // same byte.
+            in = in.getCroppedData(boolHeader.payloadLength);
+            out.isSystemTx = systemFlag;
         }
         if (auto err = codec::rlp::decode(in, out.data); err != nullptr)
             return err;  // bytes

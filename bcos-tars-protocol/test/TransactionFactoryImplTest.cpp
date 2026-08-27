@@ -527,6 +527,28 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireFormYParityZero)
     BOOST_CHECK(reassembled == wire);  // verbatim adoption, parity 0 preserved
 }
 
+// Message-pinned reassemble-throw probe (#5496 finding AH): BOOST_CHECK_THROW with only the
+// exception TYPE cannot attribute regressions across throwDecode stages, so these two anchors
+// additionally match the stage text inside what().
+static void expectReassembleThrows(
+    bcos::bytesConstRef payload, bcos::bytesConstRef sig, std::string_view expectedStage)
+{
+    bool threw = false;
+    try
+    {
+        (void)bcostars::protocol::reassembleWeb3RawTransaction(payload, sig);
+    }
+    catch (std::invalid_argument const& e)
+    {
+        threw = true;
+        BOOST_CHECK_MESSAGE(
+            std::string_view(e.what()).find(expectedStage) != std::string_view::npos,
+            "expected stage \"" << expectedStage << "\" in what(): " << e.what());
+    }
+    BOOST_CHECK_MESSAGE(
+        threw, "expected std::invalid_argument for stage \"" << expectedStage << "\", got success");
+}
+
 // Post-list trailing bytes on the typed WIRE form must be rejected (finding L): everything
 // in the verbatim-adoption branch is bounded by header.payloadLength, so junk appended after
 // the inner list would otherwise ride into txHash covered by neither signature nor cross-check.
@@ -571,9 +593,8 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireTrailingGarbageThrows)
     // One junk byte after the list -> "typed trailing garbage".
     auto tampered = buildEnvelope();
     tampered.push_back(0xde);
-    BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
-                          bcos::ref(tampered), bcos::bytesConstRef(sig.data(), sig.size())),
-        std::invalid_argument);
+    expectReassembleThrows(
+        bcos::ref(tampered), bcos::bytesConstRef(sig.data(), sig.size()), "typed trailing garbage");
 }
 
 // The bare 0x00 yParity spelling (non-minimal zero) must be rejected (finding M) even though
@@ -606,9 +627,8 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireBareZeroYParityThrows)
     std::copy(s.begin(), s.end(), sig.begin() + 32);
     sig[64] = 0;
 
-    BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
-                          bcos::ref(wire), bcos::bytesConstRef(sig.data(), sig.size())),
-        std::invalid_argument);
+    expectReassembleThrows(
+        bcos::ref(wire), bcos::bytesConstRef(sig.data(), sig.size()), "typed yParity");
 }
 
 // Legacy sealed-block wire form: rlp([6 fields, v, r, s]). Matching trailer adopted verbatim;

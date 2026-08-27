@@ -18,6 +18,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
+#include <bcos-rpc/web3jsonrpc/utils/util.h>  // estimateSearchBounds (#5496 AJ)
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -100,6 +101,44 @@ BOOST_AUTO_TEST_CASE(MalformedGasIsRejected)
         R"({"jsonrpc":"2.0","id":1,"method":"eth_estimateGas","params":[{"to":"0x0000000000000000000000000000000000000001","gas":"0xzz"},"latest"]})");
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
+}
+
+// Pure bounds initializer table (#5496 finding P / AJ). Regression anchor for the inverted-
+// bounds regime: an explicit request gas ABOVE kRpcGasCap passes run #1 uncapped, so the
+// proven-viable anchor is that FULL limit — seeding the ceiling from min(X, cap) alone used
+// to place upperBound BELOW the known-bad lowerBound and wrapped the unsigned width test.
+BOOST_AUTO_TEST_CASE(EstimateSearchBoundsOrderingTable)
+{
+    using bcos::rpc::estimateSearchBounds;
+    const u256 cap{30'000'000};
+
+    // (1) Gas-less request: both projections equal the 30M default; ordinary ordered range.
+    {
+        auto const bounds = estimateSearchBounds(u256{59'186}, cap, cap);
+        BOOST_CHECK(bounds.lowerBound == u256{59'186} && bounds.upperBound == cap);
+        BOOST_CHECK_GE(bounds.upperBound, bounds.lowerBound);
+    }
+    // (2) Explicit gas within cap: capped projection == actual limit; consumption below the
+    //     honored limit keeps the range ordered without touching the floor.
+    {
+        auto const bounds = estimateSearchBounds(u256{15'000}, u256{21'000}, u256{21'000});
+        BOOST_CHECK(bounds.lowerBound == u256{15'000});
+        BOOST_CHECK(bounds.upperBound == u256{21'000});
+    }
+    // (3) THE P REGRESSION: explicit 50M honored uncapped by run #1 while the ceiling stayed
+    //     at min(50M,30M)=30M. Pre-fix shape was [45M, 30M] — INVERTED. The clamp must seed
+    //     from the proven 50M anchor instead.
+    {
+        auto const bounds = estimateSearchBounds(u256{45'000'000}, cap, u256{50'000'000});
+        BOOST_CHECK_GE(bounds.upperBound, bounds.lowerBound);
+        BOOST_CHECK_EQUAL(bounds.upperBound, u256{50'000'000});
+    }
+    // (4) Defensive floor: consumption reported above even the uncapped request (charge
+    //     drift). Width collapses so the search loops no-op instead of wrapping.
+    {
+        auto const bounds = estimateSearchBounds(u256{60'000'000}, cap, u256{50'000'000});
+        BOOST_CHECK(bounds.lowerBound == u256{60'000'000} && bounds.upperBound == u256{60'000'000});
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
