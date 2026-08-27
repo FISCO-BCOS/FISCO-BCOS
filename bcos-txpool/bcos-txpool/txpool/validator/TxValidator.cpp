@@ -24,6 +24,8 @@
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-rlp-protocol/Web3Transaction.h"  // checkEip2Signature (#5496 finding O)
+#include "bcos-rlp-protocol/Web3TxEnvelope.h"   // classifyWeb3EnvelopeChainId (#5496 finding K)
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/DataConvertUtility.h"
 
@@ -82,6 +84,29 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
         // signature recovery even when the input transaction was previously clean.
         _tx.clearSenderAndHash();
         _tx.verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
+        // EIP-2 malleability gate on the tars import funnel (#5496 finding O): the raw-bytes
+        // hex funnel enforces low-s inside Web3Transaction::decode, but P2P-synchronized
+        // tars-form transactions reach the pool without ever passing that decoder — without
+        // this hook a high-s variant (s' = n - s) enters under a distinct txHash for the same
+        // logical transaction. Unsigned forms (deposits carry an empty signature blob) skip
+        // the gate naturally via the width requirement.
+        if (_tx.type() == TransactionType::Web3Transaction)
+        {
+            auto const sig = _tx.signatureData();
+            constexpr size_t kRsLen =
+                bcos::crypto::SECP256K1_SIGNATURE_R_LEN + bcos::crypto::SECP256K1_SIGNATURE_S_LEN;
+            if (sig.size() >= kRsLen)
+            {
+                bcos::bytes sigR(
+                    sig.begin(), sig.begin() + bcos::crypto::SECP256K1_SIGNATURE_R_LEN);
+                bcos::bytes sigS(
+                    sig.begin() + bcos::crypto::SECP256K1_SIGNATURE_R_LEN, sig.begin() + kRsLen);
+                if (bcos::checkEip2Signature(sigR, sigS) != nullptr)
+                {
+                    return TransactionStatus::InvalidSignature;
+                }
+            }
+        }
     }
     catch (...)
     {
@@ -288,16 +313,29 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
     {
         co_return TransactionStatus::None;
     }
-    auto const extraBytes = _tx.extraTransactionBytes();
-    auto const envelopeChainId = _tx.web3ChainIdFromEnvelope();
-    // EIP-2718 typed marker, excluding deposit (0x7e): deposits have no chainId field
-    // (field 0 is sourceHash). Same predicate as isTypedWeb3Envelope minus 0x7e.
-    bool const typed =
-        !extraBytes.empty() && extraBytes[0] > 0 && extraBytes[0] < 0x80 && extraBytes[0] != 0x7e;
+    // SINGLE-HOME classification (#5496 finding K): the kind table below consumes the canonical
+    // classifier directly, exactly like OpstackExecutor::envelopeChainIdMismatch and (via the
+    // same shared kinds) EthEndpoint::sendRawTransaction. The previous handwritten predicate
+    // (`typed = first<0x80 && !=0x7e` + nullopt-fold) mis-sorted malformed envelopes — e.g. a
+    // payload starting at/above 0x80 or an empty extra-bytes field fell into the "unprotected
+    // legacy" exemption and was admitted here while the executor's classifier rejected it as
+    // Malformed at execution time.
+    namespace rlp_protocol = bcos::rlp::protocol;
+    auto const classified = rlp_protocol::classifyWeb3EnvelopeChainId(_tx.extraTransactionBytes());
+    // Deposit envelopes are structurally chainId-less; they enter blocks through the rollup
+    // pipeline (executeDeposit bypasses every chainId gate), never through pool admission.
+    if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Deposit)
+    {
+        co_return TransactionStatus::InvalidChainId;
+    }
+    if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Malformed)
+    {
+        // Fail closed: an unreadable chainId/v must not ride the unprotected exemption.
+        co_return TransactionStatus::InvalidChainId;
+    }
     // Same fail-closed rules as EthEndpoint::sendRawTransaction: missing/unparsable
-    // web3_chain_id, or a typed envelope whose chainId field is unreadable, must not
-    // fall through to None. Only pre-EIP-155 unprotected legacy (no envelope chainId)
-    // is exempt.
+    // web3_chain_id must not fall through to None for anything that BINDS a chainId.
+    // Only pre-EIP-155 unprotected legacy (classifier: Unprotected) is exempt.
     if (auto config = co_await ledger::getSystemConfig(*_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
     {
         auto [chainId, _] = config.value();
@@ -310,17 +348,14 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
         {
             co_return TransactionStatus::InvalidChainId;
         }
-        if (envelopeChainId.has_value() && bcos::u256(*envelopeChainId) != *expected)
-        {
-            co_return TransactionStatus::InvalidChainId;
-        }
-        if (!envelopeChainId.has_value() && typed)
+        if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Protected &&
+            bcos::u256(classified.chainId) != *expected)
         {
             co_return TransactionStatus::InvalidChainId;
         }
         co_return TransactionStatus::None;
     }
-    if (envelopeChainId.has_value() || typed)
+    if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Protected)
     {
         co_return TransactionStatus::InvalidChainId;
     }

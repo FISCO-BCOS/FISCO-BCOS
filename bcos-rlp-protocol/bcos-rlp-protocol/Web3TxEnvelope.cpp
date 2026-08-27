@@ -42,17 +42,19 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     // decode() requires a mutable bytesRef cursor even for read-only parsing; the cast is safe
     // because this function never writes through the cursor — only reads via decodeHeader/decode.
     bcos::bytesRef cursor(const_cast<bcos::byte*>(payload.data()), payload.size());
-    // 0x7E (Deposit) has no chainId field — field 0 is sourceHash (h256). A naive typed-tx
-    // decode would fail the uint64_t width gate on sourceHash and return nullopt, which is
-    // misleading (nullopt is documented as "pre-EIP-155 unprotected legacy"). Return early
-    // so callers that gate on nullopt+isTyped see a clean signal.
+    // 0x7E (Deposit) has no chainId field — field 0 is sourceHash (h256). Classified as its own
+    // kind (NOT Malformed, NOT nullopt): chainId gates key a deliberate per-surface policy on
+    // this shape instead of re-deriving "deposit vs junk" from first bytes (#5496 finding K).
     if (firstByte == 0x7E) [[unlikely]]
     {
-        return malformed();
+        return {.kind = Web3EnvelopeChainIdKind::Deposit};
     }
     if (firstByte > 0 && firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
     {
-        // Typed (EIP-2718: 0x01-0x04): chainId is RLP field 0 of the inner list.
+        // Typed (EIP-2718: 0x01-0x04): chainId is RLP field 0 of the inner list. Canonical
+        // integer form enforced (#5496 finding N): a leading-zero/non-minimal field encodes
+        // fine but strict references reject it, and admitting it here would let pool/RPC/executor
+        // disagree with any strict peer on the SAME bytes.
         cursor = cursor.getCroppedData(1);
         auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
         if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
@@ -60,7 +62,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
             return malformed();
         }
         uint64_t chainId = 0;
-        if (auto e = bcos::codec::rlp::decode(cursor, chainId); e != nullptr) [[unlikely]]
+        if (auto e = decodeCanonicalRlpUint(cursor, chainId); e != nullptr) [[unlikely]]
         {
             return malformed();
         }
@@ -130,9 +132,9 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     }();
     if (isPreimageTail)
     {
-        // preimage form: field 7 is the EIP-155 chainId.
+        // preimage form: field 7 is the EIP-155 chainId. Canonical form enforced (finding N).
         uint64_t chainId = 0;
-        if (auto e = bcos::codec::rlp::decode(field7Item, chainId); e != nullptr) [[unlikely]]
+        if (auto e = decodeCanonicalRlpUint(field7Item, chainId); e != nullptr) [[unlikely]]
         {
             return malformed();
         }
@@ -142,7 +144,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     // protected, chainId = (v - 35) >> 1. Anything else (0/1, 29-34) is malformed — fail
     // closed rather than folding it into the unprotected exemption.
     uint64_t v = 0;
-    if (auto e = bcos::codec::rlp::decode(field7Item, v); e != nullptr) [[unlikely]]
+    if (auto e = decodeCanonicalRlpUint(field7Item, v); e != nullptr) [[unlikely]]
     {
         return malformed();
     }

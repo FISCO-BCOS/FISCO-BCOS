@@ -27,7 +27,7 @@
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <string_view>
@@ -42,7 +42,8 @@ namespace
 // Signing preimage of legacy_eip155_chain1 (chainId=1) and the canonical wire envelope it
 // assembles to with its signature; keccak256(wire) anchors the pair (New1 test vectors).
 constexpr std::string_view LEGACY_PREIMAGE_HEX =
-    "ee07847735940082520894727fc6a68321b754475c668a6abfb6e9e71c169a87038d7ea4c6800084deadbeef018080";
+    "ee07847735940082520894727fc6a68321b754475c668a6abfb6e9e71c169a87038d7ea4c6800084deadbeef01808"
+    "0";
 constexpr std::string_view LEGACY_WIRE_HEX =
     "f86e07847735940082520894727fc6a68321b754475c668a6abfb6e9e71c169a87038d7ea4c6800084deadbeef"
     "26a094f5e0158ba372a7b451996ac591fec2055d7ca7d0f72aa6b473d7b84a69d582a062a22960ade9f059d3894"

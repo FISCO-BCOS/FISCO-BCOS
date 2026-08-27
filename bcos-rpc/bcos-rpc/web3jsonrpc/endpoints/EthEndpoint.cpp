@@ -1026,13 +1026,17 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             // compare against, an EIP-155 tx signed for a foreign chain would execute here
             // and consume the sender's nonce (EIP-155 replay-protection bypass). op-geth
             // always has a genesis chainId, so it has no such open default. Only pre-EIP-155
-            // legacy (no chainId in the envelope) is exempt — there is nothing to compare.
-            auto const envelopeChainId = tx->web3ChainIdFromEnvelope();
-            if (envelopeChainId.has_value() ||
-                bcos::rlp::protocol::isTypedWeb3Envelope(tx->extraTransactionBytes()))
+            // legacy (classifier: Unprotected) is exempt — there is nothing to compare.
+            // (#5496 finding K: kind table shared with TxValidator/executor via the classifier;
+            // malformed envelopes and deposits no longer depend on a handwritten typed mask.)
+            auto const classified =
+                bcos::rlp::protocol::classifyWeb3EnvelopeChainId(tx->extraTransactionBytes());
+            if (classified.kind != bcos::rlp::protocol::Web3EnvelopeChainIdKind::Unprotected)
             {
                 WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction: web3_chain_id not configured")
-                                  << LOG_KV("txChainId", tx->chainId());
+                                  << LOG_KV("txChainId", tx->chainId())
+                                  << LOG_KV("envelopeKind",
+                                         bcos::rlp::protocol::toString(classified.kind));
                 BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
             }
         }
@@ -1040,26 +1044,31 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         {
             auto [chainIdStr, _] = chainIdConfig.value();
             // Match the signed envelope. Typed txs have no "0" exemption; only pre-EIP-155
-            // legacy (no envelope chainId) is exempt. Bad web3_chain_id config rejects the tx.
+            // legacy (classifier: Unprotected) is exempt. Bad web3_chain_id config rejects
+            // the tx. Same kind table as TxValidator::validateChainId (#5496 finding K).
             auto expected = ledger::parseWeb3ChainId(chainIdStr);
             if (!expected.has_value())
             {
                 BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
             }
-            auto const envelopeChainId = tx->web3ChainIdFromEnvelope();
-            if (envelopeChainId.has_value() && bcos::u256(*envelopeChainId) != *expected)
+            auto const classified =
+                bcos::rlp::protocol::classifyWeb3EnvelopeChainId(tx->extraTransactionBytes());
+            if (classified.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed ||
+                classified.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Deposit)
+            {
+                WEB3_LOG(WARNING) << LOG_DESC(
+                                         "sendRawTransaction envelope has no comparable chainId")
+                                  << LOG_KV("txChainId", tx->chainId())
+                                  << LOG_KV("envelopeKind",
+                                         bcos::rlp::protocol::toString(classified.kind));
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
+            }
+            if (classified.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Protected &&
+                bcos::u256(classified.chainId) != *expected)
             {
                 WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction chainId mismatch")
                                   << LOG_KV("txChainId", tx->chainId())
                                   << LOG_KV("nodeChainId", chainIdStr);
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
-            }
-            // Same typed-envelope guard as TxValidator::validateChainId: a typed tx whose
-            // chainId field cannot be parsed (nullopt) gets no "0" exemption — a malformed
-            // typed envelope is rejected here rather than deferring to signature recovery.
-            if (!envelopeChainId.has_value() &&
-                bcos::rlp::protocol::isTypedWeb3Envelope(tx->extraTransactionBytes()))
-            {
                 BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
             }
         }
@@ -1274,7 +1283,15 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     // ceiling, but never beyond this — unbounded uint64 ceilings would otherwise drive the
     // upward doubling search into dozens of EVM simulations per unauthenticated request.
     constexpr uint64_t kRpcGasCap = 30'000'000;
-    auto const effectiveFirstRunLimit = [&]() -> u256 {
+    // {searchCeiling, firstRunLimit}: searchCeiling caps this estimator's upward search;
+    // firstRunLimit records what run #1 ACTUALLY executed at — objectForm passes the
+    // request's own gas through to the EVM UNCHANGED (the cap does not bound the
+    // simulation) and a gas-less request runs at CallRequest's 30M default. Tracking it
+    // separately matters because that run is the only thing PROVEN viable so far (#5496
+    // finding P): seeding upperBound from the capped projection while an explicit gas above
+    // the cap was honored inverted the search bounds (lowerBound=consumed >
+    // upperBound=min(X, cap)) and wrapped the u256 width test.
+    auto const [effectiveFirstRunLimit, firstRunLimit] = [&]() -> std::pair<u256, u256> {
         if (objectForm && tx.isMember("gas"))
         {
             if (!tx["gas"].isString()) [[unlikely]]
@@ -1288,9 +1305,9 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
                 BOOST_THROW_EXCEPTION(
                     JsonRpcException(InvalidParams, "invalid transaction gas quantity"));
             }
-            return u256(std::min(*parsed, kRpcGasCap));
+            return {u256(std::min(*parsed, kRpcGasCap)), u256(*parsed)};
         }
-        return u256(kRpcGasCap);
+        return {u256(kRpcGasCap), u256(kRpcGasCap)};
     }();
 
     // Resolve the head base fee ONCE: every call() below would otherwise re-read the header
@@ -1338,7 +1355,20 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
             // ceiling. Starting at gasUsed*2 instead of 30M shrinks the search range from
             // 30M to ~gasUsed: typical estimates converge to the exact limit within the
             // shared simulation budget instead of stopping at the cap with a residual.
-            auto upperBound = effectiveFirstRunLimit;
+            // Bounds clamp (#5496 finding P): upperBound must never sit below lowerBound.
+            // When an explicit request gas above kRpcGasCap was honored by run #1, the
+            // proven-viable anchor is that FULL limit, not its capped projection — seeding
+            // from effectiveFirstRunLimit alone inverted these bounds and the unsigned
+            // width test wrapped.
+            auto upperBound = std::max(effectiveFirstRunLimit, firstRunLimit);
+            if (upperBound < lowerBound) [[unlikely]]
+            {
+                // Defensive floor: only reachable if run#1's consumed gas exceeded even the
+                // uncapped request limit (charge-reporting drift). Clamp to keep every
+                // subtraction below non-negative; the loops then no-op and C is returned
+                // with its failure already surfaced as the estimator's honest answer.
+                upperBound = lowerBound;
+            }
             auto candidate = std::max(gasUsed * 2, lowerBound + 1);
             while (candidate < upperBound && remaining > 0)
             {
@@ -1350,8 +1380,10 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
                 }
                 candidate = std::min(candidate * 2, upperBound);
             }
-            // else: effectiveFirstRunLimit stays the upper bound — the first run already
-            // proved it viable, no re-simulation needed.
+            // else: upperBound stays put — when it equals firstRunLimit the first run already
+            // proved THAT limit viable; when the explicit-gas raise above kicked in, firstRunLimit
+            // IS that proven anchor too. (The pre-P comment claimed viability for a ceiling the
+            // first run never executed at whenever X > kRpcGasCap.)
             while (upperBound - lowerBound > 1 && remaining > 0)
             {
                 --remaining;

@@ -192,41 +192,50 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                 // txHash inconsistent with the stored signature.
                 bcos::bytesRef tail(cursor.data(), header.payloadLength);
                 bcos::bytesRef last3[3]{};
+                bcos::bytesConstRef whole3[3]{};  // item INCLUDING its header byte(s)
                 size_t n = 0;
                 while (!tail.empty())
                 {
+                    auto const* const itemStart = tail.data();
                     auto [tailError, itemHeader] = bcos::codec::rlp::decodeHeader(tail);
                     if (tailError || itemHeader.payloadLength > tail.size()) [[unlikely]]
                     {
                         throwDecode("typed trailer");
                     }
+                    // decodeHeader may consume the item's own header bytes (string forms),
+                    // leaving only the payload ahead; capture BOTH views so the strict
+                    // yParity gate below can inspect the whole canonical item (#5496 M).
+                    whole3[n % 3] = bcos::bytesConstRef{itemStart,
+                        static_cast<size_t>(tail.data() - itemStart) + itemHeader.payloadLength};
                     last3[n % 3] = tail.getCroppedData(0, itemHeader.payloadLength);
                     tail = tail.getCroppedData(itemHeader.payloadLength);
                     ++n;
                 }
-                // yParity is a single byte 0/1; RLP encodes 0 as the empty payload 0x80, so
-                // decode() on the payload-only ref would fail InputTooShort — read it directly.
-                auto const ypRef = last3[(n - 3) % 3];
-                uint64_t wireYParity = 0;
-                if (ypRef.size() == 0)
-                {
-                    wireYParity = 0;  // 0x80
-                }
-                else if (ypRef.size() == 1)
-                {
-                    wireYParity = ypRef[0];
-                }
-                else [[unlikely]]
+                // STRICT typed yParity (#5496 finding M): the only canonical whole-item forms
+                // are 0x80 (parity 0) and 0x01. The previous read accepted any single payload
+                // byte — including the bare 0x00 non-minimal zero that strict references
+                // (op-geth rlp.Uint) reject.
+                auto const wireYParity =
+                    bcos::rlp::protocol::canonicalTypedYParityItem(whole3[(n - 3) % 3]);
+                if (!wireYParity.has_value()) [[unlikely]]
                 {
                     throwDecode("typed yParity");
                 }
                 bcos::bytes wireR(last3[(n - 2) % 3].begin(), last3[(n - 2) % 3].end());
                 bcos::bytes wireS(last3[(n - 1) % 3].begin(), last3[(n - 1) % 3].end());
-                if (wireYParity != yParity ||
+                if (*wireYParity != yParity ||
                     !std::equal(wireR.begin(), wireR.end(), r.begin(), r.end()) ||
                     !std::equal(wireS.begin(), wireS.end(), s.begin(), s.end())) [[unlikely]]
                 {
                     throwDecode("typed signature mismatch");
+                }
+                // Residual-shape gate mirroring the legacy sibling below (#5496 finding L):
+                // everything above walks and cross-checks within header.payloadLength, so bytes
+                // AFTER the inner list would be adopted verbatim into txHash while being covered
+                // by neither signature nor cross-check.
+                if (cursor.size() != header.payloadLength) [[unlikely]]
+                {
+                    throwDecode("typed trailing garbage");
                 }
                 return buffer;
             }
@@ -293,8 +302,15 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             // discriminates the two shapes unambiguously.
             uint64_t item7 = 0;
             bcos::bytes item8, item9;
-            if (auto trailerError = bcos::codec::rlp::decodeItems(walker, item7, item8, item9);
-                trailerError) [[unlikely]]
+            // Canonical integer form for the scalar trailer field (#5496 finding N): a
+            // leading-zero / non-minimal v or chainId must not reassemble into a txHash that
+            // strict peers decode differently.
+            auto trailerError = bcos::rlp::protocol::decodeCanonicalRlpUint(walker, item7);
+            if (trailerError == nullptr)
+            {
+                trailerError = bcos::codec::rlp::decodeItems(walker, item8, item9);
+            }
+            if (trailerError) [[unlikely]]
             {
                 throwDecode("legacy trailer");
             }

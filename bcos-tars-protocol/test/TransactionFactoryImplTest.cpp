@@ -527,6 +527,90 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireFormYParityZero)
     BOOST_CHECK(reassembled == wire);  // verbatim adoption, parity 0 preserved
 }
 
+// Post-list trailing bytes on the typed WIRE form must be rejected (finding L): everything
+// in the verbatim-adoption branch is bounded by header.payloadLength, so junk appended after
+// the inner list would otherwise ride into txHash covered by neither signature nor cross-check.
+BOOST_AUTO_TEST_CASE(reassembleTypedWireTrailingGarbageThrows)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+    uint64_t const yParity = 1;  // inline 0x01 form
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));      // chainId
+    rlp::encode(items, static_cast<uint64_t>(0));      // nonce
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(21000));  // gasLimit
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));  // value
+    rlp::encode(items, bcos::bytes{});             // data
+    rlp::encode(items, bcos::bytes{});             // accessList
+    rlp::encode(items, yParity);                   // 0x01 canonical inline
+    rlp::encode(items, r);
+    rlp::encode(items, s);
+    auto buildEnvelope = [&]() {
+        bcos::bytes wire{0x02};
+        rlp::encodeHeader(wire, rlp::Header{true, items.size()});
+        wire.insert(wire.end(), items.begin(), items.end());
+        return wire;
+    };
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = static_cast<bcos::byte>(yParity);
+
+    // Clean envelope still reassembles (and returns verbatim).
+    auto clean = buildEnvelope();
+    auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(clean), bcos::bytesConstRef(sig.data(), sig.size()));
+    BOOST_CHECK(reassembled == clean);
+
+    // One junk byte after the list -> "typed trailing garbage".
+    auto tampered = buildEnvelope();
+    tampered.push_back(0xde);
+    BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
+                          bcos::ref(tampered), bcos::bytesConstRef(sig.data(), sig.size())),
+        std::invalid_argument);
+}
+
+// The bare 0x00 yParity spelling (non-minimal zero) must be rejected (finding M) even though
+// the tars mirror carries parity 0 — strict references accept only whole-item 0x80/0x01.
+BOOST_AUTO_TEST_CASE(reassembleTypedWireBareZeroYParityThrows)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, bcos::bytes{});  // accessList
+    items.push_back(0x00);              // BARE ZERO: non-canonical yParity slot
+    rlp::encode(items, r);
+    rlp::encode(items, s);
+    bcos::bytes wire{0x02};
+    rlp::encodeHeader(wire, rlp::Header{true, items.size()});
+    wire.insert(wire.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = 0;
+
+    BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
+                          bcos::ref(wire), bcos::bytesConstRef(sig.data(), sig.size())),
+        std::invalid_argument);
+}
+
 // Legacy sealed-block wire form: rlp([6 fields, v, r, s]). Matching trailer adopted verbatim;
 // a tampered r or s rejected ("legacy signature mismatch") — the legacy twin of the typed check.
 BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)

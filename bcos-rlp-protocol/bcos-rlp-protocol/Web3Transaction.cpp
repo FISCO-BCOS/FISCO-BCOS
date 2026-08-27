@@ -32,11 +32,12 @@
 
 namespace bcos
 {
-namespace
-{
 // EIP-2 canonical-s guard: s > n/2 is "malleable" — flipping s -> n - s recovers the same
 // sender, so op-geth rejects it at both admission and block processing. Threshold shared via
-// Secp256k1Crypto.h (c_secp256k1n / c_secp256k1nOver2).
+// Secp256k1Crypto.h (c_secp256k1n / c_secp256k1nOver2). Declared in Web3Transaction.h (NOT
+// file-local anymore) so the tars-form import funnel — TxValidator, #5496 finding O, the one
+// admission surface whose P2P submissions never pass this TU's decode() — enforces the same
+// rule the raw-bytes funnel applies here.
 
 /// Returns a decode error if r/s fall outside EIP-2's valid range (r,s in [1, n-1], s <= n/2),
 /// else nullptr. r/s are the raw 32-byte big-endian scalars (already zero-padded by the handler).
@@ -64,7 +65,6 @@ bcos::Error::UniquePtr checkEip2Signature(
     }
     return nullptr;
 }
-}  // namespace
 
 namespace rpc
 {

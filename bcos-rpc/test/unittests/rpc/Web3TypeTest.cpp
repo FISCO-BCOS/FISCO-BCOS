@@ -1476,5 +1476,178 @@ BOOST_AUTO_TEST_CASE(testWeb3ChainIdFromEnvelope)
     }
 }
 
+// ============================================================================
+// #5496 r4-fix regression grid: classifier KINDS (Deposit/Malformed), the
+// canonical-integer walker gate (finding N), strict typed yParity helpers
+// (finding M), and the exported EIP-2 funnel (finding O).
+BOOST_AUTO_TEST_CASE(classifyWeb3EnvelopeChainIdKinds)
+{
+    namespace rlp = bcos::codec::rlp;
+    namespace envelope = bcos::rlp::protocol;
+    using Kind = envelope::Web3EnvelopeChainIdKind;
+
+    // Deposit is its OWN kind — admission gates key a deliberate policy on it instead of
+    // re-deriving "deposit vs junk" from first bytes (finding K).
+    {
+        bcos::bytes deposit;
+        deposit.push_back(static_cast<byte>(bcos::rpc::TransactionType::Deposit));
+        BOOST_CHECK(
+            envelope::toString(envelope::classifyWeb3EnvelopeChainId(bcos::ref(deposit)).kind) ==
+            "Deposit");
+    }
+
+    // Empty payload and junk-first-byte payloads classify Malformed. The handwritten
+    // admission predicates used to fold both into the unprotected exemption, admitting them
+    // at pool/RPC while the executor's classifier rejected the same bytes at execution.
+    BOOST_CHECK(
+        envelope::classifyWeb3EnvelopeChainId(bcos::bytesConstRef{}).kind == Kind::Malformed);
+    {
+        bcos::bytes junk{0xf0, 0x01, 0x02};
+        BOOST_CHECK(envelope::classifyWeb3EnvelopeChainId(bcos::ref(junk)).kind == Kind::Malformed);
+    }
+
+    // Leading-zero chainId in a typed envelope: previously Protected under the width gate
+    // alone; now Malformed via decodeCanonicalRlpUint (finding N). Only field 0 is walked,
+    // so a minimal tail suffices.
+    {
+        bcos::bytes items{0x82, 0x00, 0x01};  // non-canonical "1"
+        bcos::bytes env{static_cast<byte>(bcos::rpc::TransactionType::EIP1559)};
+        rlp::encodeHeader(env, {.isList = true, .payloadLength = items.size()});
+        env.insert(env.end(), items.begin(), items.end());
+        BOOST_CHECK(envelope::classifyWeb3EnvelopeChainId(bcos::ref(env)).kind == Kind::Malformed);
+
+        // Positive control: the minimal spelling of the same value stays Protected.
+        bcos::bytes ok;
+        rlp::encode(ok, static_cast<uint64_t>(1));
+        bcos::bytes envOk{static_cast<byte>(bcos::rpc::TransactionType::EIP1559)};
+        rlp::encodeHeader(envOk, {.isList = true, .payloadLength = ok.size()});
+        envOk.insert(envOk.end(), ok.begin(), ok.end());
+        auto const c = envelope::classifyWeb3EnvelopeChainId(bcos::ref(envOk));
+        BOOST_CHECK(c.kind == Kind::Protected && c.chainId == 1u);
+    }
+
+    // Leading-zero v in a legacy FULL envelope: same rejection, minimal-spelling twin yields
+    // Protected(chainId = (v-35)>>1). Tail keeps items 8/9 non-empty so the walker takes the
+    // full-form branch rather than the preimage one.
+    auto legacyFull = [](bcos::bytes const& vItem) {
+        bcos::bytes items;
+        for (int i = 0; i < 6; ++i)
+        {
+            rlp::encode(items, static_cast<uint64_t>(0));  // nonce..data fields
+        }
+        items.insert(items.end(), vItem.begin(), vItem.end());
+        items.push_back(0x01);  // r slot: non-empty single byte
+        items.push_back(0x01);  // s slot: non-empty single byte
+        bcos::bytes env;
+        rlp::encodeHeader(env, {.isList = true, .payloadLength = items.size()});
+        env.insert(env.end(), items.begin(), items.end());
+        return env;
+    };
+    BOOST_CHECK(
+        envelope::classifyWeb3EnvelopeChainId(bcos::ref(legacyFull({0x82, 0x00, 0x25}))).kind ==
+        Kind::Malformed);  // non-canonical "37"
+    {
+        auto const c = envelope::classifyWeb3EnvelopeChainId(bcos::ref(legacyFull({0x25})));
+        BOOST_CHECK(c.kind == Kind::Protected && c.chainId == 1u);  // 37 -> chainId 1
+    }
+}
+
+BOOST_AUTO_TEST_CASE(decodeCanonicalRlpUintAcceptsOnlyMinimalEncodings)
+{
+    namespace rlp = bcos::codec::rlp;
+
+    auto probe = [](std::initializer_list<uint8_t> raw) {
+        bcos::bytes buffer{raw};
+        bcos::bytesRef cursor(buffer.data(), buffer.size());
+        uint64_t value = 0;
+        auto const error = bcos::rlp::protocol::decodeCanonicalRlpUint(cursor, value);
+        return std::make_pair(error == nullptr, value);
+    };
+
+    // Minimal spellings accepted.
+    {
+        auto const [ok0, v0] = probe({0x80});
+        BOOST_CHECK(ok0 && v0 == 0u);
+    }
+    {
+        auto const [ok1, v1] = probe({0x01});
+        BOOST_CHECK(ok1 && v1 == 1u);
+    }
+    {
+        auto const [ok8453, v8453] = probe({0x82, 0x21, 0x05});
+        BOOST_CHECK(ok8453 && v8453 == 8453u);
+    }
+
+    // Non-minimal spellings rejected: bare zero byte, leading zeros, oversized prefix.
+    BOOST_CHECK(!probe({0x00}).first);
+    BOOST_CHECK(!probe({0x82, 0x00, 0x01}).first);
+    BOOST_CHECK(!probe({0x84, 0x00, 0x00, 0x00, 0x05}).first);
+}
+
+BOOST_AUTO_TEST_CASE(decodeCanonicalYParityStrictItemForms)
+{
+    namespace rlp = bcos::codec::rlp;
+
+    auto probeParity = [](std::initializer_list<uint8_t> item) {
+        bcos::bytes buffer{item};
+        bcos::bytesRef cursor(buffer.data(), buffer.size());
+        uint64_t parity = 99;
+        auto const error = bcos::rlp::protocol::decodeCanonicalYParity(cursor, parity);
+        return std::make_pair(error == nullptr, parity);
+    };
+
+    // Exactly two whole-item forms exist: empty-string 0x80 for zero, inline 0x01 for one.
+    {
+        auto const [okZero, p0] = probeParity({0x80});
+        BOOST_CHECK(okZero && p0 == 0u);
+    }
+    {
+        auto const [okOne, p1] = probeParity({0x01});
+        BOOST_CHECK(okOne && p1 == 1u);
+    }
+
+    // Everything else rejected: the bare non-minimal zero, other values, wider payloads,
+    // list shapes.
+    BOOST_CHECK(!probeParity({0x00}).first);
+    BOOST_CHECK(!probeParity({0x02}).first);
+    BOOST_CHECK(!probeParity({0x81, 0x00}).first);
+    BOOST_CHECK(!probeParity({0xc1, 0x80}).first);
+}
+
+// EIP-2 funnel export (finding O): low-s / range math on raw scalars.
+BOOST_AUTO_TEST_CASE(checkEip2SignatureBoundaryScalars)
+{
+    using bcos::crypto::c_secp256k1n;
+    using bcos::crypto::c_secp256k1nOver2;
+    auto scalarBytes = [](bcos::u256 const& value) {
+        auto be = bcos::toBigEndian(value);
+        if (be.size() < 32)
+        {
+            be.insert(be.begin(), 32 - be.size(), bcos::byte{0});
+        }
+        return be;
+    };
+
+    auto const r = scalarBytes(bcos::u256{1});                   // any in-range r
+    auto const sLowEdge = scalarBytes(c_secp256k1nOver2);        // boundary allowed (s <= n/2)
+    auto const sLowInside = scalarBytes(c_secp256k1nOver2 - 1);  // clearly legal
+    auto const sHigh = scalarBytes(c_secp256k1nOver2 + 1);       // malleable flip
+    auto const rZero = scalarBytes(bcos::u256{0});               // out of [1, n-1]
+    auto const rHuge = scalarBytes(c_secp256k1n);                // r >= n rejected
+
+    BOOST_CHECK(bcos::checkEip2Signature(r, sLowInside) == nullptr);
+    BOOST_CHECK(bcos::checkEip2Signature(r, sLowEdge) == nullptr);
+    BOOST_CHECK(bcos::checkEip2Signature(r, sHigh) != nullptr);
+    BOOST_CHECK(bcos::checkEip2Signature(rZero, sLowInside) != nullptr);
+    BOOST_CHECK(bcos::checkEip2Signature(rHuge, sLowInside) != nullptr);
+
+    // Width gate: a 33-byte scalar must reject even with a leading zero that would truncate
+    // into range.
+    auto wide = scalarBytes(bcos::u256{1});
+    wide.insert(wide.begin(), bcos::byte{0});
+    BOOST_REQUIRE_EQUAL(wide.size(), 33U);
+    BOOST_CHECK(bcos::checkEip2Signature(wide, sLowInside) != nullptr);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

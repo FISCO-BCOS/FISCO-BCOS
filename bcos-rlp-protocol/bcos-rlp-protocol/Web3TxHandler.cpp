@@ -166,14 +166,20 @@ struct LegacyTxHandler : Web3TxHandler
         auto const payloadLength = head.payloadLength;
         out.type = TransactionType::Legacy;
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (decodeError = codec::rlp::decodeItems(in, out.nonce, out.maxPriorityFeePerGas);
+        if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
+            decodeError != nullptr)
+        {
+            return decodeError;
+        }
+        if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
             decodeError != nullptr)
         {
             return decodeError;
         }
         out.maxFeePerGas = out.maxPriorityFeePerGas;
 
-        if (decodeError = codec::rlp::decode(in, out.gasLimit); decodeError != nullptr)
+        if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
+            decodeError != nullptr)
         {
             return decodeError;
         }
@@ -201,14 +207,24 @@ struct LegacyTxHandler : Web3TxHandler
         // ⚠️ Check value/data decode errors immediately: if deferred to the withSig branch,
         // a later successful signature decode would overwrite decodeError and misjudge
         // malformed input as valid.
-        if (auto err = codec::rlp::decodeItems(in, out.value, out.data); err != nullptr)
+        if (auto err = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value); err != nullptr)
+        {
+            return err;
+        }
+        if (auto err = codec::rlp::decode(in, out.data); err != nullptr)
         {
             return err;
         }
         if (withSig)
         {
-            if (decodeError =
-                    codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // Canonical integer form for legacy v too (#5496 finding N): multi-byte EIP-155
+            // values stay legal, but leading-zero / non-minimal spellings no longer decode.
+            if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.signatureV);
+                decodeError != nullptr)
+            {
+                return decodeError;
+            }
+            if (decodeError = codec::rlp::decodeItems(in, out.signatureR, out.signatureS);
                 decodeError != nullptr)
             {
                 return decodeError;
@@ -260,8 +276,13 @@ struct LegacyTxHandler : Web3TxHandler
                 uint64_t item7 = 0;
                 bcos::bytesRef item8;
                 bcos::bytesRef item9;
-                if (decodeError = codec::rlp::decodeItems(in, item7, item8, item9);
+                // Canonical integer form for the trailer's scalar field (#5496 finding N).
+                if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, item7);
                     decodeError != nullptr)
+                {
+                    return decodeError;
+                }
+                if (decodeError = codec::rlp::decodeItems(in, item8, item9); decodeError != nullptr)
                 {
                     return decodeError;
                 }
@@ -437,7 +458,18 @@ struct EIP2930TxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
-        if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
+        // Canonical integer forms (#5496 finding N): every scalar in the typed header is
+        // pinned to its minimal RLP spelling.
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
+            error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
             error != nullptr)
         {
             return error;
@@ -446,7 +478,8 @@ struct EIP2930TxHandler : Web3TxHandler
         // EIP2930: gasPrice is carried in maxFeePerGas
         out.maxFeePerGas = out.maxPriorityFeePerGas;
 
-        if (auto error = codec::rlp::decode(in, out.gasLimit); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
+            error != nullptr)
         {
             return error;
         }
@@ -471,8 +504,12 @@ struct EIP2930TxHandler : Web3TxHandler
             out.to.emplace(addr);
         }
 
-        if (auto error = codec::rlp::decodeItems(in, out.value, out.data, out.accessList);
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value);
             error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = codec::rlp::decodeItems(in, out.data, out.accessList); error != nullptr)
         {
             return error;
         }
@@ -482,8 +519,14 @@ struct EIP2930TxHandler : Web3TxHandler
         {
             // Consume trailing (yParity, r, s) when present so both the signing preimage
             // and the sealed-block full envelope pass the leftover-bytes check.
-            decodeError =
-                codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // STRICT yParity item first (#5496 finding M): the whole-item span must be
+            // exactly 0x80 or 0x01; the former payload-only trio read admitted the bare 0x00
+            // non-minimal zero that strict references reject.
+            decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
+            if (decodeError == nullptr)
+            {
+                decodeError = codec::rlp::decodeItems(in, out.signatureR, out.signatureS);
+            }
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
             // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
             // transactions.
@@ -634,18 +677,31 @@ struct EIP1559TxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
-        if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
+        // Canonical integer forms (#5496 finding N): every scalar in the typed header is
+        // pinned to its minimal RLP spelling.
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
+            error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
             error != nullptr)
         {
             return error;
         }
         out.chainId.emplace(chainId);
-        if (auto error = codec::rlp::decode(in, out.maxFeePerGas); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxFeePerGas);
+            error != nullptr)
         {
             return error;
         }
 
-        if (auto error = codec::rlp::decode(in, out.gasLimit); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
+            error != nullptr)
         {
             return error;
         }
@@ -670,8 +726,12 @@ struct EIP1559TxHandler : Web3TxHandler
             out.to.emplace(addr);
         }
 
-        if (auto error = codec::rlp::decodeItems(in, out.value, out.data, out.accessList);
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value);
             error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = codec::rlp::decodeItems(in, out.data, out.accessList); error != nullptr)
         {
             return error;
         }
@@ -681,8 +741,14 @@ struct EIP1559TxHandler : Web3TxHandler
         {
             // Consume trailing (yParity, r, s) when present so both the signing preimage
             // and the sealed-block full envelope pass the leftover-bytes check.
-            decodeError =
-                codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // STRICT yParity item first (#5496 finding M): the whole-item span must be
+            // exactly 0x80 or 0x01; the former payload-only trio read admitted the bare 0x00
+            // non-minimal zero that strict references reject.
+            decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
+            if (decodeError == nullptr)
+            {
+                decodeError = codec::rlp::decodeItems(in, out.signatureR, out.signatureS);
+            }
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
             // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
             // transactions.
@@ -822,17 +888,17 @@ struct DepositTxHandler : Web3TxHandler
                 return err;
             out.to.emplace(addr);
         }
-        // Width note: this layer is display-grade — mint/value/gas go through the shared RLP
-        // UnsignedIntegral width gate (RLPDecode.h: payloadLength > digits/8 → UnexpectedLength),
-        // so over-wide integers are REJECTED here too, matching the consensus path's accept set
-        // (no silent truncation). Only non-canonical prefixes (leading zeros / bare 0x00) remain
-        // display-layer-tolerant; the consensus path additionally rejects those via
-        // decodeDepositEnvelope (OpstackExecutor.h, integerPayloadLength canonicality checks).
-        if (auto err = codec::rlp::decode(in, out.mint); err != nullptr)
+        // Width + canonicality note: mint/value/gas go through decodeCanonicalRlpUint, which
+        // keeps the shared UnsignedIntegral width gate (RLPDecode.h: payloadLength >
+        // digits/8 → UnexpectedLength) AND pins minimal encodings — leading zeros and the
+        // bare 0x00 zero are rejected here exactly as the consensus path's
+        // decodeDepositEnvelope rejects them (#5496 finding N: no display-vs-consensus split).
+        if (auto err = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.mint); err != nullptr)
             return err;  // u256
-        if (auto err = codec::rlp::decode(in, out.value); err != nullptr)
+        if (auto err = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value); err != nullptr)
             return err;  // u256
-        if (auto err = codec::rlp::decode(in, out.gasLimit); err != nullptr)
+        if (auto err = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
+            err != nullptr)
             return err;  // uint64
         // ⚠️ isSystemTransaction cannot use codec::rlp::decode(bool) (RLPDecode.h:200-217
         // requires payloadLength==1 and would report UnexpectedLength for the golden 0x80 empty
@@ -995,18 +1061,31 @@ struct EIP4844TxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
-        if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
+        // Canonical integer forms (#5496 finding N): every scalar in the typed header is
+        // pinned to its minimal RLP spelling.
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
+            error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
             error != nullptr)
         {
             return error;
         }
         out.chainId.emplace(chainId);
-        if (auto error = codec::rlp::decode(in, out.maxFeePerGas); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxFeePerGas);
+            error != nullptr)
         {
             return error;
         }
 
-        if (auto error = codec::rlp::decode(in, out.gasLimit); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
+            error != nullptr)
         {
             return error;
         }
@@ -1031,14 +1110,22 @@ struct EIP4844TxHandler : Web3TxHandler
             out.to.emplace(addr);
         }
 
-        if (auto error = codec::rlp::decodeItems(in, out.value, out.data, out.accessList);
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value);
             error != nullptr)
         {
             return error;
         }
+        if (auto error = codec::rlp::decodeItems(in, out.data, out.accessList); error != nullptr)
+        {
+            return error;
+        }
 
-        if (auto error = codec::rlp::decodeItems(in, out.maxFeePerBlobGas, out.blobVersionedHashes);
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxFeePerBlobGas);
             error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = codec::rlp::decode(in, out.blobVersionedHashes); error != nullptr)
         {
             return error;
         }
@@ -1048,8 +1135,14 @@ struct EIP4844TxHandler : Web3TxHandler
         {
             // Consume trailing (yParity, r, s) when present so both the signing preimage
             // and the sealed-block full envelope pass the leftover-bytes check.
-            decodeError =
-                codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // STRICT yParity item first (#5496 finding M): the whole-item span must be
+            // exactly 0x80 or 0x01; the former payload-only trio read admitted the bare 0x00
+            // non-minimal zero that strict references reject.
+            decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
+            if (decodeError == nullptr)
+            {
+                decodeError = codec::rlp::decodeItems(in, out.signatureR, out.signatureS);
+            }
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
             // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
             // transactions.
@@ -1203,18 +1296,31 @@ struct EIP7702TxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
-        if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
+        // Canonical integer forms (#5496 finding N): every scalar in the typed header is
+        // pinned to its minimal RLP spelling.
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
+            error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
             error != nullptr)
         {
             return error;
         }
         out.chainId.emplace(chainId);
-        if (auto error = codec::rlp::decode(in, out.maxFeePerGas); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxFeePerGas);
+            error != nullptr)
         {
             return error;
         }
 
-        if (auto error = codec::rlp::decode(in, out.gasLimit); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
+            error != nullptr)
         {
             return error;
         }
@@ -1239,8 +1345,12 @@ struct EIP7702TxHandler : Web3TxHandler
             out.to.emplace(addr);
         }
 
-        if (auto error = codec::rlp::decodeItems(in, out.value, out.data, out.accessList);
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value);
             error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = codec::rlp::decodeItems(in, out.data, out.accessList); error != nullptr)
         {
             return error;
         }
@@ -1255,8 +1365,14 @@ struct EIP7702TxHandler : Web3TxHandler
         {
             // Consume trailing (yParity, r, s) when present so both the signing preimage
             // and the sealed-block full envelope pass the leftover-bytes check.
-            decodeError =
-                codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // STRICT yParity item first (#5496 finding M): the whole-item span must be
+            // exactly 0x80 or 0x01; the former payload-only trio read admitted the bare 0x00
+            // non-minimal zero that strict references reject.
+            decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
+            if (decodeError == nullptr)
+            {
+                decodeError = codec::rlp::decodeItems(in, out.signatureR, out.signatureS);
+            }
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
             // input (same for EIP-2930/1559/4844/7702); silently accepting it would hide bad
             // transactions.

@@ -497,6 +497,14 @@ namespace engine = bcos::evm::engine;
         }
         return "legacy tx envelope has a malformed chainId/v field";
     }
+    if (classified.kind == protocol::Web3EnvelopeChainIdKind::Deposit)
+    {
+        // Deposits are dispatched to executeDeposit before any chainId gate, so reaching here
+        // means a chainId-binding context received a structurally chainId-less envelope —
+        // fail closed instead of silently exempting (same disposition the old
+        // Malformed-folding produced for 0x7E).
+        return "deposit envelope carries no chainId to bind against the node chainId";
+    }
     if (classified.kind == protocol::Web3EnvelopeChainIdKind::Protected &&
         classified.chainId != nodeChainId)
     {
