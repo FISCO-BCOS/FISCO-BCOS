@@ -519,10 +519,26 @@ BOOST_AUTO_TEST_CASE(handleMempoolChainIdGateUnconfiguredTest)
     }
     // Pre-EIP-155 legacy (v=28; etherscan 0xf6ecaf...): exempt — accepted into the mempool.
     {
-        auto response = submit(
+        const std::string rawTx =
             "0xf86c808504a817c800825208945dc98fe6cd853f7f5a44399cfb1c60682d5d62ef887bd0a2ecdb872000"
             "801ca0e90ef078b60e3a186fae6071c92dbfec1256f423f5a40cd5cba69ca423eb4e44a028e14398b1a105"
-            "9388cbc5eb03cfcb6f9493bdd1efd6a17e54dcabbb2eaace16");
+            "9388cbc5eb03cfcb6f9493bdd1efd6a17e54dcabbb2eaace16";
+        // This entry runs the full PoolAdmission set now, balance included, and the vector is a
+        // real mainnet transfer. Its sender holds nothing in this fake ledger, so without state
+        // it is refused for lack of funds and never reaches the chainId exemption under test.
+        // Recovered from the envelope rather than hard-coded so the fixture cannot drift from
+        // the vector; the ledger keys on unprefixed hex, sender() returns it 0x-prefixed.
+        {
+            auto raw = fromHexWithPrefix(rawTx);
+            auto rawRef = bcos::bytesRef(raw.data(), raw.size());
+            rpc::Web3Transaction decoded;
+            BOOST_REQUIRE(codec::rlp::decode(rawRef, decoded) == nullptr);
+            bcos::ledger::StorageState state;
+            state.nonce = "0";
+            state.balance = "0xffffffffffffffffffffffffffff";
+            m_ledger->setStorageState(decoded.sender().substr(2), std::move(state));
+        }
+        auto response = submit(rawTx);
         validRespCheck(response);
         BOOST_TEST(response["result"].asString() ==
                    "0xf6ecaffaf808cdfe1d9ef02ec461f2ab5674f72f9c6f954743e0c2d74608b751");

@@ -45,6 +45,10 @@ bcos::txpool::TransactionData::TransactionData(protocol::Transaction::Ptr transa
 {}
 void bcos::txpool::MemPoolImpl::add(protocol::Transaction::Ptr transaction)
 {
+    // The lock is what addImpl's contract requires, and every other writer already takes it.
+    // Without it this entry raced them on m_transactions (a boost::multi_index container) --
+    // pre-existing, and now reachable in parallel with tryAdd() on the RPC path.
+    std::unique_lock lock(m_mutex);
     if (!transaction) [[unlikely]]
     {
         return;

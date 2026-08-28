@@ -97,8 +97,22 @@ TransactionStatus normalize(Transaction& tx)
     }
 
     // Step 2 -- the wire-supplied hash, before anything can overwrite it.
-    auto const& inner = dynamic_cast<bcostars::protocol::TransactionImpl const&>(tx).inner();
-    auto const wireHash = inner.extraTransactionHash;
+    //
+    // Pointer cast, not a reference cast: normalize() is reachable from admit(), whose contract
+    // is "return a status; throw only when the data needed to decide is unavailable". A
+    // reference cast against a Transaction that is not the tars implementation (another
+    // implementation, a test double) throws std::bad_cast, and neither admit() nor
+    // TransactionSync::importDownloadedTxs catches it -- a type mismatch would terminate the
+    // process instead of rejecting one transaction. The same pointer is reused for the commit
+    // below, so the cast happens once.
+    auto* impl = dynamic_cast<bcostars::protocol::TransactionImpl*>(&tx);
+    if (impl == nullptr) [[unlikely]]
+    {
+        // Web3 normalization needs the tars mirror; without it there is nothing to reconcile
+        // the signed envelope against, so fail closed rather than admit an unchecked mirror.
+        return TransactionStatus::Malformed;
+    }
+    auto const wireHash = impl->inner().extraTransactionHash;
 
     // Step 3 -- decode the envelope. This is the authoritative content of the transaction.
     rpc::Web3Transaction decoded;
@@ -127,7 +141,7 @@ TransactionStatus normalize(Transaction& tx)
     }
 
     // Step 5 -- commit. Everything below is infallible.
-    auto& mutableInner = dynamic_cast<bcostars::protocol::TransactionImpl&>(tx).mutableInner();
+    auto& mutableInner = impl->mutableInner();
 
     // takeToTarsTransaction produces a fresh struct whose `data` holds exactly the envelope's
     // values and leaves every other TransactionData field default-constructed. Moving the whole

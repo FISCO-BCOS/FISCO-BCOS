@@ -197,12 +197,25 @@ constexpr Check checkSet(TxKind kind, AdmissionContext context) noexcept
     case AdmissionContext::EESTReplay:
         return base & ~(Check::Balance | Check::Web3NonceWindow);
     case AdmissionContext::ProposalVerification:
+        // Everything a leader could violate stays ON. These are protocol invariants: their
+        // answer is a function of the transaction and the chain config, so every honest node
+        // computes the same one and enforcing them cannot split a block. ChainId in particular
+        // MUST be here -- nothing downstream re-checks it (EthereumTransition.h: "validate_
+        // transaction does not check that field"), so admission is the only gate standing
+        // between a malicious leader and a transaction signed for another chain.
+        //
         // Note this KEEPS Signature. The sync path's parallel loop already verified almost every
         // transaction, and Transaction::verify() returns immediately for those, so the ones it
         // skipped get verified serially here at no cost to the common case -- and no boolean has
         // to be carried along to say which is which.
-        return base & (Check::TypeGate | Check::ToFieldFormat | Check::Signature |
-                          Check::Web3NonceWindow | Check::BcosPoolNonce);
+        //
+        // Three come off. Balance is the one check whose answer depends on WHERE in the block a
+        // transaction sits -- a transaction funded by an earlier one in the same proposal fails
+        // it against pre-block state. SenderIsEOA and NonceNotMax are correctness-neutral here
+        // but would each pull a full account read (balance + code) onto the consensus hot path;
+        // Web3NonceWindow stays because it reads the committed nonce alone, which is identical
+        // on every node at the height being verified.
+        return base & ~(Check::Balance | Check::SenderIsEOA | Check::NonceNotMax);
     }
     return Check::None;
 }

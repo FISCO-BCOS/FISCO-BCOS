@@ -87,6 +87,7 @@ private:
     /// constructor chain would touch every endpoint for one caller.
     txvalidator::TxValidator& memPoolAdmission();
     std::unique_ptr<txvalidator::TxValidator> m_memPoolAdmission;
+    std::once_flag m_memPoolAdmissionInit;
 
     NodeService::Ptr m_nodeService;
     FilterSystem::Ptr m_filterSystem;

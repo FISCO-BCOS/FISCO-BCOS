@@ -308,16 +308,23 @@ TransactionStatus checkChainId(AdmissionInputs const& in)
     // From the SIGNED envelope. The mirror cannot distinguish "no chainId" (pre-EIP-155) from
     // "chainId 0" -- both serialise to "0" -- and a typed transaction may legitimately carry an
     // explicit 0, which must still be compared.
-    auto const envelopeChainId =
-        rlp::protocol::web3ChainIdFromEnvelope(in.tx.extraTransactionBytes());
-    if (!envelopeChainId)
+    //
+    // The three-way classifier, NOT web3ChainIdFromEnvelope: that walker collapses Unprotected
+    // and Malformed into the same nullopt, and a gate built on it grants the pre-EIP-155
+    // exemption to a legacy envelope whose v is neither 27/28 nor a valid EIP-155 value --
+    // executing a transaction op-geth's signer would reject. The exemption must be fail-closed,
+    // so it is granted only to an envelope positively classified as Unprotected.
+    auto const classified =
+        rlp::protocol::classifyWeb3EnvelopeChainId(in.tx.extraTransactionBytes());
+    if (classified.kind == rlp::protocol::Web3EnvelopeChainIdKind::Malformed)
     {
-        // A typed envelope always carries a chainId, so a missing one there is malformed. An
-        // unprotected pre-EIP-155 legacy transaction makes no chainId claim at all -- there is
-        // nothing to compare it against, so this check has nothing to say about it.
-        return rlp::protocol::isTypedWeb3Envelope(in.tx.extraTransactionBytes()) ?
-                   TransactionStatus::InvalidChainId :
-                   TransactionStatus::None;
+        return TransactionStatus::InvalidChainId;
+    }
+    if (classified.kind == rlp::protocol::Web3EnvelopeChainIdKind::Unprotected)
+    {
+        // A pre-EIP-155 legacy transaction makes no chainId claim at all -- there is nothing to
+        // compare it against, so this check has nothing to say about it.
+        return TransactionStatus::None;
     }
     // The transaction claims a chain. From here the configuration is required: silently
     // accepting an unverifiable claim admits transactions signed for any chain -- which is what
@@ -327,7 +334,7 @@ TransactionStatus checkChainId(AdmissionInputs const& in)
         return TransactionStatus::InvalidChainId;
     }
     auto const expected = ledger::parseWeb3ChainId(*in.web3ChainId);
-    if (!expected || u256(*envelopeChainId) != *expected)
+    if (!expected || u256(classified.chainId) != *expected)
     {
         return TransactionStatus::InvalidChainId;
     }

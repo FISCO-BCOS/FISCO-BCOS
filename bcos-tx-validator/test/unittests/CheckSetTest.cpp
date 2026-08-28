@@ -197,18 +197,35 @@ BOOST_AUTO_TEST_CASE(typeGateIsEvaluatedFirstAndSignatureBeforeAccountState)
     BOOST_CHECK(indexOf(Check::ChainId) < indexOf(Check::Balance));
 }
 
-// The proposal column is what a malicious leader's proposal is judged against. TypeGate is the
-// addition that makes a blob/deposit-carrying proposal fail instead of being accepted.
-BOOST_AUTO_TEST_CASE(proposalVerificationGatesTypesButSkipsLocalState)
+// The proposal column is what a malicious leader's proposal is judged against, so every check
+// whose answer is a function of the transaction and the chain config has to survive it: those
+// are identical on every honest node, and enforcing them cannot split a block.
+BOOST_AUTO_TEST_CASE(proposalVerificationKeepsProtocolInvariants)
 {
+    const auto pool = checkSet(TxKind::Web3DynamicFee, AdmissionContext::PoolAdmission);
+    const auto proposal = checkSet(TxKind::Web3DynamicFee, AdmissionContext::ProposalVerification);
+
+    // Exactly three come off, and no more.
+    BOOST_CHECK((pool & ~proposal) == (Check::Balance | Check::SenderIsEOA | Check::NonceNotMax));
+
     for (auto kind : kKinds)
     {
-        const auto proposal = checkSet(kind, AdmissionContext::ProposalVerification);
-        BOOST_CHECK(contains(proposal, Check::TypeGate));
-        // Balance is local state; the leader may legitimately see a different one.
-        BOOST_CHECK(!contains(proposal, Check::Balance));
-        BOOST_CHECK(!contains(proposal, Check::IntrinsicGas));
+        const auto set = checkSet(kind, AdmissionContext::ProposalVerification);
+        BOOST_CHECK(contains(set, Check::TypeGate));
+        // Balance is the one check whose answer depends on where in the block a transaction
+        // sits: one funded by an earlier transaction in the same proposal fails it.
+        BOOST_CHECK(!contains(set, Check::Balance));
     }
+
+    // ChainId above all: nothing downstream re-checks it. EthereumTransition.h states plainly
+    // that validate_transaction does not look at tx.chain_id, so dropping it here would let a
+    // leader have the whole network execute a transaction signed for a different chain.
+    BOOST_CHECK(contains(proposal, Check::ChainId));
+    BOOST_CHECK(contains(proposal, Check::IntrinsicGas));
+    BOOST_CHECK(contains(proposal, Check::TypeByRevision));
+    BOOST_CHECK(contains(proposal, Check::FeeCapVsBaseFee));
+    BOOST_CHECK(contains(proposal, Check::InitCodeSize));
+    BOOST_CHECK(contains(proposal, Check::MaxGasLimit));
 }
 
 BOOST_AUTO_TEST_CASE(eestReplayDropsOnlyBalanceAndNonceWindow)

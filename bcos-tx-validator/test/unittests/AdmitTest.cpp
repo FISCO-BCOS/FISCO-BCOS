@@ -315,6 +315,30 @@ BOOST_AUTO_TEST_CASE(insufficientBalanceIsRejected)
 // gasLimit and a near-2^256 gas price wraps to a small number and an unfundable transaction is
 // admitted. Asserted against the arithmetic directly -- the fixture's own gas price cannot be
 // changed without re-signing it.
+// The old validateBalance rejected on `balance < required || balance == 0`. The second clause
+// is not carried over, and these two cases are why. On a free-gas chain it was unreachable --
+// that implementation set skipBalanceCheck and returned before reaching it -- and on a
+// gas-charging chain `balance < required` already covers a zero balance, because required is
+// then value + gasLimit * gasPrice > 0. What is left is a zero-value transaction on a free-gas
+// chain, which costs its sender nothing and which execution accepts.
+BOOST_AUTO_TEST_CASE(zeroBalanceSenderMayStillSendAFreeZeroValueTransaction)
+{
+    AdmitHarness harness;  // tx_gas_price is "0" by default here
+    harness.account.balance = 0;
+    auto tx = admitTx({.value = 0});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+}
+
+// Free gas does not make `value` free: the old implementation skipped the whole balance check
+// when gas was free, so an unfunded transfer was admitted and then failed in the executor.
+BOOST_AUTO_TEST_CASE(freeGasStillRequiresTheValueToBeCovered)
+{
+    AdmitHarness harness;
+    harness.account.balance = 0;
+    auto tx = admitTx({.value = 5});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
+}
+
 BOOST_AUTO_TEST_CASE(feeArithmeticDoesNotWrapAt256Bits)
 {
     // bcos::u256 carries boost::multiprecision::unchecked, so gasLimit * gasPrice is reduced
@@ -367,6 +391,28 @@ BOOST_AUTO_TEST_CASE(proposalVerificationReadsOnlyTheNonce)
         harness.run(*tx, AdmissionContext::ProposalVerification) == TransactionStatus::None);
     BOOST_CHECK_EQUAL(harness.accountStateReads, 0);
     BOOST_CHECK_GT(harness.accountNonceReads, 0);
+}
+
+// The vulnerability F2 names: nothing downstream re-checks tx.chainId (EthereumTransition.h
+// says validate_transaction does not look at that field), so if proposal verification skips it
+// a leader can have every follower execute a transaction signed for another chain.
+BOOST_AUTO_TEST_CASE(proposalVerificationRejectsAForeignChainId)
+{
+    AdmitHarness harness;
+    harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "9999");
+    auto tx = admitTx();
+    BOOST_CHECK(harness.run(*tx, AdmissionContext::ProposalVerification) ==
+                TransactionStatus::InvalidChainId);
+}
+
+// Protocol invariants are enforced on the proposal column too -- they cost no account read and
+// their answer is the same on every honest node.
+BOOST_AUTO_TEST_CASE(proposalVerificationRejectsUnderIntrinsicGas)
+{
+    AdmitHarness harness;
+    auto tx = admitTx({.gasLimit = 20000});
+    BOOST_CHECK(harness.run(*tx, AdmissionContext::ProposalVerification) ==
+                TransactionStatus::OutOfGasLimit);
 }
 
 BOOST_AUTO_TEST_CASE(poolAdmissionReadsTheFullAccountState)

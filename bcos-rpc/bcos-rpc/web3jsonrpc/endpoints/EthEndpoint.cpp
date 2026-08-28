@@ -723,8 +723,10 @@ task::Task<void> EthEndpoint::sendTransaction(const Json::Value&, Json::Value& r
 
 txvalidator::TxValidator& EthEndpoint::memPoolAdmission()
 {
-    if (!m_memPoolAdmission)
-    {
+    // call_once, not a bare null check: RPC handlers run concurrently, so two first-time
+    // sendRawTransaction calls would otherwise construct and assign the unique_ptr in parallel
+    // -- one overwriting the other while a third thread reads a half-built object.
+    std::call_once(m_memPoolAdmissionInit, [this] {
         auto ledger = m_nodeService->ledger();
         auto cryptoSuite = m_nodeService->blockFactory()->cryptoSuite();
         m_memPoolAdmission = std::make_unique<txvalidator::TxValidator>(
@@ -732,9 +734,9 @@ txvalidator::TxValidator& EthEndpoint::memPoolAdmission()
             [ledger]() -> task::Task<ledger::LedgerConfig::Ptr> {
                 co_return co_await ledger::getLedgerConfig(*ledger);
             },
-            // Committed plane only. Under EESTReplay the balance and nonce-window checks are
-            // switched off, so the sole readers of this are EIP-3607 and EIP-2681, and both
-            // treat an absent account as "nothing to object to". Contract code is left empty:
+            // Committed plane only: balance and nonce come from the last committed block, which
+            // is what the balance check and the nonce window compare against. Contract code is
+            // left empty, so EIP-3607 stands down here:
             // the only way to it is the callback-based SchedulerInterface::getCode, and it is
             // not worth an extra suspension on this path for a check that execution repeats.
             [ledger](
@@ -766,7 +768,7 @@ txvalidator::TxValidator& EthEndpoint::memPoolAdmission()
             // Engine-driven mode initialises no txpool, so this path sees only Web3
             // transactions and the BCOS system-transaction rule never applies.
             [](protocol::Transaction const&) { return false; }, /*groupId*/ "", /*chainId*/ "");
-    }
+    });
     return *m_memPoolAdmission;
 }
 
@@ -843,15 +845,14 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         // `to` format (issue #5318), EIP-3607, EIP-2681 -- was skipped, and nothing reconciled
         // the tars mirror with the signed envelope.
         //
-        // EESTReplay, not PoolAdmission: this branch exists for single-node EEST reproduction,
-        // whose fixtures deliberately use arbitrary nonces and unfunded senders. That context
-        // drops exactly the balance and nonce-window checks and keeps the rest, so it is
-        // strictly stronger than what ran here before while leaving those fixtures replayable.
-        // Promoting this path to the full PoolAdmission set needs an explicit config gate so a
-        // production engine-driven node is not silently running the relaxed set; that is
-        // deliberately not decided here.
+        // PoolAdmission, the full set. An earlier revision ran EESTReplay here so that EEST
+        // fixtures (arbitrary nonces, unfunded senders) stayed replayable, but that silently put
+        // every production engine-driven node on the relaxed set: with balance and the nonce
+        // window switched off, unfunded and far-nonce transactions fill the pool and get sealed,
+        // and execution fails them. A relaxed set has to be opted into explicitly, never
+        // inherited from which pool implementation the node happens to run.
         if (auto status =
-                co_await memPoolAdmission().admit(*tx, txvalidator::AdmissionContext::EESTReplay,
+                co_await memPoolAdmission().admit(*tx, txvalidator::AdmissionContext::PoolAdmission,
                     txvalidator::SignaturePolicy::Required, txvalidator::PoolNonceQuery{});
             status != protocol::TransactionStatus::None)
         {

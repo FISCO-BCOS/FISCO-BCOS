@@ -30,6 +30,8 @@
 #include "bcos-utilities/Common.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
+#include <stdexcept>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -164,14 +166,21 @@ inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string no
     // signed envelope, so a fake whose preimage held a random nonce would leave admission with a
     // nonce unrelated to the one the test asked for, and every nonce-ordering assertion built on
     // it would be meaningless.
+    //
+    // Unparseable is a defect in the CALLER, not something to absorb: silently substituting 0
+    // would put a nonce in the envelope that the mirror does not carry, admission would reject
+    // the fake during normalization, and the test author would be chasing a rejection whose
+    // cause is three layers away. Fail where the mistake is.
     uint64_t nonceValue = 0;
     try
     {
         nonceValue = static_cast<uint64_t>(u256(transaction.data.nonce));
     }
-    catch (...)
+    catch (std::exception const& e)
     {
-        nonceValue = 0;
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("fakeWeb3Tx: nonce is not a parseable u256: '" +
+                                  transaction.data.nonce + "' (" + e.what() + ")"));
     }
     // gasPrice stays random so two fakes sharing a nonce still get distinct hashes, which some
     // tests rely on to tell "duplicate hash" apart from "duplicate nonce".

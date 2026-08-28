@@ -150,7 +150,13 @@ public:
         std::unique_lock lock(m_mutex);
         for (auto&& transaction : transactions)
         {
-            add(std::forward<decltype(transaction)>(transaction));
+            if (!transaction) [[unlikely]]
+            {
+                continue;  // same silent skip as the single-transaction add()
+            }
+            // addImpl, NOT add(): the lock is already held here and m_mutex is not recursive.
+            addImpl(std::forward<decltype(transaction)>(transaction),
+                /*replaceOnNonceConflict=*/true);
         }
     }
 

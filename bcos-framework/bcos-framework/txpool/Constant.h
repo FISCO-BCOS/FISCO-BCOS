@@ -32,5 +32,11 @@ constexpr int MAX_INITCODE_SIZE = 2 * MAX_CODE_SIZE;
 // neither evmone nor geth has an equivalent (geth uses AccountQueue/GlobalQueue quotas instead).
 // Lives here rather than in bcos-txpool so the admission layer can apply the same window without
 // depending on a transaction pool.
+//
+// Namespaced, unlike the EIP constants above: these two names are generic enough to collide
+// with unrelated code, and they are new here -- they used to live inside bcos::txpool.
+namespace bcos::protocol
+{
 constexpr int64_t DEFAULT_BLOCK_LIMIT = 600;
 constexpr uint64_t DEFAULT_WEB3_NONCE_CHECK_LIMIT = DEFAULT_BLOCK_LIMIT * 1000;
+}  // namespace bcos::protocol

@@ -39,6 +39,6 @@ static constexpr const size_t MAX_RETRY_NOTIFY_TIME = 3;
 static constexpr const size_t DEFAULT_POOL_LIMIT = 15000;
 // Defined in bcos-framework/txpool/Constant.h: the admission layer applies the same window and
 // cannot depend on this module.
-using ::DEFAULT_BLOCK_LIMIT;
-using ::DEFAULT_WEB3_NONCE_CHECK_LIMIT;
+using bcos::protocol::DEFAULT_BLOCK_LIMIT;
+using bcos::protocol::DEFAULT_WEB3_NONCE_CHECK_LIMIT;
 }  // namespace bcos::txpool
