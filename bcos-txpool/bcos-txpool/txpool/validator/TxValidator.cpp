@@ -316,11 +316,12 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
     // Blob (0x03) is parseable but never admitted on L2: sendRawTransaction, the in-process
     // mempool and the engine payload validators all reject it through the shared dispatch
     // table — the P2P sync funnel must not become the one entry that lets a blob into the
-    // pool. Same status as the Deposit exclusion below.
+    // pool. BlobTxNotAllowed says WHY the tx was refused; the Deposit/Malformed/
+    // chainId-mismatch arms below keep InvalidChainId.
     if (bcos::engine::dispatchRawTransaction(_tx.extraTransactionBytes()) ==
         bcos::engine::RawTransactionKind::Blob)
     {
-        co_return TransactionStatus::InvalidChainId;
+        co_return TransactionStatus::BlobTxNotAllowed;
     }
     // Deposits have no chainId; they enter via the rollup pipeline, not the pool.
     if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Deposit)

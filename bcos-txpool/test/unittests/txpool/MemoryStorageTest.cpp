@@ -857,8 +857,10 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
             tx20Impl->mutableInner().extraTransactionBytes.assign(
                 blobPrefix.begin(), blobPrefix.end());
         }
+        // Finding BO: the blob gate now returns the dedicated BlobTxNotAllowed instead
+        // of the InvalidChainId shared with the Deposit/Malformed/mismatch arms.
         BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(tx20, nullptr, false, false) ==
-                    TransactionStatus::InvalidChainId);
+                    TransactionStatus::BlobTxNotAllowed);
     }
 
     // Matrix: T21 — extraTxBytes starting 0x7E (deposit) is rejected at the pool gate.
