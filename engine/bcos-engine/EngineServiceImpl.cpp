@@ -461,31 +461,34 @@ std::optional<std::string> bcos::engine::detail::compareWithBuiltPayload(
     return std::nullopt;
 }
 
-bcos::protocol::EthBlockVersion bcos::engine::detail::ethBlockVersionFor(std::uint32_t version)
+bcos::protocol::EthBlockVersion bcos::engine::detail::ethBlockVersionFor(evmc_revision rev)
 {
-    switch (version)
+    // Map the chain's EVM revision to the header fork era. PoS/Engine blocks are always
+    // LONDON-shaped or later; revisions below LONDON cannot occur on this path and are
+    // mapped to LONDON (the minimal post-merge shape). OSAKA has no distinct EthBlockVersion
+    // enumerator — its header RLP carries no new fields beyond PRAGUE, so it maps to PRAGUE.
+    switch (rev)
     {
-    case static_cast<std::uint32_t>(ApiVersion::V1):
+    case EVMC_LONDON:
+    case EVMC_PARIS:
         return bcos::protocol::EthBlockVersion::LONDON;
-    case static_cast<std::uint32_t>(ApiVersion::V2):
+    case EVMC_SHANGHAI:
         return bcos::protocol::EthBlockVersion::SHANGHAI;
-    case static_cast<std::uint32_t>(ApiVersion::V3):
+    case EVMC_CANCUN:
         return bcos::protocol::EthBlockVersion::CANCUN;
-    case static_cast<std::uint32_t>(ApiVersion::V4):
+    case EVMC_PRAGUE:
+    case EVMC_OSAKA:
         return bcos::protocol::EthBlockVersion::PRAGUE;
     default:
-        // A version beyond the known fork window must fail loudly here rather than being
-        // silently mapped to PRAGUE: the fork marker decides the RLP hash, so a wrong mapping
-        // would corrupt every block built under the unknown version.
-        BOOST_THROW_EXCEPTION(
-            UnsupportedEngineApiVersion{} << bcos::errinfo_comment{
-                "EngineService: unsupported Engine API version " + std::to_string(version)});
+        // FRONTIER..BERLIN cannot appear on a PoS/Engine chain; keeping the minimal
+        // post-merge shape is safe and fail-closed for any misconfiguration.
+        return bcos::protocol::EthBlockVersion::LONDON;
     }
 }
 
 void bcos::engine::detail::finalizeEthBlockHeader(bcos::protocol::BlockHeader& header,
     const ExecutionPayload& payload, std::optional<bcos::h256> parentBeaconBlockRoot,
-    std::uint32_t version)
+    bcos::protocol::EthBlockVersion forkVersion)
 {
     // Post-merge constants: the empty-ommers hash (keccak256(rlp([]))), difficulty 0 and nonce 0
     // are fixed on every PoS Ethereum block.
@@ -503,32 +506,35 @@ void bcos::engine::detail::finalizeEthBlockHeader(bcos::protocol::BlockHeader& h
     // whatever buildPayload placed in the payload (currently 0).
     header.setBaseFee(payload.baseFeePerGas);
 
-    // SHANGHAI+ (V2): withdrawalsRoot. The withdrawals trie root is not computed yet, so the
+    // SHANGHAI+ : withdrawalsRoot. The withdrawals trie root is not computed yet, so the
     // empty-trie root is used as a placeholder.
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
+    if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)
     {
         header.setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
     }
 
-    // CANCUN+ (V3): blob gas fields and parent beacon block root.
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
+    // CANCUN+ : blob gas fields and parent beacon block root. buildPayload always fills the
+    // blob pair for the V3+ payload shape (and validatePayloadAttributes requires the beacon
+    // root), so require the values instead of defaulting to zero — a missing field must not
+    // silently hash as an explicit zero (absent and present-zero would share one sentinel).
+    if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN)
     {
-        header.setBlobGasUsed(payload.blobGasUsed.value_or(bcos::u256(0)));
-        header.setExcessBlobGas(payload.excessBlobGas.value_or(bcos::u256(0)));
-        header.setParentBeaconBlockRoot(parentBeaconBlockRoot.value_or(bcos::h256{}));
+        header.setBlobGasUsed(payload.blobGasUsed.value());
+        header.setExcessBlobGas(payload.excessBlobGas.value());
+        header.setParentBeaconBlockRoot(parentBeaconBlockRoot.value());
     }
 
-    // PRAGUE (V4): EIP-7685 execution-requests hash. FISCO-BCOS produces no execution
+    // PRAGUE : EIP-7685 execution-requests hash. FISCO-BCOS produces no execution
     // requests, so the canonical empty-requests hash (sha256 of the empty input,
     // 0xe3b0c442…) is used — the value the RLP hash must carry to validate as PRAGUE.
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
+    if (forkVersion >= bcos::protocol::EthBlockVersion::PRAGUE)
     {
         header.setRequestsHash(bcos::crypto::HashType(
             "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
     }
 
     // Mark the header as an Eth header, then compute and inject its RLP hash.
-    header.setEthBlockVersion(ethBlockVersionFor(version));
+    header.setEthBlockVersion(forkVersion);
     if (auto error = bcos::protocol::EthBlockHeader::calculateRLPHash(header))
     {
         BOOST_THROW_EXCEPTION(std::runtime_error{

@@ -297,6 +297,136 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseEthHeaderReadsFieldsFromHeader)
     BOOST_CHECK_EQUAL(specAddr, "5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
 }
 
+// Build an Eth header with the given fork marker plus the fork-gated fields that fork
+// would carry, so the RPC response shape can be asserted per fork.
+static std::shared_ptr<bcos::protocol::Block> makeEthHeaderBlock(
+    std::shared_ptr<bcos::protocol::BlockFactory> const& blockFactory,
+    std::shared_ptr<bcos::crypto::Hash> const& hashImpl, bcos::protocol::EthBlockVersion version,
+    std::optional<bcos::u256> baseFee, std::optional<bcos::h256> withdrawalsRoot,
+    std::optional<bcos::u256> blobGasUsed, std::optional<bcos::u256> excessBlobGas,
+    std::optional<bcos::h256> parentBeaconBlockRoot, std::optional<bcos::h256> requestsHash)
+{
+    auto block = blockFactory->createBlock();
+    auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(7);
+    header->setTimestamp(1700000000 * 1000LL);  // BlockHeader milliseconds == 1700000000 s
+    header->setEthBlockVersion(version);
+    header->setParentInfo(
+        bcos::protocol::ParentInfo{.blockNumber = 6,
+            .blockHash = bcos::crypto::HashType(
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")});
+    header->setUncleHash(bcos::crypto::HashType(
+        "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
+    header->setCoinbase(bcos::Address("1234567890abcdef1234567890abcdef12345678"));
+    header->setDifficulty(bcos::u256(0));
+    header->setNonce(bcos::h64(0));
+    header->setPrevRandao(
+        bcos::h256("1111111111111111111111111111111111111111111111111111111111111111"));
+    header->setGasLimit(bcos::u256(30000000));
+    header->setGasUsed(bcos::u256(21000));
+    header->setStateRoot(
+        bcos::h256("4444444444444444444444444444444444444444444444444444444444444444"));
+    header->setTxsRoot(
+        bcos::h256("5555555555555555555555555555555555555555555555555555555555555555"));
+    header->setReceiptsRoot(
+        bcos::h256("6666666666666666666666666666666666666666666666666666666666666666"));
+    bcos::Bloom bloom;
+    bloom[0] = 0xab;
+    header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+    if (baseFee)
+    {
+        header->setBaseFee(*baseFee);
+    }
+    if (withdrawalsRoot)
+    {
+        header->setWithdrawalsRoot(*withdrawalsRoot);
+    }
+    if (blobGasUsed)
+    {
+        header->setBlobGasUsed(*blobGasUsed);
+    }
+    if (excessBlobGas)
+    {
+        header->setExcessBlobGas(*excessBlobGas);
+    }
+    if (parentBeaconBlockRoot)
+    {
+        header->setParentBeaconBlockRoot(*parentBeaconBlockRoot);
+    }
+    if (requestsHash)
+    {
+        header->setRequestsHash(*requestsHash);
+    }
+    header->calculateHash(*hashImpl);
+    block->setBlockHeader(header);
+    return block;
+}
+
+// The fork-gated key matrix must match geth's eth_getBlock* shape exactly: LONDON has only
+// baseFeePerGas; SHANGHAI adds withdrawals/withdrawalsRoot; CANCUN adds the blob trio;
+// PRAGUE adds requestsHash. A wrong presence/absence on any fork must fail here.
+BOOST_AUTO_TEST_CASE(combineBlockResponseEthForkShapesGateKeys)
+{
+    using bcos::protocol::EthBlockVersion;
+
+    struct Case
+    {
+        EthBlockVersion version;
+        bool expectBaseFee;
+        bool expectWithdrawals;
+        bool expectBlobTrio;
+        bool expectRequestsHash;
+    };
+    std::vector<Case> const cases{
+        {EthBlockVersion::LONDON, true, false, false, false},
+        {EthBlockVersion::SHANGHAI, true, true, false, false},
+        {EthBlockVersion::CANCUN, true, true, true, false},
+        {EthBlockVersion::PRAGUE, true, true, true, true},
+    };
+
+    for (auto const& c : cases)
+    {
+        // The header must carry exactly the fields its fork permits: validateHeader
+        // forbids a field the version does not know (e.g. withdrawalsRoot on LONDON).
+        auto baseFee = bcos::u256(1000000000);
+        std::optional<bcos::h256> withdrawalsRoot;
+        std::optional<bcos::u256> blobGasUsed;
+        std::optional<bcos::u256> excessBlobGas;
+        std::optional<bcos::h256> parentBeaconBlockRoot;
+        std::optional<bcos::h256> requestsHash;
+        if (c.expectWithdrawals)
+        {
+            withdrawalsRoot = bcos::h256(
+                "2222222222222222222222222222222222222222222222222222222222222222");
+        }
+        if (c.expectBlobTrio)
+        {
+            blobGasUsed = bcos::u256(0);
+            excessBlobGas = bcos::u256(0);
+            parentBeaconBlockRoot = bcos::h256(
+                "3333333333333333333333333333333333333333333333333333333333333333");
+        }
+        if (c.expectRequestsHash)
+        {
+            requestsHash = bcos::h256(
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+        }
+        auto block = makeEthHeaderBlock(m_blockFactory, hashImpl, c.version, baseFee,
+            withdrawalsRoot, blobGasUsed, excessBlobGas, parentBeaconBlockRoot, requestsHash);
+
+        Json::Value result(Json::objectValue);
+        combineBlockResponse(result, *block, /*fullTxs=*/false);
+
+        BOOST_CHECK_EQUAL(result.isMember("baseFeePerGas"), c.expectBaseFee);
+        BOOST_CHECK_EQUAL(result.isMember("withdrawals"), c.expectWithdrawals);
+        BOOST_CHECK_EQUAL(result.isMember("withdrawalsRoot"), c.expectWithdrawals);
+        BOOST_CHECK_EQUAL(result.isMember("blobGasUsed"), c.expectBlobTrio);
+        BOOST_CHECK_EQUAL(result.isMember("excessBlobGas"), c.expectBlobTrio);
+        BOOST_CHECK_EQUAL(result.isMember("parentBeaconBlockRoot"), c.expectBlobTrio);
+        BOOST_CHECK_EQUAL(result.isMember("requestsHash"), c.expectRequestsHash);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(combineTxResponseShapesTransaction)
 {
     auto txFactory = m_blockFactory->transactionFactory();

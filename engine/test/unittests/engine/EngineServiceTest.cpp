@@ -168,6 +168,20 @@ struct RealGlobalStateStorageFixture
     RealGlobalCheckpointBackend checkpointBackend{backendStorage};
     RealGlobalStateStorage storage{checkpointBackend};
 
+    explicit RealGlobalStateStorageFixture(evmc_revision rev = EVMC_CANCUN)
+    {
+        // The Engine service runs only on executor_version=2 with an explicit EVMC
+        // revision. The default models the "Karst" chain (CANCUN) these tests mostly
+        // drive; tests that exercise older FCU method versions (V1/V2) pass SHANGHAI so
+        // the attribute shape the request can express matches the chain fork. Without an
+        // explicit revision, buildPayload's header-fork derivation would fall back to the
+        // compile-time default (OSAKA -> PRAGUE) instead of the intended era.
+        writeSysConfig(
+            magic_enum::enum_name(ledger::SystemConfig::executor_version),
+            std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+        writeSysConfig(ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(rev, {}));
+    }
+
     void setBlockNumber(const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
     {
         task::syncWait(writeBlockNumberToStorage(backendStorage, blockHash, blockNumber));
@@ -182,6 +196,16 @@ struct RealGlobalStateStorageFixture
         std::copy_n(sender.begin(), std::min(sender.size(), sizeof(addr.bytes)), addr.bytes);
         ledger::account::EVMAccount account{backendStorage, addr, false};
         task::syncWait(account.setNonce(std::move(nonce)));
+    }
+
+private:
+    void writeSysConfig(std::string_view key, std::string value)
+    {
+        storage::Entry entry;
+        entry.set(bcos::storage::serialize::encode(
+            ledger::SystemConfigEntry{std::move(value), 0}));
+        task::syncWait(storage2::writeOne(backendStorage,
+            bcos::executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
     }
 };
 
@@ -438,7 +462,10 @@ BOOST_AUTO_TEST_CASE(exchange_capabilities_returns_supported_methods)
 BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_payload)
 {
     MemPoolImpl memPool;
-    RealGlobalStateStorageFixture globalStateStorageFixture;
+    // A SHANGHAI chain: the V2 forkchoiceUpdated attribute shape (withdrawals, no blob
+    // fields) matches this era; on the CANCUN default fixture the same request is rightly
+    // rejected for lacking parentBeaconBlockRoot.
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
         c_initialBlockNumber, c_initialBlockNumber);
@@ -808,14 +835,15 @@ BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_ro
     BOOST_REQUIRE(result.payloadId.has_value());
 
     // buildPayload stored the attributes' beacon root in the payload cache; getPayload
-    // must return it. withdrawalsRoot carries the zero placeholder on V3+ builds (B4:
-    // required for the getPayloadV5 -> newPayloadV4 round trip) until real-value header
-    // wiring lands.
+    // must return it. withdrawalsRoot carries the empty-trie root placeholder on
+    // SHANGHAI+ chains (B4: required for the getPayloadV5 -> newPayloadV4 round trip) until
+    // real-value header wiring lands — and the served value agrees with the hashed header.
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
     BOOST_REQUIRE(payload->parentBeaconBlockRoot.has_value());
     BOOST_CHECK_EQUAL(*payload->parentBeaconBlockRoot, *payloadAttributes.parentBeaconBlockRoot);
     BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
-    BOOST_CHECK_EQUAL(*payload->executionPayload.withdrawalsRoot, h256{});
+    BOOST_CHECK_EQUAL(
+        *payload->executionPayload.withdrawalsRoot, bcos::ledger::mpt::emptyRootHash());
 
     // newPayload carries both fields back in; the committed cache entry keeps them.
     // This exercises the structure layer only: withdrawalsRoot is set directly on the
@@ -844,7 +872,8 @@ BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_ro
 BOOST_AUTO_TEST_CASE(build_payload_reassembles_web3_raw_bytes)
 {
     MemPoolImpl memPool;
-    RealGlobalStateStorageFixture globalStateStorageFixture;
+    // A SHANGHAI chain, matching the V2 forkchoiceUpdated attribute shape used below.
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
         c_initialBlockNumber, c_initialBlockNumber);
@@ -1121,7 +1150,8 @@ BOOST_AUTO_TEST_CASE(no_tx_pool_true_excludes_mempool_transactions)
 BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
 {
     MemPoolImpl memPool;
-    RealGlobalStateStorageFixture globalStateStorageFixture;
+    // A SHANGHAI chain, matching the V2 forkchoiceUpdated attribute shape used below.
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
         c_initialBlockNumber, c_initialBlockNumber);
@@ -1347,16 +1377,20 @@ BOOST_AUTO_TEST_CASE(new_payload_rejects_malformed_extra_data_shape)
 BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
 {
     MemPoolImpl memPool;
-    RealGlobalStateStorageFixture globalStateStorageFixture;
+    // A SHANGHAI chain, matching the V2 forkchoiceUpdated attribute shape used below (the
+    // CANCUN default fixture would reject the request for lacking parentBeaconBlockRoot).
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
         c_initialBlockNumber, c_initialBlockNumber);
     auto payloadAttributes = makePayloadAttributesV2();
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
-    // A V2 build carries neither blobGasUsed/excessBlobGas nor withdrawalsRoot, so
-    // serializing it in the V5 response shape would fabricate them. op-geth's GetPayloadV5
-    // allows only PayloadV3 builds and answers UnsupportedFork otherwise; so does this.
+    // A V2-tagged build on a SHANGHAI chain carries withdrawals but no blob fields or
+    // withdrawalsRoot; the V5 service window is keyed on the build's version tag, and
+    // op-geth's GetPayloadV5 admits only PayloadV3 builds — it answers UnsupportedFork
+    // otherwise; so does this. Serializing a V1/V2-tagged entry in the V5 response shape
+    // would fabricate fields the tag does not commit to.
     auto result =
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
     BOOST_REQUIRE(result.payloadId.has_value());
@@ -1485,20 +1519,24 @@ static bcos::protocol::BlockHeader::Ptr makeValidCancunHeader(
     return header;
 }
 
-BOOST_AUTO_TEST_CASE(ethBlockVersionForMapsEngineVersions)
+BOOST_AUTO_TEST_CASE(ethBlockVersionForMapsEvmRevisions)
 {
     using bcos::protocol::EthBlockVersion;
-    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(1)),
+    // Pre-London revisions cannot occur on a PoS/Engine path; they map to the minimal
+    // post-merge shape (LONDON).
+    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(EVMC_LONDON)),
         static_cast<int>(EthBlockVersion::LONDON));
-    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(2)),
+    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(EVMC_PARIS)),
+        static_cast<int>(EthBlockVersion::LONDON));
+    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(EVMC_SHANGHAI)),
         static_cast<int>(EthBlockVersion::SHANGHAI));
-    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(3)),
+    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(EVMC_CANCUN)),
         static_cast<int>(EthBlockVersion::CANCUN));
-    // V4 explicitly maps to the newest known fork.
-    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(4)),
+    // PRAGUE and OSAKA both hash as PRAGUE (OSAKA's header RLP adds no new fields).
+    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(EVMC_PRAGUE)),
         static_cast<int>(EthBlockVersion::PRAGUE));
-    // Versions beyond the known fork window fail loudly instead of silently mapping to PRAGUE.
-    BOOST_CHECK_THROW(bcos::engine::detail::ethBlockVersionFor(5), UnsupportedEngineApiVersion);
+    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(EVMC_OSAKA)),
+        static_cast<int>(EthBlockVersion::PRAGUE));
 }
 
 BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderFillsEthFieldsAndHash)
@@ -1517,7 +1555,8 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderFillsEthFieldsAndHash)
 
     auto beaconRoot = bcos::h256(
         "3333333333333333333333333333333333333333333333333333333333333333");
-    bcos::engine::detail::finalizeEthBlockHeader(*header, payload, beaconRoot, 3);
+    bcos::engine::detail::finalizeEthBlockHeader(
+        *header, payload, beaconRoot, bcos::protocol::EthBlockVersion::CANCUN);
 
     // The header is marked as an Eth CANCUN header.
     BOOST_CHECK(header->ethBlockVersion() == bcos::protocol::EthBlockVersion::CANCUN);
@@ -1555,7 +1594,8 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderVersionGatesFields)
     // V1/LONDON: baseFee present, no withdrawalsRoot / blob fields / beacon root.
     {
         auto header = makeValidCancunHeader(blockFactory, parentHash);
-        bcos::engine::detail::finalizeEthBlockHeader(*header, payload, std::nullopt, 1);
+        bcos::engine::detail::finalizeEthBlockHeader(
+            *header, payload, std::nullopt, bcos::protocol::EthBlockVersion::LONDON);
         BOOST_CHECK(header->ethBlockVersion() == bcos::protocol::EthBlockVersion::LONDON);
         BOOST_REQUIRE(header->baseFee().has_value());
         BOOST_CHECK(!header->withdrawalsRoot().has_value());
@@ -1567,7 +1607,8 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderVersionGatesFields)
     // V2/SHANGHAI: + withdrawalsRoot, no blob fields / beacon root.
     {
         auto header = makeValidCancunHeader(blockFactory, parentHash);
-        bcos::engine::detail::finalizeEthBlockHeader(*header, payload, std::nullopt, 2);
+        bcos::engine::detail::finalizeEthBlockHeader(
+            *header, payload, std::nullopt, bcos::protocol::EthBlockVersion::SHANGHAI);
         BOOST_CHECK(header->ethBlockVersion() == bcos::protocol::EthBlockVersion::SHANGHAI);
         BOOST_REQUIRE(header->withdrawalsRoot().has_value());
         BOOST_CHECK(!header->blobGasUsed().has_value());
@@ -1582,7 +1623,8 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderVersionGatesFields)
             "3333333333333333333333333333333333333333333333333333333333333333");
         payload.blobGasUsed = bcos::u256(0);
         payload.excessBlobGas = bcos::u256(0);
-        bcos::engine::detail::finalizeEthBlockHeader(*header, payload, beaconRoot, 3);
+        bcos::engine::detail::finalizeEthBlockHeader(
+            *header, payload, beaconRoot, bcos::protocol::EthBlockVersion::CANCUN);
         BOOST_CHECK(header->ethBlockVersion() == bcos::protocol::EthBlockVersion::CANCUN);
         BOOST_REQUIRE(header->withdrawalsRoot().has_value());
         BOOST_REQUIRE(header->blobGasUsed().has_value());
@@ -1598,8 +1640,8 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderVersionGatesFields)
             "3333333333333333333333333333333333333333333333333333333333333333");
         payload.blobGasUsed = bcos::u256(0);
         payload.excessBlobGas = bcos::u256(0);
-        BOOST_CHECK_NO_THROW(bcos::engine::detail::finalizeEthBlockHeader(
-            *header, payload, beaconRoot, 4));
+        BOOST_CHECK_NO_THROW(bcos::engine::detail::finalizeEthBlockHeader(*header, payload,
+            beaconRoot, bcos::protocol::EthBlockVersion::PRAGUE));
         BOOST_CHECK(header->ethBlockVersion() == bcos::protocol::EthBlockVersion::PRAGUE);
         BOOST_REQUIRE(header->requestsHash().has_value());
         BOOST_CHECK_EQUAL(header->requestsHash()->hex(),

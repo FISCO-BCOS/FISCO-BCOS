@@ -2,6 +2,7 @@
 #include "Log.h"
 
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-ledger/mpt/Constants.h>
 #include <bcos-utilities/Bloom.h>
 
 #include <range/v3/view/enumerate.hpp>
@@ -17,6 +18,11 @@ void bcos::rpc::combineBlockResponse(
 
     result["number"] = toQuantity(blockNumber);
     result["hash"] = blockHash.hexPrefixed();
+    // Genesis headers never carry parentInfo: BlockHeaderImpl::parentInfo() returns the
+    // zero hash for an empty list, so reading it verbatim reproduces the historical
+    // forced-zero behavior. This relies on every genesis build path leaving parentInfo
+    // unset (Ledger.cpp documents this invariant); a future artifact that carries a
+    // non-zero parent would surface here as a changed RPC value.
     result["parentHash"] = blockHeader->parentInfo().blockHash.hexPrefixed();
 
     if (isEth)
@@ -105,10 +111,13 @@ void bcos::rpc::combineBlockResponse(
         // header (only its trie root is); emit the always-empty list so Shanghai-shaped
         // clients keep working, and the root verbatim from the header.
         result["withdrawals"] = Json::Value(Json::arrayValue);
-        if (auto root = blockHeader->withdrawalsRoot())
-        {
-            result["withdrawalsRoot"] = root->hexPrefixed();
-        }
+        // geth emits withdrawalsRoot unconditionally for Shanghai+ blocks. The engine
+        // build path always sets it (finalizeEthBlockHeader uses the empty-trie root), so
+        // the absent case only arises for non-engine producers — emit the canonical
+        // empty-trie root to keep the response shape unconditional for the fork.
+        result["withdrawalsRoot"] =
+            blockHeader->withdrawalsRoot().value_or(bcos::ledger::mpt::emptyRootHash())
+                .hexPrefixed();
     }
     if (isEth && versionAtLeast(bcos::protocol::EthBlockVersion::CANCUN))
     {

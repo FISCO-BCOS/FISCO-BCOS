@@ -670,5 +670,32 @@ BOOST_AUTO_TEST_CASE(calculateHashClearsOnInvalid)
     BOOST_CHECK_THROW(header->hash(), std::exception);
 }
 
+// A wire header whose seconds timestamp would overflow int64 milliseconds must be rejected
+// by toTarsHeader's ×1000 conversion (seconds fit int64 but seconds*1000 does not). The
+// destination header must be cleared on this failure so a reused header cannot retain a
+// half-populated state.
+BOOST_AUTO_TEST_CASE(toTarsHeaderRejectsOverflowingTimestamp)
+{
+    auto header = makeEthHeader();
+    EthBlockHeader ethHeader(*header);
+    auto const& d = ethHeader.data();
+    // INT64_MAX seconds: fits int64 but ×1000 overflows the millisecond domain.
+    constexpr uint64_t hostileTimestamp = 0x7FFFFFFFFFFFFFFFULL;
+
+    bytes rlp;
+    codec::rlp::encode(rlp, d.parentInfo.blockHash, d.uncleHash, d.coinbase, d.stateRoot, d.txsRoot,
+        d.receiptsRoot, bcos::bytesConstRef(d.logsBloom.data(), d.logsBloom.size()), d.difficulty,
+        static_cast<uint64_t>(d.number), d.gasLimit, d.gasUsed, hostileTimestamp, d.extraData,
+        d.prevRandao, d.nonce, d.baseFee, d.withdrawalsHash, d.blobGasUsed, d.excessBlobGas,
+        d.parentBeaconRoot, d.requestsHash);
+
+    auto decodedHeader = makeEthHeader();
+    auto error = EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(rlp));
+    BOOST_REQUIRE(error != nullptr);
+    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+    // The destination must be empty on failure, matching the validateHeader error path.
+    BOOST_CHECK_EQUAL(decodedHeader->number(), 0);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

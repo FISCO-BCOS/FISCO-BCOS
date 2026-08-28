@@ -114,14 +114,21 @@ std::optional<std::string> validateExecutionPayload(
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
 
-// Map an Engine API version to the Ethereum fork era of the blocks it produces.
-bcos::protocol::EthBlockVersion ethBlockVersionFor(std::uint32_t version);
+// Map the chain's EVM revision (the per-block fork schedule from ledger config, i.e. the
+// geth config.LatestFork(timestamp) analog) to the Ethereum fork era the block header is
+// hashed as. The header fork must come from the CHAIN, not from the Engine API method
+// version — a CL/op-geth verifier recomputes the header hash from the chain's fork rules,
+// so a method-version-derived era would disagree with it once the API window and the chain
+// progress independently.
+bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
 
 // Fill the Ethereum header fields on a locally built header, mark it as an Eth header
 // (setEthBlockVersion), and compute + inject its RLP hash. Throws on validation/hash failure.
+// @p forkVersion is the era the header is hashed as, derived from the chain's EVM revision
+// (see ethBlockVersionFor); it drives which fork-gated fields the header carries.
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header,
     const ExecutionPayload& payload, std::optional<bcos::h256> parentBeaconBlockRoot,
-    std::uint32_t version);
+    bcos::protocol::EthBlockVersion forkVersion);
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -804,12 +811,50 @@ private:
             .withdrawalsRoot = std::nullopt,
         };
 
-        if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
+        // Step 2a: Get LedgerConfig via storage-based LedgerMethods
+        // Uses the parent block number since system configs are effective up to the parent
+        ledger::LedgerConfig ledgerConfig;
+        co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
+        auto blockVersion = ledgerConfig.compatibilityVersion();
+
+        // Header fork era comes from the chain's EVM revision (the per-block fork schedule
+        // in ledger config), not from the Engine API method version: a CL/op-geth verifier
+        // rebuilds the header from the chain's fork rules, so the hashed era must match the
+        // chain even when the API method version and the chain progress independently.
+        auto forkVersion = bcos::engine::detail::ethBlockVersionFor(
+            ledgerConfig.evmcRevisionForBlock(nextBlockNumber)
+                .value_or(ledger::EVMC_REVISION_DEFAULT));
+
+        // The method version's attribute shape must be able to express the chain fork's
+        // header fields: CANCUN requires the V3 attributes (parentBeaconBlockRoot),
+        // SHANGHAI the V2 attributes (withdrawals). An older FCU on a newer chain is a CL
+        // configuration error — the hashed header would demand fields the attributes never
+        // supplied — so fail loudly instead of hashing absent fields as explicit zeros.
+        if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
+            !payloadAttributes.parentBeaconBlockRoot.has_value())
+        {
+            BOOST_THROW_EXCEPTION(std::invalid_argument{
+                "EngineService: chain EVM revision requires the V3 payload attributes "
+                "(parentBeaconBlockRoot); forkchoiceUpdated must be called at version >= 3"});
+        }
+        if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI &&
+            !payloadAttributes.withdrawals.has_value())
+        {
+            BOOST_THROW_EXCEPTION(std::invalid_argument{
+                "EngineService: chain EVM revision requires the V2 payload attributes "
+                "(withdrawals); forkchoiceUpdated must be called at version >= 2"});
+        }
+
+        // The payload SHAPE also follows the chain fork, not the request's method version
+        // (geth's config.LatestFork(timestamp) analog): a CANCUN chain built through a V1/V2
+        // forkchoiceUpdated still yields a CANCUN-shaped payload, so the served field set
+        // always matches the fork the header was hashed as.
+        if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)
         {
             executionPayload.withdrawals =
                 payloadAttributes.withdrawals.value_or(std::vector<WithdrawalV1>{});
         }
-        if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
+        if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN)
         {
             executionPayload.blobGasUsed = u256(0);
             executionPayload.excessBlobGas = u256(0);
@@ -834,17 +879,15 @@ private:
             // here, getPayloadV5 serializes it, and newPayloadV4 accepts it on presence
             // alone. Until C4 computes and verifies the real L2ToL1MessagePasser storage
             // root, no L1 withdrawal proof may be taken against a root produced by this
-            // node. The v2 instantiation serving the zero root is pinned by
+            // node. The v2 instantiation serving the empty-trie root is pinned by
             // TestEthereumExecutorScheduler/engineServiceKarstServesZeroWithdrawalsRoot,
             // which has to be updated when the real value lands.
-            executionPayload.withdrawalsRoot = h256{};
+            //
+            // The served payload value and the hashed header value must agree (both the
+            // empty-trie root): a consumer rebuilding the header from the payload's
+            // withdrawalsRoot field must reproduce blockHash.
+            executionPayload.withdrawalsRoot = bcos::ledger::mpt::emptyRootHash();
         }
-
-        // Step 2a: Get LedgerConfig via storage-based LedgerMethods
-        // Uses the parent block number since system configs are effective up to the parent
-        ledger::LedgerConfig ledgerConfig;
-        co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
-        auto blockVersion = ledgerConfig.compatibilityVersion();
 
         // Fill gasLimit from ledger config. baseFeePerGas is carried in the payload (currently
         // 0 — FISCO-BCOS does not compute a real EIP-1559 base fee yet) and copied onto the Eth
@@ -877,7 +920,8 @@ private:
             emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setGasUsed(0);
             detail::finalizeEthBlockHeader(
-                *emptyHeader, executionPayload, payloadAttributes.parentBeaconBlockRoot, version);
+                *emptyHeader, executionPayload, payloadAttributes.parentBeaconBlockRoot,
+                forkVersion);
             executionPayload.stateRoot = emptyHeader->stateRoot();
             executionPayload.receiptsRoot = bcos::ledger::mpt::emptyRootHash();
             executionPayload.gasUsed = 0;
@@ -1010,7 +1054,7 @@ private:
         // onto the header (the header's logsBloom is part of the RLP hash).
         executionPayload.logsBloom = logsBloom;
         detail::finalizeEthBlockHeader(
-            *blockHeader, executionPayload, payloadAttributes.parentBeaconBlockRoot, version);
+            *blockHeader, executionPayload, payloadAttributes.parentBeaconBlockRoot, forkVersion);
 
         // Step 2i: Fill the execution payload with real values
         executionPayload.stateRoot = stateRoot;

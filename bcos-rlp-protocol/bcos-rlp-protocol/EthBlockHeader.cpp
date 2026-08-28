@@ -83,6 +83,11 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     if (ethHeader.data().timestamp >
         std::numeric_limits<int64_t>::max() / 1000)
     {
+        // Leave the destination in the same defined empty state as the validateHeader
+        // failure path below: the fields above are already written, so without a clear a
+        // caller that checks the error but reuses the header could observe a half-populated
+        // header from rejected hostile input.
+        header->clear();
         return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeader),
             "EthBlockHeader: timestamp out of representable millisecond range");
     }
@@ -226,10 +231,11 @@ bool EthBlockHeader::validateHeader(
     {
         return invalid("EthBlockHeader: invalid timestamp");
     }
-    // Internal timestamps are milliseconds and must be whole seconds so rlpEncode's /1000 is
-    // lossless. Rejecting here keeps the calculateRLPHash path on its Error-return contract
-    // (and BlockHeaderImpl::calculateHash's clear-on-failure promise) for a wire-supplied
-    // sub-second value — rlpEncode's throw then only backstops validate-skipping callers.
+    // Internal timestamps are milliseconds and must be whole seconds so the ms->s
+    // conversion (constructor /1000) is lossless. Rejecting here keeps the calculateRLPHash
+    // path on its Error-return contract (and BlockHeaderImpl::calculateHash's
+    // clear-on-failure promise); the constructor throws the same condition for direct
+    // ctor+rlpEncode callers that skip validateHeader.
     if (_header.timestamp() % 1000 != 0)
     {
         return invalid("EthBlockHeader: timestamp must be a whole number of seconds");
@@ -329,8 +335,18 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     // constructing from an incomplete header never crashes (validation is the caller's job,
     // e.g. via calculateRLPHash -> validateHeader).
     // Timestamp domain model: EthBlockHeaderData carries SECONDS (the Ethereum RLP domain);
-    // the internal BlockHeader stores MILLISECONDS. Convert unconditionally at this bridge
-    // (ms /1000) for every version — no per-version branching.
+    // the internal BlockHeader stores MILLISECONDS. The ms->s conversion happens exactly
+    // here (constructor) and the inverse at the tar boundary (toTarsHeader ×1000).
+    //
+    // A sub-second millisecond value (e.g. 1001 ms) would silently floor to a whole second
+    // and corrupt the RLP hash input. rlpEncode no longer rejects it (only negatives), so
+    // reject it at this sole ms->s conversion point — validateHeader's %1000 gate covers
+    // the calculateRLPHash path, and this covers every direct ctor+rlpEncode caller.
+    if (_header.timestamp() % 1000 != 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("timestamp must be a whole number of seconds"));
+    }
     m_version = _header.ethBlockVersion();
     auto parent = _header.parentInfo();
     m_data.parentInfo.blockNumber = parent.blockNumber;
