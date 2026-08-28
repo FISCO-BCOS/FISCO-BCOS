@@ -129,19 +129,11 @@ public:
         if (auto value = task::syncWait(
                 ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID)))
         {
-            // Same shared parser as every other web3_chain_id reader (executor fallback is
-            // the fourth consumer): raw lexical_cast would throw uncaught
-            // on a "0x"-prefixed config and wrap a negative one modulo 2^256.
-            auto const parsedChainId = ledger::parseWeb3ChainId(std::get<0>(*value));
-            if (!parsedChainId.has_value()) [[unlikely]]
-            {
-                EXECUTOR_LOG(WARNING) << LOG_DESC("fetchChainId failed: malformed web3_chain_id")
-                                      << LOG_KV("configured", std::get<0>(*value));
-                return {};
-            }
-            EXECUTOR_LOG(INFO) << LOG_DESC("fetchChainId success")
-                               << LOG_KV("chainId", *parsedChainId);
-            return bcos::toEvmC(*parsedChainId);
+            // Same shared parser AND the same fail-stop policy as the primary config path:
+            // a malformed web3_chain_id must halt loudly — parseConfiguredWeb3ChainId treats
+            // silent-zero as a state-root fork hazard because this value feeds the EVM
+            // CHAINID opcode. An absent row (no config at all) still returns unset below.
+            return bcos::toEvmC(ledger::parseConfiguredWeb3ChainId(std::get<0>(*value)));
         }
 
         return {};
