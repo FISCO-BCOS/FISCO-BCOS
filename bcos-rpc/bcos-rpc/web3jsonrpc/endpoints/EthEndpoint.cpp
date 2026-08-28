@@ -26,6 +26,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include <atomic>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 
@@ -306,10 +307,17 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
                 }
                 catch (std::exception const& e)
                 {
-                    // Same posture as ReceiptResponse.cpp (R1-12): a corrupt receipt must
-                    // skip one feeHistory row + warn, never -32603 the whole response
-                    WEB3_LOG(WARNING) << LOG_DESC("feeHistory: unparseable effectiveGasPrice")
-                                      << LOG_KV("value", effective) << LOG_KV("msg", e.what());
+                    // A corrupt receipt must skip one feeHistory row + warn, never -32603
+                    // the whole response. Throttled to the first occurrence per process,
+                    // matching ReceiptResponse.cpp (finding BR: this sits on the polled
+                    // feeHistory path — up to 128 blocks x rows per request — so an
+                    // unthrottled warning re-fires on every poll of a corrupt row).
+                    static std::atomic<bool> warnedOnce{false};
+                    if (!warnedOnce.exchange(true))
+                    {
+                        WEB3_LOG(WARNING) << LOG_DESC("feeHistory: unparseable effectiveGasPrice")
+                                          << LOG_KV("value", effective) << LOG_KV("msg", e.what());
+                    }
                     continue;
                 }
                 auto const priority =

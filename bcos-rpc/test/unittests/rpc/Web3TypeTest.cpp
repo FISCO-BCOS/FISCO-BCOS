@@ -1565,7 +1565,9 @@ BOOST_AUTO_TEST_CASE(classifyWeb3EnvelopeChainIdKinds)
     // slots must not gain a chainId binding) and 29..34 (below the EIP-155 base) — must NOT
     // ride the 27/28 unprotected exemption. Only 27/28 and >=35 are exempt/protected.
     {
-        for (uint64_t v : {0u, 1u, 26u, 29u, 34u})
+        // BS: interior values of the documented 29..34 band get their own cells — the
+        // endpoints alone would not catch a classifier that only special-cases 29/34.
+        for (uint64_t v : {0u, 1u, 26u, 29u, 30u, 31u, 32u, 33u, 34u})
         {
             bcos::bytes vItem;
             rlp::encode(vItem, v);
@@ -1711,6 +1713,74 @@ BOOST_AUTO_TEST_CASE(checkEip2SignatureBoundaryScalars)
     wide.insert(wide.begin(), bcos::byte{0});
     BOOST_REQUIRE_EQUAL(wide.size(), 33U);
     BOOST_CHECK(bcos::checkEip2Signature(wide, sLowInside) != nullptr);
+
+    // AV: EIP-2 (Homestead) also rejects s = 0 — pin the cell so deleting the production
+    // s != 0 guard (Web3Transaction decode / this check) flips the suite red.
+    auto const sZero = scalarBytes(bcos::u256{0});
+    BOOST_CHECK(bcos::checkEip2Signature(r, sZero) != nullptr);
+
+    // AV: the extreme wide s (n - 1) sits in the malleable band (n/2, n) and must reject,
+    // not just the n/2 + 1 boundary.
+    auto const sMax = scalarBytes(c_secp256k1n - 1);
+    BOOST_CHECK(bcos::checkEip2Signature(r, sMax) != nullptr);
+}
+
+// Finding BN: a withSig=false decode of a SEALED typed envelope must store 32-byte
+// zero-padded r/s (matching the withSig sibling and the legacy handler), while the
+// unsigned spelling — empty r/s placeholders — stays empty instead of being padded
+// into fabricated 32 zero bytes.
+BOOST_AUTO_TEST_CASE(typedNoSigDecodePadsPresentSignature)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto build = [](bcos::bytes const& yParityItem, bcos::bytes const& rItem,
+                        bcos::bytes const& sItem) {
+        bcos::bytes items;
+        rlp::encode(items, static_cast<uint64_t>(1));      // chainId
+        rlp::encode(items, static_cast<uint64_t>(0));      // nonce
+        rlp::encode(items, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
+        rlp::encode(items, static_cast<uint64_t>(2));      // maxFeePerGas
+        rlp::encode(items, static_cast<uint64_t>(21000));  // gas
+        rlp::encode(items, bcos::bytes(20, 0x11));         // to
+        rlp::encode(items, static_cast<uint64_t>(0));      // value
+        rlp::encode(items, bcos::bytes{});                 // data
+        bcos::bytes accessList;
+        rlp::encodeHeader(accessList, {.isList = true, .payloadLength = 0});
+        items.insert(items.end(), accessList.begin(), accessList.end());
+        items.insert(items.end(), yParityItem.begin(), yParityItem.end());
+        items.insert(items.end(), rItem.begin(), rItem.end());
+        items.insert(items.end(), sItem.begin(), sItem.end());
+        bcos::bytes envelope;
+        envelope.push_back(static_cast<bcos::byte>(bcos::rpc::TransactionType::EIP1559));
+        rlp::encodeHeader(envelope, {.isList = true, .payloadLength = items.size()});
+        envelope.insert(envelope.end(), items.begin(), items.end());
+        return envelope;
+    };
+
+    // Sealed envelope with trimmed (non-32-byte) r/s and canonical yParity 0x01.
+    bcos::bytes sealed = build(bcos::bytes{0x01}, bcos::bytes{0x01}, bcos::bytes{0x02});
+    auto sealedRef = bcos::ref(sealed);
+    bcos::rpc::Web3Transaction tx{};
+    auto error = bcos::codec::rlp::decodeFromPayload(sealedRef, tx);
+    BOOST_REQUIRE_MESSAGE(error == nullptr,
+        "sealed-form decode failed: " << (error ? error->errorMessage() : std::string("<null>")));
+    BOOST_REQUIRE_EQUAL(tx.signatureR.size(), 32U);
+    BOOST_CHECK(tx.signatureR.front() == bcos::byte{0});
+    BOOST_CHECK(tx.signatureR.back() == bcos::byte{0x01});
+    BOOST_REQUIRE_EQUAL(tx.signatureS.size(), 32U);
+    BOOST_CHECK(tx.signatureS.back() == bcos::byte{0x02});
+
+    // Unsigned spelling per the handler contract: all-empty trailer (0x80 0x80 0x80) —
+    // parity 0 with empty r/s. Keeps empty r/s instead of fabricated zero padding.
+    bcos::bytes unsignedSpelling =
+        build(bcos::bytes{0x80}, bcos::bytes{0x80}, bcos::bytes{0x80});
+    auto unsignedRef = bcos::ref(unsignedSpelling);
+    bcos::rpc::Web3Transaction unsignedDecoded{};
+    error = bcos::codec::rlp::decodeFromPayload(unsignedRef, unsignedDecoded);
+    BOOST_REQUIRE_MESSAGE(error == nullptr,
+        "unsigned-spelling decode failed: "
+        << (error ? error->errorMessage() : std::string("<null>")));
+    BOOST_CHECK(unsignedDecoded.signatureR.empty());
+    BOOST_CHECK(unsignedDecoded.signatureS.empty());
 }
 
 // Matrix: T03 — a sealed legacy envelope whose nonce is the non-minimal 0x82 0x00 0x01

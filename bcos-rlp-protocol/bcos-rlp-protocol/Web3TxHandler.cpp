@@ -317,9 +317,13 @@ struct LegacyTxHandler : Web3TxHandler
                 }
             }
         }
-        if (withSig)
+        // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
+        // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
+        // must store 32-byte r/s exactly like the withSig sibling and the legacy handler.
+        // A genuinely unsigned spelling (both empty) stays unpadded — padSignature would
+        // fabricate 32 zero bytes for it.
+        if (withSig || !out.signatureR.empty() || !out.signatureS.empty())
         {
-            // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
         }
         // ListEnd parity (op-geth List/ListEnd): fields must consume exactly the declared
@@ -538,9 +542,13 @@ struct EIP2930TxHandler : Web3TxHandler
         {
             return decodeError;
         }
-        if (withSig)
+        // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
+        // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
+        // must store 32-byte r/s exactly like the withSig sibling and the legacy handler.
+        // A genuinely unsigned spelling (both empty) stays unpadded — padSignature would
+        // fabricate 32 zero bytes for it.
+        if (withSig || !out.signatureR.empty() || !out.signatureS.empty())
         {
-            // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
         }
         // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
@@ -759,9 +767,13 @@ struct EIP1559TxHandler : Web3TxHandler
         {
             return decodeError;
         }
-        if (withSig)
+        // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
+        // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
+        // must store 32-byte r/s exactly like the withSig sibling and the legacy handler.
+        // A genuinely unsigned spelling (both empty) stays unpadded — padSignature would
+        // fabricate 32 zero bytes for it.
+        if (withSig || !out.signatureR.empty() || !out.signatureS.empty())
         {
-            // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
         }
         // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
@@ -1145,9 +1157,13 @@ struct EIP4844TxHandler : Web3TxHandler
         {
             return decodeError;
         }
-        if (withSig)
+        // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
+        // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
+        // must store 32-byte r/s exactly like the withSig sibling and the legacy handler.
+        // A genuinely unsigned spelling (both empty) stays unpadded — padSignature would
+        // fabricate 32 zero bytes for it.
+        if (withSig || !out.signatureR.empty() || !out.signatureS.empty())
         {
-            // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
         }
         // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
@@ -1374,9 +1390,13 @@ struct EIP7702TxHandler : Web3TxHandler
         {
             return decodeError;
         }
-        if (withSig)
+        // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
+        // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
+        // must store 32-byte r/s exactly like the withSig sibling and the legacy handler.
+        // A genuinely unsigned spelling (both empty) stays unpadded — padSignature would
+        // fabricate 32 zero bytes for it.
+        if (withSig || !out.signatureR.empty() || !out.signatureS.empty())
         {
-            // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
         }
         // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.

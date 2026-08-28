@@ -92,6 +92,22 @@ BOOST_AUTO_TEST_CASE(ExactTargetReturnsParentBaseFee)
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(jovian, true), bcos::u256(1'000'000'000));
 }
 
+// Finding BT: the exact-target arm is NOT exempt from the Jovian minBaseFee floor — a
+// parent whose base fee sits below a raised floor must clamp, not let the feeHistory
+// prediction quote below the protocol floor.
+BOOST_AUTO_TEST_CASE(ExactTargetStillClampsToJovianMinBaseFee)
+{
+    // parent base fee 100 << minBaseFee 1_000, usage exactly at target.
+    auto const belowFloor = makeParent(bcos::u256(30'000'000), bcos::u256(15'000'000),
+        bcos::u256(100), jovianParams(1'000));
+    BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(belowFloor, true), bcos::u256(1'000));
+
+    // Steady state: a floor below the parent fee stays a no-op on exact target.
+    auto const aboveFloor = makeParent(bcos::u256(30'000'000), bcos::u256(15'000'000),
+        bcos::u256(1'000'000'000), jovianParams(1'000));
+    BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(aboveFloor, true), bcos::u256(1'000'000'000));
+}
+
 // Over target: baseFee += max(1, parentBaseFee * delta / gasTarget / denominator).
 BOOST_AUTO_TEST_CASE(OverTargetIncreasesByDeltaFee)
 {

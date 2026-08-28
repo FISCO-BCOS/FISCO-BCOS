@@ -14,7 +14,9 @@
  *  limitations under the License.
  *
  * @file OpBaseFee.h
- * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). Shared by engine and RPC.
+ * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). Consumed today only by the
+ * RPC feeHistory trailing prediction; the engine path does not call it (finding AR — the
+ * earlier "shared by engine and RPC" claim was aspirational).
  */
 
 #pragma once
@@ -79,13 +81,16 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
     }
 
     bcos::u256 const parentBaseFee = parent.baseFee().value_or(bcos::u256(0));
+    bcos::u256 result;
     if (gasMetered == gasTarget)
     {
-        return parentBaseFee;
+        // Exact target: the fee holds steady (delta 0) — but falls through to the Jovian
+        // minBaseFee floor below like every other arm. Finding BT: an early return here
+        // skipped the clamp and let the feeHistory trailing prediction quote below the
+        // protocol floor whenever the parent sat under a raised minBaseFee.
+        result = parentBaseFee;
     }
-
-    bcos::u256 result;
-    if (gasMetered > gasTarget)
+    else if (gasMetered > gasTarget)
     {
         // baseFee increases: max(1, parentBaseFee * delta / gasTarget / denominator)
         bcos::u256 deltaFee = parentBaseFee * (gasMetered - gasTarget);
@@ -102,7 +107,7 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
         result = deltaFee < parentBaseFee ? parentBaseFee - deltaFee : bcos::u256(0);
     }
 
-    // Jovian minBaseFee floor.
+    // Jovian minBaseFee floor — applies to all three arms (finding BT).
     if (minBaseFee.has_value() && result < *minBaseFee)
     {
         result = *minBaseFee;
