@@ -341,7 +341,7 @@ BOOST_AUTO_TEST_CASE(ManyItemsTwoByteKeys)
 
 BOOST_AUTO_TEST_CASE(LogsBloom)
 {
-    // 3 receipts with blooms: b0 = all-zero, b1 = single byte 0x01 at bit 0, b2 = 0x80 at byte 255
+    // 3 receipts with blooms: b0 = all-zero, b1 = 0x01 in byte 255, b2 = 0x80 in byte 0
     bcos::Bloom b0{};
     bcos::Bloom b1{};
     b1[255] = 0x01;

@@ -34,20 +34,25 @@ bcos::h256 computeIndexedTrieRoot(std::span<bcos::bytesConstRef const> items)
     }
 
     // Key each item by its RLP-encoded index, packed into ONE flat buffer (an
-    // rlp(uint64) key is at most 9 bytes) and referenced from the ref-pair vector —
-    // no per-key heap allocation, and no second intermediate vector. The values
-    // stay VIEWS into the caller's `items`, which outlive the call; computeRawTrieRoot
-    // sorts by ENCODED KEY BYTES internally (rlp(0)=0x80 > rlp(1)=0x01, so NOT
-    // numeric index order), so no ordering or value copying is needed here. The
-    // root-only entry point is used deliberately: the tx/receipt/withdrawal tries
-    // are never persisted, so accumulating the node map would only be thrown away.
+    // rlp(uint64) key is at most 9 bytes) and referenced from the ref-pair vector.
+    // The scratch `key` is hoisted out of the loop and cleared each iteration — a
+    // cleared std::vector keeps its capacity, so the per-key encode reuses one
+    // buffer instead of heap-allocating per item. Two O(N) index vectors remain
+    // (keySpans + keyRefs), plus one nibble-path allocation per entry inside
+    // computeRawTrieRootImpl. The values stay VIEWS into the caller's `items`,
+    // which outlive the call; computeRawTrieRoot sorts by ENCODED KEY BYTES
+    // internally (rlp(0)=0x80 > rlp(1)=0x01, so NOT numeric index order), so no
+    // ordering or value copying is needed here. The root-only entry point is used
+    // deliberately: the tx/receipt/withdrawal tries are never persisted, so
+    // accumulating the node map would only be thrown away.
     bcos::bytes keyBytes;
     keyBytes.reserve(items.size() * 2);
     std::vector<std::pair<size_t, size_t>> keySpans;  // (offset, length) into keyBytes
     keySpans.reserve(items.size());
+    bcos::bytes key;
     for (size_t i = 0; i < items.size(); ++i)
     {
-        bcos::bytes key;
+        key.clear();
         codec::rlp::encode(key, static_cast<uint64_t>(i));
         keySpans.emplace_back(keyBytes.size(), key.size());
         keyBytes.insert(keyBytes.end(), key.begin(), key.end());

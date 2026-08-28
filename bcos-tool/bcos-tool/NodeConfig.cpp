@@ -1188,13 +1188,15 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
 
     ledger::EthereumForkSchedule schedule;
     schedule.m_londonTime = readTs("london_time");
-    // Paris (The Merge) is timestamp-gated on chains with a PoW phase (Sepolia).
-    // A chain that is PoS from genesis (Holesky) can omit it; absent leaves it at
-    // 0 (active from genesis).
-    if (auto value = section->get_optional<std::string>("paris_time"))
-    {
-        schedule.m_parisTime = parseTs("paris_time", *value);
-    }
+    // Upstream, London is gated by a block number (LondonBlock) and Paris by
+    // TerminalTotalDifficulty (EIP-3675) — neither is a timestamp; only Shanghai and
+    // later forks carry *Time fields. london_time / paris_time are a deliberate EL-mode
+    // simplification to a single timestamp ladder (the verifier's revision ladder is
+    // timestamp-driven); converting the upstream activation point into a timestamp is
+    // the operator's responsibility. Both are REQUIRED: the schedule is frozen in the
+    // genesis pin, and an implicit 0 would be a silent "active from genesis" the rest
+    // of this loader refuses.
+    schedule.m_parisTime = readTs("paris_time");
     schedule.m_shanghaiTime = readTs("shanghai_time");
     schedule.m_cancunTime = readTs("cancun_time");
     schedule.m_pragueTime = readTs("prague_time");

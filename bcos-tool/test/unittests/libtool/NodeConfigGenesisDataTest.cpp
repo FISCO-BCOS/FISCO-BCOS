@@ -337,8 +337,8 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
         "version=2\n";
     const std::string schedule =
         "[ethereum]\nmode=el\n"
-        "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\ncancun_time=1710338135\n"
-        "prague_time=1746612311\n";
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612311\n";
 
     // Parses into the GenesisConfig and lands in the genesis pin.
     NodeConfig cfg(keyFactory);
@@ -347,7 +347,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     BOOST_CHECK(gc.m_ethereumELMode);  // [ethereum] mode=el declaration
     BOOST_REQUIRE(gc.m_ethereumForkSchedule.has_value());
     BOOST_CHECK_EQUAL(gc.m_ethereumForkSchedule->m_londonTime, 0u);
-    BOOST_CHECK_EQUAL(gc.m_ethereumForkSchedule->m_parisTime, 0u);  // omitted: PoS from genesis
+    BOOST_CHECK_EQUAL(gc.m_ethereumForkSchedule->m_parisTime, 0u);  // explicit: PoS from genesis
     BOOST_CHECK_EQUAL(gc.m_ethereumForkSchedule->m_shanghaiTime, 1681338455u);
     BOOST_CHECK_EQUAL(gc.m_ethereumForkSchedule->m_osakaTime,
         std::numeric_limits<uint64_t>::max());  // omitted: not yet active
@@ -365,7 +365,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     NodeConfig cfg2(keyFactory);
     BOOST_REQUIRE_NO_THROW(cfg2.loadGenesisConfigFromString(
         base + "[ethereum]\nmode=el\n"
-               "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\n"
+               "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
                "cancun_time=1710338135\nprague_time=1746612312\n"));
     BOOST_CHECK(
         data != bcos::tool::generateGenesisData(cfg2.genesisConfig(), *cfg2.ledgerConfig()));
@@ -421,8 +421,8 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
         // and the suite could not distinguish the two.
         "evm_revision=cancun\n";
     const std::string schedule =
-        "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\ncancun_time=1710338135\n"
-        "prague_time=1746612311\n";
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612311\n";
 
     // [fork_timestamps] without [ethereum] mode=el: rejected by validateL2Invariants.
     {
@@ -478,7 +478,7 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
         "version=2\n"
         "evm_revision=cancun\n"
         "[ethereum]\nmode=el\n"
-        "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
         "cancun_time=1710338135\nprague_time=1746612311\n";
     const std::string ini = "[ethereum]\nmode=el\n";
 
@@ -593,7 +593,7 @@ BOOST_AUTO_TEST_CASE(loadForkTimestampsReloadClears)
     // First load: EL declaration + fork schedule.
     BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
         base + "[ethereum]\nmode=el\n"
-               "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\n"
+               "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
                "cancun_time=1710338135\nprague_time=1746612311\n"));
     BOOST_CHECK(cfg.genesisConfig().m_ethereumELMode);
     BOOST_CHECK(cfg.genesisConfig().m_ethereumForkSchedule.has_value());
@@ -626,7 +626,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
         "version=2\n"
         "[ethereum]\nmode=el\n"
-        "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
         "cancun_time=1710338135\nprague_time=";
 
     // A leading '-' must not wrap to 2^64-1 ("fork never activates").
@@ -647,6 +647,18 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "0x67f9f25b\n"));
         BOOST_CHECK_EQUAL(
             cfg.genesisConfig().m_ethereumForkSchedule->m_pragueTime, 0x67f9f25bu);
+    }
+    // paris_time is REQUIRED: an omitted key must not silently default to 0 — a
+    // mainnet-shaped schedule (london_time > 0) would then be rejected by the
+    // fork-order ladder, and an implicit 0 is exactly the silent "active from
+    // genesis" default the rest of this loader refuses.
+    {
+        NodeConfig cfg(keyFactory);
+        std::string noParis = base;
+        noParis.replace(
+            noParis.find("paris_time=0\n"), std::string("paris_time=0\n").size(), "");
+        BOOST_CHECK_THROW(
+            cfg.loadGenesisConfigFromString(noParis + "1746612311\n"), InvalidConfig);
     }
 }
 
@@ -672,14 +684,14 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
         "version=2\n"
         "[ethereum]\nmode=el\n"
-        "[fork_timestamps]\n";
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\n";
 
     // Cancun earlier than Shanghai -> rejected.
     {
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_THROW(
             cfg.loadGenesisConfigFromString(
-                head + "london_time=0\nshanghai_time=1710338135\n"
+                head + "shanghai_time=1710338135\n"
                        "cancun_time=1681338455\nprague_time=1746612311\n"),
             InvalidConfig);
     }
@@ -688,7 +700,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_THROW(
             cfg.loadGenesisConfigFromString(
-                head + "london_time=0\nshanghai_time=1681338455\n"
+                head + "shanghai_time=1681338455\n"
                        "cancun_time=1710338135\nprague_time=1746612311\n"
                        "bpo1_time=1750000000\n"),
             InvalidConfig);
@@ -698,7 +710,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
         NodeConfig cfg(keyFactory);
         BOOST_REQUIRE_NO_THROW(
             cfg.loadGenesisConfigFromString(
-                head + "london_time=0\nshanghai_time=1681338455\n"
+                head + "shanghai_time=1681338455\n"
                        "cancun_time=1710338135\nprague_time=1746612311\n"
                        "osaka_time=1767225548\n"));
         BOOST_CHECK_EQUAL(
