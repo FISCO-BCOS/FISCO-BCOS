@@ -20,6 +20,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>  // c_secp256k1n* + Secp256k1Crypto
+#include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>  // web3ChainIdFromEnvelope (F4 unit tests)
 #include <bcos-rlp-protocol/Web3TxHandler.h>
@@ -1710,6 +1711,390 @@ BOOST_AUTO_TEST_CASE(checkEip2SignatureBoundaryScalars)
     wide.insert(wide.begin(), bcos::byte{0});
     BOOST_REQUIRE_EQUAL(wide.size(), 33U);
     BOOST_CHECK(bcos::checkEip2Signature(wide, sLowInside) != nullptr);
+}
+
+// Matrix: T03 — a sealed legacy envelope whose nonce is the non-minimal 0x82 0x00 0x01
+// must fail closed (NonCanonicalSize), not decode nonce=1.
+BOOST_AUTO_TEST_CASE(legacyEnvelopeNonCanonicalNonceRejected)
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    items.insert(items.end(), {0x82, 0x00, 0x01});  // nonce: padded 1
+    rlp::encode(items, static_cast<uint64_t>(1'000'000'000));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, static_cast<uint64_t>(38));
+    rlp::encode(items, bcos::bytes(32, 0x11));
+    rlp::encode(items, bcos::bytes(32, 0x22));
+    bcos::bytes envelope;
+    rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+    envelope.insert(envelope.end(), items.begin(), items.end());
+
+    auto bRef = bcos::ref(envelope);
+    Web3Transaction tx{};
+    auto const err = rlp::decode(bRef, tx);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::NonCanonicalSize));
+}
+
+// Matrix: T04 — deposit isSystemTx spelled 0x81 0x01 (canonical 1-byte string, not the
+// op-geth 0x01 / 0x80 whole-item forms) must reject and must not latch isSystemTx=true.
+BOOST_AUTO_TEST_CASE(depositNonCanonicalIsSystemTxRejected)
+{
+    namespace rlp = bcos::codec::rlp;
+    // depositGoldenEncoding false vector, with the isSystem empty-string 0x80 rewritten
+    // as 0x81 0x01 and the list payload length bumped 0x53 → 0x54 so the envelope stays
+    // structurally well-formed. Only the flag spelling is illegal.
+    std::string hex =
+        "7ef853a07bc967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d8"
+        "94dead000000000000000000000000000000000011"
+        "944200000000000000000000000000000000000022"
+        "64"
+        "80"
+        "8307a120"
+        "80"
+        "80";
+    BOOST_REQUIRE(hex.starts_with("7ef853"));
+    BOOST_REQUIRE(hex.ends_with("8080"));
+    hex.replace(2, 4, "f854");
+    hex.replace(hex.size() - 4, 4, "810180");
+
+    auto bytes = fromHex(hex);
+    auto bRef = bcos::ref(bytes);
+    Web3Transaction tx{};
+    auto const err = rlp::decode(bRef, tx);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::NonCanonicalSize));
+    BOOST_CHECK(!tx.isSystemTx);
+}
+
+// Matrix: T12 — EIP-1559 wire with a non-canonical maxFeePerGas must reject
+// NonCanonicalSize (not silently accept 1).
+BOOST_AUTO_TEST_CASE(eip1559EnvelopeNonCanonicalMaxFeeRejected)
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1'000'000'000));
+    items.insert(items.end(), {0x82, 0x00, 0x01});  // maxFeePerGas: padded 1
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    items.push_back(rlp::LIST_HEAD_BASE);
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes(32, 0x11));
+    rlp::encode(items, bcos::bytes(32, 0x22));
+    bcos::bytes envelope;
+    envelope.push_back(static_cast<byte>(bcos::rpc::TransactionType::EIP1559));
+    rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+    envelope.insert(envelope.end(), items.begin(), items.end());
+
+    auto bRef = bcos::ref(envelope);
+    Web3Transaction tx{};
+    auto const err = rlp::decode(bRef, tx);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::NonCanonicalSize));
+}
+
+// Matrix: T18 — parseWeb3ChainId is the shared config parser (decimal + 0x QUANTITY).
+BOOST_AUTO_TEST_CASE(parseWeb3ChainIdAcceptsDecimalAndHex)
+{
+    using bcos::ledger::parseWeb3ChainId;
+    {
+        auto const parsed = parseWeb3ChainId("1337");
+        BOOST_REQUIRE(parsed.has_value());
+        BOOST_CHECK(*parsed == 1337);
+    }
+    {
+        auto const parsed = parseWeb3ChainId("0x539");
+        BOOST_REQUIRE(parsed.has_value());
+        BOOST_CHECK(*parsed == 1337);
+    }
+    BOOST_CHECK(!parseWeb3ChainId("0x").has_value());
+    BOOST_CHECK(!parseWeb3ChainId("zz").has_value());
+    BOOST_CHECK(!parseWeb3ChainId("").has_value());
+    BOOST_CHECK(!parseWeb3ChainId("-5").has_value());
+}
+
+// Matrix: T06 — EIP-7702 auth yParity spelled 0x00 must reject InvalidVInSignature
+// and must not succeed as yParity=0 (only whole-item 0x80/0x01 are legal).
+BOOST_AUTO_TEST_CASE(authYParityBareZeroRejected)
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));  // chainId
+    rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+    rlp::encode(items, static_cast<uint64_t>(0));  // nonce
+    items.push_back(0x00);                         // yParity: bare zero, not 0x80
+    rlp::encode(items, static_cast<uint64_t>(1));  // r
+    rlp::encode(items, static_cast<uint64_t>(1));  // s
+    bcos::bytes entry;
+    rlp::encodeHeader(entry, rlp::Header{.isList = true, .payloadLength = items.size()});
+    entry.insert(entry.end(), items.begin(), items.end());
+
+    auto bRef = bcos::ref(entry);
+    AuthorizationListEntry decoded{};
+    decoded.yParity = 0;  // would be the silent-accept value
+    auto const err = rlp::decode(bRef, decoded);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::InvalidVInSignature));
+}
+
+// Matrix: T07 — deposit mint spelled 0x82 0x00 0x64 (padded 100) → NonCanonicalSize.
+BOOST_AUTO_TEST_CASE(depositNonCanonicalMintRejected)
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, h256("7bc967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d8"));
+    rlp::encode(items, Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, Address("0x4200000000000000000000000000000000000022"));
+    items.insert(items.end(), {0x82, 0x00, 0x64});  // mint: padded 100
+    rlp::encode(items, static_cast<uint64_t>(0));   // value
+    rlp::encode(items, static_cast<uint64_t>(500000));
+    items.push_back(0x80);  // isSystemTx = false
+    rlp::encode(items, bcos::bytes{});
+    bcos::bytes envelope;
+    envelope.push_back(static_cast<byte>(bcos::rpc::TransactionType::Deposit));
+    rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+    envelope.insert(envelope.end(), items.begin(), items.end());
+
+    auto bRef = bcos::ref(envelope);
+    Web3Transaction tx{};
+    auto const err = rlp::decode(bRef, tx);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::NonCanonicalSize));
+}
+
+// Matrix: T08 — leftover (decodeFromPayload) 1559 yParity spelled 0x00 → InvalidVInSignature.
+BOOST_AUTO_TEST_CASE(leftoverYParityBareZeroRejected)
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1'000'000'000));
+    rlp::encode(items, static_cast<uint64_t>(1'000'000'000));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    items.push_back(rlp::LIST_HEAD_BASE);
+    items.push_back(0x00);  // yParity: bare zero
+    rlp::encode(items, bcos::bytes(32, 0x11));
+    rlp::encode(items, bcos::bytes(32, 0x22));
+    bcos::bytes envelope;
+    envelope.push_back(static_cast<byte>(bcos::rpc::TransactionType::EIP1559));
+    rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+    envelope.insert(envelope.end(), items.begin(), items.end());
+
+    auto bRef = bcos::ref(envelope);
+    Web3Transaction tx{};
+    auto const err = rlp::decodeFromPayload(bRef, tx);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::InvalidVInSignature));
+}
+
+// Matrix: T09 — typed empty trailer 0x80 0x80 0x80 vs bare preimage both decode with
+// withSig=false, but the verbatim envelopes hash differently (handler NOTE).
+BOOST_AUTO_TEST_CASE(typedEmptyTrailerHashesDifferFromBarePreimage)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto make1559Fields = []() {
+        bcos::bytes items;
+        rlp::encode(items, static_cast<uint64_t>(1));
+        rlp::encode(items, static_cast<uint64_t>(0));
+        rlp::encode(items, static_cast<uint64_t>(1'000'000'000));
+        rlp::encode(items, static_cast<uint64_t>(1'000'000'000));
+        rlp::encode(items, static_cast<uint64_t>(21000));
+        rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+        rlp::encode(items, static_cast<uint64_t>(0));
+        rlp::encode(items, bcos::bytes{});
+        items.push_back(rlp::LIST_HEAD_BASE);
+        return items;
+    };
+    auto wrap = [](bcos::bytes const& items) {
+        bcos::bytes envelope;
+        envelope.push_back(static_cast<byte>(bcos::rpc::TransactionType::EIP1559));
+        rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+        envelope.insert(envelope.end(), items.begin(), items.end());
+        return envelope;
+    };
+
+    auto const bareItems = make1559Fields();
+    auto bare = wrap(bareItems);
+    auto paddedItems = bareItems;
+    paddedItems.insert(paddedItems.end(), {0x80, 0x80, 0x80});
+    auto padded = wrap(paddedItems);
+
+    Web3Transaction bareTx{};
+    auto bareRef = bcos::ref(bare);
+    BOOST_REQUIRE(rlp::decodeFromPayload(bareRef, bareTx) == nullptr);
+    BOOST_REQUIRE(bareRef.empty());
+    BOOST_CHECK(bareTx.type == rpc::TransactionType::EIP1559);
+
+    Web3Transaction paddedTx{};
+    auto paddedRef = bcos::ref(padded);
+    BOOST_REQUIRE(rlp::decodeFromPayload(paddedRef, paddedTx) == nullptr);
+    BOOST_REQUIRE(paddedRef.empty());
+    BOOST_CHECK(paddedTx.type == rpc::TransactionType::EIP1559);
+
+    // Verbatim commitment: the two envelopes are not the same bytes.
+    auto const bareHash = bcos::crypto::keccak256Hash(bcos::ref(bare));
+    auto const paddedHash = bcos::crypto::keccak256Hash(bcos::ref(padded));
+    BOOST_CHECK(bareHash != paddedHash);
+    // Re-encode always emits an empty trailer, so both decoded objects collapse to padded.
+    BOOST_CHECK(bareTx.encode() == padded);
+    BOOST_CHECK(paddedTx.encode() == padded);
+    BOOST_CHECK(bareTx.encodeForSign() == paddedTx.encodeForSign());
+}
+
+// Matrix: T15 — leftover high-s on EIP-2930 (0x01) must reject InvalidVInSignature.
+BOOST_AUTO_TEST_CASE(eip2930LeftoverHighSRejected)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto make2930 = [](bcos::bytes const& s) {
+        bcos::bytes items;
+        rlp::encode(items, static_cast<uint64_t>(1));
+        rlp::encode(items, static_cast<uint64_t>(0));
+        rlp::encode(items, static_cast<uint64_t>(1'000'000'000));  // gasPrice
+        rlp::encode(items, static_cast<uint64_t>(21000));
+        rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+        rlp::encode(items, static_cast<uint64_t>(0));
+        rlp::encode(items, bcos::bytes{});
+        items.push_back(rlp::LIST_HEAD_BASE);
+        rlp::encode(items, static_cast<uint64_t>(0));
+        rlp::encode(items, bcos::bytes(32, 0x11));
+        rlp::encode(items, s);
+        bcos::bytes envelope;
+        envelope.push_back(static_cast<byte>(bcos::rpc::TransactionType::EIP2930));
+        rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+        envelope.insert(envelope.end(), items.begin(), items.end());
+        return envelope;
+    };
+    {
+        auto bytes = make2930(bcos::bytes(32, 0xff));
+        auto bRef = bcos::ref(bytes);
+        Web3Transaction tx{};
+        auto const err = rlp::decodeFromPayload(bRef, tx);
+        BOOST_REQUIRE(err != nullptr);
+        BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::InvalidVInSignature));
+    }
+    {
+        auto bytes = make2930(bcos::bytes(32, 0x22));
+        auto bRef = bcos::ref(bytes);
+        Web3Transaction tx{};
+        BOOST_REQUIRE(rlp::decodeFromPayload(bRef, tx) == nullptr);
+        BOOST_CHECK(tx.type == rpc::TransactionType::EIP2930);
+    }
+}
+
+// Matrix: T16 — legacy tail r non-empty + s empty is sealed, not preimage; v=5 →
+// InvalidVInSignature.
+BOOST_AUTO_TEST_CASE(legacyTailNonEmptyREmptySIsSealed)
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1'000'000'000));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, static_cast<uint64_t>(5));  // item7 = v=5
+    items.push_back(0x01);                         // item8 = r non-empty
+    items.push_back(0x80);                         // item9 = s empty
+    bcos::bytes envelope;
+    rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+    envelope.insert(envelope.end(), items.begin(), items.end());
+
+    auto bRef = bcos::ref(envelope);
+    Web3Transaction tx{};
+    auto const err = rlp::decodeFromPayload(bRef, tx);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::InvalidVInSignature));
+}
+
+// Matrix: T17 — (chainId=27, 0, 0) preimage is preimage, not Homestead v=27.
+BOOST_AUTO_TEST_CASE(legacyPreimageChainId27NotHomesteadV)
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1'000'000'000));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, static_cast<uint64_t>(27));  // chainId placeholder
+    items.push_back(0x80);
+    items.push_back(0x80);
+    bcos::bytes envelope;
+    rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+    envelope.insert(envelope.end(), items.begin(), items.end());
+
+    auto bRef = bcos::ref(envelope);
+    Web3Transaction tx{};
+    BOOST_REQUIRE(rlp::decodeFromPayload(bRef, tx) == nullptr);
+    BOOST_CHECK(tx.type == rpc::TransactionType::Legacy);
+    BOOST_REQUIRE(tx.chainId.has_value());
+    BOOST_CHECK_EQUAL(tx.chainId.value(), 27U);
+}
+
+// Matrix: T13 — 7702 auth[0].chainId spelled 0x82 0x00 0x01 → decode fails NonCanonicalSize.
+BOOST_AUTO_TEST_CASE(authChainIdLeadingZeroRejected)
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    items.insert(items.end(), {0x82, 0x00, 0x01});  // chainId: padded 1
+    rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    items.push_back(0x80);  // yParity = 0
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    bcos::bytes entry;
+    rlp::encodeHeader(entry, rlp::Header{.isList = true, .payloadLength = items.size()});
+    entry.insert(entry.end(), items.begin(), items.end());
+
+    auto bRef = bcos::ref(entry);
+    AuthorizationListEntry decoded{};
+    auto const err = rlp::decode(bRef, decoded);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::NonCanonicalSize));
+}
+
+// Matrix: T14 — EIP-4844 wire with non-canonical maxFeePerBlobGas → NonCanonicalSize.
+BOOST_AUTO_TEST_CASE(eip4844EnvelopeNonCanonicalBlobFeeRejected)
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1'000'000'000));
+    rlp::encode(items, static_cast<uint64_t>(1'000'000'000));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    items.push_back(rlp::LIST_HEAD_BASE);           // empty accessList
+    items.insert(items.end(), {0x82, 0x00, 0x01});  // maxFeePerBlobGas: padded 1
+    items.push_back(rlp::LIST_HEAD_BASE);           // empty blobVersionedHashes
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes(32, 0x11));
+    rlp::encode(items, bcos::bytes(32, 0x22));
+    bcos::bytes envelope;
+    envelope.push_back(static_cast<byte>(bcos::rpc::TransactionType::EIP4844));
+    rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+    envelope.insert(envelope.end(), items.begin(), items.end());
+
+    auto bRef = bcos::ref(envelope);
+    Web3Transaction tx{};
+    auto const err = rlp::decode(bRef, tx);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::NonCanonicalSize));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

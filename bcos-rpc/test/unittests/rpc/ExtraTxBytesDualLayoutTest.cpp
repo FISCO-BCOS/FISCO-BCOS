@@ -74,6 +74,36 @@ Web3Transaction decodeNoSig(std::string_view hex)
     BOOST_REQUIRE(ref.empty());
     return tx;
 }
+
+Web3Transaction decodeNoSigBytes(bcos::bytes bytes)
+{
+    auto ref = bcos::ref(bytes);
+    Web3Transaction tx{};
+    auto error = codec::rlp::decodeFromPayload(ref, tx);
+    BOOST_REQUIRE(error == nullptr);
+    BOOST_REQUIRE(ref.empty());
+    return tx;
+}
+
+// Shared typed-tx body for dual-layout probes. Signatures are structurally valid
+// (yParity 0/1, 32-byte r/s below n/2) so leftover EIP-2 does not mask the layout.
+Web3Transaction makeTypedDualLayoutTx(rpc::TransactionType type, uint64_t chainId)
+{
+    Web3Transaction tx;
+    tx.type = type;
+    tx.chainId = chainId;
+    tx.nonce = 7;
+    tx.maxPriorityFeePerGas = 1'000'000'000;
+    tx.maxFeePerGas = 2'000'000'000;
+    tx.gasLimit = 21000;
+    tx.to = Address("0x727fc6a68321b754475c668a6abfb6e9e71c169a");
+    tx.value = 0;
+    tx.data = {};
+    tx.signatureV = 1;
+    tx.signatureR.assign(32, static_cast<bcos::byte>(0x11));
+    tx.signatureS.assign(32, static_cast<bcos::byte>(0x22));
+    return tx;
+}
 }  // namespace
 
 BOOST_FIXTURE_TEST_SUITE(extraTxBytesDualLayout, RPCFixture)
@@ -164,6 +194,67 @@ BOOST_AUTO_TEST_CASE(wireDecodeReencodesToCanonicalHash)
     auto const reencoded = tx.encode();
     BOOST_CHECK(reencoded == bytes);
     BOOST_CHECK_EQUAL(tx.txHash(), HashType(fromHex(LEGACY_WIRE_HASH_HEX)));
+}
+
+// Matrix: T01 — EIP-2930 (0x01) preimage and sealed wire both survive decodeFromPayload.
+// Finding G: ExtraTx historically only pinned 0x02.
+BOOST_AUTO_TEST_CASE(eip2930PreimageAndWireDecodes)
+{
+    auto const built = makeTypedDualLayoutTx(rpc::TransactionType::EIP2930, 5);
+    {
+        auto const tx = decodeNoSigBytes(built.encodeForSign());
+        BOOST_CHECK(tx.type == rpc::TransactionType::EIP2930);
+        BOOST_REQUIRE(tx.chainId.has_value());
+        BOOST_CHECK_EQUAL(tx.chainId.value(), 5U);
+    }
+    {
+        auto const tx = decodeNoSigBytes(built.encode());
+        BOOST_CHECK(tx.type == rpc::TransactionType::EIP2930);
+        BOOST_REQUIRE(tx.chainId.has_value());
+        BOOST_CHECK_EQUAL(tx.chainId.value(), 5U);
+    }
+}
+
+// Matrix: T02 — EIP-7702 (0x04) preimage and sealed wire both survive decodeFromPayload.
+BOOST_AUTO_TEST_CASE(eip7702PreimageAndWireDecodes)
+{
+    auto const built = makeTypedDualLayoutTx(rpc::TransactionType::EIP7702, 5);
+    {
+        auto const tx = decodeNoSigBytes(built.encodeForSign());
+        BOOST_CHECK(tx.type == rpc::TransactionType::EIP7702);
+        BOOST_REQUIRE(tx.chainId.has_value());
+        BOOST_CHECK_EQUAL(tx.chainId.value(), 5U);
+    }
+    {
+        auto const tx = decodeNoSigBytes(built.encode());
+        BOOST_CHECK(tx.type == rpc::TransactionType::EIP7702);
+        BOOST_REQUIRE(tx.chainId.has_value());
+        BOOST_CHECK_EQUAL(tx.chainId.value(), 5U);
+    }
+}
+
+// Matrix: T11 — EIP-4844 (0x03) preimage and sealed wire must decodeFromPayload
+// without leftover InputTooLong (pool still rejects blobs; this is the decoder layout).
+BOOST_AUTO_TEST_CASE(eip4844PreimageAndWireDecodes)
+{
+    auto built = makeTypedDualLayoutTx(rpc::TransactionType::EIP4844, 5);
+    built.maxFeePerBlobGas = 1;
+    built.blobVersionedHashes.emplace_back(
+        HashType("abababababababababababababababababababababababababababababababab"));
+    {
+        auto const tx = decodeNoSigBytes(built.encodeForSign());
+        BOOST_CHECK(tx.type == rpc::TransactionType::EIP4844);
+        BOOST_REQUIRE(tx.chainId.has_value());
+        BOOST_CHECK_EQUAL(tx.chainId.value(), 5U);
+        BOOST_CHECK_EQUAL(tx.blobVersionedHashes.size(), 1U);
+    }
+    {
+        auto const tx = decodeNoSigBytes(built.encode());
+        BOOST_CHECK(tx.type == rpc::TransactionType::EIP4844);
+        BOOST_REQUIRE(tx.chainId.has_value());
+        BOOST_CHECK_EQUAL(tx.chainId.value(), 5U);
+        BOOST_CHECK_EQUAL(tx.blobVersionedHashes.size(), 1U);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

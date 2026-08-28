@@ -78,8 +78,9 @@ BOOST_AUTO_TEST_SUITE(Web3TxEnvelopeTailParityTest)
 // Clean full form (v >= 35): 6 fields + v + r + s, protected on chainId (v-35)>>1.
 BOOST_AUTO_TEST_CASE(cleanFullFormStillProtected)
 {
-    BOOST_CHECK(classify(legacyEnvelope(concat(sixFields(), concat(item(37), concat(item(1), item(1)))))) ==
-                bcos::rlp::protocol::Web3EnvelopeChainIdKind::Protected);
+    BOOST_CHECK(
+        classify(legacyEnvelope(concat(sixFields(), concat(item(37), concat(item(1), item(1)))))) ==
+        bcos::rlp::protocol::Web3EnvelopeChainIdKind::Protected);
 }
 
 // Clean preimage tail: 6 fields + chainId + empty + empty, protected on the chainId.
@@ -93,16 +94,17 @@ BOOST_AUTO_TEST_CASE(cleanPreimageTailStillProtected)
 // Clean v=27 full form stays exempt.
 BOOST_AUTO_TEST_CASE(cleanUnprotectedStillExempt)
 {
-    BOOST_CHECK(classify(legacyEnvelope(concat(sixFields(), concat(item(27), concat(item(1), item(1)))))) ==
-                bcos::rlp::protocol::Web3EnvelopeChainIdKind::Unprotected);
+    BOOST_CHECK(
+        classify(legacyEnvelope(concat(sixFields(), concat(item(27), concat(item(1), item(1)))))) ==
+        bcos::rlp::protocol::Web3EnvelopeChainIdKind::Unprotected);
 }
 
 // AW: junk item appended after the full form's (v, r, s) must classify Malformed —
 // previously the classifier ignored it while decode rejected the same bytes.
 BOOST_AUTO_TEST_CASE(junkItemAfterFullFormIsMalformed)
 {
-    auto env = legacyEnvelope(
-        concat(sixFields(), concat(item(37), concat(item(1), item(1)))), item(9));
+    auto env =
+        legacyEnvelope(concat(sixFields(), concat(item(37), concat(item(1), item(1)))), item(9));
     BOOST_CHECK(classify(env) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
 }
 
@@ -118,8 +120,8 @@ BOOST_AUTO_TEST_CASE(junkItemAfterPreimageTailIsMalformed)
 // AW: junk after an unprotected v=27 full form must not ride the exemption.
 BOOST_AUTO_TEST_CASE(junkItemAfterUnprotectedIsMalformed)
 {
-    auto env = legacyEnvelope(
-        concat(sixFields(), concat(item(27), concat(item(1), item(1)))), item(9));
+    auto env =
+        legacyEnvelope(concat(sixFields(), concat(item(27), concat(item(1), item(1)))), item(9));
     BOOST_CHECK(classify(env) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
 }
 
@@ -149,8 +151,8 @@ BOOST_AUTO_TEST_CASE(listShapedTrailingItemIsMalformed)
 BOOST_AUTO_TEST_CASE(overrunningTrailingItemIsMalformed)
 {
     bcos::bytes overrun{0xb9, 0xff, 0xff};  // long-string header claiming 65535 bytes
-    auto env = legacyEnvelope(
-        concat(sixFields(), concat(item(37), concat(item(1), item(1)))), overrun);
+    auto env =
+        legacyEnvelope(concat(sixFields(), concat(item(37), concat(item(1), item(1)))), overrun);
     BOOST_CHECK(classify(env) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
 }
 

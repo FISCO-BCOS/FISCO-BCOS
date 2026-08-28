@@ -8,6 +8,7 @@
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
@@ -24,6 +25,7 @@
 #include "bcos-txpool/txpool/validator/TxValidator.h"
 #include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/Error.h"
 #include "bcos-utilities/IOServicePool.h"
 
 #include <tbb/parallel_invoke.h>
@@ -126,6 +128,24 @@ struct MemoryStorageFixture
         rlp::encode(items, envelopeChainId);
         rlp::encode(items, uint64_t{0});
         rlp::encode(items, uint64_t{0});
+
+        bytes envelope;
+        rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+        envelope.insert(envelope.end(), items.begin(), items.end());
+        tx.mutableInner().extraTransactionBytes.assign(envelope.begin(), envelope.end());
+    }
+
+    // pre-EIP-155 6-field signing preimage: classifier Unprotected, no chainId binding.
+    void setLegacyUnprotectedPreimage(bcostars::protocol::TransactionImpl& tx)
+    {
+        namespace rlp = bcos::codec::rlp;
+        bytes items;
+        rlp::encode(items, uint64_t{0});      // nonce
+        rlp::encode(items, uint64_t{0});      // gasPrice
+        rlp::encode(items, uint64_t{21000});  // gasLimit
+        rlp::encode(items, bytes{});          // to
+        rlp::encode(items, uint64_t{0});      // value
+        rlp::encode(items, bytes{});          // data
 
         bytes envelope;
         rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
@@ -734,6 +754,127 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         // fails closed before any config fetch.
         auto const result = storageNoSig.verifyAndSubmitTransaction(tx12, nullptr, false, false);
         BOOST_CHECK(result == TransactionStatus::InvalidChainId);
+    }
+
+    auto mockMissingWeb3ChainId = [&]() {
+        fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
+            .AlwaysDo(
+                [](auto const& key,
+                    std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
+                    if (key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
+                    {
+                        callback(BCOS_ERROR_PTR(
+                                     ledger::LedgerError::EmptyEntry, "missing web3_chain_id"),
+                            "", 0);
+                    }
+                    else if (key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
+                    {
+                        callback(nullptr, "0", 0);
+                    }
+                });
+    };
+
+    // Matrix: T05 — missing web3_chain_id rejects Protected EIP-155, exempts Unprotected.
+    {
+        storageNoSig.clear();
+        mockMissingWeb3ChainId();
+        fakeit::When(Method(mockLedger, getStateStorage)).AlwaysReturn(nullptr);
+        auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(
+            nullptr, /*blockNumber*/ 0, /*blockLimit*/ 1000, /*checkBlockLimit*/ false);
+        txValidator->setLedgerNonceChecker(ledgerNonceChecker);
+
+        const std::string senderHex = "0x1234567890123456789012345678901234567890";
+        auto protectedTx = makeWeb3Tx("0x15", senderHex, false);
+        auto protectedImpl =
+            std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(protectedTx);
+        BOOST_REQUIRE(protectedImpl);
+        {
+            std::string smallValue = "0x100";
+            protectedImpl->mutableInner().data.value.assign(smallValue.begin(), smallValue.end());
+            setLegacySigningPreimage(*protectedImpl, 123);
+            protectedImpl->mutableInner().data.chainID = "";
+        }
+        BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(protectedTx, nullptr, false, false) ==
+                    TransactionStatus::InvalidChainId);
+
+        auto unprotectedTx = makeWeb3Tx("0x16", senderHex, false);
+        auto unprotectedImpl =
+            std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(unprotectedTx);
+        BOOST_REQUIRE(unprotectedImpl);
+        {
+            std::string smallValue = "0x100";
+            unprotectedImpl->mutableInner().data.value.assign(smallValue.begin(), smallValue.end());
+            setLegacyUnprotectedPreimage(*unprotectedImpl);
+            unprotectedImpl->mutableInner().data.chainID = "";
+        }
+        BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(unprotectedTx, nullptr, false, false) !=
+                    TransactionStatus::InvalidChainId);
+    }
+
+    // Matrix: T19 — hex QUANTITY web3_chain_id ("0x539" == 1337) admits a matching envelope.
+    {
+        storageNoSig.clear();
+        const std::string senderHex = "0x1234567890123456789012345678901234567890";
+        auto tx19 = makeWeb3Tx("0x19", senderHex, false);
+        auto tx19Impl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx19);
+        BOOST_REQUIRE(tx19Impl);
+        {
+            std::string smallValue = "0x100";
+            tx19Impl->mutableInner().data.value.assign(smallValue.begin(), smallValue.end());
+            setLegacySigningPreimage(*tx19Impl, 1337);
+            tx19Impl->mutableInner().data.chainID = "";
+        }
+        fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
+            .AlwaysDo(
+                [](auto const& key,
+                    std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
+                    if (key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
+                    {
+                        callback(nullptr, "0x539", 0);
+                    }
+                    else if (key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
+                    {
+                        callback(nullptr, "0", 0);
+                    }
+                });
+        fakeit::When(Method(mockLedger, getStateStorage)).AlwaysReturn(nullptr);
+        auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(
+            nullptr, /*blockNumber*/ 0, /*blockLimit*/ 1000, /*checkBlockLimit*/ false);
+        txValidator->setLedgerNonceChecker(ledgerNonceChecker);
+        BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(tx19, nullptr, false, false) ==
+                    TransactionStatus::None);
+    }
+
+    // Matrix: T20 — extraTxBytes starting 0x03 (blob) is rejected at the pool gate.
+    {
+        storageNoSig.clear();
+        const std::string senderHex = "0x1234567890123456789012345678901234567890";
+        auto tx20 = makeWeb3Tx("0x20", senderHex, false);
+        auto tx20Impl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx20);
+        BOOST_REQUIRE(tx20Impl);
+        {
+            bcos::bytes blobPrefix{0x03};
+            tx20Impl->mutableInner().extraTransactionBytes.assign(
+                blobPrefix.begin(), blobPrefix.end());
+        }
+        BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(tx20, nullptr, false, false) ==
+                    TransactionStatus::InvalidChainId);
+    }
+
+    // Matrix: T21 — extraTxBytes starting 0x7E (deposit) is rejected at the pool gate.
+    {
+        storageNoSig.clear();
+        const std::string senderHex = "0x1234567890123456789012345678901234567890";
+        auto tx21 = makeWeb3Tx("0x21", senderHex, false);
+        auto tx21Impl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx21);
+        BOOST_REQUIRE(tx21Impl);
+        {
+            bcos::bytes depositPrefix{0x7e};
+            tx21Impl->mutableInner().extraTransactionBytes.assign(
+                depositPrefix.begin(), depositPrefix.end());
+        }
+        BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(tx21, nullptr, false, false) ==
+                    TransactionStatus::InvalidChainId);
     }
 }
 

@@ -9,6 +9,7 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/ChecksumAddress.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
@@ -600,6 +601,65 @@ BOOST_AUTO_TEST_CASE(combineTxResponseAccessAndAuthLists)
         BOOST_CHECK(!result.isMember("maxFeePerBlobGas"));
         BOOST_CHECK(!result.isMember("blobVersionedHashes"));
     }
+}
+
+// Matrix: T22 — non-canonical extraTransactionBytes must not crash combineTxResponse;
+// the undecodable branch emits zeroed web3 fields and keeps the tars hash.
+BOOST_AUTO_TEST_CASE(combineTxResponseUndecodableExtraTxBytes)
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::rpc::Web3Transaction web3Tx;
+    web3Tx.type = bcos::rpc::TransactionType::EIP1559;
+    web3Tx.chainId = 1;
+    web3Tx.nonce = 7;
+    web3Tx.maxPriorityFeePerGas = 1;
+    web3Tx.maxFeePerGas = 2;
+    web3Tx.gasLimit = 21000;
+    web3Tx.to.emplace(bcos::Address("0x1234567890123456789012345678901234567890"));
+    web3Tx.value = 99;
+    web3Tx.signatureR = bcos::bytes(32, 0x11);
+    web3Tx.signatureS = bcos::bytes(32, 0x22);
+    web3Tx.signatureV = 0;
+
+    auto tarsTx = web3Tx.takeToTarsTransaction();
+    bcos::h256 arbitraryHash("0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a");
+    tarsTx.extraTransactionHash.assign(arbitraryHash.begin(), arbitraryHash.end());
+
+    bcos::bytes items;
+    items.insert(items.end(), {0x82, 0x00, 0x01});  // nonce: non-canonical
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1'000'000'000));
+    rlp::encode(items, static_cast<uint64_t>(1'000'000'000));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0x1234567890123456789012345678901234567890"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    items.push_back(rlp::LIST_HEAD_BASE);
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes(32, 0x11));
+    rlp::encode(items, bcos::bytes(32, 0x22));
+    bcos::bytes envelope;
+    envelope.push_back(static_cast<bcos::byte>(bcos::rpc::TransactionType::EIP1559));
+    rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+    envelope.insert(envelope.end(), items.begin(), items.end());
+    tarsTx.extraTransactionBytes.assign(envelope.begin(), envelope.end());
+
+    bcostars::protocol::TransactionImpl txImpl(
+        [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
+
+    Json::Value result = Json::objectValue;
+    combineTxResponse(
+        result, txImpl, /*transactionIndex=*/3u, /*blockNumber=*/12, bcos::crypto::HashType{});
+
+    BOOST_CHECK_EQUAL(result["hash"].asString(), arbitraryHash.hexPrefixed());
+    BOOST_CHECK_EQUAL(result["nonce"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["type"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["value"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["chainId"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["v"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["r"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["s"].asString(), "0x0");
+    BOOST_CHECK(!result.isMember("accessList"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
