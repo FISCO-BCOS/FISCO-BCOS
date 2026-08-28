@@ -19,11 +19,8 @@
 #pragma once
 #include "bcos-gateway/libnetwork/Common.h"
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/system/error_code.hpp>
-#include <atomic>
 #include <coroutine>
 #include <exception>
-#include <memory>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -48,22 +45,22 @@ namespace bcos::gateway
 // only while the io_context keeps running — a handler destroyed WITHOUT being invoked (an
 // io_context torn down with the operation still pending, or a test fake that drops the handler)
 // would otherwise pin the suspended coroutine frame forever, leaking everything the frame owns
-// (the strong Session/Host reference, socket, buffers). Every asio-side copy of the handler
-// shares one AsioCompletion; when the last copy is destroyed without the handler ever having
-// run, the completion DESTROYS the suspended frame, releasing its references. Destroying —
-// rather than resuming — the coroutine runs no loop code: at this point the objects the loop
-// body would touch may already be gone or deliberately torn down, and this matches the base
-// semantics, where destroying an uninvoked handler simply released its captured shared_ptr
-// without firing any logic.
+// (the strong Session/Host reference, socket, buffers). The completion therefore watches its
+// own destruction: an armed completion that is destroyed without having run DESTROYS the
+// suspended frame, releasing its references. Destroying — rather than resuming — the coroutine
+// runs no loop code: at that point the objects the loop body would touch may already be gone or
+// deliberately torn down, and this matches the base semantics, where destroying an uninvoked
+// handler simply released its captured shared_ptr without firing any logic. The rescue destroys
+// only the innermost frame of the co_await chain; production unwinding always comes through
+// normal completion (the frame pins the socket, which pins the io_context, so teardown cannot
+// destroy a pending handler out from under it), and test fakes must drain parked reads before
+// tearing down (see the FakeASIO stopReads() pattern in the unittests).
 namespace detail
 {
-// Completion state shared by every copy asio makes of an operation's handler (asio handlers
-// must be copyable for some call sites — e.g. they are type-erased into the std::function of
-// ASIOInterface::asyncReadSome — so the single ownership has to live one indirection away).
-// Exactly one of two exits happens: complete() runs the handler path, or the last shared owner
-// is destroyed first and the destructor destroys the suspended frame. m_completed also
-// serialises the two against each other: the destructor can only run once asio has released
-// every copy, i.e. after complete() ran on one of them.
+// The completion handler handed to asio. Move-only: asio moves (never copies) the handler into
+// the operation, and a move transfers the completion duty to the new instance. Exactly one of
+// two exits happens: operator() runs the handler path, or the armed instance is destroyed first
+// and the rescue above fires.
 template <typename... Results>
 class AsioCompletion
 {
@@ -71,44 +68,44 @@ public:
     AsioCompletion(std::tuple<Results...>* result, std::coroutine_handle<> handle)
       : m_result(result), m_handle(handle)
     {}
+    AsioCompletion(AsioCompletion&& other) noexcept
+      : m_result(other.m_result), m_handle(other.m_handle), m_armed(other.m_armed)
+    {
+        // the moved-from instance no longer owns the completion duty
+        other.m_armed = false;
+    }
     AsioCompletion(const AsioCompletion&) = delete;
     AsioCompletion& operator=(const AsioCompletion&) = delete;
+    AsioCompletion& operator=(AsioCompletion&&) = delete;
 
     ~AsioCompletion() noexcept
     {
         try
         {
-            if (m_completed.exchange(true))
+            // std::uncaught_exceptions(): destruction during stack unwinding means initiation
+            // threw (see await_suspend) and the coroutine is still RUNNING on that stack —
+            // destroying a non-suspended frame is undefined behaviour, so the rescue stays out
+            // of unwinding; await_resume rethrows the initiation error instead.
+            if (m_armed && std::uncaught_exceptions() == 0)
             {
-                return;
+                m_handle.destroy();
             }
-            // asio destroyed the handler without invoking it: destroy the suspended frame so
-            // its strong references unwind instead of leaking (see the header comment). No
-            // result is stored and no loop code runs — resuming here would execute arbitrary
-            // loop bodies (drop(), logging) in a context where the objects they touch may
-            // already be torn down.
-            m_handle.destroy();
         }
         catch (...)
         {}
     }
 
-    void complete(Results... results)
+    void operator()(Results... results)
     {
-        if (m_completed.exchange(true))
+        if (!m_armed)
         {
-            // asio guarantees exactly one invocation; this is only a defensive guard
+            // asio guarantees exactly one invocation; this also rejects a moved-from instance
             return;
         }
+        m_armed = false;
         *m_result = std::make_tuple(std::move(results)...);
         resume();
     }
-
-    // Initiation failed before the handler reached asio: nothing will ever invoke or destroy an
-    // asio-side copy, so the destructor must not fire either — the coroutine is still RUNNING on
-    // the initiator's stack at that point (we are inside its own await_suspend), and destroying
-    // a non-suspended frame is undefined behaviour.
-    void disarm() { m_completed.store(true); }
 
 private:
     void resume() noexcept
@@ -132,7 +129,7 @@ private:
 
     std::tuple<Results...>* m_result;
     std::coroutine_handle<> m_handle;
-    std::atomic<bool> m_completed{false};
+    bool m_armed = true;
 };
 }  // namespace detail
 
@@ -152,22 +149,21 @@ struct AsioAwaitable
         // socket's io_context — destroying this frame while initiate() is still on the stack.
         // Nothing member-owned may be touched after the call below.
         auto initiate = std::move(m_initiate);
-        auto completion =
-            std::make_shared<detail::AsioCompletion<Results...>>(&m_result, handle);
         try
         {
-            // copied, not moved: if initiate() throws, the catch below still needs the completion
-            initiate([completion](Results... results) mutable {
-                completion->complete(std::move(results)...);
-            });
+            // The completion is moved into the operation: initiate must either hand it to a
+            // deferred executor (asio) or invoke it before returning — never drop it. Dropping
+            // an armed completion outside stack unwinding destroys the RUNNING frame (see the
+            // destructor's rescue); the only sanctioned drop is initiation failure, which
+            // unwinds through this catch.
+            initiate(detail::AsioCompletion<Results...>(&m_result, handle));
         }
         catch (...)
         {
             // Initiation itself threw: no handler reached asio, so nothing will resume the
-            // coroutine. Disarm the completion, then resume immediately by NOT suspending;
-            // await_resume rethrows so the loop's own catch handles it, exactly as a synchronous
-            // throw from the old callback-style initiation did.
-            completion->disarm();
+            // coroutine. Resume immediately by NOT suspending; await_resume rethrows so the
+            // loop's own catch handles it, exactly as a synchronous throw from the old
+            // callback-style initiation did.
             m_error = std::current_exception();
             return false;
         }

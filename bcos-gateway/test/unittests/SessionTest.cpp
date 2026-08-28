@@ -39,9 +39,12 @@
 #include <chrono>
 #include <cstdint>
 #include <mutex>
+#include <optional>
 #include <queue>
+#include <list>
 #include <range/v3/view/single.hpp>
 #include <thread>
+#include <tuple>
 #include <unordered_set>
 #include <vector>
 
@@ -57,14 +60,70 @@ class FakeASIO : public bcos::gateway::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
+    using ReadResult = std::tuple<boost::system::error_code, std::size_t>;
+    using ReadCompletion =
+        bcos::gateway::detail::AsioCompletion<boost::system::error_code, std::size_t>;
+
     FakeASIO()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"))
     {};
     virtual ~FakeASIO() noexcept override {};
 
-    void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers,
-        ReadWriteHandler handler)
+    // Coroutine mock point for the read path: park the read's completion and feed it buffered
+    // packets from the fake's own pool thread.
+    task::Task<ReadResult> awaitableReadSome(
+        std::shared_ptr<SocketFace> /*socket*/, ba::mutable_buffer buffers) override
+    {
+        ++m_readsInFlight;
+        co_return co_await makeAsioAwaitable<boost::system::error_code, std::size_t>(
+            [this, buffers](auto handler) {
+                m_pendingReads.push_back(PendingRead{buffers, std::move(handler)});
+                kickDelivery();
+            });
+    }
+
+    // Synchronous helper for fakeClassTest (no session involved).
+    template <typename Handler>
+    void readSome(std::shared_ptr<SocketFace> /*socket*/, ba::mutable_buffer buffers,
+        Handler&& handler)
+    {
+        handler(boost::system::error_code(), drainPackets(buffers));
+    }
+
+    // Test teardown: complete every parked read with operation_aborted so the read loops — and
+    // the sessions their frames keep alive — unwind BEFORE the test nulls the socket or
+    // destroys this fake. Poll readsInFlight() until 0 afterwards: the counter is decremented
+    // only after the fired completion has synchronously unwound the whole read loop, so 0 means
+    // the unwind is done and no coroutine touches the session any more.
+    void stopReads()
+    {
+        m_threadPool->post([this] {
+            while (!m_pendingReads.empty())
+            {
+                auto pending = std::move(m_pendingReads.front());
+                m_pendingReads.pop_front();
+                fireRead(std::move(pending.completion), boost::asio::error::operation_aborted, 0);
+            }
+        });
+    }
+    std::size_t readsInFlight() const { return m_readsInFlight.load(); }
+
+    void stop() { m_threadPool.reset(); }
+
+public:  // for testing
+    void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
+
+    void asyncAppendRecvPacket(Packet packet)
+    {
+        m_threadPool->post([this, packet]() {
+            m_recvPackets.push(std::move(packet));
+            deliverIfPossible();
+        });
+    }
+
+protected:
+    std::size_t drainPackets(ba::mutable_buffer buffers)
     {
         std::size_t bytesTransferred = 0;
         auto limit = buffers.size();
@@ -88,35 +147,46 @@ public:
                 bytesTransferred += packet->size();
             }
         }
-
-        handler(boost::system::error_code(), bytesTransferred);
+        return bytesTransferred;
     }
 
-    void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
-        boost::asio::mutable_buffer buffers, ReadWriteHandler handler) override
+    // Everything below runs on the pool thread only: the first read is armed on the caller's
+    // thread but publishes the parked completion through kickDelivery's post, and every later
+    // arm happens inside fireRead's resume, which runs on the pool thread. Multiple sessions may
+    // share this fake, so parked reads form a FIFO list rather than a single slot.
+    void kickDelivery() { m_threadPool->post([this] { deliverIfPossible(); }); }
+
+    void deliverIfPossible()
     {
-        m_threadPool->post([this, socket, buffers, handler]() {
-            if (m_recvPackets.empty())
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                asyncReadSome(socket, buffers, handler);
-                return;
-            }
-            readSome(socket, buffers, handler);
-        });
+        if (m_pendingReads.empty() || m_recvPackets.empty())
+        {
+            return;
+        }
+        auto pending = std::move(m_pendingReads.front());
+        m_pendingReads.pop_front();
+        fireRead(std::move(pending.completion), boost::system::error_code(),
+            drainPackets(pending.buffers));
     }
-    void stop() { m_threadPool.reset(); }
 
-public:  // for testing
-    void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
-
-    void asyncAppendRecvPacket(Packet packet)
+    // Fire a parked completion. The fire resumes the read loop SYNCHRONOUSLY on this (pool)
+    // thread — on success the loop processes the messages and re-arms a fresh read (parking a
+    // new completion and re-incrementing the counter), on error it unwinds completely — so the
+    // counter is decremented only after the loop has settled.
+    void fireRead(ReadCompletion completion, boost::system::error_code ec, std::size_t bytes)
     {
-        m_threadPool->post([this, packet]() { appendRecvPacket(packet); });
+        completion(ec, bytes);
+        --m_readsInFlight;
     }
 
-protected:
+    struct PendingRead
+    {
+        ba::mutable_buffer buffers;
+        ReadCompletion completion;
+    };
+
     std::queue<Packet> m_recvPackets;
+    std::list<PendingRead> m_pendingReads;
+    std::atomic<std::size_t> m_readsInFlight{0};
     bcos::IOServicePool::Ptr m_threadPool;
 };
 
@@ -254,8 +324,23 @@ public:
 class FakeSocket : public SocketFace
 {
 public:
-    FakeSocket() : SocketFace(), m_workGuard(boost::asio::make_work_guard(m_ioService))
+    FakeSocket()
+      : SocketFace(),
+        m_sslContext(ba::ssl::context::tlsv12),
+        m_workGuard(boost::asio::make_work_guard(m_ioService))
     {
+        // A connected TCP pair backs the SSL stream so drop()/closeSocket() can call
+        // sslref().async_shutdown() safely (mirrors FakeSocket_FIB): the acceptor-side socket
+        // closes when it goes out of scope, so the shutdown completes with an error instead of
+        // dereferencing an unconnected stream.
+        bi::tcp::acceptor acceptor(m_ioService, bi::tcp::endpoint(bi::tcp::v4(), 0));
+        auto endpoint = acceptor.local_endpoint();
+        bi::tcp::socket clientSocket(m_ioService);
+        clientSocket.connect(endpoint);
+        bi::tcp::socket serverSocket(m_ioService);
+        acceptor.accept(serverSocket);
+        m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket>>(
+            std::move(clientSocket), m_sslContext);
         m_worker = std::thread([this]() { m_ioService.run(); });
     };
     ~FakeSocket() override
@@ -267,8 +352,8 @@ public:
             m_worker.join();
         }
     }
-    bool isConnected() const override { return true; }
-    void close() override {}
+    bool isConnected() const override { return m_connected; }
+    void close() override { m_connected = false; }
     boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code ec) override
     {
         return {};
@@ -284,11 +369,15 @@ public:
     ba::io_context& ioService() override { return m_ioService; }
 
 private:
-    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
+    // Declaration order matters: members are destroyed in reverse, so the io_context must
+    // outlive the SSL stream that deregisters from it in its destructor.
     ba::io_context m_ioService;
+    ba::ssl::context m_sslContext;
+    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
     boost::asio::executor_work_guard<ba::io_context::executor_type> m_workGuard;
     std::thread m_worker;
     NodeIPEndpoint m_nodeIPEndpoint;
+    bool m_connected{true};
 };
 
 BOOST_AUTO_TEST_CASE(fakeClassTest)
@@ -374,6 +463,21 @@ BOOST_AUTO_TEST_CASE(doReadTest)
 
         BOOST_CHECK_EQUAL(recvPacketCnt, totalPacketNum);
         BOOST_CHECK_EQUAL(recvBufferSize, messageBuilder.sendBufferSize());
+
+        // Teardown: a read is still parked in the fake. Swap in a tolerant message handler
+        // first — failing the parked read drops the session, and the teardown notification
+        // would otherwise reach the strict handler above with a Disconnect error — then let the
+        // fake fail the read and wait for the read loop to unwind completely before nulling
+        // the socket.
+        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
         session->setSocket(nullptr);
     }
 
@@ -408,6 +512,15 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
                 message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{})),
             NetworkException);
 
+        // drain the parked read so the read loop unwinds before the socket is nulled
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
         session->setSocket(nullptr);
     }
     fakeSocket->close();
@@ -533,6 +646,18 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
         // socket while the io thread may still run the session's idle timer (checkNetworkStatus
         // would dereference a null m_socket).
         session->disconnect(DisconnectReason::DisconnectRequested);
+
+        // The session's read is parked in the fake ASIO (not on the real socket), so the
+        // disconnect does not unwind it — fail it explicitly and wait for the read loop to
+        // finish before the fake is destroyed.
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
     }
 
     peerThread.join();
@@ -706,6 +831,18 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
         session->disconnect(DisconnectReason::DisconnectRequested);
     }
 
+    // The sessions' reads are parked in the fake ASIO (not on the real sockets), so the
+    // disconnects do not unwind them — fail them explicitly and wait for the read loops to
+    // finish before the fake is destroyed.
+    fakeAsio->stopReads();
+    size_t drainRetry = 0;
+    while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        drainRetry++;
+    }
+    BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
+
     peerV2.join();
     peerV0.join();
 
@@ -861,6 +998,18 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
         peerDone = true;
         // Unblock the peer thread's read (same teardown shape as fastSendMessageCompression).
         session->disconnect(DisconnectReason::DisconnectRequested);
+
+        // The session's read is parked in the fake ASIO (not on the real socket), so the
+        // disconnect does not unwind it — fail it explicitly and wait for the read loop to
+        // finish before the fake is destroyed.
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
     }
 
     peerThread.join();

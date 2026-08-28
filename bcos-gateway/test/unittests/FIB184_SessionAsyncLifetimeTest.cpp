@@ -42,6 +42,8 @@
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <future>
+#include <optional>
+#include <tuple>
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::test;
@@ -52,43 +54,44 @@ namespace bi = boost::asio::ip;
 
 BOOST_FIXTURE_TEST_SUITE(FIB184_SessionAsyncLifetimeTest, TestPromptFixture)
 
-// A fake ASIO that captures — but does not invoke — the async read handler, so a test can hold a
-// read "in flight" and fire it deterministically.
+// A fake ASIO that parks the read-loop's coroutine at a manually-fired completion, so a test can
+// hold a read "in flight" and complete it deterministically.
 class FakeASIO_Lifetime : public bcos::gateway::ASIOInterface
 {
 public:
+    using ReadResult = std::tuple<boost::system::error_code, std::size_t>;
+
     FakeASIO_Lifetime()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
     {}
     ~FakeASIO_Lifetime() noexcept override = default;
 
-    void asyncReadSome(
-        const std::shared_ptr<SocketFace>&, ba::mutable_buffer, ReadWriteHandler handler) override
+    task::Task<ReadResult> awaitableReadSome(
+        std::shared_ptr<SocketFace> /*socket*/, ba::mutable_buffer /*buffers*/) override
     {
-        m_readHandler = std::move(handler);
+        co_return co_await makeAsioAwaitable<boost::system::error_code, std::size_t>(
+            [this](auto handler) { m_readHandler.emplace(std::move(handler)); });
     }
 
-    bool hasReadHandler() const { return static_cast<bool>(m_readHandler); }
+    bool hasReadHandler() const { return m_readHandler.has_value(); }
 
-    // Complete the outstanding read, releasing the reference it holds on the session. The slot is
-    // cleared EXPLICITLY rather than relying on move-from leaving it empty: a moved-from
-    // std::function is only "valid but unspecified", and libc++ leaves a small-object-optimised
-    // target still engaged, so the moved-from slot kept the handler -- and with it a
-    // shared_ptr<Session> -- alive forever. Real ASIO destroys the handler after invoking it; this
-    // clear is what makes the fake match that. Clearing before the call also means a re-armed read
-    // lands in a fresh slot instead of being overwritten.
+    // Complete the outstanding read, unwinding the read loop suspended on it. The slot is
+    // cleared EXPLICITLY before firing: firing resumes the read loop, which re-arms the next
+    // read into a fresh slot, and the moved-from optional would otherwise be destroyed only
+    // after the new completion was already parked in it.
     void fireReadHandler(boost::system::error_code error, std::size_t bytes)
     {
         auto handler = std::move(m_readHandler);
-        m_readHandler = ReadWriteHandler();
+        m_readHandler.reset();
         if (handler)
         {
-            handler(error, bytes);
+            (*handler)(error, bytes);
         }
     }
 
 private:
-    ReadWriteHandler m_readHandler;
+    std::optional<bcos::gateway::detail::AsioCompletion<boost::system::error_code, std::size_t>>
+        m_readHandler;
 };
 
 class FakeHost_Lifetime : public bcos::gateway::Host

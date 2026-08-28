@@ -133,30 +133,27 @@ bi::tcp::acceptor* ASIOInterface::acceptor()
     return &m_acceptor;
 }
 
-void ASIOInterface::asyncReadSome(const std::shared_ptr<SocketFace>& socket,
-    boost::asio::mutable_buffer buffers, ReadWriteHandler handler)
+task::Task<std::tuple<boost::system::error_code, std::size_t>> ASIOInterface::awaitableReadSome(
+    std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers)
 {
     switch (m_type)
     {
     case TCP_ONLY:
-    {
-        socket->ref().async_read_some(buffers, std::move(handler));
-        break;
-    }
+        co_return co_await makeAsioAwaitable<boost::system::error_code, std::size_t>(
+            [socket = std::move(socket), buffers](auto handler) {
+                socket->ref().async_read_some(buffers, std::move(handler));
+            });
     case SSL:
-    {
-        socket->sslref().async_read_some(buffers, std::move(handler));
-        break;
-    }
+        co_return co_await makeAsioAwaitable<boost::system::error_code, std::size_t>(
+            [socket = std::move(socket), buffers](auto handler) {
+                socket->sslref().async_read_some(buffers, std::move(handler));
+            });
     default:
         // total completion: an unexpected type must still answer the read, or the awaiting
-        // read-loop coroutine pins forever. Posted, never invoked inline — this function runs on
-        // the initiator's stack (inside the awaitable's await_suspend), and inline invocation
-        // would resume that coroutine from within its own await_suspend.
-        m_ioServicePool->post([handler = std::move(handler)]() mutable {
-            handler(boost::asio::error::operation_not_supported, 0);
-        });
-        break;
+        // read-loop coroutine pins forever
+        co_return std::make_tuple(
+            boost::system::error_code(boost::asio::error::operation_not_supported),
+            std::size_t{0});
     }
 }
 
@@ -164,31 +161,4 @@ void ASIOInterface::setVerifyCallback(
     const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/)
 {
     socket->sslref().set_verify_callback(std::move(callback));
-}
-
-void ASIOInterface::resolveConnect(const std::shared_ptr<SocketFace>& socket,
-    std::function<void(boost::system::error_code)> handler)
-{
-    auto protocol = socket->nodeIPEndpoint().isIPv6() ? bi::tcp::tcp::v6() : bi::tcp::tcp::v4();
-    m_resolver.async_resolve(protocol, socket->nodeIPEndpoint().address(),
-        to_string(socket->nodeIPEndpoint().port()),
-        [socket, handler = std::move(handler)](const boost::system::error_code& ec,
-            const bi::tcp::resolver::results_type& results) mutable {
-            if (ec || results.empty())
-            {
-                ASIO_LOG(WARNING) << LOG_DESC("asyncResolve failed")
-                                  << LOG_KV("host", socket->nodeIPEndpoint().address())
-                                  << LOG_KV("port", socket->nodeIPEndpoint().port());
-                // Total completion: the client coroutine co_awaits this operation, so the
-                // handler must fire on resolve failure too — the old callback version silently
-                // dropped it, which would pin the awaiting coroutine forever.
-                handler(ec ? ec : boost::asio::error::host_not_found);
-                return;
-            }
-
-            // results is a iterator, but only use first endpoint.
-            auto it = results.begin();
-            socket->ref().async_connect(it->endpoint(), std::move(handler));
-            ASIO_LOG(INFO) << LOG_DESC("asyncResolveConnect") << LOG_KV("endpoint", it->endpoint());
-        });
 }

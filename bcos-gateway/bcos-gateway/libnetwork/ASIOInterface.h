@@ -8,12 +8,14 @@
 #pragma once
 #include "bcos-gateway/libnetwork/AsioAwaitable.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
+#include "bcos-task/Task.h"
 #include "bcos-utilities/IOServicePool.h"
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <utility>
 
 namespace ba = boost::asio;
@@ -31,7 +33,6 @@ public:
     };
 
     /// read handler
-    using ReadWriteHandler = std::function<void(const boost::system::error_code, std::size_t)>;
     using VerifyCallback = std::function<bool(bool, boost::asio::ssl::verify_context&)>;
 
     ASIOInterface(IOServicePool::Ptr _ioServicePool, std::string listenHost, uint16_t listenPort);
@@ -52,9 +53,6 @@ public:
 
     // Kept as the unit-test mock point for the read path: every read-loop test fake overrides
     // this virtual, and awaitableReadSome below dispatches through it.
-    virtual void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
-        boost::asio::mutable_buffer buffers, ReadWriteHandler handler);
-
     virtual void setVerifyCallback(
         const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/ = true);
 
@@ -63,8 +61,16 @@ public:
     // for the threading / exception / lifetime contract). Each operation guarantees total
     // completion: the awaiting coroutine is resumed exactly once, on success and on failure
     // alike — a silently dropped completion would pin the suspended coroutine (and everything
-    // its frame holds) forever. awaitableReadSome dispatches through the asyncReadSome virtual
-    // so unit-test fakes keep intercepting it; the others initiate the asio operation directly.
+    // its frame holds) forever.
+    //
+    // awaitableReadSome is the unit-test mock point for the read path. It is a virtual
+    // COROUTINE (a virtual cannot return an AsioAwaitable, whose type depends on the call
+    // site's lambda): the production implementation bridges to async_read_some through
+    // AsioAwaitable, and test fakes override it with their own coroutine. The other
+    // operations are non-virtual and initiate the asio operation directly.
+    virtual task::Task<std::tuple<boost::system::error_code, std::size_t>> awaitableReadSome(
+        std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers);
+
     auto awaitableAccept(const std::shared_ptr<SocketFace>& socket)
     {
         return makeAsioAwaitable<boost::system::error_code>(
@@ -85,15 +91,6 @@ public:
         return makeAsioAwaitable<boost::system::error_code>(
             [socket, type](auto handler) {
                 socket->sslref().async_handshake(type, std::move(handler));
-            });
-    }
-
-    auto awaitableReadSome(
-        const std::shared_ptr<SocketFace>& socket, boost::asio::mutable_buffer buffers)
-    {
-        return makeAsioAwaitable<boost::system::error_code, std::size_t>(
-            [this, socket, buffers](auto handler) {
-                asyncReadSome(socket, buffers, std::move(handler));
             });
     }
 
@@ -158,9 +155,35 @@ public:
 
 private:
     // resolve + connect helper backing awaitableResolveConnect (total completion: the handler
-    // fires with an error when resolution fails — see the coroutine-interface comment above)
-    void resolveConnect(const std::shared_ptr<SocketFace>& socket,
-        std::function<void(boost::system::error_code)> handler);
+    // fires with an error when resolution fails — see the coroutine-interface comment above).
+    // Templated because the handler is the move-only AsioCompletion.
+    template <typename Handler>
+    void resolveConnect(const std::shared_ptr<SocketFace>& socket, Handler handler)
+    {
+        auto protocol = socket->nodeIPEndpoint().isIPv6() ? bi::tcp::tcp::v6() : bi::tcp::tcp::v4();
+        m_resolver.async_resolve(protocol, socket->nodeIPEndpoint().address(),
+            std::to_string(socket->nodeIPEndpoint().port()),
+            [socket, handler = std::move(handler)](const boost::system::error_code& ec,
+                const bi::tcp::resolver::results_type& results) mutable {
+                if (ec || results.empty())
+                {
+                    ASIO_LOG(WARNING) << LOG_DESC("asyncResolve failed")
+                                      << LOG_KV("host", socket->nodeIPEndpoint().address())
+                                      << LOG_KV("port", socket->nodeIPEndpoint().port());
+                    // Total completion: the client coroutine co_awaits this operation, so the
+                    // handler must fire on resolve failure too — the old callback version
+                    // silently dropped it, which would pin the awaiting coroutine forever.
+                    handler(ec ? ec : boost::asio::error::host_not_found);
+                    return;
+                }
+
+                // results is a iterator, but only use first endpoint.
+                auto it = results.begin();
+                socket->ref().async_connect(it->endpoint(), std::move(handler));
+                ASIO_LOG(INFO) << LOG_DESC("asyncResolveConnect")
+                               << LOG_KV("endpoint", it->endpoint());
+            });
+    }
 
     IOServicePool::Ptr m_ioServicePool;
     bi::tcp::acceptor m_acceptor;

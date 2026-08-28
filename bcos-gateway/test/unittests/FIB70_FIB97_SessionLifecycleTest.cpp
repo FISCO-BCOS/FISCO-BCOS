@@ -28,6 +28,10 @@
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <queue>
 #include <thread>
+#include <atomic>
+#include <optional>
+#include <tuple>
+#include <list>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -43,6 +47,10 @@ class FakeASIO_FIB : public bcos::gateway::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
+    using ReadResult = std::tuple<boost::system::error_code, std::size_t>;
+    using ReadCompletion =
+        bcos::gateway::detail::AsioCompletion<boost::system::error_code, std::size_t>;
+
     FakeASIO_FIB()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"))
@@ -50,8 +58,50 @@ public:
     }
     ~FakeASIO_FIB() noexcept override {}
 
-    void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers,
-        ReadWriteHandler handler)
+    // Coroutine mock point for the read path: park the read's completion and feed it buffered
+    // packets from the fake's own pool thread.
+    task::Task<ReadResult> awaitableReadSome(
+        std::shared_ptr<SocketFace> /*socket*/, ba::mutable_buffer buffers) override
+    {
+        ++m_readsInFlight;
+        co_return co_await makeAsioAwaitable<boost::system::error_code, std::size_t>(
+            [this, buffers](auto handler) {
+                m_pendingReads.push_back(PendingRead{buffers, std::move(handler)});
+                kickDelivery();
+            });
+    }
+
+    // Test teardown: complete every parked read with operation_aborted so the read loops — and
+    // the sessions their frames keep alive — unwind BEFORE the test nulls the socket or
+    // destroys this fake. Poll readsInFlight() until 0 afterwards: the counter is decremented
+    // only after the fired completion has synchronously unwound the whole read loop, so 0 means
+    // the unwind is done and no coroutine touches the session any more.
+    void stopReads()
+    {
+        m_threadPool->post([this] {
+            while (!m_pendingReads.empty())
+            {
+                auto pending = std::move(m_pendingReads.front());
+                m_pendingReads.pop_front();
+                fireRead(std::move(pending.completion), boost::asio::error::operation_aborted, 0);
+            }
+        });
+    }
+    std::size_t readsInFlight() const { return m_readsInFlight.load(); }
+
+    void stop() { m_threadPool.reset(); }
+
+    void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
+    void asyncAppendRecvPacket(Packet packet)
+    {
+        m_threadPool->post([this, packet]() {
+            m_recvPackets.push(std::move(packet));
+            deliverIfPossible();
+        });
+    }
+
+protected:
+    std::size_t drainPackets(ba::mutable_buffer buffers)
     {
         std::size_t bytesTransferred = 0;
         auto limit = buffers.size();
@@ -75,34 +125,46 @@ public:
                 bytesTransferred += packet->size();
             }
         }
-
-        handler(boost::system::error_code(), bytesTransferred);
+        return bytesTransferred;
     }
 
-    void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
-        boost::asio::mutable_buffer buffers, ReadWriteHandler handler) override
+    // Everything below runs on the pool thread only: the first read is armed on the caller's
+    // thread but publishes the parked completion through kickDelivery's post, and every later
+    // arm happens inside fireRead's resume, which runs on the pool thread. Multiple sessions may
+    // share this fake, so parked reads form a FIFO list rather than a single slot.
+    void kickDelivery() { m_threadPool->post([this] { deliverIfPossible(); }); }
+
+    void deliverIfPossible()
     {
-        m_threadPool->post([this, socket, buffers, handler]() {
-            if (m_recvPackets.empty())
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                asyncReadSome(socket, buffers, handler);
-                return;
-            }
-            readSome(socket, buffers, handler);
-        });
+        if (m_pendingReads.empty() || m_recvPackets.empty())
+        {
+            return;
+        }
+        auto pending = std::move(m_pendingReads.front());
+        m_pendingReads.pop_front();
+        fireRead(std::move(pending.completion), boost::system::error_code(),
+            drainPackets(pending.buffers));
     }
 
-    void stop() { m_threadPool.reset(); }
-
-    void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
-    void asyncAppendRecvPacket(Packet packet)
+    // Fire a parked completion. The fire resumes the read loop SYNCHRONOUSLY on this (pool)
+    // thread — on success the loop processes the messages and re-arms a fresh read (parking a
+    // new completion and re-incrementing the counter), on error it unwinds completely — so the
+    // counter is decremented only after the loop has settled.
+    void fireRead(ReadCompletion completion, boost::system::error_code ec, std::size_t bytes)
     {
-        m_threadPool->post([this, packet]() { appendRecvPacket(packet); });
+        completion(ec, bytes);
+        --m_readsInFlight;
     }
 
-protected:
+    struct PendingRead
+    {
+        ba::mutable_buffer buffers;
+        ReadCompletion completion;
+    };
+
     std::queue<Packet> m_recvPackets;
+    std::list<PendingRead> m_pendingReads;
+    std::atomic<std::size_t> m_readsInFlight{0};
     bcos::IOServicePool::Ptr m_threadPool;
 };
 
@@ -476,6 +538,15 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
         BOOST_CHECK(errorCode.load() != 0);
         BOOST_CHECK(callbackManager->getCallback(seq, false) == nullptr);
 
+        // drain the parked read so the read loop unwinds before the socket is nulled
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
         session->setSocket(nullptr);
     }
 
