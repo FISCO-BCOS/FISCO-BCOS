@@ -391,17 +391,10 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     auto auth = sysConfig.getOrDefault(ledger::SystemConfig::auth_check_status, "0");
     ledgerConfig.setAuthCheckStatus(boost::lexical_cast<uint32_t>(auth.first));
     auto [chainId, _] = sysConfig.getOrDefault(ledger::SystemConfig::web3_chain_id, "0");
-    // parseWeb3ChainId; bad config -> 0 + WARN (same as unset).
-    if (auto const parsedChainId = ledger::parseWeb3ChainId(chainId); parsedChainId.has_value())
-    {
-        ledgerConfig.setChainId(bcos::toEvmC(*parsedChainId));
-    }
-    else
-    {
-        BCOS_LOG(WARNING) << LOG_DESC(
-            "web3_chain_id system config is malformed; serving 0 to the EVM CHAINID opcode");
-        ledgerConfig.setChainId(bcos::toEvmC(bcos::u256(0)));
-    }
+    // Fail-stop on a malformed value (InvalidWeb3ChainIdConfig) via the shared helper —
+    // same policy as the LedgerInterface variant and evmc_revision; absent config arrives
+    // as the "0" default and parses fine.
+    ledgerConfig.setChainId(bcos::toEvmC(ledger::parseConfiguredWeb3ChainId(chainId)));
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
