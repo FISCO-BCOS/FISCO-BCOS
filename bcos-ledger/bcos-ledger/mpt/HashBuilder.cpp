@@ -220,6 +220,24 @@ TrieBuildResult computeTrieRootFromRawKeys(
         entries.push_back(HBEntry{.nibbles = bytesToNibbles(key), .value = value.toBytes()});
     }
 
+    // Enforce the documented "Unique keys" half of the precondition (the sorted
+    // order stays the caller's contract): under the required ascending sort
+    // duplicates are adjacent, and two identical keys both terminate at the same
+    // branch — hbBuildBranch takes the front one as the branch value and would
+    // then index one past its nibble path, using that out-of-bounds byte to
+    // index the 16-entry BranchNode::children. Proper-prefix keys are legal here
+    // (they become the branch's own value); only exact duplicates are rejected.
+    for (std::size_t i = 1; i < entries.size(); ++i)
+    {
+        if (entries[i - 1].nibbles == entries[i].nibbles)
+        {
+            BOOST_THROW_EXCEPTION(
+                MPTInvariantViolation() << bcos::errinfo_comment(
+                    "computeTrieRootFromRawKeys: duplicate key at index " + std::to_string(i) +
+                    " — raw trie keys must be unique"));
+        }
+    }
+
     // Own hasher + own newNodes → no shared state (same concurrency contract as the secure path).
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
     std::unordered_map<bcos::h256, bcos::bytes> newNodes;

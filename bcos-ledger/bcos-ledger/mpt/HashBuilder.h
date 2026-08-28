@@ -76,7 +76,10 @@ TrieBuildResult computeTrieRootFromSorted(
 ///
 /// @param sortedEntries  Unique keys, sorted ascending by raw key bytes (lexicographic == nibble
 ///                       path order — note this is NOT numeric index order for RLP-encoded
-///                       indices: rlp(0)=0x80 sorts after rlp(1)=0x01).
+///                       indices: rlp(0)=0x80 sorts after rlp(1)=0x01). Uniqueness is ENFORCED
+///                       (MPTInvariantViolation on duplicates — two identical keys would both
+///                       terminate at the same branch and send hbBuildBranch's nibble indexing
+///                       out of bounds); the sorted order remains the caller's contract.
 /// @return {root, newNodes} — root is emptyRootHash() for an empty input.
 TrieBuildResult computeTrieRootFromRawKeys(
     std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> sortedEntries);
