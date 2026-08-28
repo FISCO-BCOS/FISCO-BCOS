@@ -212,7 +212,20 @@ void Session::write()
         // a write loop is already in flight; it drains the queue
         return;
     }
-    task::wait(writeLoop());
+    // Release-on-unwind, matching the old std::unique_lock(try_to_lock) writer flag: if the
+    // launch throws (coroutine-frame allocation failure, or an exception from the prologue of
+    // writeLoop — e.g. bad_weak_ptr from shared_from_this() — propagating back out through
+    // task::wait), the flag must not stay set, or every later write() would early-return at the
+    // CAS above and the queue would never drain again.
+    try
+    {
+        task::wait(writeLoop());
+    }
+    catch (...)
+    {
+        m_writingInFlight.store(false);
+        throw;
+    }
 }
 
 task::Task<void> Session::writeLoop()
@@ -257,7 +270,9 @@ task::Task<void> Session::writeLoop()
             {
                 payload.toConstBuffer(outputIt);
             }
-            auto [error, size] =
+            // `size` is unused: the loop re-derives the batch layout from `payloads` on each
+            // iteration, and a short/failed write is handled through `error` alone
+            [[maybe_unused]] auto [error, size] =
                 co_await m_server.get().asioInterface()->awaitableWrite(m_socket, buffers);
 
             buffers.clear();

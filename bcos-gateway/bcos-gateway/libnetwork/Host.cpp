@@ -850,8 +850,12 @@ void Host::stop()
         }
         catch (...)
         {
-            // stop() also runs from ~Host, which must not throw; a lost cancel only delays the
-            // accept loop's exit (it still ends on the next accept or acceptor destruction)
+            // stop() also runs from ~Host, which must not throw. A lost cancel is NOT
+            // self-healing: the accept loop's coroutine frame holds this Host (and with it the
+            // ASIOInterface and the acceptor) alive, so "acceptor destruction" can never end the
+            // loop from the outside — only the NEXT completed accept lets the loop observe
+            // m_run == false and exit. With no inbound connection, a Host whose cancel was lost
+            // here stays alive until stop() is retried.
             HOST_LOG(WARNING) << LOG_DESC("cancel acceptor on stop failed")
                               << LOG_KV("what",
                                      boost::current_exception_diagnostic_information());
@@ -889,6 +893,14 @@ void bcos::gateway::Host::postTeardown(std::function<void()> f)
 }
 bcos::gateway::Host::~Host()
 {
+    // The accept loop's coroutine frame holds a strong Host reference, so reaching ~Host with
+    // m_run still set means the loop was never started — a started-but-never-stopped Host simply
+    // never gets here (see the stop() contract on the class comment). Flag the missing stop()
+    // rather than letting it pass silently.
+    if (m_run)
+    {
+        HOST_LOG(WARNING) << LOG_DESC("Host destroyed without stop()");
+    }
     stop();
 };
 uint16_t bcos::gateway::Host::listenPort() const

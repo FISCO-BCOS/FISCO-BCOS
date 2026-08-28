@@ -46,6 +46,13 @@ class ASIOInterface;
 
 using x509PubHandler = std::function<bool(X509* x509, std::string& pubHex)>;
 
+// Lifetime contract: a started Host must be stopped (stop()) BEFORE its last strong reference
+// is released. The acceptLoop coroutine frame holds a strong Host reference for its whole life
+// and exits only when stop() clears m_run and cancels the acceptor, so a Host that is started
+// but never stopped is never destroyed — it keeps the ASIOInterface, the acceptor and the
+// teardown executor alive with it. ~Host calls stop() defensively, but the destructor can only
+// run once every strong reference — including the accept loop's — is already gone, so it cannot
+// substitute for an explicit stop().
 class Host : public std::enable_shared_from_this<Host>
 {
 public:
@@ -266,7 +273,6 @@ private:
             callback);
 
 protected:
-
     // FIB-186 (vector D): dedicated single-thread executor for session-teardown notifications, kept
     // separate from the shared IOServicePool so a bulk-disconnect flood cannot starve
     // inbound-message delivery. See postTeardown.

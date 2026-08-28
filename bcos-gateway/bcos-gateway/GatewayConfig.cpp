@@ -630,6 +630,24 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     constexpr static uint32_t defaultMaxSendMsgCount = 10;
     m_maxSendMsgCount = _pt.get<uint32_t>("p2p.session_max_send_msg_count", defaultMaxSendMsgCount);
 
+    // session_max_send_data_size / session_max_send_msg_count bound the send-batch budget that
+    // Session::tryPopSomeEncodedMsgs enforces on every write loop iteration. Unlike
+    // p2p.max_connections_per_second above, 0 does NOT mean "unlimited" here: with either budget
+    // at 0 the batch loop never pops, every write loop exits on its first iteration, and all
+    // outbound traffic on the session stalls silently. Clamp to a working minimum instead.
+    if (m_maxSendDataSize == 0)
+    {
+        GATEWAY_CONFIG_LOG(WARNING)
+            << LOG_DESC("p2p.session_max_send_data_size must be positive, clamped to 1");
+        m_maxSendDataSize = 1;
+    }
+    if (m_maxSendMsgCount == 0)
+    {
+        GATEWAY_CONFIG_LOG(WARNING)
+            << LOG_DESC("p2p.session_max_send_msg_count must be positive, clamped to 1");
+        m_maxSendMsgCount = 1;
+    }
+
     m_smSSL = smSSL;
     m_listenIP = listenIP;
     m_listenPort = (uint16_t)listenPort;

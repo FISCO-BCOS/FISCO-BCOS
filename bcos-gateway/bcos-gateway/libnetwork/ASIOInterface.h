@@ -120,6 +120,12 @@ public:
                             break;
                         }
                         default:
+                            // total completion: an unexpected type must still answer the
+                            // awaiting coroutine — dropping the handler would pin its frame
+                            // forever. (The completion-or-cancel guard in AsioAwaitable would
+                            // eventually release the frame, but failing loudly here keeps the
+                            // error explicit.)
+                            handler(boost::asio::error::operation_not_supported, 0);
                             break;
                         }
                     });

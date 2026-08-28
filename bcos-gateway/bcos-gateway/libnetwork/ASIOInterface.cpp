@@ -149,6 +149,13 @@ void ASIOInterface::asyncReadSome(const std::shared_ptr<SocketFace>& socket,
         break;
     }
     default:
+        // total completion: an unexpected type must still answer the read, or the awaiting
+        // read-loop coroutine pins forever. Posted, never invoked inline — this function runs on
+        // the initiator's stack (inside the awaitable's await_suspend), and inline invocation
+        // would resume that coroutine from within its own await_suspend.
+        m_ioServicePool->post([handler = std::move(handler)]() mutable {
+            handler(boost::asio::error::operation_not_supported, 0);
+        });
         break;
     }
 }
