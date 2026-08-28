@@ -106,8 +106,24 @@ bcos::task::Task<bcos::ledger::GenesisStateTrie> bcos::ledger::computeGenesisSta
         // Ethereum StateAccount RLP: [nonce, balance, storageRoot, codeHash].
         // nonce/balance encode as minimal big-endian RLP integers (0 -> 0x80);
         // storageRoot/codeHash as 32-byte RLP strings (0xa0 || 32 bytes).
-        // NodeConfig::loadAllocs already validated nonce fits uint64.
-        uint64_t nonce = alloc.nonce.empty() ? 0 : boost::lexical_cast<uint64_t>(alloc.nonce);
+        // NodeConfig::loadAllocs guards the INI path; direct GenesisConfig callers
+        // are guarded here the same way as every other alloc field, so a malformed
+        // nonce fails with the field-naming InvalidConfig contract instead of an
+        // unnamed boost::bad_lexical_cast.
+        uint64_t nonce = 0;
+        if (!alloc.nonce.empty())
+        {
+            try
+            {
+                nonce = boost::lexical_cast<uint64_t>(alloc.nonce);
+            }
+            catch (boost::bad_lexical_cast const&)
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                          "genesis alloc nonce is not a valid uint64: " +
+                                          alloc.nonce));
+            }
+        }
         bcos::bytes accountRlp;
         codec::rlp::encode(accountRlp, nonce, alloc.balance, storageRoot, codeHash);
 

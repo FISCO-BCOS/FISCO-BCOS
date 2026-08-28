@@ -183,6 +183,19 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
         config.m_allocs[0].storage = {{"0x" + std::string(66, '0'), gsrKey32('0')}};
         BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
     }
+    // non-decimal nonce: must abort with the field-naming InvalidConfig (not an
+    // unnamed boost::bad_lexical_cast), matching every other alloc field.
+    {
+        auto config = gsrBaseConfig();
+        config.m_allocs[0].nonce = "abc";
+        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+    }
+    // nonce overflowing uint64: same contract.
+    {
+        auto config = gsrBaseConfig();
+        config.m_allocs[0].nonce = "18446744073709551616";  // 2^64
+        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

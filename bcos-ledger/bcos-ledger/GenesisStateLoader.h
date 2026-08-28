@@ -41,14 +41,16 @@ namespace bcos::ledger
 {
 /// Write the flat /apps/ account rows for one alloc and persist every genesis trie node.
 ///
-/// The returned GenesisStateTrie.root is the op-geth-compatible genesis state root —
-/// callers SHOULD compare it against the chain's canonical genesis state root (e.g.
-/// Sepolia's 0x5eb6e371...) to prove the loaded state is complete.
+/// Returns the op-geth-compatible genesis state ROOT (not the trie itself: the node map is
+/// consumed by the /mpt/ persistence loop below, so returning it would hand the caller a
+/// map whose values have all been moved from). Callers SHOULD compare the returned root
+/// against the chain's canonical genesis state root (e.g. Sepolia's 0x5eb6e371...) to prove
+/// the loaded state is complete.
 ///
 /// @param allocs  addresses are 40-hex (with or without 0x); nonce is a DECIMAL string;
 ///                code is hex; storage slots/values are 32-byte hex.
 template <class Storage>
-task::Task<GenesisStateTrie> importEthereumGenesisState(
+task::Task<bcos::h256> importEthereumGenesisState(
     Storage& storage, std::vector<Alloc> const& allocs, crypto::Hash const& hashImpl,
     Features const& features)
 {
@@ -116,13 +118,14 @@ task::Task<GenesisStateTrie> importEthereumGenesisState(
     // Persist every produced genesis trie node as a "/mpt/" state row, exactly
     // like Ledger::buildGenesisBlock does for Scenario-B (L2) chains — block 1's
     // incremental MPT build resolves parent-version nodes through storage, and a
-    // missing node aborts loudly (MPTInvariantViolation).
+    // missing node aborts loudly (MPTInvariantViolation). The nodes are consumed
+    // here (moved into the Entry), which is why the root is returned alone.
     for (auto& [nodeHash, nodeRlp] : trie.nodes)
     {
         storage::Entry nodeEntry;
         nodeEntry.set(std::move(nodeRlp));
         co_await storage2::writeOne(storage, mptNodeStateKey(nodeHash), std::move(nodeEntry));
     }
-    co_return trie;
+    co_return trie.root;
 }
 }  // namespace bcos::ledger

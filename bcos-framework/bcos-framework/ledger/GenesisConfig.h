@@ -183,5 +183,13 @@ public:
     // chain, keeping their genesis strings byte-identical.
     std::optional<EthereumForkSchedule> m_ethereumForkSchedule;
 
+    // True iff config.genesis declares "[ethereum] mode=el" — the chain is an
+    // Ethereum L1 EL-sync chain. Chain-level (part of the genesis pin), NOT the
+    // per-node [ethereum] section of config.ini: the executor-v2 evmc_revision /
+    // auth_admin_account guard exemptions are gated on this declaration, so a
+    // [fork_timestamps] section pasted into an ordinary v2 genesis cannot waive
+    // them. validateL2Invariants binds it to m_ethereumForkSchedule both ways.
+    bool m_ethereumELMode = false;
+
 };  // namespace genesisConfig
 }  // namespace bcos::ledger

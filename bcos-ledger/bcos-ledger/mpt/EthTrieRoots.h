@@ -58,10 +58,12 @@ inline bcos::h256 calculateWithdrawalsRoot(std::span<bcos::bytesConstRef const> 
 }
 
 /// Block-level logs bloom: bitwise OR of the per-receipt 256-byte blooms (each computed from its
-/// logs via bcos::getLogsBloom). Returns a zero bloom for an empty input.
+/// logs via bcos::getLogsBloom). Returns a zero bloom for an empty input. Forwarding reference:
+/// the range is only read, never copied (a bcos::Bloom is 256 bytes, so a by-value parameter
+/// would copy the whole vector for an lvalue caller).
 template <::ranges::input_range Blooms>
     requires bcos::concepts::ByteBuffer<std::remove_cvref_t<::ranges::range_value_t<Blooms>>>
-bcos::Bloom calculateLogsBloom(Blooms blooms)
+bcos::Bloom calculateLogsBloom(Blooms&& blooms)
 {
     bcos::Bloom result{};
     for (auto const& bloom : blooms)

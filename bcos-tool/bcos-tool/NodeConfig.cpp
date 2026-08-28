@@ -204,8 +204,9 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     loadGenesisFeatures(_genesisConfig);
 
     loadLedgerConfig(_genesisConfig);
-    // EL-mode fork schedule must be parsed BEFORE loadExecutorConfig: its v2 EVMC-revision
-    // guard exempts chains with a [fork_timestamps] section (m_ethereumForkSchedule).
+    // EL-mode declaration + fork schedule must be parsed BEFORE loadExecutorConfig: its v2
+    // EVMC-revision / auth_admin_account guards exempt chains that declare EL mode
+    // ([ethereum] mode=el, with its mandatory [fork_timestamps] section).
     loadForkTimestamps(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
 
@@ -477,6 +478,23 @@ void NodeConfig::validateL2Invariants()
                 "feature_l2_ethereum_compat requires an [eth_genesis_header] section in "
                 "config.genesis (all 22 fields from the merged genesis artifact); an L2 chain "
                 "without it would build a non-Ethereum genesis block"));
+    }
+    // EL mode ([ethereum] mode=el) and its [fork_timestamps] schedule are bound both ways:
+    // the schedule only makes sense on a chain that declares EL mode — otherwise an ordinary
+    // executor-v2 chain could waive the evmc_revision / auth_admin_account guards by pasting
+    // in a section nothing reads — and an EL chain without a schedule cannot derive its EVM
+    // revision. Both live in config.genesis, so the pairing is part of the genesis pin.
+    if (!genesis.m_ethereumELMode && genesis.m_ethereumForkSchedule.has_value())
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[fork_timestamps] section requires [ethereum] mode=el in "
+                                  "config.genesis (Ethereum L1 EL mode)"));
+    }
+    if (genesis.m_ethereumELMode && !genesis.m_ethereumForkSchedule.has_value())
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[ethereum] mode=el requires a [fork_timestamps] section in "
+                                  "config.genesis (the EL-mode fork schedule)"));
     }
 }
 
@@ -982,6 +1000,19 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                 "produces its own blocks"));
     }
     m_enableEthereumEL = enableEL;
+    // EL mode's EVM revision is derived from the genesis fork schedule, so the per-node
+    // config.ini [ethereum] section must be backed by the chain-level declaration:
+    // config.genesis must carry "[ethereum] mode=el" AND a [fork_timestamps] section (the
+    // pairing is validated in validateL2Invariants). Without the schedule the fork-time
+    // getters would report every fork active from genesis — the maximally permissive
+    // reading — instead of refusing to run.
+    if (enableEL && !m_genesisConfig.m_ethereumForkSchedule)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.mode=el requires config.genesis to declare "
+                                  "[ethereum] mode=el with a [fork_timestamps] section: "
+                                  "the EL-mode fork schedule is part of the genesis pin"));
+    }
     m_ethereumListenIP = _pt.get<std::string>("ethereum.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("ethereum.listen_port", 30303);
     if (!isValidPort(listenPort))
@@ -1012,8 +1043,24 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
 // EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis). L1 PoS chains
 // fork on timestamps rather than block heights (unlike op-stack L2's
 // executor.evm_revision_forks). A zero timestamp means "active from genesis".
+// Also parses the chain-level EL-mode declaration ([ethereum] mode=el in config.genesis):
+// that is the PINNED statement the executor-v2 guard exemptions key on, so a node in EL
+// mode and its fork schedule are bound together in the genesis config, not coupled to the
+// per-node [ethereum] section of config.ini.
 void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig)
 {
+    if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
+    {
+        auto mode = ethSection->get<std::string>("mode", "none");
+        if (mode != "none" && mode != "el")
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "config.genesis [ethereum].mode invalid: \"" + mode +
+                                      "\" (supported: none, el)"));
+        }
+        m_genesisConfig.m_ethereumELMode = (mode == "el");
+    }
+
     auto section = _genesisConfig.get_child_optional("fork_timestamps");
     if (!section)
     {
@@ -2026,20 +2073,24 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     // ([fork_timestamps], loaded by loadForkTimestamps) and EthereumBlockVerifier derives the
     // EVMC revision from the block timestamp via fillExecutionLedgerConfig — the revision is
     // never read from on-chain state in this mode, so an executor.evm_revision is not
-    // required. The schedule itself IS part of the genesis pin: loadForkTimestamps stores it
-    // on the GenesisConfig and generateGenesisData emits it, so nodes holding different
-    // schedules fail the genesis comparison.
+    // required. The exemption is gated on the PINNED declaration ([ethereum] mode=el in
+    // config.genesis, loaded by loadForkTimestamps), not on the mere presence of a
+    // [fork_timestamps] section — validateL2Invariants binds the two together, so an
+    // ordinary v2 chain cannot waive this guard by pasting in a schedule nothing reads.
+    // The schedule itself IS part of the genesis pin: loadForkTimestamps stores it on the
+    // GenesisConfig and generateGenesisData emits it, so nodes holding different schedules
+    // fail the genesis comparison.
     if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
         !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty() &&
-        !m_genesisConfig.m_ethereumForkSchedule)
+        !m_genesisConfig.m_ethereumELMode)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
                 "executor.version=2 (ethereum-executor) requires an explicit "
-                "executor.evm_revision (or executor.evm_revision_forks), or a "
-                "[fork_timestamps] section (Ethereum L1 EL mode) so the EVM "
-                "revision is recorded on-chain; refusing to run with an implicit "
-                "binary-side default"));
+                "executor.evm_revision (or executor.evm_revision_forks), or "
+                "[ethereum] mode=el with a [fork_timestamps] section (Ethereum "
+                "L1 EL mode) so the EVM revision is recorded on-chain; refusing "
+                "to run with an implicit binary-side default"));
     }
     // A v2 chain must ALSO be able to persist that revision: Ledger::buildGenesisBlock only
     // writes evmc_revision for compatibility_version >= V3_18_0 (and executor_version for
@@ -2070,13 +2121,15 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     {
         m_genesisConfig.m_authAdminAccount =
             _genesisConfig.get<std::string>("executor.auth_admin_account", "");
-        // Ethereum L1 EL mode ([fork_timestamps] present) is a pure Ethereum execution
-        // layer: it has no FISCO system-contract auth, so the auth_admin_account
+        // Ethereum L1 EL mode ([ethereum] mode=el in config.genesis) is a pure Ethereum
+        // execution layer: it has no FISCO system-contract auth, so the auth_admin_account
         // requirement (normally enforced from compatibility_version 3.3.0) does not apply.
+        // Gated on the pinned EL declaration (validateL2Invariants binds it to the fork
+        // schedule), so a stray [fork_timestamps] section cannot waive the requirement.
         if (m_genesisConfig.m_authAdminAccount.empty() &&
             (m_genesisConfig.m_isAuthCheck ||
                 m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION) &&
-            !m_genesisConfig.m_ethereumForkSchedule) [[unlikely]]
+            !m_genesisConfig.m_ethereumELMode) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is empty, "
@@ -2087,7 +2140,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     {
         if ((m_genesisConfig.m_isAuthCheck ||
                 m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION) &&
-            !m_genesisConfig.m_ethereumForkSchedule)
+            !m_genesisConfig.m_ethereumELMode)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is null, "
@@ -2950,7 +3003,14 @@ std::string bcos::tool::generateGenesisData(
         // The EL-mode fork schedule drives the EVM revision in EL mode, so it is
         // part of the genesis pin for the same reason evmRevision is. Emitted only
         // when present (mirroring the [ethGenesisHeader] pattern) so every legacy
-        // chain's genesis string stays byte-identical.
+        // chain's genesis string stays byte-identical. The chain-level EL-mode
+        // declaration ([ethereum] mode=el) precedes it, so a node whose genesis
+        // declares EL mode but is missing the schedule fails the genesis comparison
+        // instead of silently running a different EVM schedule.
+        if (genesisConfig.m_ethereumELMode)
+        {
+            ss << "[ethereum]" << '\n' << "mode: el" << '\n';
+        }
         if (genesisConfig.m_ethereumForkSchedule.has_value())
         {
             auto const& schedule = *genesisConfig.m_ethereumForkSchedule;
@@ -3172,21 +3232,24 @@ uint64_t bcos::tool::NodeConfig::ethereumForkPragueTime() const
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkOsakaTime() const
 {
+    // Schedule absent -> UINT64_MAX ("not yet active"), the same default readOptionalTs
+    // stores for an omitted osaka_time key: "unspecified" must never mean "active from
+    // genesis" for a post-Prague fork.
     return m_genesisConfig.m_ethereumForkSchedule ?
                m_genesisConfig.m_ethereumForkSchedule->m_osakaTime :
-               0;
+               std::numeric_limits<uint64_t>::max();
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkBpo1Time() const
 {
     return m_genesisConfig.m_ethereumForkSchedule ?
                m_genesisConfig.m_ethereumForkSchedule->m_bpo1Time :
-               0;
+               std::numeric_limits<uint64_t>::max();
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkBpo2Time() const
 {
     return m_genesisConfig.m_ethereumForkSchedule ?
                m_genesisConfig.m_ethereumForkSchedule->m_bpo2Time :
-               0;
+               std::numeric_limits<uint64_t>::max();
 }
 bool bcos::tool::NodeConfig::singlePointConsensus() const
 {

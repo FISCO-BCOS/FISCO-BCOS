@@ -209,6 +209,18 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
                 co_await ledger::buildGenesisBlock(*ledger, config, param),
                 bcos::tool::InvalidConfig);
         }
+        // malformed nonce (non-decimal / overflowing uint64) — must fail with the
+        // field-naming InvalidConfig contract, not an unnamed boost::bad_lexical_cast
+        {
+            auto storage = makeStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            auto config = makeL2Config();
+            config.m_allocs[0].nonce = "abc";
+            appendGenesisFeatureFlagsSlot(config);
+            BOOST_CHECK_THROW(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
+                bcos::tool::InvalidConfig);
+        }
         // feature_flags slot VALUE mismatch (valid hex, wrong content): the
         // verification runs before the first write, so the rejected config
         // leaves no account rows behind — not even the SystemConfig account's

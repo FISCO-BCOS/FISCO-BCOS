@@ -74,15 +74,14 @@ TrieBuildResult computeTrieRootFromSorted(
 /// BranchNode's own value. The RLP-encoded-index keys Ethereum actually uses are prefix-free, so
 /// that case never fires there, but trietest.json exercises it, so it is supported here.
 ///
-/// @param sortedEntries  Unique keys, sorted ascending by raw key bytes (lexicographic == nibble
-///                       path order — note this is NOT numeric index order for RLP-encoded
-///                       indices: rlp(0)=0x80 sorts after rlp(1)=0x01). Uniqueness is ENFORCED
-///                       (MPTInvariantViolation on duplicates — two identical keys would both
-///                       terminate at the same branch and send hbBuildBranch's nibble indexing
-///                       out of bounds); the sorted order remains the caller's contract.
+/// The input is NOT required to be sorted (the build sorts by nibble-path order internally —
+/// byte lexicographic == nibble path order — note this is NOT numeric index order for
+/// RLP-encoded indices: rlp(0)=0x80 sorts after rlp(1)=0x01). Uniqueness is ENFORCED
+/// (MPTInvariantViolation on duplicates — two identical keys would both terminate at the same
+/// branch and send hbBuildBranch's nibble indexing out of bounds).
 /// @return {root, newNodes} — root is emptyRootHash() for an empty input.
 TrieBuildResult computeTrieRootFromRawKeys(
-    std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> sortedEntries);
+    std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> items);
 
 /// Non-secure (variable-length key) build entry: computes a canonical MPT over (key, value) pairs
 /// where @p key is an arbitrary-length byte string (each byte → 2 nibbles via bytesToNibbles),

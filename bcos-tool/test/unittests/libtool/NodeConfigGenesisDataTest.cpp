@@ -336,6 +336,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
         "version=2\n";
     const std::string schedule =
+        "[ethereum]\nmode=el\n"
         "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\ncancun_time=1710338135\n"
         "prague_time=1746612311\n";
 
@@ -343,6 +344,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     NodeConfig cfg(keyFactory);
     BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + schedule));
     auto const& gc = cfg.genesisConfig();
+    BOOST_CHECK(gc.m_ethereumELMode);  // [ethereum] mode=el declaration
     BOOST_REQUIRE(gc.m_ethereumForkSchedule.has_value());
     BOOST_CHECK_EQUAL(gc.m_ethereumForkSchedule->m_londonTime, 0u);
     BOOST_CHECK_EQUAL(gc.m_ethereumForkSchedule->m_parisTime, 0u);  // omitted: PoS from genesis
@@ -351,13 +353,16 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
         std::numeric_limits<uint64_t>::max());  // omitted: not yet active
 
     auto data = bcos::tool::generateGenesisData(gc, *cfg.ledgerConfig());
+    BOOST_CHECK(data.find("[ethereum]") != std::string::npos);
+    BOOST_CHECK(data.find("mode: el") != std::string::npos);
     BOOST_CHECK(data.find("[forkTimestamps]") != std::string::npos);
     BOOST_CHECK(data.find("shanghai_time:1681338455") != std::string::npos);
 
     // A node with a different schedule produces different genesis data.
     NodeConfig cfg2(keyFactory);
     BOOST_REQUIRE_NO_THROW(cfg2.loadGenesisConfigFromString(
-        base + "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\n"
+        base + "[ethereum]\nmode=el\n"
+               "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\n"
                "cancun_time=1710338135\nprague_time=1746612312\n"));
     BOOST_CHECK(
         data != bcos::tool::generateGenesisData(cfg2.genesisConfig(), *cfg2.ledgerConfig()));
@@ -367,8 +372,63 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     NodeConfig cfg3(keyFactory);
     BOOST_REQUIRE_NO_THROW(cfg3.loadGenesisConfigFromString(base + "evm_revision=cancun\n"));
     BOOST_CHECK(!cfg3.genesisConfig().m_ethereumForkSchedule.has_value());
+    BOOST_CHECK(!cfg3.genesisConfig().m_ethereumELMode);
     auto data3 = bcos::tool::generateGenesisData(cfg3.genesisConfig(), *cfg3.ledgerConfig());
     BOOST_CHECK(data3.find("[forkTimestamps]") == std::string::npos);
+    BOOST_CHECK(data3.find("[ethereum]") == std::string::npos);
+}
+
+// The EL-mode declaration ([ethereum] mode=el) and its fork schedule are bound together in
+// config.genesis: a [fork_timestamps] section on a genesis that does not declare EL mode
+// must be rejected (an ordinary executor-v2 chain must not be able to waive the evmc_revision
+// / auth_admin_account guards by pasting in a section nothing reads), and an EL declaration
+// without the schedule must be rejected too (no schedule = no way to derive the EVM revision).
+BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string base =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=1\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n";
+    const std::string schedule =
+        "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\ncancun_time=1710338135\n"
+        "prague_time=1746612311\n";
+
+    // [fork_timestamps] without [ethereum] mode=el: rejected.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(base + schedule), InvalidConfig);
+    }
+    // [ethereum] mode=el without [fork_timestamps]: rejected.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_THROW(
+            cfg.loadGenesisConfigFromString(base + "[ethereum]\nmode=el\n"), InvalidConfig);
+    }
+    // [ethereum] mode=none alongside [fork_timestamps]: rejected (declaration is explicit).
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_THROW(
+            cfg.loadGenesisConfigFromString(base + "[ethereum]\nmode=none\n" + schedule),
+            InvalidConfig);
+    }
+    // Invalid [ethereum] mode value: rejected like every neighbouring parse.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(base + "[ethereum]\nmode=invalid\n"),
+            InvalidConfig);
+    }
 }
 
 // Fork timestamp parsing must fail fast: std::stoull accepted a leading '-' (wrapping to
@@ -392,6 +452,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
         "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
         "version=2\n"
+        "[ethereum]\nmode=el\n"
         "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\n"
         "cancun_time=1710338135\nprague_time=";
 

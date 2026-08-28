@@ -19,7 +19,6 @@
  */
 #include "EthTrieRoots.h"
 #include <bcos-codec/rlp/RLPEncode.h>
-#include <algorithm>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -34,24 +33,25 @@ bcos::h256 computeIndexedTrieRoot(std::span<bcos::bytesConstRef const> items)
         return emptyRootHash();
     }
 
-    // Key each item by its RLP-encoded index, then sort ascending by ENCODED KEY BYTES — the
-    // raw-key trie contract (rlp(0)=0x80 > rlp(1)=0x01, so NOT numeric index order).
-    std::vector<std::pair<bcos::bytes, bcos::bytes>> keyed;
+    // Key each item by its RLP-encoded index. The keys must be owned (they are, in `keyed`);
+    // the values stay VIEWS into the caller's `items`, which outlive the call —
+    // computeTrieRootFromRawKeys copies them into its own entries and sorts by ENCODED KEY
+    // BYTES internally (rlp(0)=0x80 > rlp(1)=0x01, so NOT numeric index order), so no
+    // ordering or value copying is needed here.
+    std::vector<std::pair<bcos::bytes, bcos::bytesConstRef>> keyed;
     keyed.reserve(items.size());
     for (size_t i = 0; i < items.size(); ++i)
     {
         bcos::bytes key;
         codec::rlp::encode(key, static_cast<uint64_t>(i));
-        keyed.emplace_back(std::move(key), items[i].toBytes());
+        keyed.emplace_back(std::move(key), items[i]);
     }
-    std::sort(keyed.begin(), keyed.end(),
-        [](auto const& lhs, auto const& rhs) { return lhs.first < rhs.first; });
 
     std::vector<std::pair<bcos::bytesConstRef, bcos::bytesConstRef>> sorted;
     sorted.reserve(keyed.size());
     for (auto const& [key, value] : keyed)
     {
-        sorted.emplace_back(bcos::ref(key), bcos::ref(value));
+        sorted.emplace_back(bcos::ref(key), value);
     }
     return computeTrieRootFromRawKeys(sorted).root;
 }

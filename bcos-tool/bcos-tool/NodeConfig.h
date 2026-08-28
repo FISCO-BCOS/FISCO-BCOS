@@ -586,7 +586,8 @@ private:
     uint64_t m_ethereumChainId = 1;
     // The EL-mode fork schedule ([fork_timestamps] in config.genesis) lives on
     // m_genesisConfig.m_ethereumForkSchedule so it is part of the genesis pin;
-    // the ethereumFork*Time() getters below forward to it (0 when unset).
+    // the ethereumFork*Time() getters below forward to it (0 when unset for the
+    // pre-Prague forks, UINT64_MAX — "not yet active" — for osaka/bpo1/bpo2).
 
     // config for cert
     std::string m_certPath;

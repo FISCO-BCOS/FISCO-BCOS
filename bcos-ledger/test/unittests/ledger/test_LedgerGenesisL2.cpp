@@ -226,6 +226,24 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
                 *storage, executor_v1::StateKeyView(table, ACCOUNT_TABLE_FIELDS::CODE_HASH));
             BOOST_CHECK(!codeHashRow);
         }
+
+        // A malformed nonce aborts with the same field-naming InvalidConfig
+        // contract (not an unnamed boost::bad_lexical_cast), also before any write.
+        std::vector<Alloc> badNonceAllocs;
+        badNonceAllocs.push_back(Alloc{.address = goodAddress,
+            .balance = u256(1),
+            .nonce = "abc",  // not a decimal uint64
+            .code = "6080604052",
+            .storage = {{std::string(64, '0'), std::string(64, '1')}}});
+        BOOST_CHECK_THROW(
+            co_await importEthereumGenesisState(*storage, badNonceAllocs, *hashImpl, features),
+            bcos::tool::InvalidConfig);
+        auto badNonceRow = co_await storage2::readOne(*storage, executor_v1::StateKeyView(
+                                                                     SYS_TABLES,
+                                                                     std::string(SYS_DIRECTORY::
+                                                                             USER_APPS) +
+                                                                         goodAddress));
+        BOOST_CHECK(!badNonceRow);
     }());
 }
 

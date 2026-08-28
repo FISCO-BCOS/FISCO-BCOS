@@ -206,23 +206,30 @@ TrieBuildResult computeTrieRootFromSorted(
 }
 
 TrieBuildResult computeTrieRootFromRawKeys(
-    std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> sortedEntries)
+    std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> items)
 {
-    if (sortedEntries.empty())
+    if (items.empty())
     {
         return TrieBuildResult{.root = emptyRootHash(), .newNodes = {}};
     }
 
     std::vector<HBEntry> entries;
-    entries.reserve(sortedEntries.size());
-    for (auto const& [key, value] : sortedEntries)
+    entries.reserve(items.size());
+    for (auto const& [key, value] : items)
     {
         entries.push_back(HBEntry{.nibbles = bytesToNibbles(key), .value = value.toBytes()});
     }
 
-    // Enforce the documented "Unique keys" half of the precondition (the sorted
-    // order stays the caller's contract): under the required ascending sort
-    // duplicates are adjacent, and two identical keys both terminate at the same
+    // Sort internally, exactly like computeTrieRootVarKey below: byte-lexicographic key order
+    // == nibble-path order, which hbBuild's first/last common-prefix shortcut REQUIRES. The
+    // in-tree OP callers passed index-order entries once and produced a malformed extension
+    // node (W6 isthmus_big_block_130tx), so the raw-key API must not trust caller ordering —
+    // sorting here also makes the duplicate scan below sound BY CONSTRUCTION: under the
+    // ascending nibble-path order, two identical keys are necessarily adjacent.
+    std::sort(entries.begin(), entries.end(),
+        [](HBEntry const& a, HBEntry const& b) { return a.nibbles < b.nibbles; });
+
+    // Enforce key uniqueness: two identical keys both terminate at the same
     // branch — hbBuildBranch takes the front one as the branch value and would
     // then index one past its nibble path, using that out-of-bounds byte to
     // index the 16-entry BranchNode::children. Proper-prefix keys are legal here

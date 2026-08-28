@@ -282,8 +282,8 @@ public:
     {
         std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
         boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), table.data());
-        auto const view = std::string_view(table.data(), table.size());
-        if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, view))
+        if (auto view = std::string_view(table.data(), table.size());
+            precompiled::contains(bcos::precompiled::c_systemTxsAddress, view))
         {
             m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + table.size());
             m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
@@ -313,8 +313,7 @@ public:
      * @param storage storage instance
      * @param address address of the account, hex string, should not contain 0x prefix
      */
-    EVMAccount(Storage& storage, std::string_view address, bool binaryAddress)
-      : m_storage(storage)
+    EVMAccount(Storage& storage, std::string_view address, bool binaryAddress) : m_storage(storage)
     {
         if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, address))
         {
