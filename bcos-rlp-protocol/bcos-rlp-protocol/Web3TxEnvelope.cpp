@@ -102,6 +102,29 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         return malformed();
     }
     bcos::bytesRef afterField7 = walker.getCroppedData(field7Header.payloadLength);
+    // ListEnd parity: both 9-item spellings — full form (v, r, s) and preimage tail
+    // (chainId, 0, 0) — must END at the list boundary. Web3TxHandler's decode rejects
+    // junk after the envelope, so the classifier must see the same bytes as invalid;
+    // otherwise a junk-tailed envelope passes classifier-based admission gates it would
+    // later fail in decode (poisoning window). Fail closed on any other tail shape.
+    {
+        bcos::bytesRef tail = afterField7;
+        int tailItems = 0;
+        while (!tail.empty())
+        {
+            auto [tailError, tailHeader] = bcos::codec::rlp::decodeHeader(tail);
+            if (tailError || tailHeader.payloadLength > tail.size()) [[unlikely]]
+            {
+                return malformed();
+            }
+            tail = tail.getCroppedData(tailHeader.payloadLength);
+            ++tailItems;
+        }
+        if (tailItems != 2) [[unlikely]]
+        {
+            return malformed();
+        }
+    }
     bool const isPreimageTail = [&] {
         if (afterField7.empty()) [[unlikely]]
         {
