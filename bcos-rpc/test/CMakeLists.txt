@@ -21,6 +21,7 @@ file(GLOB_RECURSE SOURCES "unittests/*.cpp" "unittests/*.h" "unittests/*.sol")
 set(TEST_BINARY_NAME test-bcos-rpc)
 
 find_package(Boost REQUIRED unit_test_framework)
+find_package(FakeIt CONFIG REQUIRED)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
@@ -34,7 +35,7 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 # exception catching binary-wide (testCallRequest/decode_invalid_gas_string starts
 # reporting "unknown type" for a plain std::invalid_argument). The test file carries a
 # linkage-only definition of unhexAddress instead.
-target_link_libraries(${TEST_BINARY_NAME} txpool mempool ledger rpc tool transaction-scheduler storage Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} txpool mempool ledger rpc tool transaction-scheduler storage Boost::unit_test_framework FakeIt::FakeIt-boost)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/rpc/RpcReadHandlersTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # FullChainFixture.h pulls RocksDB and testutils headers whose names collide with the

@@ -33,6 +33,7 @@
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <chrono>
+#include <fakeit.hpp>
 #include <filesystem>
 #include <memory>
 #include <ostream>
@@ -60,6 +61,8 @@ public:
         std::optional<std::uint32_t> capturedNewPayloadVersion;
         std::optional<engine::PayloadID> capturedPayloadId;
         std::optional<std::uint32_t> capturedGetPayloadVersion;
+        std::optional<bcos::protocol::BlockNumber> safeBlockNumber;
+        std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber;
     };
     std::shared_ptr<State> m_state = std::make_shared<State>();
 
@@ -92,10 +95,13 @@ public:
         co_return m_state->payloadStatusResult;
     }
 
-    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const { return std::nullopt; }
+    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const
+    {
+        return m_state->safeBlockNumber;
+    }
     std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const
     {
-        return std::nullopt;
+        return m_state->finalizedBlockNumber;
     }
 };
 
@@ -626,21 +632,21 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadVersion.has_value());
     BOOST_TEST(*testEngineService.m_state->capturedNewPayloadVersion == 4);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
-            .withdrawalsRoot.has_value());
+                      .withdrawalsRoot.has_value());
     BOOST_REQUIRE(
         testEngineService.m_state->capturedNewPayloadRequest->executionRequests.has_value());
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionRequests->empty());
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions
                    .size() == 1);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals
-            .has_value());
+                      .has_value());
     BOOST_TEST(
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front()
             .amount == expectedLargeValue);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed
-            .has_value());
+                      .has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
-            .excessBlobGas.has_value());
+                      .excessBlobGas.has_value());
     BOOST_TEST(
         *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed ==
         expectedLargeValue);
@@ -650,8 +656,8 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
 
     // Raw-bytes carrier: newPayload preserves the wire bytes verbatim (no decoding).
     BOOST_TEST(toHexStringWithPrefix(testEngineService.m_state->capturedNewPayloadRequest
-                       ->executionPayload.transactions.front()
-                       .raw) == encodedTxHex);
+                                         ->executionPayload.transactions.front()
+                                         .raw) == encodedTxHex);
 
     testEngineService.m_state->getPayloadResult->executionPayload =
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload;
@@ -690,6 +696,118 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     BOOST_TEST(oldVersionResponse["result"].isMember("blockValue"));
     BOOST_TEST(!oldVersionResponse["result"].isMember("blobsBundle"));
     BOOST_TEST(!oldVersionResponse["result"].isMember("executionRequests"));
+}
+
+// safe/finalized tag routing (round-4 finding F4): the D2 branch sends these labels to the
+// engine's FCU-tracked numbers when an engine service is present. Pins all three behaviors:
+// tracked labels answer, untracked labels surface the -32000-family error on a state
+// endpoint, and getBlockByNumber converts the same throw into a JSON null (the documented
+// null-vs-error asymmetry with the state endpoints).
+// eth_gasPrice OP arm (round-4 finding F3): a legacy send priced by this endpoint must
+// clear headroom above head baseFee — max(baseFee*2, 2 gwei), matching the OP call path's
+// pricing default. The bare head baseFee failed intermittently whenever baseFee rose in
+// the next block (up to 1/denominator under EIP-1559 dynamics).
+BOOST_AUTO_TEST_CASE(gasPriceOpArmSuggestsHeadroomAboveBaseFee)
+{
+    namespace rl = bcos::ledger;
+    auto callGasPrice = [](Web3JsonRpcImpl::Ptr const& web3) {
+        std::promise<bcos::bytes> promise;
+        web3->onRPCRequest(R"({"jsonrpc":"2.0","id":77,"method":"eth_gasPrice","params":[]})",
+            [&promise](bcos::bytes resp, boost::beast::http::status) {
+                promise.set_value(std::move(resp));
+            });
+        auto jsonBytes = promise.get_future().get();
+        Json::Value value;
+        Json::Reader reader;
+        std::string_view json((char*)jsonBytes.data(), jsonBytes.size());
+        reader.parse(json.begin(), json.end(), value);
+        return value;
+    };
+
+    // Floor case: a tiny head baseFee still suggests the 2 gwei minimum. The mock is
+    // declared before the RPC objects so it outlives the ledger pointer they hold.
+    {
+        fakeit::Mock<rl::LedgerInterface> mockLedger;
+        auto header = bcos::test::fakeAndTestBlockHeader(m_blockFactory->cryptoSuite(), 0, {},
+            bcos::h256(1), bcos::h256(2), bcos::h256(3), 7, bcos::u256(1000), 0, 0, {}, bytes(),
+            SignatureList{}, false);
+        header->setBaseFee(bcos::u256(7));
+        auto block = m_blockFactory->createBlock();
+        block->setBlockHeader(header);
+        fakeit::When(Method(mockLedger, asyncGetBlockNumber))
+            .AlwaysDo([](std::function<void(bcos::Error::Ptr, bcos::protocol::BlockNumber)> cb) {
+                cb(nullptr, 7);
+            });
+        fakeit::When(Method(mockLedger, asyncGetBlockDataByNumber))
+            .AlwaysDo([block](bcos::protocol::BlockNumber, int32_t,
+                          std::function<void(bcos::Error::Ptr, bcos::protocol::Block::Ptr)> cb) {
+                cb(nullptr, block);
+            });
+        auto ledger =
+            std::shared_ptr<rl::LedgerInterface>(&mockLedger.get(), [](rl::LedgerInterface*) {});
+        auto opNodeService = std::make_shared<rpc::NodeService>(
+            ledger, nullptr, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+        auto rpc2 = factory->buildLocalRpc(groupInfo, opNodeService);
+        auto resp = callGasPrice(rpc2->web3JsonRpc());
+        validRespCheck(resp);
+        BOOST_TEST(fromQuantity(resp["result"].asString()) == bcos::u256(2'000'000'000));
+    }
+    // Multiplier case: well above the floor, the suggestion is baseFee*2.
+    {
+        fakeit::Mock<rl::LedgerInterface> mockLedger;
+        auto header = bcos::test::fakeAndTestBlockHeader(m_blockFactory->cryptoSuite(), 0, {},
+            bcos::h256(1), bcos::h256(2), bcos::h256(3), 7, bcos::u256(1000), 0, 0, {}, bytes(),
+            SignatureList{}, false);
+        header->setBaseFee(bcos::u256(2'000'000'000));
+        auto block = m_blockFactory->createBlock();
+        block->setBlockHeader(header);
+        fakeit::When(Method(mockLedger, asyncGetBlockNumber))
+            .AlwaysDo([](std::function<void(bcos::Error::Ptr, bcos::protocol::BlockNumber)> cb) {
+                cb(nullptr, 7);
+            });
+        fakeit::When(Method(mockLedger, asyncGetBlockDataByNumber))
+            .AlwaysDo([block](bcos::protocol::BlockNumber, int32_t,
+                          std::function<void(bcos::Error::Ptr, bcos::protocol::Block::Ptr)> cb) {
+                cb(nullptr, block);
+            });
+        auto ledger =
+            std::shared_ptr<rl::LedgerInterface>(&mockLedger.get(), [](rl::LedgerInterface*) {});
+        auto opNodeService = std::make_shared<rpc::NodeService>(
+            ledger, nullptr, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+        auto rpc2 = factory->buildLocalRpc(groupInfo, opNodeService);
+        auto resp = callGasPrice(rpc2->web3JsonRpc());
+        validRespCheck(resp);
+        BOOST_TEST(fromQuantity(resp["result"].asString()) == bcos::u256(4'000'000'000));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(safeFinalizedTagsRouteThroughEngineService)
+{
+    TestEngineService testEngineService;
+    nodeService->engineService() =
+        std::make_shared<bcos::engine::AnyEngineService>(testEngineService);
+
+    // (a) tracked labels: a tag-taking state endpoint answers with the tracked number.
+    testEngineService.m_state->safeBlockNumber = 19;  // the fixture chain's latest
+    testEngineService.m_state->finalizedBlockNumber = 19;
+    auto resp = onRPCRequestWrapper(
+        R"({"jsonrpc":"2.0","id":81,"method":"eth_getBalance","params":["0x0000000000000000000000000000000000000001","safe"]})");
+    validRespCheck(resp);
+
+    // (b) untracked: the state endpoint surfaces the JSON-RPC error, not a silent alias.
+    testEngineService.m_state->safeBlockNumber = std::nullopt;
+    testEngineService.m_state->finalizedBlockNumber = std::nullopt;
+    resp = onRPCRequestWrapper(
+        R"({"jsonrpc":"2.0","id":82,"method":"eth_getBalance","params":["0x0000000000000000000000000000000000000001","finalized"]})");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32000);
+    BOOST_CHECK(resp["error"]["message"].asString().find("not tracked yet") != std::string::npos);
+
+    // (c) getBlockByNumber converts the same throw into a JSON null result.
+    resp = onRPCRequestWrapper(
+        R"({"jsonrpc":"2.0","id":83,"method":"eth_getBlockByNumber","params":["safe",false]})");
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].isNull());
 }
 
 BOOST_AUTO_TEST_CASE(logMatcherTest)
