@@ -52,7 +52,6 @@ enum class EthMethod
     eth_mining,
     eth_hashrate,
     eth_gasPrice,
-    eth_feeHistory,
     eth_accounts,
     eth_blockNumber,
     eth_getBalance,
@@ -86,6 +85,10 @@ enum class EthMethod
     eth_getLogs,
     eth_maxPriorityFeePerGas,
     eth_getProof,
+    // Finding BL: appended, NOT inserted mid-list. The in-tree dispatch keys handlers by
+    // magic_enum name strings, but installed-header consumers keying this enum numerically
+    // would have seen ~34 later entries silently remap if feeHistory took a mid-list slot.
+    eth_feeHistory,
 };
 
 [[maybe_unused]] static std::string methodString(EthMethod _method)
