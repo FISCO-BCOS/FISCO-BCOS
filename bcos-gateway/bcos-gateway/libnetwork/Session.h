@@ -224,6 +224,17 @@ public:
     void drop(DisconnectReason _reason);
 
 private:
+    // Coroutine bodies backing doRead()/write(), launched fire-and-forget via task::wait. Each
+    // frame holds a strong reference to the session for the whole loop, so an in-flight
+    // read/write keeps the session, its recv buffer and its socket alive — the FIB-184 lifetime
+    // invariant, made structural instead of relying on completion-handler captures.
+    task::Task<void> readLoop();
+    // Single-writer write loop (see write()): drains m_writeQueue in batches and serializes every
+    // async_write through the single in-flight loop. The frame holds a strong reference to the
+    // session for the whole loop (see the body), keeping the socket and the batch buffers alive
+    // across each co_await.
+    task::Task<void> writeLoop();
+
     // FIB-184: perform the actual SSL/socket teardown (close + graceful async_shutdown). It has a
     // strict threading contract — it must run on the socket's io_context (or, on the shutdown path,
     // with the io_context threads already joined) so it never touches the ssl::stream concurrently
@@ -238,9 +249,10 @@ public:
 
     void onTimeout(const boost::system::error_code& error, uint32_t seq);
 
-    /// Perform a single round of the write operation. This could end up calling
-    /// itself asynchronously.
-    void onWrite(boost::system::error_code ec, std::size_t length);
+    /// Launch the write loop (writeLoop) if no write is currently in flight. Safe to call from
+    /// any thread: the first caller wins the m_writingInFlight CAS and becomes the single writer;
+    /// concurrent callers return immediately and rely on the in-flight writer (or writeLoop's
+    /// single exit) to drain the queue.
     void write();
 
     /// call by doRead() to deal with message
@@ -251,7 +263,11 @@ public:
 
     MessageFactory::Ptr m_messageFactory;
     tbb::concurrent_queue<Payload> m_writeQueue;
-    std::mutex m_writingQueueMutex;
+    // Single-flight flag guarding the write path: write() CASes it to true to claim the writer
+    // role (exactly one writeLoop runs at a time); writeLoop's exit guard clears it and re-arms
+    // write() when the queue is non-empty at exit. Replaces the old try_lock-as-flag std::mutex —
+    // it never blocks, so no lock is ever held across a co_await.
+    std::atomic<bool> m_writingInFlight{false};
     // FIB-184 (review): atomic so the active flag is read/written without a data race between the
     // network worker (set/clear in start/drop) and readers in active()/doRead(). Note active() is
     // still a composite read (also m_socket / haveNetwork()), so this narrows but does not by
@@ -296,13 +312,6 @@ public:
     // FIB-184: opaque guard whose destructor releases the Host session-cap slot. Destroyed with
     // the session, so the slot is freed exactly once on session teardown.
     std::shared_ptr<void> m_lifetimeGuard;
-
-    struct Writings
-    {
-        std::vector<Payload> payloads;
-        std::vector<boost::asio::const_buffer> buffers;
-    };
-    std::shared_ptr<Writings> m_writings;
 
     std::mutex x_pendingResponseSeqs;
     std::unordered_set<uint32_t> m_pendingResponseSeqs;

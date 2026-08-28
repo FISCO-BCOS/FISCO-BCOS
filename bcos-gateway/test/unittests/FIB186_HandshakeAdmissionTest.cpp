@@ -44,9 +44,6 @@ public:
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB186"), "0.0.0.0", 0)
     {}
     ~FakeASIO_FIB186() noexcept override {}
-    void asyncReadSome(
-        const std::shared_ptr<SocketFace>&, ba::mutable_buffer, ReadWriteHandler) override
-    {}
 };
 
 // Exposes the protected handshake-admission helpers for direct testing, mirroring the FIB-184
@@ -86,8 +83,8 @@ BOOST_AUTO_TEST_CASE(GlobalHandshakeCapIsEnforced)
 }
 
 // FIB-186: the RAII HandshakeSlotGuard pattern releases the slot exactly once when the handshake
-// completion handler is destroyed (success, failure, or abort). Mirrors how startAccept binds the
-// guard into the asyncHandshake completion handler.
+// path unwinds (success, failure, or abort). Mirrors how Host::serverHandshake binds the guard
+// into its coroutine frame.
 BOOST_AUTO_TEST_CASE(GuardReleasesSlotExactlyOnce)
 {
     auto hashImpl = std::make_shared<Keccak256>();

@@ -10,6 +10,7 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
+#include "bcos-task/Task.h"
 #include "bcos-utilities/Common.h"
 #include <openssl/x509.h>
 #include <boost/asio/ssl/stream_base.hpp>
@@ -244,11 +245,27 @@ protected:
         std::shared_ptr<std::string> endpointPublicKey,
         std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
             callback,
-        NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::steady_timer> timerPtr);
+        NodeIPEndpoint _nodeIPEndpoint);
 
     void erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
     void insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint);
+
+private:
+    // Coroutine bodies for the accept/connect paths, launched fire-and-forget (task::wait) from
+    // startAccept()/asyncConnect(). Each frame holds a strong Host reference for its whole
+    // lifetime — structurally replacing the per-operation shared_from_this() captures of the old
+    // completion handlers. acceptLoop additionally keeps the Host alive until Host::stop()
+    // cancels the acceptor, which completes the pending async_accept with operation_aborted and
+    // lets the loop exit.
+    task::Task<void> acceptLoop();
+    task::Task<void> serverHandshake(std::shared_ptr<SocketFace> socket);
+    task::Task<void> clientConnect(std::shared_ptr<SocketFace> socket,
+        NodeIPEndpoint _nodeIPEndpoint,
+        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+            callback);
+
+protected:
 
     // FIB-186 (vector D): dedicated single-thread executor for session-teardown notifications, kept
     // separate from the shared IOServicePool so a bulk-disconnect flood cannot starve

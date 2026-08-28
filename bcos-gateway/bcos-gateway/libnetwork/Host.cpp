@@ -21,6 +21,7 @@
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
 #include "bcos-utilities/IOServicePool.h"
+#include <bcos-task/Wait.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -70,120 +71,144 @@ struct HandshakeSlotGuard
  * information)
  * @attention: this function is called repeatedly
  */
-void Host::startAccept(boost::system::error_code boost_error)
+void Host::startAccept(boost::system::error_code /*boost_error*/)
 {
     /// accept the connection
     if (m_run)
     {
         HOST_LOG(INFO) << LOG_DESC("P2P StartAccept") << LOG_KV("Host", m_listenHost) << ":"
                        << m_listenPort;
-        auto socket = m_asioInterface->newSocket(true, NodeIPEndpoint());
-        // get and set the accepted endpoint to socket(client endpoint)
-        /// define callback after accept connections
-        m_asioInterface->asyncAccept(
-            socket,
-            [this, socket](boost::system::error_code ec) {
-                /// get the endpoint information of remote client after accept the
-                /// connections
-                auto endpoint = socket->remoteEndpoint();
-                HOST_LOG(TRACE) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
-                /// network accept failed
-                if (ec || !m_run)
-                {
-                    HOST_LOG(ERROR) << "Error: " << ec;
-                    socket->close();
-                    startAccept();
+        // fire-and-forget: the detached task owns the coroutine chain; acceptLoop() exits when
+        // Host::stop() clears m_run and cancels the acceptor.
+        task::wait(acceptLoop());
+    }
+}
 
-                    return;
-                }
+task::Task<void> Host::acceptLoop()
+{
+    // The frame holds the Host alive for the whole accept loop. This deliberately extends the old
+    // lifetime (the accept handler held a raw this): the loop only exits after Host::stop()
+    // cancels the acceptor, so a pending async_accept can never fire on a destroyed Host.
+    auto self = shared_from_this();
+    try
+    {
+        while (m_run)
+        {
+            auto socket = m_asioInterface->newSocket(true, NodeIPEndpoint());
+            auto [ec] = co_await m_asioInterface->awaitableAccept(socket);
+            /// get the endpoint information of remote client after accept the connections
+            auto endpoint = socket->remoteEndpoint();
+            HOST_LOG(TRACE) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
+            /// network accept failed
+            if (ec || !m_run)
+            {
+                HOST_LOG(ERROR) << "Error: " << ec;
+                socket->close();
+                // re-arm accept (the old code recursed into startAccept here)
+                continue;
+            }
 
-                /// if the connected peer over the limitation, drop socket
-                socket->setNodeIPEndpoint(endpoint);
-                // FIB-186: DEBUG, not INFO — under connection churn this fires on every accept and
-                // would flood the log, letting a low-trust peer fill the disk.
-                HOST_LOG(DEBUG) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
-                // FIB-186: bound concurrent in-flight TLS handshakes (global cap) BEFORE starting
-                // the handshake. The FIB-184 session caps apply only after the handshake completes,
-                // so connection churn from a low-trust peer would otherwise flood the shared I/O
-                // thread-pool with accept / handshake / teardown work and starve inter-validator
-                // PBFT reads, halting consensus. Over the cap, drop the socket and re-arm accept
-                // without running the (CPU-heavy) TLS handshake.
-                std::string remoteAddress = socket->nodeIPEndpoint().address();
-                // FIB-186: bound admission of new connections BEFORE the CPU-heavy TLS handshake,
-                // so connection churn from a low-trust peer cannot flood the shared I/O pool with
-                // accept / handshake / teardown work and starve inter-validator PBFT reads (the
-                // FIB-184 session caps apply only AFTER the handshake completes). Reserve the
-                // in-flight-handshake slot first because it is the refundable check: if the
-                // accept-rate limiter below then rejects, we release the slot and no rate token is
-                // spent. Checking the rate token first would instead waste a token whenever the
-                // handshake cap is already saturated, needlessly lowering the effective accept rate
-                // for legitimate peers arriving in that window.
-                if (!tryAcquireHandshakeSlot())
-                {
-                    HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
-                                    << LOG_DESC("pending-handshake cap reached, reject connection")
-                                    << LOG_KV("address", remoteAddress)
-                                    << LOG_KV("pendingHandshakes", currentPendingHandshakes())
-                                    << LOG_KV("maxPendingHandshakes", m_maxPendingHandshakes);
-                    socket->close();
-                    startAccept();
-                    return;
-                }
-                // Accept-rate token bucket: drops a churn flood cheaply (accept + close) before
-                // paying handshake CPU, which the concurrency cap alone does not. On rejection the
-                // handshake slot reserved just above must be released so it is not leaked -- the
-                // HandshakeSlotGuard that normally releases it is only created once both checks
-                // pass.
-                if (!tryAcquireConnectionToken())
-                {
-                    releaseHandshakeSlot();
-                    HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
-                                    << LOG_DESC("connection accept-rate limit reached, reject")
-                                    << LOG_KV("address", remoteAddress)
-                                    << LOG_KV("maxConnectionsPerSecond", m_maxConnectionsPerSecond);
-                    socket->close();
-                    startAccept();
-                    return;
-                }
-                // Release the slot exactly once when the handshake completes (success, failure, or
-                // abort): the guard rides the completion handler and is destroyed with it.
-                auto handshakeGuard = std::make_shared<HandshakeSlotGuard>(weak_from_this());
-                // FIB-186: bound the handshake's lifetime. A stalled / slow TLS handshake would
-                // otherwise never complete, so its admission slot (above) would never be released
-                // and this Host (kept alive by the completion handler's shared_from_this) could
-                // never be destroyed. On timeout close the socket; that completes async_handshake
-                // with an error, so the completion handler runs, the guard is destroyed and the
-                // slot released. The timer and the handshake completion run on the socket's single
-                // io_context thread, so they are serialised (no race on close/cancel). Same pattern
-                // as the outbound connectTimer.
-                auto handshakeTimer = std::make_shared<boost::asio::steady_timer>(
-                    socket->ioService(), std::chrono::milliseconds(m_handshakeTimeout));
-                handshakeTimer->async_wait([socket](const boost::system::error_code& timerError) {
-                    if (timerError == boost::asio::error::operation_aborted)
-                    {
-                        return;
-                    }
-                    if (socket->isConnected())
-                    {
-                        HOST_LOG(WARNING) << LOG_BADGE("startAccept")
-                                          << LOG_DESC("in-flight handshake timed out, close socket")
-                                          << LOG_KV("endpoint", socket->nodeIPEndpoint());
-                        socket->close();
-                    }
-                });
-                /// register ssl callback to get the NodeID of peers
-                std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-                m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
-                m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::server,
-                    [self = shared_from_this(), endpointPublicKey, socket, handshakeGuard,
-                        handshakeTimer](const boost::system::error_code& handshakeError) {
-                        handshakeTimer->cancel();
-                        self->handshakeServer(handshakeError, endpointPublicKey, socket);
-                    });
+            /// if the connected peer over the limitation, drop socket
+            socket->setNodeIPEndpoint(endpoint);
+            // FIB-186: DEBUG, not INFO — under connection churn this fires on every accept and
+            // would flood the log, letting a low-trust peer fill the disk.
+            HOST_LOG(DEBUG) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
+            // FIB-186: bound admission of new connections BEFORE the CPU-heavy TLS handshake,
+            // so connection churn from a low-trust peer cannot flood the shared I/O pool with
+            // accept / handshake / teardown work and starve inter-validator PBFT reads (the
+            // FIB-184 session caps apply only AFTER the handshake completes). Reserve the
+            // in-flight-handshake slot first because it is the refundable check: if the
+            // accept-rate limiter below then rejects, we release the slot and no rate token is
+            // spent. Checking the rate token first would instead waste a token whenever the
+            // handshake cap is already saturated, needlessly lowering the effective accept rate
+            // for legitimate peers arriving in that window.
+            std::string remoteAddress = socket->nodeIPEndpoint().address();
+            if (!tryAcquireHandshakeSlot())
+            {
+                HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
+                                << LOG_DESC("pending-handshake cap reached, reject connection")
+                                << LOG_KV("address", remoteAddress)
+                                << LOG_KV("pendingHandshakes", currentPendingHandshakes())
+                                << LOG_KV("maxPendingHandshakes", m_maxPendingHandshakes);
+                socket->close();
+                continue;
+            }
+            // Accept-rate token bucket: drops a churn flood cheaply (accept + close) before
+            // paying handshake CPU, which the concurrency cap alone does not. On rejection the
+            // handshake slot reserved just above must be released so it is not leaked -- the
+            // HandshakeSlotGuard that normally releases it is only created once both checks
+            // pass.
+            if (!tryAcquireConnectionToken())
+            {
+                releaseHandshakeSlot();
+                HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
+                                << LOG_DESC("connection accept-rate limit reached, reject")
+                                << LOG_KV("address", remoteAddress)
+                                << LOG_KV("maxConnectionsPerSecond", m_maxConnectionsPerSecond);
+                socket->close();
+                continue;
+            }
+            // Run the per-connection TLS handshake in its own coroutine and keep accepting: the
+            // old code re-armed accept right after arming the async handshake, and awaiting the
+            // handshake here would serialize accepts (one handshake at a time), defeating the
+            // concurrency-cap design.
+            task::wait(serverHandshake(std::move(socket)));
+        }
+    }
+    catch (...)
+    {
+        // never let an exception escape into the resuming asio handler (see AsioAwaitable.h)
+        HOST_LOG(ERROR) << LOG_DESC("accept loop exception")
+                        << LOG_KV("what", boost::current_exception_diagnostic_information());
+    }
+}
 
-                startAccept();
-            },
-            boost_error);
+task::Task<void> Host::serverHandshake(std::shared_ptr<SocketFace> socket)
+{
+    auto self = shared_from_this();
+    // FIB-186: release the in-flight-handshake slot exactly once when this frame unwinds
+    // (handshake success, failure, abort, or an escaping exception). This replaces the guard
+    // riding the old completion handler with plain RAII on the coroutine frame.
+    HandshakeSlotGuard handshakeGuard(weak_from_this());
+    try
+    {
+        // FIB-186: bound the handshake's lifetime. A stalled / slow TLS handshake would
+        // otherwise never complete, so its admission slot would never be released and this Host
+        // (kept alive by the coroutine frame's shared_from_this) could never be destroyed. On
+        // timeout close the socket; that completes async_handshake with an error, so the
+        // coroutine resumes, the guard is destroyed and the slot released. The timer and the
+        // handshake completion run on the socket's single io_context thread, so they are
+        // serialised (no race on close/cancel). Same pattern as the outbound connectTimer.
+        auto handshakeTimer = std::make_shared<boost::asio::steady_timer>(
+            socket->ioService(), std::chrono::milliseconds(m_handshakeTimeout));
+        handshakeTimer->async_wait([socket](const boost::system::error_code& timerError) {
+            if (timerError == boost::asio::error::operation_aborted)
+            {
+                return;
+            }
+            if (socket->isConnected())
+            {
+                HOST_LOG(WARNING) << LOG_BADGE("startAccept")
+                                  << LOG_DESC("in-flight handshake timed out, close socket")
+                                  << LOG_KV("endpoint", socket->nodeIPEndpoint());
+                socket->close();
+            }
+        });
+        /// register ssl callback to get the NodeID of peers
+        std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
+        m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
+        auto [handshakeError] =
+            co_await m_asioInterface->awaitableHandshake(socket, ba::ssl::stream_base::server);
+        handshakeTimer->cancel();
+        handshakeServer(handshakeError, endpointPublicKey, socket);
+    }
+    catch (...)
+    {
+        // never let an exception escape into the resuming asio handler (see AsioAwaitable.h);
+        // the HandshakeSlotGuard still releases the admission slot on unwind
+        HOST_LOG(ERROR) << LOG_DESC("server handshake exception")
+                        << LOG_KV("endpoint", socket->nodeIPEndpoint())
+                        << LOG_KV("what", boost::current_exception_diagnostic_information());
     }
 }
 
@@ -647,7 +672,7 @@ void Host::start()
     if (!haveNetwork())
     {
         m_run = true;
-        if (m_asioInterface->acceptor())
+        if (m_asioInterface->acceptor() != nullptr)
         {
             startAccept();
         }
@@ -678,62 +703,78 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     }
 
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(false, _nodeIPEndpoint);
-    /// if async connect timeout, close the socket directly
-    auto connectTimer = std::make_shared<boost::asio::steady_timer>(
-        socket->ioService(), std::chrono::milliseconds(m_connectTimeThre));
-    connectTimer->async_wait(
-        [this, socket, _nodeIPEndpoint](const boost::system::error_code& error) {
-            /// return when cancel has been called
-            if (error == boost::asio::error::operation_aborted)
-            {
-                HOST_LOG(DEBUG) << LOG_DESC("AsyncConnect handshake handler revoke this operation");
-                return;
-            }
-            /// connection timer error
-            if (error && error != boost::asio::error::operation_aborted)
-            {
-                HOST_LOG(ERROR) << LOG_DESC("AsyncConnect timer failed")
-                                << LOG_KV("errorValue", error.value())
-                                << LOG_KV("message", error.message());
-            }
-            if (socket->isConnected())
-            {
-                HOST_LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
-                                  << LOG_KV("endpoint", _nodeIPEndpoint);
-                erasePendingConns(_nodeIPEndpoint);
-                socket->close();
-            }
-        });
-    /// callback async connect
-    m_asioInterface->asyncResolveConnect(socket,
-        [this, callback = std::move(callback), _nodeIPEndpoint, socket,
-            connectTimer = std::move(connectTimer)](boost::system::error_code const& ec) mutable {
-            if (ec)
-            {
-                HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
-                                << LOG_KV("endpoint", _nodeIPEndpoint)
-                                << LOG_KV("message", ec.message());
-                socket->close();
+    // fire-and-forget: the coroutine frame owns the connect/handshake chain (and the strong Host
+    // reference) until it completes — the old nested-lambda chain did the same via captures.
+    task::wait(clientConnect(std::move(socket), _nodeIPEndpoint, std::move(callback)));
+}
 
-                boost::asio::post(socket->ioService(), [callback = std::move(callback)]() mutable {
-                    callback(NetworkException(ConnectError, "Connect failed"), {}, {});
-                });
-                return;
-            }
-            insertPendingConns(_nodeIPEndpoint);
-            /// get the public key of the server during handshake
-            std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-            m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
-            /// call handshakeClient after handshake succeed
-            m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
-                [self = shared_from_this(), socket,
-                    endpointPublicKey = std::move(endpointPublicKey),
-                    callback = std::move(callback), nodeIPEndPoint = _nodeIPEndpoint,
-                    connectTimer = std::move(connectTimer)](auto error) mutable {
-                    self->handshakeClient(error, std::move(socket), endpointPublicKey,
-                        std::move(callback), nodeIPEndPoint, std::move(connectTimer));
-                });
-        });
+task::Task<void> Host::clientConnect(std::shared_ptr<SocketFace> socket,
+    NodeIPEndpoint _nodeIPEndpoint,
+    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)> callback)
+{
+    auto self = shared_from_this();
+    try
+    {
+        /// if async connect timeout, close the socket directly
+        auto connectTimer = std::make_shared<boost::asio::steady_timer>(
+            socket->ioService(), std::chrono::milliseconds(m_connectTimeThre));
+        connectTimer->async_wait(
+            [this, socket, _nodeIPEndpoint](const boost::system::error_code& error) {
+                /// return when cancel has been called
+                if (error == boost::asio::error::operation_aborted)
+                {
+                    HOST_LOG(DEBUG)
+                        << LOG_DESC("AsyncConnect handshake handler revoke this operation");
+                    return;
+                }
+                /// connection timer error
+                if (error && error != boost::asio::error::operation_aborted)
+                {
+                    HOST_LOG(ERROR) << LOG_DESC("AsyncConnect timer failed")
+                                    << LOG_KV("errorValue", error.value())
+                                    << LOG_KV("message", error.message());
+                }
+                if (socket->isConnected())
+                {
+                    HOST_LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
+                                      << LOG_KV("endpoint", _nodeIPEndpoint);
+                    erasePendingConns(_nodeIPEndpoint);
+                    socket->close();
+                }
+            });
+        /// callback async connect
+        auto [ec] = co_await m_asioInterface->awaitableResolveConnect(socket);
+        if (ec)
+        {
+            HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
+                            << LOG_KV("endpoint", _nodeIPEndpoint)
+                            << LOG_KV("message", ec.message());
+            socket->close();
+            connectTimer->cancel();
+
+            boost::asio::post(socket->ioService(), [callback = std::move(callback)]() mutable {
+                callback(NetworkException(ConnectError, "Connect failed"), {}, {});
+            });
+            co_return;
+        }
+        insertPendingConns(_nodeIPEndpoint);
+        /// get the public key of the server during handshake
+        std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
+        m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
+        /// call handshakeClient after handshake succeed
+        auto [handshakeError] =
+            co_await m_asioInterface->awaitableHandshake(socket, ba::ssl::stream_base::client);
+        connectTimer->cancel();
+        handshakeClient(handshakeError, std::move(socket), endpointPublicKey,
+            std::move(callback), _nodeIPEndpoint);
+    }
+    catch (...)
+    {
+        // never let an exception escape into the resuming asio handler (see AsioAwaitable.h)
+        HOST_LOG(ERROR) << LOG_DESC("client connect exception")
+                        << LOG_KV("endpoint", _nodeIPEndpoint)
+                        << LOG_KV("what", boost::current_exception_diagnostic_information());
+    }
 }
 
 /**
@@ -747,9 +788,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
 void Host::handshakeClient(const boost::system::error_code& error,
     std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string> endpointPublicKey,
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)> callback,
-    NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::steady_timer> timerPtr)
+    NodeIPEndpoint _nodeIPEndpoint)
 {
-    timerPtr->cancel();
     erasePendingConns(_nodeIPEndpoint);
     if (error)
     {
@@ -792,6 +832,31 @@ void Host::stop()
     }
     // signal run() to prepare for shutdown and reset m_timer
     m_run = false;
+    // Cancel the acceptor so the accept loop's pending async_accept completes with
+    // operation_aborted: acceptLoop's coroutine frame holds a strong reference to this Host, and
+    // only the completed accept lets the loop observe m_run == false and exit, releasing it.
+    // Posted to the acceptor's io_context (asio objects are not thread-safe, and stop() runs off
+    // the pool thread); the ASIOInterface copy keeps the acceptor alive until the cancel runs.
+    if (auto asioInterface = m_asioInterface; asioInterface && asioInterface->acceptor() != nullptr)
+    {
+        try
+        {
+            // evaluate the executor BEFORE the move below: the evaluation order of post()'s
+            // arguments is unspecified, so moving asioInterface into the lambda first would leave
+            // a null shared_ptr for the acceptor() call
+            auto executor = asioInterface->acceptor()->get_executor();
+            boost::asio::post(executor,
+                [asioInterface = std::move(asioInterface)]() { asioInterface->cancelAcceptor(); });
+        }
+        catch (...)
+        {
+            // stop() also runs from ~Host, which must not throw; a lost cancel only delays the
+            // accept loop's exit (it still ends on the next accept or acceptor destruction)
+            HOST_LOG(WARNING) << LOG_DESC("cancel acceptor on stop failed")
+                              << LOG_KV("what",
+                                     boost::current_exception_diagnostic_information());
+        }
+    }
     // FIB-186 (vector D): the dedicated teardown executor is deliberately NOT stopped here.
     // Clearing m_run above is what stops work arriving: Session::drop() checks haveNetwork() and
     // runs the teardown notification inline once it is false, so nothing new is enqueued after this

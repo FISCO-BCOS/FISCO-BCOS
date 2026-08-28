@@ -93,7 +93,6 @@ public:
         });
     }
 
-    void strandPost(Base_Handler handler) { m_handler = handler; }
     void stop() { m_threadPool.reset(); }
 
     void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
@@ -101,18 +100,8 @@ public:
     {
         m_threadPool->post([this, packet]() { appendRecvPacket(packet); });
     }
-    void triggerRead()
-    {
-        m_threadPool->post([this]() {
-            if (m_handler)
-            {
-                m_handler();
-            }
-        });
-    }
 
 protected:
-    Base_Handler m_handler;
     std::queue<Packet> m_recvPackets;
     bcos::IOServicePool::Ptr m_threadPool;
 };
@@ -245,7 +234,6 @@ BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
             [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
 
         session->start();
-        fakeAsio->triggerRead();
 
         // Send a packet that will trigger a decode error (MESSAGE_ERROR)
         auto badPacket = std::make_shared<std::vector<uint8_t>>(10, 0xAB);
@@ -289,7 +277,6 @@ BOOST_AUTO_TEST_CASE(DecodeExceptionTriggersSessionDrop)
             [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
 
         session->start();
-        fakeAsio->triggerRead();
 
         // Send a packet that will trigger a decode exception
         auto badPacket = std::make_shared<std::vector<uint8_t>>(10, 0xCD);
@@ -420,8 +407,9 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
 }
 
 // The with-response send must fail exactly once when the async write itself fails, claiming the
-// response callback back (the claimOnWriteError branch) or via the teardown flush — onWrite()
-// drops the session on a write error, so the drop flush legitimately races the write callback
+// response callback back (the claimOnWriteError branch) or via the teardown flush — the write
+// loop drops the session on a write error, so the drop flush legitimately races the write
+// callback
 // and either the raw asio write error or NetworkTimeout is a valid outcome; what must hold is
 // exactly-once completion, no leftover callback, and no hang. The fake socket's SSL stream sits
 // on a TCP pair whose peer closed at construction, so the write (and its implicit handshake)

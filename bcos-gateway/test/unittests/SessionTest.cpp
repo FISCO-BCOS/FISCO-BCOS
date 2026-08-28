@@ -35,11 +35,15 @@
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <queue>
 #include <range/v3/view/single.hpp>
 #include <thread>
+#include <unordered_set>
+#include <vector>
 
 using namespace bcos;
 using namespace gateway;
@@ -409,9 +413,9 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
     fakeSocket->close();
 }
 
-// A SocketFace backed by a real connected TCP socket so the (non-virtual)
-// ASIOInterface::asyncWrite path actually completes on the wire — the FakeSocket above cannot
-// reach the compression branch because its write path is inert.
+// A SocketFace backed by a real connected TCP socket so the ASIOInterface::awaitableWrite path
+// actually completes on the wire — the FakeSocket above cannot reach the compression branch
+// because its write path is inert.
 class RealLoopbackSocket : public SocketFace
 {
 public:
@@ -732,6 +736,177 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     BOOST_CHECK_EQUAL(decodedV2.srcP2PNodeID(), "srcNodeID");
     BOOST_CHECK_EQUAL(decodedV2.dstP2PNodeID(), "dstNodeID");
     BOOST_CHECK_EQUAL(decodedV2.ttl(), 10);
+}
+
+BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
+{
+    // Regression for the per-session write ordering guarantee: the write path must serialize
+    // concurrent producers. N threads call fastSendMessage concurrently and the single-writer
+    // write loop (Session::writeLoop, guarded by the m_writingInFlight single-flight flag) must
+    // put a complete, non-interleaved frame for every message on the wire — if the serialization
+    // were ever broken, frames would be torn or interleaved. Uses a real loopback socket
+    // (RealLoopbackSocket) so the full awaitableWrite -> async_write path runs, then parses the
+    // accumulated byte stream into frames by their length prefix.
+    constexpr size_t threadCount = 8;
+    constexpr size_t msgPerThread = 50;
+    constexpr size_t totalMsgs = threadCount * msgPerThread;
+
+    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeAsio = std::make_shared<FakeASIO>();
+
+    auto io = std::make_shared<ba::io_context>();
+    boost::asio::executor_work_guard<ba::io_context::executor_type> workGuard(io->get_executor());
+    std::thread ioThread([io] { io->run(); });
+
+    ba::ip::tcp::acceptor acceptor(*io, ba::ip::tcp::endpoint(ba::ip::tcp::v4(), 0));
+    auto listenEndpoint = acceptor.local_endpoint();
+
+    std::mutex recvMutex;
+    std::vector<uint8_t> received;
+    std::atomic<bool> peerDone{false};
+    std::thread peerThread([&] {
+        ba::ip::tcp::socket peer(*io);
+        boost::system::error_code ec;
+        acceptor.accept(peer, ec);
+        if (ec)
+        {
+            return;
+        }
+        std::array<uint8_t, 4096> buf;
+        while (!peerDone.load(std::memory_order_relaxed))
+        {
+            std::size_t n = peer.read_some(ba::buffer(buf), ec);
+            if (ec)
+            {
+                break;
+            }
+            if (n > 0)
+            {
+                std::lock_guard<std::mutex> lock(recvMutex);
+                received.insert(received.end(), buf.begin(), buf.begin() + n);
+            }
+        }
+    });
+
+    ba::ip::tcp::socket client(*io);
+    boost::system::error_code connectError;
+    client.connect(listenEndpoint, connectError);
+    BOOST_REQUIRE(!connectError);
+
+    // Each frame is the fixed 14-byte base header plus the 64-byte payload (payload is far below
+    // the compress threshold, so no compression runs even at V2).
+    const size_t frameSize = P2PMessage::MESSAGE_HEADER_LENGTH + 64;
+    const size_t expectedBytes = frameSize * totalMsgs;
+
+    {
+        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+        auto sessionSocket = std::make_shared<RealLoopbackSocket>(io, std::move(client));
+        auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
+        session->setMessageFactory(fakeHost->messageFactory());
+        session->start();
+
+        std::vector<std::thread> senders;
+        senders.reserve(threadCount);
+        for (size_t t = 0; t < threadCount; ++t)
+        {
+            senders.emplace_back([t, session] {
+                for (size_t i = 0; i < msgPerThread; ++i)
+                {
+                    P2PMessage message;
+                    message.setVersion((uint16_t)bcos::protocol::ProtocolVersion::V2);
+                    message.setSeq(static_cast<uint32_t>(t * msgPerThread + i));
+                    bytes payload(64, static_cast<uint8_t>('a' + t));
+                    try
+                    {
+                        task::syncWait(session->fastSendMessage(message,
+                            ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{}));
+                    }
+                    catch (std::exception const&)
+                    {
+                        // no write failure is expected on a healthy loopback; a torn/aborted write
+                        // would show up as a missing/corrupt frame in the wire assertions below
+                    }
+                }
+            });
+        }
+        for (auto& th : senders)
+        {
+            th.join();
+        }
+
+        // Every syncWait has returned, but the last async_write may still be completing on the io
+        // thread, so poll until the peer has the full byte count.
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+        while (true)
+        {
+            size_t got = 0;
+            {
+                std::lock_guard<std::mutex> lock(recvMutex);
+                got = received.size();
+            }
+            if (got >= expectedBytes)
+            {
+                break;
+            }
+            BOOST_CHECK_MESSAGE(std::chrono::steady_clock::now() < deadline,
+                "peer did not receive all " << expectedBytes << " bytes, got " << got);
+            if (std::chrono::steady_clock::now() >= deadline)
+            {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        peerDone = true;
+        // Unblock the peer thread's read (same teardown shape as fastSendMessageCompression).
+        session->disconnect(DisconnectReason::DisconnectRequested);
+    }
+
+    peerThread.join();
+    workGuard.reset();
+    {
+        boost::system::error_code ec;
+        acceptor.close(ec);
+    }
+    io->stop();
+    ioThread.join();
+
+    // Parse the accumulated stream into frames by the 4-byte length prefix. Header layout:
+    // [length:4][version:2][packetType:2][seq:4][ext:2] (P2PMessage::MESSAGE_HEADER_LENGTH = 14);
+    // seq sits at bytes [8..12) in network byte order.
+    std::vector<uint32_t> seqs;
+    std::unordered_set<uint32_t> seenSeqs;
+    {
+        std::lock_guard<std::mutex> lock(recvMutex);
+        BOOST_CHECK_EQUAL(received.size(), expectedBytes);
+        size_t pos = 0;
+        while (pos < received.size())
+        {
+            BOOST_REQUIRE(pos + 4 <= received.size());
+            uint32_t frameLen = (uint32_t(received[pos]) << 24) |
+                                (uint32_t(received[pos + 1]) << 16) |
+                                (uint32_t(received[pos + 2]) << 8) | received[pos + 3];
+            // a torn/interleaved frame would fail this exact-size assertion
+            BOOST_REQUIRE(frameLen == frameSize);
+            BOOST_REQUIRE(pos + frameLen <= received.size());
+            uint32_t seq = (uint32_t(received[pos + 8]) << 24) |
+                           (uint32_t(received[pos + 9]) << 16) |
+                           (uint32_t(received[pos + 10]) << 8) | received[pos + 11];
+            // payload integrity: each thread sent 64 bytes of ('a' + threadIdx)
+            uint8_t expect = static_cast<uint8_t>('a' + seq / msgPerThread);
+            for (size_t k = P2PMessage::MESSAGE_HEADER_LENGTH; k < frameLen; ++k)
+            {
+                BOOST_CHECK_EQUAL(received[pos + k], expect);
+            }
+            seqs.push_back(seq);
+            seenSeqs.insert(seq);
+            pos += frameLen;
+        }
+    }
+
+    BOOST_CHECK_EQUAL(seqs.size(), totalMsgs);
+    BOOST_CHECK_EQUAL(seenSeqs.size(), totalMsgs);
 }
 
 BOOST_AUTO_TEST_CASE(SessionRecvBufferTest)

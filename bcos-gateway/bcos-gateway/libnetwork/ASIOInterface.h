@@ -6,6 +6,7 @@
  * @date 2018-09-13
  */
 #pragma once
+#include "bcos-gateway/libnetwork/AsioAwaitable.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
 #include "bcos-utilities/IOServicePool.h"
 #include <boost/asio.hpp>
@@ -29,11 +30,7 @@ public:
         SSL = 1
     };
 
-    /// CompletionHandler
-    using Base_Handler = std::function<void()>;
-    /// accept handler
-    using Handler_Type = std::function<void(const boost::system::error_code)>;
-    /// write handler
+    /// read handler
     using ReadWriteHandler = std::function<void(const boost::system::error_code, std::size_t)>;
     using VerifyCallback = std::function<bool(bool, boost::asio::ssl::verify_context&)>;
 
@@ -41,10 +38,7 @@ public:
     virtual ~ASIOInterface();
     virtual void setType(int type);
 
-    virtual void setIOServicePool(IOServicePool::Ptr _ioServicePool);
-
     virtual ba::ssl::context* srvContext();
-    virtual ba::ssl::context* clientContext();
 
     virtual void setSrvContext(ba::ssl::context _srvContext);
     virtual void setClientContext(ba::ssl::context _clientContext);
@@ -56,53 +50,98 @@ public:
 
     virtual bi::tcp::acceptor* acceptor();
 
-    virtual void asyncAccept(const std::shared_ptr<SocketFace>& socket, Handler_Type handler,
-        boost::system::error_code /*unused*/ = boost::system::error_code());
-
-    virtual void asyncResolveConnect(
-        const std::shared_ptr<SocketFace>& socket, Handler_Type handler);
-
-    void asyncWrite(const std::shared_ptr<SocketFace>& socket, auto buffers, auto handler)
-    {
-        auto type = m_type;
-        if (socket->isConnected())
-        {
-            auto& ioService = socket->ioService();
-            boost::asio::post(ioService, [type, socket, buffers = std::move(buffers),
-                                             handler = std::move(handler)]() mutable {
-                switch (type)
-                {
-                case TCP_ONLY:
-                {
-                    ba::async_write(socket->ref(), buffers, std::move(handler));
-                    break;
-                }
-                case SSL:
-                {
-                    ba::async_write(socket->sslref(), buffers, std::move(handler));
-                    break;
-                }
-                }
-            });
-        }
-    }
-
-    virtual void asyncRead(const std::shared_ptr<SocketFace>& socket,
-        boost::asio::mutable_buffer buffers, ReadWriteHandler handler);
-
+    // Kept as the unit-test mock point for the read path: every read-loop test fake overrides
+    // this virtual, and awaitableReadSome below dispatches through it.
     virtual void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
         boost::asio::mutable_buffer buffers, ReadWriteHandler handler);
-
-    virtual void asyncHandshake(const std::shared_ptr<SocketFace>& socket,
-        ba::ssl::stream_base::handshake_type type, Handler_Type handler);
 
     virtual void setVerifyCallback(
         const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/ = true);
 
-    template <class Task>
-    void dispatch(Task&& task)
+    // ----- coroutine-facing interface -----------------------------------------
+    // Awaitable network operations, for use inside task::Task coroutines (see AsioAwaitable.h
+    // for the threading / exception / lifetime contract). Each operation guarantees total
+    // completion: the awaiting coroutine is resumed exactly once, on success and on failure
+    // alike — a silently dropped completion would pin the suspended coroutine (and everything
+    // its frame holds) forever. awaitableReadSome dispatches through the asyncReadSome virtual
+    // so unit-test fakes keep intercepting it; the others initiate the asio operation directly.
+    auto awaitableAccept(const std::shared_ptr<SocketFace>& socket)
     {
-        m_ioServicePool->dispatch(std::forward<Task>(task));
+        return makeAsioAwaitable<boost::system::error_code>(
+            [this, socket](auto handler) {
+                m_acceptor.async_accept(socket->ref(), std::move(handler));
+            });
+    }
+
+    auto awaitableResolveConnect(const std::shared_ptr<SocketFace>& socket)
+    {
+        return makeAsioAwaitable<boost::system::error_code>(
+            [this, socket](auto handler) { resolveConnect(socket, std::move(handler)); });
+    }
+
+    static auto awaitableHandshake(const std::shared_ptr<SocketFace>& socket,
+        ba::ssl::stream_base::handshake_type type)
+    {
+        return makeAsioAwaitable<boost::system::error_code>(
+            [socket, type](auto handler) {
+                socket->sslref().async_handshake(type, std::move(handler));
+            });
+    }
+
+    auto awaitableReadSome(
+        const std::shared_ptr<SocketFace>& socket, boost::asio::mutable_buffer buffers)
+    {
+        return makeAsioAwaitable<boost::system::error_code, std::size_t>(
+            [this, socket, buffers](auto handler) {
+                asyncReadSome(socket, buffers, std::move(handler));
+            });
+    }
+
+    auto awaitableWrite(const std::shared_ptr<SocketFace>& socket, auto buffers)
+    {
+        return makeAsioAwaitable<boost::system::error_code, std::size_t>(
+            [this, socket, buffers = std::move(buffers)](auto handler) mutable {
+                auto type = m_type;
+                auto& ioService = socket->ioService();
+                if (socket->isConnected())
+                {
+                    boost::asio::post(ioService, [type, socket, buffers = std::move(buffers),
+                                                     handler = std::move(handler)]() mutable {
+                        switch (type)
+                        {
+                        case TCP_ONLY:
+                        {
+                            ba::async_write(socket->ref(), buffers, std::move(handler));
+                            break;
+                        }
+                        case SSL:
+                        {
+                            ba::async_write(socket->sslref(), buffers, std::move(handler));
+                            break;
+                        }
+                        default:
+                            break;
+                        }
+                    });
+                }
+                else
+                {
+                    // total completion, see the class comment above
+                    boost::asio::post(ioService, [handler = std::move(handler)]() mutable {
+                        handler(boost::asio::error::not_connected, 0);
+                    });
+                }
+            });
+    }
+
+    // Cancel any pending async_accept so the accept loop (Host::acceptLoop) completes with
+    // operation_aborted and can exit, releasing the strong Host reference its coroutine frame
+    // holds. Must run on the acceptor's io_context thread — post it there, e.g. from Host::stop().
+    void cancelAcceptor()
+    {
+        boost::system::error_code ec;
+        // NOLINTNEXTLINE(bugprone-unused-return-value) error is delivered via the ec out-param
+        m_acceptor.cancel(ec);
     }
 
     template <class Task>
@@ -112,6 +151,11 @@ public:
     }
 
 private:
+    // resolve + connect helper backing awaitableResolveConnect (total completion: the handler
+    // fires with an error when resolution fails — see the coroutine-interface comment above)
+    void resolveConnect(const std::shared_ptr<SocketFace>& socket,
+        std::function<void(boost::system::error_code)> handler);
+
     IOServicePool::Ptr m_ioServicePool;
     bi::tcp::acceptor m_acceptor;
     bi::tcp::resolver m_resolver;

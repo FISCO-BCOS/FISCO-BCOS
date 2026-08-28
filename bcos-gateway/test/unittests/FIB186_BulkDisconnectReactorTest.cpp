@@ -78,9 +78,6 @@ public:
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(2, "FIB186Reactor"), "0.0.0.0", 0)
     {}
     ~FakeASIO_Reactor() noexcept override = default;
-    void asyncReadSome(
-        const std::shared_ptr<SocketFace>&, ba::mutable_buffer, ReadWriteHandler) override
-    {}
 };
 
 // Host subclass with the network marked up, so Session::drop() takes the "hand the teardown

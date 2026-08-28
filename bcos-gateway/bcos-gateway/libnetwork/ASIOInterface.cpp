@@ -100,19 +100,9 @@ void ASIOInterface::setType(int type)
     m_type = type;
 }
 
-void ASIOInterface::setIOServicePool(IOServicePool::Ptr _ioServicePool)
-{
-    m_ioServicePool = std::move(_ioServicePool);
-}
-
 ba::ssl::context* ASIOInterface::srvContext()
 {
     return m_srvContext.has_value() ? &*m_srvContext : nullptr;
-}
-
-ba::ssl::context* ASIOInterface::clientContext()
-{
-    return m_clientContext.has_value() ? &*m_clientContext : nullptr;
 }
 
 void ASIOInterface::setSrvContext(ba::ssl::context _srvContext)
@@ -143,30 +133,6 @@ bi::tcp::acceptor* ASIOInterface::acceptor()
     return &m_acceptor;
 }
 
-void ASIOInterface::asyncAccept(
-    const std::shared_ptr<SocketFace>& socket, Handler_Type handler, boost::system::error_code)
-{
-    m_acceptor.async_accept(socket->ref(), std::move(handler));
-}
-
-void ASIOInterface::asyncRead(const std::shared_ptr<SocketFace>& socket,
-    boost::asio::mutable_buffer buffers, ReadWriteHandler handler)
-{
-    switch (m_type)
-    {
-    case TCP_ONLY:
-    {
-        ba::async_read(socket->ref(), buffers, std::move(handler));
-        break;
-    }
-    case SSL:
-    {
-        ba::async_read(socket->sslref(), buffers, std::move(handler));
-        break;
-    }
-    }
-}
-
 void ASIOInterface::asyncReadSome(const std::shared_ptr<SocketFace>& socket,
     boost::asio::mutable_buffer buffers, ReadWriteHandler handler)
 {
@@ -182,39 +148,40 @@ void ASIOInterface::asyncReadSome(const std::shared_ptr<SocketFace>& socket,
         socket->sslref().async_read_some(buffers, std::move(handler));
         break;
     }
+    default:
+        break;
     }
 }
 
-void ASIOInterface::asyncHandshake(const std::shared_ptr<SocketFace>& socket,
-    ba::ssl::stream_base::handshake_type type, Handler_Type handler)
-{
-    socket->sslref().async_handshake(type, std::move(handler));
-}
-
 void ASIOInterface::setVerifyCallback(
-    const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool)
+    const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/)
 {
     socket->sslref().set_verify_callback(std::move(callback));
 }
 
-void ASIOInterface::asyncResolveConnect(
-    const std::shared_ptr<SocketFace>& socket, Handler_Type handler)
+void ASIOInterface::resolveConnect(const std::shared_ptr<SocketFace>& socket,
+    std::function<void(boost::system::error_code)> handler)
 {
     auto protocol = socket->nodeIPEndpoint().isIPv6() ? bi::tcp::tcp::v6() : bi::tcp::tcp::v4();
     m_resolver.async_resolve(protocol, socket->nodeIPEndpoint().address(),
         to_string(socket->nodeIPEndpoint().port()),
-        [=](const boost::system::error_code& ec, bi::tcp::resolver::results_type results) {
+        [socket, handler = std::move(handler)](const boost::system::error_code& ec,
+            const bi::tcp::resolver::results_type& results) mutable {
             if (ec || results.empty())
             {
                 ASIO_LOG(WARNING) << LOG_DESC("asyncResolve failed")
                                   << LOG_KV("host", socket->nodeIPEndpoint().address())
                                   << LOG_KV("port", socket->nodeIPEndpoint().port());
+                // Total completion: the client coroutine co_awaits this operation, so the
+                // handler must fire on resolve failure too — the old callback version silently
+                // dropped it, which would pin the awaiting coroutine forever.
+                handler(ec ? ec : boost::asio::error::host_not_found);
                 return;
             }
 
             // results is a iterator, but only use first endpoint.
             auto it = results.begin();
-            socket->ref().async_connect(it->endpoint(), handler);
+            socket->ref().async_connect(it->endpoint(), std::move(handler));
             ASIO_LOG(INFO) << LOG_DESC("asyncResolveConnect") << LOG_KV("endpoint", it->endpoint());
         });
 }
