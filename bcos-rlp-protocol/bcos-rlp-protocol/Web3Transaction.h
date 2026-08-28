@@ -42,6 +42,11 @@ struct Transaction;
 
 namespace bcos
 {
+/// EIP-2 low-s check for decode and TxValidator. r,s in [1, n-1], s <= n/2, each <= 32 bytes.
+/// Callers pad short scalars. Returns an error, or nullptr if ok. Deposits skip this.
+[[nodiscard]] bcos::Error::UniquePtr checkEip2Signature(
+    bcos::bytes const& signatureR, bcos::bytes const& signatureS);
+
 namespace rpc
 {
 // EIP-2718 transaction type

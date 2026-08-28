@@ -728,11 +728,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto rawTx = toView(request[0U]);
     auto rawTxBytes = fromHexWithPrefix(rawTx);
     auto bytesRef = bcos::ref(rawTxBytes);
-    // Authoritative first-byte dispatch (RawTransactionDispatch.h). FISCO's OP policy rejects
-    // blob (type-3) at the gate — op-geth's decodeTyped accepts them, so this is a deliberate
-    // acceptance divergence, not a reference check (see the type-byte gate in OpTransition.h /
-    // OpCommon.h). Deposits (0x7e) can only be injected by the consensus layer through the
-    // Engine API, never through the public transaction pool.
+    // Reject blob txs at the RPC gate. Deposits (0x7e) enter only via Engine API.
     switch (engine::dispatchRawTransaction(bytesRef))
     {
     case engine::RawTransactionKind::Blob:
@@ -759,12 +755,6 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             "Deposit (0x7e) transactions are not supported via eth_sendRawTransaction"));
     }
     auto encodeTxHash = web3Tx.txHash();
-    // Capture the chainId decoded from the SIGNED envelope BEFORE takeToTarsTransaction moves
-    // web3Tx away (kyonRay R4 #3): re-walking the raw bytes via web3ChainIdFromEnvelope would
-    // duplicate the decoder and invite drift — the walker is uint64 while the decoder is u256,
-    // so a chainId above 2^64-1 would decode fine here but read as nullopt in the walker. The
-    // walker stays for the P2P/tars path where only a Transaction is available (part 4b).
-    auto const web3ChainId = web3Tx.chainId;
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
@@ -806,50 +796,45 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
         if (!chainIdConfig)
         {
-            // Fail closed when web3_chain_id is unconfigured: without a node chainId to
-            // compare against, an EIP-155 tx signed for a foreign chain would execute here
-            // and consume the sender's nonce (EIP-155 replay-protection bypass). op-geth
-            // always has a genesis chainId, so it has no such open default. Only pre-EIP-155
-            // legacy (no chainId in the envelope) is exempt — there is nothing to compare.
-            auto const envelopeChainId = web3ChainId;
-            if (envelopeChainId.has_value() ||
-                bcos::rlp::protocol::isTypedWeb3Envelope(tx->extraTransactionBytes()))
+            // No web3_chain_id: reject anything that binds a chainId. Only Unprotected is exempt.
+            auto const classified =
+                bcos::rlp::protocol::classifyWeb3EnvelopeChainId(tx->extraTransactionBytes());
+            if (classified.kind != bcos::rlp::protocol::Web3EnvelopeChainIdKind::Unprotected)
             {
                 WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction: web3_chain_id not configured")
-                                  << LOG_KV("txChainId", tx->chainId());
+                                  << LOG_KV("txChainId", tx->chainId())
+                                  << LOG_KV("envelopeKind",
+                                         bcos::rlp::protocol::toString(classified.kind));
                 BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
             }
         }
         else
         {
             auto [chainIdStr, _] = chainIdConfig.value();
-            // Validate against the SIGNED envelope; base TxValidator::validateChainId reads the
-            // tars mirror and is migrated to this envelope-keyed form in part 4b (#5477): typed
-            // txs get no "0" exemption (op-geth modernSigner); only pre-EIP-155 legacy (no
-            // chainId in the envelope) is exempt — a deliberate divergence (geth/op-geth
-            // default rejects unprotected txs at the RPC layer; part 5 adds the config gate).
-            // Parse as u256 via the shared helper (ledger::parseWeb3ChainId); a corrupted
-            // config rejects the tx.
+            // Envelope chainId vs parseWeb3ChainId. Unprotected only is exempt.
             auto expected = ledger::parseWeb3ChainId(chainIdStr);
             if (!expected.has_value())
             {
                 BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
             }
-            auto const envelopeChainId = web3ChainId;
-            if (envelopeChainId.has_value() && *envelopeChainId != *expected)
+            auto const classified =
+                bcos::rlp::protocol::classifyWeb3EnvelopeChainId(tx->extraTransactionBytes());
+            if (classified.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed ||
+                classified.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Deposit)
+            {
+                WEB3_LOG(WARNING) << LOG_DESC(
+                                         "sendRawTransaction envelope has no comparable chainId")
+                                  << LOG_KV("txChainId", tx->chainId())
+                                  << LOG_KV("envelopeKind",
+                                         bcos::rlp::protocol::toString(classified.kind));
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
+            }
+            if (classified.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Protected &&
+                bcos::u256(classified.chainId) != *expected)
             {
                 WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction chainId mismatch")
                                   << LOG_KV("txChainId", tx->chainId())
                                   << LOG_KV("nodeChainId", chainIdStr);
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
-            }
-            // Same typed-envelope guard as TxValidator::validateChainId (mirror→envelope
-            // migration lands in 4b): a typed tx whose
-            // chainId field cannot be parsed (nullopt) gets no "0" exemption — a malformed
-            // typed envelope is rejected here rather than deferring to signature recovery.
-            if (!envelopeChainId.has_value() &&
-                bcos::rlp::protocol::isTypedWeb3Envelope(tx->extraTransactionBytes()))
-            {
                 BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
             }
         }

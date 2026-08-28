@@ -27,36 +27,44 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/Common.h>
-#include <string_view>
-#include <optional>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/lexical_cast.hpp>
 #include <magic_enum/magic_enum.hpp>
+#include <optional>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
+#include <string>
+#include <string_view>
 
 namespace bcos::ledger
 {
 using MerkleProof = std::vector<crypto::HashType>;
 
 /// Parse the web3 chain-id system-config string as u256. nullopt on a corrupted value (non
-/// numeric, empty, negative, or an unparsed remainder) — the single shared parse for the three
-/// config consumers (TxValidator::validateChainId — exists in base (reads the tars mirror);
-/// its envelope-keyed implementation migrates with part 4b, PR #5477 — EthEndpoint's
-/// chainId gate, LedgerMethods::loadChainConfig [part 4b]) so width semantics and error
-/// behavior cannot drift. Note: the envelope side (web3ChainIdFromEnvelope / Web3TxHandler
-/// decodes) is uint64-capped with the RLP width gate, so in practice chainIds > 2^64-1 are
-/// rejected at decode (fail-closed) — the u256 parse here exists so a misconfigured
-/// over-wide value never silently matches; real chains are far below the cap. Also note: boost::
+/// numeric, empty, negative, or an unparsed remainder) — the single shared parse for the
+/// config consumers (TxValidator's P2P gate, sendRawTransaction, net_version, LedgerMethods
+/// CHAINID via parseConfiguredWeb3ChainId, and the LedgerCache executor fallback) so width
+/// semantics cannot drift. Envelope decode is uint64-capped.
+/// Also note: boost::
 /// multiprecision's u256 stream-in ACCEPTS a negative sign and wraps modulo 2^256 (probe-
 /// verified: lexical_cast<u256>("-5") returns 2^256-5, no throw); a leading '-' is rejected
 /// explicitly here so a mistyped negative config surfaces as a clear per-config error instead
 /// of a wrapped value that fail-closes confusingly at every tx gate.
+/// Hex (`0x`/`0X`) uses the same digit rules as QUANTITY (`0x539` == 1337); like the
+/// QUANTITY parser, leading zeros are tolerated ("0x0539") — values are compared as u256,
+/// never re-stringified, so the tolerance is benign.
 [[nodiscard]] inline std::optional<u256> parseWeb3ChainId(std::string_view chainIdStr)
 {
-    if (!chainIdStr.empty() && chainIdStr[0] == '-') [[unlikely]]
+    if (chainIdStr.empty() || chainIdStr[0] == '-') [[unlikely]]
     {
         return std::nullopt;
+    }
+    if (chainIdStr.size() >= 2 && chainIdStr[0] == '0' &&
+        (chainIdStr[1] == 'x' || chainIdStr[1] == 'X'))
+    {
+        // Hex QUANTITY; same rules as safeFromBigQuantity.
+        return safeFromBigQuantity(chainIdStr);
     }
     try
     {

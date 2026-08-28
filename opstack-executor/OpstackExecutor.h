@@ -492,21 +492,13 @@ namespace engine = bcos::evm::engine;
     auto const classified = protocol::classifyWeb3EnvelopeChainId(envelope);
     if (classified.kind == protocol::Web3EnvelopeChainIdKind::Malformed)
     {
-        // 0x7E deposits are typed-looking (type byte < 0x80) but carry no chainId: field 0 is
-        // sourceHash, which the classifier reports as Malformed. The skip is unconditional —
-        // field 0 is never a chainId on a deposit, so deleting this branch fails the pinned
-        // deposit gate test.
-        if (!envelope.empty() &&
-            envelope[0] == static_cast<uint8_t>(bcos::evm::opstack::kDepositTxType))
-        {
-            return std::nullopt;
-        }
         if (protocol::isTypedWeb3Envelope(envelope))
         {
             return "typed tx envelope is missing a parseable chainId";
         }
         return "legacy tx envelope has a malformed chainId/v field";
     }
+    // Deposit (0x7E): no chainId field. executeDeposit skips this gate; pool/RPC reject.
     if (classified.kind == protocol::Web3EnvelopeChainIdKind::Protected &&
         classified.chainId != nodeChainId)
     {
@@ -1351,15 +1343,18 @@ private:
         auto envRef = transaction.extraTransactionBytes();
         evmc::bytes_view env{envRef.data(), envRef.size()};
 
-        // eth_call/estimateGas cannot carry a signed envelope: CallRequest builds the
-        // transaction with no extraTransactionBytes (CallRequest.cpp:65-67), so the envelope
-        // here is empty for every simulation. opValidate uses the envelope only for L1-cost /
-        // calldata sizing (computeL1Cost / flzCompressLen / bedrockCalldataGasUsed) — estimates
-        // on a simulation, not a correctness precondition — so failing closed on it would reject
-        // every eth_call. Re-encode the executing transaction into its EIP-2718 form as the
-        // sizing input instead, keeping the estimates self-consistent with what is simulated.
-        // The block path (call=false) keeps the raw signed envelope: there it is the trust
-        // anchor for the mirror↔envelope cross-check and must never be synthesized.
+        // eth_call/estimateGas USUALLY carries no signed envelope, but that is not an
+        // invariant: for OP headers (baseFee present) CallRequest takes the TARS path and
+        // DOES store an envelope (CallRequest.cpp buildCallTransaction, via
+        // takeToTarsTransaction). Treat empty as the common case, not a certainty — the
+        // guard below synthesizes a sizing envelope only when none is present. The
+        // envelope is used only for L1-cost / calldata sizing (computeL1Cost /
+        // flzCompressLen / bedrockCalldataGasUsed) — estimates on a simulation, not a
+        // correctness precondition — so failing closed on it would reject every eth_call.
+        // Re-encoding the executing transaction into its EIP-2718 form keeps the estimates
+        // self-consistent with what is simulated. The block path (call=false) keeps the
+        // raw signed envelope: there it is the trust anchor for the mirror↔envelope
+        // cross-check and must never be synthesized.
         bcos::bytes synthesizedEnvelope;
         if (call && env.empty())
         {

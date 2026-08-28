@@ -19,11 +19,15 @@
  * @date 2021-05-11
  */
 #include "TxValidator.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"  // SECP256K1_SIGNATURE_*_LEN
+#include "bcos-framework/bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-rlp-protocol/Web3Transaction.h"
+#include "bcos-rlp-protocol/Web3TxEnvelope.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/DataConvertUtility.h"
 
@@ -82,6 +86,24 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
         // signature recovery even when the input transaction was previously clean.
         _tx.clearSenderAndHash();
         _tx.verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
+        // P2P tars skips decode(); apply EIP-2 here. Empty sig (deposits) skips the width check.
+        if (_tx.type() == TransactionType::Web3Transaction)
+        {
+            auto const sig = _tx.signatureData();
+            constexpr size_t kRsLen =
+                bcos::crypto::SECP256K1_SIGNATURE_R_LEN + bcos::crypto::SECP256K1_SIGNATURE_S_LEN;
+            if (sig.size() >= kRsLen)
+            {
+                bcos::bytes sigR(
+                    sig.begin(), sig.begin() + bcos::crypto::SECP256K1_SIGNATURE_R_LEN);
+                bcos::bytes sigS(
+                    sig.begin() + bcos::crypto::SECP256K1_SIGNATURE_R_LEN, sig.begin() + kRsLen);
+                if (bcos::checkEip2Signature(sigR, sigS) != nullptr)
+                {
+                    return TransactionStatus::InvalidSignature;
+                }
+            }
+        }
     }
     catch (...)
     {
@@ -288,18 +310,51 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
     {
         co_return TransactionStatus::None;
     }
+    // Same classifier as sendRawTransaction / the executor.
+    namespace rlp_protocol = bcos::rlp::protocol;
+    auto const classified = rlp_protocol::classifyWeb3EnvelopeChainId(_tx.extraTransactionBytes());
+    // Blob (0x03) is parseable but never admitted on L2: sendRawTransaction, the in-process
+    // mempool and the engine payload validators all reject it through the shared dispatch
+    // table — the P2P sync funnel must not become the one entry that lets a blob into the
+    // pool. BlobTxNotAllowed says WHY the tx was refused; the Deposit/Malformed/
+    // chainId-mismatch arms below keep InvalidChainId.
+    if (bcos::engine::dispatchRawTransaction(_tx.extraTransactionBytes()) ==
+        bcos::engine::RawTransactionKind::Blob)
+    {
+        co_return TransactionStatus::BlobTxNotAllowed;
+    }
+    // Deposits have no chainId; they enter via the rollup pipeline, not the pool.
+    if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Deposit)
+    {
+        co_return TransactionStatus::InvalidChainId;
+    }
+    if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Malformed)
+    {
+        // Fail closed: an unreadable chainId/v must not ride the unprotected exemption.
+        co_return TransactionStatus::InvalidChainId;
+    }
+    // Same fail-closed rules as EthEndpoint::sendRawTransaction: missing/unparsable
+    // web3_chain_id must not fall through to None for anything that BINDS a chainId.
+    // Only pre-EIP-155 unprotected legacy (classifier: Unprotected) is exempt.
     if (auto config = co_await ledger::getSystemConfig(*_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
     {
         auto [chainId, _] = config.value();
-        // if legacy tx, chainId is empty or 0, skip the check
-        if (!_tx.chainId().empty() && _tx.chainId() != "0")
+        // Same parseWeb3ChainId as sendRawTransaction (decimal or 0x).
+        auto expected = ledger::parseWeb3ChainId(chainId);
+        if (!expected.has_value())
         {
-            // for EIP-155, check chainId
-            if (_tx.chainId() != chainId)
-            {
-                co_return TransactionStatus::InvalidChainId;
-            }
+            co_return TransactionStatus::InvalidChainId;
         }
+        if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Protected &&
+            bcos::u256(classified.chainId) != *expected)
+        {
+            co_return TransactionStatus::InvalidChainId;
+        }
+        co_return TransactionStatus::None;
+    }
+    if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Protected)
+    {
+        co_return TransactionStatus::InvalidChainId;
     }
     co_return TransactionStatus::None;
 }

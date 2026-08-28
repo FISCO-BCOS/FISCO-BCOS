@@ -486,7 +486,11 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     auto auth = sysConfig.getOrDefault(ledger::SystemConfig::auth_check_status, "0");
     ledgerConfig.setAuthCheckStatus(boost::lexical_cast<uint32_t>(auth.first));
     auto [chainId, _] = sysConfig.getOrDefault(ledger::SystemConfig::web3_chain_id, "0");
-    ledgerConfig.setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
+    // Fail-stop on a malformed value (InvalidWeb3ChainIdConfig), same policy as
+    // evmc_revision below: CHAINID is contract-visible execution semantics and the
+    // admission side already rejects the same value, so silently serving 0 is a
+    // silent-divergence hazard. Absent config arrives as the "0" default and parses fine.
+    ledgerConfig.setChainId(bcos::toEvmC(ledger::parseConfiguredWeb3ChainId(chainId)));
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
