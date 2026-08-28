@@ -399,6 +399,15 @@ private:
     void loadEthGenesisHeader(boost::property_tree::ptree const& _genesisConfig);
     void validateL2Invariants();
 
+public:
+    // Cross-file EL-mode invariant (config.ini ethereum.mode=el must be backed by
+    // the genesis [ethereum] mode=el declaration). Reads BOTH files' members, so
+    // the node initializers call it after both are loaded — deliberately NOT part
+    // of loadEthereumConfig, because tools load config.ini before config.genesis.
+    void validateELModeInvariants() const;
+
+private:
+
     bcos::consensus::ConsensusNodeList parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
         std::string const& _subSectionName);
@@ -583,7 +592,10 @@ private:
     std::string m_ethereumBootnodesFile = "./bootnodes.json";
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;
-    uint64_t m_ethereumChainId = 1;
+    // The EL-mode chain id, validated and pinned from config.genesis's [web3] chain_id
+    // (validateL2Invariants) when the genesis declares EL mode. 0 = unset: a read
+    // outside EL mode is obviously invalid rather than silently Ethereum mainnet.
+    uint64_t m_ethereumChainId = 0;
     // The EL-mode fork schedule ([fork_timestamps] in config.genesis) lives on
     // m_genesisConfig.m_ethereumForkSchedule so it is part of the genesis pin;
     // the ethereumFork*Time() getters below forward to it (0 when unset for the

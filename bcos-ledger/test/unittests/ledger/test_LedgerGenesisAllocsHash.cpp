@@ -209,6 +209,20 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
                 co_await ledger::buildGenesisBlock(*ledger, config, param),
                 bcos::tool::InvalidConfig);
         }
+        // duplicate storage slot key within one alloc ((K, 05) then (K, 00)): last-wins
+        // for the importer but NOT for the trie (the zero-value skip fires first) —
+        // must be rejected instead of rooting the trie over state the flat rows deny
+        {
+            auto storage = makeStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            auto config = makeL2Config();
+            config.m_allocs[0].storage = {{std::string(64, '0'), std::string(63, '0') + "5"},
+                {std::string(64, '0'), std::string(64, '0')}};
+            appendGenesisFeatureFlagsSlot(config);
+            BOOST_CHECK_THROW(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
+                bcos::tool::InvalidConfig);
+        }
         // malformed nonce (non-decimal / overflowing uint64) — must fail with the
         // field-naming InvalidConfig contract, not an unnamed boost::bad_lexical_cast
         {

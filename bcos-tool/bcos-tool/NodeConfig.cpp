@@ -496,6 +496,52 @@ void NodeConfig::validateL2Invariants()
                                   "[ethereum] mode=el requires a [fork_timestamps] section in "
                                   "config.genesis (the EL-mode fork schedule)"));
     }
+    // EL mode's EIP-155 signature validation and geth's EIP-2124 fork-id handshake (parts
+    // 7-9) key on the CHAIN id: a silent fallback to mainnet (1) would accept transactions
+    // signed for another chain or announce a stale fork-id checksum. Require an explicit
+    // [web3] chain_id (the chain-level id, part of the genesis pin) on every EL-declaring
+    // genesis — "0" is loadWeb3ChainConfig's absent default, and a value that overflows
+    // uint64 is a config error, not a fallback. Keyed on the genesis declaration (not the
+    // per-node config.ini mode) so the check is independent of load order.
+    if (genesis.m_ethereumELMode)
+    {
+        auto const& web3ChainId = genesis.m_web3ChainID;
+        if (web3ChainId.empty() || web3ChainId == "0")
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[ethereum] mode=el requires [web3] chain_id in "
+                                      "config.genesis (the Ethereum chain id, e.g. 11155111 "
+                                      "for Sepolia)"));
+        }
+        try
+        {
+            m_ethereumChainId = boost::lexical_cast<uint64_t>(web3ChainId);
+        }
+        catch (boost::bad_lexical_cast const&)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[ethereum] mode=el requires [web3] chain_id to fit "
+                                      "uint64: " +
+                                      web3ChainId));
+        }
+    }
+}
+
+// Cross-file EL-mode invariant: config.ini's ethereum.mode=el must be backed by the
+// chain-level declaration in config.genesis (which itself binds [fork_timestamps] and
+// [web3] chain_id — validateL2Invariants). This hook reads BOTH files' members, so it
+// must run after both are loaded: the node initializers call it explicitly. It is NOT
+// done inside loadEthereumConfig because tools (archive-tool, storage-tool) load
+// config.ini before config.genesis and must not trip on the not-yet-loaded genesis.
+void NodeConfig::validateELModeInvariants() const
+{
+    if (m_enableEthereumEL && !m_genesisConfig.m_ethereumELMode)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.mode=el requires config.genesis to declare "
+                                  "[ethereum] mode=el: the EL-mode declaration is part of "
+                                  "the genesis pin"));
+    }
 }
 
 bool NodeConfig::opJovianActive() const
@@ -1000,47 +1046,15 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                 "produces its own blocks"));
     }
     m_enableEthereumEL = enableEL;
-    // EL mode's EVM revision is derived from the genesis fork schedule, so the per-node
-    // config.ini [ethereum] section must be backed by the chain-level declaration:
-    // config.genesis must carry "[ethereum] mode=el" AND a [fork_timestamps] section (the
-    // pairing is validated in validateL2Invariants). Without the schedule the fork-time
-    // getters would report every fork active from genesis — the maximally permissive
-    // reading — instead of refusing to run.
-    if (enableEL && !m_genesisConfig.m_ethereumForkSchedule)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.mode=el requires config.genesis to declare "
-                                  "[ethereum] mode=el with a [fork_timestamps] section: "
-                                  "the EL-mode fork schedule is part of the genesis pin"));
-    }
-    // EL mode's EIP-155 signature validation and geth's EIP-2124 fork-id handshake (parts
-    // 7-9) key on the CHAIN id: a silent fallback to mainnet (1) would accept transactions
-    // signed for another chain or announce a stale fork-id checksum. Require an explicit
-    // [web3] chain_id in config.genesis (the chain-level id, part of the genesis pin) —
-    // "0" is loadWeb3ChainConfig's absent default, and a value that overflows uint64 is a
-    // config error, not a fallback.
-    if (enableEL)
-    {
-        auto const& web3ChainId = m_genesisConfig.m_web3ChainID;
-        if (web3ChainId.empty() || web3ChainId == "0")
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "ethereum.mode=el requires [web3] chain_id in "
-                                      "config.genesis (the Ethereum chain id, e.g. 11155111 "
-                                      "for Sepolia)"));
-        }
-        try
-        {
-            m_ethereumChainId = boost::lexical_cast<uint64_t>(web3ChainId);
-        }
-        catch (boost::bad_lexical_cast const&)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "ethereum.mode=el requires [web3] chain_id to fit "
-                                      "uint64: " +
-                                      web3ChainId));
-        }
-    }
+    // NOTE: this loader deliberately stays PURE parsing of the config.ini
+    // [ethereum] section — it must NOT read m_genesisConfig members: tools
+    // (archive-tool, storage-tool) call loadConfig BEFORE loadGenesisConfig, so
+    // a genesis-reading guard here would fail them on EL-mode nodes. The
+    // cross-file requirements live in two order-independent places instead:
+    // genesis-side pairing (EL declaration <-> [fork_timestamps] <-> [web3]
+    // chain_id) in validateL2Invariants, and the config.ini->config.genesis
+    // direction in validateELModeInvariants, which the node initializers call
+    // after BOTH files are loaded.
     m_ethereumListenIP = _pt.get<std::string>("ethereum.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("ethereum.listen_port", 30303);
     if (!isValidPort(listenPort))
@@ -1083,6 +1097,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // guards; a stale schedule would leak into the genesis pin of a chain that has none.
     m_genesisConfig.m_ethereumELMode = false;
     m_genesisConfig.m_ethereumForkSchedule.reset();
+    m_ethereumChainId = 0;  // reassigned by validateL2Invariants when EL is declared
 
     if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
     {
@@ -3206,10 +3221,9 @@ uint32_t bcos::tool::NodeConfig::ethereumMaxBatchSize() const
 }
 uint64_t bcos::tool::NodeConfig::ethereumChainId() const
 {
-    // L1 EL mode: validated and pinned from config.genesis's [web3] chain_id during
-    // loadEthereumConfig, which throws when EL mode is enabled without a valid non-zero
-    // chain id. No silent fallback — m_ethereumChainId is only ever written from an
-    // explicit config value, never the mainnet constant.
+    // Validated and pinned from config.genesis's [web3] chain_id when the genesis
+    // declares EL mode (validateL2Invariants throws on an absent/invalid id).
+    // 0 = unset (non-EL chains) — never a silent mainnet fallback.
     return m_ethereumChainId;
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkLondonTime() const

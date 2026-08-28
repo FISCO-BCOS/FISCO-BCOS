@@ -436,9 +436,12 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
     }
 }
 
-// EL mode's chain id must be explicit: no silent fallback to Ethereum mainnet (1).
-// loadEthereumConfig validates config.genesis's [web3] chain_id when ethereum.mode=el
-// — absent ("0" is the loader's default) or overflowing uint64 is a config error.
+// EL mode's chain id must be explicit: no silent fallback to Ethereum mainnet.
+// The requirement is keyed on the genesis [ethereum] mode=el declaration and
+// checked in validateL2Invariants (genesis load time, order-independent);
+// the config.ini->genesis direction is checked by validateELModeInvariants,
+// which the node initializers call after BOTH files are loaded — so tools
+// that load config.ini before config.genesis are unaffected.
 BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
@@ -470,28 +473,73 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
         NodeConfig cfg(keyFactory);
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(head + "11155111" + tail));
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
+        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
         BOOST_CHECK(cfg.ethereumELModeEnabled());
         BOOST_CHECK_EQUAL(cfg.ethereumChainId(), 11155111u);
     }
-    // [web3] chain_id absent (loader default "0") -> rejected, no mainnet fallback.
+    // [web3] chain_id absent (loader default "0") -> rejected at genesis load,
+    // no mainnet fallback.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(head + "0" + tail));
-        BOOST_CHECK_THROW(cfg.loadConfigFromString(ini), InvalidConfig);
+        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(head + "0" + tail), InvalidConfig);
     }
-    // [web3] chain_id overflowing uint64 -> rejected, no mainnet fallback.
+    // [web3] chain_id overflowing uint64 -> rejected at genesis load.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(
-            cfg.loadGenesisConfigFromString(head + "99999999999999999999999" + tail));
-        BOOST_CHECK_THROW(cfg.loadConfigFromString(ini), InvalidConfig);
+        BOOST_CHECK_THROW(
+            cfg.loadGenesisConfigFromString(head + "99999999999999999999999" + tail),
+            InvalidConfig);
     }
-    // Non-EL mode never requires a chain id (normal FISCO chains are unaffected).
+    // Non-EL genesis (no declaration, no schedule) never requires a chain id (normal
+    // FISCO chains are unaffected); the unset getter reads 0, never mainnet 1.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(head + "1" + tail));
+        const std::string plainGenesis =
+            "[version]\ncompatibility_version=3.18.0\n"
+            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+            "[web3]\nchain_id=1\n"
+            "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+            "node.0=" +
+            node +
+            ":1:1\n"
+            "[tx]\ngas_limit=3000000000\n"
+            "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+            "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+            "version=2\nevm_revision=cancun\n";
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plainGenesis));
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=none\n"));
         BOOST_CHECK(!cfg.ethereumELModeEnabled());
+        BOOST_CHECK_EQUAL(cfg.ethereumChainId(), 0u);
+    }
+    // Tools order (config.ini BEFORE config.genesis): pure parsing, no genesis
+    // reads in loadEthereumConfig — both loads pass, and the post-load hook
+    // validates the pairing afterwards.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(head + "11155111" + tail));
+        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
+        BOOST_CHECK_EQUAL(cfg.ethereumChainId(), 11155111u);
+    }
+    // config.ini mode=el on a genesis that does NOT declare EL: both loaders
+    // pass (neither sees the other file), the post-load hook rejects.
+    {
+        NodeConfig cfg(keyFactory);
+        const std::string plainGenesis =
+            "[version]\ncompatibility_version=3.18.0\n"
+            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+            "[web3]\nchain_id=1\n"
+            "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+            "node.0=" +
+            node +
+            ":1:1\n"
+            "[tx]\ngas_limit=3000000000\n"
+            "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+            "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+            "version=2\nevm_revision=cancun\n";
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plainGenesis));
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
+        BOOST_CHECK_THROW(cfg.validateELModeInvariants(), InvalidConfig);
     }
 }
 

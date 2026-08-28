@@ -37,10 +37,12 @@ namespace
 // One sorted entry: the full nibble path and its value. Built once per key in commit().
 // The secure-trie callers use exactly 64 nibbles (bytesToNibbles of a 32-byte key hash); the
 // raw-key (non-secure trie) path uses variable-length paths (bytesToNibbles of the raw key).
+// The value is a VIEW into the caller's buffer (which outlives the build) — the only payload
+// copy happens once, into the Leaf/Branch node that owns it.
 struct HBEntry
 {
     bcos::bytes nibbles;  // 64 nibbles for secure keys, 2*keyLen for raw keys
-    bcos::bytes value;
+    bcos::bytesConstRef value;
 };
 
 // State threaded through the synchronous recursion. emit() records every hash-kind node into
@@ -81,6 +83,20 @@ bcos::bytes hbRefToRaw(NodeRef const& ref)
     return out;
 }
 
+// Hex of the raw key an HBEntry was built from (its nibble path always comes in
+// pairs), for error messages the reader can map back to their own input — the
+// post-sort vector index names nothing the caller can locate.
+std::string hbKeyHex(bcos::bytes const& nibbles)
+{
+    bcos::bytes key;
+    key.reserve(nibbles.size() / 2);
+    for (std::size_t k = 0; k + 1 < nibbles.size(); k += 2)
+    {
+        key.push_back(static_cast<bcos::byte>((nibbles[k] << 4) | nibbles[k + 1]));
+    }
+    return bcos::toHex(key);
+}
+
 NodeRef hbBuild(HBContext& ctx, std::span<HBEntry const> entries, size_t depth);
 
 // Keys differ at `depth` (common prefix at this depth is empty) → a 16-way branch. Entries are
@@ -95,7 +111,7 @@ NodeRef hbBuildBranch(HBContext& ctx, std::span<HBEntry const> entries, size_t d
     // (secure) keys no key terminates before depth 64, so the secure path is unaffected.
     if (!entries.empty() && entries.front().nibbles.size() == depth)
     {
-        branch.value = entries.front().value;
+        branch.value = entries.front().value.toBytes();
         i = 1;
     }
     while (i < entries.size())
@@ -121,7 +137,7 @@ NodeRef hbBuild(HBContext& ctx, std::span<HBEntry const> entries, size_t depth)
         LeafNode leaf;
         // keyNibbles is the SUFFIX from `depth` to the end (64), not the full key.
         leaf.keyNibbles.assign(nibbles.begin() + depth, nibbles.end());
-        leaf.value = value;
+        leaf.value = value.toBytes();
         return hbEmit(ctx, TrieNode{std::move(leaf)});
     }
 
@@ -164,8 +180,7 @@ TrieBuildResult computeTrieRootImpl(
     entries.reserve(sortedEntries.size());
     for (auto const& [keyHash, value] : sortedEntries)
     {
-        entries.push_back(
-            HBEntry{.nibbles = bytesToNibbles(keyHash.ref()), .value = value.toBytes()});
+        entries.push_back(HBEntry{.nibbles = bytesToNibbles(keyHash.ref()), .value = value});
     }
 
     // Own hasher + own newNodes → no shared state: many computeTrieRootImpl calls may run
@@ -227,7 +242,7 @@ TrieBuildResult computeRawTrieRootImpl(
     entries.reserve(items.size());
     for (auto const& [key, value] : items)
     {
-        entries.push_back(HBEntry{.nibbles = bytesToNibbles(key), .value = value.toBytes()});
+        entries.push_back(HBEntry{.nibbles = bytesToNibbles(key), .value = value});
     }
 
     // Sort internally, exactly like computeTrieRootVarKey below: byte-lexicographic key order
@@ -250,8 +265,8 @@ TrieBuildResult computeRawTrieRootImpl(
         {
             BOOST_THROW_EXCEPTION(
                 MPTInvariantViolation() << bcos::errinfo_comment(
-                    "computeTrieRootFromRawKeys: duplicate key at index " + std::to_string(i) +
-                    " — raw trie keys must be unique"));
+                    "computeTrieRootFromRawKeys: duplicate key 0x" +
+                    hbKeyHex(entries[i].nibbles) + " — raw trie keys must be unique"));
         }
     }
 
@@ -319,7 +334,8 @@ TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::byt
     buildEntries.reserve(entries.size());
     for (auto const& [key, value] : entries)
     {
-        buildEntries.push_back(HBEntry{.nibbles = bytesToNibbles(bcos::ref(key)), .value = value});
+        buildEntries.push_back(
+            HBEntry{.nibbles = bytesToNibbles(bcos::ref(key)), .value = bcos::ref(value)});
     }
     std::sort(buildEntries.begin(), buildEntries.end(),
         [](HBEntry const& a, HBEntry const& b) { return a.nibbles < b.nibbles; });
@@ -339,8 +355,8 @@ TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::byt
         {
             BOOST_THROW_EXCEPTION(
                 MPTInvariantViolation() << bcos::errinfo_comment(
-                    "computeTrieRootVarKey: key " + std::to_string(i - 1) +
-                    " is a duplicate of, or a prefix of, key " + std::to_string(i) +
+                    "computeTrieRootVarKey: key 0x" + hbKeyHex(previous) +
+                    " is a duplicate of, or a prefix of, key 0x" + hbKeyHex(current) +
                     " — variable-length trie keys must be prefix-free and distinct"));
         }
     }

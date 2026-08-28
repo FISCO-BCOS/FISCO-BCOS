@@ -131,6 +131,9 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     m_nodeConfig = std::make_shared<NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     m_nodeConfig->loadGenesisConfig(_genesisFile);
     m_nodeConfig->loadConfig(_configFilePath);
+    // Cross-file EL-mode invariants (config.ini ethereum.mode=el must be backed by the
+    // genesis EL declaration) — checkable only after BOTH files are loaded.
+    m_nodeConfig->validateELModeInvariants();
 
     // init the protocol
     m_protocolInitializer = std::make_shared<ProtocolInitializer>();

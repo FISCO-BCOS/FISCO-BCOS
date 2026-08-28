@@ -56,6 +56,7 @@ bcos::h256 keccak(bcos::bytesConstRef data)
 bcos::task::Task<mpt::TrieBuildResult> storageTrieOf(std::vector<Alloc::State> const& storage)
 {
     std::map<bcos::h256, bcos::bytes> entries;
+    std::set<bcos::h256> seenSlots;
     for (auto const& [slotHex, valueHex] : storage)
     {
         // Exact-width decode shared with the importers, BEFORE the zero-value
@@ -66,13 +67,25 @@ bcos::task::Task<mpt::TrieBuildResult> storageTrieOf(std::vector<Alloc::State> c
         unhexAllocExact(valueHex, "storage slot value", slotValue.bytes, sizeof(slotValue.bytes));
         evmc_bytes32 slot{};
         unhexAllocExact(slotHex, "storage slot key", slot.bytes, sizeof(slot.bytes));
+        auto slotKeyHash = keccak(bcos::bytesConstRef(slot.bytes, sizeof(slot.bytes)));
+        // Reject a repeated slot key BEFORE the zero-value skip: the importers
+        // apply every slot in order (setStorage overwrites, a zero value
+        // included) so duplicates are last-wins for the flat state — but the
+        // skip below makes them NOT last-wins for the trie ((K, 5) then (K, 0)
+        // would root at K=5 while the flat state holds K=0). Same guard as the
+        // duplicate-address check in computeGenesisStateTrie.
+        if (!seenSlots.insert(slotKeyHash).second)
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "genesis alloc storage slot key 0x" + slotKeyHash.hex() +
+                                      " is duplicated"));
+        }
         auto rlpValue =
             mpt::encodeStorageValue(bcos::bytesConstRef(slotValue.bytes, sizeof(slotValue.bytes)));
         if (rlpValue.empty())
         {
             continue;  // zero value: not part of the storage trie
         }
-        auto slotKeyHash = keccak(bcos::bytesConstRef(slot.bytes, sizeof(slot.bytes)));
         entries[slotKeyHash] = std::move(rlpValue);
     }
     if (entries.empty())
