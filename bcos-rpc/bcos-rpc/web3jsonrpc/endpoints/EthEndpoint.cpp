@@ -26,9 +26,9 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include <atomic>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <atomic>
 
 #include <bcos-executor/src/Common.h>
 #include <bcos-framework/engine/OpBaseFee.h>
@@ -137,8 +137,12 @@ task::Task<void> EthEndpoint::hashrate(const Json::Value&, Json::Value& response
 }
 task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response)
 {
-    // Legacy gas suggestion. OP headers (baseFee present) return head baseFee (tip is 0).
-    // Must be >= head baseFee or cast --legacy txs never confirm. PBFT uses the static knob.
+    // Legacy gas suggestion. OP headers (baseFee present) suggest headroom ABOVE head
+    // baseFee — max(baseFee*2, 2 gwei), the same formula the OP call path uses as its
+    // pricing default. Pricing at the bare head baseFee leaves zero headroom: under
+    // EIP-1559 dynamics baseFee can rise up to 1/denominator (12.5% at Holocene defaults)
+    // in the very next block, so a legacy send priced here would fail intermittently
+    // whenever the chain is above gas target. PBFT uses the static knob.
     auto const ledger = m_nodeService->ledger();
     if (auto const latest = co_await ledger::getCurrentBlockNumber(*ledger); latest >= 0)
     {
@@ -148,7 +152,8 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
         {
             if (auto const& header = block->blockHeader(); header && header->baseFee())
             {
-                Json::Value result = toQuantity(*header->baseFee());
+                Json::Value result =
+                    toQuantity(std::max(*header->baseFee() * 2, bcos::u256(2'000'000'000)));
                 buildJsonContent(result, response);
                 co_return;
             }
