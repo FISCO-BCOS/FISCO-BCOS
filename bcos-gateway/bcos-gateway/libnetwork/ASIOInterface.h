@@ -32,7 +32,7 @@ public:
         SSL = 1
     };
 
-    /// read handler
+    /// verify callback
     using VerifyCallback = std::function<bool(bool, boost::asio::ssl::verify_context&)>;
 
     ASIOInterface(IOServicePool::Ptr _ioServicePool, std::string listenHost, uint16_t listenPort);
@@ -51,8 +51,6 @@ public:
 
     virtual bi::tcp::acceptor* acceptor();
 
-    // Kept as the unit-test mock point for the read path: every read-loop test fake overrides
-    // this virtual, and awaitableReadSome below dispatches through it.
     virtual void setVerifyCallback(
         const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/ = true);
 
@@ -61,15 +59,29 @@ public:
     // for the threading / exception / lifetime contract). Each operation guarantees total
     // completion: the awaiting coroutine is resumed exactly once, on success and on failure
     // alike — a silently dropped completion would pin the suspended coroutine (and everything
-    // its frame holds) forever.
+    // its frame holds) forever. The awaitables live in the calling coroutine's own frame — no
+    // bridge frame, and no per-operation allocation — and are obtained from the non-virtual
+    // awaitable* helpers below, which dispatch through a single overridable initiation hook.
     //
-    // awaitableReadSome is the unit-test mock point for the read path. It is a virtual
-    // COROUTINE (a virtual cannot return an AsioAwaitable, whose type depends on the call
-    // site's lambda): the production implementation bridges to async_read_some through
-    // AsioAwaitable, and test fakes override it with their own coroutine. The other
-    // operations are non-virtual and initiate the asio operation directly.
-    virtual task::Task<std::tuple<boost::system::error_code, std::size_t>> awaitableReadSome(
-        std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers);
+    // The read mock point is the initiateReadSome VIRTUAL below: every read-loop test fake
+    // overrides it, and awaitableReadSome dispatches through it. CONTRACT for overrides (and
+    // for every initiate call in this header): the completion must be handed to a deferred
+    // executor (asio, or a post to some io_context) — it must be neither invoked nor dropped
+    // synchronously. A synchronous invocation / drop is neutralized by the arm/cancel handshake
+    // in AsioAwaitable (see AsioAwaitable.h) rather than corrupting the running coroutine, but
+    // the awaitable's total-completion guarantee is clearest when every override defers.
+    virtual void initiateReadSome(const std::shared_ptr<SocketFace>& socket,
+        boost::asio::mutable_buffer buffers,
+        detail::AsioCompletion<boost::system::error_code, std::size_t> completion);
+
+    auto awaitableReadSome(
+        const std::shared_ptr<SocketFace>& socket, boost::asio::mutable_buffer buffers)
+    {
+        return makeAsioAwaitable<boost::system::error_code, std::size_t>(
+            [this, socket, buffers](auto handler) {
+                initiateReadSome(socket, buffers, std::move(handler));
+            });
+    }
 
     auto awaitableAccept(const std::shared_ptr<SocketFace>& socket)
     {

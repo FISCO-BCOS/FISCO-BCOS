@@ -60,7 +60,6 @@ class FakeASIO : public bcos::gateway::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
-    using ReadResult = std::tuple<boost::system::error_code, std::size_t>;
     using ReadCompletion =
         bcos::gateway::detail::AsioCompletion<boost::system::error_code, std::size_t>;
 
@@ -70,17 +69,19 @@ public:
     {};
     virtual ~FakeASIO() noexcept override {};
 
-    // Coroutine mock point for the read path: park the read's completion and feed it buffered
-    // packets from the fake's own pool thread.
-    task::Task<ReadResult> awaitableReadSome(
-        std::shared_ptr<SocketFace> /*socket*/, ba::mutable_buffer buffers) override
+    // Initiation mock point for the read path: park the read's completion and feed it buffered
+    // packets from the fake's own pool thread. The park is posted onto the pool thread so EVERY
+    // access to m_pendingReads happens on the single pool thread — the first arm happens on the
+    // caller's thread (Session::start() -> readLoop), and without the post it would race the pool
+    // thread's delivery in multi-session tests that share this fake (see deliverIfPossible).
+    void initiateReadSome(const std::shared_ptr<SocketFace>& /*socket*/,
+        ba::mutable_buffer buffers, ReadCompletion completion) override
     {
         ++m_readsInFlight;
-        co_return co_await makeAsioAwaitable<boost::system::error_code, std::size_t>(
-            [this, buffers](auto handler) {
-                m_pendingReads.push_back(PendingRead{buffers, std::move(handler)});
-                kickDelivery();
-            });
+        m_threadPool->post([this, buffers, completion = std::move(completion)]() mutable {
+            m_pendingReads.push_back(PendingRead{buffers, std::move(completion)});
+            deliverIfPossible();
+        });
     }
 
     // Synchronous helper for fakeClassTest (no session involved).
@@ -150,12 +151,10 @@ protected:
         return bytesTransferred;
     }
 
-    // Everything below runs on the pool thread only: the first read is armed on the caller's
-    // thread but publishes the parked completion through kickDelivery's post, and every later
-    // arm happens inside fireRead's resume, which runs on the pool thread. Multiple sessions may
-    // share this fake, so parked reads form a FIFO list rather than a single slot.
-    void kickDelivery() { m_threadPool->post([this] { deliverIfPossible(); }); }
-
+    // Everything below runs on the pool thread only: every read arm (including the first, via
+    // initiateReadSome's post) and every delivery are posted onto the single pool thread, so
+    // m_pendingReads is never touched from another thread. Multiple sessions may share this
+    // fake, so parked reads form a FIFO list rather than a single slot.
     void deliverIfPossible()
     {
         if (m_pendingReads.empty() || m_recvPackets.empty())
@@ -1056,6 +1055,42 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
 
     BOOST_CHECK_EQUAL(seqs.size(), totalMsgs);
     BOOST_CHECK_EQUAL(seenSeqs.size(), totalMsgs);
+}
+
+BOOST_AUTO_TEST_CASE(asioCompletionHandshakeSynchronousInvocation)
+{
+    // Arm/cancel handshake regression: an initiate that INVOKES the completion synchronously
+    // (before returning) must not resume the coroutine from inside its own await_suspend
+    // (resuming a not-yet-suspended frame is UB). AsioCompletion observes m_suspended == false,
+    // records the completion, and await_suspend resumes inline by returning false — the result
+    // is delivered exactly once.
+    auto task = []() -> task::Task<boost::system::error_code> {
+        auto [ec] = co_await makeAsioAwaitable<boost::system::error_code>(
+            [](auto handler) { handler(boost::system::error_code()); });
+        co_return ec;
+    }();
+    auto ec = task::syncWait(std::move(task));
+    BOOST_CHECK(!ec);
+}
+
+BOOST_AUTO_TEST_CASE(asioCompletionHandshakeSynchronousDrop)
+{
+    // Arm/cancel handshake regression: an initiate that DROPS the completion synchronously
+    // (destroys it without invocation, no exception) must not destroy the still-running frame
+    // from inside its own await_suspend. The destructor records the cancellation instead, and
+    // await_suspend resumes inline with operation_aborted so the awaiting coroutine completes
+    // with an error rather than suspending forever.
+    auto task = []() -> task::Task<boost::system::error_code> {
+        auto [ec] = co_await makeAsioAwaitable<boost::system::error_code>(
+            [](auto handler) {
+                // destroy the armed completion without invoking it: the by-value parameter is
+                // destroyed at scope exit
+                (void)handler;
+            });
+        co_return ec;
+    }();
+    auto ec = task::syncWait(std::move(task));
+    BOOST_CHECK_EQUAL(ec, boost::asio::error::operation_aborted);
 }
 
 BOOST_AUTO_TEST_CASE(SessionRecvBufferTest)

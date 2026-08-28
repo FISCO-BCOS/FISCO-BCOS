@@ -188,11 +188,10 @@ public:
      *
      * @param encodedMsgs
      * @param _maxSendDataSize
-     * @param _maxSendMsgCount
      * @return bool
      */
     bool tryPopSomeEncodedMsgs(
-        std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount);
+        std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize);
 
     virtual void checkNetworkStatus();
 

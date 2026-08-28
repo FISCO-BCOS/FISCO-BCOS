@@ -41,9 +41,9 @@ using namespace bcos::crypto;
 namespace
 {
 // FIB-186: RAII guard bound to an in-flight TLS handshake. Constructed after a handshake slot is
-// acquired and moved into the handshake completion handler; its destructor releases the slot when
-// the handler runs (success / failure / abort) or is destroyed on shutdown. Held via weak_ptr so a
-// Host torn down before the handshake completes does not crash the guard.
+// acquired; its destructor releases the slot exactly once when the frame it rides in unwinds
+// (success / failure / abort) or is destroyed. Held via weak_ptr so a Host torn down before the
+// handshake completes does not crash the guard.
 struct HandshakeSlotGuard
 {
     std::weak_ptr<Host> host;
@@ -58,6 +58,32 @@ struct HandshakeSlotGuard
         }
     }
 };
+
+// FIB-186: reserve an in-flight-handshake slot and return an owning guard (nullptr when the cap
+// is reached). Combining the acquire with the guard construction closes the "throw between
+// acquire and guard" window — a throw after the acquire but before the guard existed would leak
+// the slot. Returned as shared_ptr<void> so the concrete guard type stays an implementation
+// detail; the guard is handed into the serverHandshake coroutine frame, so acquire and release
+// live in the same frame.
+std::shared_ptr<void> tryAcquireHandshakeSlotGuard(std::weak_ptr<Host> host)
+{
+    auto hostPtr = host.lock();
+    if (!hostPtr || !hostPtr->tryAcquireHandshakeSlot())
+    {
+        return nullptr;
+    }
+    try
+    {
+        return std::make_shared<HandshakeSlotGuard>(std::move(host));
+    }
+    catch (...)
+    {
+        // guard construction failed (allocation): release the just-acquired slot so it is not
+        // leaked, then rethrow so the accept-loop iteration is skipped
+        hostPtr->releaseHandshakeSlot();
+        throw;
+    }
+}
 }  // namespace
 
 /**
@@ -90,9 +116,14 @@ task::Task<void> Host::acceptLoop()
     // lifetime (the accept handler held a raw this): the loop only exits after Host::stop()
     // cancels the acceptor, so a pending async_accept can never fire on a destroyed Host.
     auto self = shared_from_this();
-    try
+    // The try/catch lives INSIDE the while loop: this loop is the only thing that re-arms
+    // async_accept, so an exception escaping it (newSocket allocation, remoteEndpoint, or the
+    // coroutine-frame allocation inside task::wait(serverHandshake(...))) would permanently stop
+    // inbound connection acceptance while the node keeps running and reports itself healthy. A
+    // failed iteration must be survivable, so each one is guarded and the loop continues.
+    while (m_run)
     {
-        while (m_run)
+        try
         {
             auto socket = m_asioInterface->newSocket(true, NodeIPEndpoint());
             auto [ec] = co_await m_asioInterface->awaitableAccept(socket);
@@ -118,12 +149,15 @@ task::Task<void> Host::acceptLoop()
             // accept / handshake / teardown work and starve inter-validator PBFT reads (the
             // FIB-184 session caps apply only AFTER the handshake completes). Reserve the
             // in-flight-handshake slot first because it is the refundable check: if the
-            // accept-rate limiter below then rejects, we release the slot and no rate token is
+            // accept-rate limiter below then rejects, the guard is destroyed and no rate token is
             // spent. Checking the rate token first would instead waste a token whenever the
             // handshake cap is already saturated, needlessly lowering the effective accept rate
-            // for legitimate peers arriving in that window.
+            // for legitimate peers arriving in that window. The guard is handed into
+            // serverHandshake, so the slot's acquire and release live in the same coroutine frame
+            // (see tryAcquireHandshakeSlotGuard).
             std::string remoteAddress = socket->nodeIPEndpoint().address();
-            if (!tryAcquireHandshakeSlot())
+            auto handshakeGuard = tryAcquireHandshakeSlotGuard(weak_from_this());
+            if (!handshakeGuard)
             {
                 HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
                                 << LOG_DESC("pending-handshake cap reached, reject connection")
@@ -135,12 +169,9 @@ task::Task<void> Host::acceptLoop()
             }
             // Accept-rate token bucket: drops a churn flood cheaply (accept + close) before
             // paying handshake CPU, which the concurrency cap alone does not. On rejection the
-            // handshake slot reserved just above must be released so it is not leaked -- the
-            // HandshakeSlotGuard that normally releases it is only created once both checks
-            // pass.
+            // handshake slot reserved just above is released by the guard going out of scope.
             if (!tryAcquireConnectionToken())
             {
-                releaseHandshakeSlot();
                 HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
                                 << LOG_DESC("connection accept-rate limit reached, reject")
                                 << LOG_KV("address", remoteAddress)
@@ -151,25 +182,28 @@ task::Task<void> Host::acceptLoop()
             // Run the per-connection TLS handshake in its own coroutine and keep accepting: the
             // old code re-armed accept right after arming the async handshake, and awaiting the
             // handshake here would serialize accepts (one handshake at a time), defeating the
-            // concurrency-cap design.
-            task::wait(serverHandshake(std::move(socket)));
+            // concurrency-cap design. The handshake slot guard travels with the coroutine frame,
+            // so the slot is released exactly when that frame unwinds.
+            task::wait(serverHandshake(std::move(socket), std::move(handshakeGuard)));
         }
-    }
-    catch (...)
-    {
-        // never let an exception escape into the resuming asio handler (see AsioAwaitable.h)
-        HOST_LOG(ERROR) << LOG_DESC("accept loop exception")
-                        << LOG_KV("what", boost::current_exception_diagnostic_information());
+        catch (...)
+        {
+            // never let an exception escape into the resuming asio handler (see AsioAwaitable.h);
+            // a failed iteration must not kill the accept loop, so log and continue
+            HOST_LOG(ERROR) << LOG_DESC("accept iteration exception")
+                            << LOG_KV("what", boost::current_exception_diagnostic_information());
+        }
     }
 }
 
-task::Task<void> Host::serverHandshake(std::shared_ptr<SocketFace> socket)
+task::Task<void> Host::serverHandshake(
+    std::shared_ptr<SocketFace> socket, std::shared_ptr<void> handshakeGuard)
 {
     auto self = shared_from_this();
-    // FIB-186: release the in-flight-handshake slot exactly once when this frame unwinds
-    // (handshake success, failure, abort, or an escaping exception). This replaces the guard
-    // riding the old completion handler with plain RAII on the coroutine frame.
-    HandshakeSlotGuard handshakeGuard(weak_from_this());
+    // The handshakeGuard owns the reserved FIB-186 admission slot; it is destroyed exactly when
+    // this frame unwinds (handshake success, failure, abort, or the completion-or-cancel rescue
+    // destroying the frame), releasing the slot exactly once. Acquired in acceptLoop so the
+    // slot/token admission ordering is preserved (see acceptLoop).
     try
     {
         // FIB-186: bound the handshake's lifetime. A stalled / slow TLS handshake would

@@ -133,27 +133,28 @@ bi::tcp::acceptor* ASIOInterface::acceptor()
     return &m_acceptor;
 }
 
-task::Task<std::tuple<boost::system::error_code, std::size_t>> ASIOInterface::awaitableReadSome(
-    std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers)
+void ASIOInterface::initiateReadSome(const std::shared_ptr<SocketFace>& socket,
+    boost::asio::mutable_buffer buffers,
+    detail::AsioCompletion<boost::system::error_code, std::size_t> completion)
 {
     switch (m_type)
     {
     case TCP_ONLY:
-        co_return co_await makeAsioAwaitable<boost::system::error_code, std::size_t>(
-            [socket = std::move(socket), buffers](auto handler) {
-                socket->ref().async_read_some(buffers, std::move(handler));
-            });
+        socket->ref().async_read_some(buffers, std::move(completion));
+        break;
     case SSL:
-        co_return co_await makeAsioAwaitable<boost::system::error_code, std::size_t>(
-            [socket = std::move(socket), buffers](auto handler) {
-                socket->sslref().async_read_some(buffers, std::move(handler));
-            });
+        socket->sslref().async_read_some(buffers, std::move(completion));
+        break;
     default:
         // total completion: an unexpected type must still answer the read, or the awaiting
-        // read-loop coroutine pins forever
-        co_return std::make_tuple(
-            boost::system::error_code(boost::asio::error::operation_not_supported),
-            std::size_t{0});
+        // read-loop coroutine pins forever. POST the completion rather than invoking it
+        // inline — initiateReadSome runs on the initiator's stack inside await_suspend, and
+        // an inline invocation would resume the coroutine from within its own await_suspend.
+        boost::asio::post(socket->ioService(),
+            [completion = std::move(completion)]() mutable {
+                completion(boost::asio::error::operation_not_supported, std::size_t{0});
+            });
+        break;
     }
 }
 

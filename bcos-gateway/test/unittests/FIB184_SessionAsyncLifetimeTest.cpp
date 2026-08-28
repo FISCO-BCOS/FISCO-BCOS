@@ -59,18 +59,20 @@ BOOST_FIXTURE_TEST_SUITE(FIB184_SessionAsyncLifetimeTest, TestPromptFixture)
 class FakeASIO_Lifetime : public bcos::gateway::ASIOInterface
 {
 public:
-    using ReadResult = std::tuple<boost::system::error_code, std::size_t>;
+    using ReadCompletion =
+        bcos::gateway::detail::AsioCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_Lifetime()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
     {}
     ~FakeASIO_Lifetime() noexcept override = default;
 
-    task::Task<ReadResult> awaitableReadSome(
-        std::shared_ptr<SocketFace> /*socket*/, ba::mutable_buffer /*buffers*/) override
+    // Initiation mock point for the read path: park the read's completion in a manually-fired
+    // slot so a test can hold a read "in flight" and complete it deterministically.
+    void initiateReadSome(const std::shared_ptr<SocketFace>& /*socket*/,
+        ba::mutable_buffer /*buffers*/, ReadCompletion completion) override
     {
-        co_return co_await makeAsioAwaitable<boost::system::error_code, std::size_t>(
-            [this](auto handler) { m_readHandler.emplace(std::move(handler)); });
+        m_readHandler.emplace(std::move(completion));
     }
 
     bool hasReadHandler() const { return m_readHandler.has_value(); }

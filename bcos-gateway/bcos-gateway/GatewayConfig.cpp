@@ -630,11 +630,19 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     constexpr static uint32_t defaultMaxSendMsgCount = 10;
     m_maxSendMsgCount = _pt.get<uint32_t>("p2p.session_max_send_msg_count", defaultMaxSendMsgCount);
 
-    // session_max_send_data_size / session_max_send_msg_count bound the send-batch budget that
+    // p2p.session_max_send_data_size bounds the send-batch budget that
     // Session::tryPopSomeEncodedMsgs enforces on every write loop iteration. Unlike
-    // p2p.max_connections_per_second above, 0 does NOT mean "unlimited" here: with either budget
-    // at 0 the batch loop never pops, every write loop exits on its first iteration, and all
-    // outbound traffic on the session stalls silently. Clamp to a working minimum instead.
+    // p2p.max_connections_per_second above, 0 does NOT mean "unlimited" here: with the byte
+    // budget at 0 the batch loop never pops, every write loop exits on its first iteration, and
+    // all outbound traffic on the session stalls silently. Clamp to a working minimum instead.
+    //
+    // p2p.session_max_send_msg_count is retained for config-file compatibility but is
+    // deliberately NOT enforced by the batch loop — the base had the message-count condition
+    // commented out and drained the whole queue into a single scatter-gather write, and
+    // re-enabling it capped every async_write at the (default 10) message budget, costing
+    // ceil(N/10) post + async_write round-trips under broadcast fan-out. The byte budget alone
+    // is the sole cap; see the behaviour-change note in the PR description. The clamp below is
+    // kept so a historical 0 in a config file cannot silently mean something else.
     if (m_maxSendDataSize == 0)
     {
         GATEWAY_CONFIG_LOG(WARNING)

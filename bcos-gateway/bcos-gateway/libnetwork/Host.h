@@ -266,7 +266,12 @@ private:
     // cancels the acceptor, which completes the pending async_accept with operation_aborted and
     // lets the loop exit.
     task::Task<void> acceptLoop();
-    task::Task<void> serverHandshake(std::shared_ptr<SocketFace> socket);
+    // handshakeGuard owns the reserved FIB-186 in-flight-handshake admission slot (acquired in
+    // acceptLoop so the slot/token admission ordering is preserved); it is released exactly when
+    // this coroutine frame unwinds. Held as shared_ptr<void> to keep the concrete guard type an
+    // implementation detail of Host.cpp.
+    task::Task<void> serverHandshake(
+        std::shared_ptr<SocketFace> socket, std::shared_ptr<void> handshakeGuard);
     task::Task<void> clientConnect(std::shared_ptr<SocketFace> socket,
         NodeIPEndpoint _nodeIPEndpoint,
         std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
@@ -307,7 +312,13 @@ protected:
     std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandler;
     std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandlerWithoutExtInfo;
 
-    bool m_run = false;
+    // Network run flag. Written by start()/stop() from the caller's thread, read as the accept
+    // loop's condition on the acceptor's io_context thread (Host::acceptLoop) and by
+    // haveNetwork() from every session thread. Must be atomic: the new Host contract makes
+    // observing m_run == false the only mechanism that releases the accept loop's strong Host
+    // reference, so a torn/stale read would re-arm async_accept after the cancel was consumed
+    // and make the Host immortal.
+    std::atomic<bool> m_run{false};
 
     P2PInfo m_p2pInfo;
 

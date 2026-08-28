@@ -185,20 +185,21 @@ std::size_t Session::writeQueueSize()
 }
 
 bool Session::tryPopSomeEncodedMsgs(
-    std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount)  // NOLINT
+    std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize)  // NOLINT
 {
-    // Desc: Try to send multi packets one time to improve the efficiency of sending
-    // data. Stop batching once the configured byte (session_max_send_data_size) or message-count
-    // (session_max_send_msg_count) budget is exhausted; the remainder stays queued for the next
-    // loop iteration.
+    // Desc: Try to send multi packets one time to improve the efficiency of sending data. Stop
+    // batching once the configured byte budget (p2p.session_max_send_data_size) is exhausted;
+    // the remainder stays queued for the next loop iteration. The message-count budget
+    // (p2p.session_max_send_msg_count) is deliberately NOT enforced here — the base had that
+    // condition commented out and drained the whole queue into a single scatter-gather write,
+    // and re-enabling it capped every async_write at 10 messages, costing ceil(N/10) post +
+    // async_write round-trips under broadcast fan-out. The byte budget alone bounds a single
+    // write's memory footprint; see the behaviour-change note in the PR description.
     size_t totalDataSize = 0;
-    size_t msgCount = 0;
     Payload payload;
-    while (totalDataSize < _maxSendDataSize && msgCount < _maxSendMsgCount &&
-           m_writeQueue.try_pop(payload))
+    while (totalDataSize < _maxSendDataSize && m_writeQueue.try_pop(payload))
     {
         totalDataSize += payload.size();
-        ++msgCount;
         encodedMsgs.emplace_back(std::move(payload));
     }
 
@@ -217,6 +218,15 @@ void Session::write()
     // writeLoop — e.g. bad_weak_ptr from shared_from_this() — propagating back out through
     // task::wait), the flag must not stay set, or every later write() would early-return at the
     // CAS above and the queue would never drain again.
+    //
+    // The exception is NOT propagated to the caller: write() is reached only from a sender's
+    // await_suspend (fastSendMessageWith/WithoutResponse), and by then the Payload carrying the
+    // completion callback is already queued. An exception escaping await_suspend resumes the
+    // sender and is immediately rethrown, unwinding the sender's frame while the queued
+    // callback still captures the (now destroyed) awaitable — whoever popped the payload next
+    // would write through a dangling `this`. Match the base instead: swallow, log and drop,
+    // which drains m_writeQueue and posts every queued callback (the sender is still suspended,
+    // so its frame is alive when the callback runs).
     try
     {
         task::wait(writeLoop());
@@ -224,7 +234,9 @@ void Session::write()
     catch (...)
     {
         m_writingInFlight.store(false);
-        throw;
+        SESSION_LOG(ERROR) << LOG_DESC("write loop launch failed")
+                           << LOG_KV("what", boost::current_exception_diagnostic_information());
+        drop(TCPError);
     }
 }
 
@@ -240,6 +252,54 @@ task::Task<void> Session::writeLoop()
     // is the lifetime owner now, so no shared_ptr indirection is needed).
     std::vector<Payload> payloads;
     std::vector<boost::asio::const_buffer> buffers;
+
+    // Frame-local RAII guard for the single-flight write flag. The completion-or-cancel rescue
+    // (detail::AsioCompletion in AsioAwaitable.h) can DESTROY this frame without running the
+    // loop body or its catch blocks (an armed write completion destroyed without invocation).
+    // Frame destruction runs frame-local destructors only, so without this guard m_writingInFlight
+    // — a Session member — would stay claimed forever (every later write() returns at the CAS and
+    // the queue never drains again), and the batch already moved into `payloads` would be
+    // destroyed with its m_callbacks never fired (the awaiting senders leak). Declared AFTER
+    // payloads so the guard's destructor — which runs FIRST on frame destruction — still sees the
+    // batch to fail. release() is called on every normal exit path (the loop tail), so the guard
+    // fires only on the destroy path.
+    struct WriteLoopGuard
+    {
+        Session* session;
+        std::vector<Payload>& payloads;
+        bool released = false;
+        ~WriteLoopGuard()
+        {
+            if (released)
+            {
+                return;
+            }
+            session->m_writingInFlight.store(false);
+            // fail the batch callbacks inline (not posted): on the destroy path there is no
+            // guaranteed-live executor to post to, and the senders awaiting them are suspended
+            // (their frames are alive), so a synchronous resume is safe here — the destroy path
+            // never runs on a sender's own stack.
+            for (auto& payload : payloads)
+            {
+                if (payload.m_callback)
+                {
+                    auto callback = std::move(payload.m_callback);
+                    try
+                    {
+                        callback(boost::asio::error::operation_aborted);
+                    }
+                    catch (std::exception const& e)
+                    {
+                        SESSION_LOG(WARNING)
+                            << LOG_DESC("write batch callback failed on frame destroy")
+                            << LOG_KV("what", boost::diagnostic_information(e));
+                    }
+                }
+            }
+            payloads.clear();
+        }
+        void release() { released = true; }
+    } writeLoopGuard{this, payloads};
 
     try
     {
@@ -259,7 +319,7 @@ task::Task<void> Session::writeLoop()
                 break;
             }
 
-            if (!tryPopSomeEncodedMsgs(payloads, m_maxSendDataSize, m_maxSendMsgCount))
+            if (!tryPopSomeEncodedMsgs(payloads, m_maxSendDataSize))
             {
                 // queue drained; fall through to the single exit below
                 break;
@@ -368,6 +428,11 @@ task::Task<void> Session::writeLoop()
     // suspension (task::wait is fire-and-forget), so recursion is bounded to depth one. Gated on
     // active(): after a drop the queue is drained by drop() (and late producers fail via send()'s
     // re-check), so re-arming there would just spin a fresh loop into the same teardown.
+    //
+    // The guard is released BEFORE the explicit store so its destructor never fires on this path
+    // (it must not clear the flag that a re-armed write() has just claimed). The destroy path
+    // (completion-or-cancel rescue) never reaches this tail, so the guard fires there instead.
+    writeLoopGuard.release();
     m_writingInFlight.store(false);
     if (active() && !m_writeQueue.empty())
     {
