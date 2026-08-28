@@ -196,6 +196,30 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
         config.m_allocs[0].nonce = "18446744073709551616";  // 2^64
         BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
     }
+    // duplicated address (exact): the state map is last-wins but the importers
+    // apply every alloc, so the root and the written flat state would disagree.
+    {
+        auto config = gsrBaseConfig();
+        config.m_allocs.push_back(config.m_allocs[0]);  // same address
+        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+    }
+    // duplicated address (case-insensitive): 0xAB and 0xab decode to the same
+    // 20 bytes, so keccak256(address20) collides too.
+    {
+        auto config = gsrBaseConfig();
+        Alloc dup = config.m_allocs[0];
+        dup.address = "0x43000000000000000000000000000000000000C0";  // uppercase
+        dup.balance = u256(999);
+        config.m_allocs.push_back(dup);
+        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+    }
+    // alloc at a FISCO system address (SYS_CONFIG ...1000): EVMAccount would
+    // write it to /sys/ but the root hashes it as an ordinary account.
+    {
+        auto config = gsrBaseConfig();
+        config.m_allocs[0].address = "0x0000000000000000000000000000000000001000";
+        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

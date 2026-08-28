@@ -25,6 +25,7 @@
 #include <bcos-utilities/Common.h>
 #include <range/v3/range.hpp>
 #include <span>
+#include <type_traits>
 #include <vector>
 
 namespace bcos::ledger::mpt
@@ -60,9 +61,11 @@ inline bcos::h256 calculateWithdrawalsRoot(std::span<bcos::bytesConstRef const> 
 /// Block-level logs bloom: bitwise OR of the per-receipt 256-byte blooms (each computed from its
 /// logs via bcos::getLogsBloom). Returns a zero bloom for an empty input. Forwarding reference:
 /// the range is only read, never copied (a bcos::Bloom is 256 bytes, so a by-value parameter
-/// would copy the whole vector for an lvalue caller).
+/// would copy the whole vector for an lvalue caller). The element type is pinned to bcos::Bloom
+/// (not just any 1-byte-contiguous range): orBloom reads 256 bytes unconditionally, so a
+/// shorter buffer — e.g. a bcos::bytes decoded from receipt RLP — would be read past its end.
 template <::ranges::input_range Blooms>
-    requires bcos::concepts::ByteBuffer<std::remove_cvref_t<::ranges::range_value_t<Blooms>>>
+    requires std::same_as<std::remove_cvref_t<::ranges::range_value_t<Blooms>>, bcos::Bloom>
 bcos::Bloom calculateLogsBloom(Blooms&& blooms)
 {
     bcos::Bloom result{};

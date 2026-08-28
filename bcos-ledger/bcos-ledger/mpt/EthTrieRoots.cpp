@@ -35,9 +35,11 @@ bcos::h256 computeIndexedTrieRoot(std::span<bcos::bytesConstRef const> items)
 
     // Key each item by its RLP-encoded index. The keys must be owned (they are, in `keyed`);
     // the values stay VIEWS into the caller's `items`, which outlive the call —
-    // computeTrieRootFromRawKeys copies them into its own entries and sorts by ENCODED KEY
-    // BYTES internally (rlp(0)=0x80 > rlp(1)=0x01, so NOT numeric index order), so no
-    // ordering or value copying is needed here.
+    // computeRawTrieRoot copies them into its own entries and sorts by ENCODED KEY BYTES
+    // internally (rlp(0)=0x80 > rlp(1)=0x01, so NOT numeric index order), so no ordering or
+    // value copying is needed here. The root-only entry point is used deliberately: the
+    // tx/receipt/withdrawal tries are never persisted, so accumulating the node map would
+    // only be thrown away.
     std::vector<std::pair<bcos::bytes, bcos::bytesConstRef>> keyed;
     keyed.reserve(items.size());
     for (size_t i = 0; i < items.size(); ++i)
@@ -53,7 +55,7 @@ bcos::h256 computeIndexedTrieRoot(std::span<bcos::bytesConstRef const> items)
     {
         sorted.emplace_back(bcos::ref(key), value);
     }
-    return computeTrieRootFromRawKeys(sorted).root;
+    return computeRawTrieRoot(sorted);
 }
 
 }  // namespace bcos::ledger::mpt

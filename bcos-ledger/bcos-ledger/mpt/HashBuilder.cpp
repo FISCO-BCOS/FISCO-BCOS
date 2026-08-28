@@ -45,17 +45,21 @@ struct HBEntry
 
 // State threaded through the synchronous recursion. emit() records every hash-kind node into
 // newNodes; commit() flushes them into the cache afterwards (avoids coroutine recursion).
+// collectNodes lets the raw-key root-only builds (computeRawTrieRoot) skip the per-node RLP
+// accumulation entirely — the block-header tries are never persisted, so the map would only
+// be thrown away.
 struct HBContext
 {
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher& hasher;
     std::unordered_map<bcos::h256, bcos::bytes>& newNodes;
+    bool collectNodes = true;
 };
 
 // Encode `node`, compute its ref, and record the raw bytes when the ref is a hash.
 NodeRef hbEmit(HBContext& ctx, TrieNode const& node)
 {
     auto [raw, ref] = NodeEncoder<>::encodeAndRef(node, ctx.hasher);
-    if (ref.kind() == NodeRef::Kind::Hash)
+    if (ref.kind() == NodeRef::Kind::Hash && ctx.collectNodes)
     {
         ctx.newNodes.emplace(ref.hash(), std::move(raw));
     }
@@ -205,8 +209,14 @@ TrieBuildResult computeTrieRootFromSorted(
     return computeTrieRootImpl(sortedEntries);
 }
 
-TrieBuildResult computeTrieRootFromRawKeys(
-    std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> items)
+namespace
+{
+// Shared raw-key build core: sorts by nibble-path order, enforces uniqueness, and builds the
+// canonical trie over the raw byte keys. @p collectNodes selects whether every produced node's
+// RLP is accumulated (the full TrieBuildResult, needed to persist the trie) or skipped (the
+// root-only path — the block-header tx/receipt/withdrawal tries are never persisted).
+TrieBuildResult computeRawTrieRootImpl(
+    std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> items, bool collectNodes)
 {
     if (items.empty())
     {
@@ -248,7 +258,7 @@ TrieBuildResult computeTrieRootFromRawKeys(
     // Own hasher + own newNodes → no shared state (same concurrency contract as the secure path).
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
     std::unordered_map<bcos::h256, bcos::bytes> newNodes;
-    HBContext ctx{.hasher = hasher, .newNodes = newNodes};
+    HBContext ctx{.hasher = hasher, .newNodes = newNodes, .collectNodes = collectNodes};
     NodeRef const rootRef =
         hbBuild(ctx, std::span<HBEntry const>{entries.data(), entries.size()}, /*depth=*/0);
 
@@ -261,10 +271,26 @@ TrieBuildResult computeTrieRootFromRawKeys(
     else
     {
         bcos::crypto::hasher::hash(hasher, rootRef.inlineRef(), root);
-        newNodes.emplace(root, rootRef.inlineRef().toBytes());
+        if (collectNodes)
+        {
+            newNodes.emplace(root, rootRef.inlineRef().toBytes());
+        }
     }
 
     return TrieBuildResult{.root = root, .newNodes = std::move(newNodes)};
+}
+}  // namespace
+
+TrieBuildResult computeTrieRootFromRawKeys(
+    std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> items)
+{
+    return computeRawTrieRootImpl(items, /*collectNodes=*/true);
+}
+
+bcos::h256 computeRawTrieRoot(
+    std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> items)
+{
+    return computeRawTrieRootImpl(items, /*collectNodes=*/false).root;
 }
 
 TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::bytes> const> entries)

@@ -22,11 +22,15 @@
 #include "mpt/StorageValueCodec.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/lexical_cast.hpp>
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <evmc/evmc.h>
 #include <map>
+#include <set>
 
 using namespace bcos;
 using namespace bcos::ledger;
@@ -91,6 +95,13 @@ bcos::task::Task<bcos::ledger::GenesisStateTrie> bcos::ledger::computeGenesisSta
 {
     std::map<bcos::h256, bcos::bytes> stateEntries;
     std::unordered_map<bcos::h256, bcos::bytes> nodes;
+    // Reject a repeated address: the map below is last-wins (the root would commit only the
+    // final alloc) while both importers apply EVERY alloc in order (storage slots accumulate,
+    // later nonce/balance/code overwrite). A duplicated address therefore makes the returned
+    // root and the written flat state disagree — exactly the failure the caller's root
+    // comparison exists to catch. NodeConfig::loadAllocs guards the INI path; this is the same
+    // guard for direct GenesisConfig callers (which run this pass before their first write).
+    std::set<bcos::h256> seenAddresses;
 
     for (auto const& alloc : genesis.m_allocs)
     {
@@ -130,7 +141,32 @@ bcos::task::Task<bcos::ledger::GenesisStateTrie> bcos::ledger::computeGenesisSta
         // Secure state trie: leaf key = keccak256(address20).
         evmc_address addr{};
         unhexAllocExact(alloc.address, "address", addr.bytes, sizeof(addr.bytes));
+
+        // Reject an alloc at a FISCO system address: EVMAccount routes those to the /sys/
+        // table prefix, while the state trie hashes every alloc as an ordinary /apps/
+        // account — the flat state and the returned root would disagree and the caller's
+        // root comparison would still pass. No known target chain trips this (Ethereum
+        // precompiles are 0x01-0x0a, OP predeploys are 0x4200...), but importEthereumGenesis
+        // State loads arbitrary L1 alloc sets not authored by FISCO tooling.
+        std::string addressHexLower(ledger::stripHexPrefix(alloc.address));
+        std::transform(addressHexLower.begin(), addressHexLower.end(), addressHexLower.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (bcos::precompiled::contains(bcos::precompiled::c_systemTxsAddress,
+                std::string_view{addressHexLower}))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "genesis alloc address is a FISCO system address: " +
+                                      alloc.address +
+                                      " (EVMAccount would write it to /sys/ but the state "
+                                      "root hashes it as an ordinary /apps/ account)"));
+        }
+
         auto addrKeyHash = keccak(bcos::bytesConstRef(addr.bytes, sizeof(addr.bytes)));
+        if (!seenAddresses.insert(addrKeyHash).second)
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "genesis alloc address is duplicated: " + alloc.address));
+        }
         stateEntries[addrKeyHash] = std::move(accountRlp);
     }
 

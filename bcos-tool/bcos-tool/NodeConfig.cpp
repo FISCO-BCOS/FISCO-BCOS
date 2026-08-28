@@ -1013,6 +1013,34 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                                   "[ethereum] mode=el with a [fork_timestamps] section: "
                                   "the EL-mode fork schedule is part of the genesis pin"));
     }
+    // EL mode's EIP-155 signature validation and geth's EIP-2124 fork-id handshake (parts
+    // 7-9) key on the CHAIN id: a silent fallback to mainnet (1) would accept transactions
+    // signed for another chain or announce a stale fork-id checksum. Require an explicit
+    // [web3] chain_id in config.genesis (the chain-level id, part of the genesis pin) —
+    // "0" is loadWeb3ChainConfig's absent default, and a value that overflows uint64 is a
+    // config error, not a fallback.
+    if (enableEL)
+    {
+        auto const& web3ChainId = m_genesisConfig.m_web3ChainID;
+        if (web3ChainId.empty() || web3ChainId == "0")
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "ethereum.mode=el requires [web3] chain_id in "
+                                      "config.genesis (the Ethereum chain id, e.g. 11155111 "
+                                      "for Sepolia)"));
+        }
+        try
+        {
+            m_ethereumChainId = boost::lexical_cast<uint64_t>(web3ChainId);
+        }
+        catch (boost::bad_lexical_cast const&)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "ethereum.mode=el requires [web3] chain_id to fit "
+                                      "uint64: " +
+                                      web3ChainId));
+        }
+    }
     m_ethereumListenIP = _pt.get<std::string>("ethereum.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("ethereum.listen_port", 30303);
     if (!isValidPort(listenPort))
@@ -1049,6 +1077,13 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
 // per-node [ethereum] section of config.ini.
 void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig)
 {
+    // Reload is a supported shape (loadAllocs opens with m_allocs.clear()): a second genesis
+    // load without the EL declaration / schedule must not keep the previous values. A stale
+    // m_ethereumELMode would waive both the executor.evm_revision and the auth_admin_account
+    // guards; a stale schedule would leak into the genesis pin of a chain that has none.
+    m_genesisConfig.m_ethereumELMode = false;
+    m_genesisConfig.m_ethereumForkSchedule.reset();
+
     if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
     {
         auto mode = ethSection->get<std::string>("mode", "none");
@@ -3171,33 +3206,10 @@ uint32_t bcos::tool::NodeConfig::ethereumMaxBatchSize() const
 }
 uint64_t bcos::tool::NodeConfig::ethereumChainId() const
 {
-    // L1 EL mode: chain id comes from [web3] chain_id in config.genesis (decimal string,
-    // e.g. 11155111 for Sepolia). Falls back to parsing [chain] chain_id when it is
-    // numeric (geth-style configs), else the default mainnet id 1.
-    auto const& web3Id = m_genesisConfig.m_web3ChainID;
-    if (!web3Id.empty() && web3Id != "0")
-    {
-        try
-        {
-            return boost::lexical_cast<uint64_t>(web3Id);
-        }
-        catch (boost::bad_lexical_cast const&)
-        {
-            // fall through
-        }
-    }
-    auto const& chainId = m_genesisConfig.m_chainID;
-    try
-    {
-        if (!chainId.empty())
-        {
-            return boost::lexical_cast<uint64_t>(chainId);
-        }
-    }
-    catch (boost::bad_lexical_cast const&)
-    {
-        // non-numeric FISCO chain id (e.g. "chain0"): not a real chain id
-    }
+    // L1 EL mode: validated and pinned from config.genesis's [web3] chain_id during
+    // loadEthereumConfig, which throws when EL mode is enabled without a valid non-zero
+    // chain id. No silent fallback — m_ethereumChainId is only ever written from an
+    // explicit config value, never the mainnet constant.
     return m_ethereumChainId;
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkLondonTime() const

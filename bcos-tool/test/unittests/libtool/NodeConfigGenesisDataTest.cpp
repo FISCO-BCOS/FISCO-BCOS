@@ -400,17 +400,22 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
         "[tx]\ngas_limit=3000000000\n"
         "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-        "version=2\n";
+        "version=2\n"
+        // evm_revision lets loadExecutorConfig's v2 guard pass cleanly, so the "no EL
+        // declaration" cases below reach validateL2Invariants — the branch under test — as
+        // the ONLY guard that can fire. Without it the executor-v2 guard would throw first
+        // and the suite could not distinguish the two.
+        "evm_revision=cancun\n";
     const std::string schedule =
         "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\ncancun_time=1710338135\n"
         "prague_time=1746612311\n";
 
-    // [fork_timestamps] without [ethereum] mode=el: rejected.
+    // [fork_timestamps] without [ethereum] mode=el: rejected by validateL2Invariants.
     {
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(base + schedule), InvalidConfig);
     }
-    // [ethereum] mode=el without [fork_timestamps]: rejected.
+    // [ethereum] mode=el without [fork_timestamps]: rejected by validateL2Invariants.
     {
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_THROW(
@@ -429,6 +434,103 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
         BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(base + "[ethereum]\nmode=invalid\n"),
             InvalidConfig);
     }
+}
+
+// EL mode's chain id must be explicit: no silent fallback to Ethereum mainnet (1).
+// loadEthereumConfig validates config.genesis's [web3] chain_id when ethereum.mode=el
+// — absent ("0" is the loader's default) or overflowing uint64 is a config error.
+BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string head =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=";
+    const std::string tail =
+        "\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n"
+        "evm_revision=cancun\n"
+        "[ethereum]\nmode=el\n"
+        "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612311\n";
+    const std::string ini = "[ethereum]\nmode=el\n";
+
+    // Explicit valid chain id -> parsed and pinned.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(head + "11155111" + tail));
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
+        BOOST_CHECK(cfg.ethereumELModeEnabled());
+        BOOST_CHECK_EQUAL(cfg.ethereumChainId(), 11155111u);
+    }
+    // [web3] chain_id absent (loader default "0") -> rejected, no mainnet fallback.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(head + "0" + tail));
+        BOOST_CHECK_THROW(cfg.loadConfigFromString(ini), InvalidConfig);
+    }
+    // [web3] chain_id overflowing uint64 -> rejected, no mainnet fallback.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadGenesisConfigFromString(head + "99999999999999999999999" + tail));
+        BOOST_CHECK_THROW(cfg.loadConfigFromString(ini), InvalidConfig);
+    }
+    // Non-EL mode never requires a chain id (normal FISCO chains are unaffected).
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(head + "1" + tail));
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=none\n"));
+        BOOST_CHECK(!cfg.ethereumELModeEnabled());
+    }
+}
+
+// Reload is a supported shape: a second loadGenesisConfig without the EL declaration /
+// fork schedule must clear the previous values (a stale m_ethereumELMode would waive both
+// the executor.evm_revision and the auth_admin_account guards).
+BOOST_AUTO_TEST_CASE(loadForkTimestampsReloadClears)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string base =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=1\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n"
+        "evm_revision=cancun\n";
+
+    NodeConfig cfg(keyFactory);
+    // First load: EL declaration + fork schedule.
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
+        base + "[ethereum]\nmode=el\n"
+               "[fork_timestamps]\nlondon_time=0\nshanghai_time=1681338455\n"
+               "cancun_time=1710338135\nprague_time=1746612311\n"));
+    BOOST_CHECK(cfg.genesisConfig().m_ethereumELMode);
+    BOOST_CHECK(cfg.genesisConfig().m_ethereumForkSchedule.has_value());
+
+    // Reload without those sections: both must be cleared, not retained.
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base));
+    BOOST_CHECK(!cfg.genesisConfig().m_ethereumELMode);
+    BOOST_CHECK(!cfg.genesisConfig().m_ethereumForkSchedule.has_value());
 }
 
 // Fork timestamp parsing must fail fast: std::stoull accepted a leading '-' (wrapping to

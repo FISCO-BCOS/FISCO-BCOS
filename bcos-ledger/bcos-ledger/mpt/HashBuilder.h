@@ -83,6 +83,15 @@ TrieBuildResult computeTrieRootFromSorted(
 TrieBuildResult computeTrieRootFromRawKeys(
     std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> items);
 
+/// Root-only variant of computeTrieRootFromRawKeys: builds the same canonical trie but returns
+/// just the 32-byte root, skipping the per-node RLP accumulation. The block-header
+/// transaction / receipt / withdrawal tries are never persisted (go-ethereum's DeriveSha uses
+/// a throwaway StackTrie for the same reason), so the full newNodes map would only be
+/// discarded — for a large block this drops every hash-map insertion and node copy, three
+/// times per block. Same sorting / uniqueness contract as computeTrieRootFromRawKeys.
+bcos::h256 computeRawTrieRoot(
+    std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> items);
+
 /// Non-secure (variable-length key) build entry: computes a canonical MPT over (key, value) pairs
 /// where @p key is an arbitrary-length byte string (each byte → 2 nibbles via bytesToNibbles),
 /// NOT the 32-byte keccak-hashed secure-trie key `computeTrieRoot` assumes. Used for list tries
