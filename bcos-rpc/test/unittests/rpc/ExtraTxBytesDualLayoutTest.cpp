@@ -108,13 +108,15 @@ BOOST_AUTO_TEST_CASE(legacyPre155PreimageNoChainId)
     BOOST_CHECK(!tx.chainId.has_value());
 }
 
-// A trailer that is neither (chainId,0,0) nor a valid (v,r,s) — item 7 decodes as v=1 with
-// non-zero trailers, which the wire branch must reject (v < 35).
+// A trailer that is neither (chainId,0,0) nor a valid (v,r,s): v=5 with a non-empty s defeats
+// the preimage-tail discriminator (isLegacyPreimageTail = r and s both empty), so the sealed
+// branch runs and item7=5 < 35 must reject (InvalidVInSignature).
 BOOST_AUTO_TEST_CASE(legacyGarbageTrailerRejected)
 {
-    // preimage with the last 0x80 placeholder flipped to 0x01
+    // EIP-155 preimage with the (chainId=1, r=empty, s=empty) trailer rewritten as
+    // (v=5, r=empty, s=0x01): same 3-byte payload, no length drift.
     std::string hex{LEGACY_PREIMAGE_HEX};
-    hex.back() = '1';  // ...01808{0 -> 1}
+    hex.replace(hex.size() - 6, 6, "058001");
     auto bytes = fromHex(hex);
     auto ref = bcos::ref(bytes);
     Web3Transaction tx{};
