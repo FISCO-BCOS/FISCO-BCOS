@@ -16,6 +16,7 @@
  * @file GenesisStateRoot.cpp
  */
 #include "GenesisStateRoot.h"
+#include "bcos-storage/KeyPrefixes.h"
 #include "mpt/Constants.h"
 #include "mpt/HashBuilder.h"
 #include "mpt/StorageValueCodec.h"
@@ -29,6 +30,11 @@
 
 using namespace bcos;
 using namespace bcos::ledger;
+
+executor_v1::StateKey bcos::ledger::mptNodeStateKey(bcos::h256 const& hash)
+{
+    return storage2::mptNodeStateKey(hash);
+}
 
 namespace
 {

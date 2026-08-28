@@ -1839,8 +1839,96 @@ static constexpr std::string_view c_l2SystemConfigAddress =
 static constexpr std::string_view c_l2FeatureFlagsKey = "feature_flags";
 static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
 
+// Verify the L2 SystemConfig feature_flags alloc slot against this node's
+// feature set. Runs BEFORE any genesis write: genesis import is not
+// transactional (and asyncCreateTable is not idempotent), so a mismatch
+// surfacing after create()/setStorage() would leave sys tables and earlier
+// alloc rows behind and a retry would not be a clean slate. Hex itself was
+// already accepted by computeGenesisStateTrie; this compares VALUES.
+static void verifyL2FeatureFlagsSlot(
+    ::ranges::input_range auto const& allocs, Features const& features)
+{
+    for (auto const& importAccount : allocs)
+    {
+        // Normalize before comparing: NodeConfig lowercases alloc addresses,
+        // but direct GenesisConfig callers may pass uppercase — an unmatched
+        // case must not silently skip the verification below.
+        std::string addressHexLower(ledger::stripHexPrefix(importAccount.address));
+        std::transform(addressHexLower.begin(), addressHexLower.end(), addressHexLower.begin(),
+            [](unsigned char c) { return std::tolower(c); });
+        if (addressHexLower != c_l2SystemConfigAddress)
+        {
+            continue;
+        }
+        // The feature_flags Entry slot must arrive IN the alloc (written
+        // by build-allocs.py) so the genesis state root — computed over
+        // the allocs alone — commits it, and the same alloc JSON feeds
+        // the op-reth oracle. This path only VERIFIES the slot against
+        // the feature set the node actually runs with; injecting it here
+        // (the previous behavior) left the root not covering it.
+        //
+        // slot = keccak256(utf8("feature_flags") || be32(101))
+        bcos::bytes slotInput;
+        slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
+        slotInput.insert(
+            slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
+        bcos::bytes baseSlotBytes(32, 0);
+        baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
+        slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());
+        auto slotHash = crypto::keccak256Hash(bcos::ref(slotInput));
+        auto slotKeyHex = slotHash.hex();  // lowercase, 64 chars
+
+        // expected value = packed flags number as 32-byte big-endian
+        // (enableNumber = 0)
+        std::array<uint8_t, 32> expectedValue{};
+        auto flagsNumber = features.toFlagsNumber();
+        for (size_t i = 0; i < expectedValue.size(); ++i)
+        {
+            expectedValue[expectedValue.size() - 1 - i] =
+                (flagsNumber & 0xFF).convert_to<uint8_t>();
+            flagsNumber >>= 8;
+        }
+
+        const ledger::Alloc::State* featureFlagsSlot = nullptr;
+        for (auto const& state : importAccount.storage)
+        {
+            std::string keyHex(ledger::stripHexPrefix(state.first));
+            std::transform(keyHex.begin(), keyHex.end(), keyHex.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+            if (keyHex == slotKeyHex)
+            {
+                featureFlagsSlot = &state;
+                break;
+            }
+        }
+        if (featureFlagsSlot == nullptr)
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
+                                      "L2 genesis allocs must carry the SystemConfig "
+                                      "feature_flags Entry slot (keccak256(\"feature_flags\" "
+                                      "|| be32(101)) = 0x" +
+                                      slotKeyHex +
+                                      ") so the genesis state root commits it; regenerate "
+                                      "the allocs with build-allocs.py"));
+        }
+        auto valueHex = ledger::stripHexPrefix(featureFlagsSlot->second);
+        std::array<uint8_t, 32> actualValue{};
+        ledger::unhexAllocExact(
+            valueHex, "feature_flags slot value", actualValue.data(), actualValue.size());
+        if (actualValue != expectedValue)
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << errinfo_comment(
+                    "SystemConfig feature_flags slot in the genesis allocs does not match "
+                    "this node's genesis feature set (Features::toFlagsNumber()): alloc=0x" +
+                    toHex(actualValue) + " expected=0x" + toHex(expectedValue) +
+                    "; the alloc artifact and the node's [features] config disagree"));
+        }
+    }
+}
+
 static task::Task<void> importGenesisState(
-    ::ranges::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+    ::ranges::forward_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
 {
     // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
     // a prefix. Strip a leading 0x so both shapes unhex cleanly. The exact-width /
@@ -1851,6 +1939,11 @@ static task::Task<void> importGenesisState(
 
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
+
+    // Verify the SystemConfig feature_flags slot BEFORE the first write (see
+    // verifyL2FeatureFlagsSlot): a mismatch must not leave partially-written
+    // accounts in the genesis batch.
+    verifyL2FeatureFlagsSlot(allocs, features);
 
     for (auto&& importAccount : allocs)
     {
@@ -1903,80 +1996,6 @@ static task::Task<void> importGenesisState(
         for (auto const& [evmKey, evmValue] : slots)
         {
             co_await account.setStorage(evmKey, evmValue);
-        }
-
-        // Normalize before comparing: NodeConfig lowercases alloc addresses,
-        // but direct GenesisConfig callers may pass uppercase — an unmatched
-        // case must not silently skip the verification below.
-        std::string addressHexLower(addressHex);
-        std::transform(addressHexLower.begin(), addressHexLower.end(), addressHexLower.begin(),
-            [](unsigned char c) { return std::tolower(c); });
-        if (addressHexLower == c_l2SystemConfigAddress)
-        {
-            // The feature_flags Entry slot must arrive IN the alloc (written
-            // by build-allocs.py) so the genesis state root — computed over
-            // the allocs alone — commits it, and the same alloc JSON feeds
-            // the op-reth oracle. This path only VERIFIES the slot against
-            // the feature set the node actually runs with; injecting it here
-            // (the previous behavior) left the root not covering it.
-            //
-            // slot = keccak256(utf8("feature_flags") || be32(101))
-            bcos::bytes slotInput;
-            slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
-            slotInput.insert(
-                slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
-            bcos::bytes baseSlotBytes(32, 0);
-            baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
-            slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());
-            auto slotHash = crypto::keccak256Hash(bcos::ref(slotInput));
-            auto slotKeyHex = slotHash.hex();  // lowercase, 64 chars
-
-            // expected value = packed flags number as 32-byte big-endian
-            // (enableNumber = 0)
-            std::array<uint8_t, 32> expectedValue{};
-            auto flagsNumber = features.toFlagsNumber();
-            for (size_t i = 0; i < expectedValue.size(); ++i)
-            {
-                expectedValue[expectedValue.size() - 1 - i] =
-                    (flagsNumber & 0xFF).convert_to<uint8_t>();
-                flagsNumber >>= 8;
-            }
-
-            const ledger::Alloc::State* featureFlagsSlot = nullptr;
-            for (auto const& state : importAccount.storage)
-            {
-                std::string keyHex(strip0x(state.first));
-                std::transform(keyHex.begin(), keyHex.end(), keyHex.begin(),
-                    [](unsigned char c) { return std::tolower(c); });
-                if (keyHex == slotKeyHex)
-                {
-                    featureFlagsSlot = &state;
-                    break;
-                }
-            }
-            if (featureFlagsSlot == nullptr)
-            {
-                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
-                                          "L2 genesis allocs must carry the SystemConfig "
-                                          "feature_flags Entry slot (keccak256(\"feature_flags\" "
-                                          "|| be32(101)) = 0x" +
-                                          slotKeyHex +
-                                          ") so the genesis state root commits it; regenerate "
-                                          "the allocs with build-allocs.py"));
-            }
-            auto valueHex = strip0x(featureFlagsSlot->second);
-            std::array<uint8_t, 32> actualValue{};
-            ledger::unhexAllocExact(
-                valueHex, "feature_flags slot value", actualValue.data(), actualValue.size());
-            if (actualValue != expectedValue)
-            {
-                BOOST_THROW_EXCEPTION(
-                    bcos::tool::InvalidConfig() << errinfo_comment(
-                        "SystemConfig feature_flags slot in the genesis allocs does not match "
-                        "this node's genesis feature set (Features::toFlagsNumber()): alloc=0x" +
-                        toHex(actualValue) + " expected=0x" + toHex(expectedValue) +
-                        "; the alloc artifact and the node's [features] config disagree"));
-            }
         }
     }
 }

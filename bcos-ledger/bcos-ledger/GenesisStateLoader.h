@@ -28,7 +28,6 @@
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-storage/KeyPrefixes.h"
 #include "bcos-task/Task.h"
 #include "bcos-tool/Exceptions.h"
 #include <bcos-utilities/Exceptions.h>
@@ -53,6 +52,18 @@ task::Task<GenesisStateTrie> importEthereumGenesisState(
     Storage& storage, std::vector<Alloc> const& allocs, crypto::Hash const& hashImpl,
     Features const& features)
 {
+    // Build the full genesis trie FIRST: genesis import is not transactional,
+    // and computeGenesisStateTrie validates every alloc hex field (address /
+    // code / storage slots, through the shared unhexAllocExact/unhexAllocBytes
+    // guards) plus the nonce. Running it before the first create() means a
+    // malformed alloc — anywhere in the set — cannot leave partially-written
+    // /apps/ rows behind (production Ledger::buildGenesisBlock orders it the
+    // same way). The per-alloc decode below then never fires on bad config;
+    // it stays as the defensive invariant.
+    GenesisConfig genesis;
+    genesis.m_allocs = allocs;
+    auto trie = co_await computeGenesisStateTrie(genesis);
+
     for (auto const& alloc : allocs)
     {
         // Decode & validate EVERY hex field of the alloc BEFORE the first
@@ -102,19 +113,15 @@ task::Task<GenesisStateTrie> importEthereumGenesisState(
         }
     }
 
-    // Build the full genesis trie (account trie + storage sub-tries) and persist every
-    // produced node as a "/mpt/" state row, exactly like Ledger::buildGenesisBlock does
-    // for Scenario-B (L2) chains — block 1's incremental MPT build resolves parent-version
-    // nodes through storage, and a missing node aborts loudly (MPTInvariantViolation).
-    GenesisConfig genesis;
-    genesis.m_allocs = allocs;
-    auto trie = co_await computeGenesisStateTrie(genesis);
+    // Persist every produced genesis trie node as a "/mpt/" state row, exactly
+    // like Ledger::buildGenesisBlock does for Scenario-B (L2) chains — block 1's
+    // incremental MPT build resolves parent-version nodes through storage, and a
+    // missing node aborts loudly (MPTInvariantViolation).
     for (auto& [nodeHash, nodeRlp] : trie.nodes)
     {
         storage::Entry nodeEntry;
         nodeEntry.set(std::move(nodeRlp));
-        co_await storage2::writeOne(
-            storage, storage2::mptNodeStateKey(nodeHash), std::move(nodeEntry));
+        co_await storage2::writeOne(storage, mptNodeStateKey(nodeHash), std::move(nodeEntry));
     }
     co_return trie;
 }

@@ -181,10 +181,10 @@ BOOST_AUTO_TEST_CASE(PbftBranchUnchanged)
     }());
 }
 
-// A bad hex field deep inside an alloc must abort BEFORE any row for that
-// account is written: genesis import is not transactional, so discovering it
-// at write time (after create()) would leave a partially-created account in
-// the genesis batch.
+// A bad hex field anywhere in the alloc set must abort BEFORE any row is
+// written: genesis import is not transactional, and the loader runs the
+// validating computeGenesisStateTrie pass before the first create(), so a
+// malformed alloc — even in a LATER entry — leaves no /apps/ rows behind.
 BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -213,15 +213,19 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
             co_await importEthereumGenesisState(*storage, allocs, *hashImpl, features),
             bcos::tool::InvalidConfig);
 
-        // The first (well-formed) alloc may be written; the offending account
-        // must not exist at all — not even the create() row in s_tables.
-        auto badTable = fmt::format("{}{}", SYS_DIRECTORY::USER_APPS, badAddress);
-        auto createRow =
-            co_await storage2::readOne(*storage, executor_v1::StateKeyView(SYS_TABLES, badTable));
-        BOOST_CHECK(!createRow);
-        auto codeHashRow = co_await storage2::readOne(
-            *storage, executor_v1::StateKeyView(badTable, ACCOUNT_TABLE_FIELDS::CODE_HASH));
-        BOOST_CHECK(!codeHashRow);
+        // Nothing may be written at all: not the offending account, and not the
+        // well-formed FIRST account either (the validating trie pass runs before
+        // the first create()).
+        for (auto const& address : {goodAddress, badAddress})
+        {
+            auto table = fmt::format("{}{}", SYS_DIRECTORY::USER_APPS, address);
+            auto createRow =
+                co_await storage2::readOne(*storage, executor_v1::StateKeyView(SYS_TABLES, table));
+            BOOST_CHECK(!createRow);
+            auto codeHashRow = co_await storage2::readOne(
+                *storage, executor_v1::StateKeyView(table, ACCOUNT_TABLE_FIELDS::CODE_HASH));
+            BOOST_CHECK(!codeHashRow);
+        }
     }());
 }
 

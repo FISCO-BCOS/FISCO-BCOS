@@ -24,6 +24,9 @@
 #include "GenesisFeatureFlagsHelper.h"
 #include "L2GenesisTestStorage.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
@@ -193,6 +196,39 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
             BOOST_CHECK_THROW(
                 co_await ledger::buildGenesisBlock(*ledger, config, param),
                 bcos::tool::InvalidConfig);
+        }
+        // correct length but non-hex charset ('g') — must surface as InvalidConfig,
+        // not the raw boost::algorithm::non_hex_input
+        {
+            auto storage = makeStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            auto config = makeL2Config();
+            config.m_allocs[0].storage = {{std::string(64, '0'), std::string(63, '0') + "g"}};
+            appendGenesisFeatureFlagsSlot(config);
+            BOOST_CHECK_THROW(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
+                bcos::tool::InvalidConfig);
+        }
+        // feature_flags slot VALUE mismatch (valid hex, wrong content): the
+        // verification runs before the first write, so the rejected config
+        // leaves no account rows behind — not even the SystemConfig account's
+        // s_tables registration.
+        {
+            auto storage = makeStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            // makeL2Config already carries the (correct) feature_flags slot;
+            // corrupt its last hex digit.
+            auto config = makeL2Config();
+            auto& flagsValue = config.m_allocs[0].storage.back().second;
+            flagsValue.back() = (flagsValue.back() == '0' ? '1' : '0');
+            BOOST_CHECK_THROW(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
+                bcos::tool::InvalidConfig);
+            auto tableEntry = co_await storage2::readOne(*storage,
+                executor_v1::StateKeyView(std::string(ledger::SYS_TABLES),
+                    std::string(ledger::SYS_DIRECTORY::USER_APPS) +
+                        "43000000000000000000000000000000000000c0"));
+            BOOST_CHECK(!tableEntry);
         }
     }());
 }

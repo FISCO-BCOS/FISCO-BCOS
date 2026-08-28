@@ -18,6 +18,7 @@
  */
 #pragma once
 #include <bcos-framework/ledger/GenesisConfig.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Task.h>
 #include <bcos-tool/Exceptions.h>
 #include <bcos-utilities/Common.h>
@@ -31,6 +32,13 @@
 
 namespace bcos::ledger
 {
+/// The state-row key of an MPT trie node (table "/mpt/", row key = the 32 raw
+/// digest bytes). Ledger-owned spelling delegating to bcos-storage
+/// KeyPrefixes.h's storage2::mptNodeStateKey (the single source of the key
+/// layout), so installed consumers of the genesis loader headers need no
+/// bcos-storage include path (that directory is a build-tree-only, PRIVATE
+/// include of the ledger target).
+executor_v1::StateKey mptNodeStateKey(bcos::h256 const& hash);
 /// Strip a leading lowercase 0x prefix, if present. Genesis alloc hex arrives
 /// 0x-prefixed from NodeConfig and unprefixed from direct GenesisConfig callers.
 inline std::string_view stripHexPrefix(std::string_view hex)
@@ -57,7 +65,17 @@ inline void unhexAllocExact(
                 std::to_string(expectedBytes * 2) + " hex digits, got " +
                 std::to_string(hex.size())));
     }
-    boost::algorithm::unhex(hex.begin(), hex.end(), out);
+    try
+    {
+        boost::algorithm::unhex(hex.begin(), hex.end(), out);
+    }
+    catch (boost::exception const&)
+    {
+        // A correct-length string can still contain non-hex characters; surface
+        // the same named-field InvalidConfig as unhexAllocBytes below.
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                  "genesis alloc " + std::string(field) + " is not valid hex"));
+    }
 }
 
 /// Variable-length counterpart (contract code): even-length valid hex, decoded
