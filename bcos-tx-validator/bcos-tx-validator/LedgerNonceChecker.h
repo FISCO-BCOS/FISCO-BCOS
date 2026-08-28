@@ -19,10 +19,10 @@
  * @date 2021-05-10
  */
 #pragma once
-#include "bcos-txpool/txpool/validator/TxPoolNonceChecker.h"
+#include "bcos-tx-validator/TxPoolNonceChecker.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 
-namespace bcos::txpool
+namespace bcos::txvalidator
 {
 class LedgerNonceChecker : public TxPoolNonceChecker
 {
@@ -63,4 +63,4 @@ private:
     std::map<int64_t, bcos::protocol::NonceListPtr> m_blockNonceCache;
     mutable SharedMutex x_blockNonceCache;
 };
-}  // namespace bcos::txpool
+}  // namespace bcos::txvalidator

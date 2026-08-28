@@ -4,8 +4,8 @@ bcos::txpool::TxPoolConfig::TxPoolConfig(TxValidatorInterface::Ptr _txValidator,
     bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
     bcos::protocol::BlockFactory::Ptr _blockFactory,
     std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
-    NonceCheckerInterface::Ptr _txpoolNonceChecker, int64_t _blockLimit, size_t _poolLimit,
-    bool checkTransactionSignature)
+    txvalidator::NonceCheckerInterface::Ptr _txpoolNonceChecker, int64_t _blockLimit,
+    size_t _poolLimit, bool checkTransactionSignature)
   : m_txValidator(std::move(_txValidator)),
     m_txResultFactory(std::move(_txResultFactory)),
     m_blockFactory(std::move(_blockFactory)),
@@ -23,7 +23,7 @@ size_t bcos::txpool::TxPoolConfig::poolLimit() const
 {
     return m_poolLimit;
 }
-bcos::txpool::NonceCheckerInterface::Ptr bcos::txpool::TxPoolConfig::txPoolNonceChecker()
+bcos::txvalidator::NonceCheckerInterface::Ptr bcos::txpool::TxPoolConfig::txPoolNonceChecker()
 {
     return m_txPoolNonceChecker;
 }

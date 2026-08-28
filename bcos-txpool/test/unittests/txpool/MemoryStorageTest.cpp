@@ -16,14 +16,14 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/Wait.h"
-#include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
-#include "bcos-txpool/txpool/validator/LedgerNonceChecker.h"
-#include "bcos-txpool/txpool/validator/TxPoolNonceChecker.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
-#include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/IOServicePool.h"
+#include <bcos-tx-validator/LedgerNonceChecker.h>
+#include <bcos-tx-validator/NonceCheckerInterface.h>
+#include <bcos-tx-validator/TxPoolNonceChecker.h>
+#include <bcos-tx-validator/Web3NonceChecker.h>
 
 #include <tbb/parallel_invoke.h>
 
@@ -43,8 +43,10 @@ struct MemoryStorageFixture
 {
     MemoryStorageFixture()
       : txValidator(&mockValidator.get(), [](bcos::txpool::TxValidatorInterface*) {}),
-        txPoolNonceChecker(&mockNonceChecker.get(), [](bcos::txpool::NonceCheckerInterface*) {}),
-        ledgerNonceChecker(&mockLedgerNonceChecker.get(), [](bcos::txpool::LedgerNonceChecker*) {}),
+        txPoolNonceChecker(
+            &mockNonceChecker.get(), [](bcos::txvalidator::NonceCheckerInterface*) {}),
+        ledgerNonceChecker(
+            &mockLedgerNonceChecker.get(), [](bcos::txvalidator::LedgerNonceChecker*) {}),
         ledger(&mockLedger.get(), [](bcos::ledger::LedgerInterface*) {}),
         config(std::make_shared<TxPoolConfig>(txValidator,
             std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>(), nullptr,
@@ -55,12 +57,12 @@ struct MemoryStorageFixture
         fakeit::When(Method(mockValidator, checkTransaction))
             .AlwaysReturn(bcos::protocol::TransactionStatus::None);
 
-        // Web3NonceChecker: return a usable instance (internal structures are in-memory only; pass
-        // nullptr for ledger)
-        auto web3Checker = std::make_shared<bcos::txpool::Web3NonceChecker>(nullptr);
+        // txvalidator::Web3NonceChecker: return a usable instance (internal structures are
+        // in-memory only; pass nullptr for ledger)
+        auto web3Checker = std::make_shared<bcos::txvalidator::Web3NonceChecker>(nullptr);
         fakeit::When(Method(mockValidator, web3NonceChecker)).AlwaysReturn(web3Checker);
 
-        // LedgerNonceChecker: set all methods to no-op implementations
+        // txvalidator::LedgerNonceChecker: set all methods to no-op implementations
         fakeit::When(Method(mockValidator, ledgerNonceChecker)).AlwaysReturn(ledgerNonceChecker);
         fakeit::When(Method(mockLedgerNonceChecker, batchInsert)).AlwaysDo([](auto, auto const&) {
         });
@@ -113,12 +115,12 @@ struct MemoryStorageFixture
     }
 
     fakeit::Mock<bcos::txpool::TxValidatorInterface> mockValidator;
-    fakeit::Mock<bcos::txpool::NonceCheckerInterface> mockNonceChecker;
-    fakeit::Mock<bcos::txpool::LedgerNonceChecker> mockLedgerNonceChecker;
+    fakeit::Mock<bcos::txvalidator::NonceCheckerInterface> mockNonceChecker;
+    fakeit::Mock<bcos::txvalidator::LedgerNonceChecker> mockLedgerNonceChecker;
     fakeit::Mock<bcos::ledger::LedgerInterface> mockLedger;
     std::shared_ptr<bcos::txpool::TxValidatorInterface> txValidator;
-    std::shared_ptr<bcos::txpool::NonceCheckerInterface> txPoolNonceChecker;
-    std::shared_ptr<bcos::txpool::LedgerNonceChecker> ledgerNonceChecker;
+    std::shared_ptr<bcos::txvalidator::NonceCheckerInterface> txPoolNonceChecker;
+    std::shared_ptr<bcos::txvalidator::LedgerNonceChecker> ledgerNonceChecker;
     std::shared_ptr<bcos::ledger::LedgerInterface> ledger;
     std::shared_ptr<TxPoolConfig> config;
     bcos::IOServicePool::Ptr ioServicePool =
@@ -308,8 +310,8 @@ BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsUpdatesWeb3NonceCache)
     BOOST_CHECK_EQUAL(storage.exists(bcosTx->hash()), false);
     BOOST_CHECK_EQUAL(storage.size(), 0U);
 
-    // The key part of the test: verify that Web3NonceChecker was updated with correct data.
-    // The web3NonceChecker should have been updated with:
+    // The key part of the test: verify that txvalidator::Web3NonceChecker was updated with correct
+    // data. The web3NonceChecker should have been updated with:
     // - sender1: nonces {5, 7} -> max nonce 7+1=8
     // - sender2: nonce {3} -> max nonce 3+1=4
 
@@ -454,12 +456,12 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     std::string groupId = "group_test";
     std::string chainId = "chain_test";
 
-    fakeit::Mock<bcos::txpool::Web3NonceChecker> mockWeb3NonceChecker;
+    fakeit::Mock<bcos::txvalidator::Web3NonceChecker> mockWeb3NonceChecker;
     fakeit::When(Method(mockWeb3NonceChecker, insertMemoryNonce))
         .AlwaysDo([](auto, auto) -> task::Task<bool> { co_return true; });
 
-    std::shared_ptr<bcos::txpool::Web3NonceChecker> web3NonceChecker(
-        &mockWeb3NonceChecker.get(), [](bcos::txpool::Web3NonceChecker*) {});
+    std::shared_ptr<bcos::txvalidator::Web3NonceChecker> web3NonceChecker(
+        &mockWeb3NonceChecker.get(), [](bcos::txvalidator::Web3NonceChecker*) {});
     // Create real validators
     // Create a mock ledger
     fakeit::When(OverloadedMethod(mockWeb3NonceChecker, checkWeb3Nonce,
@@ -589,7 +591,7 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         fakeit::When(Method(mockLedger, getStateStorage)).AlwaysReturn(nullptr);
 
         // Setup validator to pass all checks
-        auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(
+        auto ledgerNonceChecker = std::make_shared<txvalidator::LedgerNonceChecker>(
             nullptr, /*blockNumber*/ 0, /*blockLimit*/ 1000, /*checkBlockLimit*/ false);
         txValidator->setLedgerNonceChecker(ledgerNonceChecker);
 
@@ -688,11 +690,11 @@ BOOST_AUTO_TEST_CASE(FIB61_NegativeImportTimeTreatedAsExpired)
 
 BOOST_AUTO_TEST_CASE(FIB51_TxPoolNonceCheckerInsertReturnsBool)
 {
-    // FIB-51: TxPoolNonceChecker::insert() now returns bool (true = newly inserted,
+    // FIB-51: txvalidator::TxPoolNonceChecker::insert() now returns bool (true = newly inserted,
     // false = already existed). This makes the check-and-reserve atomic per bucket,
     // eliminating the TOCTOU window between separate checkNonce() + insert() calls.
 
-    TxPoolNonceChecker checker;
+    txvalidator::TxPoolNonceChecker checker;
 
     // First insert: nonce is new -> must return true
     const std::string nonce1 = "fib51_nonce_unique";
@@ -905,16 +907,17 @@ BOOST_AUTO_TEST_CASE(FIB50_NonceNotInsertedOnValidationFailure)
     // nonce was already stuck in the pool, preventing valid re-submission.
     // Fix: nonce insertion is deferred to verifyAndSubmitTransaction(), after all steps pass.
 
-    // Use a real TxPoolNonceChecker so we can query exists()
-    auto realNC = std::make_shared<TxPoolNonceChecker>();
-    std::shared_ptr<NonceCheckerInterface> nc = realNC;
+    // Use a real txvalidator::TxPoolNonceChecker so we can query exists()
+    auto realNC = std::make_shared<txvalidator::TxPoolNonceChecker>();
+    std::shared_ptr<txvalidator::NonceCheckerInterface> nc = realNC;
 
     // Fresh validator mock with all required methods set up
     fakeit::Mock<bcos::txpool::TxValidatorInterface> localValidator;
-    fakeit::Mock<bcos::txpool::LedgerNonceChecker> localLNC;
-    auto web3Checker = std::make_shared<bcos::txpool::Web3NonceChecker>(nullptr);
+    fakeit::Mock<bcos::txvalidator::LedgerNonceChecker> localLNC;
+    auto web3Checker = std::make_shared<bcos::txvalidator::Web3NonceChecker>(nullptr);
     fakeit::When(Method(localValidator, web3NonceChecker)).AlwaysReturn(web3Checker);
-    auto lnc = std::shared_ptr<bcos::txpool::LedgerNonceChecker>(&localLNC.get(), [](auto*) {});
+    auto lnc =
+        std::shared_ptr<bcos::txvalidator::LedgerNonceChecker>(&localLNC.get(), [](auto*) {});
     fakeit::When(Method(localValidator, ledgerNonceChecker)).AlwaysReturn(lnc);
     fakeit::When(Method(localLNC, batchInsert)).AlwaysDo([](auto, auto const&) {});
 

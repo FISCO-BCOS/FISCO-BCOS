@@ -19,14 +19,14 @@
  */
 
 #include "Web3NonceChecker.h"
-#include "../utilities/Common.h"
 #include "bcos-framework/txpool/TxPoolTypeDef.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/txpool/Constant.h>
 #include <bcos-protocol/TransactionStatus.h>
 
 using namespace bcos;
-using namespace bcos::txpool;
+using namespace bcos::txvalidator;
 using namespace bcos::protocol;
 
 task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
@@ -70,7 +70,7 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
         // Cache hit: validate against cached value and return without touching storage
         auto nonceInLedgerValue = nonceInLedger.value();
         if (nonceU256 < nonceInLedgerValue ||
-            nonceU256 > nonceInLedgerValue + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
+            nonceU256 > nonceInLedgerValue + bcos::protocol::DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce ledger check fail")
                               << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonceU256)
@@ -90,7 +90,7 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
         co_await storage2::writeOneIf(m_ledgerStateNonces, sender, nonceInStorage,
             [&](u256 const& existing) { return nonceInStorage > existing; });
         if (nonceU256 < nonceInStorage ||
-            nonceU256 > nonceInStorage + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
+            nonceU256 > nonceInStorage + bcos::protocol::DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce storage check fail")
                               << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonceU256)
@@ -137,8 +137,7 @@ task::Task<bool> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
 
 task::Task<std::optional<u256>> Web3NonceChecker::getPendingNonce(std::string_view sender)
 {
-    const auto bytesSender =
-            fromHex<std::string_view, std::string>(sender);
+    const auto bytesSender = fromHex<std::string_view, std::string>(sender);
     if (auto nonce = co_await storage2::readOne(m_maxNonces, bytesSender))
     {
         co_return nonce;
