@@ -22,7 +22,7 @@
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include "bcos-txpool/txpool/validator/TxValidator.h"
+#include "bcos-tx-validator/TxValidator.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -49,9 +49,14 @@ protocol::Transaction::Ptr makeTxWithTo(std::string toField,
     return tx;
 }
 
-TxValidator::Ptr makeValidator()
+/// The `to` gate issue #5318 is about. It used to be reached through
+/// TxValidator::validateTransaction; it is now Check::ToFieldFormat in the admission layer,
+/// which maps a false here to Malformed. Asserted against the gate directly so the regression
+/// does not depend on which check set a given context happens to run.
+TransactionStatus toFieldStatus(protocol::Transaction const& tx)
 {
-    return std::make_shared<TxValidator>(nullptr, nullptr, nullptr, "group0", "chain0");
+    return bcos::txvalidator::isValidToField(tx.to()) ? TransactionStatus::None :
+                                                        TransactionStatus::Malformed;
 }
 }  // namespace
 
@@ -59,47 +64,37 @@ BOOST_FIXTURE_TEST_SUITE(Issue5318InvalidToTest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(rejectNonHexTo)
 {
-    auto validator = makeValidator();
-
     // the exact repro of issue #5318: java-sdk copied a BFS `path` argument verbatim
     // into `to` on a Solidity chain
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo("HelloWorld")) ==
-                TransactionStatus::Malformed);
+    BOOST_CHECK(toFieldStatus(*makeTxWithTo("HelloWorld")) == TransactionStatus::Malformed);
     // correct length (40) but non-hex characters — would throw inside
     // boost::algorithm::unhex during execution
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo(std::string(40, 'z'))) ==
-                TransactionStatus::Malformed);
+    BOOST_CHECK(toFieldStatus(*makeTxWithTo(std::string(40, 'z'))) == TransactionStatus::Malformed);
     // hex but wrong length
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo(std::string(39, 'a'))) ==
-                TransactionStatus::Malformed);
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo(std::string(41, 'a'))) ==
-                TransactionStatus::Malformed);
+    BOOST_CHECK(toFieldStatus(*makeTxWithTo(std::string(39, 'a'))) == TransactionStatus::Malformed);
+    BOOST_CHECK(toFieldStatus(*makeTxWithTo(std::string(41, 'a'))) == TransactionStatus::Malformed);
     // 0x prefix alone is not a deployment marker (deployment uses an empty `to`)
-    BOOST_CHECK(
-        validator->validateTransaction(*makeTxWithTo("0x")) == TransactionStatus::Malformed);
+    BOOST_CHECK(toFieldStatus(*makeTxWithTo("0x")) == TransactionStatus::Malformed);
     // valid hex address hidden behind an invalid prefix
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo("xx" + std::string(40, 'a'))) ==
-                TransactionStatus::Malformed);
+    BOOST_CHECK(
+        toFieldStatus(*makeTxWithTo("xx" + std::string(40, 'a'))) == TransactionStatus::Malformed);
 }
 
 BOOST_AUTO_TEST_CASE(acceptValidTo)
 {
-    auto validator = makeValidator();
-
     // deployment: empty `to`
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo("")) == TransactionStatus::None);
+    BOOST_CHECK(toFieldStatus(*makeTxWithTo("")) == TransactionStatus::None);
     // unprefixed 20-byte hex address (BCOS SDK form)
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo(std::string(40, 'a'))) ==
+    BOOST_CHECK(toFieldStatus(*makeTxWithTo(std::string(40, 'a'))) == TransactionStatus::None);
+    BOOST_CHECK(toFieldStatus(*makeTxWithTo("0123456789abcdefABCDEF0123456789abcdefAB")) ==
                 TransactionStatus::None);
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo(
-                    "0123456789abcdefABCDEF0123456789abcdefAB")) == TransactionStatus::None);
     // 0x-prefixed (Web3Transaction::takeToTarsTransaction writes hexPrefixed())
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo("0x" + std::string(40, 'a'))) ==
-                TransactionStatus::None);
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo("0X" + std::string(40, 'A'))) ==
-                TransactionStatus::None);
+    BOOST_CHECK(
+        toFieldStatus(*makeTxWithTo("0x" + std::string(40, 'a'))) == TransactionStatus::None);
+    BOOST_CHECK(
+        toFieldStatus(*makeTxWithTo("0X" + std::string(40, 'A'))) == TransactionStatus::None);
     // web3 transaction with prefixed address
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo("0x" + std::string(40, 'b'),
+    BOOST_CHECK(toFieldStatus(*makeTxWithTo("0x" + std::string(40, 'b'),
                     protocol::TransactionType::Web3Transaction)) == TransactionStatus::None);
 }
 
@@ -140,15 +135,11 @@ BOOST_AUTO_TEST_CASE(enforceImportRejectsInvalidTo)
 
 BOOST_AUTO_TEST_CASE(wasmChainSkipsAddressCheck)
 {
-    auto validator = makeValidator();
-
     // on a WASM chain `to` is a BFS path, not a hex address — the check must not apply
     g_BCOSConfig.setIsWasm(true);
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo("/apps/HelloWorld")) ==
-                TransactionStatus::None);
+    BOOST_CHECK(toFieldStatus(*makeTxWithTo("/apps/HelloWorld")) == TransactionStatus::None);
     g_BCOSConfig.setIsWasm(false);
-    BOOST_CHECK(validator->validateTransaction(*makeTxWithTo("/apps/HelloWorld")) ==
-                TransactionStatus::Malformed);
+    BOOST_CHECK(toFieldStatus(*makeTxWithTo("/apps/HelloWorld")) == TransactionStatus::Malformed);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

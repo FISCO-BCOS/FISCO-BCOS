@@ -30,6 +30,8 @@
 #include "bcos-utilities/Common.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
+#include <stdexcept>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -160,11 +162,34 @@ inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string no
     // with random nonce/data so each fake tx gets a distinct hash.
     std::mt19937_64 random(std::random_device{}());
     auto toAddress = key->address(_cryptoSuite->hashImpl()).asBytes();
-    std::string data = "extraData" + std::to_string(random());
+    // The envelope must carry the SAME nonce as the mirror. Admission rebuilds data.* from the
+    // signed envelope, so a fake whose preimage held a random nonce would leave admission with a
+    // nonce unrelated to the one the test asked for, and every nonce-ordering assertion built on
+    // it would be meaningless.
+    //
+    // Unparseable is a defect in the CALLER, not something to absorb: silently substituting 0
+    // would put a nonce in the envelope that the mirror does not carry, admission would reject
+    // the fake during normalization, and the test author would be chasing a rejection whose
+    // cause is three layers away. Fail where the mistake is.
+    uint64_t nonceValue = 0;
+    try
+    {
+        nonceValue = static_cast<uint64_t>(u256(transaction.data.nonce));
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("fakeWeb3Tx: nonce is not a parseable u256: '" +
+                                  transaction.data.nonce + "' (" + e.what() + ")"));
+    }
+    // gasPrice stays random so two fakes sharing a nonce still get distinct hashes, which some
+    // tests rely on to tell "duplicate hash" apart from "duplicate nonce".
     bcos::bytes preimage;
-    bcos::codec::rlp::encode(preimage, static_cast<uint64_t>(random()) | 1U,
-        static_cast<uint64_t>(1), static_cast<uint64_t>(21000), toAddress, static_cast<uint64_t>(0),
-        data);
+    bcos::codec::rlp::encode(preimage, nonceValue, static_cast<uint64_t>(random()) | 1U,
+        // 21000 is the base cost of an empty transfer; inputStr adds calldata on top, so a
+        // 21000 limit does not cover this transaction's intrinsic gas. Admission now checks
+        // that (the executor always did), so give the fake enough headroom.
+        static_cast<uint64_t>(1000000), toAddress, static_cast<uint64_t>(0), inputStr);
     transaction.extraTransactionBytes.assign(preimage.begin(), preimage.end());
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });

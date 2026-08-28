@@ -23,7 +23,6 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-task/Wait.h"
-#include "bcos-txpool/txpool/validator/TxValidator.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <oneapi/tbb/blocked_range.h>
@@ -51,9 +50,12 @@ using namespace bcos::txpool;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
-MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, boost::asio::io_context& _ioContext,
+MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, txvalidator::TxValidator _admission,
+    txvalidator::PoolNonceQuery _poolNonceQuery, boost::asio::io_context& _ioContext,
     size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
   : m_config(std::move(_config)),
+    m_admission(std::move(_admission)),
+    m_poolNonceQuery(std::move(_poolNonceQuery)),
     m_bcosTransactions(BcosTransactions(BUCKET_SIZE)),
     m_blockNumberUpdatedTime(utcTime()),
     m_txsExpirationTime(_txsExpirationTime),
@@ -279,7 +281,7 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
     // malformed `to` is imported, passes verification and deterministically fails
     // execution, halting consensus. Rejecting it fails the proposal verification instead,
     // and PBFT view-changes to a leader with a clean proposal.
-    if (!isValidToField(_tx->to()))
+    if (!txvalidator::isValidToField(_tx->to()))
     {
         TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for malformed to field")
                             << LOG_KV("to", _tx->to()) << LOG_KV("importTxHash", txHash.abridged())
@@ -287,17 +289,30 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
                             << LOG_KV("importBatchHash", _tx->batchHash().abridged());
         return TransactionStatus::Malformed;
     }
-    // the transaction has already onChain, reject it
-    // check ledger tx
-    // check web3 tx
-    if (auto result = m_config->txValidator()->checkTransaction(*_tx, true);
-        result == TransactionStatus::NonceCheckFail)
+    // Proposal verification. The check set here is deliberately narrow (type gate, `to` format,
+    // signature, Web3 nonce window, BCOS pool nonce): failing anything makes the WHOLE proposal
+    // fail and triggers a view change, so checks whose inputs are local state -- balance above
+    // all -- must not run. See CheckSet.h.
+    if (auto result = task::syncWait(
+            m_admission.admit(*_tx, txvalidator::AdmissionContext::ProposalVerification,
+                m_config->signaturePolicy(), m_poolNonceQuery));
+        result != TransactionStatus::None && result != TransactionStatus::BlockLimitCheckFail)
     {
-        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for nonce check failed: ")
+        // BlockLimitCheckFail is deliberately still ignored, exactly as before this change.
+        // Every other status here means the transaction is malformed, forged, or of a type this
+        // chain refuses -- all of which SHOULD fail the proposal, and previously did not: the
+        // old code acted only on NonceCheckFail and let everything else through into the pool.
+        //
+        // blockLimit is different in kind. It compares against the LOCAL block height, which
+        // legitimately lags the leader's, so rejecting on it could fail an honest proposal and
+        // cost liveness. Acting on it needs the multi-node evidence described in the plan
+        // (section 11.6) and is deliberately left out of this change.
+        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for admission check")
+                            << LOG_KV("status", protocol::toString(result))
                             << LOG_KV("importTxHash", txHash)
                             << LOG_KV("importBatchId", _tx->batchId())
                             << LOG_KV("importBatchHash", _tx->batchHash().abridged());
-        return TransactionStatus::NonceCheckFail;
+        return result;
     }
 
     Transaction::Ptr tx = nullptr;
@@ -415,29 +430,18 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             return TransactionStatus::None;
         },
         [this, transaction]() {
-            // Step 2: Verify transaction signature (if enabled)
-            return m_config->checkTransactionSignature() ?
-                       m_config->txValidator()->verify(*transaction) :
-                       TransactionStatus::None;
-        },
-        [this, transaction]() {
-            // Step 3: Validate transaction format and constraints
-            return m_config->txValidator()->validateTransaction(*transaction);
-        },
-        [this, transaction]() {
-            // Step 4: Validate balance (only for Web3 transactions)
-            if (transaction->type() ==
-                static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
-            {
-                return task::syncWait(
-                    m_config->txValidator()->validateBalance(*transaction, m_config->ledger()));
-            }
-            return bcos::protocol::TransactionStatus::None;
-        },
-        [this, transaction]() {
-            // Step 5: Check chain Id
+            // Steps 2-5 (signature, format, balance, chainId) are now one call into
+            // bcos-tx-validator, which also normalizes the tars mirror against the signed
+            // envelope and adds the checks this chain never had (intrinsic gas, EIP-3607,
+            // EIP-2681, the fee-market relations, per-type revision gating).
+            //
+            // syncWait, not co_await: verifyAndSubmitTransaction returns TransactionStatus and
+            // is synchronous, exactly like the two validation steps it replaces. Turning the
+            // whole submit chain into a coroutine is a separate change -- it needs the verifier
+            // thread pool re-examined for starvation on suspension.
             return task::syncWait(
-                m_config->txValidator()->validateChainId(*transaction, m_config->ledger()));
+                m_admission.admit(*transaction, txvalidator::AdmissionContext::PoolAdmission,
+                    m_config->signaturePolicy(), m_poolNonceQuery));
         },
     };
 
@@ -467,7 +471,7 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         }
         else
         {
-            if (!task::syncWait(m_config->txValidator()->web3NonceChecker()->insertMemoryNonce(
+            if (!task::syncWait(m_config->web3NonceChecker()->insertMemoryNonce(
                     std::string(transaction->sender()), std::string(transaction->nonce()))))
                 [[unlikely]]
             {
@@ -652,12 +656,12 @@ void MemoryStorage::batchRemoveSealedTxs(
             nonceListPtr->emplace_back(nonceString);
         }
     }
-    m_config->txValidator()->ledgerNonceChecker()->batchInsert(batchId, nonceListPtr);
+    m_config->ledgerNonceChecker()->batchInsert(batchId, nonceListPtr);
     auto updateLedgerNonceT = utcTime() - startT;
 
     startT = utcTime();
-    task::syncWait(m_config->txValidator()->web3NonceChecker()->updateNonceCache(
-        ::ranges::views::all(web3NonceMap)));
+    task::syncWait(
+        m_config->web3NonceChecker()->updateNonceCache(::ranges::views::all(web3NonceMap)));
     auto updateWeb3NonceT = utcTime() - startT;
 
     startT = utcTime();
@@ -732,7 +736,7 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
         // txPool, the txs with duplicated nonce here are already-committed, but have not been
         // dropped
         // check txpool txs, no need to check txpool nonce
-        const auto result = m_config->txValidator()->checkTransaction(*tx, true);
+        const auto result = recheckPooledNonce(*tx);
         if (result == TransactionStatus::NonceCheckFail)
         {
             TXPOOL_LOG(WARNING) << "txPool nonce check failed, hash:" << tx->hash()
@@ -859,7 +863,7 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
                 return _tx->type() == TransactionType::Web3Transaction;
             });
         m_config->txPoolNonceChecker()->batchRemove(invalidNonceList);
-        task::syncWait(m_config->txValidator()->web3NonceChecker()->batchRemoveMemoryNonce(
+        task::syncWait(m_config->web3NonceChecker()->batchRemoveMemoryNonce(
             web3Txs | ::ranges::views::transform([](auto const& _tx) { return _tx->sender(); }),
             web3Txs | ::ranges::views::transform([](auto const& _tx) { return _tx->nonce(); })));
 
@@ -1160,7 +1164,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
             continue;
         }
         // check txpool txs, no need to check txpool nonce
-        auto result = m_config->txValidator()->checkTransaction(*tx, true);
+        auto result = recheckPooledNonce(*tx);
         if (result != TransactionStatus::None)
         {
             invalidTxs.emplace_back(tx);
@@ -1224,8 +1228,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
             added = true;
         }
         // check txpool txs, no need to check txpool nonce
-        auto validator = m_config->txValidator();
-        auto result = validator->checkTransaction(*tx, true);
+        auto result = recheckPooledNonce(*tx);
         // blockLimit expired
         if (result != TransactionStatus::None)
         {
@@ -1352,6 +1355,18 @@ void MemoryStorage::remove(crypto::HashType const& _txHash)
         m_bcosTransactions.unsealTransactions.remove(accessor);
     }
 }
+protocol::TransactionStatus MemoryStorage::recheckPooledNonce(protocol::Transaction const& tx) const
+{
+    if (tx.type() == static_cast<uint8_t>(protocol::TransactionType::Web3Transaction))
+    {
+        return task::syncWait(m_config->web3NonceChecker()->checkWeb3Nonce(tx, true));
+    }
+    // Null-guarded on purpose: the ledger nonce checker does not exist until TxPool::init learns
+    // the chain's block limit, and before that there is nothing to check against.
+    return m_poolNonceQuery.checkBcosNonce ? m_poolNonceQuery.checkBcosNonce(tx, true) :
+                                             protocol::TransactionStatus::None;
+}
+
 bcos::txpool::MemoryStorage::~MemoryStorage()
 {
     stop();

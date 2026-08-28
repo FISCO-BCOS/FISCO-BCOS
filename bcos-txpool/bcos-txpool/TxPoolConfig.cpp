@@ -1,12 +1,12 @@
 #include "TxPoolConfig.h"
 
-bcos::txpool::TxPoolConfig::TxPoolConfig(TxValidatorInterface::Ptr _txValidator,
+bcos::txpool::TxPoolConfig::TxPoolConfig(Web3NonceChecker::Ptr _web3NonceChecker,
     bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
     bcos::protocol::BlockFactory::Ptr _blockFactory,
     std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
     NonceCheckerInterface::Ptr _txpoolNonceChecker, int64_t _blockLimit, size_t _poolLimit,
     bool checkTransactionSignature)
-  : m_txValidator(std::move(_txValidator)),
+  : m_web3NonceChecker(std::move(_web3NonceChecker)),
     m_txResultFactory(std::move(_txResultFactory)),
     m_blockFactory(std::move(_blockFactory)),
     m_ledger(std::move(_ledger)),
@@ -26,10 +26,6 @@ size_t bcos::txpool::TxPoolConfig::poolLimit() const
 bcos::txpool::NonceCheckerInterface::Ptr bcos::txpool::TxPoolConfig::txPoolNonceChecker()
 {
     return m_txPoolNonceChecker;
-}
-bcos::txpool::TxValidatorInterface::Ptr bcos::txpool::TxPoolConfig::txValidator()
-{
-    return m_txValidator;
 }
 bcos::protocol::TransactionSubmitResultFactory::Ptr bcos::txpool::TxPoolConfig::txResultFactory()
 {

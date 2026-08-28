@@ -23,6 +23,7 @@
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
+#include <bcos-tx-validator/TxValidator.h>
 #include <json/json.h>
 
 namespace bcos::rpc
@@ -81,6 +82,13 @@ public:
     task::Task<void> getProof(const Json::Value&, Json::Value&);
 
 private:
+    /// Admission for the in-process mempool path. Built on first use rather than injected: it
+    /// needs only what NodeService already carries, and threading it through the Endpoints
+    /// constructor chain would touch every endpoint for one caller.
+    txvalidator::TxValidator& memPoolAdmission();
+    std::unique_ptr<txvalidator::TxValidator> m_memPoolAdmission;
+    std::once_flag m_memPoolAdmissionInit;
+
     NodeService::Ptr m_nodeService;
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;

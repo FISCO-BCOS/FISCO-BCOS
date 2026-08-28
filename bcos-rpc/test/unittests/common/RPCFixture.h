@@ -45,7 +45,6 @@
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-txpool/sync/TransactionSync.h>
 #include <bcos-txpool/txpool/storage/MemoryStorage.h>
-#include <bcos-txpool/txpool/validator/TxValidator.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -123,8 +122,8 @@ public:
         txPool->init();
         txPool->start();
 
-        nodeService = std::make_shared<rpc::NodeService>(
-            m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory,
+        nodeService = std::make_shared<rpc::NodeService>(m_ledger, scheduler, txPool, nullptr,
+            nullptr, m_blockFactory,
             // EngineService not needed for existing RPC tests; pass nullptr as stub.
             nullptr);
 
@@ -141,8 +140,7 @@ public:
     }
     // ioServicePool MUST be declared before any member that creates Timer objects
     // referencing its io_context, to ensure it outlives them during destruction.
-    bcos::IOServicePool::Ptr ioServicePool =
-        std::make_shared<bcos::IOServicePool>(1, "rpcTest");
+    bcos::IOServicePool::Ptr ioServicePool = std::make_shared<bcos::IOServicePool>(1, "rpcTest");
 
     bcos::tool::NodeConfig::Ptr nodeConfig;
     RPCInterface::Ptr rpc;

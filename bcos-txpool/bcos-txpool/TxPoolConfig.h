@@ -20,20 +20,23 @@
  * @date 2021-05-08
  */
 #pragma once
+#include "bcos-tx-validator/TxValidator.h"
 #include "txpool/interfaces/NonceCheckerInterface.h"
-#include "txpool/interfaces/TxValidatorInterface.h"
 #include "txpool/utilities/Common.h"
+#include "txpool/validator/LedgerNonceChecker.h"
+#include "txpool/validator/Web3NonceChecker.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionMetaData.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
+
 namespace bcos::txpool
 {
 class TxPoolConfig
 {
 public:
     using Ptr = std::shared_ptr<TxPoolConfig>;
-    TxPoolConfig(TxValidatorInterface::Ptr _txValidator,
+    TxPoolConfig(Web3NonceChecker::Ptr _web3NonceChecker,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
@@ -46,7 +49,25 @@ public:
 
     NonceCheckerInterface::Ptr txPoolNonceChecker();
 
-    TxValidatorInterface::Ptr txValidator();
+    /// The two BCOS nonce indexes this pool owns. They used to hang off the legacy
+    /// TxValidatorInterface, whose only remaining job was to hold them -- its checking methods
+    /// were superseded by bcos-tx-validator. Owned here directly instead.
+    ///
+    /// ledgerNonceChecker is null until TxPool::init learns the chain's block limit; callers
+    /// must resolve it per use rather than capture it.
+    Web3NonceChecker::Ptr web3NonceChecker() const { return m_web3NonceChecker; }
+    LedgerNonceChecker::Ptr ledgerNonceChecker() const { return m_ledgerNonceChecker; }
+    void setLedgerNonceChecker(LedgerNonceChecker::Ptr ledgerNonceChecker)
+    {
+        m_ledgerNonceChecker = std::move(ledgerNonceChecker);
+    }
+
+    /// SignaturePolicy for this chain, from experimental.check_transaction_signature.
+    txvalidator::SignaturePolicy signaturePolicy() const
+    {
+        return m_checkTransactionSignature ? txvalidator::SignaturePolicy::Required :
+                                             txvalidator::SignaturePolicy::Disabled;
+    }
     bcos::protocol::TransactionSubmitResultFactory::Ptr txResultFactory();
 
     bcos::protocol::BlockFactory::Ptr blockFactory();
@@ -59,7 +80,8 @@ public:
     bool checkTransactionSignature() const;
 
 private:
-    TxValidatorInterface::Ptr m_txValidator;
+    Web3NonceChecker::Ptr m_web3NonceChecker;
+    LedgerNonceChecker::Ptr m_ledgerNonceChecker;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;

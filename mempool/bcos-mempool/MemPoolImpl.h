@@ -4,6 +4,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Exceptions.h"
 #include <boost/multi_index/composite_key.hpp>
@@ -24,6 +25,7 @@ namespace bcos::txpool
 DERIVE_BCOS_EXCEPTION(InvalidNonce);
 DERIVE_BCOS_EXCEPTION(InvalidTaintedTransaction);
 DERIVE_BCOS_EXCEPTION(InvalidBlobTransaction);
+DERIVE_BCOS_EXCEPTION(NullTransaction);
 
 struct TransactionData
 {
@@ -121,6 +123,12 @@ private:
     }
 
     void add(protocol::Transaction::Ptr transaction);
+
+    // Shared body of add() and tryAdd(). The caller must already hold m_mutex and must have
+    // rejected a null transaction. The two entries differ only in what happens when
+    // (sender, nonce) is already taken, hence the flag rather than a second copy.
+    protocol::TransactionStatus addImpl(
+        protocol::Transaction::Ptr transaction, bool replaceOnNonceConflict);
     void removeBySenderNonces(SenderNonces auto senderNonces)
     {
         auto& senderNonceIndex = m_transactions.get<0>();
@@ -142,9 +150,39 @@ public:
         std::unique_lock lock(m_mutex);
         for (auto&& transaction : transactions)
         {
-            add(std::forward<decltype(transaction)>(transaction));
+            if (!transaction) [[unlikely]]
+            {
+                continue;  // same silent skip as the single-transaction add()
+            }
+            // addImpl, NOT add(): the lock is already held here and m_mutex is not recursive.
+            addImpl(std::forward<decltype(transaction)>(transaction),
+                /*replaceOnNonceConflict=*/true);
         }
     }
+
+    /// Admit one transaction, reporting why it was not admitted.
+    ///
+    /// add() cannot serve an RPC entry point: it returns void and four of its exits are silent
+    /// (null input, hash() throwing, duplicate hash, unparsable nonce), so a caller that replies
+    /// with the transaction hash right after calling it answers with a hash for a transaction
+    /// that never entered the pool -- the user then polls for a receipt until timeout.
+    ///
+    /// Exit contract:
+    ///   null transaction              throws NullTransaction (a caller bug, not a tx defect)
+    ///   tainted()                     throws InvalidTaintedTransaction  (as add())
+    ///   blob envelope                 throws InvalidBlobTransaction     (as add())
+    ///   hash() throws                 Malformed
+    ///   hash already pooled           AlreadyInTxPool
+    ///   (sender, nonce) already taken NonceCheckFail -- rejects, does NOT replace
+    ///   nonce not representable       NonceCheckFail
+    ///   admitted                      None
+    ///
+    /// The nonce-conflict arm is the one behavioural difference from add(), which replaces the
+    /// resident transaction. Rejecting matches the legacy pool's first-come-first-served rule
+    /// (MemoryStorage's FIB-51 atomic check-and-reserve) and makes the check-and-insert a single
+    /// critical section, so two concurrent submissions of the same (sender, nonce) cannot both
+    /// succeed.
+    protocol::TransactionStatus tryAdd(protocol::Transaction::Ptr transaction);
 
     void seal(int64_t limit,
         storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,

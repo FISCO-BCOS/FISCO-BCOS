@@ -58,7 +58,6 @@
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
-#include <boost/algorithm/string.hpp>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/rpc/RPCInterface.h>
@@ -81,8 +80,8 @@
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
-#include <txpool/validator/TxValidator.h>
 #include <util/tc_clientsocket.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <cstddef>
 #include <memory>
@@ -1641,8 +1640,8 @@ std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer
         m_globalStateStorageInitializer->storage().latestBackend());
 }
 
-std::function<std::shared_ptr<
-    bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
+std::function<
+    std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
 Initializer::stateStorageProvider()
 {
     if (!m_globalStateStorageInitializer)

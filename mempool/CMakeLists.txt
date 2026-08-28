@@ -13,7 +13,7 @@ add_library(mempool ${SRC_LIST} ${HEADERS})
 target_include_directories(mempool PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-mempool>)
-target_link_libraries(mempool PUBLIC bcos-framework ledger bcos-utilities TBB::tbb)
+target_link_libraries(mempool PUBLIC bcos-framework bcos-protocol ledger bcos-utilities TBB::tbb)
 set_target_properties(mempool PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
