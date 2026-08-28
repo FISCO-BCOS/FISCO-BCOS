@@ -41,6 +41,7 @@
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cctype>
 #include <cstdint>
@@ -506,7 +507,7 @@ void NodeConfig::validateL2Invariants()
     if (genesis.m_ethereumELMode)
     {
         auto const& web3ChainId = genesis.m_web3ChainID;
-        if (web3ChainId.empty() || web3ChainId == "0")
+        if (web3ChainId.empty())
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "[ethereum] mode=el requires [web3] chain_id in "
@@ -523,6 +524,14 @@ void NodeConfig::validateL2Invariants()
                                       "[ethereum] mode=el requires [web3] chain_id to fit "
                                       "uint64: " +
                                       web3ChainId));
+        }
+        // Check the PARSED value, not the string: any zero spelling ("0", "00", ...)
+        // yields the reserved "unset" value, which is not a chain id.
+        if (m_ethereumChainId == 0)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[ethereum] mode=el requires a non-zero [web3] chain_id "
+                                      "in config.genesis (e.g. 11155111 for Sepolia)"));
         }
     }
 }
@@ -541,6 +550,19 @@ void NodeConfig::validateELModeInvariants() const
                                   "ethereum.mode=el requires config.genesis to declare "
                                   "[ethereum] mode=el: the EL-mode declaration is part of "
                                   "the genesis pin"));
+    }
+    // The symmetric direction: the genesis EL declaration waives the on-chain
+    // executor.evm_revision (loadExecutorConfig) on the premise that the EL
+    // verifier derives the revision from the block timestamp — which only EL
+    // mode does. A node booting an EL-declaring genesis with ethereum.mode=none
+    // would run executor v2 through the FISCO pipeline with an implicit
+    // binary-side revision and diverge from its EL peers on the first block.
+    if (m_genesisConfig.m_ethereumELMode && !m_enableEthereumEL)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "config.genesis declares [ethereum] mode=el but config.ini "
+                                  "has ethereum.mode=none: an EL chain has no on-chain "
+                                  "evmc_revision, so every node must run in EL mode"));
     }
 }
 
@@ -1179,6 +1201,35 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     readOptionalTs("osaka_time", schedule.m_osakaTime);
     readOptionalTs("bpo1_time", schedule.m_bpo1Time);
     readOptionalTs("bpo2_time", schedule.m_bpo2Time);
+    // Activation times must be non-decreasing down the fork ladder — geth rejects an
+    // out-of-order schedule at startup (ChainConfig.CheckConfigForkOrder), and the
+    // EIP-2124 fork-id checksum chains activations IN ORDER, so a decreasing step
+    // announces a checksum no correct peer computes. This schedule is emitted into
+    // the genesis pin and thereby frozen for the chain's lifetime, so the check
+    // must happen here, before storing. UINT64_MAX ("not yet active") is terminal:
+    // any scheduled (smaller) time after it is a decrease and is rejected.
+    std::array<std::pair<std::string_view, uint64_t>, 8> const ladder{{
+        {"london_time", schedule.m_londonTime},
+        {"paris_time", schedule.m_parisTime},
+        {"shanghai_time", schedule.m_shanghaiTime},
+        {"cancun_time", schedule.m_cancunTime},
+        {"prague_time", schedule.m_pragueTime},
+        {"osaka_time", schedule.m_osakaTime},
+        {"bpo1_time", schedule.m_bpo1Time},
+        {"bpo2_time", schedule.m_bpo2Time},
+    }};
+    for (size_t i = 1; i < ladder.size(); ++i)
+    {
+        if (ladder[i].second < ladder[i - 1].second)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[fork_timestamps]." + std::string(ladder[i].first) + " (" +
+                                      std::to_string(ladder[i].second) + ") is earlier than " +
+                                      std::string(ladder[i - 1].first) + " (" +
+                                      std::to_string(ladder[i - 1].second) +
+                                      "): fork activation times must be non-decreasing"));
+        }
+    }
     // Stored on the GenesisConfig so generateGenesisData emits the schedule into
     // the genesis pin: two nodes holding different schedules now fail the genesis
     // comparison instead of silently running different EVM rules.
@@ -3059,7 +3110,15 @@ std::string bcos::tool::generateGenesisData(
         // instead of silently running a different EVM schedule.
         if (genesisConfig.m_ethereumELMode)
         {
-            ss << "[ethereum]" << '\n' << "mode: el" << '\n';
+            // The EIP-155 / EIP-2124 chain id is validated as part of the EL
+            // declaration (validateL2Invariants), so it belongs to the pin too:
+            // emitted next to the declaration (gated the same way, so legacy
+            // chains stay byte-identical) — an operator editing [web3] chain_id
+            // after init now fails the genesis comparison on restart.
+            ss << "[ethereum]" << '\n'
+               << "mode: el" << '\n'
+               << "[web3]" << '\n'
+               << "chain_id:" << genesisConfig.m_web3ChainID << '\n';
         }
         if (genesisConfig.m_ethereumForkSchedule.has_value())
         {

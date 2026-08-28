@@ -77,7 +77,7 @@ bcos::task::Task<mpt::TrieBuildResult> storageTrieOf(std::vector<Alloc::State> c
         if (!seenSlots.insert(slotKeyHash).second)
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "genesis alloc storage slot key 0x" + slotKeyHash.hex() +
+                                      "genesis alloc storage slot key " + slotHex +
                                       " is duplicated"));
         }
         auto rlpValue =

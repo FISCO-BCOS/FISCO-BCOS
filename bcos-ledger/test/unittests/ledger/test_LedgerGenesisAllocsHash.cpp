@@ -255,6 +255,11 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
                     std::string(ledger::SYS_DIRECTORY::USER_APPS) +
                         "43000000000000000000000000000000000000c0"));
             BOOST_CHECK(!tableEntry);
+            // The check runs before ANY genesis write, so B0 was never committed
+            // either — fixing the config and retrying starts from a clean datadir
+            // (no half-committed genesis claiming a state root no rows back).
+            auto blockHash = co_await ledger::getBlockHash(*storage, 0, ledger::fromStorage);
+            BOOST_CHECK(!blockHash.has_value());
         }
     }());
 }

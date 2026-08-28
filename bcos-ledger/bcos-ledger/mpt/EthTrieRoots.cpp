@@ -33,29 +33,33 @@ bcos::h256 computeIndexedTrieRoot(std::span<bcos::bytesConstRef const> items)
         return emptyRootHash();
     }
 
-    // Key each item by its RLP-encoded index. The keys must be owned (they are, in `keyed`);
-    // the values stay VIEWS into the caller's `items`, which outlive the call —
-    // computeRawTrieRoot copies them into its own entries and sorts by ENCODED KEY BYTES
-    // internally (rlp(0)=0x80 > rlp(1)=0x01, so NOT numeric index order), so no ordering or
-    // value copying is needed here. The root-only entry point is used deliberately: the
-    // tx/receipt/withdrawal tries are never persisted, so accumulating the node map would
-    // only be thrown away.
-    std::vector<std::pair<bcos::bytes, bcos::bytesConstRef>> keyed;
-    keyed.reserve(items.size());
+    // Key each item by its RLP-encoded index, packed into ONE flat buffer (an
+    // rlp(uint64) key is at most 9 bytes) and referenced from the ref-pair vector —
+    // no per-key heap allocation, and no second intermediate vector. The values
+    // stay VIEWS into the caller's `items`, which outlive the call; computeRawTrieRoot
+    // sorts by ENCODED KEY BYTES internally (rlp(0)=0x80 > rlp(1)=0x01, so NOT
+    // numeric index order), so no ordering or value copying is needed here. The
+    // root-only entry point is used deliberately: the tx/receipt/withdrawal tries
+    // are never persisted, so accumulating the node map would only be thrown away.
+    bcos::bytes keyBytes;
+    keyBytes.reserve(items.size() * 2);
+    std::vector<std::pair<size_t, size_t>> keySpans;  // (offset, length) into keyBytes
+    keySpans.reserve(items.size());
     for (size_t i = 0; i < items.size(); ++i)
     {
         bcos::bytes key;
         codec::rlp::encode(key, static_cast<uint64_t>(i));
-        keyed.emplace_back(std::move(key), items[i]);
+        keySpans.emplace_back(keyBytes.size(), key.size());
+        keyBytes.insert(keyBytes.end(), key.begin(), key.end());
     }
-
-    std::vector<std::pair<bcos::bytesConstRef, bcos::bytesConstRef>> sorted;
-    sorted.reserve(keyed.size());
-    for (auto const& [key, value] : keyed)
+    std::vector<std::pair<bcos::bytesConstRef, bcos::bytesConstRef>> keyRefs;
+    keyRefs.reserve(items.size());
+    for (size_t i = 0; i < items.size(); ++i)
     {
-        sorted.emplace_back(bcos::ref(key), value);
+        auto [offset, length] = keySpans[i];
+        keyRefs.emplace_back(bcos::bytesConstRef(keyBytes.data() + offset, length), items[i]);
     }
-    return computeRawTrieRoot(sorted);
+    return computeRawTrieRoot(keyRefs);
 }
 
 }  // namespace bcos::ledger::mpt

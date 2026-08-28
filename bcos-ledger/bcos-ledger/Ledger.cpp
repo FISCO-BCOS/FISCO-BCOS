@@ -1840,11 +1840,14 @@ static constexpr std::string_view c_l2FeatureFlagsKey = "feature_flags";
 static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
 
 // Verify the L2 SystemConfig feature_flags alloc slot against this node's
-// feature set. Runs BEFORE any genesis write: genesis import is not
-// transactional (and asyncCreateTable is not idempotent), so a mismatch
-// surfacing after create()/setStorage() would leave sys tables and earlier
-// alloc rows behind and a retry would not be a clean slate. Hex itself was
-// already accepted by computeGenesisStateTrie; this compares VALUES.
+// feature set. Called from TWO places: buildGenesisBlock runs it with the
+// purely-computed expected feature set right after computeGenesisStateTrie —
+// before ANY genesis write, so a mismatching config cannot leave B0 committed
+// under a state root no alloc rows back (the datadir stays untouched and a
+// config fix is a plain retry); importGenesisState re-runs it with the
+// persisted feature set before the first ACCOUNT-row write (genesis import is
+// not transactional, and asyncCreateTable is not idempotent). Hex itself is
+// accepted by computeGenesisStateTrie; this compares VALUES.
 static void verifyL2FeatureFlagsSlot(
     ::ranges::input_range auto const& allocs, Features const& features)
 {
@@ -2127,6 +2130,34 @@ bool Ledger::buildGenesisBlock(
         if (!genesis.m_allocs.empty())
         {
             ethStateTrie = co_await computeGenesisStateTrie(genesis);
+            // Verify the L2 SystemConfig feature_flags alloc slot NOW — before ANY
+            // genesis write (the first is the asyncCreateTable loop far below).
+            // A mismatch surfacing after prewriteBlockToStorage would leave B0
+            // committed under a state root no alloc rows back: the restart guard
+            // (genesis exists, pin matches, stateRoot matches) would then pass on
+            // an empty world state, block 1 would die on a missing trie node, and
+            // the datadir would be unrecoverable without a wipe. The expected
+            // feature set is computed purely here — version defaults + the rpbft
+            // auto-flag + [features] — identical to what the write side persists
+            // below; the importGenesisState-internal re-check compares against
+            // what was actually persisted.
+            Features expectedFeatures;
+            expectedFeatures.setGenesisFeatures(
+                protocol::BlockVersion(genesis.m_compatibilityVersion));
+            if (RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
+                genesis.m_compatibilityVersion >=
+                    static_cast<uint32_t>(protocol::BlockVersion::V3_5_VERSION))
+            {
+                expectedFeatures.set(ledger::Features::Flag::feature_rpbft);
+            }
+            for (auto const& featureSet : genesis.m_features)
+            {
+                if (featureSet.enable > 0)
+                {
+                    expectedFeatures.set(featureSet.flag);
+                }
+            }
+            verifyL2FeatureFlagsSlot(genesis.m_allocs, expectedFeatures);
         }
         if (genesisBlockHash)
         {

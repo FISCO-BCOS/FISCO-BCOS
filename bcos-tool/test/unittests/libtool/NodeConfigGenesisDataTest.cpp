@@ -357,6 +357,9 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     BOOST_CHECK(data.find("mode: el") != std::string::npos);
     BOOST_CHECK(data.find("[forkTimestamps]") != std::string::npos);
     BOOST_CHECK(data.find("shanghai_time:1681338455") != std::string::npos);
+    // The EL chain id is part of the pin too.
+    BOOST_CHECK(data.find("[web3]") != std::string::npos);
+    BOOST_CHECK(data.find("chain_id:1") != std::string::npos);
 
     // A node with a different schedule produces different genesis data.
     NodeConfig cfg2(keyFactory);
@@ -367,6 +370,16 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     BOOST_CHECK(
         data != bcos::tool::generateGenesisData(cfg2.genesisConfig(), *cfg2.ledgerConfig()));
 
+    // A node with a different [web3] chain_id (same schedule) also produces
+    // different genesis data — the id is pinned, not just validated.
+    std::string baseOtherChain = base;
+    baseOtherChain.replace(baseOtherChain.find("[web3]\nchain_id=1\n"),
+        std::string("[web3]\nchain_id=1\n").size(), "[web3]\nchain_id=11155111\n");
+    NodeConfig cfg4(keyFactory);
+    BOOST_REQUIRE_NO_THROW(cfg4.loadGenesisConfigFromString(baseOtherChain + schedule));
+    BOOST_CHECK(
+        data != bcos::tool::generateGenesisData(cfg4.genesisConfig(), *cfg4.ledgerConfig()));
+
     // No [fork_timestamps] section -> no [forkTimestamps] emission (legacy chains stay
     // byte-identical); an explicit evm_revision satisfies the v2 guard instead.
     NodeConfig cfg3(keyFactory);
@@ -376,6 +389,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     auto data3 = bcos::tool::generateGenesisData(cfg3.genesisConfig(), *cfg3.ledgerConfig());
     BOOST_CHECK(data3.find("[forkTimestamps]") == std::string::npos);
     BOOST_CHECK(data3.find("[ethereum]") == std::string::npos);
+    BOOST_CHECK(data3.find("[web3]") == std::string::npos);  // chain id emitted only with EL
 }
 
 // The EL-mode declaration ([ethereum] mode=el) and its fork schedule are bound together in
@@ -541,6 +555,15 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
         BOOST_CHECK_THROW(cfg.validateELModeInvariants(), InvalidConfig);
     }
+    // The symmetric direction: genesis declares EL but config.ini says mode=none —
+    // the node would run executor v2 with neither an on-chain nor a
+    // timestamp-derived EVM revision. Rejected by the post-load hook.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(head + "11155111" + tail));
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=none\n"));
+        BOOST_CHECK_THROW(cfg.validateELModeInvariants(), InvalidConfig);
+    }
 }
 
 // Reload is a supported shape: a second loadGenesisConfig without the EL declaration /
@@ -624,6 +647,62 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "0x67f9f25b\n"));
         BOOST_CHECK_EQUAL(
             cfg.genesisConfig().m_ethereumForkSchedule->m_pragueTime, 0x67f9f25bu);
+    }
+}
+
+// Activation times must be non-decreasing down the fork ladder (geth rejects an
+// out-of-order schedule via ChainConfig.CheckConfigForkOrder); UINT64_MAX
+// ("not yet active") is terminal, so a scheduled time after it is a decrease.
+BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string head =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=1\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n"
+        "[ethereum]\nmode=el\n"
+        "[fork_timestamps]\n";
+
+    // Cancun earlier than Shanghai -> rejected.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_THROW(
+            cfg.loadGenesisConfigFromString(
+                head + "london_time=0\nshanghai_time=1710338135\n"
+                       "cancun_time=1681338455\nprague_time=1746612311\n"),
+            InvalidConfig);
+    }
+    // A scheduled bpo1 while osaka is unscheduled (UINT64_MAX, terminal) -> decreasing.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_THROW(
+            cfg.loadGenesisConfigFromString(
+                head + "london_time=0\nshanghai_time=1681338455\n"
+                       "cancun_time=1710338135\nprague_time=1746612311\n"
+                       "bpo1_time=1750000000\n"),
+            InvalidConfig);
+    }
+    // A scheduled osaka with unscheduled bpos is fine (MAX is non-decreasing).
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadGenesisConfigFromString(
+                head + "london_time=0\nshanghai_time=1681338455\n"
+                       "cancun_time=1710338135\nprague_time=1746612311\n"
+                       "osaka_time=1767225548\n"));
+        BOOST_CHECK_EQUAL(
+            cfg.genesisConfig().m_ethereumForkSchedule->m_osakaTime, 1767225548u);
     }
 }
 
