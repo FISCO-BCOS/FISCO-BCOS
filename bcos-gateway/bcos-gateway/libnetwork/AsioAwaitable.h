@@ -122,8 +122,7 @@ private:
         catch (...)
         {
             ASIO_LOG(WARNING) << LOG_DESC("asio awaitable resume exception")
-                              << LOG_KV(
-                                     "what", boost::current_exception_diagnostic_information());
+                              << LOG_KV("what", boost::current_exception_diagnostic_information());
         }
     }
 
@@ -182,7 +181,6 @@ struct AsioAwaitable
 template <typename... Results, typename Initiate>
 auto makeAsioAwaitable(Initiate&& initiate)
 {
-    return AsioAwaitable<std::decay_t<Initiate>, Results...>{
-        std::forward<Initiate>(initiate), {}};
+    return AsioAwaitable<std::decay_t<Initiate>, Results...>{std::forward<Initiate>(initiate), {}};
 }
 }  // namespace bcos::gateway
