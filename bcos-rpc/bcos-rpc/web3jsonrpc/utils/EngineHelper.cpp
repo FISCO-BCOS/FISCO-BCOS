@@ -322,6 +322,7 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .baseFeePerGas = parseBigQuantity(ep["baseFeePerGas"], "executionPayload.baseFeePerGas"),
         .blockHash = parseH256Field(ep["blockHash"], "executionPayload.blockHash"),
         .transactions = {},
+        .rawTransactions = std::nullopt,
         .extraData = {},
         .feeRecipient = parseAddressField(ep["feeRecipient"], "executionPayload.feeRecipient"),
         .timestamp = engineSecondsToInternalMillis(
@@ -331,6 +332,8 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .withdrawals = std::nullopt,
         .blobGasUsed = std::nullopt,
         .excessBlobGas = std::nullopt,
+        .blockAccessList = std::nullopt,
+        .slotNumber = std::nullopt,
         .withdrawalsRoot = std::nullopt,
     };
     if (ep.isMember("extraData"))
@@ -355,15 +358,21 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 InvalidParams, "Expected array of hex strings for executionPayload.transactions"));
         }
-        // Raw EIP-2718 bytes, hex-decoded verbatim. No transaction decoding happens
-        // here — getPayload must later return exactly these bytes.
+        // Hex-decode into transactions[].raw; rawTransactions is a derived mirror.
         payload.transactions.reserve(ep["transactions"].size());
         for (Json::ArrayIndex i = 0; i < ep["transactions"].size(); ++i)
         {
-            payload.transactions.push_back(bcos::engine::EngineTransaction{
-                .raw = parseRawTransactionElement(ep["transactions"][i], "executionPayload", i),
+            auto txData = parseRawTransactionElement(ep["transactions"][i], "executionPayload", i);
+            payload.transactions.push_back(engine::EngineTransaction{
+                .raw = std::move(txData),
                 .decoded = nullptr,
             });
+        }
+        payload.rawTransactions.emplace();
+        payload.rawTransactions->reserve(payload.transactions.size());
+        for (auto const& tx : payload.transactions)
+        {
+            payload.rawTransactions->push_back(tx.raw);
         }
     }
     if (ep.isMember("withdrawals") && !ep["withdrawals"].isNull())
@@ -822,5 +831,12 @@ void bcos::rpc::combineGetPayloadResponse(Json::Value& _result,
     if (_response->parentBeaconBlockRoot.has_value())
     {
         _result["parentBeaconBlockRoot"] = _response->parentBeaconBlockRoot->hexPrefixed();
+    }
+    // V4 (Prague payload shape): executionRequests is a required member of the response. This
+    // chain produces none (no deposit/consolidation requests), so an empty list is the honest
+    // payload — op-geth's own no-request blocks serialize the same shape.
+    if (version == engine::ApiVersion::V4)
+    {
+        _result["executionRequests"] = Json::Value(Json::arrayValue);
     }
 }

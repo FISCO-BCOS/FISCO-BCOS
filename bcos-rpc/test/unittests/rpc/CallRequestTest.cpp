@@ -56,11 +56,7 @@ BOOST_AUTO_TEST_CASE(decode_data_and_input_precedence)
 {
     // Given both "data" and "input" present, "data" should take precedence
     Json::Value root(Json::objectValue);
-    constexpr std::string_view hexData =
-        "0x26c8917e00000000000000000000000000000000000000000000000000000000000000600000000000000000"
-        "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-        "00000000000000000003e8000000000000000000000000000000000000000000000000000000000000002chszs"
-        "ray4r2rgyr8vmossvvgh2xawx7csbmhn4gbqmwhd00000000000000000000";
+    constexpr std::string_view hexData = "0x26c8917e";
     root["data"] = std::string{hexData};
     root["input"] = "0x1122";
     root["to"] = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -68,7 +64,7 @@ BOOST_AUTO_TEST_CASE(decode_data_and_input_precedence)
     auto [ok, req] = decodeCallRequest(root);
     BOOST_TEST(ok);
 
-    BOOST_TEST(req.data.empty());
+    BOOST_TEST(req.data == fromHexWithPrefix(hexData));
     BOOST_CHECK_EQUAL(req.to, "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 }
 
@@ -110,17 +106,15 @@ BOOST_AUTO_TEST_CASE(decode_all_fields)
     BOOST_CHECK_EQUAL(req.maxFeePerGas.value(), "0x4");
 }
 
-BOOST_AUTO_TEST_CASE(decode_invalid_hex_data_is_ignored)
+BOOST_AUTO_TEST_CASE(decode_invalid_hex_data_is_rejected)
 {
-    // Given invalid hex in data, it should be ignored (kept empty) and not throw
     Json::Value root(Json::objectValue);
     root["data"] = "0xzzzz";  // invalid hex
     root["to"] = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
     auto [ok, req] = decodeCallRequest(root);
-    BOOST_TEST(ok);
+    BOOST_TEST(!ok);
     BOOST_TEST(req.data.empty());
-    BOOST_CHECK_EQUAL(req.to, "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
 }
 
 BOOST_AUTO_TEST_CASE(decode_uses_input_when_data_missing)
@@ -136,24 +130,20 @@ BOOST_AUTO_TEST_CASE(decode_uses_input_when_data_missing)
 BOOST_AUTO_TEST_CASE(decode_invalid_gas_string)
 {
     Json::Value root(Json::objectValue);
-    root["gas"] = "zz";  // invalid hex with no leading valid digit -> stoull throws -> terminate
-    // Call function; expected to abort. If not aborted, exit(0) to mark failure in parent.
-    BOOST_CHECK_THROW(auto resultTuple = decodeCallRequest(root), std::invalid_argument);
-    int status = 0;
+    root["gas"] = "zz";
+    auto [ok, req] = decodeCallRequest(root);
+    BOOST_TEST(!ok);
+    BOOST_TEST(!req.gas.has_value());
 }
 
-BOOST_AUTO_TEST_CASE(decode_numeric_gas_treated_as_hex)
+BOOST_AUTO_TEST_CASE(decode_numeric_gas_is_rejected)
 {
-    // Given gas as a numeric JSON value, asString() yields decimal text
-    // but fromQuantity parses with base-16; verify current behavior is hex parse
     constexpr long long kGasDecimal = 21000;
-    constexpr unsigned kExpectedHexParsed = 135168U;  // 0x21000
     Json::Value root(Json::objectValue);
-    root["gas"] = Json::Int64(kGasDecimal);  // asString => "21000"; hex 0x21000 == 135168
+    root["gas"] = Json::Int64(kGasDecimal);
     auto [ok, req] = decodeCallRequest(root);
-    BOOST_TEST(ok);
-    BOOST_TEST(req.gas.has_value());
-    BOOST_CHECK_EQUAL(req.gas.value(), kExpectedHexParsed);
+    BOOST_TEST(!ok);
+    BOOST_TEST(!req.gas.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(decode_invalid_from_does_not_fail)
@@ -167,24 +157,29 @@ BOOST_AUTO_TEST_CASE(decode_invalid_from_does_not_fail)
     BOOST_CHECK_EQUAL(req.from.value(), "not_an_address");
 }
 
-BOOST_AUTO_TEST_CASE(decode_invalid_fee_fields_pass_through)
+BOOST_AUTO_TEST_CASE(decode_invalid_fee_fields_are_rejected)
 {
-    // gasPrice/value/max* are kept as-is; invalid strings are not parsed here
-    Json::Value root(Json::objectValue);
-    root["gasPrice"] = "0xzz";
-    root["value"] = "-123";
-    root["maxPriorityFeePerGas"] = "abc";
-    root["maxFeePerGas"] = "\t";
-    auto [ok, req] = decodeCallRequest(root);
-    BOOST_TEST(ok);
-    BOOST_TEST(req.gasPrice.has_value());
-    BOOST_CHECK_EQUAL(req.gasPrice.value(), "0xzz");
-    BOOST_TEST(req.value.has_value());
-    BOOST_CHECK_EQUAL(req.value.value(), "-123");
-    BOOST_TEST(req.maxPriorityFeePerGas.has_value());
-    BOOST_CHECK_EQUAL(req.maxPriorityFeePerGas.value(), "abc");
-    BOOST_TEST(req.maxFeePerGas.has_value());
-    BOOST_CHECK_EQUAL(req.maxFeePerGas.value(), "\t");
+    for (auto const field : {"gasPrice", "value", "maxPriorityFeePerGas", "maxFeePerGas"})
+    {
+        Json::Value root(Json::objectValue);
+        root[field] = "0xzz";
+        auto [ok, req] = decodeCallRequest(root);
+        BOOST_TEST(!ok);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(opEnvelopeConstructionDoesNotDefaultMalformedQuantity)
+{
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+
+    CallRequest req;
+    req.to = "0x1234567890abcdef1234567890abcdef12345678";
+    req.value = "0xzz";
+    BOOST_CHECK_THROW(req.takeToTransaction(txFactory, nullptr, bcos::u256(1'000'000'000)),
+        std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_CASE(deployEstimateGasParsesDecimalNonce)
@@ -213,9 +208,9 @@ BOOST_AUTO_TEST_CASE(deployEstimateGasParsesDecimalNonce)
 
 BOOST_AUTO_TEST_CASE(deployEstimateGasLeavesCorruptNonceUnset)
 {
-    // A stored nonce that is empty or non-numeric must not abort the RPC (this
-    // function is noexcept) — the nonce is left unset and the executor's dry-run
-    // falls back to the sender's state nonce.
+    // A stored nonce that is empty or non-numeric must not abort the RPC — the
+    // nonce is left unset and the executor's dry-run falls back to the sender's
+    // state nonce.
     auto cryptoSuite =
         std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
             std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
@@ -233,6 +228,21 @@ BOOST_AUTO_TEST_CASE(deployEstimateGasLeavesCorruptNonceUnset)
         auto tx = req.takeToTransaction(txFactory, nonceScheduler);
         BOOST_CHECK(tx->nonce().empty());
     }
+}
+
+BOOST_AUTO_TEST_CASE(pricingLessCallUsesBaseFeeTimesTwo)
+{
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    CallRequest req;
+    req.to = "0x1234567890abcdef1234567890abcdef12345678";
+    auto const highBase = bcos::u256(8'000'000'000);  // 8 gwei > 2 gwei floor
+    auto tx = req.takeToTransaction(txFactory, nullptr, highBase);
+    BOOST_REQUIRE(tx);
+    auto const got = tx->maxPriorityFeePerGas().value_or(tx->gasPrice().value_or(bcos::u256(0)));
+    BOOST_CHECK_EQUAL(got, highBase * 2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
