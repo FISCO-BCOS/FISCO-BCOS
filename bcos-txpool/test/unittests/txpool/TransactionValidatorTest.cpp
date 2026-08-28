@@ -19,10 +19,12 @@
  * @date 2024-12-11
  */
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
+#include "bcos-framework/bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include <bcos-codec/rlp/RLPEncode.h>
 
 #include "bcos-task/Wait.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
@@ -125,6 +127,68 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
 
     txpool->txpoolStorage()->clear();
     std::cout << "#### testTransactionValidator finish" << std::endl;
+}
+
+// Finding BO: a blob (0x03) tx reaching the P2P-sync chainId gate must be refused with
+// BlobTxNotAllowed — the InvalidChainId previously shared with the Deposit/Malformed/
+// chainId-mismatch arms made pool logs blame the chainId for a type-policy refusal.
+// The fixture is an independently assembled EIP-4844 wire envelope, so it exercises the
+// dispatch gate itself: deleting the gate flips this test red.
+BOOST_AUTO_TEST_CASE(testBlobTxRejectedWithDedicatedStatus)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto keyPair = signatureImpl->generateKeyPair();
+    std::string groupId = "group_test_for_txpool";
+    std::string chainId = "chain_test_for_txpool";
+    int64_t blockLimit = 10;
+    auto fakeGateWay = std::make_shared<FakeGateWay>();
+    auto faker = std::make_shared<TxPoolFixture>(
+        keyPair->publicKey(), cryptoSuite, groupId, chainId, blockLimit, fakeGateWay, false, false);
+    faker->init();
+    auto txpoolConfig = faker->txpool()->txpoolConfig();
+    auto ledger = faker->ledger();
+
+    // Independently assembled EIP-4844 wire envelope: 0x03 || rlp([chainId, nonce,
+    // maxPriorityFeePerGas, maxFeePerGas, gas, to, value, data, accessList,
+    // maxFeePerBlobGas, blobVersionedHashes, yParity, r, s]).
+    namespace codec_rlp = bcos::codec::rlp;
+    auto const eoaKey = cryptoSuite->signatureImpl()->generateKeyPair();
+    bcos::bytes fields;
+    codec_rlp::encode(fields, static_cast<uint64_t>(1));
+    codec_rlp::encode(fields, static_cast<uint64_t>(0));
+    codec_rlp::encode(fields, static_cast<uint64_t>(1));
+    codec_rlp::encode(fields, static_cast<uint64_t>(2));
+    codec_rlp::encode(fields, static_cast<uint64_t>(21000));
+    codec_rlp::encode(fields, eoaKey->address(hashImpl).asBytes());
+    codec_rlp::encode(fields, static_cast<uint64_t>(0));
+    codec_rlp::encode(fields, bcos::bytes{});
+    bcos::bytes emptyList;
+    codec_rlp::encodeHeader(emptyList, {.isList = true, .payloadLength = 0});
+    fields.insert(fields.end(), emptyList.begin(), emptyList.end());  // accessList
+    codec_rlp::encode(fields, static_cast<uint64_t>(1));              // maxFeePerBlobGas
+    fields.insert(fields.end(), emptyList.begin(), emptyList.end());  // blobVersionedHashes
+    codec_rlp::encode(fields, static_cast<uint64_t>(1));              // yParity
+    codec_rlp::encode(fields, bcos::bytes(32, 0x01));                 // r
+    codec_rlp::encode(fields, bcos::bytes(32, 0x02));                 // s
+    bcos::bytes wire;
+    wire.push_back(0x03);
+    codec_rlp::encodeHeader(wire, {.isList = true, .payloadLength = fields.size()});
+    wire.insert(wire.end(), fields.begin(), fields.end());
+
+    // Sanity: the fixture keys the dispatch table on 0x03 independent of the gate.
+    BOOST_CHECK(bcos::engine::dispatchRawTransaction(bcos::ref(wire)) ==
+                bcos::engine::RawTransactionKind::Blob);
+
+    bcostars::Transaction transaction;
+    transaction.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    transaction.extraTransactionBytes.assign(wire.begin(), wire.end());
+    auto blobTx = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
+
+    auto result = task::syncWait(txpoolConfig->txValidator()->validateChainId(*blobTx, ledger));
+    BOOST_CHECK(result == TransactionStatus::BlobTxNotAllowed);
 }
 
 BOOST_AUTO_TEST_CASE(testValidateBalanceIncludesGasCost)

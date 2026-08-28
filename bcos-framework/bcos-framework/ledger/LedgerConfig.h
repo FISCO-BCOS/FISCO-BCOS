@@ -22,6 +22,7 @@
 #include "../consensus/ConsensusNode.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include "Features.h"
+#include "LedgerTypeDef.h"
 #include "SystemConfigs.h"
 #include <evmc/evmc.hpp>
 #include <algorithm>
@@ -42,6 +43,13 @@ namespace bcos::ledger
 /// (explicit startup failure) rather than fall back to a compile-time default that could
 /// differ between binaries (a silent state-root fork).
 DERIVE_BCOS_EXCEPTION(InvalidEVMCRevisionConfig);
+
+/// Thrown when a persisted web3_chain_id SYS_CONFIG value cannot be parsed. The value
+/// feeds the EVM CHAINID opcode, so a corrupt value must halt loudly rather than
+/// silently serve 0 — a sentinel indistinguishable from "unset", and one the admission
+/// side already rejects (TxValidator fail-closes on the same parse failure). Serving 0
+/// while other nodes hold the correct id is a silent state-root fork.
+DERIVE_BCOS_EXCEPTION(InvalidWeb3ChainIdConfig);
 
 constexpr static uint64_t DEFAULT_GAS_LIMIT = 3000000000;
 constexpr static std::uint64_t DEFAULT_EPOCH_SEALER_NUM = 4;
@@ -473,5 +481,21 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
         BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
             "cannot parse evmc_revision config value: " + std::string(value)));
     }
+}
+
+/// Single home for the config-apply policy of the web3_chain_id SYS_CONFIG value: parse
+/// via parseWeb3ChainId and throw InvalidWeb3ChainIdConfig on a malformed value. Both
+/// getLedgerConfig variants route through here so the execution side cannot drift from
+/// the admission side (which rejects the same value). An absent config arrives as the
+/// caller's getOrDefault(web3_chain_id, "0") default and parses fine — only malformed
+/// non-empty values throw.
+[[nodiscard]] inline bcos::u256 parseConfiguredWeb3ChainId(std::string_view value)
+{
+    if (auto parsed = parseWeb3ChainId(value))
+    {
+        return *parsed;
+    }
+    BOOST_THROW_EXCEPTION(InvalidWeb3ChainIdConfig() << errinfo_comment(
+                              "cannot parse web3_chain_id config value: " + std::string(value)));
 }
 }  // namespace bcos::ledger

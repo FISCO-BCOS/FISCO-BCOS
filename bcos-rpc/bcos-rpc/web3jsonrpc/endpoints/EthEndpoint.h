@@ -44,6 +44,7 @@ public:
     task::Task<void> mining(const Json::Value&, Json::Value&);
     task::Task<void> hashrate(const Json::Value&, Json::Value&);
     task::Task<void> gasPrice(const Json::Value&, Json::Value&);
+    task::Task<void> feeHistory(const Json::Value&, Json::Value&);
     task::Task<void> accounts(const Json::Value&, Json::Value&);
     task::Task<void> blockNumber(const Json::Value&, Json::Value&);
     task::Task<void> getBalance(const Json::Value&, Json::Value&);
@@ -85,7 +86,17 @@ private:
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;
 
-    task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
+
+    task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate,
+        std::optional<u256> preResolvedBaseFee = std::nullopt);
+
+    // Runs an eth_call with the gas field rewritten in @p bounded (the caller's single
+    // request copy — mutated in place, no per-iteration deep copy) and the gas field pinned
+    // to @p limit; true when the simulation succeeds (estimateGas' minimum-viable-limit
+    // search). @p blockBaseFee is passed through to call() so the header is not re-read
+    // per iteration.
+    task::Task<bool> simulateAtGasLimit(
+        Json::Value& bounded, u256 limit, std::optional<u256> blockBaseFee);
 };
 
 }  // namespace bcos::rpc

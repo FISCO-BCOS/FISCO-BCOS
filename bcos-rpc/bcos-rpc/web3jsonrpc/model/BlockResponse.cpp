@@ -1,15 +1,28 @@
 #include "BlockResponse.h"
 #include "Log.h"
 
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-utilities/Bloom.h>
 
 #include <range/v3/view/enumerate.hpp>
 
-void bcos::rpc::combineBlockResponse(
-    Json::Value& result, const bcos::protocol::Block& block, bool fullTxs)
+bcos::crypto::HashType bcos::rpc::opAwareBlockHash(const bcos::protocol::BlockHeader& header)
+{
+    if (!header.withdrawalsRoot().has_value())
+    {
+        return header.hash();
+    }
+    return bcos::protocol::EthBlockHeader::computeHash(header);
+}
+
+void bcos::rpc::combineBlockResponse(Json::Value& result, const bcos::protocol::Block& block,
+    bool fullTxs, std::optional<bcos::crypto::HashType> canonicalHash)
 {
     auto blockHeader = block.blockHeader();
-    auto blockHash = blockHeader->hash();
+    // Lazy fallback: value_or's argument is evaluated eagerly, and both
+    // production callers always pass a canonical hash — the eager form made every OP header
+    // pay conversion+RLP+keccak once discarded per getBlockBy* response.
+    auto blockHash = canonicalHash ? *canonicalHash : opAwareBlockHash(*blockHeader);
     auto blockNumber = blockHeader->number();
     result["number"] = toQuantity(blockNumber);
     result["hash"] = blockHash.hexPrefixed();
@@ -50,12 +63,27 @@ void bcos::rpc::combineBlockResponse(
         result["miner"] = "0x0000000000000000000000000000000000000000";
         result["parentHash"] = "0x0000000000000000000000000000000000000000000000000000000000000000";
     }
+    // Engine-built blocks (OP sequencer path) have an empty sealerList — the miner/coinbase
+    // is the execution payload's feeRecipient, which is stored in the header's coinbase()
+    // field (set by rebuildOpEthHeader from the payload attributes). Clients like alloy/cast
+    // require this field for deserialization; without it eth_getBlockByNumber fails.
+    if (!result.isMember("miner"))
+    {
+        auto coinbase = blockHeader->coinbase();
+        auto coinbaseString = coinbase.hex();
+        auto coinbaseHash = crypto::keccak256Hash(bytesConstRef(coinbaseString)).hex();
+        toChecksumAddress(coinbaseString, coinbaseHash);
+        result["miner"] = "0x" + coinbaseString;
+    }
     result["difficulty"] = "0x0";
     result["totalDifficulty"] = "0x0";
     result["extraData"] = toHexStringWithPrefix(blockHeader->extraData());
     result["size"] = toQuantity(block.size());
-    // TODO: change it wen block gas limit apply
-    result["gasLimit"] = toQuantity(30000000ULL);
+    // gasLimit: engine-built/genesis blocks carry the real limit in the header (OP newPayload
+    // via rebuildOpEthHeader, genesis via applyEthGenesisHeader); PBFT blocks never write it
+    // (tars field empty -> u256(0)) and keep the legacy 30M so their output is byte-identical.
+    auto gasLimit = blockHeader->gasLimit();
+    result["gasLimit"] = (gasLimit == 0) ? toQuantity(30000000ULL) : toQuantity(gasLimit);
     result["gasUsed"] = toQuantity((uint64_t)blockHeader->gasUsed());
     result["timestamp"] = toQuantity(blockHeader->timestamp() / 1000);  // to seconds
     if (fullTxs)
@@ -79,12 +107,64 @@ void bcos::rpc::combineBlockResponse(
         result["transactions"] = std::move(txHashesList);
     }
     result["uncles"] = Json::Value(Json::arrayValue);
-    result["mixHash"] = crypto::HashType().hexPrefixed();
-    result["baseFeePerGas"] = "0x0";
+    // mixHash is the header's prevRandao slot. OP headers store the payload attributes'
+    // prevRandao there (op-node sets keccak256(L1 block hash)) and the blockHash covers it,
+    // so serving a fabricated zero breaks hash-recomputing clients (go-ethereum's ethclient,
+    // op-batcher, ...) — they derive a different hash and reject the chain ("block does not
+    // extend existing chain"). PBFT headers never write the tars field (empty -> zero h256),
+    // keeping their output byte-identical.
+    result["mixHash"] = blockHeader->prevRandao().hexPrefixed();
+    // baseFeePerGas: OP headers (engine-built / newPayload-rebuilt) carry the real EIP-1559
+    // value; PBFT headers never write the tars field (nullopt, or 0) and keep the legacy 0x0
+    // so their output stays byte-identical — same pattern as gasLimit above.
+    if (auto baseFee = blockHeader->baseFee(); baseFee.has_value() && *baseFee != 0)
+    {
+        result["baseFeePerGas"] = toQuantity(*baseFee);
+    }
+    else
+    {
+        result["baseFeePerGas"] = "0x0";
+    }
     result["withdrawals"] = Json::Value(Json::arrayValue);
-    // empty withdrawals trie root hash
-    result["withdrawalsRoot"] = crypto::HashType().hexPrefixed();
-    result["blobGasUsed"] = "0x0";
+    // Isthmus+: the header carries the MessagePasser storage root as withdrawalsRoot (the OP
+    // semantic — set by the executed seal and rebuilt by the engine); pre-Isthmus/PBFT headers
+    // have no value (nullopt) and keep the legacy zero.
+    if (auto withdrawalsRoot = blockHeader->withdrawalsRoot(); withdrawalsRoot.has_value())
+    {
+        result["withdrawalsRoot"] = withdrawalsRoot->hexPrefixed();
+    }
+    else
+    {
+        result["withdrawalsRoot"] = crypto::HashType().hexPrefixed();
+    }
+    // blobGasUsed: pre-Jovian OP headers store 0 (identical output); Jovian reuses the header
+    // slot for the DA footprint, which the RPC must surface. PBFT headers never write the
+    // tars field (nullopt) and keep the legacy 0x0. excessBlobGas stays the constant 0: OP
+    // Stack chains serve no blobs and no header field carries it.
+    if (auto blobGasUsed = blockHeader->blobGasUsed(); blobGasUsed.has_value())
+    {
+        result["blobGasUsed"] = toQuantity(*blobGasUsed);
+    }
+    else
+    {
+        result["blobGasUsed"] = "0x0";
+    }
     result["excessBlobGas"] = "0x0";
-    result["parentBeaconBlockRoot"] = crypto::HashType().hexPrefixed();
+    // EIP-4788: pre-Cancun/PBFT headers have no PBBR (accessor returns nullopt when the
+    // tars field is < 32 bytes) -> zero, symmetric with withdrawalsRoot above.
+    if (auto parentBeaconRoot = blockHeader->parentBeaconBlockRoot(); parentBeaconRoot.has_value())
+    {
+        result["parentBeaconBlockRoot"] = parentBeaconRoot->hexPrefixed();
+    }
+    else
+    {
+        result["parentBeaconBlockRoot"] = crypto::HashType().hexPrefixed();
+    }
+    // EIP-7685 requestsHash: Isthmus+ OP headers carry sha256('') (set by the seal and rebuilt
+    // by the engine); PBFT/pre-Isthmus headers have no value (nullopt) and keep the field
+    // absent -- symmetric with op-geth (internal/ethapi/api.go:1092-1094, omitempty).
+    if (auto requestsHash = blockHeader->requestsHash(); requestsHash.has_value())
+    {
+        result["requestsHash"] = requestsHash->hexPrefixed();
+    }
 }

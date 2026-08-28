@@ -117,18 +117,15 @@ BOOST_AUTO_TEST_CASE(dispatchTableIsAuthoritative)
     BOOST_CHECK(kindOf({0xc0}) == RawTransactionKind::Legacy);
     BOOST_CHECK(kindOf({0xf8, 0x01}) == RawTransactionKind::Legacy);
     BOOST_CHECK(kindOf({0xff}) == RawTransactionKind::Legacy);
-    // Blob: parseable as a category, but never admissible.
+    // Blob: parseable as a category; admission policy (always rejected) lives at each
+    // entry gate, not in the dispatch table.
     BOOST_CHECK(kindOf({0x03, 0xaa}) == RawTransactionKind::Blob);
-    BOOST_CHECK(!isRawTransactionPayloadAdmissible(RawTransactionKind::Blob));
     // 0x00 is not a valid EIP-2718 type; reserved/unknown bytes are unsupported.
     BOOST_CHECK(kindOf({0x00, 0xaa}) == RawTransactionKind::Unsupported);
     BOOST_CHECK(kindOf({0x05, 0xaa}) == RawTransactionKind::Unsupported);
     BOOST_CHECK(kindOf({0x7f, 0xaa}) == RawTransactionKind::Unsupported);
     BOOST_CHECK(kindOf({0xbf, 0xaa}) == RawTransactionKind::Unsupported);
     BOOST_CHECK(kindOf({}) == RawTransactionKind::Unsupported);
-    BOOST_CHECK(!isRawTransactionPayloadAdmissible(RawTransactionKind::Unsupported));
-    BOOST_CHECK(isRawTransactionPayloadAdmissible(RawTransactionKind::Legacy));
-    BOOST_CHECK(isRawTransactionPayloadAdmissible(RawTransactionKind::Deposit));
 }
 
 BOOST_AUTO_TEST_CASE(rawTransactionBytesSurviveParseSerializeRoundTrip)

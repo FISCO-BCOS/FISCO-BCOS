@@ -22,6 +22,7 @@
 
 #include "bcos-ledger/LedgerMethods.h"
 #include <bcos-framework/ledger/Ledger.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 using namespace bcos;
@@ -30,22 +31,16 @@ task::Task<void> NetEndpoint::version(const Json::Value&, Json::Value& response)
 {
     auto const ledger = m_nodeService->ledger();
     auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
-    Json::Value result;
+    Json::Value result = "0x4ee8";  // 20200 — default when unconfigured / unparseable
     if (config.has_value())
     {
-        try
+        auto [chainId, _] = config.value();
+        // Same parser as TxValidator / EthEndpoint sendRawTransaction: accepts decimal and
+        // 0x-prefixed config. std::stoull would treat "0x539" as 0 (stops at 'x').
+        if (auto parsed = ledger::parseWeb3ChainId(chainId))
         {
-            auto [chainId, _] = config.value();
-            result = toQuantity(std::stoull(chainId));
+            result = toQuantity(*parsed);
         }
-        catch (...)
-        {
-            result = "0x4ee8";  // 20200
-        }
-    }
-    else
-    {
-        result = "0x4ee8";  // 20200
     }
     buildJsonContent(result, response);
     co_return;

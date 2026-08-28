@@ -107,8 +107,9 @@ public:
         Json::Value value;
         Json::Reader reader;
         std::promise<bcos::bytes> promise;
-        web3JsonRpc->onRPCRequest(
-            req, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+        web3JsonRpc->onRPCRequest(req, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
         auto jsonBytes = promise.get_future().get();
         std::string_view json((char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
         reader.parse(json.begin(), json.end(), value);
@@ -198,6 +199,66 @@ BOOST_AUTO_TEST_CASE(MissingRootThroughAdapterReturns32004)
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
     BOOST_CHECK(
         resp["error"]["message"].asString().find("not in MPT node storage") != std::string::npos);
+}
+
+// --- OP-stack branch (EthEndpoint::getProof): a header carrying baseFee switches the endpoint
+// to the node-backed proof path (the PBFT branch above never writes the tars baseFee field).
+// The OP message strings differ from the PBFT ones, so the assertions below also prove which
+// branch actually ran.
+
+// Same trie, but the baseFee discriminator engages the OP branch while no reader is wired:
+// it must fail closed with -32603 exactly like the PBFT side — a node without the MPT node
+// reader never answers with a fabricated proof.
+BOOST_AUTO_TEST_CASE(OpHeaderWithoutReaderFailsClosed32603)
+{
+    buildTrie();
+    m_ledger->ledgerData().back()->blockHeader()->setBaseFee(bcos::u256(1));
+    // no wireReader()
+
+    auto resp = getProof(address.hexPrefixed(), {}, "latest");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32603);
+    BOOST_CHECK(resp["error"]["message"].asString().find("MPT not enabled") != std::string::npos);
+}
+
+// OP branch, reader wired, but the header's stateRoot has no node rows behind it: the proof
+// walk dead-ends at the missing root and generateProof reports BlockNotCommitted, which the
+// endpoint maps to -32004 with the OP-specific "flat rebuild" message — the message string is
+// what pins this test to the OP branch (the PBFT branch would say "not in MPT node storage").
+BOOST_AUTO_TEST_CASE(OpHeaderWithStaleRootFailsClosed32004)
+{
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData().back()->blockHeader()->setBaseFee(bcos::u256(1));
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(h256{0x1234U});
+
+    auto resp = getProof(address.hexPrefixed(), {}, "latest");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
+    BOOST_CHECK(resp["error"]["message"].asString().find("Proof unavailable for this block") !=
+                std::string::npos);
+}
+
+// Positive anchor for the OP branch: with a reader wired and real rows behind the stateRoot,
+// a baseFee-bearing header must serve the same proof as the PBFT path — proving the OP branch
+// is not just reachable but functional (the two negative cases above would pass even if the
+// baseFee discriminator silently fell through to PBFT; this one cannot).
+BOOST_AUTO_TEST_CASE(OpHeaderServesProofFromStateRows)
+{
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData().back()->blockHeader()->setBaseFee(bcos::u256(1));
+
+    auto resp =
+        getProof(address.hexPrefixed(), {slotA.hexPrefixed(), slotB.hexPrefixed()}, "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    auto const& result = resp["result"];
+    BOOST_TEST(result["address"].asString() == address.hexPrefixed());
+    BOOST_TEST(result["balance"].asString() == "0x3e8");
+    BOOST_REQUIRE_EQUAL(result["storageProof"].size(), 2U);
+    BOOST_TEST(result["storageProof"][0U]["value"].asString() == "0x2a");
+    BOOST_TEST(result["storageProof"][1U]["value"].asString() == "0x1337");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

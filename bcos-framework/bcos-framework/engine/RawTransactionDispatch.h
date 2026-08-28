@@ -44,6 +44,11 @@ enum class RawTransactionKind : std::uint8_t
 ///
 /// Note: 0x00 is NOT a valid EIP-2718 type. Bytes in [0x05, 0x7d] and [0x7f, 0xbf] are
 /// reserved/unknown and classify as Unsupported.
+///
+/// Per-kind admission POLICY is enforced at the entry gates, not here: FISCO's OP policy
+/// rejects blob (type-3) where op-geth's decodeTyped accepts it — a deliberate acceptance
+/// divergence, not an op-geth check — and a single blob or unsupported transaction
+/// invalidates a whole engine payload rather than being dropped individually.
 inline RawTransactionKind dispatchRawTransaction(bcos::bytesConstRef raw)
 {
     if (raw.empty())
@@ -66,15 +71,6 @@ inline RawTransactionKind dispatchRawTransaction(bcos::bytesConstRef raw)
         // 0xc0..0xff: RLP list header => legacy transaction.
         return raw[0] >= 0xc0 ? RawTransactionKind::Legacy : RawTransactionKind::Unsupported;
     }
-}
-
-/// Whether a transaction of this kind may appear inside an Engine execution payload.
-/// FISCO's OP policy rejects blob (type-3) txs at the gate — op-geth's decodeTyped accepts
-/// them, so this is a deliberate acceptance divergence, not an op-geth check. A single blob or
-/// unsupported transaction invalidates the whole payload, it is not dropped individually.
-inline bool isRawTransactionPayloadAdmissible(RawTransactionKind kind)
-{
-    return kind != RawTransactionKind::Blob && kind != RawTransactionKind::Unsupported;
 }
 
 }  // namespace bcos::engine
