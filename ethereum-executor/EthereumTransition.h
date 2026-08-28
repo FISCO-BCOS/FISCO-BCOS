@@ -11,19 +11,19 @@
 
 #pragma once
 
+#include "EVMSupport.h"
 #include "EthereumHost.h"
 #include "EthereumState.h"
-#include "EVMSupport.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <algorithm>
 #include <evmc/evmc.hpp>
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
-#include <algorithm>
 #include <optional>
 #include <span>
 #include <system_error>
@@ -37,10 +37,12 @@ using evm::make_error_code;
 // EIP-7840 blob schedule constants (target, max, base_fee_update_fraction).
 // Shared by EthereumExecutor (blob_gas_left for validation) and the block-info
 // builder (blob_base_fee computation) so the two cannot drift.
-inline constexpr evm::BlobParams PRAGUE_BLOB_PARAMS{
-    .target = 6, .max = 9, .base_fee_update_fraction = 5007716};
-inline constexpr evm::BlobParams CANCUN_BLOB_PARAMS{
-    .target = 3, .max = 6, .base_fee_update_fraction = 3338477};
+inline constexpr evm::BlobParams PRAGUE_BLOB_PARAMS{.target = 6,
+    .max = 9,
+    .base_fee_update_fraction = 5007716};
+inline constexpr evm::BlobParams CANCUN_BLOB_PARAMS{.target = 3,
+    .max = 6,
+    .base_fee_update_fraction = 3338477};
 
 /// The EIP-7840 blob schedule in effect for @p rev (empty for pre-Cancun).
 inline evm::BlobParams blobParamsForRevision(evmc_revision rev) noexcept
@@ -73,9 +75,9 @@ struct EthWithdrawal
     uint64_t amount_in_gwei = 0;  ///< The amount is denominated in gwei.
 
     /// Returns withdrawal amount in wei.
-    [[nodiscard]] intx::uint256 get_amount() const noexcept
+    [[nodiscard]] uint256 get_amount() const noexcept
     {
-        return intx::uint256{amount_in_gwei} * 1'000'000'000;
+        return uint256{amount_in_gwei} * 1'000'000'000;
     }
 };
 
@@ -89,11 +91,10 @@ inline std::optional<address> ethToAddress(protocol::Transaction const& tx)
         return std::nullopt;
 
     const bool has0x = tb.size() >= 2 && tb[0] == '0' && (tb[1] == 'x' || tb[1] == 'X');
-    const bool is40Hex = tb.size() == sizeof(evmc_address) * 2 &&
-                         std::all_of(tb.begin(), tb.end(), [](char c) {
-                             return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
-                                    (c >= 'A' && c <= 'F');
-                         });
+    const bool is40Hex =
+        tb.size() == sizeof(evmc_address) * 2 && std::all_of(tb.begin(), tb.end(), [](char c) {
+            return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+        });
     if (has0x || is40Hex)
     {
         // Hex-string form. Only a well-formed 20-byte address decodes to a
@@ -162,7 +163,8 @@ struct TransactionCost
 inline TransactionCost compute_tx_intrinsic_cost(
     evmc_revision rev, protocol::Transaction const& tx) noexcept
 {
-    static constexpr auto TX_BASE_COST = 21000;    static constexpr auto TX_CREATE_COST = 32000;
+    static constexpr auto TX_BASE_COST = 21000;
+    static constexpr auto TX_CREATE_COST = 32000;
     static constexpr auto DATA_TOKEN_COST = 4;
     static constexpr auto INITCODE_WORD_COST = 2;
     static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
@@ -172,18 +174,17 @@ inline TransactionCost compute_tx_intrinsic_cost(
     const auto create_cost = (is_create && rev >= EVMC_HOMESTEAD) ? TX_CREATE_COST : 0;
 
     const auto data = tx.input();
-    const auto num_tokens =
-        static_cast<int64_t>(compute_tx_data_tokens(rev, std::span<const uint8_t>{data.data(), data.size()}));
+    const auto num_tokens = static_cast<int64_t>(
+        compute_tx_data_tokens(rev, std::span<const uint8_t>{data.data(), data.size()}));
     const auto data_cost = num_tokens * DATA_TOKEN_COST;
 
     const auto access_list_cost = compute_access_list_cost(tx.web3AccessList());
 
-    const auto auth_list_cost = static_cast<int64_t>(tx.authorizationList().size()) *
-                                evm::AUTHORIZATION_EMPTY_ACCOUNT_COST;
+    const auto auth_list_cost =
+        static_cast<int64_t>(tx.authorizationList().size()) * evm::AUTHORIZATION_EMPTY_ACCOUNT_COST;
 
-    const auto initcode_cost = (is_create && rev >= EVMC_SHANGHAI) ?
-                                   INITCODE_WORD_COST * num_words(data.size()) :
-                                   0;
+    const auto initcode_cost =
+        (is_create && rev >= EVMC_SHANGHAI) ? INITCODE_WORD_COST * num_words(data.size()) : 0;
 
     const auto intrinsic_cost =
         TX_BASE_COST + create_cost + data_cost + access_list_cost + auth_list_cost + initcode_cost;
@@ -211,7 +212,7 @@ inline evmc_message build_message(
         .sender = ethSender(tx),
         .input_data = input.data(),
         .input_size = input.size(),
-        .value = intx::be::store<evmc::uint256be>(evm::toIntxU256(tx.value())),
+        .value = evm::toEvmcBE<evmc::uint256be>(tx.value()),
         .create2_salt = {},
         .code_address = recipient,
         .code = nullptr,
@@ -243,7 +244,7 @@ int64_t processAuthorizationList(
         // 3. y_parity must be 0 or 1; s must be <= secp256k1n/2 (EIP-2).
         if (auth.v > 1)
             continue;
-        if (evm::toIntxU256(auth.s) > evm::SECP256K1N_OVER_2)
+        if (auth.s > evm::SECP256K1N_OVER_2)
             continue;
 
         // 4. Always recover the signer via real ecrecover (never honour an
@@ -407,10 +408,10 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     const auto* const senderPtr = state.find(ethSender(tx));
     const auto senderNonce = senderPtr != nullptr ? senderPtr->nonce : 0;
 
-    if (senderPtr != nullptr &&
-        senderPtr->code_hash != EthAccount::EMPTY_CODE_HASH &&
+    if (senderPtr != nullptr && senderPtr->code_hash != EthAccount::EMPTY_CODE_HASH &&
         !evmone::is_code_delegated(state.get_code(ethSender(tx))))
-        return make_error_code(ErrorCode::SENDER_NOT_EOA);  // Origin must not be a contract (EIP-3607).
+        return make_error_code(ErrorCode::SENDER_NOT_EOA);  // Origin must not be a contract
+                                                            // (EIP-3607).
 
     if (senderNonce == EthAccount::NonceMax)  // Nonce value limit (EIP-2681).
         return make_error_code(ErrorCode::NONCE_HAS_MAX_VALUE);
@@ -426,18 +427,18 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
         return make_error_code(ErrorCode::INIT_CODE_SIZE_LIMIT_EXCEEDED);
 
     // Compute and check if sender has enough balance for the theoretical maximum transaction cost.
-    auto max_total_fee =
-        intx::umul(intx::uint256(static_cast<uint64_t>(gasLimit)), maxGasPrice);
-    max_total_fee += evm::toIntxU256(tx.value());
+    // Widened to u512 so gasLimit * gasPrice + value cannot wrap, as the original intx::umul did.
+    auto max_total_fee = bcos::u512(static_cast<uint64_t>(gasLimit)) * bcos::u512(maxGasPrice);
+    max_total_fee += bcos::u512(tx.value());
 
     if (txKind == 3)  // blob
     {
-        const auto total_blob_gas =
-            static_cast<uint64_t>(evm::GAS_PER_BLOB) * blobHashes.size();
-        max_total_fee += intx::uint256(total_blob_gas) * ethMaxBlobGasPrice(tx);
+        const auto total_blob_gas = static_cast<uint64_t>(evm::GAS_PER_BLOB) * blobHashes.size();
+        // 256-bit product then widened — matches the original intx expression bit for bit.
+        max_total_fee += bcos::u512(uint256(total_blob_gas) * ethMaxBlobGasPrice(tx));
     }
-    const auto senderBalance = senderPtr != nullptr ? senderPtr->balance : intx::uint256{};
-    if (senderBalance < max_total_fee)
+    const auto senderBalance = senderPtr != nullptr ? senderPtr->balance : uint256{};
+    if (bcos::u512(senderBalance) < max_total_fee)
         return make_error_code(ErrorCode::INSUFFICIENT_FUNDS);
 
     const auto [intrinsic_cost, min_cost] =
@@ -528,20 +529,19 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
     // The NODE's chain id, never tx.chain_id: validate_transaction does not
     // check that field, so passing it would make EIP-7702 step 1 compare sender
     // input against sender input. See the declaration comment in bcos-evm.
-    const auto delegation_refund = eth_transition_detail::processAuthorizationList(state, chainId, tx);
+    const auto delegation_refund =
+        eth_transition_detail::processAuthorizationList(state, chainId, tx);
 
     const auto base_fee = (rev >= EVMC_LONDON) ? block.base_fee : 0;
     const auto max_gas_price = ethMaxGasPrice(tx, callParams);
     const auto max_priority_gas_price = ethMaxPriorityGasPrice(tx, callParams);
-    assert(max_gas_price >= base_fee);                   // Required for valid tx.
-    assert(max_gas_price >= max_priority_gas_price);     // Required for valid tx.
-    const auto priority_gas_price =
-        std::min(max_priority_gas_price, max_gas_price - base_fee);
+    assert(max_gas_price >= base_fee);                // Required for valid tx.
+    assert(max_gas_price >= max_priority_gas_price);  // Required for valid tx.
+    const auto priority_gas_price = std::min(max_priority_gas_price, max_gas_price - base_fee);
     const auto effective_gas_price = base_fee + priority_gas_price;
 
     assert(effective_gas_price <= max_gas_price);  // Required for valid tx.
-    const auto tx_max_cost =
-        intx::uint256(static_cast<uint64_t>(gasLimit)) * effective_gas_price;
+    const auto tx_max_cost = uint256(static_cast<uint64_t>(gasLimit)) * effective_gas_price;
 
     sender_acc.balance -= tx_max_cost;  // Modify sender balance after all checks.
 
@@ -552,10 +552,10 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
         assert(block.blob_base_fee.has_value());
         const auto blob_gas_used =
             static_cast<uint64_t>(evm::GAS_PER_BLOB) * tx.blobVersionedHashes().size();
-        const auto blob_fee = intx::umul(intx::uint256(blob_gas_used), *block.blob_base_fee);
-        assert(blob_fee <= std::numeric_limits<intx::uint256>::max());
-        assert(sender_acc.balance >= blob_fee);  // Required for valid tx.
-        sender_acc.balance -= intx::uint256(blob_fee);
+        const auto blob_fee = bcos::u512(blob_gas_used) * bcos::u512(*block.blob_base_fee);
+        assert(blob_fee <= bcos::u512(std::numeric_limits<uint256>::max()));
+        assert(bcos::u512(sender_acc.balance) >= blob_fee);  // Required for valid tx.
+        sender_acc.balance -= uint256(blob_fee);
     }
 
     EthereumHost<Storage> host{
@@ -605,9 +605,9 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
     gas_used = std::max(gas_used, txProps.min_gas_cost);
 
     sender_acc.balance +=
-        tx_max_cost - intx::uint256(static_cast<uint64_t>(gas_used)) * effective_gas_price;
+        tx_max_cost - uint256(static_cast<uint64_t>(gas_used)) * effective_gas_price;
     state.touch(block.coinbase).balance +=
-        intx::uint256(static_cast<uint64_t>(gas_used)) * priority_gas_price;
+        uint256(static_cast<uint64_t>(gas_used)) * priority_gas_price;
 
     auto receipt = buildBcosReceipt(host, result, gas_used, rf, blockNumber);
 

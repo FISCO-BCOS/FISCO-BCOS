@@ -1,7 +1,7 @@
-#include "OpTestReceiptFactory.h"
 #include "TestPrinters.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-evm/opstack/OpTransition.h>
+#include <bcos-evm/test/opstack/OpTestReceiptFactory.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <opstack-executor/OpBlockExecute.h>  // encodeReceiptForRoot (seal merged here)
 #include <boost/test/unit_test.hpp>

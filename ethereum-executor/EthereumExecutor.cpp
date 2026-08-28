@@ -30,8 +30,7 @@ EthBlockInfo buildBlockInfo(
     if (rev >= EVMC_PARIS)
         info.prev_randao = config.prevRandao();
     else
-        info.prev_randao =
-            intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(info.difficulty)));
+        info.prev_randao = evmc::bytes32{static_cast<uint64_t>(info.difficulty)};
     auto const& cb = header.coinbase();
     if (cb.size() == sizeof(evmc_address))
         std::copy_n(cb.begin(), sizeof(evmc_address), info.coinbase.bytes);

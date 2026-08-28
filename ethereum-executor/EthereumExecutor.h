@@ -27,14 +27,15 @@
 #pragma once
 
 #include "EthereumTransition.h"
-#include "bcos-framework/storage2/RollbackableStorage.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/storage2/RollbackableStorage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Exceptions.h>
 #include <evmc/evmc.h>
 #include <evmone/evmone.h>
@@ -45,7 +46,6 @@
 #include <optional>
 #include <string>
 #include <system_error>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::executor_v1::eth
 {
@@ -221,7 +221,9 @@ public:
         uint64_t nodeChainId() const
         {
             if (auto const& cid = ledgerConfig.get().chainId(); cid.has_value())
-                return static_cast<uint64_t>(intx::be::load<intx::uint256>(*cid));
+                // fold of the trailing 8 bytes == the low 64 bits of the BE value, the
+                // same truncation the old static_cast<uint64_t>(intx-load) produced
+                return bcos::fromBigEndian<uint64_t>(cid->bytes);
             return 0;
         }
 
@@ -284,7 +286,8 @@ public:
                 //   state read, so it is resolved in execute() (the only
                 //   phase allowed to touch state).
             }
-            m_blobGasLeft = static_cast<int64_t>(evm::max_blob_gas_per_block(blobParamsForRevision(m_rev)));
+            m_blobGasLeft =
+                static_cast<int64_t>(evm::max_blob_gas_per_block(blobParamsForRevision(m_rev)));
             co_return;
         }
 
@@ -373,8 +376,7 @@ public:
                     // Genuinely invalid — skip execution; finish() produces a
                     // failure receipt and nothing is written for this transaction.
                     m_validationError = std::get<std::error_code>(validationResult);
-                    BCOS_LOG(INFO) << LOG_BADGE("EXECUTE")
-                                   << LOG_DESC("tx validation failed")
+                    BCOS_LOG(INFO) << LOG_BADGE("EXECUTE") << LOG_DESC("tx validation failed")
                                    << LOG_KV("error", m_validationError.value().message())
                                    << LOG_KV("code", m_validationError.value().value());
                 }

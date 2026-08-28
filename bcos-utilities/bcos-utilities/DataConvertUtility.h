@@ -273,6 +273,89 @@ bytes asBytes(std::string const& _b);
 
 // Big-endian to/from host endian conversion functions.
 
+namespace detail
+{
+/// Matches the repo's fixed-width unsigned multiprecision types (u160/u256/u512 and
+/// FixedBytes<N>::ArithType). Primary template: not one of them.
+template <class T>
+struct FixedWidthUnsigned
+{
+    static constexpr bool value = false;
+    static constexpr size_t bits = 0;
+};
+// note: Bits must be std::size_t, matching cpp_int_backend's MinBits/MaxBits parameter type —
+// with a mismatched type (e.g. unsigned) GCC correctly never selects this specialization
+template <std::size_t Bits, boost::multiprecision::expression_template_option ET>
+struct FixedWidthUnsigned<boost::multiprecision::number<
+    boost::multiprecision::cpp_int_backend<Bits, Bits, boost::multiprecision::unsigned_magnitude,
+        boost::multiprecision::unchecked, void>,
+    ET>>
+{
+    static constexpr bool value = true;
+    static constexpr size_t bits = Bits;
+};
+
+/// The limb-level fast path needs 64-bit limbs and a multi-limb fixed width: >128 bits keeps it
+/// off boost's single-double_limb "trivial" backend, whose storage layout differs. Anything else
+/// (bigint, builtin unsigned, 32-bit-limb builds) takes the generic shift loop.
+template <class T>
+concept LimbReadable = FixedWidthUnsigned<T>::value && FixedWidthUnsigned<T>::bits % 8 == 0 &&
+                       FixedWidthUnsigned<T>::bits > 128 &&
+                       sizeof(boost::multiprecision::limb_type) == 8;
+
+// the specialization must recognize the repo types on every platform (the limb-size condition
+// above may still veto the fast path, e.g. on 32-bit-limb builds, but a silent recognition
+// failure would quietly reroute production onto the slow loop)
+static_assert(FixedWidthUnsigned<u256>::bits == 256 && FixedWidthUnsigned<u160>::bits == 160 &&
+                  FixedWidthUnsigned<u512>::bits == 512,
+    "FixedWidthUnsigned must match the repo's fixed-width unsigned typedefs");
+
+/// Byte @a _k (0 = least significant) of @a _val, read straight from the limb array so no
+/// wide shifts run. Bytes at or above the significant limbs read as zero.
+template <LimbReadable T>
+inline uint8_t limbByte(T const& _val, size_t _k)
+{
+    using Limb = boost::multiprecision::limb_type;
+    size_t limbIndex = _k / sizeof(Limb);
+    if (limbIndex >= _val.backend().size())
+    {
+        return 0;
+    }
+    return (uint8_t)(_val.backend().limbs()[limbIndex] >> (8 * (_k % sizeof(Limb))));
+}
+
+/// Stores @a _val at @a out as exactly bits/8 big-endian bytes: whole-limb stores for the full
+/// limbs, byte reads for a partial top limb (e.g. u160's upper 4 bytes).
+template <LimbReadable T>
+inline void storeBigEndian(uint8_t* out, T const& _val)
+{
+    using Limb = boost::multiprecision::limb_type;
+    constexpr size_t valueBytes = FixedWidthUnsigned<T>::bits / 8;
+    constexpr size_t fullLimbs = valueBytes / sizeof(Limb);
+    auto const* limbs = _val.backend().limbs();
+    size_t significant = _val.backend().size();
+    for (size_t limbIndex = 0; limbIndex < fullLimbs; ++limbIndex)
+    {
+        Limb bigEndianLimb =
+            boost::endian::native_to_big(limbIndex < significant ? limbs[limbIndex] : (Limb)0);
+        std::memcpy(
+            out + valueBytes - sizeof(Limb) * (limbIndex + 1), &bigEndianLimb, sizeof(Limb));
+    }
+    for (size_t k = fullLimbs * sizeof(Limb); k < valueBytes; ++k)
+    {
+        out[valueBytes - 1 - k] = limbByte(_val, k);
+    }
+}
+
+/// Contiguous single-byte-element input: the shape every production caller passes (bytes,
+/// std::string, std::array, C arrays, bytesConstRef). Anything else keeps the generic loop.
+template <class In>
+concept ContiguousByteInput = requires(In const& input) {
+    std::data(input);
+    std::size(input);
+} && sizeof(std::remove_cvref_t<decltype(*std::data(std::declval<In const&>()))>) == 1;
+}  // namespace detail
+
 /// Converts a templated integer value to the big-endian byte-stream represented on a templated
 /// collection. The size of the collection object will be unchanged. If it is too small, it will not
 /// represent the value properly, if too big then the additional elements will be zeroed out.
@@ -283,10 +366,29 @@ inline void toBigEndian(T _val, Out& o_out)
 {
     static_assert(std::is_same<bigint, T>::value || !std::numeric_limits<T>::is_signed,
         "only unsigned types or bigint supported");  // bigint does not carry sign bit on shift
-    for (auto i = o_out.size(); i != 0; _val >>= 8, i--)
+    if constexpr (detail::LimbReadable<T>)
     {
-        T v = _val & (T)0xff;
-        o_out[i - 1] = (typename Out::value_type)(uint8_t)v;
+        size_t outSize = o_out.size();
+        if constexpr (sizeof(typename Out::value_type) == 1 && requires { std::data(o_out); })
+        {
+            if (outSize == detail::FixedWidthUnsigned<T>::bits / 8)
+            {
+                detail::storeBigEndian(reinterpret_cast<uint8_t*>(std::data(o_out)), _val);
+                return;
+            }
+        }
+        for (size_t i = 0; i < outSize; ++i)
+        {
+            o_out[outSize - 1 - i] = (typename Out::value_type)detail::limbByte(_val, i);
+        }
+    }
+    else
+    {
+        for (auto i = o_out.size(); i != 0; _val >>= 8, i--)
+        {
+            T v = _val & (T)0xff;
+            o_out[i - 1] = (typename Out::value_type)(uint8_t)v;
+        }
     }
 }
 
@@ -297,10 +399,43 @@ inline void toBigEndian(T _val, Out& o_out)
 template <class T, class _In>
 inline T fromBigEndian(_In const& _bytes)
 {
-    T ret = (T)0;
-    for (auto i : _bytes)
-        ret = (T)((ret << 8) | (byte)(typename std::make_unsigned<decltype(i)>::type)i);
-    return ret;
+    if constexpr (detail::LimbReadable<T> && detail::ContiguousByteInput<_In>)
+    {
+        using Limb = boost::multiprecision::limb_type;
+        constexpr size_t valueBytes = detail::FixedWidthUnsigned<T>::bits / 8;
+        constexpr size_t limbCount = (detail::FixedWidthUnsigned<T>::bits + 63) / 64;
+        T ret = (T)0;
+        auto& backend = ret.backend();
+        backend.resize(limbCount, limbCount);
+        Limb* limbs = backend.limbs();
+        std::fill_n(limbs, limbCount, (Limb)0);
+        auto const* input = reinterpret_cast<const uint8_t*>(std::data(_bytes));
+        size_t inputSize = std::size(_bytes);
+        // only the trailing min(inputSize, valueBytes) bytes contribute: the same
+        // trailing-bytes-win truncation the shift-fold loop below produces on over-wide input
+        size_t take = std::min(inputSize, valueBytes);
+        size_t fullLimbs = take / sizeof(Limb);
+        for (size_t limbIndex = 0; limbIndex < fullLimbs; ++limbIndex)
+        {
+            Limb bigEndianLimb;
+            std::memcpy(
+                &bigEndianLimb, input + inputSize - sizeof(Limb) * (limbIndex + 1), sizeof(Limb));
+            limbs[limbIndex] = boost::endian::big_to_native(bigEndianLimb);
+        }
+        for (size_t k = fullLimbs * sizeof(Limb); k < take; ++k)
+        {
+            limbs[k / sizeof(Limb)] |= (Limb)input[inputSize - 1 - k] << (8 * (k % sizeof(Limb)));
+        }
+        backend.normalize();
+        return ret;
+    }
+    else
+    {
+        T ret = (T)0;
+        for (auto i : _bytes)
+            ret = (T)((ret << 8) | (byte)(typename std::make_unsigned<decltype(i)>::type)i);
+        return ret;
+    }
 }
 
 bytes toBigEndian(u256 _val);

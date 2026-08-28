@@ -20,12 +20,27 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-task/TBBWait.h"
-#include "ethereum-executor/EthereumState.h"  // evm::toIntxU256 / evm::toBcosU256 / eth::clearAccountStorage
+#include "ethereum-executor/EthereumState.h"  // eth::EthAccount / eth::clearAccountStorage
 #include <evmc/evmc.h>
 #include <optional>
 
 namespace bcos::test
 {
+
+// bcos::u256 <-> intx::uint256 for the bcos-evm oracle types this bridge drives (the
+// evmone::state interfaces stay intx). ethereum-executor's own arithmetic and interfaces no
+// longer use intx, so these test-local copies retire together with the bcos-evm dependency.
+inline intx::uint256 testToIntxU256(bcos::u256 const& val)
+{
+    std::array<bcos::byte, 32> be{};
+    bcos::toBigEndian(val, be);
+    return intx::be::unsafe::load<intx::uint256>(be.data());
+}
+inline bcos::u256 testToBcosU256(intx::uint256 const& val)
+{
+    const auto be = intx::be::store<evmc::bytes32>(val);
+    return bcos::fromBigEndian<bcos::u256>(bcos::bytesConstRef(be.bytes, sizeof(be.bytes)));
+}
 
 /// A read-only evmone::state::StateView backed by BCOS storage + EVMAccount.
 /// Synchronous (required by the StateView interface), bridged with
@@ -93,7 +108,7 @@ private:
         if (nonceVal.has_value())
             acc.nonce = static_cast<uint64_t>(bcos::u256(nonceVal.value()));
 
-        acc.balance = bcos::executor_v1::eth::evm::toIntxU256(co_await evmAccount.balance());
+        acc.balance = testToIntxU256(co_await evmAccount.balance());
 
         auto codeHashVal = co_await evmAccount.codeHash();
         {
@@ -123,8 +138,8 @@ private:
         auto tableName = co_await evmAccount.path();
 
         bool hasStorage = false;
-        auto it = co_await storage2::range(storage, storage2::RANGE_SEEK,
-            executor_v1::StateKey{tableName, std::string_view{}});
+        auto it = co_await storage2::range(
+            storage, storage2::RANGE_SEEK, executor_v1::StateKey{tableName, std::string_view{}});
 
         while (auto kv = co_await it.next())
         {
@@ -183,7 +198,6 @@ task::Task<void> testApplyStateDiff(
     Storage& storage, evmone::state::StateDiff const& diff, crypto::Hash const& hashImpl)
 {
     using namespace bcos::ledger::account;
-    using bcos::executor_v1::eth::evm::toBcosU256;
     using bcos::executor_v1::eth::clearAccountStorage;
 
     // Phase 1: Process modified_accounts FIRST so created accounts exist.
@@ -193,7 +207,7 @@ task::Task<void> testApplyStateDiff(
         if (!co_await acc.exists())
             co_await acc.create();
         co_await acc.setNonce(std::to_string(m.nonce));
-        co_await acc.setBalance(toBcosU256(m.balance));
+        co_await acc.setBalance(testToBcosU256(m.balance));
         if (m.code.has_value())
         {
             auto const& c = *m.code;
