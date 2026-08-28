@@ -64,16 +64,16 @@ public:
 
     FakeASIO_Lifetime()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
-    {}
-    ~FakeASIO_Lifetime() noexcept override = default;
-
-    // Initiation mock point for the read path: park the read's completion in a manually-fired
-    // slot so a test can hold a read "in flight" and complete it deterministically.
-    void initiateReadSome(const std::shared_ptr<SocketFace>& /*socket*/,
-        ba::mutable_buffer /*buffers*/, ReadCompletion completion) override
     {
-        m_readHandler.emplace(std::move(completion));
+        // Initiation mock point for the read path (see the seam contract on
+        // ASIOInterface::setReadSomeInitiate): park the read's completion in a manually-fired
+        // slot so a test can hold a read "in flight" and complete it deterministically.
+        setReadSomeInitiate([this](const std::shared_ptr<SocketFace>& /*socket*/,
+                                 ba::mutable_buffer /*buffers*/, ReadCompletion completion) {
+            m_readHandler.emplace(std::move(completion));
+        });
     }
+    ~FakeASIO_Lifetime() noexcept override = default;
 
     bool hasReadHandler() const { return m_readHandler.has_value(); }
 

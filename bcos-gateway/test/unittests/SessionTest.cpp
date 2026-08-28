@@ -66,23 +66,24 @@ public:
     FakeASIO()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"))
-    {};
-    virtual ~FakeASIO() noexcept override {};
-
-    // Initiation mock point for the read path: park the read's completion and feed it buffered
-    // packets from the fake's own pool thread. The park is posted onto the pool thread so EVERY
-    // access to m_pendingReads happens on the single pool thread — the first arm happens on the
-    // caller's thread (Session::start() -> readLoop), and without the post it would race the pool
-    // thread's delivery in multi-session tests that share this fake (see deliverIfPossible).
-    void initiateReadSome(const std::shared_ptr<SocketFace>& /*socket*/,
-        ba::mutable_buffer buffers, ReadCompletion completion) override
     {
-        ++m_readsInFlight;
-        m_threadPool->post([this, buffers, completion = std::move(completion)]() mutable {
-            m_pendingReads.push_back(PendingRead{buffers, std::move(completion)});
-            deliverIfPossible();
+        // Initiation mock point for the read path (see the seam contract on
+        // ASIOInterface::setReadSomeInitiate): park the read's completion and feed it buffered
+        // packets from the fake's own pool thread. The park is posted onto the pool thread so
+        // EVERY access to m_pendingReads happens on the single pool thread — the first arm
+        // happens on the caller's thread (Session::start() -> readLoop), and without the post it
+        // would race the pool thread's delivery in multi-session tests that share this fake (see
+        // deliverIfPossible).
+        setReadSomeInitiate([this](const std::shared_ptr<SocketFace>& /*socket*/,
+                                 ba::mutable_buffer buffers, ReadCompletion completion) {
+            ++m_readsInFlight;
+            m_threadPool->post([this, buffers, completion = std::move(completion)]() mutable {
+                m_pendingReads.push_back(PendingRead{buffers, std::move(completion)});
+                deliverIfPossible();
+            });
         });
-    }
+    };
+    virtual ~FakeASIO() noexcept override {};
 
     // Synchronous helper for fakeClassTest (no session involved).
     template <typename Handler>

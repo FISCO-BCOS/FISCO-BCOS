@@ -61,25 +61,32 @@ public:
     // alike — a silently dropped completion would pin the suspended coroutine (and everything
     // its frame holds) forever. The awaitables live in the calling coroutine's own frame — no
     // bridge frame, and no per-operation allocation — and are obtained from the non-virtual
-    // awaitable* helpers below, which dispatch through a single overridable initiation hook.
+    // awaitable* helpers below.
     //
-    // The read mock point is the initiateReadSome VIRTUAL below: every read-loop test fake
-    // overrides it, and awaitableReadSome dispatches through it. CONTRACT for overrides (and
-    // for every initiate call in this header): the completion must be handed to a deferred
-    // executor (asio, or a post to some io_context) — it must be neither invoked nor dropped
-    // synchronously. A synchronous invocation / drop is neutralized by the arm/cancel handshake
-    // in AsioAwaitable (see AsioAwaitable.h) rather than corrupting the running coroutine, but
-    // the awaitable's total-completion guarantee is clearest when every override defers.
-    virtual void initiateReadSome(const std::shared_ptr<SocketFace>& socket,
-        boost::asio::mutable_buffer buffers,
-        detail::AsioCompletion<boost::system::error_code, std::size_t> completion);
+    // The read mock point is the injectable read-initiation hook (setReadSomeInitiate):
+    // production uses the default target (the real async_read_some dispatch, see the private
+    // initiateReadSome); read-loop test fakes replace it to park / control read completions
+    // deterministically. CONTRACT (for injected fakes and for every initiate call in this
+    // header): the completion must be handed to a deferred executor (asio, or a post to some
+    // io_context) — it must be neither invoked nor dropped synchronously. A synchronous
+    // invocation / drop is neutralized by the arm/cancel handshake in AsioAwaitable (see
+    // AsioAwaitable.h) rather than corrupting the running coroutine, but the awaitable's
+    // total-completion guarantee is clearest when every initiation defers.
+    using ReadSomeHandler = detail::AsioCompletion<boost::system::error_code, std::size_t>;
+    using ReadSomeInitiate = std::function<void(const std::shared_ptr<SocketFace>& socket,
+        boost::asio::mutable_buffer buffers, ReadSomeHandler completion)>;
+    // unit-test seam for the read path (see the contract above); set before reads are armed
+    void setReadSomeInitiate(ReadSomeInitiate initiate)
+    {
+        m_readSomeInitiate = std::move(initiate);
+    }
 
     auto awaitableReadSome(
         const std::shared_ptr<SocketFace>& socket, boost::asio::mutable_buffer buffers)
     {
         return makeAsioAwaitable<boost::system::error_code, std::size_t>(
             [this, socket, buffers](auto handler) {
-                initiateReadSome(socket, buffers, std::move(handler));
+                m_readSomeInitiate(socket, buffers, std::move(handler));
             });
     }
 
@@ -166,6 +173,12 @@ public:
     }
 
 private:
+    // Real read initiation: async_read_some dispatch on m_type (TCP vs SSL, with the unexpected-
+    // type default completing via operation_not_supported). This is the default target of
+    // m_readSomeInitiate (see the seam contract on setReadSomeInitiate).
+    void initiateReadSome(const std::shared_ptr<SocketFace>& socket,
+        boost::asio::mutable_buffer buffers, ReadSomeHandler completion);
+
     // resolve + connect helper backing awaitableResolveConnect (total completion: the handler
     // fires with an error when resolution fails — see the coroutine-interface comment above).
     // Templated because the handler is the move-only AsioCompletion.
@@ -204,5 +217,8 @@ private:
     std::optional<ba::ssl::context> m_srvContext;
     std::optional<ba::ssl::context> m_clientContext;
     int m_type = 0;
+    // The read-initiation seam (see setReadSomeInitiate): defaults to initiateReadSome; read
+    // fakes replace it before reads are armed.
+    ReadSomeInitiate m_readSomeInitiate;
 };
 }  // namespace bcos::gateway

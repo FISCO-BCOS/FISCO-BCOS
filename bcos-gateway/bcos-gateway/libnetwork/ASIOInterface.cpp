@@ -91,6 +91,12 @@ ASIOInterface::ASIOInterface(
 {
     boost::asio::socket_base::reuse_address optionReuseAddress(true);
     m_acceptor.set_option(optionReuseAddress);
+    // default read initiation: the real async_read_some dispatch (see the seam contract on
+    // setReadSomeInitiate in ASIOInterface.h)
+    m_readSomeInitiate = [this](const std::shared_ptr<SocketFace>& socket,
+                              boost::asio::mutable_buffer buffers, ReadSomeHandler completion) {
+        initiateReadSome(socket, buffers, std::move(completion));
+    };
 }
 
 ASIOInterface::~ASIOInterface() = default;
@@ -134,8 +140,7 @@ bi::tcp::acceptor* ASIOInterface::acceptor()
 }
 
 void ASIOInterface::initiateReadSome(const std::shared_ptr<SocketFace>& socket,
-    boost::asio::mutable_buffer buffers,
-    detail::AsioCompletion<boost::system::error_code, std::size_t> completion)
+    boost::asio::mutable_buffer buffers, ReadSomeHandler completion)
 {
     switch (m_type)
     {
