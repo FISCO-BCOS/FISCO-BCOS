@@ -175,13 +175,12 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
         session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
         weakSession = session;
 
-        // startWithPolicy() calls doRead() directly now (it used to defer the first read
-        // through ASIOInterface::strandPost, which no longer exists), so the read handler is
-        // armed synchronously here.
+        // startWithPolicy() arms the first read synchronously (the old code used to defer the
+        // first read through ASIOInterface::strandPost, which no longer exists).
         session->startWithPolicy<FakeASIO_Lifetime::ReadPolicy>();
 
         BOOST_REQUIRE_MESSAGE(fakeAsio->hasReadHandler(),
-            "Session::start()/doRead() must arm exactly one async read");
+            "Session::startWithPolicy() must arm exactly one async read");
         // `session` goes out of scope here: the in-flight read is now the only owner.
     }
 

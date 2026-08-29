@@ -165,7 +165,7 @@ protected:
     }
 
     // Everything below runs on the pool thread only: every read arm (including the first, via
-    // initiateReadSome's post) and every delivery are posted onto the single pool thread, so
+    // parkRead's post) and every delivery are posted onto the single pool thread, so
     // m_pendingReads is never touched from another thread. Multiple sessions may share this
     // fake, so parked reads form a FIFO list rather than a single slot.
     void deliverIfPossible()
@@ -437,7 +437,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
         session->setMessageHandler(
             [&recvPacketCnt, &recvBufferSize, &lastReadTime](
                 NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {
-                // doRead() call this function after reading a message
+                // the read loop calls this function after reading a message
                 lastReadTime = utcSteadyTime();
                 if (e.errorCode() != P2PExceptionType::Success)
                 {

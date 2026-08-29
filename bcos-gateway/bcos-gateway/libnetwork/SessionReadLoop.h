@@ -1,5 +1,5 @@
 /**
- * @brief Template definitions of Session::readLoop / doRead / startWithPolicy — the read path
+ * @brief Template definitions of Session::readLoop / startWithPolicy — the read path
  *        is a compile-time policy (see ASIOInterface::awaitableReadSome), so production compiles
  *        against the default policy (a direct, inlined async_read_some) while read-loop test
  *        fakes instantiate the same code with their own parking policy. The bodies live in this
@@ -166,7 +166,7 @@ task::Task<void> Session::readLoop()
                         }
 
                         // need more data: continue the outer loop and arm the next read
-                        // (replaces the session->doRead() recursion of the callback version)
+                        // (replaces the doRead() recursion of the old callback version)
                         break;
                     }
                     else

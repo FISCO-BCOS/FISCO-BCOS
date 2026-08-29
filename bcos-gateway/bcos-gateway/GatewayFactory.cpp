@@ -633,7 +633,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // Session Factory
     auto sessionFactory = std::make_shared<SessionFactory>(selfInfo,
         _config->sessionRecvBufferSize(), _config->allowMaxMsgSize(), _config->maxReadDataSize(),
-        _config->maxSendDataSize(), _config->maxMsgCountSendOneTime(), _config->enableCompress());
+        _config->maxSendDataSize(), _config->enableCompress());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     // Session Callback manager

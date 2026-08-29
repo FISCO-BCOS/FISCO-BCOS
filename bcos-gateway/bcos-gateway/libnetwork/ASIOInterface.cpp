@@ -91,8 +91,9 @@ ASIOInterface::ASIOInterface(
 {
     boost::asio::socket_base::reuse_address optionReuseAddress(true);
     m_acceptor.set_option(optionReuseAddress);
-    // The read path needs no runtime seam: awaitableReadSome compiles against the default
-    // policy (DefaultReadPolicy), whose invoke() calls the inline initiateReadSome below.
+    // The read path needs no runtime seam: awaitableReadSome compiles against the default policy
+    // (DefaultReadPolicy), whose invoke() directly dispatches async_read_some on the socket
+    // (TCP vs SSL by m_type) — see ASIOInterface.h.
 }
 
 ASIOInterface::~ASIOInterface() = default;

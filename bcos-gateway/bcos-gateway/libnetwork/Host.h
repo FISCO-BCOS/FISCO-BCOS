@@ -222,6 +222,12 @@ public:
     }
     bool tryAcquireConnectionToken();
 
+    // Retry delay after a failed accept-loop iteration (ms): the per-iteration catch in
+    // acceptLoop re-arms a short timer before retrying, so a persistently failing newSocket()
+    // (e.g. fd exhaustion) degrades to a slow retry loop instead of spinning the acceptor's
+    // io_context thread at 100% CPU.
+    constexpr static uint32_t ACCEPT_RETRY_INTERVAL_MS = 200;
+
 protected:
     /// obtain the common name from the subject:
     /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly

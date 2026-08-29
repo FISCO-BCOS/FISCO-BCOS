@@ -51,8 +51,8 @@ Session::Session(
     // createSession passes the config-validated session_recv_buffer_size, which is forced to
     // 2 * allow_max_msg_size = 64MB; allocating that per session up front let authenticated TLS
     // connect/close churn exhaust the heap (SIGSEGV inside malloc during Session construction).
-    // Allocate only INITIAL_SESSION_RECV_BUFFER_SIZE (16KB) initially and let doRead grow the
-    // buffer up to m_maxRecvBufferSize on demand, so only sessions that actually carry large
+    // Allocate only INITIAL_SESSION_RECV_BUFFER_SIZE (16KB) initially and let the read loop grow
+    // the buffer up to m_maxRecvBufferSize on demand, so only sessions that actually carry large
     // messages pay for a large buffer. _forceSize keeps the exact size for tests that assert a
     // specific small buffer.
     m_recvBuffer(_forceSize ? _recvBufferSize :
@@ -302,6 +302,41 @@ task::Task<void> Session::writeLoop()
         void release() { released = true; }
     } writeLoopGuard{this, payloads};
 
+    // Fails the in-flight batch: the payloads have already been moved out of m_writeQueue and no
+    // completion handler exists for them, so their callbacks would never fire (drop() only drains
+    // m_writeQueue). Invoked from every exception exit so the batch is settled exactly once — a
+    // batch destroyed with its callbacks unfired would pin every awaiting sender forever.
+    // Posted rather than inline when the network is still up, for the same reason as drop()'s
+    // drain: this code runs on the caller's stack, which may still be inside an await_suspend.
+    auto failBatch = [this](std::vector<Payload>& batch) {
+        for (auto& payload : batch)
+        {
+            if (payload.m_callback)
+            {
+                auto callback = std::move(payload.m_callback);
+                if (m_server.get().haveNetwork())
+                {
+                    m_server.get().asioInterface()->post([callback = std::move(callback)]() {
+                        callback(boost::asio::error::operation_aborted);
+                    });
+                }
+                else
+                {
+                    try
+                    {
+                        callback(boost::asio::error::operation_aborted);
+                    }
+                    catch (std::exception const& e2)
+                    {
+                        SESSION_LOG(WARNING) << LOG_DESC("write callback exception")
+                                             << LOG_KV("what", boost::diagnostic_information(e2));
+                    }
+                }
+            }
+        }
+        batch.clear();
+    };
+
     try
     {
         while (true)
@@ -386,38 +421,17 @@ task::Task<void> Session::writeLoop()
         // never fire (drop() only drains m_writeQueue). Fail them here — posted rather than
         // inline, for the same reason as drop()'s drain: this catch runs on the caller's stack,
         // which may still be inside an await_suspend.
-        for (auto& payload : payloads)
-        {
-            if (payload.m_callback)
-            {
-                auto callback = std::move(payload.m_callback);
-                if (m_server.get().haveNetwork())
-                {
-                    m_server.get().asioInterface()->post([callback = std::move(callback)]() {
-                        callback(boost::asio::error::operation_aborted);
-                    });
-                }
-                else
-                {
-                    try
-                    {
-                        callback(boost::asio::error::operation_aborted);
-                    }
-                    catch (std::exception const& e2)
-                    {
-                        SESSION_LOG(WARNING) << LOG_DESC("write callback exception")
-                                             << LOG_KV("what", boost::diagnostic_information(e2));
-                    }
-                }
-            }
-        }
+        failBatch(payloads);
         drop(TCPError);
     }
     catch (...)
     {
-        // never let an exception escape into the resuming asio handler (see AsioAwaitable.h)
+        // never let an exception escape into the resuming asio handler (see AsioAwaitable.h);
+        // fail the in-flight batch here too — the catch(std::exception&) arm above does it, and a
+        // batch destroyed with its callbacks unfired would pin every awaiting sender forever
         SESSION_LOG(ERROR) << LOG_DESC("write error") << LOG_KV("endpoint", nodeIPEndpoint())
                            << LOG_KV("what", boost::current_exception_diagnostic_information());
+        failBatch(payloads);
         drop(TCPError);
     }
 
@@ -775,22 +789,6 @@ void Session::start()
     // that want to park reads call the templated startWithPolicy<FakePolicy>() instead (see
     // SessionReadLoop.h).
     startWithPolicy<ASIOInterface::DefaultReadPolicy>();
-}
-
-void Session::doRead()
-{
-    if (m_active && m_server.get().haveNetwork())
-    {
-        // fire-and-forget: the detached task owns the coroutine chain; readLoop() holds the
-        // session alive in its frame (FIB-184) and exits on error, drop or shutdown.
-        task::wait(readLoop<ASIOInterface::DefaultReadPolicy>());
-    }
-    else
-    {
-        SESSION_LOG(ERROR) << LOG_DESC("callback doRead failed for session inactive")
-                           << LOG_KV("active", m_active.load())
-                           << LOG_KV("haveNetwork", m_server.get().haveNetwork());
-    }
 }
 
 bool Session::checkRead(boost::system::error_code _ec)
@@ -1268,7 +1266,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     // The pre-send checks run in the same order as the removed asyncSendMessage path (active →
     // allowMaxMsgSize → beforeMessageHandler), but the size limit is judged on the COMPRESSED wire
     // bytes (totalLength, computed above after compression) rather than the pre-compression
-    // estimate the old path used: the peer's read side (Session::doRead) rejects frames by the
+    // estimate the old path used: the peer's read side (the read loop) rejects frames by the
     // on-the-wire length too, so a message that only fits after compression is accepted here and
     // decodes on the peer — this is an intentional, documented divergence from asyncSendMessage.
     // The outgoing rate-limit handler receives the ACTUAL wire bytes (totalLength including the
@@ -1456,14 +1454,6 @@ void bcos::gateway::Session::setMaxSendDataSize(uint32_t _maxSendDataSize)
 {
     m_maxSendDataSize = _maxSendDataSize;
 }
-uint32_t bcos::gateway::Session::maxSendMsgCountS() const
-{
-    return m_maxSendMsgCount;
-}
-void bcos::gateway::Session::setMaxSendMsgCountS(uint32_t _maxSendMsgCountS)
-{
-    m_maxSendMsgCount = _maxSendMsgCountS;
-}
 uint32_t bcos::gateway::Session::allowMaxMsgSize() const
 {
     return m_allowMaxMsgSize;
@@ -1500,14 +1490,12 @@ std::shared_ptr<SessionFace> bcos::gateway::SessionFactory::createSession(Host& 
     session->setAllowMaxMsgSize(m_allowMaxMsgSize);
     session->setMaxReadDataSize(m_maxReadDataSize);
     session->setMaxSendDataSize(m_maxSendDataSize);
-    session->setMaxSendMsgCountS(m_maxSendMsgCountS);
     session->setEnableCompress(m_enableCompress);
     BCOS_LOG(INFO) << LOG_BADGE("SessionFactory") << LOG_DESC("create new session")
                    << LOG_KV("sessionRecvBufferSize", m_sessionRecvBufferSize)
                    << LOG_KV("allowMaxMsgSize", m_allowMaxMsgSize)
                    << LOG_KV("maxReadDataSize", m_maxReadDataSize)
                    << LOG_KV("maxSendDataSize", m_maxSendDataSize)
-                   << LOG_KV("maxSendMsgCountS", m_maxSendMsgCountS)
                    << LOG_KV("enableCompress", m_enableCompress);
     return session;
 }

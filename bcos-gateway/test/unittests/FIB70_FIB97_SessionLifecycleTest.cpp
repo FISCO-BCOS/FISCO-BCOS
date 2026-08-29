@@ -142,7 +142,7 @@ protected:
     }
 
     // Everything below runs on the pool thread only: every read arm (including the first, via
-    // initiateReadSome's post) and every delivery are posted onto the single pool thread, so
+    // parkRead's post) and every delivery are posted onto the single pool thread, so
     // m_pendingReads is never touched from another thread. Multiple sessions may share this
     // fake, so parked reads form a FIFO list rather than a single slot.
     void deliverIfPossible()

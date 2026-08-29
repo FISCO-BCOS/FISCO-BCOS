@@ -20,6 +20,7 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <coroutine>
+#include <cstdint>
 #include <exception>
 #include <tuple>
 #include <type_traits>
@@ -52,19 +53,40 @@ namespace bcos::gateway
 // deliberately torn down, and this matches the base semantics, where destroying an uninvoked
 // handler simply released its captured shared_ptr without firing any logic.
 //
-// Arm/cancel handshake: the completion and await_suspend share three atomics so a completion
-// that resolves DURING initiation can never touch a frame that has not suspended yet (resuming
-// or destroying a still-running coroutine is undefined behaviour):
-//  - m_suspended is set by await_suspend only after initiate() returns, marking the coroutine
-//    as safely suspended. operator() resumes only when it observes this flag; the destructor
-//    performs the frame-destroying rescue only when it observes it too.
-//  - a completion invoked before that point records m_completedBeforeSuspend and defers the
-//    resume; await_suspend observes it and resumes inline (returns false).
-//  - a completion DROPPED before that point (destroyed without invocation, outside stack
-//    unwinding) records m_droppedBeforeSuspend instead of destroying the running frame;
-//    await_suspend observes it and resumes inline with operation_aborted.
+// Arm/cancel handshake: the completion and await_suspend share ONE atomic state (see
+// detail::CompletionState below), and each side claims its transition with a single
+// compare_exchange_strong, so a completion that resolves DURING initiation can never touch a
+// frame that has not suspended yet, and exactly one side wins the transition:
+//  - await_suspend claims Init -> Suspended only after initiate() returns. On success the
+//    coroutine suspends and the completion owns the resume; on failure the observed state
+//    (Completed or Dropped) means the completion already settled synchronously inside
+//    initiate(), so await_suspend resumes inline (returns false) instead.
+//  - operator() writes the result, then claims Init -> Completed. On success await_suspend will
+//    observe it and resume inline — operator() must NOT resume the still-running frame; on
+//    failure the state is Suspended, so it resumes the suspended coroutine.
+//  - ~AsioCompletion claims Init -> Dropped when an armed completion is destroyed without
+//    invocation. On success await_suspend observes it and resumes inline with operation_aborted;
+//    on failure the state is Suspended, so the frame-destroying rescue runs.
+// The single-atomic claim removes the check-then-set window a multi-flag handshake has: a
+// cross-thread completion landing between a read and a later store can no longer be lost.
+//
+// Rescue scope: destroying the suspended frame releases the strong Session/Host reference, the
+// socket and the buffers — everything the coroutine body owns. One small frame is NOT
+// reclaimed: task::wait wraps these loop coroutines in an AsyncTask frame that is resumed only
+// through the inner coroutine's final_suspend, so destroying the inner handle directly orphans
+// the wrapper frame (a bounded, shutdown-scoped leak — one small AsyncTask per rescued
+// operation).
 namespace detail
 {
+// Handshake state shared by the completion and await_suspend (see the arm/cancel handshake
+// contract above). Each transition is claimed by exactly one side via compare_exchange_strong.
+enum class CompletionState : uint8_t
+{
+    Init = 0,   // no side has claimed the completion yet
+    Suspended,  // await_suspend has suspended the coroutine; the completion owns the resume
+    Completed,  // operator() ran (result written); await_suspend resumes inline
+    Dropped     // the armed completion was destroyed uninvoked; await_suspend fails inline
+};
 // Result tuple for the dropped-completion path: the first element (always boost::system::
 // error_code for every awaitable in this file) is operation_aborted, the remaining elements are
 // zero-initialized so the awaiting coroutine sees a well-formed error result.
@@ -86,16 +108,12 @@ class AsioCompletion
 {
 public:
     AsioCompletion(std::tuple<Results...>* result, std::coroutine_handle<> handle,
-        std::atomic<bool>* suspended, std::atomic<bool>* completedBeforeSuspend,
-        std::atomic<bool>* droppedBeforeSuspend)
-      : m_result(result), m_handle(handle), m_suspended(suspended),
-        m_completedBeforeSuspend(completedBeforeSuspend),
-        m_droppedBeforeSuspend(droppedBeforeSuspend)
+        std::atomic<CompletionState>* state)
+      : m_result(result), m_handle(handle), m_state(state)
     {}
     AsioCompletion(AsioCompletion&& other) noexcept
-      : m_result(other.m_result), m_handle(other.m_handle), m_suspended(other.m_suspended),
-        m_completedBeforeSuspend(other.m_completedBeforeSuspend),
-        m_droppedBeforeSuspend(other.m_droppedBeforeSuspend), m_armed(other.m_armed)
+      : m_result(other.m_result), m_handle(other.m_handle), m_state(other.m_state),
+        m_armed(other.m_armed)
     {
         // the moved-from instance no longer owns the completion duty
         other.m_armed = false;
@@ -114,19 +132,19 @@ public:
             // of unwinding; await_resume rethrows the initiation error instead.
             if (m_armed && std::uncaught_exceptions() == 0)
             {
-                if (m_suspended->load(std::memory_order_acquire))
+                auto expected = CompletionState::Init;
+                if (m_state->compare_exchange_strong(expected, CompletionState::Dropped,
+                        std::memory_order_acq_rel))
+                {
+                    // we claimed the drop: await_suspend has not suspended yet (state was
+                    // Init), so it will observe Dropped and resume inline with operation_aborted
+                    return;
+                }
+                if (expected == CompletionState::Suspended)
                 {
                     // the coroutine has suspended and no completion will ever come: release
                     // the frame (and everything it owns) — the completion-or-cancel rescue
                     m_handle.destroy();
-                }
-                else
-                {
-                    // the completion was dropped synchronously inside initiate() WITHOUT
-                    // throwing: the coroutine is still running on the initiator's stack, so
-                    // destroying it would be UB. Record the cancellation instead; await_suspend
-                    // observes it and resumes inline with operation_aborted.
-                    m_droppedBeforeSuspend->store(true, std::memory_order_release);
                 }
             }
         }
@@ -143,17 +161,19 @@ public:
         }
         m_armed = false;
         *m_result = std::make_tuple(std::move(results)...);
-        if (m_suspended->load(std::memory_order_acquire))
+        auto expected = CompletionState::Init;
+        if (m_state->compare_exchange_strong(
+                expected, CompletionState::Completed, std::memory_order_acq_rel))
+        {
+            // we claimed the completion: await_suspend has not suspended yet, so it will
+            // observe Completed and resume inline (return false) — resuming here would resume
+            // a still-running frame (UB)
+            return;
+        }
+        if (expected == CompletionState::Suspended)
         {
             // normal asynchronous completion: the coroutine has suspended, resume it
             resume();
-        }
-        else
-        {
-            // completed synchronously inside initiate(): the coroutine has not suspended yet,
-            // so resuming here would resume a running frame (UB). Record the result instead;
-            // await_suspend observes the flag and resumes inline by returning false.
-            m_completedBeforeSuspend->store(true, std::memory_order_release);
         }
     }
 
@@ -178,9 +198,7 @@ private:
 
     std::tuple<Results...>* m_result;
     std::coroutine_handle<> m_handle;
-    std::atomic<bool>* m_suspended;
-    std::atomic<bool>* m_completedBeforeSuspend;
-    std::atomic<bool>* m_droppedBeforeSuspend;
+    std::atomic<CompletionState>* m_state;
     bool m_armed = true;
 };
 }  // namespace detail
@@ -191,14 +209,11 @@ struct AsioAwaitable
     Initiate m_initiate;
     std::tuple<Results...> m_result{};
     std::exception_ptr m_error = nullptr;
-    // Arm/cancel handshake with the completion (see the detail::AsioCompletion contract above):
-    // m_suspended is set once await_suspend has passed initiate() back control, i.e. the
-    // coroutine is about to suspend; m_completedBeforeSuspend / m_droppedBeforeSuspend record a
-    // completion that fired / was dropped synchronously inside initiate(), which await_suspend
-    // turns into an inline resume instead of suspending.
-    std::atomic<bool> m_suspended{false};
-    std::atomic<bool> m_completedBeforeSuspend{false};
-    std::atomic<bool> m_droppedBeforeSuspend{false};
+    // Arm/cancel handshake with the completion (see the detail::CompletionState contract above):
+    // a single atomic state, claimed once by whichever side wins — await_suspend (Suspended),
+    // the completion (Completed), or its destructor (Dropped). A cross-thread completion landing
+    // between a read and a store of a multi-flag handshake can no longer be lost.
+    std::atomic<detail::CompletionState> m_state{detail::CompletionState::Init};
 
     constexpr bool await_ready() const noexcept { return false; }
     bool await_suspend(std::coroutine_handle<> handle)
@@ -207,21 +222,16 @@ struct AsioAwaitable
         // finish) this coroutine on another thread before initiate() returns — for the write
         // path the initiating thread is an arbitrary producer while completion runs on the
         // socket's io_context — destroying this frame while initiate() is still on the stack.
-        // Nothing member-owned may be touched after the call below.
         auto initiate = std::move(m_initiate);
         try
         {
             // The completion is moved into the operation: initiate must either hand it to a
             // deferred executor (asio) or invoke it before returning — never drop it. Both the
             // synchronous-invocation and the synchronous-drop cases are neutralized by the
-            // handshake (the completion observes m_suspended == false and defers to
-            // await_suspend instead of touching the running frame); the only sanctioned drop is
-            // initiation failure, which unwinds through this catch.
-            m_suspended.store(false, std::memory_order_relaxed);
-            m_completedBeforeSuspend.store(false, std::memory_order_relaxed);
-            m_droppedBeforeSuspend.store(false, std::memory_order_relaxed);
-            initiate(detail::AsioCompletion<Results...>(&m_result, handle, &m_suspended,
-                &m_completedBeforeSuspend, &m_droppedBeforeSuspend));
+            // handshake (the completion's CAS observes Init and defers to await_suspend instead
+            // of touching the running frame); the only sanctioned drop is initiation failure,
+            // which unwinds through this catch.
+            initiate(detail::AsioCompletion<Results...>(&m_result, handle, &m_state));
         }
         catch (...)
         {
@@ -232,22 +242,30 @@ struct AsioAwaitable
             m_error = std::current_exception();
             return false;
         }
-        if (m_completedBeforeSuspend.load(std::memory_order_acquire))
+        // After initiate() returns, touch only the single atomic state below — and only until
+        // the CAS decides: on success we return immediately (the completion owns the resume), so
+        // a cross-thread resume cannot catch us touching members; on failure the completion
+        // settled synchronously inside initiate() WITHOUT resuming (it observed Init and
+        // deferred to us), so the frame is still running and safe to read.
+        auto expected = detail::CompletionState::Init;
+        if (m_state.compare_exchange_strong(
+                expected, detail::CompletionState::Suspended, std::memory_order_acq_rel))
+        {
+            // we claimed the suspend: the coroutine is now parked and the completion (or its
+            // destructor) will resume / release it
+            return true;
+        }
+        if (expected == detail::CompletionState::Completed)
         {
             // the completion fired synchronously inside initiate(): the result is already in
             // m_result, so resume inline (return false) instead of suspending
             return false;
         }
-        if (m_droppedBeforeSuspend.load(std::memory_order_acquire))
-        {
-            // the completion was dropped synchronously inside initiate() without throwing: no
-            // completion will ever come. Resume inline with operation_aborted so the awaiting
-            // coroutine completes with an error instead of suspending forever.
-            m_result = detail::makeOperationAbortedResult<Results...>();
-            return false;
-        }
-        m_suspended.store(true, std::memory_order_release);
-        return true;
+        // Dropped: the completion was dropped synchronously inside initiate() without throwing.
+        // Resume inline with operation_aborted so the awaiting coroutine completes with an error
+        // instead of suspending forever.
+        m_result = detail::makeOperationAbortedResult<Results...>();
+        return false;
     }
     std::tuple<Results...> await_resume()
     {

@@ -123,6 +123,7 @@ task::Task<void> Host::acceptLoop()
     // failed iteration must be survivable, so each one is guarded and the loop continues.
     while (m_run)
     {
+        bool iterationFailed = false;
         try
         {
             auto socket = m_asioInterface->newSocket(true, NodeIPEndpoint());
@@ -190,8 +191,23 @@ task::Task<void> Host::acceptLoop()
         {
             // never let an exception escape into the resuming asio handler (see AsioAwaitable.h);
             // a failed iteration must not kill the accept loop, so log and continue
+            iterationFailed = true;
             HOST_LOG(ERROR) << LOG_DESC("accept iteration exception")
                             << LOG_KV("what", boost::current_exception_diagnostic_information());
+        }
+        // Give a failed iteration a suspension point before retrying: when the throw came from
+        // newSocket() (the canonical failure is fd exhaustion), the iteration never reached the
+        // accept co_await, so falling straight through would spin synchronously and starve the
+        // acceptor's io_context thread — the shared resolver and the session sockets live on it.
+        // A short timer turns a persistent failure into a slow retry loop instead of a livelock.
+        // (co_await is not permitted inside a catch handler, so the delay lives after the
+        // try/catch, reached only on a failed iteration.)
+        if (iterationFailed)
+        {
+            auto retryTimer = m_asioInterface->newTimer(ACCEPT_RETRY_INTERVAL_MS);
+            co_await makeAsioAwaitable<boost::system::error_code>([&retryTimer](auto handler) {
+                retryTimer.async_wait(std::move(handler));
+            });
         }
     }
 }
@@ -808,6 +824,21 @@ task::Task<void> Host::clientConnect(std::shared_ptr<SocketFace> socket,
         HOST_LOG(ERROR) << LOG_DESC("client connect exception")
                         << LOG_KV("endpoint", _nodeIPEndpoint)
                         << LOG_KV("what", boost::current_exception_diagnostic_information());
+        // Total completion for the caller-facing callback: an exception between
+        // insertPendingConns() and handshakeClient() (bad_alloc on endpointPublicKey,
+        // setVerifyCallback, or an initiation failure rethrown by await_resume) would otherwise
+        // leak the pending-connection entry — permanently blocking every future reconnect to
+        // this peer — and orphan the caller's callback. Settle the operation exactly like the
+        // error paths do: erase the entry, close the socket and answer the callback. POSTED, not
+        // inline — this catch can run on a producer's stack inside an await_suspend.
+        erasePendingConns(_nodeIPEndpoint);
+        socket->close();
+        if (callback)
+        {
+            boost::asio::post(socket->ioService(), [callback = std::move(callback)]() mutable {
+                callback(NetworkException(ConnectError, "Connect failed"), {}, {});
+            });
+        }
     }
 }
 
