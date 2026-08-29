@@ -22,6 +22,7 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
@@ -53,24 +54,35 @@ public:
     FakeASIO_FIB()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"))
+    {}
+    ~FakeASIO_FIB() noexcept override {}
+
+    // Compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): the read loop
+    // is launched with this policy (startWithPolicy<FakeASIO_FIB::ReadPolicy>) so every read
+    // parks its completion here instead of arming the real async_read_some.
+    struct ReadPolicy
     {
-        // Initiation mock point for the read path (see the seam contract on
-        // ASIOInterface::setReadSomeInitiate): park the read's completion and feed it buffered
-        // packets from the fake's own pool thread. The park is posted onto the pool thread so
-        // EVERY access to m_pendingReads happens on the single pool thread — the first arm
-        // happens on the caller's thread (Session::start() -> readLoop), and without the post it
-        // would race the pool thread's delivery in multi-session tests that share this fake (see
-        // deliverIfPossible).
-        setReadSomeInitiate([this](const std::shared_ptr<SocketFace>& /*socket*/,
-                                 ba::mutable_buffer buffers, ReadCompletion completion) {
-            ++m_readsInFlight;
-            m_threadPool->post([this, buffers, completion = std::move(completion)]() mutable {
-                m_pendingReads.push_back(PendingRead{buffers, std::move(completion)});
-                deliverIfPossible();
-            });
+        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketFace>& /*socket*/,
+            ba::mutable_buffer buffers, ReadCompletion completion)
+        {
+            dynamic_cast<FakeASIO_FIB*>(asio)->parkRead(buffers, std::move(completion));
+        }
+    };
+
+    // Read-policy target (see FakeASIO_FIB::ReadPolicy): park the read's completion and feed it
+    // buffered packets from the fake's own pool thread. The park is posted onto the pool thread
+    // so EVERY access to m_pendingReads happens on the single pool thread — the first arm
+    // happens on the caller's thread (Session::startWithPolicy -> readLoop), and without the
+    // post it would race the pool thread's delivery in multi-session tests that share this fake
+    // (see deliverIfPossible).
+    void parkRead(ba::mutable_buffer buffers, ReadCompletion completion)
+    {
+        ++m_readsInFlight;
+        m_threadPool->post([this, buffers, completion = std::move(completion)]() mutable {
+            m_pendingReads.push_back(PendingRead{buffers, std::move(completion)});
+            deliverIfPossible();
         });
     }
-    ~FakeASIO_FIB() noexcept override {}
 
     // Test teardown: complete every parked read with operation_aborted so the read loops — and
     // the sessions their frames keep alive — unwind BEFORE the test nulls the socket or
@@ -294,7 +306,7 @@ BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
         session->setMessageHandler(
             [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
 
-        session->start();
+        session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
         // Send a packet that will trigger a decode error (MESSAGE_ERROR)
         auto badPacket = std::make_shared<std::vector<uint8_t>>(10, 0xAB);
@@ -337,7 +349,7 @@ BOOST_AUTO_TEST_CASE(DecodeExceptionTriggersSessionDrop)
         session->setMessageHandler(
             [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
 
-        session->start();
+        session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
         // Send a packet that will trigger a decode exception
         auto badPacket = std::make_shared<std::vector<uint8_t>>(10, 0xCD);
@@ -494,7 +506,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
         session->setSessionCallbackManager(callbackManager);
         session->setMessageHandler(
             [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
-        session->start();
+        session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
         // the socket's io_context is never run by the fixture: drive it so the posted
         // async_write actually executes (and fails against the closed peer)

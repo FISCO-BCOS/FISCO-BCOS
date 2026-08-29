@@ -91,12 +91,8 @@ ASIOInterface::ASIOInterface(
 {
     boost::asio::socket_base::reuse_address optionReuseAddress(true);
     m_acceptor.set_option(optionReuseAddress);
-    // default read initiation: the real async_read_some dispatch (see the seam contract on
-    // setReadSomeInitiate in ASIOInterface.h)
-    m_readSomeInitiate = [this](const std::shared_ptr<SocketFace>& socket,
-                              boost::asio::mutable_buffer buffers, ReadSomeHandler completion) {
-        initiateReadSome(socket, buffers, std::move(completion));
-    };
+    // The read path needs no runtime seam: awaitableReadSome compiles against the default
+    // policy (DefaultReadPolicy), whose invoke() calls the inline initiateReadSome below.
 }
 
 ASIOInterface::~ASIOInterface() = default;
@@ -137,30 +133,6 @@ std::shared_ptr<SocketFace> ASIOInterface::newSocket(bool _server, NodeIPEndpoin
 bi::tcp::acceptor* ASIOInterface::acceptor()
 {
     return &m_acceptor;
-}
-
-void ASIOInterface::initiateReadSome(const std::shared_ptr<SocketFace>& socket,
-    boost::asio::mutable_buffer buffers, ReadSomeHandler completion)
-{
-    switch (m_type)
-    {
-    case TCP_ONLY:
-        socket->ref().async_read_some(buffers, std::move(completion));
-        break;
-    case SSL:
-        socket->sslref().async_read_some(buffers, std::move(completion));
-        break;
-    default:
-        // total completion: an unexpected type must still answer the read, or the awaiting
-        // read-loop coroutine pins forever. POST the completion rather than invoking it
-        // inline — initiateReadSome runs on the initiator's stack inside await_suspend, and
-        // an inline invocation would resume the coroutine from within its own await_suspend.
-        boost::asio::post(socket->ioService(),
-            [completion = std::move(completion)]() mutable {
-                completion(boost::asio::error::operation_not_supported, std::size_t{0});
-            });
-        break;
-    }
 }
 
 void ASIOInterface::setVerifyCallback(

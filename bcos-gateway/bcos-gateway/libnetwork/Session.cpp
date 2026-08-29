@@ -13,6 +13,7 @@
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
+#include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
 #include "bcos-gateway/libp2p/Common.h"  // for c_compressThreshold / c_zstdCompressLevel
 #include "bcos-utilities/BoostLog.h"
@@ -769,26 +770,11 @@ void Session::disconnect(DisconnectReason _reason)
 
 void Session::start()
 {
-    SESSION_LOG(INFO) << "[Session::start] this=" << this;
-    if (!m_active && m_server.get().haveNetwork())
-    {
-        m_active = true;
-        m_lastWriteTime.store(utcSteadyTime());
-        m_lastReadTime.store(utcSteadyTime());
-        doRead();
-    }
-
-    auto self = weak_from_this();
-    m_idleCheckTimer->registerTimeoutHandler([self]() {
-        auto session = self.lock();
-        if (session)
-        {
-            session->checkNetworkStatus();
-        }
-    });
-    m_idleCheckTimer->start();
-
-    SESSION_LOG(INFO) << "[start] start session " << LOG_KV("this", this);
+    // Production read policy (default): the read loop compiles against
+    // ASIOInterface::DefaultReadPolicy — a direct async_read_some call. Read-loop test fakes
+    // that want to park reads call the templated startWithPolicy<FakePolicy>() instead (see
+    // SessionReadLoop.h).
+    startWithPolicy<ASIOInterface::DefaultReadPolicy>();
 }
 
 void Session::doRead()
@@ -797,180 +783,13 @@ void Session::doRead()
     {
         // fire-and-forget: the detached task owns the coroutine chain; readLoop() holds the
         // session alive in its frame (FIB-184) and exits on error, drop or shutdown.
-        task::wait(readLoop());
+        task::wait(readLoop<ASIOInterface::DefaultReadPolicy>());
     }
     else
     {
         SESSION_LOG(ERROR) << LOG_DESC("callback doRead failed for session inactive")
                            << LOG_KV("active", m_active.load())
                            << LOG_KV("haveNetwork", m_server.get().haveNetwork());
-    }
-}
-
-task::Task<void> Session::readLoop()
-{
-    // FIB-184: the coroutine frame holds a strong reference to the session for the whole read
-    // loop. While the loop is suspended at the co_await below, the buffer handed to
-    // async_read_some points into this->m_recvBuffer and the stream is this->m_socket — the frame
-    // keeps both alive until the read completes, so a concurrent teardown on another thread can
-    // free them only after the read finishes. This supersedes the FIB-97/FIB-184 completion-
-    // handler captures with a structural guarantee.
-    auto self = shared_from_this();
-    try
-    {
-        while (m_active && m_server.get().haveNetwork())
-        {
-            if (!m_socket->isConnected())
-            {
-                SESSION_LOG(WARNING) << LOG_DESC("Error Reading ssl socket is close!");
-                drop(TCPError);
-                co_return;
-            }
-
-            auto writeBuffer = m_recvBuffer.asWriteBuffer();
-            std::size_t readSize =
-                (writeBuffer.size() > m_maxReadDataSize ? m_maxReadDataSize : writeBuffer.size());
-            auto [ec, bytesTransferred] =
-                co_await m_server.get().asioInterface()->awaitableReadSome(
-                    m_socket, boost::asio::buffer((void*)writeBuffer.data(), readSize));
-
-            if (ec)
-            {
-                SESSION_LOG(INFO) << LOG_DESC("doRead failed")
-                                  << LOG_KV("endpoint", nodeIPEndpoint())
-                                  << LOG_KV("message", ec.message());
-                drop(TCPError);
-                co_return;
-            }
-
-            m_lastReadTime.store(utcSteadyTime());
-
-            auto& recvBuffer = this->recvBuffer();
-            // FIB-184 (review): onWrite advances the write position and returns false if the
-            // just-read bytes would overrun the recv buffer. With the lazy-initial / grow-on-
-            // demand buffer the read size is bounded by the write-buffer span, so this should
-            // not happen; but if it ever did the bytes would be silently dropped and the stream
-            // desynchronized. Treat it as a transport error and drop the session instead.
-            if (!recvBuffer.onWrite(bytesTransferred))
-            {
-                SESSION_LOG(ERROR)
-                    << LOG_BADGE("doRead") << LOG_DESC("recv buffer overflow on write, drop")
-                    << LOG_KV("bytesTransferred", bytesTransferred)
-                    << LOG_KV("recvBufferSize", recvBuffer.recvBufferSize());
-                drop(TCPError);
-                co_return;
-            }
-
-            // decode every complete message already in the buffer, then loop back for more
-            while (true)
-            {
-                Message::Ptr message = m_messageFactory->buildMessage();
-                try
-                {
-                    auto bufferForWrite = recvBuffer.asWriteBuffer();
-                    auto readBuffer = recvBuffer.asReadBuffer();
-                    // Note: the decode function may throw exception
-                    ssize_t result = message->decode(readBuffer);
-                    if (result > 0)
-                    {
-                        NetworkException e(P2PExceptionType::Success, "Success");
-                        onMessage(e, message);
-                        recvBuffer.onRead(result);
-                    }
-                    else if (result == 0)
-                    {
-                        auto length = message->lengthDirect();
-                        if (length > allowMaxMsgSize())
-                        {
-                            SESSION_LOG(ERROR)
-                                << LOG_BADGE("doRead")
-                                << LOG_DESC("the message size exceeded the allow maximum value")
-                                << LOG_KV("msgSize", message->length())
-                                << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
-
-                            onMessage(NetworkException(P2PExceptionType::ProtocolError,
-                                          "ProtocolError(msg overflow)"),
-                                message);
-                            drop(UserReason);
-                            co_return;
-                        }
-
-                        if ((length > recvBuffer.recvBufferSize()) ||
-                            (length > bufferForWrite.size()) ||
-                            maxReadDataSize() > bufferForWrite.size())
-                        {
-                            recvBuffer.moveToHeader();
-
-                            // the write buffer is not enough, move the left data to recv
-                            // buffer header for waiting for the next read
-                            if (length >= recvBuffer.recvBufferSize())
-                            {
-                                auto resizeRecvBufferSize = 2 * length;
-                                resizeRecvBufferSize = std::min<std::size_t>(
-                                    resizeRecvBufferSize, m_maxRecvBufferSize);
-                                recvBuffer.resizeBuffer(resizeRecvBufferSize);
-
-                                SESSION_LOG(INFO)
-                                    << LOG_BADGE("doRead")
-                                    << LOG_DESC(
-                                           "the current recv buffer size is not enough for "
-                                           "the "
-                                           "next message, resize the recv buffer")
-                                    << LOG_KV("msgSize", length)
-                                    << LOG_KV("resizeRecvBufferSize", resizeRecvBufferSize)
-                                    << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
-                            }
-                        }
-
-                        // need more data: continue the outer loop and arm the next read
-                        // (replaces the session->doRead() recursion of the callback version)
-                        break;
-                    }
-                    else
-                    {
-                        SESSION_LOG(ERROR)
-                            << LOG_BADGE("doRead") << LOG_DESC("decode message error")
-                            << LOG_KV("result", result);
-                        onMessage(NetworkException(P2PExceptionType::ProtocolError,
-                                      "ProtocolError(decode msg error)"),
-                            message);
-                        drop(UserReason);
-                        co_return;
-                    }
-                }
-                catch (std::exception const& e)
-                {
-                    SESSION_LOG(ERROR) << LOG_DESC("Decode message exception")
-                                       << LOG_KV("message", boost::diagnostic_information(e));
-                    onMessage(NetworkException(P2PExceptionType::ProtocolError,
-                                  "ProtocolError(decode msg exception)"),
-                        message);
-                    drop(UserReason);
-                    co_return;
-                }
-                catch (...)
-                {
-                    SESSION_LOG(ERROR)
-                        << LOG_DESC("Decode message exception")
-                        << LOG_KV("message", boost::current_exception_diagnostic_information());
-                    onMessage(NetworkException(P2PExceptionType::ProtocolError,
-                                  "ProtocolError(decode msg exception)"),
-                        message);
-                    drop(UserReason);
-                    co_return;
-                }
-            }
-        }
-    }
-    catch (...)
-    {
-        // never let an exception escape into the resuming asio handler (see AsioAwaitable.h);
-        // a session whose read loop died without a drop would zombie until the idle timer
-        SESSION_LOG(ERROR) << LOG_DESC("read loop exception")
-                           << LOG_KV("endpoint", nodeIPEndpoint())
-                           << LOG_KV("what", boost::current_exception_diagnostic_information());
-        drop(TCPError);
-        co_return;
     }
 }
 

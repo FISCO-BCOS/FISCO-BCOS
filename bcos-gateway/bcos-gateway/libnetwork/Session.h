@@ -113,6 +113,14 @@ public:
     using Ptr = std::shared_ptr<Session>;
 
     void start() override;
+
+    // Read-policy seam (compile-time): identical lifecycle to start(), but the read loop is
+    // compiled against an explicit ReadPolicy so read-loop test fakes can inject a policy that
+    // parks / controls read completions (see ASIOInterface::awaitableReadSome). Production call
+    // sites use the virtual start() (the default policy) — this template costs nothing there.
+    // Definition lives in SessionReadLoop.h.
+    template <typename ReadPolicy>
+    void startWithPolicy();
     void disconnect(DisconnectReason _reason) override;
 
     task::Task<Message::Ptr> fastSendMessage(const Message& message,
@@ -195,6 +203,9 @@ public:
 
     virtual void checkNetworkStatus();
 
+    // Launch the read loop with the production read-initiation policy (a direct async_read_some,
+    // see ASIOInterface::awaitableReadSome). Test fakes that want to park reads use
+    // startWithPolicy<FakePolicy>() instead.
     void doRead();
 
     // FIB-184 (review): keep the grow ceiling private so it can only be read via
@@ -223,10 +234,14 @@ public:
     void drop(DisconnectReason _reason);
 
 private:
-    // Coroutine bodies backing doRead()/write(), launched fire-and-forget via task::wait. Each
-    // frame holds a strong reference to the session for the whole loop, so an in-flight
-    // read/write keeps the session, its recv buffer and its socket alive — the FIB-184 lifetime
-    // invariant, made structural instead of relying on completion-handler captures.
+    // Coroutine body backing doRead(), launched fire-and-forget via task::wait. Each frame
+    // holds a strong reference to the session for the whole loop, so an in-flight read keeps
+    // the session, its recv buffer and its socket alive — the FIB-184 lifetime invariant, made
+    // structural instead of relying on completion-handler captures. ReadPolicy is the
+    // compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): production
+    // instantiates ASIOInterface::DefaultReadPolicy, test fakes their own. Definition in
+    // SessionReadLoop.h.
+    template <typename ReadPolicy>
     task::Task<void> readLoop();
     // Single-writer write loop (see write()): drains m_writeQueue in batches and serializes every
     // async_write through the single in-flight loop. The frame holds a strong reference to the

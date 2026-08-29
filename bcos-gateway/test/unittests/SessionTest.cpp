@@ -23,6 +23,7 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
@@ -66,24 +67,35 @@ public:
     FakeASIO()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"))
-    {
-        // Initiation mock point for the read path (see the seam contract on
-        // ASIOInterface::setReadSomeInitiate): park the read's completion and feed it buffered
-        // packets from the fake's own pool thread. The park is posted onto the pool thread so
-        // EVERY access to m_pendingReads happens on the single pool thread — the first arm
-        // happens on the caller's thread (Session::start() -> readLoop), and without the post it
-        // would race the pool thread's delivery in multi-session tests that share this fake (see
-        // deliverIfPossible).
-        setReadSomeInitiate([this](const std::shared_ptr<SocketFace>& /*socket*/,
-                                 ba::mutable_buffer buffers, ReadCompletion completion) {
-            ++m_readsInFlight;
-            m_threadPool->post([this, buffers, completion = std::move(completion)]() mutable {
-                m_pendingReads.push_back(PendingRead{buffers, std::move(completion)});
-                deliverIfPossible();
-            });
-        });
-    };
+    {}
     virtual ~FakeASIO() noexcept override {};
+
+    // Compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): the read loop
+    // is launched with this policy (startWithPolicy<FakeASIO::ReadPolicy>) so every read parks
+    // its completion here instead of arming the real async_read_some.
+    struct ReadPolicy
+    {
+        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketFace>& /*socket*/,
+            ba::mutable_buffer buffers, ReadCompletion completion)
+        {
+            dynamic_cast<FakeASIO*>(asio)->parkRead(buffers, std::move(completion));
+        }
+    };
+
+    // Read-policy target (see FakeASIO::ReadPolicy): park the read's completion and feed it
+    // buffered packets from the fake's own pool thread. The park is posted onto the pool thread
+    // so EVERY access to m_pendingReads happens on the single pool thread — the first arm
+    // happens on the caller's thread (Session::startWithPolicy -> readLoop), and without the
+    // post it would race the pool thread's delivery in multi-session tests that share this fake
+    // (see deliverIfPossible).
+    void parkRead(ba::mutable_buffer buffers, ReadCompletion completion)
+    {
+        ++m_readsInFlight;
+        m_threadPool->post([this, buffers, completion = std::move(completion)]() mutable {
+            m_pendingReads.push_back(PendingRead{buffers, std::move(completion)});
+            deliverIfPossible();
+        });
+    }
 
     // Synchronous helper for fakeClassTest (no session involved).
     template <typename Handler>
@@ -443,7 +455,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
                 recvPacketCnt++;
             });
 
-        session->start();
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         // send packets
         while (auto packet = messageBuilder.nextPacket())
@@ -502,7 +514,7 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
                 return bcos::Error::buildError(
                     "", P2PExceptionType::OutBWOverflow, "outgoing bandwidth overflow");
             });
-        session->start();
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         P2PMessage message;
         message.setSeq(1);
@@ -626,7 +638,7 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
         auto sessionSocket = std::make_shared<RealLoopbackSocket>(io, std::move(client));
         auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
         session->setMessageFactory(fakeHost->messageFactory());
-        session->start();
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         // V2 wire format + payload well above the 1KB compress threshold -> compression must run
         P2PMessage message;
@@ -785,7 +797,7 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
         auto session = std::make_shared<Session>(
             std::make_shared<RealLoopbackSocket>(io, std::move(_client)), *host, 2, true);
         session->setMessageFactory(fakeMessageFactory);
-        session->start();
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
         sessions.push_back(session);
 
         auto p2pSession = std::make_shared<P2PSession>();
@@ -941,7 +953,7 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
         auto sessionSocket = std::make_shared<RealLoopbackSocket>(io, std::move(client));
         auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
         session->setMessageFactory(fakeHost->messageFactory());
-        session->start();
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         std::vector<std::thread> senders;
         senders.reserve(threadCount);

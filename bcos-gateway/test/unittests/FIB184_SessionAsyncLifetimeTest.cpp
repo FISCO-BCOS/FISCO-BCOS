@@ -34,6 +34,7 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
@@ -64,16 +65,27 @@ public:
 
     FakeASIO_Lifetime()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
-    {
-        // Initiation mock point for the read path (see the seam contract on
-        // ASIOInterface::setReadSomeInitiate): park the read's completion in a manually-fired
-        // slot so a test can hold a read "in flight" and complete it deterministically.
-        setReadSomeInitiate([this](const std::shared_ptr<SocketFace>& /*socket*/,
-                                 ba::mutable_buffer /*buffers*/, ReadCompletion completion) {
-            m_readHandler.emplace(std::move(completion));
-        });
-    }
+    {}
     ~FakeASIO_Lifetime() noexcept override = default;
+
+    // Compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): the read loop
+    // is launched with this policy (startWithPolicy<FakeASIO_Lifetime::ReadPolicy>) so every
+    // read parks its completion in a manually-fired slot.
+    struct ReadPolicy
+    {
+        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketFace>& /*socket*/,
+            ba::mutable_buffer /*buffers*/, ReadCompletion completion)
+        {
+            dynamic_cast<FakeASIO_Lifetime*>(asio)->parkRead(std::move(completion));
+        }
+    };
+
+    // Read-policy target (see FakeASIO_Lifetime::ReadPolicy): park the read's completion in a
+    // manually-fired slot so a test can hold a read "in flight" and complete it deterministically.
+    void parkRead(ReadCompletion completion)
+    {
+        m_readHandler.emplace(std::move(completion));
+    }
 
     bool hasReadHandler() const { return m_readHandler.has_value(); }
 
@@ -163,10 +175,10 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
         session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
         weakSession = session;
 
-        // start() calls doRead() directly now (it used to defer the first read through
-        // ASIOInterface::strandPost, which no longer exists), so the read handler is armed
-        // synchronously here.
-        session->start();
+        // startWithPolicy() calls doRead() directly now (it used to defer the first read
+        // through ASIOInterface::strandPost, which no longer exists), so the read handler is
+        // armed synchronously here.
+        session->startWithPolicy<FakeASIO_Lifetime::ReadPolicy>();
 
         BOOST_REQUIRE_MESSAGE(fakeAsio->hasReadHandler(),
             "Session::start()/doRead() must arm exactly one async read");
