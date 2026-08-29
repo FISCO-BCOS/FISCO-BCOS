@@ -597,9 +597,13 @@ private:
     // outside EL mode is obviously invalid rather than silently Ethereum mainnet.
     uint64_t m_ethereumChainId = 0;
     // The EL-mode fork schedule ([fork_timestamps] in config.genesis) lives on
-    // m_genesisConfig.m_ethereumForkSchedule so it is part of the genesis pin;
-    // the ethereumFork*Time() getters below forward to it (0 when unset for the
-    // pre-Prague forks, UINT64_MAX — "not yet active" — for osaka/bpo1/bpo2).
+    // m_genesisConfig.m_ethereumForkSchedule; the REQUIRED pre-Prague ladder
+    // (london..prague) is part of the genesis pin, while the post-Prague tail
+    // (osaka/bpo1/bpo2) is deliberately not pinned — those forks activate after
+    // genesis and must stay configurable (EIP-2124 fork-id handshake catches
+    // divergence). The ethereumFork*Time() getters below forward to it (0 when
+    // unset for the pre-Prague forks, UINT64_MAX — "not yet active" — for
+    // osaka/bpo1/bpo2).
 
     // config for cert
     std::string m_certPath;

@@ -312,11 +312,14 @@ BOOST_AUTO_TEST_CASE(legacyDashJoinedFormat)
     BOOST_CHECK(data.find("1000-1-3000000000") != std::string::npos);  // txCount-period-gas
 }
 
-// The EL-mode fork schedule ([fork_timestamps]) drives the EVM revision in EL mode, so it
-// is part of the genesis pin: loadForkTimestamps stores it on the GenesisConfig and
-// generateGenesisData emits a [forkTimestamps] section — two nodes holding different
-// schedules produce different genesis data and fail the genesis comparison instead of
-// silently running different EVM rules. Chains without the section are byte-unaffected.
+// The EL-mode fork schedule's REQUIRED ladder ([fork_timestamps] london..prague) drives
+// the EVM revision in EL mode, so it is part of the genesis pin: loadForkTimestamps stores
+// it on the GenesisConfig and generateGenesisData emits a [forkTimestamps] section — two
+// nodes holding different required schedules produce different genesis data and fail the
+// genesis comparison instead of silently running different EVM rules. The post-Prague tail
+// (osaka/bpo1/bpo2) is deliberately NOT pinned: those forks activate after genesis, so
+// configuring one later must not trip the byte-compared pin (EIP-2124 fork-id handshake
+// catches divergence). Chains without the section are byte-unaffected.
 BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
@@ -354,9 +357,18 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
 
     auto data = bcos::tool::generateGenesisData(gc, *cfg.ledgerConfig());
     BOOST_CHECK(data.find("[ethereum]") != std::string::npos);
-    BOOST_CHECK(data.find("mode: el") != std::string::npos);
+    BOOST_CHECK(data.find("mode:el") != std::string::npos);
     BOOST_CHECK(data.find("[forkTimestamps]") != std::string::npos);
+    BOOST_CHECK(data.find("london_time:0") != std::string::npos);
+    BOOST_CHECK(data.find("paris_time:0") != std::string::npos);
     BOOST_CHECK(data.find("shanghai_time:1681338455") != std::string::npos);
+    BOOST_CHECK(data.find("cancun_time:1710338135") != std::string::npos);
+    BOOST_CHECK(data.find("prague_time:1746612311") != std::string::npos);
+    // The post-Prague tail must NOT be pinned: a later osaka/bpo activation changes the
+    // config but must not trip the byte-compared restart comparison.
+    BOOST_CHECK(data.find("osaka_time:") == std::string::npos);
+    BOOST_CHECK(data.find("bpo1_time:") == std::string::npos);
+    BOOST_CHECK(data.find("bpo2_time:") == std::string::npos);
     // The EL chain id is part of the pin too.
     BOOST_CHECK(data.find("[web3]") != std::string::npos);
     BOOST_CHECK(data.find("chain_id:1") != std::string::npos);
@@ -369,6 +381,18 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
                "cancun_time=1710338135\nprague_time=1746612312\n"));
     BOOST_CHECK(
         data != bcos::tool::generateGenesisData(cfg2.genesisConfig(), *cfg2.ledgerConfig()));
+
+    // A node that differs ONLY in the post-Prague tail (osaka scheduled vs omitted)
+    // produces the SAME genesis data — the tail is not pinned, so activating Osaka
+    // later does not break the restart comparison (EIP-2124 handshake covers it).
+    NodeConfig cfgTail(keyFactory);
+    BOOST_REQUIRE_NO_THROW(cfgTail.loadGenesisConfigFromString(
+        base + "[ethereum]\nmode=el\n"
+               "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+               "cancun_time=1710338135\nprague_time=1746612311\n"
+               "osaka_time=1767225548\n"));
+    BOOST_CHECK(
+        data == bcos::tool::generateGenesisData(cfgTail.genesisConfig(), *cfgTail.ledgerConfig()));
 
     // A node with a different [web3] chain_id (same schedule) also produces
     // different genesis data — the id is pinned, not just validated.

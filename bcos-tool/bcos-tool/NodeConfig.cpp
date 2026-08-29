@@ -1174,7 +1174,9 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // Post-Prague forks (osaka, bpo1, bpo2, ...) are optional: absent means "not yet
     // active". They MUST be configured once activated on the chain — geth's EIP-2124
     // fork-id checksum chains every activated fork, so a missing entry makes us
-    // announce a stale checksum and get rejected by peers.
+    // announce a stale checksum and get rejected by peers. These three are also NOT
+    // part of the genesis pin (only the required london..prague ladder is pinned), so
+    // configuring one later does not trip the restart comparison.
     auto readOptionalTs = [&](std::string const& key, uint64_t& out) {
         if (auto value = section->get_optional<std::string>(key))
         {
@@ -1232,9 +1234,12 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
                                       "): fork activation times must be non-decreasing"));
         }
     }
-    // Stored on the GenesisConfig so generateGenesisData emits the schedule into
-    // the genesis pin: two nodes holding different schedules now fail the genesis
-    // comparison instead of silently running different EVM rules.
+    // Stored on the GenesisConfig so generateGenesisData emits the REQUIRED ladder
+    // (london..prague) into the genesis pin: two nodes holding different required
+    // schedules now fail the genesis comparison instead of silently running different
+    // EVM rules. The post-Prague tail (osaka/bpo1/bpo2) is deliberately not pinned —
+    // those forks activate after genesis, so they must stay configurable; divergence
+    // there is caught by the EIP-2124 fork-id handshake, not a startup abort.
     m_genesisConfig.m_ethereumForkSchedule = schedule;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadForkTimestamps")
@@ -2180,9 +2185,12 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     // config.genesis, loaded by loadForkTimestamps), not on the mere presence of a
     // [fork_timestamps] section — validateL2Invariants binds the two together, so an
     // ordinary v2 chain cannot waive this guard by pasting in a schedule nothing reads.
-    // The schedule itself IS part of the genesis pin: loadForkTimestamps stores it on the
-    // GenesisConfig and generateGenesisData emits it, so nodes holding different schedules
-    // fail the genesis comparison.
+    // The REQUIRED part of the schedule IS part of the genesis pin: loadForkTimestamps
+    // stores it on the GenesisConfig and generateGenesisData emits the london..prague
+    // ladder, so nodes holding different required schedules fail the genesis comparison.
+    // The post-Prague tail (osaka/bpo1/bpo2) is intentionally NOT pinned — those forks
+    // activate after genesis, so updating them must not trip the restart comparison
+    // (EIP-2124 fork-id handshake covers divergence).
     if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
         !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty() &&
         !m_genesisConfig.m_ethereumELMode)
@@ -3103,10 +3111,10 @@ std::string bcos::tool::generateGenesisData(
                       genesisConfig.m_evmcRevision, genesisConfig.m_evmcRevisionForks)
                << '\n';
         }
-        // The EL-mode fork schedule drives the EVM revision in EL mode, so it is
-        // part of the genesis pin for the same reason evmRevision is. Emitted only
-        // when present (mirroring the [ethGenesisHeader] pattern) so every legacy
-        // chain's genesis string stays byte-identical. The chain-level EL-mode
+        // The EL-mode fork schedule's REQUIRED ladder drives the EVM revision in EL
+        // mode, so it is part of the genesis pin for the same reason evmRevision is.
+        // Emitted only when present (mirroring the [ethGenesisHeader] pattern) so every
+        // legacy chain's genesis string stays byte-identical. The chain-level EL-mode
         // declaration ([ethereum] mode=el) precedes it, so a node whose genesis
         // declares EL mode but is missing the schedule fails the genesis comparison
         // instead of silently running a different EVM schedule.
@@ -3118,22 +3126,26 @@ std::string bcos::tool::generateGenesisData(
             // chains stay byte-identical) — an operator editing [web3] chain_id
             // after init now fails the genesis comparison on restart.
             ss << "[ethereum]" << '\n'
-               << "mode: el" << '\n'
+               << "mode:el" << '\n'
                << "[web3]" << '\n'
                << "chain_id:" << genesisConfig.m_web3ChainID << '\n';
         }
         if (genesisConfig.m_ethereumForkSchedule.has_value())
         {
             auto const& schedule = *genesisConfig.m_ethereumForkSchedule;
+            // Only the REQUIRED pre-Prague ladder is pinned: london..prague are
+            // required fields of [fork_timestamps] and are decided at genesis. The
+            // post-Prague tail (osaka/bpo1/bpo2) is deliberately NOT emitted — those
+            // forks activate AFTER genesis, so configuring one later must not trip the
+            // byte-compared pin (geth's CheckCompatible permits appending a future
+            // fork; divergence on a not-yet-activated fork is caught by the EIP-2124
+            // fork-id handshake, not by a startup abort).
             ss << "[forkTimestamps]" << '\n'
                << "london_time:" << schedule.m_londonTime << '\n'
                << "paris_time:" << schedule.m_parisTime << '\n'
                << "shanghai_time:" << schedule.m_shanghaiTime << '\n'
                << "cancun_time:" << schedule.m_cancunTime << '\n'
-               << "prague_time:" << schedule.m_pragueTime << '\n'
-               << "osaka_time:" << schedule.m_osakaTime << '\n'
-               << "bpo1_time:" << schedule.m_bpo1Time << '\n'
-               << "bpo2_time:" << schedule.m_bpo2Time << '\n';
+               << "prague_time:" << schedule.m_pragueTime << '\n';
         }
         if (genesisConfig.m_compatibilityVersion >=
             (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
