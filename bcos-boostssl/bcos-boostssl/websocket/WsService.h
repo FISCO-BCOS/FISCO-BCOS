@@ -170,8 +170,6 @@ private:
     std::vector<DisconnectHandler> m_disconnectHandlers;
 
     IOServicePool::Ptr m_ioservicePool;
-
-    std::shared_ptr<boost::asio::io_context> m_timerIoc;
 };
 
 }  // namespace bcos::boostssl::ws

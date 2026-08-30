@@ -34,7 +34,7 @@ BOOST_AUTO_TEST_SUITE(WsConnectorTest)
 
 BOOST_AUTO_TEST_CASE(test_WsConnectorTest)
 {
-    auto connector = std::make_shared<WsConnector>(nullptr);
+    auto connector = std::make_shared<WsConnector>();
     {
         std::string host = "0.0.0.0";
         uint16_t port = 1111;

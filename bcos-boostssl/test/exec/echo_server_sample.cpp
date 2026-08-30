@@ -86,7 +86,7 @@ int main(int argc, char** argv)
     {
         auto contextConfig = std::make_shared<ContextConfig>();
         contextConfig->initConfig("./boostssl.ini");
-        config->setContextConfig(contextConfig);
+        config->setContextConfig(*contextConfig);
     }
 
     auto wsService = std::make_shared<ws::WsService>();
