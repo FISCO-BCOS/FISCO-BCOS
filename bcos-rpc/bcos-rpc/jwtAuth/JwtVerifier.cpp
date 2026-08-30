@@ -185,7 +185,7 @@ std::optional<std::string> JwtVerifier::readSecret() const
         return std::nullopt;
     }
 
-    std::shared_ptr<std::string> secretContent;
+    std::string secretContent;
     try
     {
         secretContent = readContentsToString(m_config->secretFile());
@@ -195,12 +195,12 @@ std::optional<std::string> JwtVerifier::readSecret() const
         RPC_LOG(WARNING) << "Failed to read JWT secret file: " << e.what();
         return std::nullopt;
     }
-    if (!secretContent || secretContent->empty())
+    if (secretContent.empty())
     {
         return std::nullopt;
     }
 
-    auto secret = boost::algorithm::trim_copy(*secretContent);
+    auto secret = boost::algorithm::trim_copy(secretContent);
     if (secret.empty())
     {
         return std::nullopt;

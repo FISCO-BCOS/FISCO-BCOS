@@ -49,11 +49,11 @@ std::string HsmDataEncryption::encrypt(uint8_t* data, size_t size)
     // iv data would be changed after hsm encrypt, so keep it
     auto originIvData = ivData;
 
-    bytesPointer encData = m_symmetricEncrypt->symmetricEncryptWithInternalKey(
+    bytes encData = m_symmetricEncrypt->symmetricEncryptWithInternalKey(
         reinterpret_cast<const unsigned char*>(data), size, m_encKeyIndex, ivData.data(),
         SM4_IV_DATA_SIZE);
     // append iv data to end of encData
-    std::string value((char*)encData->data(), encData->size());
+    std::string value((char*)encData.data(), encData.size());
     value.insert(value.end(), originIvData.begin(), originIvData.end());
 
     return value;
@@ -62,9 +62,9 @@ std::string HsmDataEncryption::encrypt(uint8_t* data, size_t size)
 std::string HsmDataEncryption::decrypt(uint8_t* data, size_t size)
 {
     size_t cipherDataSize = size - SM4_IV_DATA_SIZE;
-    bytesPointer decData = m_symmetricEncrypt->symmetricDecryptWithInternalKey(
+    bytes decData = m_symmetricEncrypt->symmetricDecryptWithInternalKey(
         data, cipherDataSize, m_encKeyIndex, data + cipherDataSize, SM4_IV_DATA_SIZE);
-    std::string value((char*)decData->data(), decData->size());
+    std::string value((char*)decData.data(), decData.size());
 
     return value;
 }

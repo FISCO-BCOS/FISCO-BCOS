@@ -120,8 +120,9 @@ int main(int argc, char* argv[])
 
             if (mode == "encrypt")
             {
-                auto plaintext = readContents(inputFilePath);
-                auto encryptResult = kmsWrapper.encryptContents(plaintext);
+                bytes plaintext = readContents(inputFilePath);
+                auto encryptResult =
+                    kmsWrapper.encryptContents(std::make_shared<bytes>(std::move(plaintext)));
                 if (encryptResult == nullptr)
                 {
                     std::cerr << "Encryption failed!" << "\n";
@@ -132,8 +133,9 @@ int main(int argc, char* argv[])
             }
             else if (mode == "decrypt")
             {
-                auto ciphertext = readContents(inputFilePath);
-                auto decryptResult = kmsWrapper.decryptContents(ciphertext);
+                bytes ciphertext = readContents(inputFilePath);
+                auto decryptResult =
+                    kmsWrapper.decryptContents(std::make_shared<bytes>(std::move(ciphertext)));
                 if (decryptResult == nullptr)
                 {
                     std::cerr << "Decryption failed!" << "\n";

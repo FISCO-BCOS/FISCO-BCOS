@@ -38,7 +38,7 @@ public:
     using Ptr = std::shared_ptr<Timer>;
     using ConstPtr = std::shared_ptr<Timer>;
 
-    Timer(std::shared_ptr<boost::asio::io_context> _ioService, TimerTask&& _task,
+    Timer(boost::asio::io_context& _ioService, TimerTask&& _task,
         int _periodMS,  // NOLINT
         int _delayMS);
     Timer(const Timer&) = delete;
@@ -60,7 +60,7 @@ private:
     void executeTask();
 
     std::atomic_bool m_running = false;
-    std::shared_ptr<boost::asio::io_context> m_ioService;
+    boost::asio::io_context& m_ioService;
     TimerTask m_timerTask;
     int m_delayMS;
     int m_periodMS;
@@ -73,7 +73,7 @@ public:
     using Ptr = std::shared_ptr<TimerFactory>;
     using ConstPtr = std::shared_ptr<TimerFactory>;
 
-    explicit TimerFactory(std::shared_ptr<boost::asio::io_context> _ioService);
+    explicit TimerFactory(boost::asio::io_context& _ioService);
     TimerFactory(const TimerFactory&) = delete;
     TimerFactory(TimerFactory&&) = delete;
     TimerFactory& operator=(const TimerFactory&) = delete;
@@ -92,7 +92,7 @@ public:
         ;
 
 private:
-    std::shared_ptr<boost::asio::io_context> m_ioService;
+    boost::asio::io_context& m_ioService;
 };
 
 }  // namespace bcos::timer

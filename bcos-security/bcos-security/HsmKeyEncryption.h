@@ -43,13 +43,13 @@ public:
     // use to encrypt/decrypt node.key
     std::shared_ptr<bytes> encryptFile(const std::string& filename) override
     {
-        std::shared_ptr<bytes> fileContents = readContents(boost::filesystem::path(filename));
-        return encryptContents(fileContents);
+        bytes fileContents = readContents(boost::filesystem::path(filename));
+        return encryptContents(std::make_shared<bytes>(std::move(fileContents)));
     }
     std::shared_ptr<bytes> decryptFile(const std::string& filename) override
     {
-        std::shared_ptr<bytes> fileContents = readContents(boost::filesystem::path(filename));
-        return decryptContents(fileContents);
+        bytes fileContents = readContents(boost::filesystem::path(filename));
+        return decryptContents(std::make_shared<bytes>(std::move(fileContents)));
     }
     std::shared_ptr<bytes> encryptContents(const std::shared_ptr<bytes>& contents) override;
     std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) override;

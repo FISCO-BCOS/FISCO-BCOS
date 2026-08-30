@@ -65,7 +65,6 @@ void WsService::setWaitConnectFinishTimeout(int32_t _timeout)
 void WsService::setIOServicePool(IOServicePool::Ptr _ioservicePool)
 {
     m_ioservicePool = std::move(_ioservicePool);
-    m_timerIoc = m_ioservicePool->getIOService();
 }
 
 std::shared_ptr<WsConnector> WsService::connector() const noexcept
@@ -158,7 +157,8 @@ void WsService::start()
     // init m_timerFactory if it is not initialized
     if (!m_timerFactory)
     {
-        m_timerFactory = std::make_shared<timer::TimerFactory>(m_timerIoc);
+        m_timerFactory =
+            std::make_shared<timer::TimerFactory>(*m_ioservicePool->getIOService());
     }
 
     // start as server

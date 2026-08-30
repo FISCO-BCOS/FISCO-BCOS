@@ -658,14 +658,14 @@ void GatewayConfig::loadP2pConnectedNodes()
     // load p2p connected nodes
     std::set<NodeIPEndpoint> nodes;
     auto jsonContent = readContentsToString(boost::filesystem::path(nodeFilePath));
-    if (!jsonContent || jsonContent->empty())
+    if (jsonContent.empty())
     {
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment(
                 "initP2PConfig: unable to read nodes json file, path=" + nodeFilePath));
     }
 
-    parseConnectedJson(*jsonContent, nodes);
+    parseConnectedJson(jsonContent, nodes);
     m_connectedNodes = nodes;
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("loadP2pConnectedNodes ok!")
@@ -1301,7 +1301,7 @@ R GatewayConfig::checkFileExist(const std::string& _path)
 {
     auto fileContent = readContentsToString(boost::filesystem::path(_path));
 
-    bool fileExist = fileContent && !fileContent->empty();
+    bool fileExist = !fileContent.empty();
     if constexpr (std::same_as<R, void>)
     {
         BOOST_THROW_EXCEPTION(

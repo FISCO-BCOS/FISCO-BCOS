@@ -31,9 +31,8 @@ using namespace bcos::crypto;
 
 HsmSM4Crypto::HsmSM4Crypto(std::string _libPath) : m_hsmLibPath(std::move(_libPath)) {}
 
-bcos::bytesPointer HsmSM4Crypto::HsmSM4Encrypt(const unsigned char* _plainData,
-    size_t _plainDataSize, const unsigned char* _key, size_t, const unsigned char* _ivData,
-    size_t _ivDataSize)
+bcos::bytes HsmSM4Crypto::HsmSM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
+    const unsigned char* _key, size_t, const unsigned char* _ivData, size_t _ivDataSize)
 {
     // note: parm _ivDataSize and _keySize wasn't used
     if (!_ivData || _ivDataSize < SM4_IV_DATA_SIZE)
@@ -62,17 +61,16 @@ bcos::bytesPointer HsmSM4Crypto::HsmSM4Encrypt(const unsigned char* _plainData,
     CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
 
     unsigned int size;
-    auto encryptedData = std::make_shared<bytes>();
-    encryptedData->resize(inDataVLen);
+    bytes encryptedData;
+    encryptedData.resize(inDataVLen);
     provider.Encrypt(key, SM4_CBC, (unsigned char*)_ivData, (unsigned char*)inDataV.data(),
-        inDataVLen, (unsigned char*)encryptedData->data(), &size);
+        inDataVLen, (unsigned char*)encryptedData.data(), &size);
     CRYPTO_LOG(DEBUG) << "[HsmSM4Crypto::Encrypt] Encrypt Success";
     return encryptedData;
 }
 
-bcos::bytesPointer HsmSM4Crypto::HsmSM4Decrypt(const unsigned char* _cipherData,
-    size_t _cipherDataSize, const unsigned char* _key, size_t, const unsigned char* _ivData,
-    size_t _ivDataSize)
+bcos::bytes HsmSM4Crypto::HsmSM4Decrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+    const unsigned char* _key, size_t, const unsigned char* _ivData, size_t _ivDataSize)
 {
     if (!_ivData || _ivDataSize < SM4_IV_DATA_SIZE)
     {
@@ -84,8 +82,8 @@ bcos::bytesPointer HsmSM4Crypto::HsmSM4Decrypt(const unsigned char* _cipherData,
             std::runtime_error("Hsm SM4 HsmSM4Decrypt error, invalid iv data or iv data size"));
     }
 
-    auto decryptedData = std::make_shared<bytes>();
-    decryptedData->resize(_cipherDataSize);
+    bytes decryptedData;
+    decryptedData.resize(_cipherDataSize);
     Key key = Key();
     std::shared_ptr<const std::vector<byte>> pbKeyValue =
         std::make_shared<const std::vector<byte>>(_key, _key + 16);
@@ -94,12 +92,12 @@ bcos::bytesPointer HsmSM4Crypto::HsmSM4Decrypt(const unsigned char* _cipherData,
 
     unsigned int size;
     provider.Decrypt(key, SM4_CBC, (unsigned char*)_ivData, _cipherData, _cipherDataSize,
-        (unsigned char*)decryptedData->data(), &size);
+        (unsigned char*)decryptedData.data(), &size);
     CRYPTO_LOG(DEBUG) << "[HsmSM4Crypto::Decrypt] Decrypt Success";
     return decryptedData;
 }
 
-bcos::bytesPointer HsmSM4Crypto::symmetricEncryptWithInternalKey(const unsigned char* _plainData,
+bcos::bytes HsmSM4Crypto::symmetricEncryptWithInternalKey(const unsigned char* _plainData,
     size_t _plainDataSize, const unsigned int _keyIndex, const unsigned char* _ivData,
     size_t _ivDataSize)
 {
@@ -123,12 +121,12 @@ bcos::bytesPointer HsmSM4Crypto::symmetricEncryptWithInternalKey(const unsigned 
 
     // Encrypt
     unsigned int size;
-    auto encryptedData = std::make_shared<bytes>();
-    encryptedData->resize(inDataVLen);
+    bytes encryptedData;
+    encryptedData.resize(inDataVLen);
     SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
     auto encryptCode = provider.EncryptWithInternalKey((unsigned int)_keyIndex, SM4_CBC,
         (unsigned char*)_ivData, (unsigned char*)inDataV.data(), inDataVLen,
-        (unsigned char*)(encryptedData->data()), &size);
+        (unsigned char*)(encryptedData.data()), &size);
     if (encryptCode != SDR_OK)
     {
         CRYPTO_LOG(WARNING) << "[HsmSM4Crypto::symmetricEncryptWithInternalKey] encrypt ERROR "
@@ -139,7 +137,7 @@ bcos::bytesPointer HsmSM4Crypto::symmetricEncryptWithInternalKey(const unsigned 
     return encryptedData;
 }
 
-bcos::bytesPointer HsmSM4Crypto::symmetricDecryptWithInternalKey(const unsigned char* _cipherData,
+bcos::bytes HsmSM4Crypto::symmetricDecryptWithInternalKey(const unsigned char* _cipherData,
     size_t _cipherDataSize, const unsigned int _keyIndex, const unsigned char* _ivData,
     size_t _ivDataSize)
 {
@@ -153,13 +151,13 @@ bcos::bytesPointer HsmSM4Crypto::symmetricDecryptWithInternalKey(const unsigned 
             "Hsm SM4 DecryptWithInternalKey error, invalid iv data or iv data size"));
     }
 
-    auto decryptedData = std::make_shared<bytes>();
-    decryptedData->resize(_cipherDataSize);
+    bytes decryptedData;
+    decryptedData.resize(_cipherDataSize);
     SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
     unsigned int size;
     auto decryptCode =
         provider.DecryptWithInternalKey((unsigned int)_keyIndex, SM4_CBC, (unsigned char*)_ivData,
-            _cipherData, _cipherDataSize, (unsigned char*)decryptedData->data(), &size);
+            _cipherData, _cipherDataSize, (unsigned char*)decryptedData.data(), &size);
     if (decryptCode != SDR_OK)
     {
         CRYPTO_LOG(WARNING) << "[HsmSM4Crypto::symmetricDecryptWithInternalKey] decrypt ERROR "
@@ -168,9 +166,9 @@ bcos::bytesPointer HsmSM4Crypto::symmetricDecryptWithInternalKey(const unsigned 
     }
 
     // exclude padding data in decryptedData
-    int paddingCount = (int)decryptedData->back();
-    int pureDecryptedDataSize = decryptedData->size() - paddingCount;
-    decryptedData->resize(pureDecryptedDataSize);
+    int paddingCount = (int)decryptedData.back();
+    int pureDecryptedDataSize = decryptedData.size() - paddingCount;
+    decryptedData.resize(pureDecryptedDataSize);
 
     return decryptedData;
 }

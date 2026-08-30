@@ -28,9 +28,9 @@ namespace crypto
 const int AES_MAX_PADDING_SIZE = 26;
 const int AES_KEY_SIZE = 32;
 const int AES_IV_DATA_SIZE = 16;
-bytesPointer AESEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
-    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize);
-bytesPointer AESDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+bytes AESEncrypt(const unsigned char* _plainData, size_t _plainDataSize, const unsigned char* _key,
+    size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize);
+bytes AESDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize);
 class AESCrypto : public SymmetricEncryption
 {
@@ -38,25 +38,25 @@ public:
     using Ptr = std::shared_ptr<AESCrypto>;
     AESCrypto() = default;
     ~AESCrypto() override {}
-    bytesPointer symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
+    bytes symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
         const unsigned char* _key, size_t _keySize) override
     {
         return symmetricEncrypt(_plainData, _plainDataSize, _key, _keySize, _key, AES_IV_DATA_SIZE);
     }
-    bytesPointer symmetricDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+    bytes symmetricDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
         const unsigned char* _key, size_t _keySize) override
     {
         return symmetricDecrypt(
             _cipherData, _cipherDataSize, _key, _keySize, _key, AES_IV_DATA_SIZE);
     }
 
-    bytesPointer symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
+    bytes symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
         const unsigned char* _key, size_t _keySize, const unsigned char* _ivData,
         size_t _ivDataSize) override
     {
         return AESEncrypt(_plainData, _plainDataSize, _key, _keySize, _ivData, _ivDataSize);
     }
-    bytesPointer symmetricDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+    bytes symmetricDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
         const unsigned char* _key, size_t _keySize, const unsigned char* _ivData,
         size_t _ivDataSize) override
     {
