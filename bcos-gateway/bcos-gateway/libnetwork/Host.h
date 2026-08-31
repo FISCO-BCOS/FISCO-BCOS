@@ -18,6 +18,7 @@
 #include <boost/system/error_code.hpp>
 #include <atomic>
 #include <chrono>
+#include <future>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -329,6 +330,19 @@ protected:
     // reference, so a torn/stale read would re-arm async_accept after the cancel was consumed
     // and make the Host immortal.
     std::atomic<bool> m_run{false};
+
+    // Accept-loop exit latch (see Host::stop). The loop's frame holds a strong Host reference,
+    // forming a reference cycle (frame -> Host -> ASIOInterface -> IOServicePool -> io_context ->
+    // pending async_accept -> the frame) whose only cut point is the cancel Host::stop() posts
+    // to the acceptor's io_context — if that cancel is lost (the io_context was already stopped
+    // or drained, or the post threw), nothing else ends the loop and the whole graph leaks
+    // silently. stop() therefore waits on this latch with a bounded timeout and logs loudly on
+    // expiry, turning the silent permanent leak into a bounded wait plus a diagnosable line.
+    // m_acceptLoopStarted gates the wait (a Host whose loop never ran has nothing to wait for);
+    // the promise is satisfied when acceptLoop returns. The frame-destroy rescue path never
+    // satisfies it, which is exactly the case the timeout exists to diagnose.
+    std::atomic<bool> m_acceptLoopStarted{false};
+    std::promise<void> m_acceptLoopExit;
 
     P2PInfo m_p2pInfo;
 

@@ -873,6 +873,24 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     task::syncWait(service->broadcastMessageToNeighbors(
         message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{}));
 
+    // Session::write() posts the write-loop launch to the socket's io thread, so the broadcast
+    // returning only means each per-peer payload is QUEUED (the fan-out tasks are fire-and-
+    // forget). Wait (bounded) until both peers have actually received their frame before
+    // disconnecting below — otherwise the disconnect races the posted launch and drop() fails
+    // the queued payload instead of writing it. A genuinely lost frame still fails the size
+    // assertions at the end; the bound only keeps the peer reads from hanging forever first.
+    for (size_t frameRetry = 0; frameRetry < 500; ++frameRetry)
+    {
+        {
+            std::lock_guard<std::mutex> lock(recvMutex);
+            if (!receivedV2.empty() && !receivedV0.empty())
+            {
+                break;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
     // Round-7 review: disconnect the sessions BEFORE joining the peer threads. Each peer thread
     // blocks on a synchronous asio read; if a broadcast regression ever skipped a peer, that
     // thread would block forever and a disconnect placed after join() would never run — surfacing

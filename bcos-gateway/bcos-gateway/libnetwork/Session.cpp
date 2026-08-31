@@ -198,7 +198,13 @@ bool Session::tryPopSomeEncodedMsgs(
     // write's memory footprint; see the behaviour-change note in the PR description.
     size_t totalDataSize = 0;
     Payload payload;
-    while (totalDataSize < _maxSendDataSize && m_writeQueue.try_pop(payload))
+    // Floor the budget at 1 here — the point where the invariant "the byte budget is never 0"
+    // is actually needed. The GatewayConfig clamp warns the operator, but Session::
+    // setMaxSendDataSize stores whatever it is given, and a 0 budget makes the while below
+    // never enter: tryPop returns false, writeLoop breaks on its first iteration and every
+    // outbound write on the session stalls silently and permanently.
+    size_t budget = std::max<size_t>(_maxSendDataSize, 1);
+    while (totalDataSize < budget && m_writeQueue.try_pop(payload))
     {
         totalDataSize += payload.size();
         encodedMsgs.emplace_back(std::move(payload));
@@ -214,23 +220,50 @@ void Session::write()
         // a write loop is already in flight; it drains the queue
         return;
     }
-    // Release-on-unwind, matching the old std::unique_lock(try_to_lock) writer flag: if the
-    // launch throws (coroutine-frame allocation failure, or an exception from the prologue of
-    // writeLoop — e.g. bad_weak_ptr from shared_from_this() — propagating back out through
-    // task::wait), the flag must not stay set, or every later write() would early-return at the
-    // CAS above and the queue would never drain again.
+    // Launch the loop on the socket's own io thread, NOT synchronously on the caller's stack.
+    // write() is reached from a sender's await_suspend (fastSendMessageWith/WithoutResponse via
+    // send()): running writeLoop's first iteration there would let a shutdown race (Host::stop()
+    // clearing m_run between send()'s active() re-check and writeLoop's haveNetwork() check) call
+    // drop(TCPError) on that stack, and drop()'s inline drain would invoke the just-queued
+    // payload's callback — resuming the very coroutine whose await_suspend is still running
+    // (undefined behaviour; await_resume's throw could even destroy the frame await_suspend is
+    // standing on). With the launch posted, every settlement inside writeLoop — including the
+    // drop() it may trigger and failBatch's inline branch — runs on an io thread, so no callback
+    // can land on a sender's own stack. Cost is one post per write-loop start; the loop already
+    // suspends into awaitableWrite, so steady-state cost is unchanged.
     //
-    // The exception is NOT propagated to the caller: write() is reached only from a sender's
-    // await_suspend (fastSendMessageWith/WithoutResponse), and by then the Payload carrying the
-    // completion callback is already queued. An exception escaping await_suspend resumes the
-    // sender and is immediately rethrown, unwinding the sender's frame while the queued
-    // callback still captures the (now destroyed) awaitable — whoever popped the payload next
-    // would write through a dangling `this`. Match the base instead: swallow, log and drop,
-    // which drains m_writeQueue and posts every queued callback (the sender is still suspended,
-    // so its frame is alive when the callback runs).
+    // Release-on-unwind, matching the old std::unique_lock(try_to_lock) writer flag: if the
+    // launch itself throws (post allocation failure, or bad_weak_ptr from shared_from_this()),
+    // the flag must not stay set, or every later write() would early-return at the CAS above and
+    // the queue would never drain again. The exception is NOT propagated to the caller (see
+    // above: the caller may be a sender's await_suspend with the payload already queued);
+    // swallow, log and drop, which drains m_writeQueue and completes every queued callback.
+    auto socket = m_socket;
+    if (!socket)
+    {
+        // inactive session (setSocket(nullptr) raced the active() checks): the queue is
+        // settled by send()'s post-push re-check or by drop(), so just release the flag
+        m_writingInFlight.store(false);
+        return;
+    }
     try
     {
-        task::wait(writeLoop());
+        boost::asio::post(socket->ioService(), [self = shared_from_this()]() {
+            try
+            {
+                task::wait(self->writeLoop());
+            }
+            catch (...)
+            {
+                // the loop's own catches make this unreachable in practice; if the frame
+                // allocation itself threw, release the flag and settle the queue
+                self->m_writingInFlight.store(false);
+                SESSION_LOG(ERROR) << LOG_DESC("write loop launch failed")
+                                   << LOG_KV("what",
+                                          boost::current_exception_diagnostic_information());
+                self->drop(TCPError);
+            }
+        });
     }
     catch (...)
     {
@@ -461,10 +494,10 @@ task::Task<void> Session::writeLoop()
     // was draining, hand the writer role to a fresh loop. Runs after every exit path (normal
     // drain, drop, exception). No wakeup is ever lost: a producer that pushed after the last
     // drain either wins the CAS in its own write() (flag already cleared) or this tail finds the
-    // queue non-empty and re-arms. The re-arm (write()) drives the next loop only to its first
-    // suspension (task::wait is fire-and-forget), so recursion is bounded to depth one. Gated on
-    // active(): after a drop the queue is drained by drop() (and late producers fail via send()'s
-    // re-check), so re-arming there would just spin a fresh loop into the same teardown.
+    // queue non-empty and re-arms. The re-arm (write()) posts the next loop's launch to the
+    // socket's io thread, so it never extends this stack. Gated on active(): after a drop the
+    // queue is drained by drop() (and late producers fail via send()'s re-check), so re-arming
+    // there would just spin a fresh loop into the same teardown.
     //
     // The guard is released BEFORE the flag is cleared so its destructor never fires on this path
     // (it must not clear the flag that a re-armed write() has just claimed). The destroy path
@@ -520,13 +553,14 @@ void Session::drop(DisconnectReason _reason)
     // Also covers Session::write()'s early returns: they call drop(TCPError) right after the
     // payload has been pushed into m_writeQueue.
     //
-    // FIB-185 (review): complete these callbacks OFF the caller's stack. drop() is reachable from
-    // Session::write()'s early-return path, which runs on the stack of a sender that is still
-    // inside its own await_suspend — calling the callback inline there would resume that coroutine
-    // from inside its own await_suspend (the exact hazard send()'s early-return branch avoids by
-    // posting). Post to the shared pool; when the host is already gone there is no live executor
-    // to hand it to, so fall back to inline — the same shape as the notifyDisconnect / closeSocket
-    // branches below.
+    // FIB-185 (review): complete these callbacks OFF the caller's stack whenever an executor is
+    // available. writeLoop never runs on a sender's stack anymore (Session::write() posts its
+    // launch), but drop() remains reachable from arbitrary caller stacks — including write()'s
+    // launch-failure catch, which can still sit inside a sender's await_suspend — so calling the
+    // callback inline here could resume a coroutine from inside its own await_suspend (the exact
+    // hazard send()'s early-return branch avoids by posting). Post to the shared pool; when the
+    // host is already gone there is no live executor to hand it to, so fall back to inline —
+    // the same shape as the notifyDisconnect / closeSocket branches below.
     Payload payload;
     while (m_writeQueue.try_pop(payload))
     {

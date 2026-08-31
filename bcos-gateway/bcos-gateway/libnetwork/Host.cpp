@@ -112,7 +112,9 @@ void Host::startAccept(boost::system::error_code /*boost_error*/)
         HOST_LOG(INFO) << LOG_DESC("P2P StartAccept") << LOG_KV("Host", m_listenHost) << ":"
                        << m_listenPort;
         // fire-and-forget: the detached task owns the coroutine chain; acceptLoop() exits when
-        // Host::stop() clears m_run and cancels the acceptor.
+        // Host::stop() clears m_run and cancels the acceptor. Arm the exit latch BEFORE launching
+        // so stop() can never miss a started loop (see Host::stop).
+        m_acceptLoopStarted.store(true, std::memory_order_release);
         task::wait(acceptLoop());
     }
 }
@@ -141,7 +143,20 @@ task::Task<void> Host::acceptLoop()
             /// network accept failed
             if (ec || !m_run)
             {
-                HOST_LOG(ERROR) << "Error: " << ec;
+                // A REAL accept error (EMFILE/ENFILE — fd exhaustion arrives here as an
+                // error_code, not as a throw) must take the same retry backoff as a thrown
+                // iteration below: the pending connection stays in the listen backlog, so the
+                // next async_accept fails identically and an un-delayed loop would spin on the
+                // acceptor's io_context thread, allocating a Socket + ssl::stream per turn and
+                // starving the sessions and the shared resolver on that context.
+                // operation_aborted (Host::stop()'s cancel) stays on the fast path so shutdown
+                // is not delayed — and never logged at ERROR.
+                if (ec && ec != boost::asio::error::operation_aborted)
+                {
+                    HOST_LOG(ERROR) << LOG_DESC("accept failed")
+                                    << LOG_KV("message", ec.message());
+                    iterationFailed = true;
+                }
                 socket->close();
                 // re-arm accept (the old code recursed into startAccept here)
                 continue;
@@ -202,13 +217,16 @@ task::Task<void> Host::acceptLoop()
             HOST_LOG(ERROR) << LOG_DESC("accept iteration exception")
                             << LOG_KV("what", boost::current_exception_diagnostic_information());
         }
-        // Give a failed iteration a suspension point before retrying: when the throw came from
-        // newSocket() (the canonical failure is fd exhaustion), the iteration never reached the
-        // accept co_await, so falling straight through would spin synchronously and starve the
-        // acceptor's io_context thread — the shared resolver and the session sockets live on it.
-        // A short timer turns a persistent failure into a slow retry loop instead of a livelock.
-        // (co_await is not permitted inside a catch handler, so the delay lives after the
-        // try/catch, reached only on a failed iteration.)
+        // Give a failed iteration a suspension point before retrying. Two failure shapes land
+        // here: a throw (newSocket() allocation — the canonical cause is fd exhaustion —,
+        // remoteEndpoint, or the frame allocation inside task::wait(serverHandshake(...))) never
+        // reached the accept co_await, so falling straight through would spin synchronously; and
+        // a real accept error_code (EMFILE/ENFILE, marked above) would re-fail identically on the
+        // next async_accept because the pending connection stays in the listen backlog. Both
+        // would starve the acceptor's io_context thread — the shared resolver and the session
+        // sockets live on it. A short timer turns a persistent failure into a slow retry loop
+        // instead of a livelock. (co_await is not permitted inside a catch handler, so the delay
+        // lives after the try/catch, reached only on a failed iteration.)
         // The timer MUST be armed on the acceptor's own executor (newAcceptorTimer), not on a
         // round-robin pool context: co_await resumes the loop on the timer's thread, and only
         // the acceptor's single io_context thread serializes the next while (m_run) re-check and
@@ -239,6 +257,17 @@ task::Task<void> Host::acceptLoop()
                                        "what", boost::current_exception_diagnostic_information());
             }
         }
+    }
+    // Satisfy the stop() exit latch (see Host::stop): the loop has returned, so its frame's
+    // strong Host reference is about to go away. The frame-destroy rescue path never reaches
+    // here — that is precisely the case stop()'s bounded wait exists to diagnose.
+    try
+    {
+        m_acceptLoopExit.set_value();
+    }
+    catch (...)
+    {
+        // a second acceptLoop after a Host restart finds the promise already satisfied
     }
 }
 
@@ -952,8 +981,35 @@ void Host::stop()
             // ASIOInterface and the acceptor) alive, so "acceptor destruction" can never end the
             // loop from the outside — only the NEXT completed accept lets the loop observe
             // m_run == false and exit. With no inbound connection, a Host whose cancel was lost
-            // here stays alive until stop() is retried.
+            // here stays alive until stop() is retried. The bounded wait below is what makes
+            // this diagnosable instead of silent.
             HOST_LOG(WARNING) << LOG_DESC("cancel acceptor on stop failed")
+                              << LOG_KV("what", boost::current_exception_diagnostic_information());
+        }
+    }
+    // Bounded wait for the accept loop to exit (see the latch contract in Host.h): the loop's
+    // frame holds a strong Host reference, so a lost cancel above — or an acceptor io_context
+    // that was already stopped/drained before the post — would otherwise leak the whole Host
+    // graph silently. After a successful cancel the loop exits within one event-loop turn (plus
+    // at most one ACCEPT_RETRY_INTERVAL_MS backoff), so 10s is generous; a timeout means the
+    // cancel never landed and this Host will outlive its teardown. Callers run stop() off the
+    // pool threads (Service::stop / ~Host on the shutdown path), so waiting here cannot block
+    // the acceptor's io_context thread the loop needs to exit.
+    if (m_acceptLoopStarted.load(std::memory_order_acquire))
+    {
+        try
+        {
+            if (m_acceptLoopExit.get_future().wait_for(std::chrono::seconds(10)) !=
+                std::future_status::ready)
+            {
+                HOST_LOG(ERROR) << LOG_DESC("accept loop did not exit within 10s of stop(); "
+                                            "the posted cancel was likely lost and this Host "
+                                            "(ASIOInterface, acceptor, teardown pool) may leak");
+            }
+        }
+        catch (...)
+        {
+            HOST_LOG(WARNING) << LOG_DESC("accept loop exit wait failed")
                               << LOG_KV("what", boost::current_exception_diagnostic_information());
         }
     }
