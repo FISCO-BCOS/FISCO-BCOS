@@ -17,6 +17,7 @@
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/protocol/TxGasModel.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <algorithm>
@@ -101,11 +102,11 @@ inline std::optional<evmc::address> recoverAuthority(protocol::Authorization con
 // has to use this exact formula -- a second copy would drift at the next hard fork that moves
 // EIP-7623's min_cost or the authorization-list cost. Re-imported so the call sites below and
 // the qualified `eth_transition_detail::compute_tx_intrinsic_cost` uses resolve unchanged.
-using bcos::protocol::compute_access_list_cost;
-using bcos::protocol::compute_tx_data_tokens;
-using bcos::protocol::compute_tx_intrinsic_cost;
-using bcos::protocol::num_words;
-using bcos::protocol::TransactionCost;
+using bcos::protocol::gas::compute_access_list_cost;
+using bcos::protocol::gas::compute_tx_data_tokens;
+using bcos::protocol::gas::compute_tx_intrinsic_cost;
+using bcos::protocol::gas::num_words;
+using bcos::protocol::gas::TransactionCost;
 
 inline evmc_message build_message(
     protocol::Transaction const& tx, int64_t execution_gas_limit) noexcept

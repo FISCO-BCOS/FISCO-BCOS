@@ -26,10 +26,9 @@
 //
 // Lives in bcos-framework (not in the executor) because the admission layer must not link
 // ethereum-executor: EthereumTransition.h drags in EthereumHost.h / EthereumState.h / evmone,
-// and neither txpool nor rpc can reach evmone today. The only dependency here is the evmc
-// header, which is header-only. Balance arithmetic that must not wrap uses bcos::u512 from
-// bcos-utilities, NOT intx -- bcos-framework is the core interface library and must not pull
-// intx into every module that depends on it.
+// and neither txpool nor rpc can reach evmone today. What this header adds on top of what
+// bcos-framework already carries is the evmc header alone, which is header-only -- no evmone,
+// no intx.
 
 #pragma once
 
@@ -37,7 +36,6 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <algorithm>
-#include <array>
 #include <cstdint>
 #include <evmc/evmc.hpp>
 #include <optional>
@@ -47,14 +45,23 @@ namespace bcos::protocol
 {
 
 /// EIP-7825: the per-transaction gas cap enforced from Osaka onwards.
-constexpr auto MAX_TX_GAS_LIMIT = 0x1000000;  // 2**24
+inline constexpr int64_t MAX_TX_GAS_LIMIT = 0x1000000;  // 2**24
 
 /// EIP-7702: intrinsic cost charged per authorization-list entry.
 inline constexpr int64_t AUTHORIZATION_EMPTY_ACCOUNT_COST = 25000;
 
 /// Resolve the recipient of a bcos Transaction (Ethereum addresses are big-endian and
-/// right-aligned). std::nullopt means contract creation -- returned for an empty `to` or a
-/// malformed non-20-byte value.
+/// right-aligned). std::nullopt means contract creation.
+///
+/// A malformed `to` -- one that is neither empty nor a well-formed 20-byte address -- also
+/// returns nullopt and is therefore priced and executed as a CREATE, where geth and evmone
+/// reject it at decode. That collapse is the executor's long-standing behaviour and is left
+/// unchanged here, because changing it would change consensus. What stands in front of it is
+/// txpool::isValidToField, on both pool entry points: TxValidator.cpp for submissions and
+/// MemoryStorage.cpp for the proposal path (issue #5318). Note it stands down entirely under
+/// g_BCOSConfig.isWasm(), so this is a guard on the EVM chain modes, not an invariant.
+///
+/// Do not add a caller that reads this nullopt as "definitely empty".
 inline std::optional<evmc::address> ethToAddress(Transaction const& tx)
 {
     auto const& tb = tx.to();
@@ -87,6 +94,12 @@ inline std::optional<evmc::address> ethToAddress(Transaction const& tx)
     // Anything else (short raw bytes, malformed hex) is contract creation.
     return std::nullopt;
 }
+
+/// The cost model proper. Nested one level deeper than ethToAddress and the constants because
+/// `num_words` / `TransactionCost` are names a caller would plausibly define itself, and
+/// bcos::protocol is opened wholesale by `using namespace` across the tree.
+namespace gas
+{
 
 constexpr int64_t num_words(size_t size_in_bytes) noexcept
 {
@@ -121,7 +134,14 @@ struct TransactionCost
 
 /// Compute the transaction intrinsic gas g0 (Yellow Paper, 6.2) and minimal gas (EIP-7623).
 /// Ported from evmone state.cpp.
-inline TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, Transaction const& tx) noexcept
+///
+/// NOT noexcept, unlike the three helpers above: tx.authorizationList() is fail-loud by design
+/// (TransactionImpl.cpp throws BadHexCharacter / InvalidAddress on a malformed entry rather than
+/// skipping it, because EIP-7702 entries are consensus-critical). The tars authorizationList is
+/// an unauthenticated mirror -- the signature binds only extraTransactionBytes -- so a peer can
+/// choose that value, and declaring this function noexcept would turn a rejectable transaction
+/// into std::terminate.
+inline TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, Transaction const& tx)
 {
     static constexpr auto TX_BASE_COST = 21000;
     static constexpr auto TX_CREATE_COST = 32000;
@@ -156,4 +176,5 @@ inline TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, Transaction 
     return {intrinsic_cost, min_cost};
 }
 
+}  // namespace gas
 }  // namespace bcos::protocol
