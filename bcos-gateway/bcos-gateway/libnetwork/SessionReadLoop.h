@@ -79,7 +79,7 @@ task::Task<void> Session::readLoop()
 
             if (ec)
             {
-                SESSION_LOG(INFO) << LOG_DESC("doRead failed")
+                SESSION_LOG(INFO) << LOG_DESC("readLoop failed")
                                   << LOG_KV("endpoint", nodeIPEndpoint())
                                   << LOG_KV("message", ec.message());
                 drop(TCPError);
@@ -97,7 +97,7 @@ task::Task<void> Session::readLoop()
             if (!recvBuffer.onWrite(bytesTransferred))
             {
                 SESSION_LOG(ERROR)
-                    << LOG_BADGE("doRead") << LOG_DESC("recv buffer overflow on write, drop")
+                    << LOG_BADGE("readLoop") << LOG_DESC("recv buffer overflow on write, drop")
                     << LOG_KV("bytesTransferred", bytesTransferred)
                     << LOG_KV("recvBufferSize", recvBuffer.recvBufferSize());
                 drop(TCPError);
@@ -126,7 +126,7 @@ task::Task<void> Session::readLoop()
                         if (length > allowMaxMsgSize())
                         {
                             SESSION_LOG(ERROR)
-                                << LOG_BADGE("doRead")
+                                << LOG_BADGE("readLoop")
                                 << LOG_DESC("the message size exceeded the allow maximum value")
                                 << LOG_KV("msgSize", message->length())
                                 << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
@@ -154,7 +154,7 @@ task::Task<void> Session::readLoop()
                                 recvBuffer.resizeBuffer(resizeRecvBufferSize);
 
                                 SESSION_LOG(INFO)
-                                    << LOG_BADGE("doRead")
+                                    << LOG_BADGE("readLoop")
                                     << LOG_DESC(
                                            "the current recv buffer size is not enough for "
                                            "the "
@@ -172,7 +172,7 @@ task::Task<void> Session::readLoop()
                     else
                     {
                         SESSION_LOG(ERROR)
-                            << LOG_BADGE("doRead") << LOG_DESC("decode message error")
+                            << LOG_BADGE("readLoop") << LOG_DESC("decode message error")
                             << LOG_KV("result", result);
                         onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                       "ProtocolError(decode msg error)"),

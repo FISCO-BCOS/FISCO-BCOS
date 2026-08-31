@@ -496,6 +496,46 @@ BOOST_AUTO_TEST_CASE(doReadTest)
     fakeSocket->close();
 }
 
+BOOST_AUTO_TEST_CASE(startUsesDefaultReadPolicy)
+{
+    // Coverage for the production read entry point: Session::start() is the only instantiation
+    // of readLoop<ASIOInterface::DefaultReadPolicy> (every other test enters via
+    // startWithPolicy<FakePolicy>). Drive DefaultReadPolicy down its deterministic
+    // unexpected-type branch — an m_type that is neither TCP_ONLY nor SSL completes the read
+    // with a posted operation_not_supported — and assert the read loop drops the session.
+    // (m_type defaults to TCP_ONLY, so "unset" would arm a real async_read_some on the fake's
+    // connected socket pair instead; the invalid type is what makes the branch deterministic.)
+    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeSocket = std::make_shared<FakeSocket>();
+    auto fakeAsio = std::make_shared<FakeASIO>();
+    fakeAsio->setType(2);
+    {
+        auto fakeHost =
+            std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+
+        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        session->setMessageFactory(fakeHost->messageFactory());
+        // Tolerant handler: the read error drops the session, and the drop notifies.
+        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
+
+        session->start();  // virtual production entry — NOT startWithPolicy<>
+
+        size_t retryTimes = 0;
+        while (session->active() && retryTimes < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            retryTimes++;
+        }
+        BOOST_CHECK(!session->active());
+        // drop() captured the socket into a local shared_ptr before clearing m_active, so the
+        // socket can be nulled as soon as the session is inactive (same teardown as doReadTest).
+        session->setSocket(nullptr);
+    }
+
+    fakeSocket->close();
+}
+
 BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
 {
     // The fast path must honour the same pre-send (outgoing rate-limit) check the removed callback

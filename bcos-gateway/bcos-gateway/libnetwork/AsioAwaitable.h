@@ -30,10 +30,12 @@ namespace bcos::gateway
 {
 // Awaitable bridging one callback-style asio operation into a task::Task coroutine.
 //
-// Threading contract: the wrapped asio operation never invokes its completion handler inline
-// from the initiating call, so the suspended coroutine is always resumed on the io_context
-// thread that completes the operation — the same thread the old hand-written callback chain ran
-// on. resume() is wrapped in try/catch (including catch(...)): an exception escaping the resumed
+// Threading contract: initiations are expected to defer — the completion handler is handed to a
+// deferred executor (asio, or a post to some io_context) — so the suspended coroutine is resumed
+// on the io_context thread that completes the operation, the same thread the old hand-written
+// callback chain ran on. A synchronous invocation or drop from the initiating call does not
+// corrupt the running coroutine either: it is neutralized by the arm/cancel handshake below.
+// resume() is wrapped in try/catch (including catch(...)): an exception escaping the resumed
 // coroutine must not unwind the asio handler into io_context::run() (the same containment the
 // hand-written callbacks applied). The loop coroutines additionally catch everything internally,
 // so this is the second line of defence.

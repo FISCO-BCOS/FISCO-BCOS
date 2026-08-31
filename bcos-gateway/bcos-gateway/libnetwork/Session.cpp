@@ -444,11 +444,16 @@ task::Task<void> Session::writeLoop()
     // active(): after a drop the queue is drained by drop() (and late producers fail via send()'s
     // re-check), so re-arming there would just spin a fresh loop into the same teardown.
     //
-    // The guard is released BEFORE the explicit store so its destructor never fires on this path
+    // The guard is released BEFORE the flag is cleared so its destructor never fires on this path
     // (it must not clear the flag that a re-armed write() has just claimed). The destroy path
     // (completion-or-cancel rescue) never reaches this tail, so the guard fires there instead.
+    // The flag is cleared with exchange, not store: the tail never otherwise READS the flag, and
+    // a plain store is release-only, so the queue re-check below would have no happens-before
+    // edge from a producer's push (push, then exchange(true) observing the flag set). The seq_cst
+    // exchange reads from the release sequence headed by that producer's exchange(true), giving
+    // every such producer's push a happens-before edge to the re-check.
     writeLoopGuard.release();
-    m_writingInFlight.store(false);
+    m_writingInFlight.exchange(false);
     if (active() && !m_writeQueue.empty())
     {
         try

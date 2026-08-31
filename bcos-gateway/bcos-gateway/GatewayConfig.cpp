@@ -636,24 +636,19 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     // budget at 0 the batch loop never pops, every write loop exits on its first iteration, and
     // all outbound traffic on the session stalls silently. Clamp to a working minimum instead.
     //
-    // p2p.session_max_send_msg_count is retained for config-file compatibility but is
-    // deliberately NOT enforced by the batch loop — the base had the message-count condition
-    // commented out and drained the whole queue into a single scatter-gather write, and
-    // re-enabling it capped every async_write at the (default 10) message budget, costing
-    // ceil(N/10) post + async_write round-trips under broadcast fan-out. The byte budget alone
-    // is the sole cap; see the behaviour-change note in the PR description. The clamp below is
-    // kept so a historical 0 in a config file cannot silently mean something else.
+    // p2p.session_max_send_msg_count is parsed for config-file compatibility only and is
+    // deliberately NOT enforced anywhere — the base had the message-count condition commented
+    // out and drained the whole queue into a single scatter-gather write, and re-enabling it
+    // capped every async_write at the (default 10) message budget, costing ceil(N/10) post +
+    // async_write round-trips under broadcast fan-out. The byte budget alone is the sole cap;
+    // see the behaviour-change note in the PR description. No clamp here: nothing reads this
+    // value, so warning the operator to "fix" a 0 would invite a config change that changes
+    // nothing.
     if (m_maxSendDataSize == 0)
     {
         GATEWAY_CONFIG_LOG(WARNING)
             << LOG_DESC("p2p.session_max_send_data_size must be positive, clamped to 1");
         m_maxSendDataSize = 1;
-    }
-    if (m_maxSendMsgCount == 0)
-    {
-        GATEWAY_CONFIG_LOG(WARNING)
-            << LOG_DESC("p2p.session_max_send_msg_count must be positive, clamped to 1");
-        m_maxSendMsgCount = 1;
     }
 
     m_smSSL = smSSL;

@@ -164,10 +164,10 @@ public:
     constexpr static std::size_t DEFAULT_MAX_PENDING_HANDSHAKES = 64;
     // FIB-186: default inbound TLS handshake timeout (ms). Without a timeout a stalled / slow
     // handshake never completes, so its admission slot is never released and (because the
-    // completion handler holds shared_from_this) this Host can never be destroyed. Bounding it lets
-    // a slow-loris peer hold at most this long before its slot is reclaimed. GatewayFactory plumbs
-    // the configured value (p2p.handshake_timeout_ms); this constant is the default when the config
-    // omits it.
+    // serverHandshake coroutine frame holds shared_from_this) this Host can never be destroyed.
+    // Bounding it lets a slow-loris peer hold at most this long before its slot is reclaimed.
+    // GatewayFactory plumbs the configured value (p2p.handshake_timeout_ms); this constant is
+    // the default when the config omits it.
     constexpr static int DEFAULT_HANDSHAKE_TIMEOUT_MS = 10000;
 
     std::size_t maxPendingHandshakes() const { return m_maxPendingHandshakes; }
@@ -182,8 +182,8 @@ public:
 
     // FIB-186: reserve / release an in-flight-handshake slot. tryAcquire returns false (caller must
     // close the socket and re-arm accept) when the global cap is reached. release runs from the
-    // HandshakeSlotGuard bound to the handshake completion handler, i.e. exactly once when the
-    // handshake finishes (success, failure, or abort).
+    // HandshakeSlotGuard riding the serverHandshake coroutine frame, i.e. exactly once when that
+    // frame unwinds (handshake success, failure, or abort).
     bool tryAcquireHandshakeSlot();
     void releaseHandshakeSlot();
 

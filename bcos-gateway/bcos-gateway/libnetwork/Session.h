@@ -97,8 +97,7 @@ public:
     // session unconditionally allocated MIN_SESSION_RECV_BUFFER_SIZE (512KB) up front, so a
     // flood of unauthenticated/short-lived sessions caused heap exhaustion. Start small and
     // rely on the existing grow path (the read loop grows up to m_maxRecvBufferSize) to expand
-    // only
-    // for sessions that actually carry large messages. Must stay well above the message
+    // only for sessions that actually carry large messages. Must stay well above the message
     // header length so the first read can always make forward progress.
     constexpr static const std::size_t INITIAL_SESSION_RECV_BUFFER_SIZE = 16 * 1024UL;
 

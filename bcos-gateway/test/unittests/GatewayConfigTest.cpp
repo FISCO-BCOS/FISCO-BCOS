@@ -489,9 +489,11 @@ BOOST_AUTO_TEST_CASE(test_sessionCapsFromConfig)
         config->initP2PConfig(pt, false);
         BOOST_CHECK_EQUAL(config->maxConnectionsPerSecond(), 0U);
     }
-    // Round-1 review: 0 for the send-batch budgets would stall every outbound write on the
+    // Round-1 review: 0 for the send-batch byte budget would stall every outbound write on the
     // session (the batch loop never pops) — unlike max_connections_per_second, 0 is NOT
-    // "unlimited" here, so both keys are clamped to a working minimum at load time.
+    // "unlimited" here, so the byte budget is clamped to a working minimum at load time.
+    // session_max_send_msg_count is parsed for compatibility but not enforced anywhere, so a 0
+    // is accepted as-is (no clamp, no warning — nothing reads the value).
     {
         auto config = std::make_shared<GatewayConfig>();
         boost::property_tree::ptree pt;
@@ -499,7 +501,7 @@ BOOST_AUTO_TEST_CASE(test_sessionCapsFromConfig)
         pt.put("p2p.session_max_send_msg_count", 0);
         config->initP2PConfig(pt, false);
         BOOST_CHECK_EQUAL(config->maxSendDataSize(), 1U);
-        BOOST_CHECK_EQUAL(config->maxMsgCountSendOneTime(), 1U);
+        BOOST_CHECK_EQUAL(config->maxMsgCountSendOneTime(), 0U);
     }
 }
 

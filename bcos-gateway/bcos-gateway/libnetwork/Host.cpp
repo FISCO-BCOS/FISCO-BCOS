@@ -202,9 +202,18 @@ task::Task<void> Host::acceptLoop()
         // A short timer turns a persistent failure into a slow retry loop instead of a livelock.
         // (co_await is not permitted inside a catch handler, so the delay lives after the
         // try/catch, reached only on a failed iteration.)
+        // The timer MUST be armed on the acceptor's own executor (newAcceptorTimer), not on a
+        // round-robin pool context: co_await resumes the loop on the timer's thread, and only
+        // the acceptor's single io_context thread serializes the next while (m_run) re-check and
+        // async_accept re-arm against the cancelAcceptor() that Host::stop() posts to that same
+        // context. Resuming on a foreign pool thread would reopen the check-then-act window —
+        // stop()'s cancel could land between the m_run read and the re-arm, be consumed by a
+        // acceptor with nothing pending, and leave a fresh async_accept that never completes,
+        // making the Host immortal (see the m_run contract in Host.h) — and would race the
+        // posted cancel() on the acceptor object itself ("Shared objects: Unsafe").
         if (iterationFailed)
         {
-            auto retryTimer = m_asioInterface->newTimer(ACCEPT_RETRY_INTERVAL_MS);
+            auto retryTimer = m_asioInterface->newAcceptorTimer(ACCEPT_RETRY_INTERVAL_MS);
             co_await makeAsioAwaitable<boost::system::error_code>([&retryTimer](auto handler) {
                 retryTimer.async_wait(std::move(handler));
             });

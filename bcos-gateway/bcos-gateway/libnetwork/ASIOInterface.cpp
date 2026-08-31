@@ -124,6 +124,12 @@ boost::asio::steady_timer ASIOInterface::newTimer(uint32_t timeout)
         *(m_ioServicePool->getIOService()), std::chrono::milliseconds(timeout));
 }
 
+boost::asio::steady_timer ASIOInterface::newAcceptorTimer(uint32_t timeout)
+{
+    return boost::asio::steady_timer(
+        m_acceptor.get_executor(), std::chrono::milliseconds(timeout));
+}
+
 std::shared_ptr<SocketFace> ASIOInterface::newSocket(bool _server, NodeIPEndpoint nodeIPEndpoint)
 {
     std::shared_ptr<SocketFace> socket = std::make_shared<Socket>(m_ioServicePool->getIOService(),

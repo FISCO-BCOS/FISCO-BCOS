@@ -45,6 +45,11 @@ public:
     virtual void setClientContext(ba::ssl::context _clientContext);
 
     virtual boost::asio::steady_timer newTimer(uint32_t timeout);
+    // Unlike newTimer (round-robin pool context), this timer is bound to the acceptor's own
+    // executor, so awaiting it resumes the caller on the acceptor's single io_context thread.
+    // The accept retry loop relies on that thread to serialize its m_run re-check and its
+    // async_accept re-arm against the cancelAcceptor() that Host::stop() posts there.
+    virtual boost::asio::steady_timer newAcceptorTimer(uint32_t timeout);
 
     virtual std::shared_ptr<SocketFace> newSocket(
         bool _server, NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint());
