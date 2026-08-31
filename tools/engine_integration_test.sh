@@ -199,9 +199,8 @@ listen_ip=0.0.0.0
 listen_port=${RPC_PORT}
 jwt_secret_file=${WORK_DIR}/jwt.hex
 clock_skew_secs=300
-; this harness drives the v1 EngineService over the endpoint (no [executor] version=2
-; here); production chains must never set this test-only escape hatch
-unsafe_allow_v1_executor=true
+; The Karst Engine API surface is served by the v2 pure-Ethereum executor (executor_version=2
+; + executor.evm_revision=cancun below), matching the production [op_engine_rpc] configuration.
 
 [p2p]
 listen_ip=0.0.0.0
@@ -221,6 +220,11 @@ multi_ca_path=multiCaPath
 [certificate_whitelist]
 
 [executor]
+; executor_version=2 selects the pure-Ethereum EthereumExecutor; the header-fork derivation
+; in buildPayload keys off the chain's EVM revision, so an explicit evm_revision is required
+; (a missing one would fail closed rather than hash under an assumed fork).
+version=2
+evm_revision=cancun
 is_auth_check=false
 auth_admin_account=0x3443d6866e757893e6862f451f5d1b7976c54594
 is_serial_execute=true
@@ -579,13 +583,12 @@ else
 fi
 
 # 3.6 pre-Karst surface on a chain whose fork outruns V2: forkchoiceUpdatedV2 is refused
-# with -38005 Unsupported fork. The harness chain has no explicit on-chain EVM revision
-# (it drives the v1 executor through unsafe_allow_v1_executor), so the header-fork
-# derivation falls back to the compile-time default (OSAKA -> PRAGUE); a V2 attribute
-# shape cannot express PRAGUE (parentBeaconBlockRoot / blob fields), so the service
-# answers the same Unsupported fork error geth gives for this CL/chain mismatch. The V2
-# build/fetch/submit loop itself is covered by the engine unit tests on a SHANGHAI
-# fixture.
+# with -38005 Unsupported fork. The harness chain runs executor_version=2 with
+# evm_revision=cancun (the production [op_engine_rpc] configuration), so the header-fork
+# derivation keys off CANCUN; a V2 attribute shape cannot express CANCUN
+# (parentBeaconBlockRoot), so the service answers the same Unsupported fork error geth
+# gives for this CL/chain mismatch. The V2 build/fetch/submit loop itself is covered by
+# the engine unit tests on a SHANGHAI fixture.
 log_test "engine_forkchoiceUpdatedV2 answers -38005 (chain fork outruns V2)"
 V2_HEAD=$(json_val "$(rpc_call "eth_getBlockByNumber" '["latest",false]')" "hash")
 V2_TS_SECS=$((TS_SECS + 12))

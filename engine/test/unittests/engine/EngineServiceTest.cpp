@@ -380,12 +380,10 @@ PayloadAttributes makePayloadAttributesV2()
     payloadAttributes.prevRandao =
         h256("1111111111111111111111111111111111111111111111111111111111111111");
     payloadAttributes.suggestedFeeRecipient = Address("1234567890abcdef1234567890abcdef12345678");
-    WithdrawalV1 withdrawal;
-    withdrawal.index = 1;
-    withdrawal.validatorIndex = 2;
-    withdrawal.address = Address("abcdefabcdefabcdefabcdefabcdefabcdefabcd");
-    withdrawal.amount = 3;
-    payloadAttributes.withdrawals = std::vector<WithdrawalV1>{std::move(withdrawal)};
+    // The withdrawals list is empty: finalizeEthBlockHeader commits the empty-trie root as
+    // a placeholder, and validatePayloadAttributes rejects a NON-empty list paired with it
+    // (the real withdrawals trie root is not computed yet).
+    payloadAttributes.withdrawals = std::vector<WithdrawalV1>{};
     return payloadAttributes;
 }
 
@@ -510,9 +508,14 @@ BOOST_AUTO_TEST_CASE(forkchoice_v2_rejected_on_cancun_chain)
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto payloadAttributes = makePayloadAttributesV2();
-    BOOST_CHECK_THROW(
+    // Pin the exact gate, not just the exception type: the same UnsupportedFork type is
+    // thrown by the V2-attr and the missing-revision gates with different what() text.
+    BOOST_CHECK_EXCEPTION(
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2)),
-        UnsupportedFork);
+        UnsupportedFork, [](const UnsupportedFork& e) {
+            return std::string(e.what()).find("requires the V3 payload attributes") !=
+                   std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
@@ -1561,8 +1564,10 @@ BOOST_AUTO_TEST_CASE(ethBlockVersionForMapsEvmRevisions)
     // A future EVMC bump (a revision above OSAKA) must fail loudly: hashing under the
     // wrong fork rules would drop fork-gated fields and every peer would reject the
     // block, with no diagnostic.
-    BOOST_CHECK_THROW(bcos::engine::detail::ethBlockVersionFor(EVMC_EXPERIMENTAL),
-        UnsupportedFork);
+    BOOST_CHECK_EXCEPTION(bcos::engine::detail::ethBlockVersionFor(EVMC_EXPERIMENTAL),
+        UnsupportedFork, [](const UnsupportedFork& e) {
+            return std::string(e.what()).find("unsupported EVM revision") != std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderFillsEthFieldsAndHash)

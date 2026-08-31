@@ -126,6 +126,10 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
 // (setEthBlockVersion), and compute + inject its RLP hash. Throws on validation/hash failure.
 // @p forkVersion is the era the header is hashed as, derived from the chain's EVM revision
 // (see ethBlockVersionFor); it drives which fork-gated fields the header carries.
+// PRECONDITION: when forkVersion >= CANCUN, @p payload must carry blobGasUsed,
+// excessBlobGas and @p parentBeaconBlockRoot must be engaged (this function uses .value()
+// on them and would throw std::bad_optional_access otherwise). buildPayload guarantees the
+// precondition under the same forkVersion-derived gate; a direct caller must too.
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header,
     const ExecutionPayload& payload, std::optional<bcos::h256> parentBeaconBlockRoot,
     bcos::protocol::EthBlockVersion forkVersion);
@@ -722,7 +726,7 @@ private:
 
     bcos::task::Task<BuildPayloadResult> buildPayload(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
-        std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
+        std::uint32_t version [[maybe_unused]], bcos::protocol::BlockNumber nextBlockNumber,
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
     {
         // Dual carrier: every sealed transaction is stored with both its raw EIP-2718
@@ -821,9 +825,23 @@ private:
         // in ledger config), not from the Engine API method version: a CL/op-geth verifier
         // rebuilds the header from the chain's fork rules, so the hashed era must match the
         // chain even when the API method version and the chain progress independently.
-        auto forkVersion = bcos::engine::detail::ethBlockVersionFor(
-            ledgerConfig.evmcRevisionForBlock(nextBlockNumber)
-                .value_or(ledger::EVMC_REVISION_DEFAULT));
+        //
+        // A missing revision must FAIL CLOSED rather than default to the compile-time
+        // latest (EVMC_REVISION_DEFAULT = OSAKA -> PRAGUE, which would stamp requestsHash
+        // into every RLP hash): hashing under an assumed fork the chain never configured
+        // is exactly the silent-divergence failure this chain-derived selection exists to
+        // prevent. A v2 chain always persists its revision at genesis (Initializer refuses
+        // to boot one without it), so reaching this throw means a misconfigured chain.
+        auto chainRevision = ledgerConfig.evmcRevisionForBlock(nextBlockNumber);
+        if (!chainRevision.has_value())
+        {
+            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
+                "EngineService: no on-chain EVM revision configured for block " +
+                std::to_string(nextBlockNumber) +
+                "; cannot derive the Eth header fork era (a v2 chain persists evmc_revision "
+                "at genesis)"});
+        }
+        auto forkVersion = bcos::engine::detail::ethBlockVersionFor(*chainRevision);
 
         // The method version's attribute shape must be able to express the chain fork's
         // header fields: CANCUN requires the V3 attributes (parentBeaconBlockRoot),

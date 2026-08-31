@@ -318,6 +318,17 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     {
         return std::string("withdrawals are required for PayloadAttributesV2 and V3");
     }
+    if (version >= 2 && payloadAttributes.withdrawals.has_value() &&
+        !payloadAttributes.withdrawals->empty())
+    {
+        // The withdrawals trie root is not computed yet (finalizeEthBlockHeader commits
+        // the empty-trie root as a placeholder), so a non-empty list would hash a root
+        // that differs from what geth derives (DeriveSha(withdrawals)) and every peer
+        // would reject the block. Reject the pairing until the real root is computed.
+        return std::string(
+            "non-empty withdrawals are not supported until the withdrawals trie root is "
+            "computed");
+    }
     if (version == 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
     {
         return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3");

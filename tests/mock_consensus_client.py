@@ -372,15 +372,14 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
 
 
 def run_v2_block_flow() -> None:
-    """V2 FCU on this harness chain is refused as Unsupported fork (-38005).
+    """V2 FCU on the CANCUN harness chain is refused as Unsupported fork (-38005).
 
-    The harness chain has no explicit on-chain EVM revision (it drives the v1 executor
-    through unsafe_allow_v1_executor), so buildPayload's header-fork derivation falls
-    back to the compile-time default (OSAKA -> PRAGUE). A V2 forkchoiceUpdated cannot
-    express the PRAGUE attribute shape (parentBeaconBlockRoot / blob fields), so it is
-    refused with -38005 — the same answer geth gives for a CL/chain fork mismatch. The
-    pre-Karst V2 build loop itself is covered by the engine unit tests on a SHANGHAI
-    fixture.
+    The harness chain runs executor_version=2 with evm_revision=cancun (the production
+    [op_engine_rpc] configuration), so buildPayload's chain-derived header fork is CANCUN.
+    A V2 forkchoiceUpdated cannot express the CANCUN attribute shape
+    (parentBeaconBlockRoot), so it is refused with -38005 — the same answer geth gives
+    for a CL/chain fork mismatch. The pre-Karst V2 build loop itself is covered by the
+    engine unit tests on a SHANGHAI fixture.
     """
     _log_test("FCU V2 + getPayloadV2 + newPayloadV2 (pre-Karst surface)")
 
@@ -413,9 +412,9 @@ def test_eip1559_fields_are_v3_only() -> None:
     before Holocene", op-core/eip1559/eip1559.go:27-28).
 
     Attribute errors surface through the payloadStatus channel, not as a JSON-RPC error.
-    The control is a V3 FCU (the only version the harness chain's PRAGUE fork accepts);
-    the V2 + field cases are still rejected by validatePayloadAttributes, which runs
-    before buildPayload's chain-fork gate.
+    The control is a V3 FCU (the only version the CANCUN harness chain accepts); the
+    V2 + field cases are still rejected by validatePayloadAttributes, which runs before
+    buildPayload's chain-fork gate.
     """
     _log_test("eip1559Params / minBaseFee are rejected below forkchoiceUpdatedV3")
 
