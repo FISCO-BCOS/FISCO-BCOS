@@ -94,10 +94,12 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
                 bcos::crypto::SECP256K1_SIGNATURE_R_LEN + bcos::crypto::SECP256K1_SIGNATURE_S_LEN;
             if (sig.size() >= kRsLen)
             {
-                bcos::bytes sigR(
-                    sig.begin(), sig.begin() + bcos::crypto::SECP256K1_SIGNATURE_R_LEN);
-                bcos::bytes sigS(
-                    sig.begin() + bcos::crypto::SECP256K1_SIGNATURE_R_LEN, sig.begin() + kRsLen);
+                // Views, not copies (finding N3): the 2x32B vectors were materialized only
+                // to match the old bytes const& parameters.
+                bcos::bytesConstRef const sigR(
+                    sig.data(), bcos::crypto::SECP256K1_SIGNATURE_R_LEN);
+                bcos::bytesConstRef const sigS(sig.data() + bcos::crypto::SECP256K1_SIGNATURE_R_LEN,
+                    kRsLen - bcos::crypto::SECP256K1_SIGNATURE_R_LEN);
                 if (bcos::checkEip2Signature(sigR, sigS) != nullptr)
                 {
                     return TransactionStatus::InvalidSignature;

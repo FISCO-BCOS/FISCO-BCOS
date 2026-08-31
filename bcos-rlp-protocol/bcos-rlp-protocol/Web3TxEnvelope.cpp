@@ -56,8 +56,27 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         {
             return malformed();
         }
+        bcos::bytesRef listPayload = cursor.getCroppedData(0, header.payloadLength);
+        cursor = cursor.getCroppedData(header.payloadLength);
         uint64_t chainId = 0;
-        if (auto e = decodeCanonicalRlpUint(cursor, chainId); e != nullptr) [[unlikely]]
+        if (auto e = decodeCanonicalRlpUint(listPayload, chainId); e != nullptr) [[unlikely]]
+        {
+            return malformed();
+        }
+        // Finding S6: the inner list must close at its declared payload boundary and no
+        // bytes may follow the list — decode() rejects post-list junk and overrunning
+        // items, so the classifier must see the same bytes as invalid (same rationale as
+        // the legacy ListEnd gate below).
+        while (!listPayload.empty())
+        {
+            auto [tailError, tailHeader] = bcos::codec::rlp::decodeHeader(listPayload);
+            if (tailError || tailHeader.payloadLength > listPayload.size()) [[unlikely]]
+            {
+                return malformed();
+            }
+            listPayload = listPayload.getCroppedData(tailHeader.payloadLength);
+        }
+        if (!cursor.empty()) [[unlikely]]
         {
             return malformed();
         }
@@ -125,24 +144,53 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
             return malformed();
         }
     }
+    bcos::bytesRef tailProbe = afterField7;
     bool const isPreimageTail = [&] {
-        if (afterField7.empty()) [[unlikely]]
+        if (tailProbe.empty()) [[unlikely]]
         {
             return false;  // no 0,0 placeholders — treat as full form (or malformed)
         }
-        auto [field8Error, field8Header] = bcos::codec::rlp::decodeHeader(afterField7);
+        auto [field8Error, field8Header] = bcos::codec::rlp::decodeHeader(tailProbe);
         if (field8Error != nullptr || field8Header.isList || field8Header.payloadLength != 0)
         {
             return false;
         }
-        if (afterField7.empty()) [[unlikely]]
+        if (tailProbe.empty()) [[unlikely]]
         {
             return false;
         }
-        auto [field9Error, field9Header] = bcos::codec::rlp::decodeHeader(afterField7);
+        auto [field9Error, field9Header] = bcos::codec::rlp::decodeHeader(tailProbe);
         return field9Error == nullptr && !field9Header.isList && field9Header.payloadLength == 0 &&
                isLegacyPreimageTail(0, true, true);
     }();
+    if (!isPreimageTail)
+    {
+        // Finding S6: the full form must match what decode()'s sealed branch accepts —
+        // EIP-2 keeps r,s in [1, n-1], so a sealed envelope never carries an empty r/s
+        // item (only the preimage tail's 0,0 placeholders are empty). Exactly one empty
+        // item classified Unprotected/Protected here but is rejected in decode — fail
+        // closed instead.
+        bcos::bytesRef tailCheck = tailProbe;
+        bool emptySeen = false;
+        for (int i = 0; i < 2; ++i)
+        {
+            auto [itemError, itemHeader] = bcos::codec::rlp::decodeHeader(tailCheck);
+            if (itemError || itemHeader.isList || itemHeader.payloadLength > tailCheck.size())
+                [[unlikely]]
+            {
+                return malformed();
+            }
+            if (itemHeader.payloadLength == 0)
+            {
+                emptySeen = true;
+            }
+            tailCheck = tailCheck.getCroppedData(itemHeader.payloadLength);
+        }
+        if (emptySeen) [[unlikely]]
+        {
+            return malformed();
+        }
+    }
     if (isPreimageTail)
     {
         // Preimage: field 7 is the EIP-155 chainId.

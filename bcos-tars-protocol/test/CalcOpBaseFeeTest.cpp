@@ -65,10 +65,12 @@ bcos::bytes holoceneParams()
     return {0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x02};
 }
 
-// Jovian parameters: Holocene tail plus an 8-byte minBaseFee floor.
+// Jovian parameters: Jovian version byte (0x01), Holocene denominator/elasticity tail,
+// plus an 8-byte minBaseFee floor — the layout the engine stamps and validates (finding S4).
 bcos::bytes jovianParams(uint64_t minBaseFee)
 {
     bcos::bytes out = holoceneParams();
+    out[0] = 0x01;
     for (int i = 7; i >= 0; --i)
     {
         out.push_back(static_cast<bcos::byte>((minBaseFee >> (i * 8)) & 0xff));

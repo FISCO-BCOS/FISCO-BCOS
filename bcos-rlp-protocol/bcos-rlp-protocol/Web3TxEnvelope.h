@@ -47,10 +47,28 @@ template <typename T>
     {
         return error;
     }
-    bcos::bytes encoded;
-    bcos::codec::rlp::encode(encoded, to);
-    if (encoded.size() != static_cast<size_t>(from.data() - start) ||
-        std::memcmp(start, encoded.data(), encoded.size()) != 0)
+    // Canonicality checked in place (finding BA: the decode-then-re-encode roundtrip cost
+    // 1-2 heap allocations per scalar on the shared decode funnel). The consumed item
+    // [start, from.data()) must be the minimal RLP spelling of an unsigned integer:
+    //   0        -> exactly {0x80} (empty payload)
+    //   1..0x7f  -> single inline byte ({0x00} would be the non-canonical spelling of 0)
+    //   >=0x80   -> prefix 0x80+len + minimal big-endian payload: no leading zero, and a
+    //              one-byte payload must be >= 0x80 or it should have been inline.
+    // Payload width beyond T is already rejected by decode above.
+    auto const consumed = static_cast<std::size_t>(from.data() - start);
+    if (consumed == 1)
+    {
+        if (*start == 0x00) [[unlikely]]
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                bcos::codec::rlp::DecodingError::NonCanonicalSize, "non-canonical RLP integer");
+        }
+        return nullptr;
+    }
+    auto const headerByte = *start;
+    auto const payloadLength = consumed - 1;
+    if (headerByte < 0x80 || headerByte != static_cast<bcos::byte>(0x80 + payloadLength) ||
+        start[1] == 0x00 || (payloadLength == 1 && start[1] < 0x80)) [[unlikely]]
     {
         // In-range but non-minimal spelling.
         return BCOS_ERROR_UNIQUE_PTR(

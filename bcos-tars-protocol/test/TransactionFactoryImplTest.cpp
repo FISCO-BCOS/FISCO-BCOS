@@ -819,5 +819,68 @@ BOOST_AUTO_TEST_CASE(calculateHashIgnoresForgeableDepositKindMirror)
     BOOST_CHECK(tx->hash() != bcos::crypto::keccak256Hash(bcos::ref(env)));
 }
 
+
+// Finding BG: the preimage v derivation (chainId*2+35+yParity) must reject chainId >= 2^63
+// instead of wrapping a uint64 and failing downstream with a confusing parity mismatch.
+BOOST_AUTO_TEST_CASE(reassembleLegacyPreimageHugeChainIdThrows)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, static_cast<uint64_t>(1) << 63);  // chainId == 2^63: v would wrap
+    items.push_back(0x80);
+    items.push_back(0x80);
+    bcos::bytes env;
+    rlp::encodeHeader(env, rlp::Header{true, items.size()});
+    env.insert(env.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = 0;
+
+    expectReassembleThrows(
+        bcos::ref(env), bcos::bytesConstRef(sig.data(), sig.size()), "legacy chainId too large");
+}
+
+// Finding N2: a tars parity byte > 1 recovers an uncontrollable sender and produces a
+// preimage display-side decode rejects — reassembly must fail closed.
+BOOST_AUTO_TEST_CASE(reassembleTarsParityByteAboveOneThrows)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, bcos::bytes{});  // accessList
+    bcos::bytes env{0x02};
+    rlp::encodeHeader(env, rlp::Header{true, items.size()});
+    env.insert(env.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = 2;  // parity byte 2: valid recid, invalid envelope parity
+
+    expectReassembleThrows(
+        bcos::ref(env), bcos::bytesConstRef(sig.data(), sig.size()), "signature yParity byte");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

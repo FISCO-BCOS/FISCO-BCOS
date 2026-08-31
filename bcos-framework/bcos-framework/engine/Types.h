@@ -143,9 +143,6 @@ struct ExecutionPayload
     /// encoded bytes (including the OP 0x7E deposit envelope). This is the single
     /// authoritative carrier for both generic and OP engine paths.
     std::vector<EngineTransaction> transactions;
-    /// Mirror of `transactions[i].raw` for the OP executor seam. Filled at parse time;
-    /// prefer `transactions[].raw`.
-    std::optional<std::vector<bytes>> rawTransactions;
     bytes extraData;
     Address feeRecipient;
     // Internal milliseconds, matching BlockHeader::timestamp(); the RPC boundary

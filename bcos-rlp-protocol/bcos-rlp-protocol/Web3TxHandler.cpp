@@ -56,6 +56,20 @@ void padSignature(bcos::bytes& signatureR, bcos::bytes& signatureS) noexcept
         to.clear();
         return nullptr;
     }
+    // Over-wide scalars keep the funnel's InvalidVInSignature classification (they used to
+    // be rejected by checkEip2Signature's width gate; Web3TypeTest pins that code), while
+    // in-width non-canonical scalars keep the codec's NonCanonicalSize
+    // (ExtraTxBytesDualLayoutTest pins leading-zero r).
+    {
+        bcos::bytesRef probe = from;
+        auto&& [headerError, header] = bcos::codec::rlp::decodeHeader(probe);
+        if (headerError == nullptr && !header.isList &&
+            header.payloadLength > bcos::crypto::SECP256K1_SIGNATURE_R_LEN)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(bcos::codec::rlp::DecodingError::InvalidVInSignature,
+                "signature r/s wider than 32 bytes");
+        }
+    }
     bcos::u256 value = 0;
     if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(from, value); error != nullptr)
     {

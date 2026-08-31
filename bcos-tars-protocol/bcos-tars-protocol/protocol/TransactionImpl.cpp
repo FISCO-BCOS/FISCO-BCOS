@@ -127,6 +127,14 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         BOOST_THROW_EXCEPTION(std::invalid_argument(
             std::string("reassemble raw Web3 transaction: decode failed at ").append(stage)));
     };
+    // Finding N2: the tars parity byte feeds both the typed trailer encoding and the
+    // legacy v derivation; parity > 1 is a valid secp256k1 recid and recovers an
+    // uncontrollable sender, and the produced preimage is a form display-side decode
+    // rejects — fail closed at reassembly instead of admitting it.
+    if (yParity > 1) [[unlikely]]
+    {
+        throwDecode("signature yParity byte");
+    }
     if (payload.empty()) [[unlikely]]
     {
         throwDecode("empty payload");
@@ -155,8 +163,10 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             throwDecode("typed body");
         }
         // Dual layout: the stored bytes are the signing preimage (type || fields) or — for
-        // sealed OP blocks, whose extraTransactionBytes the engine overwrote with the full
-        // envelope — the wire form (type || fields || yParity,r,s). The per-type field
+        // sealed OP blocks, whose extraTransactionBytes the engine overwrites with the full
+        // envelope — the wire form (type || fields || yParity,r,s). Forward reference: the
+        // engine-side overwrite producer lands with split C (#5521); at this pin only tests
+        // exercise the wire form. The per-type field
         // count is fixed, so counting the list items discriminates unambiguously; a wire
         // payload is already the assembled form and is returned verbatim.
         {
@@ -216,8 +226,11 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                 {
                     throwDecode("typed yParity");
                 }
-                bcos::bytes wireR(last3[(n - 2) % 3].begin(), last3[(n - 2) % 3].end());
-                bcos::bytes wireS(last3[(n - 1) % 3].begin(), last3[(n - 1) % 3].end());
+                // Views, not copies (finding N4): the payload refs compare directly.
+                bcos::bytesConstRef const wireR(
+                    last3[(n - 2) % 3].data(), last3[(n - 2) % 3].size());
+                bcos::bytesConstRef const wireS(
+                    last3[(n - 1) % 3].data(), last3[(n - 1) % 3].size());
                 if (*wireYParity != yParity ||
                     !std::equal(wireR.begin(), wireR.end(), r.begin(), r.end()) ||
                     !std::equal(wireS.begin(), wireS.end(), s.begin(), s.end())) [[unlikely]]
@@ -307,6 +320,13 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             if (bcos::rlp::protocol::isLegacyPreimageTail(item7, item8.empty(), item9.empty()))
             {
                 // Preimage: item7 is chainId (includes 27/28).
+                // Finding BG: item7*2+35+yParity in uint64 wraps for chainId >= 2^63 and
+                // the wrapped v then fails the parity cross-checks downstream — reject the
+                // width here so the failure is a clear gate error, not a wrapped value.
+                if (item7 >= 0x8000000000000000ULL) [[unlikely]]
+                {
+                    throwDecode("legacy chainId too large");
+                }
                 v = item7 * 2 + 35 + yParity;
             }
             else

@@ -702,14 +702,36 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     // Test 11: the EIP-2 low-s hook in TxValidator::verify is the ONLY low-s
     // enforcement a P2P-synced tars-form Web3 tx ever meets — the raw-bytes decode funnel,
     // which rejects high-s inline, is not on this path. Sign genuinely, then flip s to
-    // n-s: recovery still derives the same sender, so without the hook this tx would enter
-    // the pool under a distinct txHash for the same logical transaction. The low-s
+    // n-s: recovery still SUCCEEDS (deriving an unrelated address — a same-sender replay
+    // would need v flipped too), so without the hook this tx would enter the pool under a
+    // distinct txHash for the same logical transaction. The low-s
     // baseline is the positive control (deleting the hook flips the second check green).
     {
         fakeit::When(Method(mockLedger, asyncGetBlockNumber)).AlwaysDo([](auto) -> long long {
             return 0;
         });
         fakeit::When(Method(mockLedger, getStateStorage)).AlwaysReturn(nullptr);
+        // Finding N7: T19-style full stubs so the exempt tx walks the whole post-gate path
+        // and the assertion pins the healthy outcome instead of "any non-chainId status".
+        fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
+            .AlwaysDo(
+                [](auto const& key,
+                    std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
+                    if (key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
+                    {
+                        callback(nullptr, "0", 0);
+                    }
+                    else
+                    {
+                        // Same values as the case's earlier webhook ("321"): this stub must
+                        // not change outcomes for the later protected-chain sections in
+                        // this test case (fakeit stubs persist for the whole case).
+                        callback(nullptr, "321", 0);
+                    }
+                });
+        auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(
+            nullptr, /*blockNumber*/ 0, /*blockLimit*/ 1000, /*checkBlockLimit*/ false);
+        txValidator->setLedgerNonceChecker(ledgerNonceChecker);
 
         bcos::bytes preimage;
         bcos::codec::rlp::encode(preimage, static_cast<uint64_t>(9), static_cast<uint64_t>(1),
@@ -817,8 +839,9 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
             setLegacyUnprotectedPreimage(*unprotectedImpl);
             unprotectedImpl->mutableInner().data.chainID = "";
         }
-        BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(unprotectedTx, nullptr, false, false) !=
-                    TransactionStatus::InvalidChainId);
+        BOOST_CHECK(
+            storageNoSig.verifyAndSubmitTransaction(unprotectedTx, nullptr, false, false) ==
+            TransactionStatus::None);
     }
 
     // Matrix: T19 — hex QUANTITY web3_chain_id ("0x539" == 1337) admits a matching envelope.

@@ -22,6 +22,7 @@
  * @date 2026/8/28
  */
 
+#include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rlp-protocol/Web3TxEnvelope.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <boost/test/unit_test.hpp>
@@ -154,6 +155,97 @@ BOOST_AUTO_TEST_CASE(overrunningTrailingItemIsMalformed)
     auto env =
         legacyEnvelope(concat(sixFields(), concat(item(37), concat(item(1), item(1)))), overrun);
     BOOST_CHECK(classify(env) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
+}
+
+
+// S6: a sealed full form never carries an empty r/s item (EIP-2 keeps r,s in [1,n-1]) —
+// exactly one empty item must classify Malformed, not ride the 27/28 exemption nor the
+// 35+ protected band, matching what decode()'s sealed branch rejects.
+BOOST_AUTO_TEST_CASE(oneEmptySignatureItemIsMalformed)
+{
+    auto emptyR = legacyEnvelope(
+        concat(sixFields(), concat(item(27), concat(bcos::bytes{0x80}, item(1)))));
+    BOOST_CHECK(classify(emptyR) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
+    auto emptyS = legacyEnvelope(
+        concat(sixFields(), concat(item(37), concat(item(1), bcos::bytes{0x80}))));
+    BOOST_CHECK(classify(emptyS) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
+}
+
+// S6: the typed inner list must close at the envelope boundary — junk after the list is
+// Malformed, matching decode()'s trailing-garbage rejection on the same bytes.
+BOOST_AUTO_TEST_CASE(typedListTrailingGarbageIsMalformed)
+{
+    bcos::bytes items;
+    for (int i = 0; i < 7; ++i)
+    {
+        codec_rlp::encode(items, static_cast<uint64_t>(i == 0 ? 1 : 0));  // field0 = chainId
+    }
+    bcos::bytes body;
+    codec_rlp::encodeHeader(body, {.isList = true, .payloadLength = items.size()});
+    body.insert(body.end(), items.begin(), items.end());
+    bcos::bytes env{0x02};
+    env.insert(env.end(), body.begin(), body.end());
+    env.push_back(0xde);  // junk after the typed list
+    BOOST_CHECK(classify(env) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
+    bcos::bytes clean(env.begin(), env.end() - 1);
+    BOOST_CHECK(classify(clean) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Protected);
+}
+
+// S9: canonical-integer grid on the classifier path — bare 0x00, leading-zero and
+// over-wide integer items must classify Malformed (decodeCanonicalRlpUint rejects them).
+BOOST_AUTO_TEST_CASE(nonCanonicalIntegerItemsAreMalformed)
+{
+    auto bareZero = legacyEnvelope(concat(sixFields(),
+        concat(bcos::bytes{0x00}, concat(bcos::bytes{0x80}, bcos::bytes{0x80}))));
+    BOOST_CHECK(classify(bareZero) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
+    auto leadingZero = legacyEnvelope(concat(sixFields(),
+        concat(bcos::bytes{0x82, 0x00, 0x01}, concat(bcos::bytes{0x80}, bcos::bytes{0x80}))));
+    BOOST_CHECK(classify(leadingZero) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
+    bcos::bytes wideV{0xa1};  // 0x80+33: 33-byte payload
+    wideV.insert(wideV.end(), 33, 0x01);
+    auto overWide = legacyEnvelope(concat(sixFields(), concat(wideV, concat(item(1), item(1)))));
+    BOOST_CHECK(classify(overWide) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
+}
+
+// S9: v=26 sits in the malformed Homestead band — never exempt, never protected.
+BOOST_AUTO_TEST_CASE(v26HomesteadBandIsMalformed)
+{
+    auto env = legacyEnvelope(concat(sixFields(), concat(item(26), concat(item(1), item(1)))));
+    BOOST_CHECK(classify(env) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
+}
+
+// S9: checkEip2Signature boundary grid — each [1, n-1] / s <= n/2 edge needs a fixture so
+// relaxing any single edge cannot pass silently.
+BOOST_AUTO_TEST_CASE(eip2SignatureBoundaryGrid)
+{
+    namespace crypto = bcos::crypto;
+    // Full-width 32-byte big-endian form of a u256 (left-padded with zeros).
+    auto const be32 = [](bcos::u256 value) {
+        bcos::bytes out(32, 0x00);
+        for (int i = 31; i >= 0; --i)
+        {
+            out[i] = static_cast<bcos::byte>(static_cast<uint64_t>(value & 0xff));
+            value >>= 8;
+        }
+        return out;
+    };
+    auto const rOne = be32(bcos::u256(1));
+    auto const sOne = be32(bcos::u256(1));
+    auto const sMax = be32(crypto::c_secp256k1nOver2);
+    auto const sOver = be32(crypto::c_secp256k1nOver2 + 1);
+    auto const rMax = be32(crypto::c_secp256k1n - 1);
+    auto const rN = be32(crypto::c_secp256k1n);
+    auto const sHigh = be32(crypto::c_secp256k1n - 1);
+    auto const zero = bcos::bytes(32, 0x00);
+
+    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(sOne)) == nullptr);
+    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(sMax)) == nullptr);
+    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rMax), bcos::ref(sOne)) == nullptr);
+    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(zero), bcos::ref(sOne)) != nullptr);
+    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(zero)) != nullptr);
+    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rN), bcos::ref(sOne)) != nullptr);
+    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(sOver)) != nullptr);
+    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(sHigh)) != nullptr);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

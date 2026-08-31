@@ -14,9 +14,9 @@
  *  limitations under the License.
  *
  * @file OpBaseFee.h
- * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). Consumed today only by the
- * RPC feeHistory trailing prediction; the engine path does not call it (finding AR — the
- * earlier "shared by engine and RPC" claim was aspirational).
+ * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). No production caller in this
+ * PR — the RPC feeHistory consumer lands with split C (#5521); the engine path does not
+ * call it (finding AR — the earlier "shared by engine and RPC" claim was aspirational).
  */
 
 #pragma once
@@ -29,10 +29,12 @@
 namespace bcos::engine
 {
 
-/// Next-block baseFee (op-geth CalcBaseFee). extraData layout:
-///   9 bytes  = Holocene: version || denominator(u32 BE) || elasticity(u32 BE)
-///   17 bytes = Jovian adds minBaseFee (u64 BE)
-/// Shorter extraData uses Holocene defaults (8/2). Caller decides parentIsJovian.
+/// Next-block baseFee (op-geth CalcBaseFee). extraData layout (version byte first):
+///   9 bytes  = Holocene: 0x00 || denominator(u32 BE) || elasticity(u32 BE)
+///   17 bytes = Jovian:   0x01 || denominator || elasticity || minBaseFee(u64 BE)
+/// Shorter extraData uses Holocene defaults (8/2). The caller decides parentIsJovian from
+/// the fork schedule; the minBaseFee floor is only read from exactly-17-byte extraData
+/// carrying the Jovian version byte 0x01, matching the engine's stamped/validated format.
 inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool parentIsJovian)
 {
     auto const extra = parent.extraData();
@@ -55,9 +57,12 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
         throw std::invalid_argument("invalid OP base-fee parameters: zero denominator/elasticity");
     }
 
-    // Jovian minBaseFee, only when the 8-byte tail is present.
+    // Jovian minBaseFee — requires exactly the engine's stamped/validated Jovian layout
+    // (17 bytes, version byte 0x01). Finding S4: a bare >=17 gate would read a floor out
+    // of a buffer the engine's extraData validation would have rejected, and a 17-byte
+    // Holocene-version buffer would wrongly engage the floor.
     std::optional<bcos::u256> minBaseFee;
-    if (parentIsJovian && extra.size() >= 17)
+    if (parentIsJovian && extra.size() == 17 && extra[0] == 0x01)
     {
         uint64_t floor = 0;
         for (std::size_t i = 0; i < 8; ++i)
