@@ -96,9 +96,11 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
         w3.value = parsePresentQuantity(value).value_or(u256(0));
         // Nonce goes into the envelope. Unknown stays 0; executor then uses state nonce.
         w3.nonce = safeFromQuantity(nonce).value_or(0);
-        // op-geth caps a gas-less eth_call at its RPC gas cap; default to the 30M block-gas
-        // convention so a pricing-less simulation passes the intrinsic-gas check.
-        w3.gasLimit = gas.value_or(30'000'000);
+        // op-geth caps eth_call at its RPC gas cap — for a gas-less call AND a
+        // caller-supplied one ("Caller gas above allowance, capping"). Finding I1: an
+        // explicit 0xffffffffffffffff previously reached the executor unclamped; estimateGas
+        // already clamps the same way before run #1.
+        w3.gasLimit = std::min(gas.value_or(30'000'000), uint64_t{30'000'000});
         u256 const defaultFee = std::max(*blockBaseFee * 2, u256(2'000'000'000));
         w3.maxPriorityFeePerGas = parsePresentQuantity(gasPrice).value_or(
             parsePresentQuantity(maxFeePerGas).value_or(defaultFee));

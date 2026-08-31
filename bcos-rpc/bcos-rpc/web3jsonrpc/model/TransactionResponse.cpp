@@ -162,16 +162,20 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         // reconstructed from the stored parity byte — the storage layer keeps only the parity.
         if (web3Tx.type == TransactionType::Legacy)
         {
-            // sig[64] is unchecked; short signatures report v as 0x0.
+            // Finding S9: a short/corrupt signature has no trustworthy parity byte — omit v
+            // entirely instead of fabricating a valid-looking EIP-155 value from parity 0.
             auto const sig = tx.signatureData();
-            uint64_t const parity = (sig.size() >= 65) ? static_cast<uint64_t>(sig[64]) : 0;
-            if (web3Tx.chainId.has_value() && web3Tx.chainId.value() != 0)
+            if (sig.size() >= 65)
             {
-                result["v"] = toQuantity(u256(web3Tx.chainId.value()) * 2 + 35 + parity);
-            }
-            else
-            {
-                result["v"] = toQuantity(27 + parity);
+                auto const parity = static_cast<uint64_t>(sig[64]);
+                if (web3Tx.chainId.has_value() && web3Tx.chainId.value() != 0)
+                {
+                    result["v"] = toQuantity(u256(web3Tx.chainId.value()) * 2 + 35 + parity);
+                }
+                else
+                {
+                    result["v"] = toQuantity(27 + parity);
+                }
             }
         }
         if (web3Tx.type == TransactionType::EIP4844)

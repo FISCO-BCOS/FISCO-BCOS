@@ -358,7 +358,9 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 InvalidParams, "Expected array of hex strings for executionPayload.transactions"));
         }
-        // Hex-decode into transactions[].raw; rawTransactions is a derived mirror.
+        // Hex-decode into transactions[].raw — the single authoritative carrier
+        // (finding S11: the derived rawTransactions mirror had zero readers in-tree and
+        // doubled the payload bytes; it stays nullopt until an OP executor seam consumes it).
         payload.transactions.reserve(ep["transactions"].size());
         for (Json::ArrayIndex i = 0; i < ep["transactions"].size(); ++i)
         {
@@ -367,12 +369,6 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
                 .raw = std::move(txData),
                 .decoded = nullptr,
             });
-        }
-        payload.rawTransactions.emplace();
-        payload.rawTransactions->reserve(payload.transactions.size());
-        for (auto const& tx : payload.transactions)
-        {
-            payload.rawTransactions->push_back(tx.raw);
         }
     }
     if (ep.isMember("withdrawals") && !ep["withdrawals"].isNull())
@@ -832,11 +828,7 @@ void bcos::rpc::combineGetPayloadResponse(Json::Value& _result,
     {
         _result["parentBeaconBlockRoot"] = _response->parentBeaconBlockRoot->hexPrefixed();
     }
-    // V4 (Prague payload shape): executionRequests is a required member of the response. This
-    // chain produces none (no deposit/consolidation requests), so an empty list is the honest
-    // payload — op-geth's own no-request blocks serialize the same shape.
-    if (version == engine::ApiVersion::V4)
-    {
-        _result["executionRequests"] = Json::Value(Json::arrayValue);
-    }
+    // (Finding S10: the former ==V4 overwrite of executionRequests to [] duplicated the
+    // >=V4 gate above — the gate already renders nullopt as [], so a future non-empty
+    // executionRequests would have been silently dropped here.)
 }
