@@ -125,6 +125,16 @@ public:
     static bcos::Error::UniquePtr toEthBlockHeader(
         EthBlockHeader& ethHeader, bcos::bytesConstRef _data);
     static bcos::Error::UniquePtr calculateRLPHash(bcos::protocol::BlockHeader& header);
+    /// Compute keccak256(rlp(header)) WITHOUT validation or state mutation — usable for
+    /// FISCO-native/OP headers (EthBlockVersion::NON_ETH) that calculateRLPHash's
+    /// validateHeader rejects. Returns the 32-byte Ethereum block hash.
+    /// The header's timestamp is internal milliseconds (every version); the RLP surface
+    /// carries seconds, converted at the bridge — the EthBlockHeader(BlockHeader) ctor
+    /// divides by 1000 and throws std::invalid_argument on a sub-second value, so a
+    /// non-whole-second timestamp fails loudly here. Callers that cannot tolerate
+    /// exceptions should use calculateRLPHash (which returns Error::UniquePtr) instead.
+    static bcos::crypto::HashType computeHash(const bcos::protocol::BlockHeader& header) noexcept(
+        false);
 
     const EthBlockHeaderData& data() const { return m_data; }
 

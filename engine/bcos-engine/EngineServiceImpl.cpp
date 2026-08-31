@@ -480,9 +480,20 @@ bcos::protocol::EthBlockVersion bcos::engine::detail::ethBlockVersionFor(evmc_re
     case EVMC_OSAKA:
         return bcos::protocol::EthBlockVersion::PRAGUE;
     default:
-        // FRONTIER..BERLIN cannot appear on a PoS/Engine chain; keeping the minimal
-        // post-merge shape is safe and fail-closed for any misconfiguration.
-        return bcos::protocol::EthBlockVersion::LONDON;
+        // Asymmetric arm: revisions strictly below LONDON (FRONTIER..BERLIN) cannot
+        // appear on a PoS/Engine chain, so the minimal post-merge shape is a defensible
+        // floor. Any revision ABOVE the highest mapped one — a future EVMC bump adding a
+        // revision after OSAKA — must fail loudly instead of hashing under the wrong fork
+        // rules: that would drop withdrawalsRoot, the blob trio and requestsHash from the
+        // RLP with no diagnostic, and every peer recomputing under the chain's real fork
+        // would reject the block.
+        if (rev < EVMC_LONDON)
+        {
+            return bcos::protocol::EthBlockVersion::LONDON;
+        }
+        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
+            "EngineService: unsupported EVM revision " + std::to_string(static_cast<int>(rev)) +
+            " for Eth header fork derivation"});
     }
 }
 

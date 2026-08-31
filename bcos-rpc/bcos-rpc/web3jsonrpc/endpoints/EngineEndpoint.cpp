@@ -141,8 +141,22 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
     //   not in chain -38003 InvalidPayloadAttributes: payloadAttributes.timestamp <=
     //   headBlockHash.timestamp -38005 UnsupportedFork: timestamp out of fork window (V2/V3
     //   specific) -38006 TooDeepReorg: reorg depth exceeds limitation
-    auto engineResult = co_await engineService->updateForkchoice(forkchoiceState,
-        payloadAttrs.has_value() ? &*payloadAttrs : nullptr, static_cast<uint32_t>(version));
+    engine::ForkchoiceUpdatedResult engineResult;
+    try
+    {
+        engineResult = co_await engineService->updateForkchoice(forkchoiceState,
+            payloadAttrs.has_value() ? &*payloadAttrs : nullptr, static_cast<uint32_t>(version));
+    }
+    catch (engine::UnsupportedFork const&)
+    {
+        // The request's attribute shape cannot express the chain's fork era (e.g. a V2
+        // forkchoiceUpdated on a CANCUN+ chain). geth answers -38005 Unsupported fork for
+        // the same CL/chain mismatch; the service layer throws UnsupportedFork so this
+        // stays a diagnosable fork error instead of a generic -32603 InternalError.
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
+            "Unsupported fork: the requested attribute shape does not match the chain's "
+            "EVM revision"));
+    }
     auto jsonResult = combineForkchoiceUpdatedResult(engineResult, version);
     buildJsonContent(jsonResult, response);
 }

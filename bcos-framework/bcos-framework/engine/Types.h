@@ -54,6 +54,10 @@ using PayloadID = std::string;
 DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
 DERIVE_BCOS_EXCEPTION(UnknownPayload);
 DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+/// A request whose attribute shape cannot express the chain fork the header must be
+/// hashed as (e.g. forkchoiceUpdatedV2 on a CANCUN chain). Maps to -38005 Unsupported
+/// fork, matching geth's answer for the same CL/chain mismatch.
+DERIVE_BCOS_EXCEPTION(UnsupportedFork);
 
 struct WithdrawalV1
 {

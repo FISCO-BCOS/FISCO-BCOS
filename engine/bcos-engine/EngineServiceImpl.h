@@ -830,17 +830,19 @@ private:
         // SHANGHAI the V2 attributes (withdrawals). An older FCU on a newer chain is a CL
         // configuration error — the hashed header would demand fields the attributes never
         // supplied — so fail loudly instead of hashing absent fields as explicit zeros.
+        // UnsupportedFork maps to -38005 (geth answers the same for this mismatch); a
+        // bare std::invalid_argument would surface as a -32603 InternalError.
         if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
             !payloadAttributes.parentBeaconBlockRoot.has_value())
         {
-            BOOST_THROW_EXCEPTION(std::invalid_argument{
+            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
                 "EngineService: chain EVM revision requires the V3 payload attributes "
                 "(parentBeaconBlockRoot); forkchoiceUpdated must be called at version >= 3"});
         }
         if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI &&
             !payloadAttributes.withdrawals.has_value())
         {
-            BOOST_THROW_EXCEPTION(std::invalid_argument{
+            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
                 "EngineService: chain EVM revision requires the V2 payload attributes "
                 "(withdrawals); forkchoiceUpdated must be called at version >= 2"});
         }

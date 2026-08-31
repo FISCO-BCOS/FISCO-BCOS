@@ -496,6 +496,25 @@ BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_paylo
     BOOST_CHECK(!fetched[0]);
 }
 
+// On a CANCUN chain the header-fork era outruns the V2 attribute shape, so a V2
+// forkchoiceUpdated is refused with UnsupportedFork (the RPC layer maps it to -38005,
+// matching geth's answer for the same CL/chain mismatch). The same attributes on a
+// SHANGHAI chain build (see forkchoice_with_payload_attributes_builds_retrievable_payload).
+BOOST_AUTO_TEST_CASE(forkchoice_v2_rejected_on_cancun_chain)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;  // default CANCUN
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV2();
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2)),
+        UnsupportedFork);
+}
+
 BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
 {
     MemPoolImpl memPool;
@@ -1522,8 +1541,10 @@ static bcos::protocol::BlockHeader::Ptr makeValidCancunHeader(
 BOOST_AUTO_TEST_CASE(ethBlockVersionForMapsEvmRevisions)
 {
     using bcos::protocol::EthBlockVersion;
-    // Pre-London revisions cannot occur on a PoS/Engine path; they map to the minimal
-    // post-merge shape (LONDON).
+    // Revisions strictly below LONDON (FRONTIER..BERLIN) cannot occur on a PoS/Engine
+    // path; they map to the minimal post-merge shape (LONDON).
+    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(EVMC_BERLIN)),
+        static_cast<int>(EthBlockVersion::LONDON));
     BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(EVMC_LONDON)),
         static_cast<int>(EthBlockVersion::LONDON));
     BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(EVMC_PARIS)),
@@ -1537,6 +1558,11 @@ BOOST_AUTO_TEST_CASE(ethBlockVersionForMapsEvmRevisions)
         static_cast<int>(EthBlockVersion::PRAGUE));
     BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(EVMC_OSAKA)),
         static_cast<int>(EthBlockVersion::PRAGUE));
+    // A future EVMC bump (a revision above OSAKA) must fail loudly: hashing under the
+    // wrong fork rules would drop fork-gated fields and every peer would reject the
+    // block, with no diagnostic.
+    BOOST_CHECK_THROW(bcos::engine::detail::ethBlockVersionFor(EVMC_EXPERIMENTAL),
+        UnsupportedFork);
 }
 
 BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderFillsEthFieldsAndHash)

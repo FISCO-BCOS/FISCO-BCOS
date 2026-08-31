@@ -45,6 +45,18 @@ bcos::Error::UniquePtr EthBlockHeader::calculateRLPHash(bcos::protocol::BlockHea
     return nullptr;
 }
 
+bcos::crypto::HashType EthBlockHeader::computeHash(
+    const bcos::protocol::BlockHeader& header) noexcept(false)
+{
+    // No validateHeader here (unlike calculateRLPHash): this is the block-identity hash
+    // for FISCO-native/OP headers (EthBlockVersion::NON_ETH) that validateHeader rejects.
+    // The ctor performs the ms->s conversion and throws on a sub-second timestamp.
+    EthBlockHeader ethHeader(header);
+    bcos::bytes encoded;
+    ethHeader.rlpEncode(encoded);
+    return bcos::crypto::keccak256Hash(bcos::ref(encoded));
+}
+
 bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data)
 {
