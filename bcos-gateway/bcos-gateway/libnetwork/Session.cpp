@@ -317,7 +317,19 @@ task::Task<void> Session::writeLoop()
                 if (m_server.get().haveNetwork())
                 {
                     m_server.get().asioInterface()->post([callback = std::move(callback)]() {
-                        callback(boost::asio::error::operation_aborted);
+                        // Same containment as the success-path write completion below: the
+                        // callback resumes a waiter whose await_resume may throw, and this
+                        // lambda runs inside io_context::run(), so nothing may escape it.
+                        try
+                        {
+                            callback(boost::asio::error::operation_aborted);
+                        }
+                        catch (std::exception const& e2)
+                        {
+                            SESSION_LOG(WARNING)
+                                << LOG_DESC("write callback exception")
+                                << LOG_KV("what", boost::diagnostic_information(e2));
+                        }
                     });
                 }
                 else
@@ -369,7 +381,8 @@ task::Task<void> Session::writeLoop()
             // `size` is unused: the loop re-derives the batch layout from `payloads` on each
             // iteration, and a short/failed write is handled through `error` alone
             [[maybe_unused]] auto [error, size] =
-                co_await m_server.get().asioInterface()->awaitableWrite(m_socket, buffers);
+                co_await m_server.get().asioInterface()->awaitableWrite(
+                    m_socket, std::move(buffers));
 
             buffers.clear();
             for (auto& payload : payloads)

@@ -86,6 +86,13 @@ std::shared_ptr<void> tryAcquireHandshakeSlotGuard(std::weak_ptr<Host> host)
 }
 }  // namespace
 
+// FIB-186: member wrapper over the anonymous-namespace factory above, so acceptLoop and tests
+// drive the exact same acquire-and-guard path.
+std::shared_ptr<void> Host::acquireHandshakeSlotGuard()
+{
+    return tryAcquireHandshakeSlotGuard(weak_from_this());
+}
+
 /**
  * @brief: accept connection requests, maily include procedures:
  *         1. async_accept: accept connection requests
@@ -213,10 +220,24 @@ task::Task<void> Host::acceptLoop()
         // posted cancel() on the acceptor object itself ("Shared objects: Unsafe").
         if (iterationFailed)
         {
-            auto retryTimer = m_asioInterface->newAcceptorTimer(ACCEPT_RETRY_INTERVAL_MS);
-            co_await makeAsioAwaitable<boost::system::error_code>([&retryTimer](auto handler) {
-                retryTimer.async_wait(std::move(handler));
-            });
+            // Guard the retry itself: newAcceptorTimer / async_wait run OUTSIDE the iteration's
+            // try above, so a throw here (timer allocation, initiation failure rethrown by
+            // await_resume) would escape acceptLoop entirely and permanently stop inbound
+            // acceptance while m_run stays true. Log and let the while loop retry.
+            try
+            {
+                auto retryTimer = m_asioInterface->newAcceptorTimer(ACCEPT_RETRY_INTERVAL_MS);
+                co_await makeAsioAwaitable<boost::system::error_code>(
+                    [&retryTimer](auto handler) {
+                        retryTimer.async_wait(std::move(handler));
+                    });
+            }
+            catch (...)
+            {
+                HOST_LOG(ERROR) << LOG_DESC("accept retry timer exception")
+                                << LOG_KV("what",
+                                       boost::current_exception_diagnostic_information());
+            }
         }
     }
 }
@@ -612,8 +633,8 @@ bool Host::tryAcquireHandshakeSlot()
     return true;
 }
 
-// FIB-186: release a previously reserved handshake slot. Runs from the HandshakeSlotGuard bound to
-// the handshake completion handler, i.e. exactly once when the handshake finishes or is aborted.
+// FIB-186: release a previously reserved handshake slot. Runs from the HandshakeSlotGuard riding
+// the serverHandshake coroutine frame, i.e. exactly once when that frame unwinds.
 void Host::releaseHandshakeSlot()
 {
     std::lock_guard<std::mutex> lock(x_pendingHandshakes);
@@ -824,8 +845,10 @@ task::Task<void> Host::clientConnect(std::shared_ptr<SocketFace> socket,
         auto [handshakeError] =
             co_await m_asioInterface->awaitableHandshake(socket, ba::ssl::stream_base::client);
         connectTimer->cancel();
-        handshakeClient(handshakeError, std::move(socket), endpointPublicKey,
-            std::move(callback), _nodeIPEndpoint);
+        // Pass COPIES of socket/callback, not moves: if handshakeClient itself throws, the
+        // catch(...) below settles the operation through socket->close() and the callback —
+        // both would be moved-from (null) here had they been moved into the call.
+        handshakeClient(handshakeError, socket, endpointPublicKey, callback, _nodeIPEndpoint);
     }
     catch (...)
     {

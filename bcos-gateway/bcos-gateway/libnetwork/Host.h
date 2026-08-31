@@ -186,6 +186,10 @@ public:
     // frame unwinds (handshake success, failure, or abort).
     bool tryAcquireHandshakeSlot();
     void releaseHandshakeSlot();
+    // FIB-186: reserve a slot AND return the owning RAII guard in one step (nullptr when the cap
+    // is reached). The guard rides the caller's coroutine frame, so acquire and release live in
+    // the same frame — and the "throw between acquire and guard" window cannot leak a slot.
+    std::shared_ptr<void> acquireHandshakeSlotGuard();
 
     // FIB-186: rate-limit accepted new connections (not just their concurrency). The pending-
     // handshake cap above bounds how many handshakes run at once, but on a fast link a churn flood

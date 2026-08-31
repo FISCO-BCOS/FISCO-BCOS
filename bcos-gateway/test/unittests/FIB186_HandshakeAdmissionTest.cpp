@@ -58,6 +58,7 @@ public:
     }
     bool callTryAcquireHandshakeSlot() { return tryAcquireHandshakeSlot(); }
     void callReleaseHandshakeSlot() { releaseHandshakeSlot(); }
+    std::shared_ptr<void> callAcquireHandshakeSlotGuard() { return acquireHandshakeSlotGuard(); }
 };
 
 // FIB-186: the global concurrent-handshake cap rejects once the total limit is hit. It is global,
@@ -82,35 +83,35 @@ BOOST_AUTO_TEST_CASE(GlobalHandshakeCapIsEnforced)
     BOOST_CHECK_EQUAL(fakeHost->currentPendingHandshakes(), 2u);
 }
 
-// FIB-186: the RAII HandshakeSlotGuard pattern releases the slot exactly once when the handshake
-// path unwinds (success, failure, or abort). Mirrors how Host::serverHandshake binds the guard
-// into its coroutine frame.
+// FIB-186: the REAL HandshakeSlotGuard the accept loop hands into serverHandshake releases the
+// slot exactly once when the frame unwinds (success, failure, or abort — all three are the same
+// frame destruction, which is what this drives).
 BOOST_AUTO_TEST_CASE(GuardReleasesSlotExactlyOnce)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB186>();
     auto fakeHost = std::make_shared<FakeHost_FIB186>(hashImpl, fakeAsio);
 
-    BOOST_CHECK(fakeHost->callTryAcquireHandshakeSlot());
-    BOOST_CHECK_EQUAL(fakeHost->currentPendingHandshakes(), 1u);
-
     {
-        // A shared_ptr with a release-on-destroy deleter models the HandshakeSlotGuard riding the
-        // completion handler; when the last copy is destroyed the slot is released once.
-        std::weak_ptr<Host> weakHost = fakeHost;
-        auto guard = std::shared_ptr<void>(nullptr, [weakHost](void*) {
-            if (auto h = weakHost.lock())
-            {
-                std::static_pointer_cast<FakeHost_FIB186>(h)->callReleaseHandshakeSlot();
-            }
-        });
-        // Copying the handler (as asio may) must not double-release: release happens on final
-        // destruction of the shared guard, not per copy.
+        // Acquiring through the real factory reserves the slot and binds it to the guard.
+        auto guard = fakeHost->callAcquireHandshakeSlotGuard();
+        BOOST_REQUIRE(guard);
+        BOOST_CHECK_EQUAL(fakeHost->currentPendingHandshakes(), 1u);
+        // Copying the guard (the coroutine frame may hold several references to it) must not
+        // double-release: the slot is released on final destruction, not per copy.
         auto guardCopy = guard;
         BOOST_CHECK_EQUAL(fakeHost->currentPendingHandshakes(), 1u);
     }
-    // After the guard (and its copy) is destroyed, the slot is released exactly once.
+    // After the last copy is destroyed — i.e. the serverHandshake frame unwound — the slot is
+    // released exactly once.
     BOOST_CHECK_EQUAL(fakeHost->currentPendingHandshakes(), 0u);
+
+    // Cap reached: the real factory returns nullptr and reserves nothing.
+    fakeHost->setMaxPendingHandshakes(1);
+    auto guard = fakeHost->callAcquireHandshakeSlotGuard();
+    BOOST_REQUIRE(guard);
+    BOOST_CHECK(!fakeHost->callAcquireHandshakeSlotGuard());
+    BOOST_CHECK_EQUAL(fakeHost->currentPendingHandshakes(), 1u);
 }
 
 // FIB-186: releasing an unknown / already-drained address never underflows the global counter.

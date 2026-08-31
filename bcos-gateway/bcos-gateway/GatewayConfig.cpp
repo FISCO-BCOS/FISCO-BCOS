@@ -256,7 +256,11 @@ uint32_t GatewayConfig::maxSendDataSize() const
 
 void GatewayConfig::setMaxSendDataSize(uint32_t _maxSendDataSize)
 {
-    m_maxSendDataSize = _maxSendDataSize;
+    // Single enforcement point for the send-batch byte budget (shared with initP2PConfig's
+    // parse path): 0 would make Session::tryPopSomeEncodedMsgs never pop and silently stall
+    // every outbound write on the session, so clamp to a working minimum wherever the value
+    // comes from.
+    m_maxSendDataSize = std::max<uint32_t>(_maxSendDataSize, 1);
 }
 
 uint32_t GatewayConfig::maxMsgCountSendOneTime() const
@@ -625,7 +629,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     m_maxReadDataSize = _pt.get<uint32_t>("p2p.session_max_read_data_size", defaultMaxReadDataSize);
 
     constexpr static uint32_t defaultMaxSendDataSize = 1024 * 1024;
-    m_maxSendDataSize = _pt.get<uint32_t>("p2p.session_max_send_data_size", defaultMaxSendDataSize);
+    auto maxSendDataSize = _pt.get<uint32_t>("p2p.session_max_send_data_size", defaultMaxSendDataSize);
 
     constexpr static uint32_t defaultMaxSendMsgCount = 10;
     m_maxSendMsgCount = _pt.get<uint32_t>("p2p.session_max_send_msg_count", defaultMaxSendMsgCount);
@@ -634,7 +638,9 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     // Session::tryPopSomeEncodedMsgs enforces on every write loop iteration. Unlike
     // p2p.max_connections_per_second above, 0 does NOT mean "unlimited" here: with the byte
     // budget at 0 the batch loop never pops, every write loop exits on its first iteration, and
-    // all outbound traffic on the session stalls silently. Clamp to a working minimum instead.
+    // all outbound traffic on the session stalls silently. Warn here so the operator sees the
+    // config problem, then route through the setter — the single clamp enforcement point shared
+    // with every other writer of this value.
     //
     // p2p.session_max_send_msg_count is parsed for config-file compatibility only and is
     // deliberately NOT enforced anywhere — the base had the message-count condition commented
@@ -644,12 +650,12 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     // see the behaviour-change note in the PR description. No clamp here: nothing reads this
     // value, so warning the operator to "fix" a 0 would invite a config change that changes
     // nothing.
-    if (m_maxSendDataSize == 0)
+    if (maxSendDataSize == 0)
     {
         GATEWAY_CONFIG_LOG(WARNING)
             << LOG_DESC("p2p.session_max_send_data_size must be positive, clamped to 1");
-        m_maxSendDataSize = 1;
     }
+    setMaxSendDataSize(maxSendDataSize);
 
     m_smSSL = smSSL;
     m_listenIP = listenIP;
