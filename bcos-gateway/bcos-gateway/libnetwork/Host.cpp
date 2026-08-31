@@ -235,8 +235,8 @@ task::Task<void> Host::acceptLoop()
             catch (...)
             {
                 HOST_LOG(ERROR) << LOG_DESC("accept retry timer exception")
-                                << LOG_KV("what",
-                                       boost::current_exception_diagnostic_information());
+                                << LOG_KV(
+                                       "what", boost::current_exception_diagnostic_information());
             }
         }
     }
@@ -954,8 +954,7 @@ void Host::stop()
             // m_run == false and exit. With no inbound connection, a Host whose cancel was lost
             // here stays alive until stop() is retried.
             HOST_LOG(WARNING) << LOG_DESC("cancel acceptor on stop failed")
-                              << LOG_KV("what",
-                                     boost::current_exception_diagnostic_information());
+                              << LOG_KV("what", boost::current_exception_diagnostic_information());
         }
     }
     // FIB-186 (vector D): the dedicated teardown executor is deliberately NOT stopped here.

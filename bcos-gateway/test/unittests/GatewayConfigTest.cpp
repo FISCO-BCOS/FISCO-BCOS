@@ -493,7 +493,8 @@ BOOST_AUTO_TEST_CASE(test_sessionCapsFromConfig)
     // session (the batch loop never pops) — unlike max_connections_per_second, 0 is NOT
     // "unlimited" here, so the byte budget is clamped to a working minimum at load time.
     // session_max_send_msg_count is parsed for compatibility but not enforced anywhere, so a 0
-    // is accepted as-is (no clamp, no warning — nothing reads the value).
+    // is accepted as-is (no clamp); an explicitly-present value now triggers a startup
+    // deprecation warning instead.
     {
         auto config = std::make_shared<GatewayConfig>();
         boost::property_tree::ptree pt;

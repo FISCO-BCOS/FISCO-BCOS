@@ -128,26 +128,36 @@ public:
     {
         try
         {
-            // std::uncaught_exceptions(): destruction during stack unwinding means initiation
-            // threw (see await_suspend) and the coroutine is still RUNNING on that stack —
-            // destroying a non-suspended frame is undefined behaviour, so the rescue stays out
-            // of unwinding; await_resume rethrows the initiation error instead.
-            if (m_armed && std::uncaught_exceptions() == 0)
+            if (!m_armed)
             {
-                auto expected = CompletionState::Init;
-                if (m_state->compare_exchange_strong(expected, CompletionState::Dropped,
-                        std::memory_order_acq_rel))
-                {
-                    // we claimed the drop: await_suspend has not suspended yet (state was
-                    // Init), so it will observe Dropped and resume inline with operation_aborted
-                    return;
-                }
-                if (expected == CompletionState::Suspended)
-                {
-                    // the coroutine has suspended and no completion will ever come: release
-                    // the frame (and everything it owns) — the completion-or-cancel rescue
-                    m_handle.destroy();
-                }
+                // moved-from, or the completion already ran: nothing to settle
+                return;
+            }
+            // The std::uncaught_exceptions() guard applies only to the Init -> Dropped claim
+            // below: destruction during stack unwinding means initiation threw (see
+            // await_suspend) and the coroutine is still RUNNING on that stack — destroying a
+            // non-suspended frame is undefined behaviour, so the claim is skipped there and
+            // await_resume rethrows the initiation error instead. The guard must NOT gate the
+            // Suspended-state rescue below: Suspended is published by await_suspend's CAS only
+            // after initiate() returned normally, so a Suspended frame is structurally never
+            // the still-running case — gating it would strand a genuinely parked coroutine
+            // (and everything it owns) whenever the destroying thread happens to be unwinding
+            // for unrelated reasons.
+            auto expected = CompletionState::Init;
+            if (std::uncaught_exceptions() == 0 &&
+                m_state->compare_exchange_strong(
+                    expected, CompletionState::Dropped, std::memory_order_acq_rel))
+            {
+                // we claimed the drop: await_suspend has not suspended yet (state was Init),
+                // so it will observe Dropped and resume inline with operation_aborted
+                return;
+            }
+            if (expected == CompletionState::Suspended ||
+                m_state->load(std::memory_order_acquire) == CompletionState::Suspended)
+            {
+                // the coroutine has suspended and no completion will ever come: release the
+                // frame (and everything it owns) — the completion-or-cancel rescue
+                m_handle.destroy();
             }
         }
         catch (...)

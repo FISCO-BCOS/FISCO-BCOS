@@ -629,9 +629,20 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     m_maxReadDataSize = _pt.get<uint32_t>("p2p.session_max_read_data_size", defaultMaxReadDataSize);
 
     constexpr static uint32_t defaultMaxSendDataSize = 1024 * 1024;
-    auto maxSendDataSize = _pt.get<uint32_t>("p2p.session_max_send_data_size", defaultMaxSendDataSize);
+    auto maxSendDataSize =
+        _pt.get<uint32_t>("p2p.session_max_send_data_size", defaultMaxSendDataSize);
 
     constexpr static uint32_t defaultMaxSendMsgCount = 10;
+    // p2p.session_max_send_msg_count is parsed for config-file compatibility only and is
+    // deliberately NOT enforced anywhere (see the comment below). If the operator has explicitly
+    // tuned it, say so at startup — a value that is accepted and echoed back but has no effect
+    // would otherwise be silent and indistinguishable from a working setting.
+    if (_pt.get_optional<uint32_t>("p2p.session_max_send_msg_count"))
+    {
+        GATEWAY_CONFIG_LOG(WARNING) << LOG_DESC(
+            "p2p.session_max_send_msg_count is no longer enforced; the send-batch "
+            "is capped by p2p.session_max_send_data_size only");
+    }
     m_maxSendMsgCount = _pt.get<uint32_t>("p2p.session_max_send_msg_count", defaultMaxSendMsgCount);
 
     // p2p.session_max_send_data_size bounds the send-batch budget that
@@ -648,8 +659,9 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     // capped every async_write at the (default 10) message budget, costing ceil(N/10) post +
     // async_write round-trips under broadcast fan-out. The byte budget alone is the sole cap;
     // see the behaviour-change note in the PR description. No clamp here: nothing reads this
-    // value, so warning the operator to "fix" a 0 would invite a config change that changes
-    // nothing.
+    // value, so "fixing" a 0 would change nothing; an explicitly-configured value is instead
+    // flagged with a deprecation warning above so a tuned-but-ignored setting is visible at
+    // startup.
     if (maxSendDataSize == 0)
     {
         GATEWAY_CONFIG_LOG(WARNING)

@@ -295,6 +295,15 @@ task::Task<void> Session::writeLoop()
                             << LOG_DESC("write batch callback failed on frame destroy")
                             << LOG_KV("what", boost::diagnostic_information(e));
                     }
+                    catch (...)
+                    {
+                        // the guard's destructor is implicitly noexcept: a foreign exception
+                        // (not derived from std::exception) escaping here would call
+                        // std::terminate, so catch everything and log
+                        SESSION_LOG(WARNING)
+                            << LOG_DESC("write batch callback failed on frame destroy")
+                            << LOG_KV("what", boost::current_exception_diagnostic_information());
+                    }
                 }
             }
             payloads.clear();
@@ -526,7 +535,19 @@ void Session::drop(DisconnectReason _reason)
             if (m_server.get().haveNetwork())
             {
                 m_server.get().asioInterface()->post([callback = std::move(payload.m_callback)]() {
-                    callback(boost::asio::error::operation_aborted);
+                    // The callback resumes a coroutine whose await_resume may throw
+                    // (fastSendMessageWithoutResponse throws NetworkException on write failure),
+                    // and this lambda runs inside io_context::run() — contain it exactly as
+                    // failBatch and the response-waiter flush below do.
+                    try
+                    {
+                        callback(boost::asio::error::operation_aborted);
+                    }
+                    catch (std::exception const& e)
+                    {
+                        SESSION_LOG(WARNING) << LOG_DESC("write callback exception during drop")
+                                             << LOG_KV("what", boost::diagnostic_information(e));
+                    }
                 });
             }
             else

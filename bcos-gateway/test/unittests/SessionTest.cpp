@@ -1114,9 +1114,10 @@ BOOST_AUTO_TEST_CASE(asioCompletionHandshakeSynchronousInvocation)
 {
     // Arm/cancel handshake regression: an initiate that INVOKES the completion synchronously
     // (before returning) must not resume the coroutine from inside its own await_suspend
-    // (resuming a not-yet-suspended frame is UB). AsioCompletion observes m_suspended == false,
-    // records the completion, and await_suspend resumes inline by returning false — the result
-    // is delivered exactly once.
+    // (resuming a not-yet-suspended frame is UB). The completion's operator() claims
+    // Init -> Completed and deliberately does not resume; await_suspend observes Completed on
+    // its failed CAS and resumes inline by returning false — the result is delivered exactly
+    // once.
     auto task = []() -> task::Task<boost::system::error_code> {
         auto [ec] = co_await makeAsioAwaitable<boost::system::error_code>(
             [](auto handler) { handler(boost::system::error_code()); });
