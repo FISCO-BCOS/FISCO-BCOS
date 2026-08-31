@@ -171,6 +171,42 @@ BOOST_AUTO_TEST_CASE(oneEmptySignatureItemIsMalformed)
     BOOST_CHECK(classify(emptyS) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
 }
 
+// 32-byte big-endian scalar item — real signature width. decodeHeader CONSUMES the 0xa0
+// header when probing, unlike the inline item(1) forms the fixtures above use, so only
+// these shapes exercise the emptySeen walk's cursor hygiene (kyonRay R3 #1/#2).
+bcos::bytes wideScalar(bcos::byte fill)
+{
+    bcos::bytes out(1, 0xa0);
+    out.insert(out.end(), 32, fill);
+    return out;
+}
+
+// R3 #2: a real-width sealed envelope (v=38 = chainId 1, 32-byte r/s) must classify
+// Protected with the chainId — the preimage probe consumes r's 0xa0 header, and the
+// emptySeen walk must still re-anchor on the tail's item boundary, not parse r's interior
+// and answer Malformed (the data-dependent aliasing defect). r's first payload byte is
+// 0xc1 — a list header if the walk were anchored mid-r, which is what makes this fixture
+// fail on the aliasing code.
+BOOST_AUTO_TEST_CASE(sealedFullFormRealWidthSignatureIsProtected)
+{
+    bcos::bytes r = wideScalar(0x11);
+    r[1] = 0xc1;  // >= 0xc0: parsed as a list header from inside r's payload
+    auto env = legacyEnvelope(concat(sixFields(), concat(item(38), concat(r, wideScalar(0x22)))));
+    auto const result = bcos::rlp::protocol::classifyWeb3EnvelopeChainId(bcos::ref(env));
+    BOOST_CHECK(result.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Protected);
+    BOOST_CHECK_EQUAL(result.chainId, 1U);
+}
+
+// R3 #2: the S6 exactly-one-empty rule pinned at real signature width — 32-byte r with an
+// EMPTY s must classify Malformed, not ride the Protected band because the walk parsed
+// r's interior and never saw the empty item.
+BOOST_AUTO_TEST_CASE(oneEmptySignatureItemRealWidthIsMalformed)
+{
+    auto env = legacyEnvelope(
+        concat(sixFields(), concat(item(38), concat(wideScalar(0x11), bcos::bytes{0x80}))));
+    BOOST_CHECK(classify(env) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
+}
+
 // S6: the typed inner list must close at the envelope boundary — junk after the list is
 // Malformed, matching decode()'s trailing-garbage rejection on the same bytes.
 BOOST_AUTO_TEST_CASE(typedListTrailingGarbageIsMalformed)

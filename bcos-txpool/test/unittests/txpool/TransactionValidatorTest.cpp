@@ -247,6 +247,35 @@ BOOST_AUTO_TEST_CASE(testValidateChainIdTypedAdmitAndUnsupported)
         BOOST_CHECK(result == TransactionStatus::InvalidChainId);
     }
 
+    // R3 #2: legacy SEALED envelope at real signature width (32-byte r/s, v=38 = chainId 1)
+    // must be admitted — validateChainId was previously driven only with typed envelopes,
+    // and inline-width classifier fixtures hide the emptySeen cursor defect that misreads
+    // real-width tails (Malformed instead of Protected).
+    {
+        auto makeLegacySealedWire = []() {
+            bcos::bytes items;
+            for (int i = 0; i < 6; ++i)
+            {
+                codec_rlp::encode(items, static_cast<uint64_t>(0));
+            }
+            codec_rlp::encode(items, static_cast<uint64_t>(38));  // v: chainId 1, parity 1
+            items.push_back(0xa0);                                // 32-byte r
+            items.insert(items.end(), 32, 0x11);
+            items.push_back(0xa0);  // 32-byte s
+            items.insert(items.end(), 32, 0x22);
+            bcos::bytes wire;
+            codec_rlp::encodeHeader(wire, {.isList = true, .payloadLength = items.size()});
+            wire.insert(wire.end(), items.begin(), items.end());
+            return wire;
+        };
+        auto const wire = makeLegacySealedWire();
+        BOOST_CHECK(bcos::engine::dispatchRawTransaction(bcos::ref(wire)) !=
+                    bcos::engine::RawTransactionKind::Unsupported);
+        auto result =
+            task::syncWait(txpoolConfig->txValidator()->validateChainId(*asWeb3Tx(wire), ledger));
+        BOOST_CHECK(result == TransactionStatus::None);
+    }
+
     // Unsupported type byte (0x05) and empty extra are Malformed, not InvalidChainId.
     {
         bcos::bytes unsupported{0x05};

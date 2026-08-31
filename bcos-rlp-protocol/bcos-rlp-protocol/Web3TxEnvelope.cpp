@@ -144,8 +144,12 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
             return malformed();
         }
     }
-    bcos::bytesRef tailProbe = afterField7;
+    // Probe the tail on a LOCAL copy: codec::rlp::decodeHeader advances its argument, and
+    // the emptySeen walk below re-walks the same tail from the pristine afterField7 — a
+    // shared probe cursor would leave that walk starting inside r/s payloads, yielding
+    // data-dependent Malformed verdicts on real-width (32-byte) signatures (kyonRay R3 #1).
     bool const isPreimageTail = [&] {
+        bcos::bytesRef tailProbe = afterField7;
         if (tailProbe.empty()) [[unlikely]]
         {
             return false;  // no 0,0 placeholders — treat as full form (or malformed)
@@ -180,8 +184,9 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         // EIP-2 keeps r,s in [1, n-1], so a sealed envelope never carries an empty r/s
         // item (only the preimage tail's 0,0 placeholders are empty). Exactly one empty
         // item classified Unprotected/Protected here but is rejected in decode — fail
-        // closed instead.
-        bcos::bytesRef tailCheck = tailProbe;
+        // closed instead. Anchored on the PRISTINE tail cursor (afterField7), never on a
+        // cursor the preimage probe above moved.
+        bcos::bytesRef tailCheck = afterField7;
         bool emptySeen = false;
         for (int i = 0; i < 2; ++i)
         {

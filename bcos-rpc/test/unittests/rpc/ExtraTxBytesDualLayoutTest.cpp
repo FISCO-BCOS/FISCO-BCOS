@@ -131,6 +131,17 @@ BOOST_AUTO_TEST_CASE(legacyWireDecodesChainId)
     BOOST_CHECK_EQUAL(tx.chainId.value(), 1U);
 }
 
+// R3 #1/#2: the PR's own signed, hash-anchored legacy sealed vector must classify
+// Protected with chainId 1 — this is the exact vector whose r (first byte 0x94, with a
+// 0xf7 at r[21]) made the pre-fix emptySeen walk parse r's interior and answer Malformed.
+BOOST_AUTO_TEST_CASE(legacyWireClassifiesProtectedChainId)
+{
+    auto const classified =
+        bcos::rlp::protocol::classifyWeb3EnvelopeChainId(bcos::ref(fromHex(LEGACY_WIRE_HEX)));
+    BOOST_CHECK(classified.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Protected);
+    BOOST_CHECK_EQUAL(classified.chainId, 1U);
+}
+
 // Pre-EIP-155 6-item preimage: no trailer at all → chainId stays nullopt.
 BOOST_AUTO_TEST_CASE(legacyPre155PreimageNoChainId)
 {
