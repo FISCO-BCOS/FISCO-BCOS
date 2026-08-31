@@ -19,11 +19,11 @@
  * @date 2021-05-08
  */
 #pragma once
-#include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
-#include "bcos-txpool/txpool/validator/LedgerNonceChecker.h"
-#include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-protocol/TransactionStatus.h>
+#include <bcos-tx-validator/LedgerNonceChecker.h>
+#include <bcos-tx-validator/NonceCheckerInterface.h>
+#include <bcos-tx-validator/Web3NonceChecker.h>
 #include <bcos-utilities/BoostLog.h>
 
 #define TX_VALIDATOR_CHECKER_LOG(LEVEL) \
@@ -47,9 +47,10 @@ public:
         const bcos::protocol::Transaction& _tx) = 0;
     virtual bcos::protocol::TransactionStatus checkWeb3Nonce(
         const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce = false) = 0;
-    virtual LedgerNonceChecker::Ptr ledgerNonceChecker() = 0;
-    virtual Web3NonceChecker::Ptr web3NonceChecker() = 0;
-    virtual void setLedgerNonceChecker(LedgerNonceChecker::Ptr _ledgerNonceChecker) = 0;
+    virtual txvalidator::LedgerNonceChecker::Ptr ledgerNonceChecker() = 0;
+    virtual txvalidator::Web3NonceChecker::Ptr web3NonceChecker() = 0;
+    virtual void setLedgerNonceChecker(
+        txvalidator::LedgerNonceChecker::Ptr _ledgerNonceChecker) = 0;
     virtual bcos::protocol::TransactionStatus validateTransaction(
         const bcos::protocol::Transaction& _tx) = 0;
     virtual task::Task<protocol::TransactionStatus> validateBalance(

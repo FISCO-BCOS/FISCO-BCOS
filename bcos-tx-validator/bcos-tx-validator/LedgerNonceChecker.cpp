@@ -21,7 +21,7 @@
 #include "LedgerNonceChecker.h"
 using namespace bcos;
 using namespace bcos::protocol;
-using namespace bcos::txpool;
+using namespace bcos::txvalidator;
 
 void LedgerNonceChecker::initNonceCache(
     std::shared_ptr<std::map<int64_t, bcos::protocol::NonceListPtr> > _initialNonces)

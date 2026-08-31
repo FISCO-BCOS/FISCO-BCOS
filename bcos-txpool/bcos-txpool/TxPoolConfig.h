@@ -20,13 +20,13 @@
  * @date 2021-05-08
  */
 #pragma once
-#include "txpool/interfaces/NonceCheckerInterface.h"
 #include "txpool/interfaces/TxValidatorInterface.h"
 #include "txpool/utilities/Common.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionMetaData.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
+#include <bcos-tx-validator/NonceCheckerInterface.h>
 namespace bcos::txpool
 {
 class TxPoolConfig
@@ -37,14 +37,14 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
-        NonceCheckerInterface::Ptr _txpoolNonceChecker, int64_t _blockLimit, size_t _poolLimit,
-        bool checkTransactionSignature);
+        txvalidator::NonceCheckerInterface::Ptr _txpoolNonceChecker, int64_t _blockLimit,
+        size_t _poolLimit, bool checkTransactionSignature);
 
     virtual ~TxPoolConfig() = default;
     virtual void setPoolLimit(size_t _poolLimit);
     virtual size_t poolLimit() const;
 
-    NonceCheckerInterface::Ptr txPoolNonceChecker();
+    txvalidator::NonceCheckerInterface::Ptr txPoolNonceChecker();
 
     TxValidatorInterface::Ptr txValidator();
     bcos::protocol::TransactionSubmitResultFactory::Ptr txResultFactory();
@@ -63,7 +63,7 @@ private:
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;
-    NonceCheckerInterface::Ptr m_txPoolNonceChecker;
+    txvalidator::NonceCheckerInterface::Ptr m_txPoolNonceChecker;
     int64_t m_blockLimit = DEFAULT_BLOCK_LIMIT;
     size_t m_poolLimit = DEFAULT_POOL_LIMIT;
     bool m_checkTransactionSignature;
