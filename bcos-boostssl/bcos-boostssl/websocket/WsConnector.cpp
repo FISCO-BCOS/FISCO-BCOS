@@ -79,12 +79,16 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
         return;
     }
 
-    auto resolver = boost::asio::ip::tcp::resolver(*ioc);
+    // the resolver must outlive the async_resolve operation (it is only valid
+    // until the handler is invoked), so it is heap-allocated and captured by the
+    // async_resolve handler instead of being a stack-local that would be
+    // destroyed as soon as connectToWsServer returns
+    auto resolver = std::make_shared<boost::asio::ip::tcp::resolver>(*ioc);
     auto connector = shared_from_this();
 
     // resolve host
-    resolver.async_resolve(_host, std::to_string(_port),
-        [_host, _port, _disableSsl, endpoint, ioc, ctx, connector, _callback](
+    resolver->async_resolve(_host, std::to_string(_port),
+        [_host, _port, _disableSsl, endpoint, ioc, ctx, connector, resolver, _callback](
             boost::beast::error_code _ec, boost::asio::ip::tcp::resolver::results_type _results) {
             if (_ec)
             {

@@ -45,7 +45,12 @@ HttpServer::~HttpServer()
 // start http server
 void HttpServer::start()
 {
-    if (m_acceptor && m_acceptor->is_open())
+    if (!m_acceptor)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("acceptor is not initialized"));
+    }
+
+    if (m_acceptor->is_open())
     {
         HTTP_SERVER(INFO) << LOG_BADGE("startListen") << LOG_DESC("http server is running");
         return;
@@ -250,6 +255,10 @@ void HttpServer::setHttpReqHandler(HttpReqHandler _httpReqHandler)
 
 boost::asio::ip::tcp::acceptor& HttpServer::acceptor()
 {
+    if (!m_acceptor)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("acceptor is not initialized"));
+    }
     return *m_acceptor;
 }
 
@@ -258,6 +267,11 @@ void HttpServer::setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _ac
     if (_acceptor)
     {
         m_acceptor.emplace(std::move(*_acceptor));
+    }
+    else
+    {
+        // reset the optional so that a previously set acceptor is not reused
+        m_acceptor.reset();
     }
 }
 
