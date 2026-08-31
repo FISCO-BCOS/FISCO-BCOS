@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file FIB157_NonceCacheRaceTest.cpp
- * @brief Regression tests for FIB-157: Web3NonceChecker::updateNonceCache() must not
+ * @brief Regression tests for FIB-157: txvalidator::Web3NonceChecker::updateNonceCache() must not
  *        delete a newer m_maxNonces entry that was published by a concurrent
  *        insertMemoryNonce(). The fix replaces the read-then-remove pair on m_maxNonces
  *        with an atomic predicate-guarded remove (storage2::removeOneIf) so the predicate
@@ -25,7 +25,7 @@
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>
-#include <bcos-txpool/txpool/validator/Web3NonceChecker.h>
+#include <bcos-tx-validator/Web3NonceChecker.h>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -44,7 +44,7 @@ class FIB157Fixture : public TxPoolFixture
 {
 public:
     FIB157Fixture() : TxPoolFixture(), checker(m_ledger) {}
-    Web3NonceChecker checker;
+    txvalidator::Web3NonceChecker checker;
 };
 
 BOOST_FIXTURE_TEST_SUITE(FIB157_NonceCacheRace, FIB157Fixture)

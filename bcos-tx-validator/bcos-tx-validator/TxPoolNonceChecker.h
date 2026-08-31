@@ -19,10 +19,10 @@
  * @date 2021-05-10
  */
 #pragma once
-#include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
+#include "bcos-tx-validator/NonceCheckerInterface.h"
 #include "bcos-utilities/BucketMap.h"
 
-namespace bcos::txpool
+namespace bcos::txvalidator
 {
 class TxPoolNonceChecker : public NonceCheckerInterface
 {
@@ -44,4 +44,4 @@ protected:
     using NonceSet = bcos::BucketSet<bcos::protocol::NonceType, StringHash>;
     NonceSet m_nonces;
 };
-}  // namespace bcos::txpool
+}  // namespace bcos::txvalidator

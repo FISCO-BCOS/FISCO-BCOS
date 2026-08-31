@@ -20,7 +20,7 @@
 
 #include "bcos-utilities/Common.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
-#include <bcos-txpool/txpool/validator/Web3NonceChecker.h>
+#include <bcos-tx-validator/Web3NonceChecker.h>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -65,7 +65,7 @@ public:
         }
         return std::make_tuple(std::move(senders), std::move(nonceMap));
     }
-    Web3NonceChecker checker;
+    txvalidator::Web3NonceChecker checker;
 };
 BOOST_FIXTURE_TEST_SUITE(Web3NonceTest, Web3NonceCheckerFixture)
 BOOST_AUTO_TEST_CASE(testNormalFlow)
@@ -253,7 +253,7 @@ BOOST_AUTO_TEST_CASE(FIB52_PairHashDistinguishesSecondElement)
     // (nonce), causing all (sender, *) pairs to collide in the same hash bucket. The fix
     // combines hashes of both elements using a Fibonacci multiplier to spread nonces.
 
-    bcos::txpool::PairHash hasher;
+    bcos::txvalidator::PairHash hasher;
 
     const std::string senderA = "sender_alpha_addr_xyz";
     const std::string senderB = "sender_beta_addr_abc";

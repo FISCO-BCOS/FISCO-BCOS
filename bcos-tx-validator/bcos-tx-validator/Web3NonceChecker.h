@@ -25,7 +25,7 @@
 #include <bcos-framework/txpool/TxPoolTypeDef.h>
 #include <concepts>
 
-namespace bcos::txpool
+namespace bcos::txvalidator
 {
 constexpr static uint16_t DefaultBucketSize = 256;
 struct PairHash
@@ -237,4 +237,4 @@ private:
         m_maxNonces;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
 };
-}  // namespace bcos::txpool
+}  // namespace bcos::txvalidator

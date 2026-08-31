@@ -22,12 +22,12 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-protocol/TransactionStatus.h>
-#include <tbb/concurrent_unordered_set.h>
 #include <bcos-utilities/BoostLog.h>
+#include <tbb/concurrent_unordered_set.h>
 
 #define NONCECHECKER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TXPOOL") << LOG_BADGE("NonceChecker")
 
-namespace bcos::txpool
+namespace bcos::txvalidator
 {
 class NonceCheckerInterface
 {
@@ -50,4 +50,4 @@ public:
 
     virtual void remove(bcos::protocol::NonceType const& _nonce) = 0;
 };
-}  // namespace bcos::txpool
+}  // namespace bcos::txvalidator
