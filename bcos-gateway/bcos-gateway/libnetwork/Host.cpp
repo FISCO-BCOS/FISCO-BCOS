@@ -158,56 +158,60 @@ task::Task<void> Host::acceptLoop()
                     iterationFailed = true;
                 }
                 socket->close();
-                // re-arm accept (the old code recursed into startAccept here)
-                continue;
+                // NO continue here: a failed iteration must FALL THROUGH to the retry backoff
+                // below (an early continue would skip it and leave iterationFailed dead).
+                // Shutdown is unaffected — !m_run with no ec leaves iterationFailed false, so
+                // the while condition exits without the delay.
             }
-
-            /// if the connected peer over the limitation, drop socket
-            socket->setNodeIPEndpoint(endpoint);
-            // FIB-186: DEBUG, not INFO — under connection churn this fires on every accept and
-            // would flood the log, letting a low-trust peer fill the disk.
-            HOST_LOG(DEBUG) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
-            // FIB-186: bound admission of new connections BEFORE the CPU-heavy TLS handshake,
-            // so connection churn from a low-trust peer cannot flood the shared I/O pool with
-            // accept / handshake / teardown work and starve inter-validator PBFT reads (the
-            // FIB-184 session caps apply only AFTER the handshake completes). Reserve the
-            // in-flight-handshake slot first because it is the refundable check: if the
-            // accept-rate limiter below then rejects, the guard is destroyed and no rate token is
-            // spent. Checking the rate token first would instead waste a token whenever the
-            // handshake cap is already saturated, needlessly lowering the effective accept rate
-            // for legitimate peers arriving in that window. The guard is handed into
-            // serverHandshake, so the slot's acquire and release live in the same coroutine frame
-            // (see tryAcquireHandshakeSlotGuard).
-            std::string remoteAddress = socket->nodeIPEndpoint().address();
-            auto handshakeGuard = tryAcquireHandshakeSlotGuard(weak_from_this());
-            if (!handshakeGuard)
+            else
             {
-                HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
-                                << LOG_DESC("pending-handshake cap reached, reject connection")
-                                << LOG_KV("address", remoteAddress)
-                                << LOG_KV("pendingHandshakes", currentPendingHandshakes())
-                                << LOG_KV("maxPendingHandshakes", m_maxPendingHandshakes);
-                socket->close();
-                continue;
+                /// if the connected peer over the limitation, drop socket
+                socket->setNodeIPEndpoint(endpoint);
+                // FIB-186: DEBUG, not INFO — under connection churn this fires on every accept and
+                // would flood the log, letting a low-trust peer fill the disk.
+                HOST_LOG(DEBUG) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
+                // FIB-186: bound admission of new connections BEFORE the CPU-heavy TLS handshake,
+                // so connection churn from a low-trust peer cannot flood the shared I/O pool with
+                // accept / handshake / teardown work and starve inter-validator PBFT reads (the
+                // FIB-184 session caps apply only AFTER the handshake completes). Reserve the
+                // in-flight-handshake slot first because it is the refundable check: if the
+                // accept-rate limiter below then rejects, the guard is destroyed and no rate token
+                // is spent. Checking the rate token first would instead waste a token whenever the
+                // handshake cap is already saturated, needlessly lowering the effective accept rate
+                // for legitimate peers arriving in that window. The guard is handed into
+                // serverHandshake, so the slot's acquire and release live in the same coroutine
+                // frame (see tryAcquireHandshakeSlotGuard).
+                std::string remoteAddress = socket->nodeIPEndpoint().address();
+                auto handshakeGuard = tryAcquireHandshakeSlotGuard(weak_from_this());
+                if (!handshakeGuard)
+                {
+                    HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
+                                    << LOG_DESC("pending-handshake cap reached, reject connection")
+                                    << LOG_KV("address", remoteAddress)
+                                    << LOG_KV("pendingHandshakes", currentPendingHandshakes())
+                                    << LOG_KV("maxPendingHandshakes", m_maxPendingHandshakes);
+                    socket->close();
+                    continue;
+                }
+                // Accept-rate token bucket: drops a churn flood cheaply (accept + close) before
+                // paying handshake CPU, which the concurrency cap alone does not. On rejection the
+                // handshake slot reserved just above is released by the guard going out of scope.
+                if (!tryAcquireConnectionToken())
+                {
+                    HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
+                                    << LOG_DESC("connection accept-rate limit reached, reject")
+                                    << LOG_KV("address", remoteAddress)
+                                    << LOG_KV("maxConnectionsPerSecond", m_maxConnectionsPerSecond);
+                    socket->close();
+                    continue;
+                }
+                // Run the per-connection TLS handshake in its own coroutine and keep accepting:
+                // the old code re-armed accept right after arming the async handshake, and
+                // awaiting the handshake here would serialize accepts (one handshake at a time),
+                // defeating the concurrency-cap design. The handshake slot guard travels with the
+                // coroutine frame, so the slot is released exactly when that frame unwinds.
+                task::wait(serverHandshake(std::move(socket), std::move(handshakeGuard)));
             }
-            // Accept-rate token bucket: drops a churn flood cheaply (accept + close) before
-            // paying handshake CPU, which the concurrency cap alone does not. On rejection the
-            // handshake slot reserved just above is released by the guard going out of scope.
-            if (!tryAcquireConnectionToken())
-            {
-                HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
-                                << LOG_DESC("connection accept-rate limit reached, reject")
-                                << LOG_KV("address", remoteAddress)
-                                << LOG_KV("maxConnectionsPerSecond", m_maxConnectionsPerSecond);
-                socket->close();
-                continue;
-            }
-            // Run the per-connection TLS handshake in its own coroutine and keep accepting: the
-            // old code re-armed accept right after arming the async handshake, and awaiting the
-            // handshake here would serialize accepts (one handshake at a time), defeating the
-            // concurrency-cap design. The handshake slot guard travels with the coroutine frame,
-            // so the slot is released exactly when that frame unwinds.
-            task::wait(serverHandshake(std::move(socket), std::move(handshakeGuard)));
         }
         catch (...)
         {
@@ -858,12 +862,16 @@ task::Task<void> Host::clientConnect(std::shared_ptr<SocketFace> socket,
             HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
                             << LOG_KV("endpoint", _nodeIPEndpoint)
                             << LOG_KV("message", ec.message());
-            socket->close();
-            connectTimer->cancel();
-
-            boost::asio::post(socket->ioService(), [callback = std::move(callback)]() mutable {
-                callback(NetworkException(ConnectError, "Connect failed"), {}, {});
-            });
+            // Settle on the SOCKET's io_context: on RESOLVE failure this coroutine resumed on
+            // the resolver's context (resolveConnect invokes the handler inline from the
+            // resolver completion), while connectTimer's async_wait handler runs on the
+            // socket's — close()/cancel() from here would race it ("Shared objects: Unsafe").
+            boost::asio::post(socket->ioService(),
+                [socket, connectTimer, callback = std::move(callback)]() mutable {
+                    socket->close();
+                    connectTimer->cancel();
+                    callback(NetworkException(ConnectError, "Connect failed"), {}, {});
+                });
             co_return;
         }
         insertPendingConns(_nodeIPEndpoint);
@@ -890,16 +898,20 @@ task::Task<void> Host::clientConnect(std::shared_ptr<SocketFace> socket,
         // setVerifyCallback, or an initiation failure rethrown by await_resume) would otherwise
         // leak the pending-connection entry — permanently blocking every future reconnect to
         // this peer — and orphan the caller's callback. Settle the operation exactly like the
-        // error paths do: erase the entry, close the socket and answer the callback. POSTED, not
-        // inline — this catch can run on a producer's stack inside an await_suspend.
+        // error paths do: erase the entry, close the socket and answer the callback. The
+        // socket teardown is POSTED to the socket's io_context — this catch is reachable on
+        // the resolver's thread (see the resolve-failure branch above) as well as on a
+        // producer's stack inside an await_suspend, and close() from here would race the
+        // connect timer's handler ("Shared objects: Unsafe").
         erasePendingConns(_nodeIPEndpoint);
-        socket->close();
-        if (callback)
-        {
-            boost::asio::post(socket->ioService(), [callback = std::move(callback)]() mutable {
-                callback(NetworkException(ConnectError, "Connect failed"), {}, {});
+        boost::asio::post(socket->ioService(),
+            [socket, callback = std::move(callback)]() mutable {
+                socket->close();
+                if (callback)
+                {
+                    callback(NetworkException(ConnectError, "Connect failed"), {}, {});
+                }
             });
-        }
     }
 }
 

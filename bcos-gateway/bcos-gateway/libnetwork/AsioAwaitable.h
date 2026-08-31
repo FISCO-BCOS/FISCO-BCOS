@@ -18,7 +18,10 @@
  */
 #pragma once
 #include "bcos-gateway/libnetwork/Common.h"
+#include <boost/asio/error.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/system/error_code.hpp>
+#include <atomic>
 #include <coroutine>
 #include <cstdint>
 #include <exception>
