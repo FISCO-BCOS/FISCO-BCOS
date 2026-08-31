@@ -269,21 +269,18 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
         bytes keyContent;
         if (!_certConfig.nodeKey->empty())
         {
+            std::shared_ptr<bytes> decrypted;
             try
             {
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
                     keyContent = readContents(boost::filesystem::path(*_certConfig.nodeKey));
                 else
                 {
-                    auto decrypted = m_dataEncrypt->decryptFile(*_certConfig.nodeKey);
-                    if (!decrypted)
+                    decrypted = m_dataEncrypt->decryptFile(*_certConfig.nodeKey);
+                    if (decrypted)
                     {
-                        BOOST_THROW_EXCEPTION(
-                            InvalidParameter() << errinfo_comment(
-                                "buildSSLContext: decryptFile returned no content for key: " +
-                                *_certConfig.nodeKey));
+                        keyContent = std::move(*decrypted);
                     }
-                    keyContent = std::move(*decrypted);
                 }
             }
             catch (std::exception& e)
@@ -294,6 +291,17 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                 BOOST_THROW_EXCEPTION(
                     InvalidParameter() << errinfo_comment(
                         "buildSSLContext: unable read content of key: " + *_certConfig.nodeKey));
+            }
+            // Reject OUTSIDE the try: thrown inside, this InvalidParameter
+            // would be caught above and replaced with the generic "unable
+            // read content" message, hiding the distinction between a missing
+            // file and a KMS/decrypt that returned no content.
+            if (m_dataEncrypt && !decrypted)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidParameter() << errinfo_comment(
+                        "buildSSLContext: decryptFile returned no content for key: " +
+                        *_certConfig.nodeKey));
             }
         }
         if (keyContent.empty())
@@ -386,21 +394,18 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
         bytes keyContent;
         if (!_smCertConfig.nodeKey->empty())
         {
+            std::shared_ptr<bytes> decrypted;
             try
             {
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
                     keyContent = readContents(boost::filesystem::path(*_smCertConfig.nodeKey));
                 else
                 {
-                    auto decrypted = m_dataEncrypt->decryptFile(*_smCertConfig.nodeKey);
-                    if (!decrypted)
+                    decrypted = m_dataEncrypt->decryptFile(*_smCertConfig.nodeKey);
+                    if (decrypted)
                     {
-                        BOOST_THROW_EXCEPTION(
-                            InvalidParameter() << errinfo_comment(
-                                "buildSSLContext: decryptFile returned no content for key: " +
-                                *_smCertConfig.nodeKey));
+                        keyContent = std::move(*decrypted);
                     }
-                    keyContent = std::move(*decrypted);
                 }
             }
             catch (std::exception& e)
@@ -411,6 +416,14 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                 BOOST_THROW_EXCEPTION(
                     InvalidParameter() << errinfo_comment(
                         "buildSSLContext: unable read content of key: " + *_smCertConfig.nodeKey));
+            }
+            // Reject OUTSIDE the try: see the non-SM buildSSLContext above.
+            if (m_dataEncrypt && !decrypted)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidParameter() << errinfo_comment(
+                        "buildSSLContext: decryptFile returned no content for key: " +
+                        *_smCertConfig.nodeKey));
             }
         }
         if (keyContent.empty())
@@ -447,6 +460,7 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
         bytes enNodeKeyContent;
         if (!_smCertConfig.enNodeKey->empty())
         {
+            std::shared_ptr<bytes> decrypted;
             try
             {
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
@@ -454,15 +468,11 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                         readContents(boost::filesystem::path(*_smCertConfig.enNodeKey));
                 else
                 {
-                    auto decrypted = m_dataEncrypt->decryptFile(*_smCertConfig.enNodeKey);
-                    if (!decrypted)
+                    decrypted = m_dataEncrypt->decryptFile(*_smCertConfig.enNodeKey);
+                    if (decrypted)
                     {
-                        BOOST_THROW_EXCEPTION(
-                            InvalidParameter() << errinfo_comment(
-                                "buildSSLContext: decryptFile returned no content for key: " +
-                                *_smCertConfig.enNodeKey));
+                        enNodeKeyContent = std::move(*decrypted);
                     }
-                    enNodeKeyContent = std::move(*decrypted);
                 }
             }
             catch (std::exception& e)
@@ -473,6 +483,14 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                 BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                           "buildSSLContext: unable read content of key: " +
                                           *_smCertConfig.enNodeKey));
+            }
+            // Reject OUTSIDE the try: see the non-SM buildSSLContext above.
+            if (m_dataEncrypt && !decrypted)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidParameter() << errinfo_comment(
+                        "buildSSLContext: decryptFile returned no content for key: " +
+                        *_smCertConfig.enNodeKey));
             }
         }
         if (enNodeKeyContent.empty())

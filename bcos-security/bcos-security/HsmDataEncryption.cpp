@@ -61,6 +61,16 @@ std::string HsmDataEncryption::encrypt(uint8_t* data, size_t size)
 
 std::string HsmDataEncryption::decrypt(uint8_t* data, size_t size)
 {
+    // Symmetric with HsmKeyEncryption::decryptContents: without this guard a
+    // stored blob shorter than the IV wraps size - SM4_IV_DATA_SIZE to ~2^64,
+    // which both forms a wild IV pointer and reaches decryptedData.resize()
+    // inside the crypto layer as a ~16-exabyte allocation request.
+    if (size < SM4_IV_DATA_SIZE)
+    {
+        BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(
+                                  "HsmDataEncryption: ciphertext too short, size: " +
+                                  std::to_string(size)));
+    }
     size_t cipherDataSize = size - SM4_IV_DATA_SIZE;
     bytes decData = m_symmetricEncrypt->symmetricDecryptWithInternalKey(
         data, cipherDataSize, m_encKeyIndex, data + cipherDataSize, SM4_IV_DATA_SIZE);

@@ -150,6 +150,13 @@ bcos::bytes HsmSM4Crypto::symmetricDecryptWithInternalKey(const unsigned char* _
         BOOST_THROW_EXCEPTION(std::runtime_error(
             "Hsm SM4 DecryptWithInternalKey error, invalid iv data or iv data size"));
     }
+    if (_cipherDataSize == 0)
+    {
+        CRYPTO_LOG(WARNING)
+            << "[HsmSM4Crypto::symmetricDecryptWithInternalKey] cipher data size is 0";
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("Hsm SM4 DecryptWithInternalKey error, cipher data size is 0"));
+    }
 
     bytes decryptedData;
     decryptedData.resize(_cipherDataSize);
@@ -165,10 +172,22 @@ bcos::bytes HsmSM4Crypto::symmetricDecryptWithInternalKey(const unsigned char* _
         BOOST_THROW_EXCEPTION(std::runtime_error("Hsm SM4 DecryptWithInternalKey error"));
     }
 
-    // exclude padding data in decryptedData
-    int paddingCount = (int)decryptedData.back();
-    int pureDecryptedDataSize = decryptedData.size() - paddingCount;
-    decryptedData.resize(pureDecryptedDataSize);
+    // exclude padding data in decryptedData; the padding count is the last
+    // decrypted byte and is fully determined by the ciphertext, so validate it
+    // BEFORE trimming: a corrupted/forged count would otherwise wrap
+    // size() - paddingCount into a near-SIZE_MAX resize (length_error /
+    // bad_alloc out of the key/data load path)
+    size_t paddingCount = decryptedData.back();
+    if (paddingCount < 1 || paddingCount > decryptedData.size())
+    {
+        CRYPTO_LOG(WARNING)
+            << "[HsmSM4Crypto::symmetricDecryptWithInternalKey] invalid padding count"
+            << LOG_KV("paddingCount", paddingCount)
+            << LOG_KV("decryptedDataSize", decryptedData.size());
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("Hsm SM4 DecryptWithInternalKey error, invalid padding"));
+    }
+    decryptedData.resize(decryptedData.size() - paddingCount);
 
     return decryptedData;
 }
