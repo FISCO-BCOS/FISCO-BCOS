@@ -238,5 +238,50 @@ BOOST_AUTO_TEST_CASE(OpHeaderTrailingPredictsNextBaseFee)
     BOOST_TEST(result["baseFeePerGas"][1U].asString() == "0x3e16926a");  // 1,041,666,666
 }
 
+// newestBlock is required and must be a non-empty QUANTITY/TAG string. Missing, non-string,
+// or empty values must not fall through toView() → latest.
+BOOST_AUTO_TEST_CASE(NewestBlockMustBeStringTag)
+{
+    Json::Value missing(Json::arrayValue);
+    missing.append("0x1");
+    auto missingResp = request(missing);
+    BOOST_REQUIRE(missingResp.isMember("error"));
+    BOOST_CHECK_EQUAL(missingResp["error"]["code"].asInt(), -32602);
+
+    Json::Value numeric(Json::arrayValue);
+    numeric.append("0x1");
+    numeric.append(1);
+    auto numericResp = request(numeric);
+    BOOST_REQUIRE(numericResp.isMember("error"));
+    BOOST_CHECK_EQUAL(numericResp["error"]["code"].asInt(), -32602);
+
+    Json::Value empty(Json::arrayValue);
+    empty.append("0x1");
+    empty.append("");
+    auto emptyResp = request(empty);
+    BOOST_REQUIRE(emptyResp.isMember("error"));
+    BOOST_CHECK_EQUAL(emptyResp["error"]["code"].asInt(), -32602);
+}
+
+// Jovian extraData (>=17 bytes) raises the trailing next-baseFee to minBaseFee when the
+// Holocene exact-target result would sit under the floor.
+BOOST_AUTO_TEST_CASE(JovianHeaderTrailingAppliesMinBaseFeeFloor)
+{
+    auto const header = m_ledger->ledgerData().back()->blockHeader();
+    header->setGasLimit(bcos::u256(30'000'000));
+    header->setGasUsed(bcos::u256(15'000'000));  // exact target → Holocene delta 0
+    header->setBaseFee(bcos::u256(100));
+    // version(0) || denominator 8 || elasticity 2 || minBaseFee 1000 (u64 BE)
+    header->setExtraData(bcos::bytes{0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x02, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xe8});
+
+    auto resp = request(params("0x1"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    auto const& result = resp["result"];
+    BOOST_REQUIRE_EQUAL(result["baseFeePerGas"].size(), 2U);
+    BOOST_TEST(result["baseFeePerGas"][0U].asString() == "0x64");   // parent 100
+    BOOST_TEST(result["baseFeePerGas"][1U].asString() == "0x3e8");  // floor 1000
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

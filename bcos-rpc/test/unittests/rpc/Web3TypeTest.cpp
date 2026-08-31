@@ -1090,8 +1090,10 @@ BOOST_AUTO_TEST_CASE(testWideSignatureRejectedAtDecode)
     Web3Transaction tx{};
     auto err = rlp::decode(bRef, tx);
     BOOST_REQUIRE(err != nullptr);
-    // The width gate reports the EIP-2 signature error class, not a generic decode failure.
-    BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::InvalidVInSignature));
+    // CanonInt now rejects a 33-byte r before the EIP-2 width gate: 33 bytes cannot
+    // decode into u256 (UnexpectedLength). Either rejection is a decode failure; pin
+    // the integer-width class so a regression back to decodeItems+truncate turns red.
+    BOOST_CHECK(err->errorCode() == static_cast<int>(rlp::DecodingError::UnexpectedLength));
 }
 
 // Leftover sealed-envelope path (decodeFromPayload / withSig=false) must still reject high-s.

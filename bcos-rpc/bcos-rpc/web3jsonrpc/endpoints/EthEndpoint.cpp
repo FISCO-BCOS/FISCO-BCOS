@@ -241,6 +241,11 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
             percentiles.push_back(percentile);
         }
     }
+    if (request.size() < 2 || !request[1U].isString() || toView(request[1U]).empty())
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "newestBlock must be a QUANTITY or TAG"));
+    }
     auto const [newestNumber, _] = co_await getBlockNumberByTag(toView(request[1U]));
     if (newestNumber < 0)
     {
