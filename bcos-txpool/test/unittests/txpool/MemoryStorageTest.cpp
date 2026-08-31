@@ -135,6 +135,19 @@ struct MemoryStorageFixture
         tx.mutableInner().extraTransactionBytes.assign(envelope.begin(), envelope.end());
     }
 
+    void setTypedChainIdEnvelope(
+        bcostars::protocol::TransactionImpl& tx, uint8_t type, uint64_t envelopeChainId)
+    {
+        namespace rlp = bcos::codec::rlp;
+        bytes fields;
+        rlp::encode(fields, envelopeChainId);
+        bytes envelope;
+        envelope.push_back(type);
+        rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = fields.size()});
+        envelope.insert(envelope.end(), fields.begin(), fields.end());
+        tx.mutableInner().extraTransactionBytes.assign(envelope.begin(), envelope.end());
+    }
+
     // pre-EIP-155 6-field signing preimage: classifier Unprotected, no chainId binding.
     void setLegacyUnprotectedPreimage(bcostars::protocol::TransactionImpl& tx)
     {
@@ -742,18 +755,15 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         BOOST_CHECK(result == TransactionStatus::InvalidSignature);
     }
 
-    // Test 12: the pool-surface Malformed class — empty extraTransactionBytes
-    // classifies Malformed and must reject InvalidChainId at pool level. tx7 pins the
-    // chainId-mismatch class and tx8 the accept path; this pins the unreadable-envelope
-    // class so a regression folding it back into the unprotected exemption flips this test.
+    // Test 12: empty extraTransactionBytes is dispatch Unsupported → Malformed.
+    // (Classifier Malformed used to map this to InvalidChainId; the P2P funnel must not
+    // treat an untyped/empty payload as a chainId question.)
     {
         storageNoSig.clear();
         const std::string senderHex = "0x1234567890123456789012345678901234567890";
         auto tx12 = makeWeb3Tx("0x12", senderHex, false);
-        // No extraTransactionBytes installed: the classifier sees an empty payload and
-        // fails closed before any config fetch.
         auto const result = storageNoSig.verifyAndSubmitTransaction(tx12, nullptr, false, false);
-        BOOST_CHECK(result == TransactionStatus::InvalidChainId);
+        BOOST_CHECK(result == TransactionStatus::Malformed);
     }
 
     auto mockMissingWeb3ChainId = [&]() {
@@ -876,6 +886,77 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
                 depositPrefix.begin(), depositPrefix.end());
         }
         BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(tx21, nullptr, false, false) ==
+                    TransactionStatus::InvalidChainId);
+    }
+
+    auto mockWeb3ChainId321 = [&]() {
+        fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
+            .AlwaysDo(
+                [](auto const& key,
+                    std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
+                    if (key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
+                    {
+                        callback(nullptr, "321", 0);
+                    }
+                    else if (key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
+                    {
+                        callback(nullptr, "0", 0);
+                    }
+                });
+    };
+
+    // Matrix: T22 — extraTxBytes starting 0x05 (unsupported typed) is Malformed.
+    {
+        storageNoSig.clear();
+        const std::string senderHex = "0x1234567890123456789012345678901234567890";
+        auto tx22 = makeWeb3Tx("0x22", senderHex, false);
+        auto tx22Impl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx22);
+        BOOST_REQUIRE(tx22Impl);
+        {
+            bcos::bytes unsupported{0x05};
+            tx22Impl->mutableInner().extraTransactionBytes.assign(
+                unsupported.begin(), unsupported.end());
+        }
+        BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(tx22, nullptr, false, false) ==
+                    TransactionStatus::Malformed);
+    }
+
+    // Matrix: T23 — typed 0x01/0x02/0x04 admit when field0 matches; mismatch is InvalidChainId.
+    {
+        mockWeb3ChainId321();
+        fakeit::When(Method(mockLedger, getStateStorage)).AlwaysReturn(nullptr);
+        auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(
+            nullptr, /*blockNumber*/ 0, /*blockLimit*/ 1000, /*checkBlockLimit*/ false);
+        txValidator->setLedgerNonceChecker(ledgerNonceChecker);
+        const std::string senderHex = "0x1234567890123456789012345678901234567890";
+        for (uint8_t const type : {uint8_t{0x01}, uint8_t{0x02}, uint8_t{0x04}})
+        {
+            storageNoSig.clear();
+            auto tx =
+                makeWeb3Tx(std::string("0x23") + static_cast<char>('0' + type), senderHex, false);
+            auto txImpl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
+            BOOST_REQUIRE(txImpl);
+            {
+                std::string smallValue = "0x100";
+                txImpl->mutableInner().data.value.assign(smallValue.begin(), smallValue.end());
+                setTypedChainIdEnvelope(*txImpl, type, 321);
+                txImpl->mutableInner().data.chainID = "";
+            }
+            BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(tx, nullptr, false, false) ==
+                        TransactionStatus::None);
+        }
+        storageNoSig.clear();
+        auto mismatch = makeWeb3Tx("0x24", senderHex, false);
+        auto mismatchImpl =
+            std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(mismatch);
+        BOOST_REQUIRE(mismatchImpl);
+        {
+            std::string smallValue = "0x100";
+            mismatchImpl->mutableInner().data.value.assign(smallValue.begin(), smallValue.end());
+            setTypedChainIdEnvelope(*mismatchImpl, 0x02, 999);
+            mismatchImpl->mutableInner().data.chainID = "";
+        }
+        BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(mismatch, nullptr, false, false) ==
                     TransactionStatus::InvalidChainId);
     }
 }

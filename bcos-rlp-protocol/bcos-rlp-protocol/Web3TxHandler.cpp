@@ -45,6 +45,27 @@ void padSignature(bcos::bytes& signatureR, bcos::bytes& signatureS) noexcept
     }
 }
 
+// Canonical integer RLP for r/s (same re-encode memcmp as chainId / v / auth r/s).
+// 0x80 stays empty so unsigned/preimage trailers are not padded into 32 zero bytes.
+[[nodiscard]] bcos::Error::UniquePtr decodeCanonicalSignatureBytes(
+    bcos::bytesRef& from, bcos::bytes& to)
+{
+    if (!from.empty() && from[0] == bcos::codec::rlp::BYTES_HEAD_BASE)
+    {
+        from = from.getCroppedData(1);
+        to.clear();
+        return nullptr;
+    }
+    bcos::u256 value = 0;
+    if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(from, value); error != nullptr)
+    {
+        return error;
+    }
+    to.assign(bcos::crypto::SECP256K1_SIGNATURE_R_LEN, bcos::byte{0});
+    bcos::toBigEndian(value, to);
+    return nullptr;
+}
+
 // ⚠️ decode contract: each handler's decode is self-contained (consumes the envelope itself —
 // Legacy: RLP list header; typed: type byte + RLP list header), copied field-by-field from the
 // corresponding branch of Web3Transaction.cpp decodeTransaction. The dispatcher
@@ -223,7 +244,12 @@ struct LegacyTxHandler : Web3TxHandler
             {
                 return decodeError;
             }
-            if (decodeError = codec::rlp::decodeItems(in, out.signatureR, out.signatureS);
+            if (decodeError = decodeCanonicalSignatureBytes(in, out.signatureR);
+                decodeError != nullptr)
+            {
+                return decodeError;
+            }
+            if (decodeError = decodeCanonicalSignatureBytes(in, out.signatureS);
                 decodeError != nullptr)
             {
                 return decodeError;
@@ -524,7 +550,11 @@ struct EIP2930TxHandler : Web3TxHandler
             decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             if (decodeError == nullptr)
             {
-                decodeError = codec::rlp::decodeItems(in, out.signatureR, out.signatureS);
+                decodeError = decodeCanonicalSignatureBytes(in, out.signatureR);
+                if (decodeError == nullptr)
+                {
+                    decodeError = decodeCanonicalSignatureBytes(in, out.signatureS);
+                }
             }
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
             // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
@@ -749,7 +779,11 @@ struct EIP1559TxHandler : Web3TxHandler
             decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             if (decodeError == nullptr)
             {
-                decodeError = codec::rlp::decodeItems(in, out.signatureR, out.signatureS);
+                decodeError = decodeCanonicalSignatureBytes(in, out.signatureR);
+                if (decodeError == nullptr)
+                {
+                    decodeError = decodeCanonicalSignatureBytes(in, out.signatureS);
+                }
             }
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
             // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
@@ -1139,7 +1173,11 @@ struct EIP4844TxHandler : Web3TxHandler
             decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             if (decodeError == nullptr)
             {
-                decodeError = codec::rlp::decodeItems(in, out.signatureR, out.signatureS);
+                decodeError = decodeCanonicalSignatureBytes(in, out.signatureR);
+                if (decodeError == nullptr)
+                {
+                    decodeError = decodeCanonicalSignatureBytes(in, out.signatureS);
+                }
             }
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
             // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
@@ -1372,7 +1410,11 @@ struct EIP7702TxHandler : Web3TxHandler
             decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             if (decodeError == nullptr)
             {
-                decodeError = codec::rlp::decodeItems(in, out.signatureR, out.signatureS);
+                decodeError = decodeCanonicalSignatureBytes(in, out.signatureR);
+                if (decodeError == nullptr)
+                {
+                    decodeError = decodeCanonicalSignatureBytes(in, out.signatureS);
+                }
             }
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
             // input (same for EIP-2930/1559/4844/7702); silently accepting it would hide bad

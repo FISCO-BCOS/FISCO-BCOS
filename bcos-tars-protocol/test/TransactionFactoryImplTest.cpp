@@ -43,6 +43,26 @@ static void expectThrowMessage(const std::function<void()>& call, std::string_vi
         threw, "expected std::invalid_argument containing \"" << expectedText << "\"");
 }
 
+// Match throwDecode stage text, not just the exception type.
+static void expectReassembleThrows(
+    bcos::bytesConstRef payload, bcos::bytesConstRef sig, std::string_view expectedStage)
+{
+    bool threw = false;
+    try
+    {
+        (void)bcostars::protocol::reassembleWeb3RawTransaction(payload, sig);
+    }
+    catch (std::invalid_argument const& e)
+    {
+        threw = true;
+        BOOST_CHECK_MESSAGE(
+            std::string_view(e.what()).find(expectedStage) != std::string_view::npos,
+            "expected stage \"" << expectedStage << "\" in what(): " << e.what());
+    }
+    BOOST_CHECK_MESSAGE(
+        threw, "expected std::invalid_argument for stage \"" << expectedStage << "\", got success");
+}
+
 namespace
 {
 CryptoSuite::Ptr makeSuite()
@@ -512,9 +532,8 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireFormCrossChecksSignature)
     // Tampered r in the trailer -> rejected (would otherwise produce a txHash inconsistent
     // with the stored signature).
     auto tampered = buildWire(bcos::bytes(32, 0x33), s, yParity);
-    BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
-                          bcos::ref(tampered), bcos::bytesConstRef(sig.data(), sig.size())),
-        std::invalid_argument);
+    expectReassembleThrows(bcos::ref(tampered), bcos::bytesConstRef(sig.data(), sig.size()),
+        "typed signature mismatch");
 
     // Round-2 F6: leading-zero r. Tars stores the full 32-byte scalar (first byte 0x00),
     // the wire trailer carries its MINIMAL 31-byte RLP form — trimLeadingZeros must bridge
@@ -567,26 +586,6 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireFormYParityZero)
     auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
         bcos::ref(wire), bcos::bytesConstRef(sig.data(), sig.size()));
     BOOST_CHECK(reassembled == wire);  // verbatim adoption, parity 0 preserved
-}
-
-// Match throwDecode stage text, not just the exception type.
-static void expectReassembleThrows(
-    bcos::bytesConstRef payload, bcos::bytesConstRef sig, std::string_view expectedStage)
-{
-    bool threw = false;
-    try
-    {
-        (void)bcostars::protocol::reassembleWeb3RawTransaction(payload, sig);
-    }
-    catch (std::invalid_argument const& e)
-    {
-        threw = true;
-        BOOST_CHECK_MESSAGE(
-            std::string_view(e.what()).find(expectedStage) != std::string_view::npos,
-            "expected stage \"" << expectedStage << "\" in what(): " << e.what());
-    }
-    BOOST_CHECK_MESSAGE(
-        threw, "expected std::invalid_argument for stage \"" << expectedStage << "\", got success");
 }
 
 // Bytes after the typed inner list must be rejected.
@@ -706,15 +705,13 @@ BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
 
     // Tampered r -> rejected.
     auto tamperedR = buildWire(bcos::bytes(32, 0x33), s, v);
-    BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
-                          bcos::ref(tamperedR), bcos::bytesConstRef(sig.data(), sig.size())),
-        std::invalid_argument);
+    expectReassembleThrows(bcos::ref(tamperedR), bcos::bytesConstRef(sig.data(), sig.size()),
+        "legacy signature mismatch");
 
     // Relabeled v (parity flip) with the same r/s must be rejected.
     auto relabeledV = buildWire(r, s, /*v=*/38);  // parity 1 vs tars parity 0
-    BOOST_CHECK_THROW(bcostars::protocol::reassembleWeb3RawTransaction(
-                          bcos::ref(relabeledV), bcos::bytesConstRef(sig.data(), sig.size())),
-        std::invalid_argument);
+    expectReassembleThrows(
+        bcos::ref(relabeledV), bcos::bytesConstRef(sig.data(), sig.size()), "legacy v mismatch");
 
     // Round-2 F6: leading-zero r. Tars stores the full 32-byte scalar (first byte 0x00),
     // the wire trailer carries its MINIMAL 31-byte RLP form — trimLeadingZeros must bridge

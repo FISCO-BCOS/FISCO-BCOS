@@ -28,6 +28,7 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
+#include <bcos-rlp-protocol/Web3TxEnvelope.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <string_view>
@@ -255,6 +256,66 @@ BOOST_AUTO_TEST_CASE(eip4844PreimageAndWireDecodes)
         BOOST_CHECK_EQUAL(tx.chainId.value(), 5U);
         BOOST_CHECK_EQUAL(tx.blobVersionedHashes.size(), 1U);
     }
+}
+
+// Leading-zero r as a byte string (0x82 0x00 0x01) is non-canonical integer RLP and must
+// be rejected at decodeFromPayload. Real envelopes encode r/s as minimal integers.
+BOOST_AUTO_TEST_CASE(typedLeadingZeroRRejected)
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    items.push_back(rlp::LIST_HEAD_BASE);
+    rlp::encode(items, static_cast<uint64_t>(0));
+    items.push_back(0x82);
+    items.push_back(0x00);
+    items.push_back(0x01);
+    rlp::encode(items, bcos::bytes(32, 0x02));
+
+    bcos::bytes envelope;
+    envelope.push_back(static_cast<byte>(rpc::TransactionType::EIP1559));
+    rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+    envelope.insert(envelope.end(), items.begin(), items.end());
+
+    auto cursor = bcos::ref(envelope);
+    Web3Transaction tx{};
+    auto err = codec::rlp::decodeFromPayload(cursor, tx);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK_EQUAL(err->errorCode(), static_cast<int>(rlp::DecodingError::NonCanonicalSize));
+}
+
+// Minimal typed envelopes (type || rlp([chainId])) are enough for classifyWeb3EnvelopeChainId,
+// which sendRawTransaction and validateChainId both use.
+BOOST_AUTO_TEST_CASE(typedMinimalEnvelopeClassifyChainId)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto make = [](uint8_t type, uint64_t chainId) {
+        bcos::bytes fields;
+        rlp::encode(fields, chainId);
+        bcos::bytes wire;
+        wire.push_back(type);
+        rlp::encodeHeader(wire, rlp::Header{.isList = true, .payloadLength = fields.size()});
+        wire.insert(wire.end(), fields.begin(), fields.end());
+        return wire;
+    };
+    for (uint8_t const type : {uint8_t{0x01}, uint8_t{0x02}, uint8_t{0x04}})
+    {
+        auto const wire = make(type, 1);
+        auto const classified = bcos::rlp::protocol::classifyWeb3EnvelopeChainId(bcos::ref(wire));
+        BOOST_CHECK(classified.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Protected);
+        BOOST_CHECK_EQUAL(classified.chainId, 1U);
+    }
+    auto const mismatch = make(0x02, 999);
+    auto const classified = bcos::rlp::protocol::classifyWeb3EnvelopeChainId(bcos::ref(mismatch));
+    BOOST_CHECK(classified.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Protected);
+    BOOST_CHECK_EQUAL(classified.chainId, 999U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -21,6 +21,7 @@
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-protocol/TransactionStatus.h"
@@ -189,6 +190,75 @@ BOOST_AUTO_TEST_CASE(testBlobTxRejectedWithDedicatedStatus)
 
     auto result = task::syncWait(txpoolConfig->txValidator()->validateChainId(*blobTx, ledger));
     BOOST_CHECK(result == TransactionStatus::BlobTxNotAllowed);
+}
+
+BOOST_AUTO_TEST_CASE(testValidateChainIdTypedAdmitAndUnsupported)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto keyPair = signatureImpl->generateKeyPair();
+    std::string groupId = "group_test_for_txpool";
+    std::string chainId = "chain_test_for_txpool";
+    int64_t blockLimit = 10;
+    auto fakeGateWay = std::make_shared<FakeGateWay>();
+    auto faker = std::make_shared<TxPoolFixture>(
+        keyPair->publicKey(), cryptoSuite, groupId, chainId, blockLimit, fakeGateWay, false, false);
+    faker->init();
+    auto txpoolConfig = faker->txpool()->txpoolConfig();
+    auto ledger = faker->ledger();
+    ledger->setSystemConfig(std::string(bcos::ledger::SYSTEM_KEY_WEB3_CHAIN_ID), "1");
+
+    namespace codec_rlp = bcos::codec::rlp;
+    auto makeTypedChainIdWire = [](uint8_t type, uint64_t envelopeChainId) {
+        bcos::bytes fields;
+        codec_rlp::encode(fields, envelopeChainId);
+        bcos::bytes wire;
+        wire.push_back(type);
+        codec_rlp::encodeHeader(wire, {.isList = true, .payloadLength = fields.size()});
+        wire.insert(wire.end(), fields.begin(), fields.end());
+        return wire;
+    };
+    auto asWeb3Tx = [](bcos::bytes const& wire) {
+        bcostars::Transaction transaction;
+        transaction.type =
+            static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+        transaction.extraTransactionBytes.assign(wire.begin(), wire.end());
+        return std::make_shared<bcostars::protocol::TransactionImpl>(
+            [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
+    };
+
+    // 0x01 / 0x02 / 0x04 with inner-list field0 matching the node chainId are admitted.
+    for (uint8_t const type : {uint8_t{0x01}, uint8_t{0x02}, uint8_t{0x04}})
+    {
+        auto const wire = makeTypedChainIdWire(type, 1);
+        BOOST_CHECK(bcos::engine::dispatchRawTransaction(bcos::ref(wire)) !=
+                    bcos::engine::RawTransactionKind::Unsupported);
+        auto result =
+            task::syncWait(txpoolConfig->txValidator()->validateChainId(*asWeb3Tx(wire), ledger));
+        BOOST_CHECK(result == TransactionStatus::None);
+    }
+
+    // Matching type, mismatched chainId.
+    {
+        auto const wire = makeTypedChainIdWire(0x02, 999);
+        auto result =
+            task::syncWait(txpoolConfig->txValidator()->validateChainId(*asWeb3Tx(wire), ledger));
+        BOOST_CHECK(result == TransactionStatus::InvalidChainId);
+    }
+
+    // Unsupported type byte (0x05) and empty extra are Malformed, not InvalidChainId.
+    {
+        bcos::bytes unsupported{0x05};
+        auto result = task::syncWait(
+            txpoolConfig->txValidator()->validateChainId(*asWeb3Tx(unsupported), ledger));
+        BOOST_CHECK(result == TransactionStatus::Malformed);
+    }
+    {
+        auto result = task::syncWait(
+            txpoolConfig->txValidator()->validateChainId(*asWeb3Tx(bcos::bytes{}), ledger));
+        BOOST_CHECK(result == TransactionStatus::Malformed);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(testValidateBalanceIncludesGasCost)

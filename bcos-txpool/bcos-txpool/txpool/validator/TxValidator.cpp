@@ -313,15 +313,20 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
     // Same classifier as sendRawTransaction / the executor.
     namespace rlp_protocol = bcos::rlp::protocol;
     auto const classified = rlp_protocol::classifyWeb3EnvelopeChainId(_tx.extraTransactionBytes());
-    // Blob (0x03) is parseable but never admitted on L2: sendRawTransaction, the in-process
-    // mempool and the engine payload validators all reject it through the shared dispatch
-    // table — the P2P sync funnel must not become the one entry that lets a blob into the
-    // pool. BlobTxNotAllowed says WHY the tx was refused; the Deposit/Malformed/
-    // chainId-mismatch arms below keep InvalidChainId.
-    if (bcos::engine::dispatchRawTransaction(_tx.extraTransactionBytes()) ==
-        bcos::engine::RawTransactionKind::Blob)
+    // Same first-byte table as sendRaw / engine payload: Blob is parseable but never
+    // admitted on L2; Unsupported (empty extra, 0x00, 0x05–0x7d, 0x7f–0xbf) is not a
+    // Web3 envelope at all. P2P tars does not call decode(), so this is the gate.
+    // BlobTxNotAllowed says WHY a blob was refused; Unsupported is Malformed, matching
+    // verify()'s unknown-type rejection. Deposit/classifier-Malformed/mismatch stay
+    // InvalidChainId.
+    auto const kind = bcos::engine::dispatchRawTransaction(_tx.extraTransactionBytes());
+    if (kind == bcos::engine::RawTransactionKind::Blob)
     {
         co_return TransactionStatus::BlobTxNotAllowed;
+    }
+    if (kind == bcos::engine::RawTransactionKind::Unsupported)
+    {
+        co_return TransactionStatus::Malformed;
     }
     // Deposits have no chainId; they enter via the rollup pipeline, not the pool.
     if (classified.kind == rlp_protocol::Web3EnvelopeChainIdKind::Deposit)
