@@ -106,8 +106,7 @@ std::pair<bool, bytes> bcos::crypto::ed25519Recover(Hash::Ptr _hashImpl, bytesCo
     try
     {
         auto encodedData = signatureData->encode();
-        auto ed25519Pub =
-            std::make_shared<KeyImpl>(ED25519_PUBLIC_LEN, ref(signatureData->pub()));
+        auto ed25519Pub = std::make_shared<KeyImpl>(ED25519_PUBLIC_LEN, ref(signatureData->pub()));
         if (ed25519Verify(
                 ed25519Pub, in.hash, bytesConstRef(encodedData->data(), encodedData->size())))
         {

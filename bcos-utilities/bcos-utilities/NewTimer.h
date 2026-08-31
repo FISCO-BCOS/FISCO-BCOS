@@ -38,6 +38,15 @@ public:
     using Ptr = std::shared_ptr<Timer>;
     using ConstPtr = std::shared_ptr<Timer>;
 
+    /**
+     * @brief Create a timer that runs its task on the given io_context.
+     *
+     * @note The referenced _ioService must outlive every Timer created with it:
+     *       the Timer does NOT own the io_context, it only borrows it. All
+     *       steady_timer operations and dispatch calls happen on that context,
+     *       so destroying the io_context before the Timer (or while it is
+     *       running) is undefined behaviour.
+     */
     Timer(boost::asio::io_context& _ioService, TimerTask&& _task,
         int _periodMS,  // NOLINT
         int _delayMS);
@@ -73,6 +82,13 @@ public:
     using Ptr = std::shared_ptr<TimerFactory>;
     using ConstPtr = std::shared_ptr<TimerFactory>;
 
+    /**
+     * @brief Create a TimerFactory bound to the given io_context.
+     *
+     * @note The referenced _ioService must outlive the factory and every Timer
+     *       created by it (createTimer). The factory does NOT own the
+     *       io_context, it only borrows it.
+     */
     explicit TimerFactory(boost::asio::io_context& _ioService);
     TimerFactory(const TimerFactory&) = delete;
     TimerFactory(TimerFactory&&) = delete;

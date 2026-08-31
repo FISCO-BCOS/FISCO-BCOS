@@ -273,8 +273,16 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
             {
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
                     keyContent = readContents(boost::filesystem::path(*_certConfig.nodeKey));
-                else if (auto decrypted = m_dataEncrypt->decryptFile(*_certConfig.nodeKey))
+                else
                 {
+                    auto decrypted = m_dataEncrypt->decryptFile(*_certConfig.nodeKey);
+                    if (!decrypted)
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            InvalidParameter() << errinfo_comment(
+                                "buildSSLContext: decryptFile returned no content for key: " +
+                                *_certConfig.nodeKey));
+                    }
                     keyContent = std::move(*decrypted);
                 }
             }
@@ -382,8 +390,16 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
             {
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
                     keyContent = readContents(boost::filesystem::path(*_smCertConfig.nodeKey));
-                else if (auto decrypted = m_dataEncrypt->decryptFile(*_smCertConfig.nodeKey))
+                else
                 {
+                    auto decrypted = m_dataEncrypt->decryptFile(*_smCertConfig.nodeKey);
+                    if (!decrypted)
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            InvalidParameter() << errinfo_comment(
+                                "buildSSLContext: decryptFile returned no content for key: " +
+                                *_smCertConfig.nodeKey));
+                    }
                     keyContent = std::move(*decrypted);
                 }
             }
@@ -396,6 +412,14 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                     InvalidParameter() << errinfo_comment(
                         "buildSSLContext: unable read content of key: " + *_smCertConfig.nodeKey));
             }
+        }
+        if (keyContent.empty())
+        {
+            GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC(
+                "buildSSLContext: unable read content of key: " + *_smCertConfig.nodeKey);
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "buildSSLContext: unable read content of key: " + *_smCertConfig.nodeKey));
         }
         // nodekey
         boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
@@ -428,8 +452,16 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
                     enNodeKeyContent =
                         readContents(boost::filesystem::path(*_smCertConfig.enNodeKey));
-                else if (auto decrypted = m_dataEncrypt->decryptFile(*_smCertConfig.enNodeKey))
+                else
                 {
+                    auto decrypted = m_dataEncrypt->decryptFile(*_smCertConfig.enNodeKey);
+                    if (!decrypted)
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            InvalidParameter() << errinfo_comment(
+                                "buildSSLContext: decryptFile returned no content for key: " +
+                                *_smCertConfig.enNodeKey));
+                    }
                     enNodeKeyContent = std::move(*decrypted);
                 }
             }
@@ -442,6 +474,14 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                                           "buildSSLContext: unable read content of key: " +
                                           *_smCertConfig.enNodeKey));
             }
+        }
+        if (enNodeKeyContent.empty())
+        {
+            GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC(
+                "buildSSLContext: unable read content of key: " + *_smCertConfig.enNodeKey);
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "buildSSLContext: unable read content of key: " + *_smCertConfig.enNodeKey));
         }
         std::string enNodeKeyStr((const char*)enNodeKeyContent.data(), enNodeKeyContent.size());
         if (SSL_CTX_use_enc_PrivateKey(

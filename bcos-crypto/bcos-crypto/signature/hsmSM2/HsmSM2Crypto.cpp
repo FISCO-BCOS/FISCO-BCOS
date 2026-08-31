@@ -155,8 +155,7 @@ bool HsmSM2Crypto::verify(
 PublicPtr HsmSM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) const
 {
     auto signatureStruct = std::make_shared<SignatureDataWithPub>(_signData);
-    auto hsmSM2Pub =
-        std::make_shared<KeyImpl>(HSM_SM2_PUBLIC_KEY_LEN, ref(signatureStruct->pub()));
+    auto hsmSM2Pub = std::make_shared<KeyImpl>(HSM_SM2_PUBLIC_KEY_LEN, ref(signatureStruct->pub()));
     if (verify(hsmSM2Pub, _hash, _signData))
     {
         return hsmSM2Pub;

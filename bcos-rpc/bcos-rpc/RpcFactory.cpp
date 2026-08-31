@@ -85,18 +85,16 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     {  //  ssl
         boostssl::context::ContextConfig::CertConfig certConfig;
 
-        bytes keyContent;
-
         // caCert
         if (!_nodeConfig->caCert().empty())
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->caCert()));
-                if (!keyContent.empty())
+                bytes caCertContent = readContents(boost::filesystem::path(_nodeConfig->caCert()));
+                if (!caCertContent.empty())
                 {
-                    certConfig.caCert.resize(keyContent.size());
-                    memcpy(certConfig.caCert.data(), keyContent.data(), keyContent.size());
+                    certConfig.caCert.resize(caCertContent.size());
+                    memcpy(certConfig.caCert.data(), caCertContent.data(), caCertContent.size());
                 }
             }
             catch (std::exception& e)
@@ -114,11 +112,13 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->nodeCert()));
-                if (!keyContent.empty())
+                bytes nodeCertContent =
+                    readContents(boost::filesystem::path(_nodeConfig->nodeCert()));
+                if (!nodeCertContent.empty())
                 {
-                    certConfig.nodeCert.resize(keyContent.size());
-                    memcpy(certConfig.nodeCert.data(), keyContent.data(), keyContent.size());
+                    certConfig.nodeCert.resize(nodeCertContent.size());
+                    memcpy(
+                        certConfig.nodeCert.data(), nodeCertContent.data(), nodeCertContent.size());
                 }
             }
             catch (std::exception& e)
@@ -136,14 +136,32 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         {
             try
             {
+                bytes nodeKeyContent;
                 if (nullptr == m_dataEncrypt) [[likely]]  // storage_security.enable = false
                 {
-                    keyContent = readContents(boost::filesystem::path(_nodeConfig->nodeKey()));
+                    nodeKeyContent = readContents(boost::filesystem::path(_nodeConfig->nodeKey()));
                 }
-                else if (auto decrypted = m_dataEncrypt->decryptFile(_nodeConfig->nodeKey()))
+                else
                 {
-                    keyContent = std::move(*decrypted);
+                    auto decrypted = m_dataEncrypt->decryptFile(_nodeConfig->nodeKey());
+                    if (!decrypted)
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            InvalidParameter() << errinfo_comment(
+                                "RpcFactory::initConfig: decryptFile returned no content for key:" +
+                                _nodeConfig->nodeKey()));
+                    }
+                    nodeKeyContent = std::move(*decrypted);
                 }
+                if (nodeKeyContent.empty())
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidParameter()
+                        << errinfo_comment("RpcFactory::initConfig: unable read content of key:" +
+                                           _nodeConfig->nodeKey()));
+                }
+                certConfig.nodeKey.resize(nodeKeyContent.size());
+                memcpy(certConfig.nodeKey.data(), nodeKeyContent.data(), nodeKeyContent.size());
             }
             catch (std::exception& e)
             {
@@ -154,8 +172,6 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                                           _nodeConfig->nodeKey()));
             }
         }
-        certConfig.nodeKey.resize(keyContent.size());
-        memcpy(certConfig.nodeKey.data(), keyContent.data(), keyContent.size());
 
         contextConfig->setIsCertPath(false);
 
@@ -175,18 +191,18 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     {  // sm ssl
         boostssl::context::ContextConfig::SMCertConfig certConfig;
 
-        bytes keyContent;
-
         // caCert
         if (!_nodeConfig->smCaCert().empty())
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->smCaCert()));
-                if (!keyContent.empty())
+                bytes smCaCertContent =
+                    readContents(boost::filesystem::path(_nodeConfig->smCaCert()));
+                if (!smCaCertContent.empty())
                 {
-                    certConfig.caCert.resize(keyContent.size());
-                    memcpy(certConfig.caCert.data(), keyContent.data(), keyContent.size());
+                    certConfig.caCert.resize(smCaCertContent.size());
+                    memcpy(
+                        certConfig.caCert.data(), smCaCertContent.data(), smCaCertContent.size());
                 }
             }
             catch (std::exception& e)
@@ -204,11 +220,13 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->smNodeCert()));
-                if (!keyContent.empty())
+                bytes smNodeCertContent =
+                    readContents(boost::filesystem::path(_nodeConfig->smNodeCert()));
+                if (!smNodeCertContent.empty())
                 {
-                    certConfig.nodeCert.resize(keyContent.size());
-                    memcpy(certConfig.nodeCert.data(), keyContent.data(), keyContent.size());
+                    certConfig.nodeCert.resize(smNodeCertContent.size());
+                    memcpy(certConfig.nodeCert.data(), smNodeCertContent.data(),
+                        smNodeCertContent.size());
                 }
             }
             catch (std::exception& e)
@@ -226,14 +244,33 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         {
             try
             {
+                bytes smNodeKeyContent;
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
                 {
-                    keyContent = readContents(boost::filesystem::path(_nodeConfig->smNodeKey()));
+                    smNodeKeyContent =
+                        readContents(boost::filesystem::path(_nodeConfig->smNodeKey()));
                 }
-                else if (auto decrypted = m_dataEncrypt->decryptFile(_nodeConfig->smNodeKey()))
+                else
                 {
-                    keyContent = std::move(*decrypted);
+                    auto decrypted = m_dataEncrypt->decryptFile(_nodeConfig->smNodeKey());
+                    if (!decrypted)
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            InvalidParameter() << errinfo_comment(
+                                "RpcFactory::initConfig: decryptFile returned no content for key:" +
+                                _nodeConfig->smNodeKey()));
+                    }
+                    smNodeKeyContent = std::move(*decrypted);
                 }
+                if (smNodeKeyContent.empty())
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidParameter()
+                        << errinfo_comment("RpcFactory::initConfig: unable read content of key:" +
+                                           _nodeConfig->smNodeKey()));
+                }
+                certConfig.nodeKey.resize(smNodeKeyContent.size());
+                memcpy(certConfig.nodeKey.data(), smNodeKeyContent.data(), smNodeKeyContent.size());
             }
             catch (std::exception& e)
             {
@@ -244,19 +281,19 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                                           _nodeConfig->nodeKey()));
             }
         }
-        certConfig.nodeKey.resize(keyContent.size());
-        memcpy(certConfig.nodeKey.data(), keyContent.data(), keyContent.size());
 
         // enNodeCert
         if (!_nodeConfig->enSmNodeCert().empty())
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->enSmNodeCert()));
-                if (!keyContent.empty())
+                bytes enSmNodeCertContent =
+                    readContents(boost::filesystem::path(_nodeConfig->enSmNodeCert()));
+                if (!enSmNodeCertContent.empty())
                 {
-                    certConfig.enNodeCert.resize(keyContent.size());
-                    memcpy(certConfig.enNodeCert.data(), keyContent.data(), keyContent.size());
+                    certConfig.enNodeCert.resize(enSmNodeCertContent.size());
+                    memcpy(certConfig.enNodeCert.data(), enSmNodeCertContent.data(),
+                        enSmNodeCertContent.size());
                 }
             }
             catch (std::exception& e)
@@ -274,14 +311,34 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         {
             try
             {
+                bytes enSmNodeKeyContent;
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
                 {
-                    keyContent = readContents(boost::filesystem::path(_nodeConfig->enSmNodeKey()));
+                    enSmNodeKeyContent =
+                        readContents(boost::filesystem::path(_nodeConfig->enSmNodeKey()));
                 }
-                else if (auto decrypted = m_dataEncrypt->decryptFile(_nodeConfig->enSmNodeKey()))
+                else
                 {
-                    keyContent = std::move(*decrypted);
+                    auto decrypted = m_dataEncrypt->decryptFile(_nodeConfig->enSmNodeKey());
+                    if (!decrypted)
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            InvalidParameter() << errinfo_comment(
+                                "RpcFactory::initConfig: decryptFile returned no content for key:" +
+                                _nodeConfig->enSmNodeKey()));
+                    }
+                    enSmNodeKeyContent = std::move(*decrypted);
                 }
+                if (enSmNodeKeyContent.empty())
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidParameter()
+                        << errinfo_comment("RpcFactory::initConfig: unable read content of key:" +
+                                           _nodeConfig->enSmNodeKey()));
+                }
+                certConfig.enNodeKey.resize(enSmNodeKeyContent.size());
+                memcpy(certConfig.enNodeKey.data(), enSmNodeKeyContent.data(),
+                    enSmNodeKeyContent.size());
             }
             catch (std::exception& e)
             {
@@ -292,8 +349,6 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                                           _nodeConfig->nodeKey()));
             }
         }
-        certConfig.enNodeKey.resize(keyContent.size());
-        memcpy(certConfig.enNodeKey.data(), keyContent.data(), keyContent.size());
 
         contextConfig->setIsCertPath(false);
 
@@ -383,8 +438,7 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
 
     // Use shared IOServicePool's io_context for TimerFactory to avoid
     // creating dedicated "timerFactory" threads
-    auto timerFactory =
-        std::make_shared<timer::TimerFactory>(*m_ioServicePool->getIOService());
+    auto timerFactory = std::make_shared<timer::TimerFactory>(*m_ioServicePool->getIOService());
     wsService->setTimerFactory(std::move(timerFactory));
 
     return wsService;

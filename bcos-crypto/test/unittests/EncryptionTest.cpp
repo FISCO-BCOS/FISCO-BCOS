@@ -49,10 +49,11 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
     std::string invalidKey = "ABCDCD";
     try
     {
-        _encrypt->symmetricDecrypt((const unsigned char*)ciperData.data(), ciperData.size(),
-            (const unsigned char*)invalidKey.c_str(), invalidKey.size());
-        BOOST_CHECK(std::string_view((const char*)ciperData.data(), ciperData.size()) !=
-                    std::string_view(plainData));
+        auto invalidDecrypted = _encrypt->symmetricDecrypt((const unsigned char*)ciperData.data(),
+            ciperData.size(), (const unsigned char*)invalidKey.c_str(), invalidKey.size());
+        // If decrypt silently succeeds with a wrong key, the result must not be the plaintext
+        bytes invalidPlainBytes(plainData.begin(), plainData.end());
+        BOOST_CHECK(invalidDecrypted != invalidPlainBytes);
     }
     catch (std::exception& e)
     {

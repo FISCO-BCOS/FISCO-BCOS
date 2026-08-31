@@ -134,8 +134,7 @@ std::shared_ptr<bytes> BcosKmsKeyEncryption::decryptContents(const std::shared_p
 
         BCOS_LOG(DEBUG) << "[ENCFILE] DecryptedFile Base64 key: " << asString(decFileBytesBase64)
                         << endl;
-        decFileBytes =
-            std::make_shared<bytes>(base64DecodeBytes(asString(decFileBytesBase64)));
+        decFileBytes = std::make_shared<bytes>(base64DecodeBytes(asString(decFileBytesBase64)));
     }
     catch (exception& e)
     {
@@ -178,8 +177,7 @@ std::shared_ptr<bytes> BcosKmsKeyEncryption::decryptFile(const std::string& file
         //}
         BCOS_LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: " << asString(decFileBytesBase64)
                         << endl;
-        decFileBytes =
-            std::make_shared<bytes>(base64DecodeBytes(asString(decFileBytesBase64)));
+        decFileBytes = std::make_shared<bytes>(base64DecodeBytes(asString(decFileBytesBase64)));
     }
     catch (exception& e)
     {

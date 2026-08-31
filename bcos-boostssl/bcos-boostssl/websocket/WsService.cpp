@@ -157,8 +157,7 @@ void WsService::start()
     // init m_timerFactory if it is not initialized
     if (!m_timerFactory)
     {
-        m_timerFactory =
-            std::make_shared<timer::TimerFactory>(*m_ioservicePool->getIOService());
+        m_timerFactory = std::make_shared<timer::TimerFactory>(*m_ioservicePool->getIOService());
     }
 
     // start as server

@@ -55,8 +55,7 @@ public:
         decodeCommonFields(_signatureData);
         if (_signatureData.size() > m_signatureLen)
         {
-            m_pub.insert(
-                m_pub.end(), _signatureData.data() + m_signatureLen, _signatureData.end());
+            m_pub.insert(m_pub.end(), _signatureData.data() + m_signatureLen, _signatureData.end());
         }
     }
 
