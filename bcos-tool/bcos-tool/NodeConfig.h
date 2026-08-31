@@ -241,7 +241,8 @@ public:
     uint32_t ethereumMaxBatchSize() const;
     uint64_t ethereumChainId() const;
     // EL-mode fork schedule ([fork_timestamps] in config.genesis): L1 PoS chains fork on
-    // timestamps (not block heights); 0 means active from genesis.
+    // timestamps (not block heights); 0 means active from genesis, and an absent
+    // schedule reads as UINT64_MAX ("not active") — never 0.
     uint64_t ethereumForkLondonTime() const;
     uint64_t ethereumForkParisTime() const;
     uint64_t ethereumForkShanghaiTime() const;

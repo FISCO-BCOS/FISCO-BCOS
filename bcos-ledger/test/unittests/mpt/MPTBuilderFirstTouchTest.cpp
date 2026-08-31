@@ -39,8 +39,11 @@
 #include <string_view>
 #include <vector>
 
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
+
 namespace bcos::ledger::mpt::test
 {
+using bcos::test::errinfoContains;
 
 BOOST_AUTO_TEST_SUITE(MPTBuilderFirstTouchSuite)
 
@@ -215,9 +218,10 @@ BOOST_AUTO_TEST_CASE(ZeroCodeHashRowInFlatThrows)
     auto view = makeFlatView(flatBackend);
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("10"));
 
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false)),
-        MPTInvariantViolation);
+        MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "decodes to a zero h256"); });
 }
 
 BOOST_AUTO_TEST_CASE(DeleteOfNeverWrittenSlotIsNoop)

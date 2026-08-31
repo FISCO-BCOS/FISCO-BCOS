@@ -8,6 +8,7 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
+#include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -125,7 +126,8 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresEvmcRevision)
     {
         NodeConfig cfg(keyFactory);
         std::string genesis = base + "version=2\n";
-        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(genesis), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(genesis), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "requires an explicit"); });
     }
 
     // version=2 with an explicit single revision -> accepted.
@@ -177,13 +179,19 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresCompat318)
     // 3.15.0 <= compat < 3.18.0 -> rejected (revision cannot be persisted on-chain).
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(
-            cfg.loadGenesisConfigFromString(base + "3.17.0" + mid), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + "3.17.0" + mid),
+            InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "compatibility_version >= 3.18.0");
+            });
     }
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(
-            cfg.loadGenesisConfigFromString(base + "3.15.0" + mid), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + "3.15.0" + mid),
+            InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "compatibility_version >= 3.18.0");
+            });
     }
     // compat >= 3.18.0 -> accepted.
     {
@@ -233,14 +241,16 @@ BOOST_AUTO_TEST_CASE(evmcRevisionForksEdgeCases)
     {
         NodeConfig cfg(keyFactory);
         std::string genesis = base + "evm_revision_forks=-5:cancun,100000:osaka\n";
-        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(genesis), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(genesis), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "block height must be >= 0"); });
     }
 
     // Unknown revision name -> rejected.
     {
         NodeConfig cfg(keyFactory);
         std::string genesis = base + "evm_revision_forks=0:notafork\n";
-        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(genesis), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(genesis), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "invalid revision"); });
     }
 }
 
@@ -271,15 +281,19 @@ BOOST_AUTO_TEST_CASE(evmcExperimentalRejected)
     // Single revision = experimental -> rejected.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(
-            cfg.loadGenesisConfigFromString(base + "evm_revision=experimental\n"), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(base + "evm_revision=experimental\n"), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "evm_revision=experimental"); });
     }
     // Fork transition to experimental -> rejected.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(
-                              base + "evm_revision_forks=0:experimental\n"),
-            InvalidConfig);
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(
+                                  base + "evm_revision_forks=0:experimental\n"),
+            InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "evm_revision_forks revision \"experimental\"");
+            });
     }
     // Control: a released revision is still accepted.
     {
@@ -451,26 +465,36 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
     // [fork_timestamps] without [ethereum] mode=el: rejected by validateL2Invariants.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(base + schedule), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + schedule), InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "[fork_timestamps] section requires [ethereum] mode=el");
+            });
     }
     // [ethereum] mode=el without [fork_timestamps]: rejected by validateL2Invariants.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(
-            cfg.loadGenesisConfigFromString(base + "[ethereum]\nmode=el\n"), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(base + "[ethereum]\nmode=el\n"), InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "mode=el requires a [fork_timestamps] section");
+            });
     }
     // [ethereum] mode=none alongside [fork_timestamps]: rejected (declaration is explicit).
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(
+        BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(base + "[ethereum]\nmode=none\n" + schedule),
-            InvalidConfig);
+            InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "[fork_timestamps] section requires [ethereum] mode=el");
+            });
     }
     // Invalid [ethereum] mode value: rejected like every neighbouring parse.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(base + "[ethereum]\nmode=invalid\n"),
-            InvalidConfig);
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + "[ethereum]\nmode=invalid\n"),
+            InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "[ethereum].mode invalid"); });
     }
 }
 
@@ -519,14 +543,16 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
     // no mainnet fallback.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(head + "0" + tail), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(head + "0" + tail), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "non-zero [web3] chain_id"); });
     }
     // [web3] chain_id overflowing uint64 -> rejected at genesis load.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(
+        BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(head + "99999999999999999999999" + tail),
-            InvalidConfig);
+            InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "chain_id to fit uint64"); });
     }
     // Non-EL genesis (no declaration, no schedule) never requires a chain id (normal
     // FISCO chains are unaffected); the unset getter reads 0, never mainnet 1.
@@ -577,7 +603,10 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
             "version=2\nevm_revision=cancun\n";
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plainGenesis));
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
-        BOOST_CHECK_THROW(cfg.validateELModeInvariants(), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "requires config.genesis to declare");
+            });
     }
     // The symmetric direction: genesis declares EL but config.ini says mode=none —
     // the node would run executor v2 with neither an on-chain nor a
@@ -586,7 +615,10 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
         NodeConfig cfg(keyFactory);
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(head + "11155111" + tail));
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=none\n"));
-        BOOST_CHECK_THROW(cfg.validateELModeInvariants(), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "declares [ethereum] mode=el but config.ini");
+            });
     }
 }
 
@@ -656,14 +688,16 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
     // A leading '-' must not wrap to 2^64-1 ("fork never activates").
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(
-            cfg.loadGenesisConfigFromString(base + "-1\n"), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(base + "-1\n"), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "prague_time invalid timestamp"); });
     }
     // Trailing garbage must not be silently truncated to a wrong schedule.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(
-            cfg.loadGenesisConfigFromString(base + "1746612311abc\n"), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(base + "1746612311abc\n"), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "prague_time invalid timestamp"); });
     }
     // 0x-prefixed hex is still accepted.
     {
@@ -681,8 +715,9 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
         std::string noParis = base;
         noParis.replace(
             noParis.find("paris_time=0\n"), std::string("paris_time=0\n").size(), "");
-        BOOST_CHECK_THROW(
-            cfg.loadGenesisConfigFromString(noParis + "1746612311\n"), InvalidConfig);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(noParis + "1746612311\n"), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "paris_time is required"); });
     }
 }
 
@@ -713,21 +748,27 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
     // Cancun earlier than Shanghai -> rejected.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(
+        BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(
                 head + "shanghai_time=1710338135\n"
                        "cancun_time=1681338455\nprague_time=1746612311\n"),
-            InvalidConfig);
+            InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "cancun_time (1681338455) is earlier than");
+            });
     }
     // A scheduled bpo1 while osaka is unscheduled (UINT64_MAX, terminal) -> decreasing.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_THROW(
+        BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(
                 head + "shanghai_time=1681338455\n"
                        "cancun_time=1710338135\nprague_time=1746612311\n"
                        "bpo1_time=1750000000\n"),
-            InvalidConfig);
+            InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "bpo1_time (1750000000) is earlier than");
+            });
     }
     // A scheduled osaka with unscheduled bpos is fine (MAX is non-decreasing).
     {

@@ -35,8 +35,11 @@
 #include <utility>
 #include <vector>
 
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
+
 namespace bcos::ledger::mpt::test
 {
+using bcos::test::errinfoContains;
 
 BOOST_AUTO_TEST_SUITE(ComputeTrieRootSuite)
 
@@ -140,13 +143,15 @@ BOOST_AUTO_TEST_CASE(VarKeyRejectsPrefixAndDuplicateKeys)
         {bcos::bytes{0x01}, bcos::bytes{0xaa}},
         {bcos::bytes{0x01, 0x02}, bcos::bytes{0xbb}},
     };
-    BOOST_CHECK_THROW(computeTrieRootVarKey(prefixEntries), MPTInvariantViolation);
+    BOOST_CHECK_EXCEPTION(computeTrieRootVarKey(prefixEntries), MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "is a duplicate of, or a prefix of"); });
 
     std::vector<std::pair<bcos::bytes, bcos::bytes>> duplicateEntries{
         {bcos::bytes{0x03}, bcos::bytes{0xaa}},
         {bcos::bytes{0x03}, bcos::bytes{0xbb}},
     };
-    BOOST_CHECK_THROW(computeTrieRootVarKey(duplicateEntries), MPTInvariantViolation);
+    BOOST_CHECK_EXCEPTION(computeTrieRootVarKey(duplicateEntries), MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "is a duplicate of, or a prefix of"); });
 }
 
 // computeTrieRootFromRawKeys enforces the OTHER half of its precondition the same way:
@@ -163,7 +168,8 @@ BOOST_AUTO_TEST_CASE(RawKeysRejectsDuplicateKeys)
     std::vector<std::pair<bcos::bytesConstRef, bcos::bytesConstRef>> duplicates;
     duplicates.emplace_back(bcos::ref(keyA), bcos::ref(valueA));
     duplicates.emplace_back(bcos::ref(keyB), bcos::ref(valueB));
-    BOOST_CHECK_THROW(computeTrieRootFromRawKeys(duplicates), MPTInvariantViolation);
+    BOOST_CHECK_EXCEPTION(computeTrieRootFromRawKeys(duplicates), MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "duplicate key"); });
 
     // Control: a proper-prefix key is supported (branch value) and must NOT throw.
     bcos::bytes prefix{0x01};

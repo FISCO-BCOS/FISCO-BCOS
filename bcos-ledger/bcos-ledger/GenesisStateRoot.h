@@ -39,11 +39,12 @@ namespace bcos::ledger
 /// bcos-storage include path (that directory is a build-tree-only, PRIVATE
 /// include of the ledger target).
 executor_v1::StateKey mptNodeStateKey(bcos::h256 const& hash);
-/// Strip a leading lowercase 0x prefix, if present. Genesis alloc hex arrives
-/// 0x-prefixed from NodeConfig and unprefixed from direct GenesisConfig callers.
+/// Strip a leading 0x/0X prefix, if present. Genesis alloc hex arrives
+/// 0x-prefixed from NodeConfig (which lowercases first) and possibly 0X-prefixed
+/// or unprefixed from direct GenesisConfig callers.
 inline std::string_view stripHexPrefix(std::string_view hex)
 {
-    return hex.starts_with("0x") ? hex.substr(2) : hex;
+    return (hex.starts_with("0x") || hex.starts_with("0X")) ? hex.substr(2) : hex;
 }
 
 /// unhex into a fixed-size buffer requires an EXACT digit count:

@@ -19,11 +19,13 @@
 
 #include "bcos-ledger/mpt/HexPrefix.h"
 #include "bcos-ledger/mpt/Errors.h"
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
 #include <boost/test/unit_test.hpp>
 #include <vector>
 
 namespace bcos::ledger::mpt::test
 {
+using bcos::test::errinfoContains;
 
 BOOST_AUTO_TEST_SUITE(HexPrefixSuite)
 
@@ -100,7 +102,8 @@ BOOST_AUTO_TEST_CASE(EncodeDecodeRoundTripEven)
 BOOST_AUTO_TEST_CASE(DecodeEmptyThrows)
 {
     bcos::bytes const empty{};
-    BOOST_CHECK_THROW(hexPrefixDecode(bcos::ref(empty)), MPTDecodeError);
+    BOOST_CHECK_EXCEPTION(hexPrefixDecode(bcos::ref(empty)), MPTDecodeError,
+        [](auto const& e) { return errinfoContains(e, "hexPrefixDecode: empty input"); });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

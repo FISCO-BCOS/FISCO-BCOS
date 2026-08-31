@@ -137,6 +137,9 @@ void SchedulerServiceApp::initConfig()
         std::make_shared<bcos::tool::NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     m_nodeConfig->loadGenesisConfig(genesisPt);
     m_nodeConfig->loadConfig(pt);
+    // Cross-file EL-mode invariants (config.ini ethereum.mode=el must be backed by the
+    // genesis EL declaration), same as the air/full-node initializer path.
+    m_nodeConfig->validateELModeInvariants();
     m_nodeConfig->loadServiceConfig(pt);
     m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt, true);
     // init the protocol

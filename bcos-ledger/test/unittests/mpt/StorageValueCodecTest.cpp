@@ -23,8 +23,11 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
 
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
+
 namespace bcos::ledger::mpt::test
 {
+using bcos::test::errinfoContains;
 
 BOOST_AUTO_TEST_SUITE(StorageValueCodecSuite)
 
@@ -54,21 +57,25 @@ BOOST_AUTO_TEST_CASE(MalformedLeavesThrow)
 {
     // Truncated: a 4-byte string header with only 2 bytes of payload.
     bcos::bytes const truncated{0x84, 0x01, 0x02};
-    BOOST_CHECK_THROW(decodeStorageValue(bcos::ref(truncated)), MPTDecodeError);
+    BOOST_CHECK_EXCEPTION(decodeStorageValue(bcos::ref(truncated)), MPTDecodeError,
+        [](auto const& e) { return errinfoContains(e, "bad RLP value"); });
 
     // Empty input: no RLP item at all.
     bcos::bytes const empty;
-    BOOST_CHECK_THROW(decodeStorageValue(bcos::ref(empty)), MPTDecodeError);
+    BOOST_CHECK_EXCEPTION(decodeStorageValue(bcos::ref(empty)), MPTDecodeError,
+        [](auto const& e) { return errinfoContains(e, "bad RLP value"); });
 
     // Trailing bytes after a well-formed value — a corrupted leaf that would otherwise decode
     // to the first item and silently drop the rest.
     auto trailing = encodeStorageValue(bcos::h256(bcos::u256{0x1234}).ref());
     trailing.push_back(0x01);
-    BOOST_CHECK_THROW(decodeStorageValue(bcos::ref(trailing)), MPTDecodeError);
+    BOOST_CHECK_EXCEPTION(decodeStorageValue(bcos::ref(trailing)), MPTDecodeError,
+        [](auto const& e) { return errinfoContains(e, "trailing bytes after the RLP value"); });
 
     // A list where a string is expected.
     bcos::bytes const list{0xc2, 0x01, 0x02};
-    BOOST_CHECK_THROW(decodeStorageValue(bcos::ref(list)), MPTDecodeError);
+    BOOST_CHECK_EXCEPTION(decodeStorageValue(bcos::ref(list)), MPTDecodeError,
+        [](auto const& e) { return errinfoContains(e, "bad RLP value"); });
 }
 
 // Ethereum storage values are minimal big-endian byte strings of at most 32 bytes. Decoding
@@ -84,12 +91,14 @@ BOOST_AUTO_TEST_CASE(NonCanonicalPayloadsThrow)
     bcos::bytes overlong{0xa1};
     overlong.push_back(0xff);
     overlong.insert(overlong.end(), 32, 0x11);
-    BOOST_CHECK_THROW(decodeStorageValue(bcos::ref(overlong)), MPTDecodeError);
+    BOOST_CHECK_EXCEPTION(decodeStorageValue(bcos::ref(overlong)), MPTDecodeError,
+        [](auto const& e) { return errinfoContains(e, "over the 32-byte max"); });
 
     // The long-string form itself, canonically encoded: 0xb8 + length 56 + 56 bytes.
     bcos::bytes longForm{0xb8, 56};
     longForm.insert(longForm.end(), 56, 0x11);
-    BOOST_CHECK_THROW(decodeStorageValue(bcos::ref(longForm)), MPTDecodeError);
+    BOOST_CHECK_EXCEPTION(decodeStorageValue(bcos::ref(longForm)), MPTDecodeError,
+        [](auto const& e) { return errinfoContains(e, "over the 32-byte max"); });
 
     // Exactly 32 bytes is the boundary and must still decode.
     bcos::bytes maxWidth{0xa0};
@@ -98,7 +107,8 @@ BOOST_AUTO_TEST_CASE(NonCanonicalPayloadsThrow)
 
     // Leading zero: 0x82 0x00 0x01 encodes the same value as 0x01, non-minimally.
     bcos::bytes const leadingZero{0x82, 0x00, 0x01};
-    BOOST_CHECK_THROW(decodeStorageValue(bcos::ref(leadingZero)), MPTDecodeError);
+    BOOST_CHECK_EXCEPTION(decodeStorageValue(bcos::ref(leadingZero)), MPTDecodeError,
+        [](auto const& e) { return errinfoContains(e, "leading zero byte"); });
 
     // The encoder never produces either form, so nothing valid is rejected.
     BOOST_CHECK_EQUAL(decodeStorageValue(bcos::ref(encodeStorageValue(

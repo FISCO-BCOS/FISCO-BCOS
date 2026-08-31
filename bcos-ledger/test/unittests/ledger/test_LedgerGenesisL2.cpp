@@ -30,6 +30,7 @@
 #include "bcos-ledger/GenesisStateRoot.h"
 #include "bcos-ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <boost/algorithm/hex.hpp>
@@ -209,9 +210,11 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
             .code = "",
             .storage = {{std::string(64, '0'), "01"}}});
 
-        BOOST_CHECK_THROW(
+        BOOST_CHECK_EXCEPTION(
             co_await importEthereumGenesisState(*storage, allocs, *hashImpl, features),
-            bcos::tool::InvalidConfig);
+            bcos::tool::InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "storage slot value must be exactly 64 hex digits");
+            });
 
         // Nothing may be written at all: not the offending account, and not the
         // well-formed FIRST account either (the validating trie pass runs before
@@ -235,9 +238,10 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
             .nonce = "abc",  // not a decimal uint64
             .code = "6080604052",
             .storage = {{std::string(64, '0'), std::string(64, '1')}}});
-        BOOST_CHECK_THROW(
+        BOOST_CHECK_EXCEPTION(
             co_await importEthereumGenesisState(*storage, badNonceAllocs, *hashImpl, features),
-            bcos::tool::InvalidConfig);
+            bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "nonce is not a valid uint64"); });
         auto badNonceRow = co_await storage2::readOne(*storage, executor_v1::StateKeyView(
                                                                      SYS_TABLES,
                                                                      std::string(SYS_DIRECTORY::

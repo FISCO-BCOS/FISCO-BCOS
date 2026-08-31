@@ -18,6 +18,7 @@
  */
 #include "bcos-ledger/GenesisStateRoot.h"
 #include "bcos-ledger/mpt/Constants.h"
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
@@ -136,11 +137,12 @@ BOOST_AUTO_TEST_CASE(ZeroStorageSlotIgnored)
     BOOST_CHECK_EQUAL(gsrStateRoot(withZero), gsrStateRoot(gsrBaseConfig()));
 }
 
-// GOLDEN: op-geth-compatible state root for a fixed single-account alloc. The
-// literal is TBD until the first green CI run; freeze it then by replacing the
-// size check with BOOST_CHECK_EQUAL against the printed value. Because this is a
-// real op-geth state root, the frozen value is independently verifiable against
-// op-deployer / go-ethereum `Genesis.ToBlock()` output for the same account.
+// GOLDEN: op-geth-compatible state root for a fixed single-account alloc, frozen
+// against the independent Python MPT reference in
+// tools/opstack-genesis/gen_trieroot_golden.py (the "golden_state" vector there
+// recomputes this value from scratch — run it to audit). The same value is
+// independently verifiable against op-deployer / go-ethereum `Genesis.ToBlock()`
+// output for the same account.
 BOOST_AUTO_TEST_CASE(GoldenVector)
 {
     GenesisConfig genesis;
@@ -150,8 +152,7 @@ BOOST_AUTO_TEST_CASE(GoldenVector)
         .code = "0x6080604052",
         .storage = {{gsrKey32('0'), "0x" + std::string(60, '0') + "0385"}}});
     auto root = gsrStateRoot(genesis).hex();
-    BOOST_TEST_MESSAGE("GoldenVector eth state root (freeze + verify vs op-deployer): " + root);
-    BOOST_CHECK_EQUAL(root.size(), 64u);  // 32-byte root = 64 hex chars
+    BOOST_CHECK_EQUAL(root, "f4ea8faf448deb0ccd599a526b6d8c61e090d6e3c6a1f7618b5e2049327e73f5");
 }
 
 // The hasher shares the importers' exact-width / even-length unhex guards: a
@@ -163,45 +164,58 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
     {
         auto config = gsrBaseConfig();
         config.m_allocs[0].address = "0x430000000000000000000000000000000000c0";
-        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "alloc address must be exactly 40 hex digits");
+            });
     }
     // odd-length code
     {
         auto config = gsrBaseConfig();
         config.m_allocs[0].code = "0x608060405";
-        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "code must be even-length hex"); });
     }
     // short storage slot value (2 hex digits)
     {
         auto config = gsrBaseConfig();
         config.m_allocs[0].storage = {{gsrKey32('0'), "0x01"}};
-        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "storage slot value must be exactly 64 hex digits");
+            });
     }
     // over-long storage slot key (66 hex digits)
     {
         auto config = gsrBaseConfig();
         config.m_allocs[0].storage = {{"0x" + std::string(66, '0'), gsrKey32('0')}};
-        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "storage slot key must be exactly 64 hex digits");
+            });
     }
     // non-decimal nonce: must abort with the field-naming InvalidConfig (not an
     // unnamed boost::bad_lexical_cast), matching every other alloc field.
     {
         auto config = gsrBaseConfig();
         config.m_allocs[0].nonce = "abc";
-        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "nonce is not a valid uint64"); });
     }
     // nonce overflowing uint64: same contract.
     {
         auto config = gsrBaseConfig();
         config.m_allocs[0].nonce = "18446744073709551616";  // 2^64
-        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "nonce is not a valid uint64"); });
     }
     // duplicated address (exact): the state map is last-wins but the importers
     // apply every alloc, so the root and the written flat state would disagree.
     {
         auto config = gsrBaseConfig();
         config.m_allocs.push_back(config.m_allocs[0]);  // same address
-        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "address is duplicated"); });
     }
     // duplicated address (case-insensitive): 0xAB and 0xab decode to the same
     // 20 bytes, so keccak256(address20) collides too.
@@ -211,14 +225,16 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
         dup.address = "0x43000000000000000000000000000000000000C0";  // uppercase
         dup.balance = u256(999);
         config.m_allocs.push_back(dup);
-        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "address is duplicated"); });
     }
     // alloc at a FISCO system address (SYS_CONFIG ...1000): EVMAccount would
     // write it to /sys/ but the root hashes it as an ordinary account.
     {
         auto config = gsrBaseConfig();
         config.m_allocs[0].address = "0x0000000000000000000000000000000000001000";
-        BOOST_CHECK_THROW(gsrStateRoot(config), bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "FISCO system address"); });
     }
 }
 

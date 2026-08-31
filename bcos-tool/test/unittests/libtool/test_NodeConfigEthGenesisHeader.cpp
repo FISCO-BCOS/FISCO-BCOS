@@ -16,6 +16,7 @@
  * @file test_NodeConfigEthGenesisHeader.cpp
  * @brief [eth_genesis_header] parsing: 22-field mapping + per-field fail-fast (A3)
  */
+#include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-tool/Exceptions.h>
@@ -173,8 +174,12 @@ BOOST_AUTO_TEST_CASE(EachMissingRequiredFieldFailsFast)
             continue;
         }
         auto cfg = makeEthNodeConfig();
-        BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection(key)))),
-            bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(
+            cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection(key)))),
+            bcos::tool::InvalidConfig,
+            [](auto const& e) {
+                return bcos::test::errinfoContains(e, "is required (all 22 eth genesis header");
+            });
     }
 }
 
@@ -230,17 +235,23 @@ BOOST_AUTO_TEST_CASE(L2WithoutSectionRejected)
     // without [eth_genesis_header] would mint a Tars-hashed B0 no
     // op-node/op-reth could match, so it fails fast.
     auto cfg = makeEthNodeConfig();
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         cfg->loadGenesisConfig(parseEthIni(std::string(kEthBase) + kEthFeatureL2 + kEthAlloc0)),
-        bcos::tool::InvalidConfig);
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
+            return bcos::test::errinfoContains(e, "requires an [eth_genesis_header] section");
+        });
 }
 
 BOOST_AUTO_TEST_CASE(SectionWithoutL2FeatureRejected)
 {
     auto cfg = makeEthNodeConfig();
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         cfg->loadGenesisConfig(parseEthIni(std::string(kEthBase) + ethHeaderSection())),
-        bcos::tool::InvalidConfig);
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
+            return bcos::test::errinfoContains(e, "section requires feature_l2_ethereum_compat");
+        });
 }
 
 BOOST_AUTO_TEST_CASE(NonZeroNumberRejected)
@@ -248,8 +259,11 @@ BOOST_AUTO_TEST_CASE(NonZeroNumberRejected)
     auto section = ethHeaderSection();
     boost::replace_first(section, "number=0x0\n", "number=0x1\n");
     auto cfg = makeEthNodeConfig();
-    BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section))),  //
-        bcos::tool::InvalidConfig);
+    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section))),  //
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
+            return bcos::test::errinfoContains(e, "[eth_genesis_header].number must be 0x0");
+        });
 }
 
 BOOST_AUTO_TEST_CASE(EmptyExtraDataAccepted)
@@ -269,8 +283,11 @@ BOOST_AUTO_TEST_CASE(EmptyExtraDataAccepted)
     auto badQuantity = ethHeaderSection();
     boost::replace_first(badQuantity, "gas_limit=0x1c9c380\n", "gas_limit=0x\n");
     auto cfg2 = makeEthNodeConfig();
-    BOOST_CHECK_THROW(cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(badQuantity))),  //
-        bcos::tool::InvalidConfig);
+    BOOST_CHECK_EXCEPTION(cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(badQuantity))),  //
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
+            return bcos::test::errinfoContains(e, ".gas_limit is not valid hex");
+        });
 }
 
 BOOST_AUTO_TEST_CASE(BadWidthRejected)
@@ -280,15 +297,21 @@ BOOST_AUTO_TEST_CASE(BadWidthRejected)
     boost::replace_first(section, std::string(kEthEmptyTrieRoot),
         "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b4");
     auto cfg = makeEthNodeConfig();
-    BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section))),  //
-        bcos::tool::InvalidConfig);
+    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section))),  //
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
+            return bcos::test::errinfoContains(e, ".state_root must be 64 hex chars");
+        });
 
     // 7-byte nonce
     auto shortNonce = ethHeaderSection();
     boost::replace_first(shortNonce, "nonce=0x0000000000000000\n", "nonce=0x00000000000000\n");
     auto cfg2 = makeEthNodeConfig();
-    BOOST_CHECK_THROW(cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(shortNonce))),  //
-        bcos::tool::InvalidConfig);
+    BOOST_CHECK_EXCEPTION(cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(shortNonce))),  //
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
+            return bcos::test::errinfoContains(e, ".nonce must be 16 hex chars");
+        });
 }
 
 BOOST_AUTO_TEST_CASE(GenesisDataCoversEthHeader)

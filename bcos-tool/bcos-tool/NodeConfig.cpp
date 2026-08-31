@@ -398,10 +398,12 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
     // London-era genesis) omits the keys, which makes the corresponding RLP
     // field absent — that is exactly what lets Ledger re-encode the header
     // byte-for-byte. An L2 artifact always emits all 21 keys, so the
-    // 21-field encoding is unchanged.
+    // 21-field encoding is unchanged. Only an ABSENT key means "field omitted":
+    // a present-but-empty key is a config typo and must fail loudly in
+    // requireHexField, not silently decode to the omitted-field encoding.
     auto optionalHashField = [&](std::string const& key) -> std::optional<crypto::HashType> {
         auto value = section->get_optional<std::string>(key);
-        if (!value || value->empty())
+        if (!value)
         {
             return std::nullopt;
         }
@@ -410,7 +412,7 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
     };
     auto optionalQuantityField = [&](std::string const& key) -> std::optional<u256> {
         auto value = section->get_optional<std::string>(key);
-        if (!value || value->empty())
+        if (!value)
         {
             return std::nullopt;
         }
@@ -3299,41 +3301,43 @@ uint64_t bcos::tool::NodeConfig::ethereumChainId() const
     // 0 = unset (non-EL chains) — never a silent mainnet fallback.
     return m_ethereumChainId;
 }
+// Schedule absent -> UINT64_MAX ("not active") for every fork getter: 0 is the
+// "active from genesis" sentinel in Ethereum fork semantics, so returning 0 for
+// an unset schedule would silently mean "every fork live since block 0". The
+// required london..prague ladder shares readOptionalTs's omitted-key default
+// with the post-Prague tail.
 uint64_t bcos::tool::NodeConfig::ethereumForkLondonTime() const
 {
     return m_genesisConfig.m_ethereumForkSchedule ?
                m_genesisConfig.m_ethereumForkSchedule->m_londonTime :
-               0;
+               std::numeric_limits<uint64_t>::max();
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkParisTime() const
 {
     return m_genesisConfig.m_ethereumForkSchedule ?
                m_genesisConfig.m_ethereumForkSchedule->m_parisTime :
-               0;
+               std::numeric_limits<uint64_t>::max();
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkShanghaiTime() const
 {
     return m_genesisConfig.m_ethereumForkSchedule ?
                m_genesisConfig.m_ethereumForkSchedule->m_shanghaiTime :
-               0;
+               std::numeric_limits<uint64_t>::max();
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkCancunTime() const
 {
     return m_genesisConfig.m_ethereumForkSchedule ?
                m_genesisConfig.m_ethereumForkSchedule->m_cancunTime :
-               0;
+               std::numeric_limits<uint64_t>::max();
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkPragueTime() const
 {
     return m_genesisConfig.m_ethereumForkSchedule ?
                m_genesisConfig.m_ethereumForkSchedule->m_pragueTime :
-               0;
+               std::numeric_limits<uint64_t>::max();
 }
 uint64_t bcos::tool::NodeConfig::ethereumForkOsakaTime() const
 {
-    // Schedule absent -> UINT64_MAX ("not yet active"), the same default readOptionalTs
-    // stores for an omitted osaka_time key: "unspecified" must never mean "active from
-    // genesis" for a post-Prague fork.
     return m_genesisConfig.m_ethereumForkSchedule ?
                m_genesisConfig.m_ethereumForkSchedule->m_osakaTime :
                std::numeric_limits<uint64_t>::max();

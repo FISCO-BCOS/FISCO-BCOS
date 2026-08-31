@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Independent golden-vector generator for bcos-ledger's indexed-trie roots.
+"""Independent golden-vector generator for bcos-ledger's trie roots.
 
 EthTrieRootsTest.cpp (bcos-ledger/test/unittests/mpt/) anchors
 computeIndexedTrieRoot / calculateTransactionsRoot / calculateReceiptsRoot /
-calculateWithdrawalsRoot to this SECOND implementation: the MPT below is a
+calculateWithdrawalsRoot, and GenesisStateRootTest.cpp's GoldenVector anchors
+the genesis state root, to this SECOND implementation: the MPT below is a
 from-scratch Python hexary-trie (real keccak-256 via pycryptodome), sharing no
 code with the C++ HashBuilder, so a bug in either side shows up as a mismatch
 instead of cancelling out.
@@ -106,6 +107,31 @@ def indexed_trie_root(elements) -> bytes:
     return trie_root({rlp_encode(i): bytes(e) for i, e in enumerate(elements)})
 
 
+EMPTY_ROOT = keccak256(rlp_encode(b""))
+KECCAK_EMPTY = keccak256(b"")
+
+
+def state_root(allocs) -> bytes:
+    """Ethereum genesis state root over (address, nonce, balance, code, storage)
+    allocs — the construction go-ethereum's Genesis.ToBlock() uses: a SECURE
+    state trie (leaf key = keccak256(address)) of RLP([nonce, balance,
+    storageRoot, codeHash]), where storageRoot is the SECURE storage trie over
+    keccak256(slot32) -> RLP(value with leading zero bytes trimmed); zero slots
+    are no-ops, and empty storage / empty code use the canonical sentinels.
+    Anchors GenesisStateRootTest.cpp's GoldenVector."""
+    leaves = {}
+    for address, nonce, balance, code, storage in allocs:
+        slots = {
+            keccak256(k): rlp_encode(v.lstrip(b"\0"))
+            for k, v in storage.items()
+            if v != bytes(32)
+        }
+        storage_root = trie_root(slots) if slots else EMPTY_ROOT
+        code_hash = keccak256(code) if code else KECCAK_EMPTY
+        leaves[keccak256(address)] = rlp_encode([nonce, balance, storage_root, code_hash])
+    return trie_root(leaves)
+
+
 # --- Vectors (byte-identical to EthTrieRootsTest.cpp) ------------------------
 
 TXS = [
@@ -182,12 +208,25 @@ WITHDRAWALS = [
 # 200 items force 2-byte rlp keys (index >= 128): item i is bytes([i, 7*i mod 256]).
 MANY_ITEMS = [bytes([i, (7 * i) % 256]) for i in range(200)]
 
+# Single-account genesis alloc, byte-identical to GenesisStateRootTest.cpp's
+# GoldenVector: (address, nonce, balance, code, {slot32: value32}).
+GOLDEN_ALLOC = [
+    (
+        bytes.fromhex("43000000000000000000000000000000000000c0"),
+        0,  # nonce
+        0,  # balance
+        bytes.fromhex("6080604052"),
+        {bytes(32): bytes.fromhex("0385").rjust(32, b"\0")},
+    ),
+]
+
 EXPECTED = {
     "empty":        "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
     "transactions": "0xb0324982374a362506a47c4c22316dc9507c08b8f77cf8ee1f763ebbd1bc4806",
     "receipts":     "0x2d82724250d2cb15d23a84a75c0ccce1c4fbd6032110e3be57eccbf68866353d",
     "withdrawals":  "0xa42c3ab8f3dd29c60f0182050b7a77a8603d83e035368004b7450857d3cd172e",
     "many_items":   "0x1e6f2f0fd22412f2ec4284e0c57f0b1032b6f578b1cb3fd64282eecec528a3a3",
+    "golden_state": "0xf4ea8faf448deb0ccd599a526b6d8c61e090d6e3c6a1f7618b5e2049327e73f5",
 }
 
 
@@ -198,6 +237,7 @@ def main() -> int:
         "receipts": "0x" + indexed_trie_root(RECEIPTS).hex(),
         "withdrawals": "0x" + indexed_trie_root(WITHDRAWALS).hex(),
         "many_items": "0x" + indexed_trie_root(MANY_ITEMS).hex(),
+        "golden_state": "0x" + state_root(GOLDEN_ALLOC).hex(),
     }
     failed = False
     for name, expected in EXPECTED.items():

@@ -24,6 +24,7 @@
 #include "bcos-ledger/GenesisStateRoot.h"
 #include "bcos-ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/Exceptions.h"
 #include <bcos-framework/testutils/faker/FakeBlock.h>
@@ -108,8 +109,9 @@ BOOST_AUTO_TEST_CASE(MissingFlagsSlotRefusesToBuild)
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
         auto param = makeParam();
         auto genesisConfig = makeConfigWithoutFlagsSlot();  // slot absent
-        BOOST_CHECK_THROW(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
-            bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
+            bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "must carry the SystemConfig"); });
         co_return;
     }());
 }
@@ -126,8 +128,11 @@ BOOST_AUTO_TEST_CASE(MismatchingFlagsSlotRefusesToBuild)
         // set than the node runs with -> fail-fast.
         auto& slotValue = genesisConfig.m_allocs[0].storage.back().second;
         slotValue[slotValue.size() - 1] = (slotValue.back() == '0') ? '1' : '0';
-        BOOST_CHECK_THROW(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
-            bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
+            bcos::tool::InvalidConfig, [](auto const& e) {
+                return errinfoContains(
+                    e, "feature_flags slot in the genesis allocs does not match");
+            });
         co_return;
     }());
 }
