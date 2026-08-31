@@ -137,5 +137,38 @@ BOOST_AUTO_TEST_CASE(MismatchingFlagsSlotRefusesToBuild)
     }());
 }
 
+// The feature_flags gate runs on the FIRST-INIT path only. On restart the
+// pinned stateRoot / genesis-data comparisons are the guards: an unchanged
+// config restarts fine, and a config that perturbs the purely-computed
+// expected feature set (here an extra enabled feature — feature_op_jovian is
+// set by no genesis-default path) is refused by the genesis-pin guard, NOT by
+// the feature-flags message. The latter would tell the operator to
+// "regenerate the allocs", which is impossible for an initialized chain
+// (B0's stateRoot pins them); it must also never fire just because a newer
+// binary computes a different expected set.
+BOOST_AUTO_TEST_CASE(RestartGuardsOnGenesisPinNotFeatureFlags)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeL2GenesisTestStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        auto param = makeParam();
+        auto genesisConfig = makeConfigWithoutFlagsSlot();
+        appendGenesisFeatureFlagsSlot(genesisConfig);
+        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param));
+
+        // Unchanged config: plain restart succeeds.
+        BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param));
+
+        // Perturbed expected feature set: refused by the pin comparison.
+        auto perturbed = genesisConfig;
+        perturbed.m_features.push_back(FeatureSet{Features::Flag::feature_op_jovian, 1});
+        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, perturbed, param),
+            bcos::tool::InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "Genesis Data is inconsistent");
+            });
+        co_return;
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

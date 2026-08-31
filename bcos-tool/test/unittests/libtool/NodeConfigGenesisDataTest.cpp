@@ -629,6 +629,43 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
     }
 }
 
+// ethereum.max_batch_size sizes the RLPx header/body requests the EL
+// downloader will issue; bound it while the config surface is unreleased
+// (geth caps one request at MaxHeaderFetch=192 / MaxBodyFetch=128).
+BOOST_AUTO_TEST_CASE(ethereumMaxBatchSizeBounds)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    // Default when the key is absent.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=el\n"));
+        BOOST_CHECK_EQUAL(cfg.ethereumMaxBatchSize(), 192u);
+    }
+    // Boundary values pass.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadConfigFromString("[ethereum]\nmode=el\nmax_batch_size=1024\n"));
+        BOOST_CHECK_EQUAL(cfg.ethereumMaxBatchSize(), 1024u);
+    }
+    // Zero and anything above 1024 are rejected.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(cfg.loadConfigFromString("[ethereum]\nmode=el\nmax_batch_size=0\n"),
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "max_batch_size must be in [1, 1024]");
+            });
+    }
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadConfigFromString("[ethereum]\nmode=el\nmax_batch_size=1025\n"), InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "max_batch_size must be in [1, 1024]");
+            });
+    }
+}
+
 // Reload is a supported shape: a second loadGenesisConfig without the EL declaration /
 // fork schedule must clear the previous values (a stale m_ethereumELMode would waive both
 // the executor.evm_revision and the auth_admin_account guards).

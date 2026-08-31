@@ -1039,7 +1039,8 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         bootnodes_file=./bootnodes.json
         ; secp256k1 node identity (hex or PEM). Empty = derive deterministically.
         node_key_file=
-        ; max blocks requested per batch
+        ; max blocks requested per batch (geth caps one request at
+        ; MaxHeaderFetch=192 / MaxBodyFetch=128; accepted range here: 1..1024)
         max_batch_size=192
     */
     const std::string mode = _pt.get<std::string>("ethereum.mode", "none");
@@ -1091,10 +1092,16 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         _pt.get<std::string>("ethereum.bootnodes_file", "./bootnodes.json");
     m_ethereumNodeKeyFile = _pt.get<std::string>("ethereum.node_key_file", "");
     uint32_t maxBatch = _pt.get<uint32_t>("ethereum.max_batch_size", 192);
-    if (maxBatch == 0)
+    // This value will size RLPx GetBlockHeaders/GetBlockBodies requests once
+    // the downloader lands. geth caps a single request at MaxHeaderFetch=192 /
+    // MaxBodyFetch=128 and peers drop oversized requests, so bound the knob
+    // now (while the config surface is unreleased) rather than as a later
+    // config-compatibility change.
+    if (maxBatch == 0 || maxBatch > 1024)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("ethereum.max_batch_size must be > 0"));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.max_batch_size must be in [1, 1024], got " +
+                                  std::to_string(maxBatch)));
     }
     m_ethereumMaxBatchSize = maxBatch;
 

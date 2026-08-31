@@ -114,17 +114,21 @@ BOOST_AUTO_TEST_CASE(SecondStartupChangedChainModeAborts)
 
         BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, config, param));
 
-        // flip off feature_l2_ethereum_compat but keep allocs so the guard
-        // (allocs non-empty) still fires. NodeConfig would reject this upstream
-        // (validateL2Invariants requires the two to agree); Ledger defends anyway.
+        // flip off feature_l2_ethereum_compat but keep allocs so the alloc
+        // guard (stateRoot) still has something to compare. NodeConfig would
+        // reject this upstream (validateL2Invariants requires the two to
+        // agree); Ledger defends anyway — on the RESTART path via the
+        // genesis-pin comparison: the feature-flags gate is first-init only
+        // (it compares against a binary-derived expected set, which must not
+        // be able to strand an initialized chain after an upgrade), while the
+        // pin/stateRoot comparisons cover every config drift on restart.
         auto changed = config;
         changed.m_features.clear();
 
         BOOST_CHECK_EXCEPTION(
             co_await ledger::buildGenesisBlock(*ledger, changed, param), bcos::tool::InvalidConfig,
             [](auto const& e) {
-                return errinfoContains(
-                    e, "feature_flags slot in the genesis allocs does not match");
+                return errinfoContains(e, "Genesis Data is inconsistent");
             });
     }());
 }

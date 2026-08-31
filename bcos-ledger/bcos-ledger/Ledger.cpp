@@ -1841,13 +1841,16 @@ static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
 
 // Verify the L2 SystemConfig feature_flags alloc slot against this node's
 // feature set. Called from TWO places: buildGenesisBlock runs it with the
-// purely-computed expected feature set right after computeGenesisStateTrie —
-// before ANY genesis write, so a mismatching config cannot leave B0 committed
-// under a state root no alloc rows back (the datadir stays untouched and a
-// config fix is a plain retry); importGenesisState re-runs it with the
-// persisted feature set before the first ACCOUNT-row write (genesis import is
-// not transactional, and asyncCreateTable is not idempotent). Hex itself is
-// accepted by computeGenesisStateTrie; this compares VALUES.
+// purely-computed expected feature set on the FIRST-INIT path (after the
+// genesis-exists early return) — before ANY genesis write, so a mismatching
+// config cannot leave B0 committed under a state root no alloc rows back (the
+// datadir stays untouched and a config fix is a plain retry); on restart the
+// pinned stateRoot comparison is the guard instead, so a binary-side Features
+// enum/default change can never strand an initialized chain here.
+// importGenesisState re-runs it with the persisted feature set before the
+// first ACCOUNT-row write (genesis import is not transactional, and
+// asyncCreateTable is not idempotent). Hex itself is accepted by
+// computeGenesisStateTrie; this compares VALUES.
 static void verifyL2FeatureFlagsSlot(
     ::ranges::input_range auto const& allocs, Features const& features)
 {
@@ -2130,34 +2133,6 @@ bool Ledger::buildGenesisBlock(
         if (!genesis.m_allocs.empty())
         {
             ethStateTrie = co_await computeGenesisStateTrie(genesis);
-            // Verify the L2 SystemConfig feature_flags alloc slot NOW — before ANY
-            // genesis write (the first is the asyncCreateTable loop far below).
-            // A mismatch surfacing after prewriteBlockToStorage would leave B0
-            // committed under a state root no alloc rows back: the restart guard
-            // (genesis exists, pin matches, stateRoot matches) would then pass on
-            // an empty world state, block 1 would die on a missing trie node, and
-            // the datadir would be unrecoverable without a wipe. The expected
-            // feature set is computed purely here — version defaults + the rpbft
-            // auto-flag + [features] — identical to what the write side persists
-            // below; the importGenesisState-internal re-check compares against
-            // what was actually persisted.
-            Features expectedFeatures;
-            expectedFeatures.setGenesisFeatures(
-                protocol::BlockVersion(genesis.m_compatibilityVersion));
-            if (RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
-                genesis.m_compatibilityVersion >=
-                    static_cast<uint32_t>(protocol::BlockVersion::V3_5_VERSION))
-            {
-                expectedFeatures.set(ledger::Features::Flag::feature_rpbft);
-            }
-            for (auto const& featureSet : genesis.m_features)
-            {
-                if (featureSet.enable > 0)
-                {
-                    expectedFeatures.set(featureSet.flag);
-                }
-            }
-            verifyL2FeatureFlagsSlot(genesis.m_allocs, expectedFeatures);
         }
         if (genesisBlockHash)
         {
@@ -2277,6 +2252,48 @@ bool Ledger::buildGenesisBlock(
             {
                 LEDGER_LOG(INFO) << "failed, initialGenesisDate is null";
             }
+        }
+
+        // First-init path only (a restart either returned true above or threw
+        // on the pin/stateRoot guards): verify the L2 SystemConfig
+        // feature_flags alloc slot NOW — before ANY genesis write (the first
+        // is the asyncCreateTable loop far below). A mismatch surfacing after
+        // prewriteBlockToStorage would leave B0 committed under a state root
+        // no alloc rows back: the next start would then pass the restart
+        // guards on an empty world state, block 1 would die on a missing trie
+        // node, and the datadir would be unrecoverable without a wipe. The
+        // expected feature set is computed purely here — version defaults +
+        // the rpbft auto-flag + [features] — identical to what the write side
+        // persists below; the importGenesisState-internal re-check compares
+        // against what was actually persisted.
+        //
+        // This must NOT run on the restart path: the stateRoot comparison
+        // above already refuses to start on any alloc drift (the slot value
+        // is part of the trie), while expectedFeatures derives from this
+        // binary's Features enum and version defaults — re-checking it on
+        // every start would let a future release that changes the enum or a
+        // genesis default strand an initialized chain with an unactionable
+        // "regenerate the allocs" error (the allocs are pinned by B0's
+        // stateRoot and cannot be regenerated for a live chain).
+        if (!genesis.m_allocs.empty())
+        {
+            Features expectedFeatures;
+            expectedFeatures.setGenesisFeatures(
+                protocol::BlockVersion(genesis.m_compatibilityVersion));
+            if (RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
+                genesis.m_compatibilityVersion >=
+                    static_cast<uint32_t>(protocol::BlockVersion::V3_5_VERSION))
+            {
+                expectedFeatures.set(ledger::Features::Flag::feature_rpbft);
+            }
+            for (auto const& featureSet : genesis.m_features)
+            {
+                if (featureSet.enable > 0)
+                {
+                    expectedFeatures.set(featureSet.flag);
+                }
+            }
+            verifyL2FeatureFlagsSlot(genesis.m_allocs, expectedFeatures);
         }
 
         auto versionNumber = genesis.m_compatibilityVersion;
