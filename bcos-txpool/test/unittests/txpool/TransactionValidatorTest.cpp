@@ -261,7 +261,9 @@ BOOST_AUTO_TEST_CASE(testValidateChainIdTypedAdmitAndUnsupported)
             codec_rlp::encode(items, static_cast<uint64_t>(38));  // v: chainId 1, parity 1
             items.push_back(0xa0);                                // 32-byte r
             items.insert(items.end(), 32, 0x11);
-            items.push_back(0xa0);  // 32-byte s
+            items[items.size() - 32] = 0xc1;  // first payload byte >= 0xc0: a list header if the
+                                              // emptySeen walk starts mid-r (pre-fix)
+            items.push_back(0xa0);            // 32-byte s
             items.insert(items.end(), 32, 0x22);
             bcos::bytes wire;
             codec_rlp::encodeHeader(wire, {.isList = true, .payloadLength = items.size()});

@@ -197,6 +197,16 @@ BOOST_AUTO_TEST_CASE(sealedFullFormRealWidthSignatureIsProtected)
     BOOST_CHECK_EQUAL(result.chainId, 1U);
 }
 
+// R4 #1: bytes AFTER the outer RLP list — the typed arm rejects the same shape
+// (`!cursor.empty()`) and reassembleWeb3RawTransaction rejects it; the legacy arm must
+// classify Malformed too instead of ignoring the tail (poisoning-window parity).
+BOOST_AUTO_TEST_CASE(junkAfterOuterListIsMalformed)
+{
+    auto env = legacyEnvelope(concat(sixFields(), concat(item(37), concat(item(1), item(1)))));
+    env.push_back(0xde);  // junk outside the list
+    BOOST_CHECK(classify(env) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
+}
+
 // R3 #2: the S6 exactly-one-empty rule pinned at real signature width — 32-byte r with an
 // EMPTY s must classify Malformed, not ride the Protected band because the walk parsed
 // r's interior and never saw the empty item.

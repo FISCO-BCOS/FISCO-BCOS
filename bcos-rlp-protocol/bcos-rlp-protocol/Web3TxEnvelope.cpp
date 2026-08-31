@@ -96,6 +96,14 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     {
         return malformed();
     }
+    // The outer list must be the LAST thing in the envelope — the typed arm rejects the
+    // same shape with `!cursor.empty()` (post-list junk), and reassembleWeb3RawTransaction
+    // rejects it too; a legacy envelope with bytes after the list would otherwise classify
+    // Protected and pass admission gates that decode() later refuses (poisoning window).
+    if (cursor.size() != header.payloadLength) [[unlikely]]
+    {
+        return malformed();
+    }
     bcos::bytesRef walker(cursor.data(), header.payloadLength);
     for (int i = 0; i < 6; ++i)
     {
