@@ -318,6 +318,34 @@ BOOST_AUTO_TEST_CASE(typedMinimalEnvelopeClassifyChainId)
     BOOST_CHECK_EQUAL(classified.chainId, 999U);
 }
 
+// Legacy sealed withSig=false must use the same canonical r/s funnel as the withSig sibling.
+BOOST_AUTO_TEST_CASE(legacySealedLeadingZeroRRejected)
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0x1111111111111111111111111111111111111111"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, static_cast<uint64_t>(37));
+    items.push_back(0x82);
+    items.push_back(0x00);
+    items.push_back(0x01);
+    rlp::encode(items, bcos::bytes(32, 0x02));
+
+    bcos::bytes envelope;
+    rlp::encodeHeader(envelope, rlp::Header{.isList = true, .payloadLength = items.size()});
+    envelope.insert(envelope.end(), items.begin(), items.end());
+
+    auto cursor = bcos::ref(envelope);
+    Web3Transaction tx{};
+    auto err = codec::rlp::decodeFromPayload(cursor, tx);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK_EQUAL(err->errorCode(), static_cast<int>(rlp::DecodingError::NonCanonicalSize));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::test

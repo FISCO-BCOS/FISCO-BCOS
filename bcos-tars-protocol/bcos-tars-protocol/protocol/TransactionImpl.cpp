@@ -381,8 +381,7 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
         // forgeable web3TypedTxKind mirror (tars field 12): a peer can rewrite that mirror to
         // 0x7e on a signed Web3 tx, which would route the hash to this unsigned-deposit form
         // and skip reassembleWeb3RawTransaction — defeating the "never believe the wire hash"
-        // defense (kyonRay R4 #1). The mirror is display-only; security decisions key on the
-        // envelope. isDepositTx() itself must stay mirror-keyed for display/RPC classification.
+        // defense (kyonRay R4 #1). isDepositTx() uses the same envelope byte.
         auto const extraBytes = extraTransactionBytes();
         bool const isDepositEnvelope =
             (!extraBytes.empty() && extraBytes[0] == static_cast<bcos::byte>(kDepositTxType));
@@ -618,12 +617,15 @@ bcos::u256 bcostars::protocol::TransactionImpl::mint() const
 
 bool bcostars::protocol::TransactionImpl::isDepositTx() const
 {
-    // Use web3TypedTxKind() == 0x7e, NOT isSystemTransaction: isSystemTransaction is a
-    // per-transaction flag, so a non-system deposit (isSystemTx=false, the vast majority) would
-    // be misclassified.
-    // Also use the accessor (not the raw tars field): it returns 0 unless type()==Web3Transaction,
-    // so a forged BCOS tx (type=0, web3TypedTxKind=0x7e) is never treated as a deposit.
-    return web3TypedTxKind() == kDepositTxType;
+    // Envelope first byte, not the forgeable web3TypedTxKind mirror and not
+    // isSystemTransaction (a per-tx flag; non-system deposits must still classify).
+    // type()!=Web3 rejects a forged BCOS tx that only rewrites the kind field.
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        return false;
+    }
+    auto const extra = extraTransactionBytes();
+    return !extra.empty() && extra[0] == kDepositTxType;
 }
 
 bool bcostars::protocol::TransactionImpl::depositIsSystemTransaction() const

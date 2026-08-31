@@ -198,21 +198,21 @@ BOOST_AUTO_TEST_CASE(DecreaseWithUnitDenominatorReachesZero)
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(0));
 }
 
-BOOST_AUTO_TEST_CASE(InvalidFeeParametersFailClosed)
+BOOST_AUTO_TEST_CASE(ZeroFeeParametersUseHoloceneDefaults)
 {
     auto zeroDenominator = holoceneParams();
     std::fill(zeroDenominator.begin() + 1, zeroDenominator.begin() + 5, 0);
     auto const denominatorParent = makeParent(bcos::u256(30'000'000), bcos::u256(20'000'000),
         bcos::u256(1'000'000'000), std::move(zeroDenominator));
-    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(denominatorParent, false); },
-        "zero denominator/elasticity");
+    BOOST_CHECK_EQUAL(
+        bcos::engine::calcOpBaseFee(denominatorParent, false), bcos::u256(1'041'666'666));
 
     auto zeroElasticity = holoceneParams();
     std::fill(zeroElasticity.begin() + 5, zeroElasticity.end(), 0);
     auto const elasticityParent = makeParent(bcos::u256(30'000'000), bcos::u256(20'000'000),
         bcos::u256(1'000'000'000), std::move(zeroElasticity));
-    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(elasticityParent, false); },
-        "zero denominator/elasticity");
+    BOOST_CHECK_EQUAL(
+        bcos::engine::calcOpBaseFee(elasticityParent, false), bcos::u256(1'041'666'666));
 
     auto const zeroTargetParent =
         makeParent(bcos::u256(1), bcos::u256(1), bcos::u256(1'000'000'000), holoceneParams());

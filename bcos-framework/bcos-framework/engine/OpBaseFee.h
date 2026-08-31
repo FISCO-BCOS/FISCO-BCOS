@@ -54,7 +54,10 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
     }
     if (denominator == 0 || elasticity == 0) [[unlikely]]
     {
-        throw std::invalid_argument("invalid OP base-fee parameters: zero denominator/elasticity");
+        // Unset 1559 params: same Holocene defaults (8/2) as a short extraData tail.
+        // Zero gas target below remains an arithmetic precondition.
+        denominator = 8;
+        elasticity = 2;
     }
 
     // Jovian minBaseFee — requires exactly the engine's stamped/validated Jovian layout

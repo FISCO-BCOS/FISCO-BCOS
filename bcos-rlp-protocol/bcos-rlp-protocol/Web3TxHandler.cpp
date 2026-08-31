@@ -310,15 +310,19 @@ struct LegacyTxHandler : Web3TxHandler
             {
                 // Empty r/s => preimage (chainId, 0, 0); otherwise sealed (v, r, s).
                 uint64_t item7 = 0;
-                bcos::bytesRef item8;
-                bcos::bytesRef item9;
+                bcos::bytes item8;
+                bcos::bytes item9;
                 // Canonical trailer scalar.
                 if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, item7);
                     decodeError != nullptr)
                 {
                     return decodeError;
                 }
-                if (decodeError = codec::rlp::decodeItems(in, item8, item9); decodeError != nullptr)
+                if (decodeError = decodeCanonicalSignatureBytes(in, item8); decodeError != nullptr)
+                {
+                    return decodeError;
+                }
+                if (decodeError = decodeCanonicalSignatureBytes(in, item9); decodeError != nullptr)
                 {
                     return decodeError;
                 }
@@ -347,8 +351,8 @@ struct LegacyTxHandler : Web3TxHandler
                         normalizedV = (item7 - 35) & 1;
                     }
                     out.signatureV = normalizedV;
-                    out.signatureR = bcos::bytes(item8.begin(), item8.end());
-                    out.signatureS = bcos::bytes(item9.begin(), item9.end());
+                    out.signatureR = std::move(item8);
+                    out.signatureS = std::move(item9);
                     // Pad on adoption too: a minimal-width RLP item
                     // (leading-zero r/s) stored trimmed would flow into sender()'s 65-byte
                     // r||s||v recovery input as 64 bytes and break it. padSignature is

@@ -1,6 +1,7 @@
 #include "../mock/MockLedger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Exceptions.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-table/src/StateStorage.h"
@@ -189,6 +190,34 @@ BOOST_AUTO_TEST_CASE(upgradeVersion)
         codec.decode(bcos::ref(result->execResult()), value);
         BOOST_CHECK_EQUAL(value, "1");
     }());
+}
+
+BOOST_AUTO_TEST_CASE(web3ChainIdSharesParseWeb3ChainId)
+{
+    SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
+    std::shared_ptr<LedgerCache> v39LedgerCache =
+        std::make_shared<LedgerCache>(std::make_shared<bcos::test::MockLedger>());
+    std::shared_ptr<BlockContext> v39Context =
+        std::make_shared<BlockContext>(stateStorage, v39LedgerCache, hashImpl, 0, h256(), utcTime(),
+            static_cast<uint32_t>(protocol::BlockVersion::V3_9_0_VERSION), false, backendStorage);
+    auto v39Executive = std::make_shared<MockTransactionExecutive>(*v39Context, "", 100, 0);
+    v39Executive->setStorageWrapper();
+
+    CodecWrapper codec(hashImpl);
+    auto setParameters = std::make_shared<PrecompiledExecResult>();
+    auto trySet = [&](std::string const& value) {
+        auto setInput = codec.encodeWithSig(
+            "setValueByKey(string,string)", std::string(SYSTEM_KEY_WEB3_CHAIN_ID), value);
+        setParameters->m_input = bcos::ref(setInput);
+        return systemConfigPrecompiled.call(v39Executive, setParameters);
+    };
+
+    BOOST_CHECK_NO_THROW(trySet("1337"));
+    BOOST_CHECK_NO_THROW(trySet("0x539"));
+    BOOST_CHECK_THROW(trySet("-5"), PrecompiledError);
+    BOOST_CHECK_THROW(trySet("-0"), PrecompiledError);
+    BOOST_CHECK_THROW(trySet("not-a-number"), PrecompiledError);
+    BOOST_CHECK_THROW(trySet("4294967296"), PrecompiledError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

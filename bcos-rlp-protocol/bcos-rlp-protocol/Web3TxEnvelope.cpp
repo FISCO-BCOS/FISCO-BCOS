@@ -160,8 +160,19 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
             return false;
         }
         auto [field9Error, field9Header] = bcos::codec::rlp::decodeHeader(tailProbe);
-        return field9Error == nullptr && !field9Header.isList && field9Header.payloadLength == 0 &&
-               isLegacyPreimageTail(0, true, true);
+        if (field9Error != nullptr || field9Header.isList || field9Header.payloadLength != 0)
+        {
+            return false;
+        }
+        uint64_t field7 = 0;
+        bcos::bytesRef field7Cursor = field7Item;
+        if (auto field7Error = decodeCanonicalRlpUint(field7Cursor, field7); field7Error != nullptr)
+        {
+            return false;
+        }
+        bool const field8Empty = field8Header.payloadLength == 0;
+        bool const field9Empty = field9Header.payloadLength == 0;
+        return isLegacyPreimageTail(field7, field8Empty, field9Empty);
     }();
     if (!isPreimageTail)
     {

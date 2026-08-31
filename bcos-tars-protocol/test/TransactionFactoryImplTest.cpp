@@ -321,6 +321,7 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     auto& inner = tx->mutableInner();
     inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     inner.web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    inner.extraTransactionBytes = {static_cast<char>(0x7e)};
     // hex without 0x prefix, matching Web3Transaction::takeToTarsTransaction (h256::hex())
     inner.sourceHash = "6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7";
     // "0x"+hex, matching takeToTarsTransaction (mint() parses via bcos::u256)
@@ -335,11 +336,12 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     BOOST_CHECK(tx->size() >= inner.sourceHash.size() + inner.mint.size());
 
     // A non-system deposit (isSystemTx=false) must still be a deposit: isDepositTx() keys off
-    // web3TypedTxKind(), never off the per-transaction isSystemTransaction flag.
+    // the envelope's first byte, never off the per-transaction isSystemTransaction flag.
     auto nonSystemDeposit = std::make_shared<TransactionImpl>();
     nonSystemDeposit->mutableInner().type =
         static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     nonSystemDeposit->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    nonSystemDeposit->mutableInner().extraTransactionBytes = {static_cast<char>(0x7e)};
     nonSystemDeposit->mutableInner().isSystemTransaction = 0;
     BOOST_CHECK(nonSystemDeposit->isDepositTx());
 
@@ -348,6 +350,7 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     noMint->mutableInner().type =
         static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     noMint->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    noMint->mutableInner().extraTransactionBytes = {static_cast<char>(0x7e)};
     BOOST_CHECK(noMint->isDepositTx());
     BOOST_CHECK_EQUAL(noMint->mint(), u256(0));
     BOOST_CHECK(noMint->sourceHash().empty());
@@ -359,6 +362,7 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     wideMint->mutableInner().type =
         static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     wideMint->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    wideMint->mutableInner().extraTransactionBytes = {static_cast<char>(0x7e)};
     wideMint->mutableInner().mint = std::string(65, 'a');  // 65 hex digits, no prefix
     BOOST_CHECK(wideMint->isDepositTx());
     BOOST_CHECK_EQUAL(wideMint->mint(), u256(0));
@@ -368,6 +372,7 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     maxMint->mutableInner().type =
         static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     maxMint->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    maxMint->mutableInner().extraTransactionBytes = {static_cast<char>(0x7e)};
     maxMint->mutableInner().mint = "0x" + std::string(64, 'f');  // exactly 256-bit
     BOOST_CHECK(maxMint->isDepositTx());
     BOOST_CHECK(maxMint->mint() != u256(0));
@@ -859,6 +864,25 @@ BOOST_AUTO_TEST_CASE(calculateHashIgnoresForgeableDepositKindMirror)
     auto const expect = bcos::crypto::keccak256Hash(bcos::ref(raw));
     BOOST_CHECK(tx->hash() == expect);
     BOOST_CHECK(tx->hash() != bcos::crypto::keccak256Hash(bcos::ref(env)));
+    BOOST_CHECK(!tx->isDepositTx());
+}
+
+// isDepositTx() keys on extraBytes[0]==0x7e, never the forgeable kind mirror.
+BOOST_AUTO_TEST_CASE(isDepositTxKeysOnEnvelopeByte)
+{
+    auto forgedKind = std::make_shared<TransactionImpl>();
+    forgedKind->mutableInner().type =
+        static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    forgedKind->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    forgedKind->mutableInner().extraTransactionBytes = {static_cast<char>(0x02)};
+    BOOST_CHECK(!forgedKind->isDepositTx());
+
+    auto genuineEnvelope = std::make_shared<TransactionImpl>();
+    genuineEnvelope->mutableInner().type =
+        static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    genuineEnvelope->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x02);
+    genuineEnvelope->mutableInner().extraTransactionBytes = {static_cast<char>(0x7e)};
+    BOOST_CHECK(genuineEnvelope->isDepositTx());
 }
 
 
