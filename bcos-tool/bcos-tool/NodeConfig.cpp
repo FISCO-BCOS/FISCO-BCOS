@@ -3113,13 +3113,30 @@ std::string bcos::tool::generateGenesisData(
                       genesisConfig.m_evmcRevision, genesisConfig.m_evmcRevisionForks)
                << '\n';
         }
+        if (genesisConfig.m_compatibilityVersion >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
+        {
+            ss << "epochSealerNum:" << genesisConfig.m_epochSealerNum << '\n'
+               << "epochBlockNum:" << genesisConfig.m_epochBlockNum << '\n';
+        }
+        if (!genesisConfig.m_features.empty())  // TODO: Need version check?
+        {
+            ss << "[features]" << '\n';
+            for (const auto& feature : genesisConfig.m_features)
+            {
+                ss << feature.flag << ":" << feature.enable << '\n';
+            }
+        }
         // The EL-mode fork schedule's REQUIRED ladder drives the EVM revision in EL
         // mode, so it is part of the genesis pin for the same reason evmRevision is.
         // Emitted only when present (mirroring the [ethGenesisHeader] pattern) so every
         // legacy chain's genesis string stays byte-identical. The chain-level EL-mode
         // declaration ([ethereum] mode=el) precedes it, so a node whose genesis
         // declares EL mode but is missing the schedule fails the genesis comparison
-        // instead of silently running a different EVM schedule.
+        // instead of silently running a different EVM schedule. Emitted AFTER the
+        // [executor]-owned keys (epochSealerNum/epochBlockNum, [features]) so those
+        // no-section-header keys keep following [executor] on every chain instead of
+        // being split off under [forkTimestamps] on an EL chain.
         if (genesisConfig.m_ethereumELMode)
         {
             // The EIP-155 / EIP-2124 chain id is validated as part of the EL
@@ -3148,20 +3165,6 @@ std::string bcos::tool::generateGenesisData(
                << "shanghai_time:" << schedule.m_shanghaiTime << '\n'
                << "cancun_time:" << schedule.m_cancunTime << '\n'
                << "prague_time:" << schedule.m_pragueTime << '\n';
-        }
-        if (genesisConfig.m_compatibilityVersion >=
-            (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
-        {
-            ss << "epochSealerNum:" << genesisConfig.m_epochSealerNum << '\n'
-               << "epochBlockNum:" << genesisConfig.m_epochBlockNum << '\n';
-        }
-        if (!genesisConfig.m_features.empty())  // TODO: Need version check?
-        {
-            ss << "[features]" << '\n';
-            for (const auto& feature : genesisConfig.m_features)
-            {
-                ss << feature.flag << ":" << feature.enable << '\n';
-            }
         }
         // A3: the eth genesis header is part of the genesis pin. Emitted only
         // when present, so every legacy chain's genesis string stays

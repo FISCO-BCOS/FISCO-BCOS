@@ -602,9 +602,9 @@ private:
     // (london..prague) is part of the genesis pin, while the post-Prague tail
     // (osaka/bpo1/bpo2) is deliberately not pinned — those forks activate after
     // genesis and must stay configurable (EIP-2124 fork-id handshake catches
-    // divergence). The ethereumFork*Time() getters below forward to it (0 when
-    // unset for the pre-Prague forks, UINT64_MAX — "not yet active" — for
-    // osaka/bpo1/bpo2).
+    // divergence). The ethereumFork*Time() getters declared above forward to it;
+    // an absent schedule reads as UINT64_MAX ("not active") for every fork —
+    // never 0 (0 is the "active from genesis" sentinel).
 
     // config for cert
     std::string m_certPath;

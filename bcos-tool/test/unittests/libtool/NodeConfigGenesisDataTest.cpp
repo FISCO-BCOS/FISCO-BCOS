@@ -386,6 +386,13 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     // The EL chain id is part of the pin too.
     BOOST_CHECK(data.find("[web3]") != std::string::npos);
     BOOST_CHECK(data.find("chain_id:1") != std::string::npos);
+    // Section layout: the EL-gated [ethereum]/[web3]/[forkTimestamps] blocks are
+    // emitted AFTER the [executor]-owned keys (epochSealerNum/epochBlockNum carry no
+    // section header), so those keys keep following [executor] on EL chains too
+    // instead of being split off under [forkTimestamps].
+    BOOST_CHECK(data.find("epochSealerNum:") != std::string::npos);
+    BOOST_CHECK(data.find("epochSealerNum:") < data.find("[forkTimestamps]"));
+    BOOST_CHECK(data.find("[forkTimestamps]") < data.find("node.0"));
 
     // A node with a different schedule produces different genesis data.
     NodeConfig cfg2(keyFactory);
