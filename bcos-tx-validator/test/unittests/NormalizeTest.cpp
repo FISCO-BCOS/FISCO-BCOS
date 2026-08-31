@@ -201,6 +201,55 @@ BOOST_AUTO_TEST_CASE(forgedAttributeIsZeroed)
     BOOST_CHECK_EQUAL(tx->inner().attribute, 0);
 }
 
+// The rest of the unsigned surface, in one case. attribute above has execution consequences and
+// earns its own test; these do not individually, but together they are the whole argument for
+// moving the `data` sub-struct wholesale instead of assigning field by field -- the fields a
+// Web3 envelope never carries have to come back as defaults, and nothing else pins that. A later
+// "optimisation" into field-by-field assignment would leave every one of them standing, which is
+// exactly how #5364 happened.
+BOOST_AUTO_TEST_CASE(unsignedLeftoverFieldsAreAllReset)
+{
+    auto tx = makeSignedTx(kRaw1559);
+    auto& inner = tx->mutableInner();
+
+    // Outer fields, cleared explicitly by the commit step.
+    inner.extraData = "leftover";
+    inner.dataHash.assign(32, 0x11);
+    inner.sourceHash = "0xdeadbeef";
+    inner.mint = "1000000";
+    inner.isSystemTransaction = 1;
+
+    // TransactionData fields a Web3 envelope has no slot for: these are reset only as a
+    // consequence of replacing the whole sub-struct.
+    inner.data.groupID = "forged-group";
+    inner.data.blockLimit = 12345;
+    inner.data.abi = "[{\"forged\":true}]";
+    inner.data.extension.assign(8, 0x22);
+    inner.data.version = 7;
+    inner.data.maxFeePerBlobGas = "999";
+    // Carried only for legacy/2930 envelopes; kRaw1559 writes maxFeePerGas instead.
+    inner.data.gasPrice = "0xdeadbeef";
+    inner.data.blobVersionedHashes.emplace_back(32, 0x33);
+
+    BOOST_CHECK(normalize(*tx) == TransactionStatus::None);
+
+    auto const& out = tx->inner();
+    BOOST_CHECK(out.extraData.empty());
+    BOOST_CHECK(out.dataHash.empty());
+    BOOST_CHECK(out.sourceHash.empty());
+    BOOST_CHECK(out.mint.empty());
+    BOOST_CHECK_EQUAL(out.isSystemTransaction, 0);
+
+    BOOST_CHECK(out.data.groupID.empty());
+    BOOST_CHECK_EQUAL(out.data.blockLimit, 0);
+    BOOST_CHECK(out.data.abi.empty());
+    BOOST_CHECK(out.data.extension.empty());
+    BOOST_CHECK_EQUAL(out.data.version, 0);
+    BOOST_CHECK(out.data.maxFeePerBlobGas.empty());
+    BOOST_CHECK(out.data.gasPrice.empty());
+    BOOST_CHECK(out.data.blobVersionedHashes.empty());
+}
+
 // ---------------------------------------------------------------- hash commitment
 
 BOOST_AUTO_TEST_CASE(forgedWireHashIsRejected)

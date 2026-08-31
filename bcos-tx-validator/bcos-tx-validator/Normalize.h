@@ -75,11 +75,32 @@ namespace bcos::txvalidator
 /// matters: a half-normalized transaction whose mirror was overwritten but whose hash check then
 /// failed would otherwise be handed back to a caller holding only a status code.
 ///
-/// CALL ORDERING (P2P)
+/// WHERE TO CALL IT
 ///
-/// On the sync path this must run BEFORE Transaction::clearSenderAndHash(), which zeroes
-/// extraTransactionHash. Run afterwards, step 4 compares against an empty value and always
-/// passes -- and P2P is the only attack surface for a forged hash.
+/// On the untrusted ingress -- the peer-response path in bcos-txpool's TransactionSync -- and
+/// before ANY read of tx->hash() there, because for a Web3 transaction TransactionImpl::hash()
+/// returns the peer-supplied extraTransactionHash verbatim. There are two such reads, in this
+/// order:
+///
+///   1. verifyFetchedTxs, `expectedHash != tx->hash()` -- the gate that checks the peer sent
+///      the transactions we asked for.
+///   2. importDownloadedTxs, `m_config->txpoolStorage()->exists(tx->hash())` -- the dedup
+///      lookup, nine lines above the clearSenderAndHash() that drops the wire hash.
+///
+/// So the call site is in verifyFetchedTxs, ahead of (1) -- not inside importDownloadedTxs,
+/// which would still let a forged hash through (1). Naming clearSenderAndHash() as the
+/// constraint is likewise not enough: normalize() placed between (2) and it satisfies "before
+/// clearSenderAndHash" while (2) still keys on a hash the peer chose. Once clearSenderAndHash()
+/// has run there is nothing left for step 4 to compare against.
+///
+/// importDownloadedTxs is also reached from onGetMissedTxsFromLedger, where the transactions
+/// come from the local ledger and none of this applies.
+///
+/// Not on the RPC ingress. There the tars mirror was built by takeToTarsTransaction() from
+/// these exact envelope bytes inside the same call, so steps 3-5 provably reproduce what is
+/// already in the struct -- a second RLP decode, a second keccak256 and a full re-projection
+/// for a no-op. The forgery this defends against needs an attacker who can hand over a mirror
+/// and an envelope that disagree, which the RPC path does not let anyone do.
 ///
 /// @return None on success. Otherwise the transaction is unchanged.
 protocol::TransactionStatus normalize(protocol::Transaction& tx);

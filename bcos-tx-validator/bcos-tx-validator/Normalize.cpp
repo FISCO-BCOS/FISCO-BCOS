@@ -126,13 +126,27 @@ TransactionStatus normalize(Transaction& tx)
     {
         // Web3 normalization needs the tars mirror; without it there is nothing to reconcile
         // the signed envelope against, so fail closed rather than admit an unchecked mirror.
+        //
+        // The only branch here that logs, and the only one that is not about the input: every
+        // other rejection returns a distinct status the caller reports. This one means some
+        // caller is passing a Transaction implementation this module cannot read, which would
+        // otherwise present as every transaction failing as Malformed with nothing to debug.
+        BCOS_LOG(WARNING) << LOG_BADGE("TXVALIDATOR")
+                          << LOG_DESC("normalize() got a non-tars Transaction; wiring error");
         return TransactionStatus::Malformed;
     }
     auto const wireHash = impl->inner().extraTransactionHash;
 
     // Step 3 -- decode the envelope. This is the authoritative content of the transaction.
+    // Decoded from a COPY, not through a const_cast over tx.extraTransactionBytes(). That
+    // buffer is the only thing the signature covers, and decodeFromPayload takes a mutable
+    // bytesRef because decodeHeader crops the header off the cursor as it parses --
+    // reassembleWeb3RawTransaction copies for the same reason and says so. The copy is paid for
+    // again inside canonicalHash() on the next line; this adds one buffer, not a new order of
+    // cost.
     rpc::Web3Transaction decoded;
-    auto payloadRef = bcos::bytesRef(const_cast<bcos::byte*>(payload.data()), payload.size());
+    bcos::bytes preimage(payload.begin(), payload.end());
+    auto payloadRef = bcos::bytesRef(preimage.data(), preimage.size());
     if (auto error = codec::rlp::decodeFromPayload(payloadRef, decoded); error != nullptr)
         [[unlikely]]
     {
