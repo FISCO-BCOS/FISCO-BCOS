@@ -162,8 +162,14 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         {
             return false;  // no 0,0 placeholders — treat as full form (or malformed)
         }
+        // Emptiness is computed once as the full predicate and doubles as the guard, so
+        // the values handed to the shared discriminator are the real decoded results —
+        // never a tautology re-derived after a guard that already proved them (Codacy:
+        // 'field9Header.payloadLength == 0 is always true').
         auto [field8Error, field8Header] = bcos::codec::rlp::decodeHeader(tailProbe);
-        if (field8Error != nullptr || field8Header.isList || field8Header.payloadLength != 0)
+        bool const field8Empty =
+            field8Error == nullptr && !field8Header.isList && field8Header.payloadLength == 0;
+        if (!field8Empty)
         {
             return false;
         }
@@ -172,7 +178,9 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
             return false;
         }
         auto [field9Error, field9Header] = bcos::codec::rlp::decodeHeader(tailProbe);
-        if (field9Error != nullptr || field9Header.isList || field9Header.payloadLength != 0)
+        bool const field9Empty =
+            field9Error == nullptr && !field9Header.isList && field9Header.payloadLength == 0;
+        if (!field9Empty)
         {
             return false;
         }
@@ -182,8 +190,6 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         {
             return false;
         }
-        bool const field8Empty = field8Header.payloadLength == 0;
-        bool const field9Empty = field9Header.payloadLength == 0;
         return isLegacyPreimageTail(field7, field8Empty, field9Empty);
     }();
     if (!isPreimageTail)
