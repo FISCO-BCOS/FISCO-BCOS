@@ -7,7 +7,7 @@
 // applyDiff on an unauthenticated RPC path. This test drives the public executeTransaction with
 // call=true over a real MemoryStorage and asserts the storage is unmodified afterwards.
 
-#include "OpTestReceiptFactory.h"
+#include <bcos-evm/test/opstack/OpTestReceiptFactory.h>
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/ledger/LedgerConfig.h>

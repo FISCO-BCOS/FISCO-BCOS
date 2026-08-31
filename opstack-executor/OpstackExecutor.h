@@ -18,7 +18,7 @@
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-task/TBBWait.h"
-#include "ethereum-executor/EVMSupport.h"  // eth::evm::toIntxU256
+#include "ethereum-executor/EVMSupport.h"
 #include "opstack-executor/OpCommon.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
 #include "opstack-executor/OpDepositEncode.h"  // detail::encodeRlpItem (call-path sizing envelope)
 #include "opstack-executor/Storage2State.h"    // Storage2State / SharedErrorSlot
@@ -30,8 +30,10 @@
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <evmc/evmc.hpp>
+#include <intx/intx.hpp>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -50,10 +52,15 @@ evmone::state::StateDiff finalizeOpBlock(
 
 namespace bcos::executor_v1::eth
 {
-// toIntxU256 lives in bcos::executor_v1::eth::evm (EVMSupport.h); re-import so
-// toEvmoneTransaction's unqualified calls resolve (the deleted StorageStateView.h previously
-// carried a bcos::executor_v1::eth copy).
-using evm::toIntxU256;
+/// Convert bcos::u256 to intx::uint256 for the evmone::state (bcos-evm) types this executor
+/// still drives. ethereum-executor's own arithmetic and interfaces no longer use intx, so the
+/// bridge lives here with its only consumer and retires together with the bcos-evm dependency.
+inline intx::uint256 toIntxU256(bcos::u256 const& val)
+{
+    std::array<bcos::byte, 32> be{};
+    bcos::toBigEndian(val, be);  // writes 32 big-endian bytes, no allocation.
+    return intx::be::unsafe::load<intx::uint256>(be.data());
+}
 
 /// Convert a FISCO `protocol::Transaction` into the evmone `state::Transaction` the OP executor
 /// feeds to the VM. Moved from BCOS2Evmone (the only consumer is OpstackExecutor's transaction
@@ -454,7 +461,7 @@ namespace engine = bcos::evm::engine;
         bcos::u256 envValue{};
         if (auto e = rlp::decode(*valueItem, envValue); e != nullptr)
             return "value decode failed";
-        if (eth::evm::toIntxU256(envValue) != evmTx.value)
+        if (eth::toIntxU256(envValue) != evmTx.value)
             return "value mismatch";
     }
     // data
@@ -714,9 +721,9 @@ public:
         fail("deposit envelope: trailing bytes inside the RLP list");
 
     dep.mint = mint.has_value() ?
-                   std::optional<intx::uint256>{bcos::executor_v1::eth::evm::toIntxU256(*mint)} :
+                   std::optional<intx::uint256>{bcos::executor_v1::eth::toIntxU256(*mint)} :
                    std::nullopt;
-    dep.value = bcos::executor_v1::eth::evm::toIntxU256(value);
+    dep.value = bcos::executor_v1::eth::toIntxU256(value);
     dep.gas_limit = static_cast<int64_t>(gas);
     dep.is_system_tx = isSystemTxValue != 0;
     dep.data = evmc::bytes(data.begin(), data.end());

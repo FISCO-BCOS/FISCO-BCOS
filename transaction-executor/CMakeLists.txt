@@ -1,6 +1,5 @@
 
 find_package(evmone REQUIRED)
-find_package(intx REQUIRED)
 find_package(fmt REQUIRED)
 find_package(jsoncpp REQUIRED)
 

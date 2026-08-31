@@ -22,12 +22,12 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <algorithm>
 #include <array>
-#include <evmc/evmc.hpp>
-#include <evmone_precompiles/keccak.hpp>
-#include <evmone_precompiles/secp256k1.hpp>
 #include <bit>
 #include <cassert>
 #include <cstdint>
+#include <evmc/evmc.hpp>
+#include <evmone_precompiles/keccak.hpp>
+#include <evmone_precompiles/secp256k1.hpp>
 #include <intx/intx.hpp>
 #include <ios>
 #include <limits>
@@ -40,23 +40,22 @@
 namespace bcos::executor_v1::eth::evm
 {
 
-/// Convert bcos::u256 to intx::uint256 (big-endian byte copy into a stack
-/// buffer; no string round-trip, no heap allocation). Single canonical home of
-/// this conversion.
-inline intx::uint256 toIntxU256(bcos::u256 const& val)
+/// Store a bcos::u256 as a 32-byte big-endian evmc value (evmc::bytes32 or evmc::uint256be).
+template <class EvmcBytes = evmc::bytes32>
+inline EvmcBytes toEvmcBE(bcos::u256 const& val)
 {
-    std::array<bcos::byte, 32> be{};
-    bcos::toBigEndian(val, be);  // writes 32 big-endian bytes, no allocation.
-    return intx::be::unsafe::load<intx::uint256>(be.data());
+    EvmcBytes out{};
+    static_assert(sizeof(out.bytes) == 32, "toEvmcBE targets 32-byte evmc values only");
+    std::span<uint8_t, sizeof(out.bytes)> view{out.bytes};
+    bcos::toBigEndian(val, view);
+    return out;
 }
 
-/// Convert intx::uint256 to bcos::u256 (big-endian byte copy; no string
-/// round-trip).
-inline bcos::u256 toBcosU256(intx::uint256 const& val)
+/// Load a 32-byte big-endian evmc value as a bcos::u256.
+inline bcos::u256 fromEvmcBE(auto const& be)
+    requires(sizeof(be.bytes) == 32)
 {
-    const auto be = intx::be::store<evmc::bytes32>(val);
-    return bcos::fromBigEndian<bcos::u256>(
-        bcos::bytesConstRef(be.bytes, sizeof(be.bytes)));
+    return bcos::fromBigEndian<bcos::u256>(be.bytes);
 }
 
 /// A transaction log entry (ported evmone state::Log).
@@ -199,25 +198,26 @@ inline uint64_t max_blob_gas_per_block(const BlobParams& blob_params) noexcept
 
 /// Computes the current blob gas price based on the excess blob gas
 /// (ported evmone block.cpp, EIP-4844 helpers).
-inline intx::uint256 compute_blob_gas_price(
+inline bcos::u256 compute_blob_gas_price(
     const BlobParams& blob_params, uint64_t excess_blob_gas) noexcept
 {
     /// A helper function approximating `factor * e ** (numerator / denominator)`.
     static constexpr auto fake_exponential = [](uint64_t factor, uint64_t numerator,
                                                  uint64_t denominator) noexcept {
-        intx::uint256 i = 1;
-        intx::uint256 output = 0;
-        intx::uint256 numerator_accum = factor * denominator;
-        const intx::uint256 numerator256 = numerator;
+        bcos::u256 i = 1;
+        bcos::u256 output = 0;
+        bcos::u256 numerator_accum = factor * denominator;
+        const bcos::u256 numerator256 = numerator;
         while (numerator_accum > 0)
         {
             output += numerator_accum;
-            // Ensure the multiplication won't overflow 256 bits.
-            if (const auto p = intx::umul(numerator_accum, numerator256);
-                p <= std::numeric_limits<intx::uint256>::max())
-                numerator_accum = intx::uint256(p) / (denominator * i);
+            // Ensure the multiplication won't overflow 256 bits: widen to u512, as
+            // the original's intx::umul did.
+            if (const auto p = bcos::u512(numerator_accum) * bcos::u512(numerator256);
+                p <= bcos::u512(std::numeric_limits<bcos::u256>::max()))
+                numerator_accum = bcos::u256(p) / (denominator * i);
             else
-                return std::numeric_limits<intx::uint256>::max();
+                return std::numeric_limits<bcos::u256>::max();
             i += 1;
         }
         return output / denominator;
@@ -226,7 +226,7 @@ inline intx::uint256 compute_blob_gas_price(
     static constexpr auto MIN_BLOB_GASPRICE = 1;
     const auto fraction = blob_params.base_fee_update_fraction;
     if (fraction == 0)
-        return std::numeric_limits<intx::uint256>::max();  // degenerate schedule
+        return std::numeric_limits<bcos::u256>::max();  // degenerate schedule
     return fake_exponential(MIN_BLOB_GASPRICE, excess_blob_gas, fraction);
 }
 
@@ -243,8 +243,7 @@ inline intx::uint256 compute_blob_gas_price(
 
     const auto base_hash = keccak256(evmc::bytes_view{encoded.data(), encoded.size()});
     evmc::address addr;
-    std::copy_n(
-        &base_hash.bytes[sizeof(base_hash) - sizeof(addr)], sizeof(addr), addr.bytes);
+    std::copy_n(&base_hash.bytes[sizeof(base_hash) - sizeof(addr)], sizeof(addr), addr.bytes);
     return addr;
 }
 
@@ -270,7 +269,11 @@ inline intx::uint256 compute_blob_gas_price(
 // ---- EIP-7702 authorization handling (ported bcos-evm Eip7702Recover.h) ----
 
 /// Secp256k1's N/2 is the upper bound of an EIP-2 canonical signature's s value.
-inline constexpr auto SECP256K1N_OVER_2 = evmmax::secp256k1::Curve::ORDER / 2;
+/// Converted once from evmone's intx constant — the curve API is the only intx
+/// boundary left in this header. Runtime-initialized: do not read it from
+/// another static initializer.
+inline const bcos::u256 SECP256K1N_OVER_2 =
+    fromEvmcBE(intx::be::store<evmc::bytes32>(evmmax::secp256k1::Curve::ORDER / 2));
 
 /// EIP-7702 authorization magic byte (prefix of the signing hash).
 inline constexpr uint8_t kSetCodeMagic = 0x05;
@@ -302,8 +305,8 @@ inline std::optional<evmc::address> recoverAuthority(protocol::Authorization con
     msg.insert(msg.end(), tuple.begin(), tuple.end());
 
     const auto h = keccak256(evmc::bytes_view{msg.data(), msg.size()});
-    const auto r = intx::be::store<evmc::bytes32>(toIntxU256(auth.r));
-    const auto s = intx::be::store<evmc::bytes32>(toIntxU256(auth.s));
+    const auto r = toEvmcBE(auth.r);
+    const auto s = toEvmcBE(auth.s);
     return evmmax::secp256k1::ecrecover(std::span<const uint8_t, 32>{h.bytes, 32},
         std::span<const uint8_t, 32>{r.bytes, 32}, std::span<const uint8_t, 32>{s.bytes, 32},
         auth.v != 0);

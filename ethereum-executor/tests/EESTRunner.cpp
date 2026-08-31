@@ -16,6 +16,7 @@
 
 #include "EESTRunner.h"
 #include "TestMemoryStorage.h"
+#include "TestStorageBridge.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-evm/eth/state/block.hpp"
 #include "bcos-evm/eth/state/system_contracts.hpp"
@@ -28,11 +29,11 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/TBBWait.h"
-#include "TestStorageBridge.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include <evmc/evmc.h>
 #include <tbb/concurrent_vector.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/log/core.hpp>
 #include <atomic>
 #include <chrono>
@@ -48,7 +49,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <boost/algorithm/string.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -472,10 +472,8 @@ EESTBlockchainFixture parseBlockchainFixture(
     fixture.name = name;
 
     // genesisBlockHeader (optional: engine_x format lacks it)
-    if (fixtureJson.isMember("genesisBlockHeader") &&
-        fixtureJson["genesisBlockHeader"].isObject())
-        fixture.genesisBlockHeader =
-            parseBlockHeader(fixtureJson["genesisBlockHeader"]);
+    if (fixtureJson.isMember("genesisBlockHeader") && fixtureJson["genesisBlockHeader"].isObject())
+        fixture.genesisBlockHeader = parseBlockHeader(fixtureJson["genesisBlockHeader"]);
 
     // pre state
     if (fixtureJson.isMember("pre") && !fixtureJson["pre"].isNull())
@@ -514,8 +512,7 @@ EESTBlockchainFixture parseBlockchainFixture(
 
     // postState
     if (fixtureJson.isMember("postState") && !fixtureJson["postState"].isNull())
-        for (auto it = fixtureJson["postState"].begin();
-             it != fixtureJson["postState"].end(); ++it)
+        for (auto it = fixtureJson["postState"].begin(); it != fixtureJson["postState"].end(); ++it)
             fixture.postState[it.key().asString()] = parseAccount(*it);
 
     // config
@@ -536,8 +533,7 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
 
     std::ifstream file(filePath);
     if (!file.is_open())
-        BOOST_THROW_EXCEPTION(
-            std::runtime_error("Cannot open fixture file: " + filePath));
+        BOOST_THROW_EXCEPTION(std::runtime_error("Cannot open fixture file: " + filePath));
 
     Json::CharReaderBuilder builder;
     Json::Value root;
@@ -548,8 +544,7 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
 
     for (auto it = root.begin(); it != root.end(); ++it)
     {
-        if (it.key().asString().rfind("//", 0) == 0 ||
-            it.key().asString().rfind("_", 0) == 0)
+        if (it.key().asString().rfind("//", 0) == 0 || it.key().asString().rfind("_", 0) == 0)
             continue;
 
         // Skip non-object values
@@ -558,13 +553,12 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
 
         try
         {
-            fixtures.push_back(
-                parseBlockchainFixture(it.key().asString(), *it));
+            fixtures.push_back(parseBlockchainFixture(it.key().asString(), *it));
         }
         catch (std::exception const& e)
         {
-            std::cerr << "Warning: Failed to parse blockchain fixture '"
-                      << it.key().asString() << "': " << e.what() << std::endl;
+            std::cerr << "Warning: Failed to parse blockchain fixture '" << it.key().asString()
+                      << "': " << e.what() << std::endl;
         }
     }
 
@@ -798,10 +792,8 @@ public:
         transactionFactory(cryptoSuite),
         receiptFactory(cryptoSuite),
         executor(receiptFactory,
-            [blockHashes = m_blockHashes](
-                int64_t blockNumber, int64_t /*currentHeight*/) -> evmc::bytes32 {
-                return blockHashes->get_block_hash(blockNumber);
-            })
+            [blockHashes = m_blockHashes](int64_t blockNumber, int64_t /*currentHeight*/)
+                -> evmc::bytes32 { return blockHashes->get_block_hash(blockNumber); })
     {}
 
     void configureFork(std::string const& forkName)
@@ -1326,8 +1318,7 @@ public:
     {
         configureFork(forkName);
         m_chainId = fixture.chainId;
-        m_ledgerConfig.setChainId(
-            intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(m_chainId))));
+        m_ledgerConfig.setChainId(evmc::bytes32{static_cast<uint64_t>(m_chainId)});
         configureEnvironment(fixture.env);
 
         MutableStorage storage;
@@ -1636,8 +1627,7 @@ public:
         }
         configureFork(forkName);
         m_chainId = fixture.chainId;
-        m_ledgerConfig.setChainId(
-            intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(m_chainId))));
+        m_ledgerConfig.setChainId(evmc::bytes32{static_cast<uint64_t>(m_chainId)});
 
         // Set up pre-state once
         MutableStorage storage;
@@ -1775,8 +1765,8 @@ public:
                 auto sysDiff = evmone::state::system_call_block_start(
                     stateView, bi, blockHashes, blockRev, executor.vm());
 
-                task::tbb::syncWait(::bcos::test::testApplyStateDiff(
-                    storage, sysDiff, *cryptoSuite->hashImpl()));
+                task::tbb::syncWait(
+                    ::bcos::test::testApplyStateDiff(storage, sysDiff, *cryptoSuite->hashImpl()));
             }
 
             for (auto const& tx : block.transactions)

@@ -26,7 +26,6 @@ using CallbackFuncWithSession =
     std::function<void(NetworkException, std::shared_ptr<P2PSession>, std::shared_ptr<P2PMessage>)>;
 using DisconnectCallbackFuncWithSession =
     std::function<void(NetworkException, std::shared_ptr<P2PSession>)>;
-using P2PResponseCallback = std::function<void(Error::Ptr, uint16_t, bytesConstRef)>;
 class P2PInterface
 {
 public:
@@ -48,6 +47,13 @@ public:
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
         Options options = {}) = 0;
 
+    // (coroutine) send a message to each of the given p2p nodes. One independent coroutine is
+    // fanned out per node (no head-of-line blocking on a stalled peer's socket write); a
+    // failed/unreachable node is logged and skipped (fire-and-forget per node). The payload bytes
+    // are owned by the frame so the caller does not need to keep them alive.
+    virtual task::Task<void> sendMessageByNodeIDs(uint16_t _type,
+        const std::vector<P2pID>& _nodeIDs, bcos::bytes _payload, Options options = {}) = 0;
+
     virtual P2PInfos sessionInfos() = 0;
     virtual P2PInfo localP2pInfo() = 0;
 
@@ -58,34 +64,6 @@ public:
     virtual std::shared_ptr<MessageFactory> messageFactory() = 0;
 
     virtual std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) const = 0;
-
-    /**
-     * @brief send message to the given p2p nodes
-     *
-     * @param _type the message type
-     * @param _dstNodeID the dst node
-     * @param _payload the data
-     * @param options timeout option
-     * @param _callback called when receive response
-     */
-    virtual void asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID,
-        bytesConstRef _payload, Options options = Options(),
-        P2PResponseCallback _callback = nullptr) = 0;
-
-    /**
-     * @brief broadcast message to all p2p nodes
-     *
-     * @param _type the message type
-     * @param _payload the payload
-     */
-    virtual void asyncBroadcastMessageToP2PNodes(
-        uint16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options) = 0;
-
-    /**
-     * @brief send message to the given nodeIDs
-     */
-    virtual void asyncSendMessageByP2PNodeIDs(uint16_t _type, const std::vector<P2pID>& _nodeIDs,
-        bytesConstRef _payload, Options _options) = 0;
 
     using MessageHandler =
         std::function<void(NetworkException, std::shared_ptr<P2PSession>, P2PMessage::Ptr)>;

@@ -1,6 +1,6 @@
 #pragma once
 
-// OpTestReceiptFactory — test-side receipt factory for the 方案 A 阶段 2 tests. opTransition and
+// OpTestReceiptFactory — test-side receipt factory. opTransition and
 // runDeposit now inject a bcos::protocol::TransactionReceiptFactory::Ptr (they produce FISCO
 // receipts directly); the tests build the real bcostars implementation over a Keccak256 suite,
 // the same construction bcos-tars-protocol's own TransactionReceiptImplTest uses.

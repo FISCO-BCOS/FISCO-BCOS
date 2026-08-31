@@ -64,8 +64,8 @@ evmc::address addressFromHex(const std::string& hex)
     for (size_t i = 0; i < 40; ++i)
     {
         const auto c = hex[start + i];
-        const auto v = (c <= '9') ? static_cast<uint8_t>(c - '0')
-                                  : static_cast<uint8_t>((c | 32) - 'a' + 10);
+        const auto v =
+            (c <= '9') ? static_cast<uint8_t>(c - '0') : static_cast<uint8_t>((c | 32) - 'a' + 10);
         out.bytes[i / 2] = static_cast<uint8_t>((out.bytes[i / 2] << 4) | v);
     }
     return out;
@@ -79,8 +79,8 @@ evmc::bytes32 bytes32FromHex(const std::string& hex)
     for (size_t i = 0; i < 64; ++i)
     {
         const auto c = hex[start + i];
-        const auto v = (c <= '9') ? static_cast<uint8_t>(c - '0')
-                                  : static_cast<uint8_t>((c | 32) - 'a' + 10);
+        const auto v =
+            (c <= '9') ? static_cast<uint8_t>(c - '0') : static_cast<uint8_t>((c | 32) - 'a' + 10);
         out.bytes[i / 2] = static_cast<uint8_t>((out.bytes[i / 2] << 4) | v);
     }
     return out;
@@ -91,26 +91,25 @@ bool sameAddress(const evmc::address& a, const evmc::address& b)
     return std::memcmp(a.bytes, b.bytes, sizeof(a.bytes)) == 0;
 }
 
-void testU256IntxRoundTrip()
+void testU256EvmcRoundTrip()
 {
     const bcos::u256 values[] = {bcos::u256(0), bcos::u256(1), bcos::u256(42),
         bcos::u256("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
         bcos::u256("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")};
     for (const auto& v : values)
     {
-        const auto i = eth_evm::toIntxU256(v);
-        CHECK(eth_evm::toBcosU256(i) == v);
-        CHECK(eth_evm::toIntxU256(eth_evm::toBcosU256(i)) == i);
+        const auto be = eth_evm::toEvmcBE(v);
+        CHECK(eth_evm::fromEvmcBE(be) == v);
     }
     // Spot-check the big-endian mapping: 1 -> 0x00..01.
-    CHECK(eth_evm::toIntxU256(bcos::u256(1)) == intx::uint256{1});
+    CHECK(eth_evm::toEvmcBE(bcos::u256(1)) == evmc::bytes32{1});
 }
 
 void testKeccak256()
 {
     const auto h = eth_evm::keccak256({});
-    const auto expected = bytes32FromHex(
-        "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
+    const auto expected =
+        bytes32FromHex("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
     CHECK(h == expected);
 }
 
@@ -153,8 +152,7 @@ void testCreate2Address()
     CHECK(sameAddress(eth_evm::compute_create2_address(deadbeef, zeroSalt, {init00, 1}),
         addressFromHex("0xB928f69Bb1D91Cd65274e3c79d8986362984fDA3")));
 
-    CHECK(sameAddress(
-        eth_evm::compute_create2_address(zero20, zeroSalt, {initDeadbeef, 4}),
+    CHECK(sameAddress(eth_evm::compute_create2_address(zero20, zeroSalt, {initDeadbeef, 4}),
         addressFromHex("0x70f2b2914A2a4b783FaEFb75f459A580616Fcb5e")));
 }
 
@@ -163,16 +161,15 @@ void testBlobGasPrice()
     // EIP-4844 mainnet schedule: fake_exponential(1, excess, 3338477).
     const eth_evm::BlobParams params{3, 6, 3338477};
     CHECK(eth_evm::compute_blob_gas_price(params, 0) == 1);
-    CHECK(eth_evm::compute_blob_gas_price(params, 16777216) == 152);      // 2**24
-    CHECK(eth_evm::compute_blob_gas_price(params, 33554432) == 23174);    // 2**25
+    CHECK(eth_evm::compute_blob_gas_price(params, 16777216) == 152);        // 2**24
+    CHECK(eth_evm::compute_blob_gas_price(params, 33554432) == 23174);      // 2**25
     CHECK(eth_evm::compute_blob_gas_price(params, 67108864) == 537070730);  // 2**26
     CHECK(eth_evm::max_blob_gas_per_block(params) == 6 * eth_evm::GAS_PER_BLOB);
 
     // Degenerate schedule (base_fee_update_fraction == 0) must not divide by
     // zero; the guard returns the maximum like the overflow path.
     const eth_evm::BlobParams degenerate{0, 0, 0};
-    CHECK(eth_evm::compute_blob_gas_price(degenerate, 0) ==
-        std::numeric_limits<intx::uint256>::max());
+    CHECK(eth_evm::compute_blob_gas_price(degenerate, 0) == std::numeric_limits<bcos::u256>::max());
 }
 
 void testRecoverAuthority()
@@ -190,8 +187,7 @@ void testRecoverAuthority()
 
     const auto recovered = eth_evm::recoverAuthority(auth);
     CHECK(recovered.has_value());
-    CHECK(sameAddress(
-        *recovered, addressFromHex("0x70997970C51812dc3A010C7d01b50e0d17dc79C8")));
+    CHECK(sameAddress(*recovered, addressFromHex("0x70997970C51812dc3A010C7d01b50e0d17dc79C8")));
 }
 
 void testRecoverAuthorityRejectsBadSignature()
@@ -239,7 +235,7 @@ void testEthereumStateInstantiation()
 
 int main()
 {
-    testU256IntxRoundTrip();
+    testU256EvmcRoundTrip();
     testKeccak256();
     testCreateAddress();
     testCreate2Address();
