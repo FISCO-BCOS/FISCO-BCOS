@@ -163,11 +163,11 @@ BOOST_AUTO_TEST_CASE(overrunningTrailingItemIsMalformed)
 // 35+ protected band, matching what decode()'s sealed branch rejects.
 BOOST_AUTO_TEST_CASE(oneEmptySignatureItemIsMalformed)
 {
-    auto emptyR = legacyEnvelope(
-        concat(sixFields(), concat(item(27), concat(bcos::bytes{0x80}, item(1)))));
+    auto emptyR =
+        legacyEnvelope(concat(sixFields(), concat(item(27), concat(bcos::bytes{0x80}, item(1)))));
     BOOST_CHECK(classify(emptyR) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
-    auto emptyS = legacyEnvelope(
-        concat(sixFields(), concat(item(37), concat(item(1), bcos::bytes{0x80}))));
+    auto emptyS =
+        legacyEnvelope(concat(sixFields(), concat(item(37), concat(item(1), bcos::bytes{0x80}))));
     BOOST_CHECK(classify(emptyS) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
 }
 
@@ -195,8 +195,8 @@ BOOST_AUTO_TEST_CASE(typedListTrailingGarbageIsMalformed)
 // over-wide integer items must classify Malformed (decodeCanonicalRlpUint rejects them).
 BOOST_AUTO_TEST_CASE(nonCanonicalIntegerItemsAreMalformed)
 {
-    auto bareZero = legacyEnvelope(concat(sixFields(),
-        concat(bcos::bytes{0x00}, concat(bcos::bytes{0x80}, bcos::bytes{0x80}))));
+    auto bareZero = legacyEnvelope(concat(
+        sixFields(), concat(bcos::bytes{0x00}, concat(bcos::bytes{0x80}, bcos::bytes{0x80}))));
     BOOST_CHECK(classify(bareZero) == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
     auto leadingZero = legacyEnvelope(concat(sixFields(),
         concat(bcos::bytes{0x82, 0x00, 0x01}, concat(bcos::bytes{0x80}, bcos::bytes{0x80}))));

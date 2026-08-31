@@ -162,6 +162,11 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         {
             throwDecode("typed body");
         }
+        // Bytes after the inner list must not enter txHash (covers wire AND preimage).
+        if (cursor.size() != header.payloadLength) [[unlikely]]
+        {
+            throwDecode("typed trailing garbage");
+        }
         // Dual layout: the stored bytes are the signing preimage (type || fields) or — for
         // sealed OP blocks, whose extraTransactionBytes the engine overwrites with the full
         // envelope — the wire form (type || fields || yParity,r,s). Forward reference: the
@@ -237,11 +242,6 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                 {
                     throwDecode("typed signature mismatch");
                 }
-                // Bytes after the inner list must not enter txHash.
-                if (cursor.size() != header.payloadLength) [[unlikely]]
-                {
-                    throwDecode("typed trailing garbage");
-                }
                 return buffer;
             }
             if (itemCount != expected->second) [[unlikely]]
@@ -277,6 +277,10 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
         {
             throwDecode("legacy header");
+        }
+        if (cursor.size() != header.payloadLength) [[unlikely]]
+        {
+            throwDecode("trailing garbage");
         }
         auto const* fieldsStart = cursor.data();
         bcos::bytesRef walker(cursor.data(), header.payloadLength);

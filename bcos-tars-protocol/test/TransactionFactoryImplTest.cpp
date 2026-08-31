@@ -634,6 +634,42 @@ BOOST_AUTO_TEST_CASE(reassembleTypedWireTrailingGarbageThrows)
         bcos::ref(tampered), bcos::bytesConstRef(sig.data(), sig.size()), "typed trailing garbage");
 }
 
+// Typed *preimage* (9 fields, no y/r/s) plus junk after the inner list — same guard as wire.
+BOOST_AUTO_TEST_CASE(reassembleTypedPreimageTrailingGarbageThrows)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, bcos::bytes{});
+
+    bcos::bytes preimage{0x02};
+    rlp::encodeHeader(preimage, rlp::Header{true, items.size()});
+    preimage.insert(preimage.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = 1;
+
+    auto clean = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(preimage), bcos::bytesConstRef(sig.data(), sig.size()));
+    BOOST_CHECK(!clean.empty());
+
+    preimage.push_back(0xde);
+    expectReassembleThrows(
+        bcos::ref(preimage), bcos::bytesConstRef(sig.data(), sig.size()), "typed trailing garbage");
+}
+
 // Bare 0x00 yParity is rejected; only 0x80 / 0x01 are valid.
 BOOST_AUTO_TEST_CASE(reassembleTypedWireBareZeroYParityThrows)
 {
@@ -728,6 +764,12 @@ BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
     auto reassembledz = bcostars::protocol::reassembleWeb3RawTransaction(
         bcos::ref(wirez), bcos::bytesConstRef(sigz.data(), sigz.size()));
     BOOST_CHECK(reassembledz == wirez);
+
+    // Bytes after the outer list header (not inside the list payload).
+    auto trailing = buildWire(r, s, v);
+    trailing.push_back(0xde);
+    expectReassembleThrows(
+        bcos::ref(trailing), bcos::bytesConstRef(sig.data(), sig.size()), "trailing garbage");
 }
 
 // A signing preimage with chainId 27/28 has the same trailer bytes as an invalid Homestead

@@ -86,21 +86,17 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
         // signature recovery even when the input transaction was previously clean.
         _tx.clearSenderAndHash();
         _tx.verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
-        // P2P tars skips decode(); apply EIP-2 here. Empty sig (deposits) skips the width check.
+        // P2P tars skips decode(); apply EIP-2 here. Empty sig (deposits) skips.
+        // Shorter-than-65 signatures were already rejected by verify() above.
         if (_tx.type() == TransactionType::Web3Transaction)
         {
             auto const sig = _tx.signatureData();
-            constexpr size_t kRsLen =
-                bcos::crypto::SECP256K1_SIGNATURE_R_LEN + bcos::crypto::SECP256K1_SIGNATURE_S_LEN;
-            if (sig.size() >= kRsLen)
+            if (sig.size() == static_cast<size_t>(bcos::crypto::SECP256K1_SIGNATURE_LEN))
             {
-                // Views, not copies (finding N3): the 2x32B vectors were materialized only
-                // to match the old bytes const& parameters.
-                bcos::bytesConstRef const sigR(
-                    sig.data(), bcos::crypto::SECP256K1_SIGNATURE_R_LEN);
-                bcos::bytesConstRef const sigS(sig.data() + bcos::crypto::SECP256K1_SIGNATURE_R_LEN,
-                    kRsLen - bcos::crypto::SECP256K1_SIGNATURE_R_LEN);
-                if (bcos::checkEip2Signature(sigR, sigS) != nullptr)
+                if (bcos::checkEip2Signature(
+                        sig.getCroppedData(0, bcos::crypto::SECP256K1_SIGNATURE_R_LEN),
+                        sig.getCroppedData(bcos::crypto::SECP256K1_SIGNATURE_R_LEN,
+                            bcos::crypto::SECP256K1_SIGNATURE_S_LEN)) != nullptr)
                 {
                     return TransactionStatus::InvalidSignature;
                 }

@@ -1576,9 +1576,10 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
 }
 
 // Finding AO (fail-stop decision): getLedgerConfig must propagate InvalidWeb3ChainIdConfig
-// when the stored web3_chain_id row is malformed — the value feeds the EVM CHAINID opcode,
-// and the old WARN + serve-0 fallback silently diverged from the admission side, which
-// rejects the same value. Same scaffolding as the getLedgerConfig case above.
+// when the stored web3_chain_id row is malformed. The base already fail-stopped via
+// boost::lexical_cast; this path now throws a typed exception, accepts 0x QUANTITY, and
+// rejects a leading '-' (lexical_cast<u256> wrapped that modulo 2^256). Same scaffolding
+// as the getLedgerConfig case above.
 BOOST_AUTO_TEST_CASE(getLedgerConfigMalformedWeb3ChainIdFailStop)
 {
     task::syncWait([this]() -> task::Task<void> {

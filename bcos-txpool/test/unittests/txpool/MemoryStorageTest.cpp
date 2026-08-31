@@ -839,9 +839,8 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
             setLegacyUnprotectedPreimage(*unprotectedImpl);
             unprotectedImpl->mutableInner().data.chainID = "";
         }
-        BOOST_CHECK(
-            storageNoSig.verifyAndSubmitTransaction(unprotectedTx, nullptr, false, false) ==
-            TransactionStatus::None);
+        BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(unprotectedTx, nullptr, false, false) ==
+                    TransactionStatus::None);
     }
 
     // Matrix: T19 — hex QUANTITY web3_chain_id ("0x539" == 1337) admits a matching envelope.
