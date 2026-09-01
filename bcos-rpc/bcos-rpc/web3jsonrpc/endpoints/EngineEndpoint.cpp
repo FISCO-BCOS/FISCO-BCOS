@@ -136,6 +136,26 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
 
     auto forkchoiceState = parseForkchoiceState(request);
     auto payloadAttrs = parsePayloadAttributes(request, version);
+    // Rate-limit FCU calls that carry payload attributes: payload building runs two full
+    // block executions per call, so a flood (even authenticated) is a CPU DoS. A normal CL
+    // sends one FCU-with-attrs per block; the fixed window below only trips on abusive
+    // bursts.
+    if (payloadAttrs.has_value())
+    {
+        const auto now = std::chrono::steady_clock::now();
+        const auto last = m_lastFcuBuildAt.exchange(now, std::memory_order_relaxed);
+        if (last.time_since_epoch().count() != 0 && now - last < c_opFcuBuildMinInterval)
+        {
+            Json::Value error;
+            error["code"] = Web3DefaultError;
+            error["message"] =
+                "forkchoiceUpdated with payloadAttributes is rate-limited (minimum interval "
+                "between attribute-bearing calls)";
+            response["jsonrpc"] = "2.0";
+            response["error"] = std::move(error);
+            co_return;
+        }
+    }
     // TODO: engineService->updateForkchoice() MUST throw JsonRpcException in these cases:
     //   -38002 InvalidForkchoiceState: headBlockHash is VALID but finalizedBlockHash/safeBlockHash
     //   not in chain -38003 InvalidPayloadAttributes: payloadAttributes.timestamp <=

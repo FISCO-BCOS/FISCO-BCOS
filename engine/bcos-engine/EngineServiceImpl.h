@@ -85,7 +85,8 @@ std::vector<std::string> supportedCapabilities();
 /// OP capability list: `supportedCapabilities()` plus the V4 methods.
 std::vector<std::string> supportedOpCapabilities();
 
-bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payloadVersion);
+bool isGetPayloadVersionCompatible(
+    ApiVersion requestVersion, std::uint32_t payloadVersion, bool opMode);
 
 std::optional<std::string> validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version);
@@ -764,6 +765,38 @@ private:
                 std::any_of(sealedEnvelopes.begin(), sealedEnvelopes.end(),
                     [&culprit](auto const& entry) { return entry.first == *culprit; }))
             {
+                // The candidate was built under the CL-supplied gasLimit. A gasLimit below
+                // the chain's own is a CL configuration fault, not a poisoned transaction —
+                // evicting on it would let one FCU drain the pool (censorship). Re-probe the
+                // same envelope set under the ledger gasLimit; only a transaction that fails
+                // there is poison.
+                if (payloadAttributes.gasLimit.has_value() &&
+                    *payloadAttributes.gasLimit != std::get<0>(ledgerConfig.gasLimit()))
+                {
+                    auto ledgerGasPayload = assemblePayload(candidateEnvelopes);
+                    ledgerGasPayload.gasLimit = u256(std::get<0>(ledgerConfig.gasLimit()));
+                    auto ledgerGasHeader = detail::rebuildOpEthHeader(
+                        m_blockFactory->blockHeaderFactory(), ledgerGasPayload,
+                        SchedulerType::computeTxRoot(*ledgerGasPayload.rawTransactions),
+                        parentBeaconBlockRoot);
+                    auto ledgerGasBlock = buildOpBlock(ledgerGasPayload, ledgerGasHeader);
+                    m_delegate->reset([](bcos::Error::Ptr) {});
+                    bcos::Error::Ptr ledgerGasError;
+                    bcos::protocol::BlockHeader::Ptr ledgerGasExecutedHeader;
+                    m_delegate->executeBlock(ledgerGasBlock, /*verify=*/false,
+                        [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header,
+                            bool) {
+                            ledgerGasError = std::move(error);
+                            ledgerGasExecutedHeader = std::move(header);
+                        });
+                    if (!ledgerGasError && ledgerGasExecutedHeader)
+                    {
+                        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                            "OP payload build failed under the CL-supplied gasLimit, while the "
+                            "chain gasLimit executes the same transactions: the CL gasLimit is "
+                            "below the chain's own"});
+                    }
+                }
                 evicted.insert(*culprit);
                 std::array<crypto::HashType, 1> hashSpan{*culprit};
                 m_memPool.get().remove(std::span<crypto::HashType const>(hashSpan));
@@ -871,7 +904,7 @@ private:
                 BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
             }
             if (!detail::isGetPayloadVersionCompatible(
-                    static_cast<ApiVersion>(version), it->second.version))
+                    static_cast<ApiVersion>(version), it->second.version, c_opMode))
             {
                 BOOST_THROW_EXCEPTION(
                     IncompatiblePayloadVersion{} << bcos::errinfo_comment{

@@ -459,6 +459,22 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             "op_engine_rpc serving the v1 EngineService (unsafe_allow_v1_executor=true): "
             "test-harness mode, never drive this endpoint with a production op-node");
     }
+    // executor_version == 2 (EthereumExecutor): the v2 pipeline assembles the EngineService
+    // only for the built-in single-node driver (below), never for [op_engine_rpc] — an
+    // external op-node would drive endpoints that answer "not available" and stall the node
+    // with no diagnostics. Reject the combination at startup; OP mode (>=3) is the
+    // op-node-facing configuration.
+    if (m_nodeConfig->enableOpEngineRpc() &&
+        m_executorVersion == scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+            "op_engine_rpc with executor_version == " +
+            std::to_string(scheduler_v1::ETHEREUM_EXECUTOR_VERSION) +
+            " builds no EngineService for the endpoint: the v2 pipeline assembles it only "
+            "for the built-in single-node driver. Use executor_version >= " +
+            std::to_string(scheduler_v1::OPSTACK_EXECUTOR_VERSION) +
+            " (OP mode) to serve an external op-node"));
+    }
 
     if (baselineSchedulerConfig.parallel)
     {

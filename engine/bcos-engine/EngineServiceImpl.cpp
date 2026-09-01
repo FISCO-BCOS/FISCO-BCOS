@@ -126,7 +126,7 @@ std::vector<std::string> bcos::engine::detail::supportedOpCapabilities()
 }
 
 bool bcos::engine::detail::isGetPayloadVersionCompatible(
-    ApiVersion requestVersion, std::uint32_t payloadVersion)
+    ApiVersion requestVersion, std::uint32_t payloadVersion, bool opMode)
 {
     if (requestVersion == ApiVersion::V1)
     {
@@ -142,8 +142,13 @@ bool bcos::engine::detail::isGetPayloadVersionCompatible(
     }
     if (requestVersion == ApiVersion::V4)
     {
-        // getPayloadV4 serves payloads version <= 4.
-        return payloadVersion <= 4;
+        // op-geth's GetPayloadV4 passes []engine.PayloadVersion{engine.PayloadV3} and
+        // answers UnsupportedFork for anything else (eth/catalyst/api.go:498-511) — a
+        // committed V1/V2 build must not be re-servable through the V4 window. The OP
+        // path widens the window to <=4: OP builds always carry the V3+ shape
+        // (withdrawalsRoot, blobGasUsed), so a V4-tagged build serializes losslessly in
+        // the V4 response.
+        return opMode ? payloadVersion <= 4 : payloadVersion == 3;
     }
     if (requestVersion == ApiVersion::V5)
     {
@@ -482,6 +487,13 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
         // rejection of a block but a malformed request; with no RPC layer to raise -32602 this
         // cycle, INVALID with a field-naming validationError is the honest local answer.
         return std::string("executionPayload.rawTransactions is required on the OP path");
+    }
+    // The ETH header stores timestamp as int64 (ms); reject overflow fail-closed instead of
+    // wrapping at rebuildOpEthHeader's cast.
+    if (payload.timestamp >
+        static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+    {
+        return std::string("timestamp exceeds the int64 range of the ETH header field");
     }
     if (!payload.withdrawals.has_value() || !payload.withdrawals->empty())
     {

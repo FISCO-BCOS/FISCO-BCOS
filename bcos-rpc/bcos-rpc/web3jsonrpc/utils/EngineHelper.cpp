@@ -367,6 +367,16 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
             });
         }
     }
+    // OP carrier mirror: validateOpNewPayloadRequest requires rawTransactions to be present
+    // on the OP path, and its content is the same raw envelopes as transactions[].raw. Fill
+    // it unconditionally (present-but-empty for a block with no transactions) so an external
+    // op-node's newPayloadV4 is never rejected for a missing field at the RPC boundary.
+    payload.rawTransactions = std::vector<bcos::bytes>{};
+    payload.rawTransactions->reserve(payload.transactions.size());
+    for (auto const& tx : payload.transactions)
+    {
+        payload.rawTransactions->push_back(tx.raw);
+    }
     if (ep.isMember("withdrawals") && !ep["withdrawals"].isNull())
     {
         // jsoncpp iterates a non-array value as an EMPTY range, so without this gate a
