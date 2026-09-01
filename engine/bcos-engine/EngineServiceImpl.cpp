@@ -27,7 +27,7 @@
 #include <utility>
 
 // EIP-2718 envelope -> tars Transaction (Web3Transaction decode).
-#include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
+#include "bcos-rlp-protocol/Web3Transaction.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <optional>
 
