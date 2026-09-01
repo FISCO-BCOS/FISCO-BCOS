@@ -55,7 +55,9 @@ public:
     void call(protocol::Transaction::Ptr transaction,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
 
-    /// Forward eth_call-at-height to the selected scheduler (do not drop the height).
+    /// eth_call pinned at a block height (M13.2 / OP historical call): forward to the
+    /// selected scheduler. Without this override the interface default would silently drop
+    /// the height and serve the latest state — a wrong answer, not an error.
     void callAtBlock(protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
 

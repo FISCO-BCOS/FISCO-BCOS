@@ -156,10 +156,19 @@ struct ExecutionPayload
     std::optional<bytes> blockAccessList = std::nullopt;
     std::optional<std::uint64_t> slotNumber = std::nullopt;
 
-    /// OP path: raw EIP-2718 envelopes (including 0x7E deposits). Unused on the generic path.
+    /// OP-mode carrier fields. Both are optional and unread by the generic (non-OP) engine
+    /// path — zero behavioral change for existing callers.
+    /// - rawTransactions: the block's transactions as raw EIP-2718 envelope bytes (typed tx
+    ///   MarshalBinary() output, including the OP 0x7E deposit envelope). This is the OP
+    ///   path's only transaction carrier: the engine derives the transactions root and
+    ///   assembles the delegate's block from it (computeTxRoot / buildOpBlock), and the
+    ///   delegate's execute hook re-derives the envelopes. `transactions` above
+    ///   (vector<EngineTransaction>) is the generic-path carrier and is not populated/read
+    ///   on the OP path.
+    /// - withdrawalsRoot: OP Isthmus+ extends the payload with an explicit withdrawals-root
+    ///   field (= MessagePasser storage root) that cannot be derived from the (always-empty)
+    ///   `withdrawals` list above — op-geth's NewPayloadV4 requires it on OP chains.
     std::optional<std::vector<bytes>> rawTransactions;
-
-    // Isthmus+: L2ToL1MessagePasser storage root. Not derivable from withdrawals.
     std::optional<h256> withdrawalsRoot;
 };
 

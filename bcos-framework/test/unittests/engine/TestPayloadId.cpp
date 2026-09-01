@@ -14,7 +14,13 @@
  *  limitations under the License.
  *
  * @file TestPayloadId.cpp
- * @brief derivePayloadId vectors (byte stream quoted per case).
+ * @brief derivePayloadId test vectors, byte-aligned with op-geth
+ *        BuildPayloadArgs.Id() (miner/payload_building.go).
+ *
+ * All expected values below were verified with three independent
+ * implementations of the op-geth algorithm: Python hashlib.sha256, a
+ * standalone Go program, and the openssl CLI. The exact byte stream fed to
+ * SHA-256 is quoted in each case.
  */
 
 #include "bcos-framework/engine/PayloadId.h"

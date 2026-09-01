@@ -14,7 +14,8 @@
  *  limitations under the License.
  *
  * @file PayloadId.h
- * @brief Deterministic 8-byte payload ID (op-geth BuildPayloadArgs.Id()).
+ * @brief Deterministic payload-ID derivation, byte-aligned with op-geth's
+ *        BuildPayloadArgs.Id() (miner/payload_building.go).
  */
 
 #pragma once
@@ -49,7 +50,11 @@ inline void appendCompactBigEndian(bcos::bytes& out, u256 const& value)
     out.insert(out.end(), buf.begin() + static_cast<ptrdiff_t>(start), buf.end());
 }
 
-/// RLP list/string header for @p payloadLength bytes (short form < 56).
+/// RLP header for a payload of @p payloadLength bytes (@p isList selects the
+/// list vs string base). Emits the short form (< 56 bytes) or the long form
+/// (>= 56 bytes: base + size-of-length + length bytes), matching go-ethereum's
+/// rlp.encBuffer: short form base 0x80/0xc0 + len; long form 0xb7/0xf7 +
+/// len-of-len + big-endian length.
 inline void rlpAppendHeader(bcos::bytes& out, bool isList, size_t payloadLength)
 {
     if (payloadLength < 56)
@@ -98,10 +103,36 @@ inline void rlpAppendWithdrawal(bcos::bytes& out, WithdrawalV1 const& w)
 }
 }  // namespace detail
 
-/// 8-byte payload ID: sha256(parentHash || timestamp_sec || prevRandao ||
-/// feeRecipient || RLP(withdrawals) [|| beaconRoot] [|| noTxPool || txs]
-/// [|| gasLimit] [|| eip1559Params] [|| minBaseFee]), first 8 bytes, byte 0
-/// overwritten with the Engine API version. attrs.timestamp is ms; hashed as seconds.
+/// Derive an 8-byte payload ID from the payload attributes, byte-aligned with
+/// op-geth's BuildPayloadArgs.Id() (miner/payload_building.go):
+///
+///   sha256(parentHash || timestamp(sec, u64 BE) || prevRandao ||
+///          suggestedFeeRecipient || RLP(withdrawals) [|| parentBeaconBlockRoot]
+///          [|| noTxPool || txCount(u64 BE) || txHash*]
+///          [|| gasLimit(u64 BE)] [|| eip1559Params(8B)] [|| minBaseFee(u64 BE)])
+///
+/// then take the first 8 hash bytes and overwrite byte 0 with the Engine API
+/// version (V1=0x1 .. V4=0x4), exactly like `copy(out[:], hasher.Sum(nil)[:8]);
+/// out[0] = byte(args.Version)`.
+///
+/// Known divergence (documented, not a bug): op-geth also hashes an optional
+/// `SlotNum` (u64 BE) between parentBeaconBlockRoot and the tx block
+/// (flashblocks/Amsterdam extension). FISCO's PayloadAttributes has no
+/// slotNumber field and op-node never sends one, so the field is never
+/// written — byte-identical to op-geth with SlotNum == nil, which is the
+/// only configuration this chain produces. If slotNumber is ever added to
+/// PayloadAttributes it must be hashed here in the same position.
+///
+/// @param attrs    the payload attributes. attrs.timestamp is FISCO-internal
+///                 milliseconds (EngineHelper converts Engine-API seconds to
+///                 ms at the RPC boundary); op-geth hashes the Engine-API
+///                 seconds, so it is divided by 1000 here.
+/// @param parentHash the head block hash the payload builds on.
+/// @param txHashes canonical keccak256 hashes of the attribute transactions,
+///                 in order (the caller decodes raw envelopes to obtain them).
+/// @param version  Engine API version byte (0x01..0x04).
+/// @return the 8-byte payload ID as a hex string ("0x" + 16 hex digits),
+///         matching the existing PayloadID = std::string representation.
 inline std::string derivePayloadId(PayloadAttributes const& attrs, h256 const& parentHash,
     std::span<h256 const> txHashes, uint8_t version)
 {
