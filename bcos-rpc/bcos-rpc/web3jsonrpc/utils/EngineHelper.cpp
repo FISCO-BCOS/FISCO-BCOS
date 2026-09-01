@@ -322,6 +322,7 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .baseFeePerGas = parseBigQuantity(ep["baseFeePerGas"], "executionPayload.baseFeePerGas"),
         .blockHash = parseH256Field(ep["blockHash"], "executionPayload.blockHash"),
         .transactions = {},
+        .rawTransactions = std::nullopt,
         .extraData = {},
         .feeRecipient = parseAddressField(ep["feeRecipient"], "executionPayload.feeRecipient"),
         .timestamp = engineSecondsToInternalMillis(

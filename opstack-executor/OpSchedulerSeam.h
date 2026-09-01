@@ -66,6 +66,16 @@ public:
     /// Jovian is active (blobGasUsed is DA footprint; Isthmus keeps it 0).
     [[nodiscard]] bool isJovianActive() const noexcept { return m_forkFlags.jovianActive; }
 
+    /// L1-attributes deposit envelope for the block's forced-transaction set. Not yet
+    /// implemented: the real L1-info synthesis (sourceHash from L1 block hash + sequence
+    /// number, per op-geth l1AttributesDeposited) lands with the OpScheduler wiring part.
+    /// Fails closed so an OP build cannot silently mint a placeholder deposit.
+    [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(bool) const
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error(
+            "synthesizeL1AttributesEnvelope: L1-attributes deposit synthesis not implemented yet"));
+    }
+
     OpSchedulerSeam(const OpSchedulerSeam&) = delete;
     OpSchedulerSeam(OpSchedulerSeam&&) = delete;
     OpSchedulerSeam& operator=(const OpSchedulerSeam&) = delete;

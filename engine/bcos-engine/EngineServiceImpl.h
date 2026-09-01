@@ -760,7 +760,7 @@ private:
             {
                 evicted.insert(*culprit);
                 std::array<crypto::HashType, 1> hashSpan{*culprit};
-                m_memPool.get().removeByHash(std::span<crypto::HashType const>(hashSpan));
+                m_memPool.get().remove(std::span<crypto::HashType const>(hashSpan));
                 BCOS_LOG(WARNING)
                     << LOG_BADGE("EngineService")
                     << LOG_DESC("buildOpPayload: evicted poisoned pool transaction, retrying")
