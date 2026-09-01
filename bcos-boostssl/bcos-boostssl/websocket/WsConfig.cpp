@@ -155,8 +155,7 @@ const bcos::boostssl::context::ContextConfig& WsConfig::contextConfig() const
     return m_contextConfig;
 }
 
-void WsConfig::setContextConfig(
-    const bcos::boostssl::context::ContextConfig& _contextConfig)
+void WsConfig::setContextConfig(const bcos::boostssl::context::ContextConfig& _contextConfig)
 {
     m_contextConfig = _contextConfig;
 }

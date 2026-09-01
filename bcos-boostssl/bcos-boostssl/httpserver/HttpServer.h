@@ -51,7 +51,7 @@ public:
     void setHttpReqHandler(HttpReqHandler _httpReqHandler);
 
     boost::asio::ip::tcp::acceptor& acceptor();
-    void setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor);
+    void setAcceptor(boost::asio::ip::tcp::acceptor _acceptor);
 
     std::shared_ptr<boost::asio::ssl::context> ctx() const;
     void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx);

@@ -121,16 +121,6 @@ void HttpServer::stop()
 
 void HttpServer::accept()
 {
-    if (!m_acceptor)
-    {
-        // the acceptor may have been reset by setAcceptor(nullptr); do not
-        // dereference an empty optional. This is a no-op rather than an
-        // exception because accept() is also called from onAccept retries,
-        // where throwing would escape into io_context::run
-        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_DESC("acceptor is not initialized");
-        return;
-    }
-
     // The new connection gets its own strand
     m_acceptor->async_accept(*(m_ioservicePool->getIOService()),
         boost::beast::bind_front_handler(&HttpServer::onAccept, shared_from_this()));
@@ -272,7 +262,7 @@ boost::asio::ip::tcp::acceptor& HttpServer::acceptor()
     return *m_acceptor;
 }
 
-void HttpServer::setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor)
+void HttpServer::setAcceptor(boost::asio::ip::tcp::acceptor _acceptor)
 {
     if (m_acceptor)
     {
@@ -284,15 +274,7 @@ void HttpServer::setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _ac
         m_acceptor->close(ec);
     }
 
-    if (_acceptor)
-    {
-        m_acceptor.emplace(std::move(*_acceptor));
-    }
-    else
-    {
-        // reset the optional so that a previously set acceptor is not reused
-        m_acceptor.reset();
-    }
+    m_acceptor.emplace(std::move(_acceptor));
 }
 
 std::shared_ptr<boost::asio::ssl::context> HttpServer::ctx() const
@@ -322,7 +304,7 @@ HttpStreamFactory& HttpServer::httpStreamFactory()
 
 void HttpServer::setHttpStreamFactory(HttpStreamFactory _httpStreamFactory)
 {
-    m_httpStreamFactory = _httpStreamFactory;
+    m_httpStreamFactory = std::move(_httpStreamFactory);
 }
 
 bool HttpServer::disableSsl() const
@@ -378,9 +360,8 @@ HttpServer::Ptr HttpServerFactory::buildHttpServer(const std::string& _listenIP,
     // create httpserver and launch a listening port
     auto server =
         std::make_shared<HttpServer>(_listenIP, _listenPort, _httpBodySizeLimit, _corsConfig);
-    auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(*_ioc);
     server->setCtx(std::move(_ctx));
-    server->setAcceptor(acceptor);
+    server->setAcceptor(boost::asio::ip::tcp::acceptor{*_ioc});
     server->setHttpStreamFactory(HttpStreamFactory{});
 
     HTTP_SERVER(INFO) << LOG_BADGE("buildHttpServer") << LOG_KV("listenIP", _listenIP)

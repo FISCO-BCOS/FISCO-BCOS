@@ -27,6 +27,7 @@
 #include <future>
 #include <memory>
 #include <string>
+#include <thread>
 
 using namespace bcos;
 
@@ -64,8 +65,8 @@ BOOST_AUTO_TEST_CASE(test_connectToWsServerResolveFailure)
     auto connector = std::make_shared<WsConnector>();
     auto ioServicePool = std::make_shared<IOServicePool>(1);
     connector->setIOServicePool(ioServicePool);
-    connector->setCtx(std::make_shared<boost::asio::ssl::context>(
-        boost::asio::ssl::context::tls_client));
+    connector->setCtx(
+        std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tls_client));
 
     // grab a free loopback port, then release it so nothing listens on it
     uint16_t port = 0;
@@ -79,13 +80,14 @@ BOOST_AUTO_TEST_CASE(test_connectToWsServerResolveFailure)
     std::string host = "127.0.0.1";
     std::string endpoint = host + ":" + std::to_string(port);
 
-    std::promise<boost::beast::error_code> result;
-    auto future = result.get_future();
+    // hold the promise on the heap and capture it by value, so it outlives the
+    // handler chain even if the test exits early (e.g. on the timeout path)
+    auto result = std::make_shared<std::promise<boost::beast::error_code>>();
+    auto future = result->get_future();
     connector->connectToWsServer(host, port, true,
-        [&result](boost::beast::error_code _ec, const std::string&,
-            std::shared_ptr<WsStreamDelegate>, std::shared_ptr<std::string>) {
-            result.set_value(_ec);
-        });
+        [result](boost::beast::error_code _ec, const std::string&,
+            std::shared_ptr<WsStreamDelegate>,
+            std::shared_ptr<std::string>) { result->set_value(_ec); });
 
     BOOST_REQUIRE(future.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
     auto ec = future.get();
@@ -94,8 +96,19 @@ BOOST_AUTO_TEST_CASE(test_connectToWsServerResolveFailure)
     // which would mean the resolver was destroyed before async_resolve finished
     BOOST_CHECK_MESSAGE(ec && ec != boost::asio::error::operation_aborted,
         "expected a connect-stage error, got: " << ec.message());
+    // erasePendingConns runs on the io thread right after the callback fired,
+    // so poll briefly instead of racing it for the x_pendingConns lock
+    bool erased = false;
+    for (int i = 0; i < 100 && !erased; ++i)
+    {
+        erased = connector->insertPendingConns(endpoint);
+        if (!erased)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
     // the failed connect must erase the pending conns entry
-    BOOST_CHECK(connector->insertPendingConns(endpoint));
+    BOOST_CHECK(erased);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
