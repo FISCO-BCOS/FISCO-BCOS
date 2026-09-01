@@ -79,7 +79,8 @@ constexpr std::uint32_t c_newPayloadVersion =
 SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engineService,
     bcos::ledger::LedgerInterface::Ptr _ledger, std::uint64_t _blockIntervalMs,
     bool _produceEmptyBlocks, bcos::crypto::HashType _prevRandao, std::string _feeRecipient,
-    std::uint64_t _fixedTimestamp)
+    std::uint64_t _fixedTimestamp, std::optional<std::uint64_t> _gasLimit,
+    std::optional<bcos::bytes> _eip1559Params)
   : m_engineService(_engineService),
     m_ledger(std::move(_ledger)),
     m_blockIntervalMs(_blockIntervalMs > 0 ? _blockIntervalMs : 1000),
@@ -88,7 +89,9 @@ SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engine
     // Parse the coinbase exactly once here: a malformed fee_recipient must fail the node at
     // startup, not fail on the first block tick.
     m_feeRecipient(toAddress(_feeRecipient)),
-    m_fixedTimestamp(_fixedTimestamp)
+    m_fixedTimestamp(_fixedTimestamp),
+    m_gasLimit(_gasLimit),
+    m_eip1559Params(std::move(_eip1559Params))
 {}
 
 SingleNodeConsensus::~SingleNodeConsensus()
@@ -223,6 +226,17 @@ bool SingleNodeConsensus::produceBlock()
     // zero roots are acceptable on a real chain.
     payloadAttributes.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
     payloadAttributes.parentBeaconBlockRoot = bcos::h256{};
+    // OP mode (FCU V3+, set by Initializer): gasLimit and Holocene eip1559Params are
+    // mandatory on the OP path (validateOpPayloadAttributes). The generic V1 driver keeps
+    // both absent — pre-V3 attributes must not carry them.
+    if (m_gasLimit.has_value())
+    {
+        payloadAttributes.gasLimit = m_gasLimit;
+    }
+    if (m_eip1559Params.has_value())
+    {
+        payloadAttributes.eip1559Params = m_eip1559Params;
+    }
 
     // forkchoiceUpdated(head, attributes): the EL resolves the head hash from storage, removes
     // stale transactions, seals the in-process mempool (with the nonce-vs-state check) and

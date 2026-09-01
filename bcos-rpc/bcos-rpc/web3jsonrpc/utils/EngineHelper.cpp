@@ -322,7 +322,6 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .baseFeePerGas = parseBigQuantity(ep["baseFeePerGas"], "executionPayload.baseFeePerGas"),
         .blockHash = parseH256Field(ep["blockHash"], "executionPayload.blockHash"),
         .transactions = {},
-        .rawTransactions = std::nullopt,
         .extraData = {},
         .feeRecipient = parseAddressField(ep["feeRecipient"], "executionPayload.feeRecipient"),
         .timestamp = engineSecondsToInternalMillis(
@@ -332,6 +331,7 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .withdrawals = std::nullopt,
         .blobGasUsed = std::nullopt,
         .excessBlobGas = std::nullopt,
+        .rawTransactions = std::nullopt,
         .withdrawalsRoot = std::nullopt,
     };
     if (ep.isMember("extraData"))

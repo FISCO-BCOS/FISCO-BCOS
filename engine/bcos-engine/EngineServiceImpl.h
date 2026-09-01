@@ -539,6 +539,12 @@ private:
         const PayloadAttributes& payloadAttributes, std::uint32_t version,
         bcos::protocol::BlockNumber nextBlockNumber)
     {
+        // The whole build (probe + canonical delegate passes) runs under x_state so a
+        // concurrent newPayload execution cannot race the shared OpScheduler delegate.
+        // Storage2 backends used here complete in-thread, so holding the lock across
+        // co_await is safe (same rationale as runOpNewPayloadSteps).
+        std::unique_lock xStateLock(x_state);
+
         // Payload ID from CL attributes only (not pool txs or the synthesized deposit).
         auto payloadIdOpt =
             derivePayloadId(payloadAttributes, forkchoiceState.headBlockHash, version);
@@ -566,7 +572,7 @@ private:
         if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
         {
             forcedEnvelopes.push_back(m_scheduler.get().synthesizeL1AttributesEnvelope(
-                m_scheduler.get().isJovianActive()));
+                payloadAttributes.timestamp));
         }
         if (payloadAttributes.transactions.has_value())
         {
@@ -825,24 +831,22 @@ private:
         {
             entry.blobsBundle = BlobsBundleV1{};
         }
+        // xStateLock is held for the whole function; publish directly.
+        m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
+        m_payloadCache[payloadId] = std::move(entry);
+        // Dedupe: identical attributes rebuild the same payload ID.
+        if (std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId) ==
+            m_payloadOrder.end())
         {
-            std::unique_lock lock(x_state);
-            m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
-            m_payloadCache[payloadId] = std::move(entry);
-            // Dedupe: identical attributes rebuild the same payload ID.
-            if (std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId) ==
-                m_payloadOrder.end())
-            {
-                m_payloadOrder.push_back(payloadId);
-            }
-            while (m_payloadOrder.size() > c_maxPayloadEntries)
-            {
-                auto const evictedId = m_payloadOrder.front();
-                m_payloadOrder.pop_front();
-                m_payloadCache.erase(evictedId);
-                std::erase_if(
-                    m_blockHashToPayloadId, [&](auto const& kv) { return kv.second == evictedId; });
-            }
+            m_payloadOrder.push_back(payloadId);
+        }
+        while (m_payloadOrder.size() > c_maxPayloadEntries)
+        {
+            auto const evictedId = m_payloadOrder.front();
+            m_payloadOrder.pop_front();
+            m_payloadCache.erase(evictedId);
+            std::erase_if(
+                m_blockHashToPayloadId, [&](auto const& kv) { return kv.second == evictedId; });
         }
         co_return ForkchoiceUpdatedResult{
             .payloadStatus = makeStatus(
@@ -1126,43 +1130,50 @@ private:
         }
 
         // Locally built payload: commit the pending block without re-execution.
+        bcos::protocol::BlockHeader::Ptr builtHeader;
         {
+            std::shared_lock lock(x_state);
             auto it = m_blockHashToPayloadId.find(payload.blockHash);
             if (it != m_blockHashToPayloadId.end())
             {
                 auto payloadId = it->second;
-                bcos::protocol::BlockHeader::Ptr builtHeader;
+                if (auto entry = m_payloadCache.find(payloadId); entry != m_payloadCache.end())
                 {
-                    std::shared_lock lock(x_state);
-                    if (auto entry = m_payloadCache.find(payloadId); entry != m_payloadCache.end())
+                    // Deterministic payload IDs are derived from attributes only: a stale
+                    // retry of an older build can carry a payloadId whose cache entry was
+                    // replaced by a newer build of the same attributes. Only the cached
+                    // build whose blockHash equals the submitted payload may be committed
+                    // without re-execution; anything else falls through to the full
+                    // execution path below.
+                    if (entry->second.executionPayload.blockHash == payload.blockHash)
                     {
                         builtHeader = entry->second.header;
                     }
                 }
-                if (builtHeader)
-                {
-                    // Cached payload whose pending is gone: VALID if already in the ledger.
-                    auto knownView = m_globalStateStorage.get().fork();
-                    if (auto known = co_await bcos::ledger::getBlockNumber(
-                            knownView, payload.blockHash, bcos::ledger::fromStorage);
-                        known.has_value())
-                    {
-                        co_return makeStatus(
-                            PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
-                    }
-                    bcos::Error::Ptr commitError;
-                    m_delegate->commitBlock(
-                        builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
-                            commitError = std::move(error);
-                        });
-                    if (commitError)
-                    {
-                        co_return mapDelegateError(*commitError, std::nullopt);
-                    }
-                    co_return makeStatus(
-                        PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
-                }
             }
+        }
+        if (builtHeader)
+        {
+            // Cached payload whose pending is gone: VALID if already in the ledger.
+            auto knownView = m_globalStateStorage.get().fork();
+            if (auto known = co_await bcos::ledger::getBlockNumber(
+                    knownView, payload.blockHash, bcos::ledger::fromStorage);
+                known.has_value())
+            {
+                co_return makeStatus(
+                    PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
+            }
+            bcos::Error::Ptr commitError;
+            m_delegate->commitBlock(
+                builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
+                    commitError = std::move(error);
+                });
+            if (commitError)
+            {
+                co_return mapDelegateError(*commitError, std::nullopt);
+            }
+            co_return makeStatus(
+                PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
         }
 
         // Serialize OP execution under x_state. Storage2 backends used here complete
@@ -1468,7 +1479,7 @@ private:
             .baseFeePerGas = 0,
             .blockHash = detail::syntheticHash(payloadId),
             .transactions = std::move(engineTransactions),
-            .extraData = {},
+            .extraData = detail::encodeOptimismExtraData(payloadAttributes),
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .timestamp = payloadAttributes.timestamp,
             .blockNumber = nextBlockNumber,
@@ -1518,6 +1529,7 @@ private:
             emptyHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
             emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
             emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
+            emptyHeader->setExtraData(executionPayload.extraData);
             emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
             emptyHeader->setReceiptsRoot(h256{});
             emptyHeader->setTxsRoot(h256{});
@@ -1543,6 +1555,7 @@ private:
         blockHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
         blockHeader->setPrevRandao(payloadAttributes.prevRandao);
         blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
+        blockHeader->setExtraData(executionPayload.extraData);
 
         // Step 2c: Execute transactions via the scheduler, over the decoded executable
         // forms. Raw-only entries (forced transactions from the OP attributes list) have

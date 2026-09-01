@@ -5,6 +5,7 @@
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
 #include <bcos-evm/eth/state/state.hpp>
+#include <array>
 #include <cstdint>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
@@ -228,6 +229,39 @@ struct DepositTx
 
 /// OP 0x7E deposit transaction/receipt type (EIP-2718 typed envelope prefix).
 constexpr auto kDepositTxType = static_cast<evmone::state::Transaction::Type>(0x7e);
+
+// ---- L1-attributes deposit calldata layout (shared by synthesis and validation) ----
+// The calldata is 176B on the Jovian activation block, 178B with the Jovian selector
+// thereafter. Selectors mirror op-geth core/types (setL1BlockValues dispatch); the
+// pre-Isthmus Ecotone form (164B, 0x440a5e20) predates this chain's Isthmus baseline and
+// is never synthesized.
+inline constexpr std::size_t IsthmusL1AttributesLen = 176;
+inline constexpr std::size_t JovianL1AttributesLen = 178;
+inline constexpr std::array<uint8_t, 4> IsthmusL1AttributesSelector = {0x09, 0x89, 0x99, 0xbe};
+inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6, 0xbe, 0x2b};
+/// op-geth L1InfoDepositGas (core/types/deposit_tx.go) — the reference L1-attributes
+/// deposit gas limit. Not used by the built-in-CL synthesis: FISCO's runDeposit rejects a
+/// deposit whose gas exceeds the block gas pool (op-geth ErrGasLimitReached, block-level
+/// error), and 150M exceeds every realistic block gasLimit this chain configures, so the
+/// fallback mints 1M — enough for the intrinsic gas + calldata the attributes deposit
+/// actually consumes.
+inline constexpr int64_t c_l1InfoDepositGas = 1'000'000;
+
+/// L1 block information used to synthesize the L1-attributes deposit (mirrors op-geth
+/// core/types/rollup_cost.go L1BlockInfo). In production the deposit is derived by the
+/// op-node (L2 CL) and arrives inside payloadAttributes.transactions; this struct only
+/// feeds the built-in single-node CL's fallback synthesis, which runs when the CL did not
+/// supply a deposit. All-zero fields are the documented stand-in for an absent [op_l1]
+/// configuration (see NodeConfig::loadOpL1Config) — never a production L1 value.
+struct L1BlockInfo
+{
+    uint64_t number = 0;
+    uint64_t time = 0;
+    intx::uint256 baseFee{0};
+    evmc::bytes32 blockHash{};
+    uint64_t sequenceNumber = 0;
+    intx::uint256 blobBaseFee{0};
+};
 
 /// Execute one 0x7E deposit: skip buyGas; add balance when mint has a value; still deduct
 /// intrinsic + the EIP-7623 floor; both failure paths retain the mint and force-increment the

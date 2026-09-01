@@ -83,10 +83,8 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
 
 // ---- Jovian L1-attributes block shape ----
 // The L1-attributes deposit's calldata is 176B on the Jovian activation block, 178B with the
-// Jovian selector thereafter.
-inline constexpr std::size_t IsthmusL1AttributesLen = 176;
-inline constexpr std::size_t JovianL1AttributesLen = 178;
-inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6, 0xbe, 0x2b};
+// Jovian selector thereafter. Lengths/selectors live in OpTransition.h (shared with the
+// deposit synthesis in OpDepositEncode.h).
 
 /// Shared Jovian L1-attributes shape (selector/length + activation deposits-only).
 /// `lastTxIsDeposit` is the path-specific last-tx probe: processOpBlock uses the DepositTx

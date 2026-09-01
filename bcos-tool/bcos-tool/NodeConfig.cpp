@@ -166,6 +166,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadRpcConfig(_pt);
     loadWeb3RpcConfig(_pt);
     loadOpEngineRpcConfig(_pt);
+    loadOpL1Config(_pt);
     loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
     loadSingleNodeConsensusConfig(_pt);
@@ -895,6 +896,37 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("jwtSecretFile", jwtSecretFile)
                          << LOG_KV("clockSkewSecs", clockSkewSecs)
                          << LOG_KV("unsafeAllowV1Executor", allowV1Executor);
+}
+
+void NodeConfig::loadOpL1Config(boost::property_tree::ptree const& _pt)
+{
+    /*
+    [op_l1]
+        l1_block_hash=0x...
+        l1_block_number=0
+        l1_timestamp=0
+        l1_base_fee=0
+        l1_sequence_number=0
+        l1_blob_base_fee=0
+    L1 information for the built-in L1-attributes deposit synthesis. Only consumed when
+    executor_version>=3 (OP mode) and the built-in single-node driver builds payloads.
+    All-zero when absent: the built-in-CL stand-in, never a production L1 value (a real
+    deployment's op-node supplies the deposit itself via payloadAttributes.transactions).
+    */
+    m_opL1Info.blockHashHex = _pt.get<std::string>("op_l1.l1_block_hash", "");
+    m_opL1Info.blockNumber = _pt.get<uint64_t>("op_l1.l1_block_number", 0);
+    m_opL1Info.timestamp = _pt.get<uint64_t>("op_l1.l1_timestamp", 0);
+    m_opL1Info.baseFee = _pt.get<uint64_t>("op_l1.l1_base_fee", 0);
+    m_opL1Info.sequenceNumber = _pt.get<uint64_t>("op_l1.l1_sequence_number", 0);
+    m_opL1Info.blobBaseFee = _pt.get<uint64_t>("op_l1.l1_blob_base_fee", 0);
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOpL1Config")
+                         << LOG_KV("l1BlockHash", m_opL1Info.blockHashHex)
+                         << LOG_KV("l1BlockNumber", m_opL1Info.blockNumber)
+                         << LOG_KV("l1Timestamp", m_opL1Info.timestamp)
+                         << LOG_KV("l1BaseFee", m_opL1Info.baseFee)
+                         << LOG_KV("l1SequenceNumber", m_opL1Info.sequenceNumber)
+                         << LOG_KV("l1BlobBaseFee", m_opL1Info.blobBaseFee);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)

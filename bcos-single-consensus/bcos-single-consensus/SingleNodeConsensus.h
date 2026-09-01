@@ -17,6 +17,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -52,7 +53,9 @@ public:
         bool _produceEmptyBlocks = true,
         bcos::crypto::HashType _prevRandao = bcos::crypto::HashType{},
         std::string _feeRecipient = "0x0000000000000000000000000000000000000000",
-        std::uint64_t _fixedTimestamp = 0);
+        std::uint64_t _fixedTimestamp = 0,
+        std::optional<std::uint64_t> _gasLimit = std::nullopt,
+        std::optional<bcos::bytes> _eip1559Params = std::nullopt);
 
     ~SingleNodeConsensus();
 
@@ -83,6 +86,11 @@ private:
     /// at startup instead of failing on the first block tick).
     bcos::Address m_feeRecipient;
     std::uint64_t m_fixedTimestamp;
+    /// OP-mode (FCU V3+) attributes: gasLimit and Holocene eip1559Params are mandatory on the
+    /// OP path but rejected pre-V3, so they stay nullopt for the generic V1 driver and are
+    /// populated by the OP-mode constructor call (Initializer).
+    std::optional<std::uint64_t> m_gasLimit;
+    std::optional<bcos::bytes> m_eip1559Params;
 
     /// CL-side head tracking. newPayload() persists the ledger block tables — including
     /// SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER — via ledger::prewriteBlockToBuffer

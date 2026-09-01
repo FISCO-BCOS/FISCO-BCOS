@@ -80,6 +80,7 @@
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
+#include <algorithm>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
 #include <txpool/validator/TxValidator.h>
@@ -568,9 +569,41 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                                       "OP mode (executor_version>=3) requires a numeric chain_id "
                                       "(decimal or 0x-prefixed hex)"));
         }
+        // L1 info for the built-in L1-attributes deposit synthesis ([op_l1] config).
+        // All-zero when absent — the documented built-in-CL stand-in, never a production
+        // L1 value (a real deployment's op-node supplies the deposit itself).
+        bcos::evm::opstack::L1BlockInfo l1BlockInfo;
+        const auto& opL1 = m_nodeConfig->opL1Info();
+        if (!opL1.blockHashHex.empty())
+        {
+            bcos::bytes hashBytes;
+            try
+            {
+                hashBytes = bcos::fromHex(opL1.blockHashHex);
+            }
+            catch (const std::exception&)
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                          "OP mode (executor_version>=3): op_l1.l1_block_hash "
+                                          "must be a hex string"));
+            }
+            if (hashBytes.size() != sizeof(evmc::bytes32))
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                          "OP mode (executor_version>=3): op_l1.l1_block_hash "
+                                          "must be a 32-byte (64 hex chars) block hash"));
+            }
+            std::copy_n(
+                hashBytes.begin(), sizeof(evmc::bytes32), l1BlockInfo.blockHash.bytes);
+        }
+        l1BlockInfo.number = opL1.blockNumber;
+        l1BlockInfo.time = opL1.timestamp;
+        l1BlockInfo.baseFee = opL1.baseFee;
+        l1BlockInfo.sequenceNumber = opL1.sequenceNumber;
+        l1BlockInfo.blobBaseFee = opL1.blobBaseFee;
         auto opScheduler =
             std::make_shared<bcos::evm::engine::OpSchedulerSeam<GlobalStateStorage::ViewType>>(
-                forkFlags);
+                forkFlags, l1BlockInfo);
         // Same OpScheduler is the engine delegate and scheduler slot 3.
         auto opDelegate =
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>>(
@@ -824,15 +857,25 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                     "enable_single_node_consensus requires the EngineService to be built"));
         }
         // OP Engine API is V4; the generic driver stays on V1.
-        auto const driverEngineApiVersion =
-            opStackMode ? static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4) :
-                          static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1);
+        // OP mode (executor_version>=3) additionally mandates gasLimit + Holocene
+        // eip1559Params in FCU attributes (validateOpPayloadAttributes); the generic V1
+        // driver must keep them absent (pre-V3 attributes reject eip1559Params). Defaults:
+        // 30M gas; Canyon EIP-1559 denominator 250 / elasticity 6.
+        std::optional<std::uint64_t> driverGasLimit;
+        std::optional<bcos::bytes> driverEip1559Params;
+        if (opStackMode)
+        {
+            driverGasLimit = 30'000'000ull;
+            driverEip1559Params =
+                bcos::bytes{0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06};
+        }
         m_singleNodeConsensus = std::make_shared<single_consensus::SingleNodeConsensus>(
             *m_engineServiceInitializer->engineService(), m_ledger,
             m_nodeConfig->singleNodeConsensusBlockInterval(),
             m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
             m_nodeConfig->singleNodeConsensusFeeRecipient(),
-            m_nodeConfig->singleNodeConsensusFixedTimestamp(), driverEngineApiVersion);
+            m_nodeConfig->singleNodeConsensusFixedTimestamp(), driverGasLimit,
+            driverEip1559Params);
     }
 
 #ifdef TOOLS

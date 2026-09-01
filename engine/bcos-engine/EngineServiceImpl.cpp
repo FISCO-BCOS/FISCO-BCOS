@@ -257,11 +257,14 @@ bcos::bytes bcos::engine::detail::encodeOptimismExtraData(
     bcos::bytes extraData(jovian ? c_jovianExtraDataBytes : c_holoceneExtraDataBytes, 0);
     extraData[0] = jovian ? c_jovianExtraDataVersion : c_holoceneExtraDataVersion;
     auto out = std::span(extraData);
-    bcos::toBigEndian(denominator, out.subspan(1, 4));
-    bcos::toBigEndian(elasticity, out.subspan(5, 4));
+    auto denominatorField = out.subspan(1, 4);
+    bcos::toBigEndian(denominator, denominatorField);
+    auto elasticityField = out.subspan(5, 4);
+    bcos::toBigEndian(elasticity, elasticityField);
     if (jovian)
     {
-        bcos::toBigEndian(*payloadAttributes.minBaseFee, out.subspan(9, 8));
+        auto minBaseFeeField = out.subspan(9, 8);
+        bcos::toBigEndian(*payloadAttributes.minBaseFee, minBaseFeeField);
     }
     return extraData;
 }

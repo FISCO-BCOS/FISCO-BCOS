@@ -37,6 +37,21 @@
 #define NodeConfig_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("NodeConfig")
 namespace bcos::tool
 {
+/// OP-mode L1 information for the built-in L1-attributes deposit synthesis ([op_l1]
+/// section; all-zero when absent — the built-in-CL stand-in, never a production L1 value).
+/// Only consumed when executor_version>=3 (OP mode) and the built-in single-node driver
+/// builds payloads; a real deployment's op-node supplies the deposit itself via
+/// payloadAttributes.transactions, bypassing this synthesis entirely.
+struct OpL1Info
+{
+    std::string blockHashHex;  // "0x" + 64 hex chars; empty = zero blockHash
+    uint64_t blockNumber = 0;
+    uint64_t timestamp = 0;
+    uint64_t baseFee = 0;
+    uint64_t sequenceNumber = 0;
+    uint64_t blobBaseFee = 0;
+};
+
 class NodeConfig
 {
 public:
@@ -62,6 +77,7 @@ public:
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadOpL1Config(boost::property_tree::ptree const& _pt);
 
     virtual void loadWithoutTarsFrameworkConfig(boost::property_tree::ptree const& _pt);
 
@@ -98,6 +114,9 @@ public:
     /// chain.isthmus_time / chain.jovian_time timestamp thresholds). Isthmus is the OP-mode
     /// baseline; this flag selects Jovian semantics (DA footprint, operator fee ×100).
     bool opJovianActive() const;
+
+    /// OP-mode L1 info ([op_l1]); all-zero fields when the section is absent.
+    OpL1Info const& opL1Info() const { return m_opL1Info; }
 
     std::string const& privateKeyPath() const;
     std::string const& hsmLibPath() const;
@@ -525,6 +544,9 @@ private:
     std::string m_opEngineJwtSecretFile;
     int32_t m_opEngineClockSkewSecs{60};
     bool m_opEngineAllowV1Executor = false;
+
+    // OP-mode L1 info for the built-in L1-attributes deposit synthesis.
+    OpL1Info m_opL1Info;
 
     // config for single-node consensus
     bool m_enableSingleNodeConsensus = false;

@@ -14,11 +14,13 @@
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpCommitments.h>
 #include <opstack-executor/OpCommon.h>
+#include <opstack-executor/OpDepositEncode.h>
 #include <cstdint>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace bcos::evm::engine
@@ -29,7 +31,10 @@ template <class Storage>
 class OpSchedulerSeam
 {
 public:
-    explicit OpSchedulerSeam(bcos::evm::opstack::OpForkFlags forkFlags) : m_forkFlags(forkFlags) {}
+    explicit OpSchedulerSeam(bcos::evm::opstack::OpForkFlags forkFlags,
+        bcos::evm::opstack::L1BlockInfo l1BlockInfo = {})
+      : m_forkFlags(forkFlags), m_l1BlockInfo(std::move(l1BlockInfo))
+    {}
 
     using BlockEnv = bcos::protocol::BlockHeader;
     using ExecuteResult = OpExecuteBlockResult;
@@ -66,14 +71,16 @@ public:
     /// Jovian is active (blobGasUsed is DA footprint; Isthmus keeps it 0).
     [[nodiscard]] bool isJovianActive() const noexcept { return m_forkFlags.jovianActive; }
 
-    /// L1-attributes deposit envelope for the block's forced-transaction set. Not yet
-    /// implemented: the real L1-info synthesis (sourceHash from L1 block hash + sequence
-    /// number, per op-geth l1AttributesDeposited) lands with the OpScheduler wiring part.
-    /// Fails closed so an OP build cannot silently mint a placeholder deposit.
-    [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(bool) const
+    /// L1-attributes deposit envelope for the block's forced-transaction set, synthesized
+    /// from the configured L1 info (op-geth l1AttributesDeposited semantics). In production
+    /// the op-node (L2 CL) supplies this deposit inside payloadAttributes.transactions, so
+    /// this member only serves the built-in single-node CL's fallback. An all-zero
+    /// L1BlockInfo (no [op_l1] config) is the documented stand-in, never a production L1
+    /// value — see L1BlockInfo.
+    [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(uint64_t l2BlockTime) const
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error(
-            "synthesizeL1AttributesEnvelope: L1-attributes deposit synthesis not implemented yet"));
+        return bcos::evm::opstack::synthesizeL1AttributesDeposit(
+            m_l1BlockInfo, m_forkFlags.jovianActive, l2BlockTime);
     }
 
     OpSchedulerSeam(const OpSchedulerSeam&) = delete;
@@ -95,6 +102,7 @@ public:
 
 private:
     bcos::evm::opstack::OpForkFlags m_forkFlags;
+    bcos::evm::opstack::L1BlockInfo m_l1BlockInfo;
 };
 
 }  // namespace bcos::evm::engine
