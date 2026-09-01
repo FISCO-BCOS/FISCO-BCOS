@@ -10,9 +10,7 @@ namespace
 {
 using bcos::scheduler::SchedulerInterface;
 
-// Minimal fake: records which fake handled a call()/callAtBlock() (id == 0 means not selected);
-// no-op otherwise. callAtBlock additionally records the forwarded block number — the whole point
-// of the MultiVersionScheduler override is that the height survives the passthrough.
+// Fake scheduler: records which slot handled call/callAtBlock and the forwarded height.
 struct FakeScheduler : public SchedulerInterface
 {
     int id;

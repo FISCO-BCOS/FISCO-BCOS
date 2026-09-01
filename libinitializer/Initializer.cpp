@@ -238,11 +238,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
 {
-    // Single-node consensus mode is AIR-only. It skips txpool/pbft init and wires the
-    // in-process mempool into NodeService via AirNodeInitializer::setMemPool; on a MAX/tars
-    // node the flag would start the block-producing driver while sendRawTransaction still
-    // falls through to an uninitialized txpool. Reject the combination at startup rather
-    // than leaving that state reachable by a config flag.
+    // Single-node / OP engine production is AIR-only (in-process mempool).
     if (m_nodeConfig->engineDrivenBlockProduction() &&
         _nodeArchType != bcos::protocol::NodeArchitectureType::AIR)
     {
@@ -429,12 +425,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     m_executorVersion = executorVersion;
 
-    // State-layout gate (08-18 diagnosis "Bug A"): the storage2 executors (v2 EthereumExecutor
-    // / v3 OP) persist state as raw "table:key" rows — the genesis alloc import included —
-    // while the legacy v1 executor persists KeyPage pages (ShardingBlockExecutive wraps its
-    // execution storage in KeyPageStorage). Ledger::getStorageAt — the RPC state reads — must
-    // read the layout the chain's writer actually used, so force raw reads (keyPageSize=0) on
-    // storage2 chains; v1 keeps the configured keyPage layout where writer and reader match.
+    // v2+/OP write raw table:key rows; force Ledger::getStorageAt off KeyPage.
     if (auto concreteLedger = std::dynamic_pointer_cast<bcos::ledger::Ledger>(m_ledger);
         m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION && concreteLedger)
     {
@@ -449,11 +440,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // respond "engine service not available" (see EngineEndpoint.cpp).
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
 
-    // An OP Stack chain with v1 (non-Ethereum) semantics is nonsense. Fail fast instead. The only
-    // exception is the explicit test-only escape hatch unsafe_allow_v1_executor, which the v1
-    // Engine API integration harness (tools/engine_integration_test.sh, driving the v1
-    // EngineService over this endpoint with a mock CL / Lodestar) sets; production configs must
-    // not.
+    // OP engine RPC requires executor_version >= 2 (test-only escape: unsafe_allow_v1_executor).
     if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
     {
         if (!m_nodeConfig->opEngineAllowV1Executor())
@@ -555,16 +542,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
     }
 
-    // executor_version >= 3: OP mode. EngineService uses OpSchedulerSeam so c_opMode is true.
-    // Mutually exclusive with engineApiForV1Only; version 2 has no Engine API.
+    // executor_version >= 3: OP mode (OpSchedulerSeam / c_opMode).
     const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
     if (opStackMode)
     {
-        // Forks are feature-driven (feature_op_jovian). Isthmus is the OP baseline.
+        // Isthmus baseline; Jovian is feature-gated.
         auto forkFlags = bcos::evm::opstack::OpForkFlags{
             .jovianActive = m_nodeConfig->opJovianActive(),
         };
-        // chainId must be numeric (decimal or 0x-hex). Default genesis "chain" is rejected.
+        // chainId must be numeric (decimal or 0x-hex).
         uint64_t opChainId = 0;
         try
         {
@@ -585,7 +571,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto opScheduler =
             std::make_shared<bcos::evm::engine::OpSchedulerSeam<GlobalStateStorage::ViewType>>(
                 forkFlags);
-        // Same OpScheduler instance is the engine delegate and MultiVersionScheduler slot 3.
+        // Same OpScheduler is the engine delegate and scheduler slot 3.
         auto opDelegate =
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>>(
                 m_protocolInitializer->blockFactory()->receiptFactory(),
@@ -599,7 +585,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
             /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4),
             m_daCaps);
-        // decltype(*opScheduler) is a reference; c_opMode requires the value type.
+        // c_opMode needs the scheduler value type, not a reference.
         using OpEngineServiceT = bcos::engine::EngineServiceImpl<bcos::txpool::MemPoolImpl,
             GlobalStateStorage, executor_v1::TransactionExecutorImpl,
             std::remove_reference_t<decltype(*opScheduler)>>;
@@ -926,9 +912,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
             });
     }
 
-    // executor_version>=3 (OP): the delegate fires the notifier after a VALID OP block merges
-    // (OpScheduler::commitBlock); without it RPC block-number subscribers never see OP blocks.
-    // The setter is only present in OP mode.
+    // OP: notify RPC block-number subscribers after a VALID commit.
     if (m_setOpSchedulerBlockNumberNotifier)
     {
         m_setOpSchedulerBlockNumberNotifier(
@@ -1046,8 +1030,7 @@ void Initializer::initSysContract()
 
 void Initializer::start()
 {
-    // Engine-driven block production mode: txpool/pbft (and the sealer inside pbft) stay dormant —
-    // block production is driven by the EngineService (single-node driver or external op-node).
+    // Engine-driven production: leave txpool/pbft stopped.
     if (!m_nodeConfig->engineDrivenBlockProduction())
     {
         if (m_txpoolInitializer)

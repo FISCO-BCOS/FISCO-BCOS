@@ -40,32 +40,22 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
     bcos::bytesRef envRef{const_cast<bcos::byte*>(env.data()), env.size()};
     if (auto err = bcos::codec::rlp::decode(envRef, web3Tx); err)
     {
-        return std::nullopt;  // only malformed/un-enumerated envelopes -- no throw; 0x04 is already
-                              // supported by Web3Transaction
+        return std::nullopt;  // malformed / unknown type; 0x04 is already supported
     }
     auto tarsTx = web3Tx.takeToTarsTransaction();
-    // The read side's tx.hash() returns extraTransactionHash; leaving it empty would throw
-    // EmptyTransactionHash.
+    // extraTransactionHash is what tx.hash() returns.
     tarsTx.extraTransactionHash.assign(txHash.begin(), txHash.end());
-    // For non-deposits, fill sender (takeToTarsTransaction leaves it empty; the read side's from
-    // reads tx.sender()). Note: web3Tx.sender() returns a "0x"-prefixed hex string
-    // (Web3Transaction.cpp:207-223), while tarsTx.sender must be raw 20 bytes (the read side's
-    // toHex(tx.sender()) expects raw bytes) -- must restore via fromHex, otherwise it
-    // double-encodes into 84 garbage characters. The deposit branch already fills raw bytes
-    // (:121); the sender.empty() guard skips it.
+    // Non-deposits: sender is a 0x-hex string; store raw 20 bytes. Deposits already have it.
     if (tarsTx.sender.empty())
     {
         try
         {
-            auto sender = bcos::fromHex(web3Tx.sender());  // DataConvertUtility.h:119-166, 0x-aware
+            auto sender = bcos::fromHex(web3Tx.sender());
             tarsTx.sender.assign(sender.begin(), sender.end());
         }
         catch (std::exception const&)
         {
-            // web3Tx.sender() → Secp256k1Crypto::recoverAddress throws InvalidSignature on a bad
-            // signature. Without this, the exception escapes to the RPC layer and is misclassified
-            // as -32603; the caller's nullopt fallback (EngineServiceImpl.h:1184-1197) instead
-            // carries the raw envelope to decodeOneRawTx, which issues the INVALID verdict.
+            // Bad signature: let the caller treat the envelope as INVALID.
             return std::nullopt;
         }
     }
@@ -173,10 +163,7 @@ bool bcos::engine::detail::isGetPayloadVersionCompatible(
 
 namespace
 {
-/// Shared over the two transaction carriers (attributes hex strings and payload raw
-/// bytes): a blob (type-3) or unsupported/unknown-type transaction invalidates the whole
-/// carrier — it is never dropped individually. Blob rejection is FISCO's OP policy, not an
-/// op-geth check (decodeTyped accepts 0x03; see the OpScheduler.h type-byte gate note).
+/// Blob or unknown-type txs invalidate the whole carrier (not dropped individually).
 std::optional<std::string> validateRawTransactionKind(
     bcos::engine::RawTransactionKind kind, std::size_t index)
 {
@@ -349,10 +336,7 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
 std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     const PayloadAttributes& payloadAttributes, bool jovianActive)
 {
-    // Rollup-mode FCU attrs validation (op-geth checkOptimismPayloadAttributes,
-    // eth/catalyst/api_optimism.go:40-65, non-empty withdrawals rejection :55-58). The OP face
-    // is Isthmus+/Holocene+, so the Holocene eip1559Params and (from Jovian) minBaseFee
-    // presence rules are unconditional.
+    // OP FCU attrs: gasLimit, eip1559Params, empty withdrawals, Jovian minBaseFee.
     if (!payloadAttributes.gasLimit.has_value())
     {
         return std::string("gasLimit parameter is required (OP rollup)");
@@ -365,9 +349,7 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     {
         return std::string("eip1559Params must be exactly 8 bytes");
     }
-    // Partial-zero eip-1559 params are rejected at FCU time (op-geth
-    // ValidateHolocene1559Params): denominator=0 with elasticity!=0 (or vice versa) would
-    // build a block newPayload then refuses. Both zero is allowed (= prior constants).
+    // denom and elasticity must both be zero or both non-zero.
     const auto readU32BE = [&](std::size_t off) {
         return (static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off]) << 24) |
                (static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off + 1]) << 16) |
@@ -381,8 +363,7 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
         return std::string(
             "eip1559Params denominator and elasticity must both be zero or both non-zero");
     }
-    // OP blocks carry an empty withdrawals list (isthmus/exec-engine.md:161-163); a non-empty
-    // attrs list must be rejected, never silently normalized to empty at build time.
+    // OP withdrawals list must be empty.
     if (payloadAttributes.withdrawals.has_value() && !payloadAttributes.withdrawals->empty())
     {
         return std::string("withdrawals must be empty on the OP path");
@@ -468,11 +449,7 @@ std::optional<std::string> bcos::engine::detail::compareWithBuiltPayload(
     return std::nullopt;
 }
 
-// ============================ OP-mode helpers ============================
-// Reached only from `EngineServiceImpl::handleOpNewPayload`, i.e. only from an instantiation with
-// `c_opMode == true`. They are plain non-template functions living in this .cpp (rather than in
-// the header) because none of them touch a template parameter: they work purely on
-// `NewPayloadRequest`/`ExecutionPayload` plus a couple of caller-supplied derived values.
+// OP newPayload helpers (non-template; used only when c_opMode).
 
 std::optional<std::uint64_t> bcos::engine::detail::narrowU256ToU64(const u256& value)
 {
@@ -486,26 +463,14 @@ std::optional<std::uint64_t> bcos::engine::detail::narrowU256ToU64(const u256& v
 
 bcos::h2048 bcos::engine::detail::toEthLogsBloom(const Bloom& logsBloom)
 {
-    // `Bloom` is `std::array<byte, 256>` (bcos-utilities/Bloom.h);
-    // `protocol::BlockHeader::logsBloom` is `h2048` -- same 256 bytes, same order, so this is a
-    // plain byte copy through `FixedBytes(byte const*, size_t)`. Explicit constructor -- `return
-    // {...}` (copy-list-initialization) would not compile.
+    // Bloom and h2048 are the same 256 bytes; explicit ctor (brace-init would not compile).
     return bcos::h2048(logsBloom.data(), logsBloom.size());
 }
 
 std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     const NewPayloadRequest& request, bool jovianActive)
 {
-    // Static validation. Every failure here is reported by the caller as INVALID +
-    // latestValidHash = null (the blockHash-mismatch bucket): all of these checks run before
-    // parentKnown, so no ancestor has been established as valid at this point.
-    //
-    // Malformed-input cases assigned to JSON-RPC -32602 (missing/ill-typed members) are *not*
-    // decidable here: they are decoding failures at the RPC parse layer, and RPC endpoint
-    // registration is out of scope for this cycle. By the time a `NewPayloadRequest` exists, an
-    // absent and an empty array are indistinguishable for the vector-typed members. What this
-    // function can and does enforce is the *value* constraint ("present and empty" collapses to
-    // "empty").
+    // Static checks before parentKnown. Failures are INVALID with latestValidHash = null.
     const auto& payload = request.executionPayload;
 
     if (!payload.rawTransactions.has_value())
@@ -529,8 +494,7 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     }
     if (!payload.withdrawalsRoot.has_value())
     {
-        // OP Isthmus+ payload extension: the MessagePasser storage root cannot be derived from
-        // the (always empty) withdrawals list, so the header cannot be reconstructed without it.
+        // Isthmus+: withdrawalsRoot is required (cannot be derived from the empty list).
         return std::string("withdrawalsRoot is required on the OP path (Isthmus+)");
     }
     if (!payload.excessBlobGas.has_value() || *payload.excessBlobGas != 0)
@@ -543,22 +507,12 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     }
     if (!jovianActive && *payload.blobGasUsed != 0)
     {
-        // Isthmus: the slot is a genuine blob-gas counter and OP blocks carry no blobs, so it
-        // must be 0. From Jovian on the same header slot is repurposed as the DA footprint
-        // (OpBlockExecute.h's OpBlockSeal) and is validated by seal comparison instead -- hence
-        // this check
-        // is gated on the fork, not unconditional.
+        // Isthmus: blobGasUsed is a blob counter (must be 0). Jovian reuses the slot as DA
+        // footprint and checks it in the seal comparison.
         return std::string("blobGasUsed must be zero before Jovian (OP Isthmus)");
     }
 
-    // Range checks for the header fields whose `ExecutionPayload` type is wider (or signed)
-    // relative to the ETH header's uint64_t. Doing them here makes `rebuildOpEthHeader` total.
-    //
-    // `blockNumber` is `bcos::protocol::BlockNumber` (int64_t), not u256 -- the narrowing hazard
-    // is the sign, not the width: a negative value would wrap to a huge uint64 in the header and,
-    // worse, be lexical_cast into a bogus registration key. Same "explicit check before
-    // narrowing" discipline as `narrowU256ToU64` below, which exists because of this repo's
-    // documented silent-truncation incident.
+    // Width/sign checks so rebuildOpEthHeader does not wrap.
     if (payload.blockNumber < 0)
     {
         return std::string("blockNumber must not be negative");
@@ -567,41 +521,15 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     {
         return std::string("gasLimit exceeds the uint64 range of the ETH header field");
     }
-    // Execution stores gas_limit as int64; values above 2^63-1 wrap negative.
+    // Execution stores gasLimit as int64.
     if (*narrowU256ToU64(payload.gasLimit) >
         static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
     {
         return std::string("gasLimit exceeds the maximum block gas limit (2^63-1)");
     }
-    // `gasUsed <= gasLimit` has NO pre-execution header check here on purpose, unlike op-geth's
-    // beacon `verifyHeader` (`consensus/beacon/consensus.go:266-268`, reached before any state is
-    // touched). It is guaranteed by the execution side instead, in two layers that together match
-    // op-geth's pre-execution rejection:
-    //   1. by construction — `processOpBlock` (`OpBlockExecute.cpp:126`) starts the gas pool at the
-    //      block gas limit and each tx is gated by `tx.gasLimit <= blockGasLeft` (evmone
-    //      validate/transition) with `gasUsed <= tx.gasLimit`, so the computed `cumulative`
-    //      (= OpExecuteBlockResult::gasUsed) can never exceed the block gas limit;
-    //   2. by commitment comparison — `payload.gasUsed` is one of the six-way comparison fields
-    //      (bcos-evm/bcos-evm/engine/OpSchedulerSeam.h:94-103, struct OpExecuteBlockResult),
-    //      pinned to the computed value, so a payload that CLAIMS `gasUsed > gasLimit` fails the
-    //      comparison after execution -> INVALID.
-    // Behaviorally equivalent to op-geth, with a different timing: FISCO rejects only after
-    // executing the block, op-geth rejects before execution (the same "no full
-    // VerifyHeader/ValidateBody equivalent" structural note as in
-    // docs/opstack-opgeth-e2e-comparison.md). Not a gap, but deliberately not mirrored here.
-    // extraData: OP Holocene+ header shape. op-geth validates it in
-    // `consensus/misc/eip1559/eip1559_optimism.go`'s `ValidateHoloceneExtraData` (Isthmus) /
-    // `ValidateJovianExtraData` (Jovian), reached from BOTH the block-verify path
-    // (`consensus/beacon/consensus.go:240`) and the newPayload path
-    // (`eth/catalyst/api_optimism.go:22`):
-    //   - Isthmus: exactly 9 bytes = 0x00 version ‖ uint32 denominator ‖ uint32 elasticity (big
-    //     endian), with denominator and elasticity both non-zero;
-    //   - Jovian: exactly 17 bytes = 0x01 version ‖ the same 8 eip-1559 bytes ‖ uint64 minBaseFee
-    //     (minBaseFee arbitrary, not validated).
-    // The OP path is always Isthmus+ (`withdrawalsRoot` is required above), so an empty extraData
-    // is never valid here. This shape check subsumes the old 32-byte ETH length bound (9 and 17
-    // are both < 32): a caller-supplied blob longer than 32 bytes now fails the length branch
-    // below with a shape message instead of the generic bound.
+    // gasUsed > gasLimit is rejected after execution via seal comparison, not here.
+    // extraData: Isthmus 9 bytes (0x00 + denom + elasticity); Jovian 17 bytes (0x01 + same +
+    // minBaseFee). denom and elasticity must be non-zero.
     {
         const auto& extra = payload.extraData;
         if (jovianActive)
@@ -626,9 +554,7 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
                 return std::string("extraData version byte must be 0x00 on the OP path (Isthmus)");
             }
         }
-        // denominator = extra[1:5], elasticity = extra[5:9], both big-endian uint32 and both
-        // required non-zero (op-geth `validateHoloceneExtraDataPart`). The offsets are identical
-        // for Isthmus and Jovian; only the total length and version byte differ.
+        // extra[1:5] denominator, extra[5:9] elasticity (big-endian uint32).
         const auto readU32BE = [&extra](std::size_t off) {
             return (static_cast<std::uint32_t>(extra[off]) << 24) |
                    (static_cast<std::uint32_t>(extra[off + 1]) << 16) |
@@ -653,30 +579,13 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
         return std::string("blobGasUsed exceeds the uint64 range of the ETH header field");
     }
 
-    // Jovian DA-footprint block limit. From Jovian on, the header `blobGasUsed` slot carries the
-    // block's DA footprint (OpBlockExecute.h's OpBlockSeal); a block whose DA footprint exceeds its
-    // own
-    // gasLimit is rejected. op-geth checks the recomputed footprint against `block.GasLimit()` in
-    // `core/block_validator.go:131` (Jovian branch, DA footprint from
-    // `core/types/rollup_cost.go`'s `CalcDAFootprint`). Checking the payload's claimed
-    // `blobGasUsed` here is equivalent given the step-5 seal comparison already pins `blobGasUsed`
-    // to the computed footprint; it only ever widens rejection (single direction), never accepts a
-    // block op-geth would reject. Isthmus keeps `blobGasUsed == 0` (checked above), so this is
-    // Jovian-gated. Both operands are u256, compared directly.
+    // Jovian: DA footprint (blobGasUsed) must not exceed gasLimit.
     if (jovianActive && *payload.blobGasUsed > payload.gasLimit)
     {
         return std::string("DA footprint (blobGasUsed) exceeds the block gas limit");
     }
 
-    // The OP path carries no execution requests (there is no engine API to set them -- the RPC
-    // layer always sends nullopt, EngineHelper.cpp:100-105), so a present-and-NON-empty list
-    // contradicts the protocol's request shape and is rejected here, in the same bucket as every
-    // other static check above (INVALID + latestValidHash=null, before parentKnown). This is the
-    // explicit check the sentinel static_assert (EngineNewPayloadGateTest.cpp, mutation class #7's
-    // compile-time half) forced once `NewPayloadRequest::executionRequests` existed; the mutation
-    // test now sets the real carrier instead of the requestsHash surrogate. Rejecting rather than
-    // hashing keeps the reconstructed header's `requestsHash` pin to the OP empty-requests
-    // constant provably consistent: a non-empty list never reaches the reconstruction.
+    // OP carries no execution requests.
     if (request.executionRequests.has_value() && !request.executionRequests->empty())
     {
         return std::string("executionRequests must be absent or empty on the OP path");
@@ -688,16 +597,7 @@ bcos::protocol::BlockHeader::Ptr bcos::engine::detail::rebuildOpEthHeader(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const h256& transactionsRoot, const h256& parentBeaconBlockRoot)
 {
-    // 21 fields, all of which land in the FISCO BlockHeader (tars, PR #5385); the 3 post-merge
-    // constants (ommersHash/difficulty/nonce) via applyOpHeaderConstants (read back by
-    // encodeOpHeader/opHeaderHash). Field sources: 17 verbatim from the payload (extraData
-    // kept "as-is", never re-derived), 1 caller-derived transactionsRoot (the payload has no such
-    // field), constants at the top of this file. timestamp is stored in milliseconds per FISCO
-    // convention (blockHash/RLP/execution always use seconds; tars storage uses milliseconds).
-    //
-    // Precondition: `validateOpNewPayloadRequest` returned nullopt for this request -- that is
-    // what guarantees the optionals below are engaged. A violated precondition surfaces as a
-    // thrown `std::bad_optional_access`, i.e. loudly, rather than as a quietly wrong block hash.
+    // Requires validateOpNewPayloadRequest to have passed (optionals are engaged).
     auto header = factory->createBlockHeader();
     const auto number = static_cast<bcos::protocol::BlockNumber>(payload.blockNumber);
     header->setNumber(number);
@@ -717,13 +617,11 @@ bcos::protocol::BlockHeader::Ptr bcos::engine::detail::rebuildOpEthHeader(
     header->setBaseFee(payload.baseFeePerGas);
     header->setWithdrawalsRoot(payload.withdrawalsRoot.value());
     header->setBlobGasUsed(payload.blobGasUsed.value());
-    // excessBlobGas is pinned to 0 by validation above (consistent with the retired
-    // EthBlockHeader).
+    // excessBlobGas is 0 after validation.
     header->setExcessBlobGas(bcos::u256(0));
     header->setParentBeaconBlockRoot(parentBeaconBlockRoot);
     header->setRequestsHash(c_opEmptyRequestsHash);
-    // The 3 post-merge constants (uncleHash/difficulty/nonce) — read back by
-    // encodeOpHeader/opHeaderHash.
+    // Post-merge uncleHash/difficulty/nonce constants.
     applyOpHeaderConstants(*header);
     return header;
 }

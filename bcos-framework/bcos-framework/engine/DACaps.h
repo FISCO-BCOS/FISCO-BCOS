@@ -14,8 +14,7 @@
  *  limitations under the License.
  *
  * @file DACaps.h
- * @brief Shared DA throttling caps — the bridge between miner_setMaxDASize (RPC) and the
- *        OP payload build path (engine).
+ * @brief DA size caps shared by miner_setMaxDASize and OP payload build.
  */
 
 #pragma once
@@ -27,23 +26,10 @@
 namespace bcos::engine
 {
 
-/// The OP Stack batcher's DA throttling handshake: it pushes
-/// miner_setMaxDASize(maxCanonTxSize, maxBlockSize) on every L2 endpoint and treats a
-/// missing method as fatal. The RPC layer receives the values; the engine's payload
-/// build consumes them. The two layers share nothing else, so the caps live here —
-/// one instance created by the initializer, handed to both sides (NodeService carries
-/// it for the RPC, the engine service ctor receives it directly).
-///
-/// Semantics (both in BYTES of the serialized EIP-2718 envelope, matching the
-/// build-path TODO's documented contract and op-geth's miner shrinking under throttle):
-///   maxTxSize   — a sealed pool tx whose envelope exceeds this is dropped from the
-///                 build (op-geth rejects oversized txs from blocks the same way);
-///   maxBlockSize — block assembly stops appending sealed envelopes once the
-///                  cumulative serialized size (forced envelopes included in the
-///                  accounting, never dropped — the leading deposit is consensus-
-///                  required) crosses the cap.
-/// Zero means UNSET = uncapped (the atomics' zero init), so a node without throttling
-/// behaves exactly as before.
+/// EIP-2718 envelope-byte caps from miner_setMaxDASize. Zero = uncapped.
+/// maxTxSize drops an oversized sealed tx from the build; maxBlockSize stops
+/// appending sealed txs once the cumulative size (forced envelopes included)
+/// crosses the cap. Forced envelopes are never dropped.
 struct DACaps
 {
     std::atomic<std::uint64_t> maxTxSize{0};
@@ -56,9 +42,7 @@ struct DACaps
         return cap == 0 || envelopeSize <= cap;
     }
 
-    /// Running byte budget for block assembly: call begin() with the forced (unde
-    /// droppable) envelope total, then admits(sealedEnvelopeSize) per sealed tx in order.
-    /// This is a plain helper, not enforced state — the build loop owns the decisions.
+    /// Running build budget: start with forced-envelope bytes, then admits() each sealed tx.
     class Budget
     {
     public:
