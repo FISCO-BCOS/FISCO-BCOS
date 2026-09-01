@@ -58,7 +58,6 @@
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
-#include <boost/algorithm/string.hpp>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/rpc/RPCInterface.h>
@@ -81,8 +80,8 @@
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
-#include <txpool/validator/TxValidator.h>
 #include <util/tc_clientsocket.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <cstddef>
 #include <memory>
@@ -304,10 +303,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto transactionSubmitResultFactory =
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
 
+    // One holder per process, written by whoever commits a block and read by transaction
+    // admission. Created here because it outlives both and neither should own the other.
+    m_ledgerConfigState = std::make_shared<bcos::ledger::LedgerConfigState>();
+
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,
         m_frontServiceInitializer->front(), ledger, *m_ioServicePool->getIOService(),
-        m_ioServicePool);
+        m_ioServicePool, m_ledgerConfigState);
     m_memPoolInitializer = MemPoolInitializer::build();
 
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
@@ -781,6 +784,8 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     auto schedulerFactory =
         dynamic_cast<scheduler::SchedulerManager&>(m_scheduler->scheduler(0)).getFactory();
     // notify blockNumber
+    // The scheduler is the publisher: it refetches the configuration on every commit.
+    schedulerFactory->setLedgerConfigState(m_ledgerConfigState);
     schedulerFactory->setBlockNumberReceiver(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
             INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
@@ -1647,8 +1652,8 @@ std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer
         m_globalStateStorageInitializer->storage().latestBackend());
 }
 
-std::function<std::shared_ptr<
-    bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
+std::function<
+    std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
 Initializer::stateStorageProvider()
 {
     if (!m_globalStateStorageInitializer)

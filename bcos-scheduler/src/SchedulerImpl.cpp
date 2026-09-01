@@ -729,6 +729,13 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                         << "CommitBlock success" << LOG_KV("gas limit", self->m_gasLimit)
                         << LOG_KV("timeCost", utcTime() - startTime);
                     self->m_ledgerConfig = ledgerConfig;
+                    // Republish for readers outside the scheduler. Transaction admission needs the
+                    // configuration of the block that just committed -- chain id, gas limit,
+                    // features -- and this is the one point in the process that has it.
+                    if (self->m_ledgerConfigState)
+                    {
+                        self->m_ledgerConfigState->set(ledgerConfig);
+                    }
                     commitLock->unlock();  // just unlock here
 
                     self->m_ledger->removeExpiredNonce(blockNumber, false);

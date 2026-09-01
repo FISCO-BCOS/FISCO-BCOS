@@ -1,12 +1,14 @@
 #include "TxPoolConfig.h"
 
-bcos::txpool::TxPoolConfig::TxPoolConfig(TxValidatorInterface::Ptr _txValidator,
+bcos::txpool::TxPoolConfig::TxPoolConfig(std::shared_ptr<txvalidator::TxValidator> _txValidator,
     bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
     bcos::protocol::BlockFactory::Ptr _blockFactory,
     std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
-    txvalidator::NonceCheckerInterface::Ptr _txpoolNonceChecker, int64_t _blockLimit,
-    size_t _poolLimit, bool checkTransactionSignature)
+    txvalidator::NonceCheckerInterface::Ptr _txpoolNonceChecker,
+    txvalidator::Web3NonceChecker::Ptr _web3NonceChecker, int64_t _blockLimit, size_t _poolLimit,
+    bool checkTransactionSignature)
   : m_txValidator(std::move(_txValidator)),
+    m_web3NonceChecker(std::move(_web3NonceChecker)),
     m_txResultFactory(std::move(_txResultFactory)),
     m_blockFactory(std::move(_blockFactory)),
     m_ledger(std::move(_ledger)),
@@ -27,9 +29,22 @@ bcos::txvalidator::NonceCheckerInterface::Ptr bcos::txpool::TxPoolConfig::txPool
 {
     return m_txPoolNonceChecker;
 }
-bcos::txpool::TxValidatorInterface::Ptr bcos::txpool::TxPoolConfig::txValidator()
+std::shared_ptr<bcos::txvalidator::TxValidator> bcos::txpool::TxPoolConfig::txValidator()
 {
     return m_txValidator;
+}
+bcos::txvalidator::Web3NonceChecker::Ptr bcos::txpool::TxPoolConfig::web3NonceChecker()
+{
+    return m_web3NonceChecker;
+}
+bcos::txvalidator::LedgerNonceChecker::Ptr bcos::txpool::TxPoolConfig::ledgerNonceChecker()
+{
+    return m_ledgerNonceChecker;
+}
+void bcos::txpool::TxPoolConfig::setLedgerNonceChecker(
+    bcos::txvalidator::LedgerNonceChecker::Ptr _ledgerNonceChecker)
+{
+    m_ledgerNonceChecker = std::move(_ledgerNonceChecker);
 }
 bcos::protocol::TransactionSubmitResultFactory::Ptr bcos::txpool::TxPoolConfig::txResultFactory()
 {

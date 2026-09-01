@@ -164,6 +164,7 @@ private:
     ProtocolInitializer::Ptr m_protocolInitializer;
     FrontServiceInitializer::Ptr m_frontServiceInitializer;
     bcos::IOServicePool::Ptr m_ioServicePool;
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
 #ifdef WITH_LIGHTNODE

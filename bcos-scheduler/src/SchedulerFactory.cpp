@@ -29,10 +29,16 @@ SchedulerImpl::Ptr SchedulerFactory::build(int64_t schedulerTermId)
         m_hashImpl, m_isAuthCheck, m_isSerialExecute, schedulerTermId, m_keyPageSize);
     scheduler->fetchConfig();
 
+    scheduler->setLedgerConfigState(m_ledgerConfigState);
     scheduler->registerBlockNumberReceiver(m_blockNumberReceiver);
     scheduler->registerTransactionNotifier(m_txNotifier);
 
     return scheduler;
+}
+
+void SchedulerFactory::setLedgerConfigState(bcos::ledger::LedgerConfigState::Ptr ledgerConfigState)
+{
+    m_ledgerConfigState = std::move(ledgerConfigState);
 }
 
 void SchedulerFactory::setBlockNumberReceiver(

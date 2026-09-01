@@ -152,19 +152,24 @@ inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string no
 
     transaction.data.to = key->address(_cryptoSuite->hashImpl()).hex();
     transaction.data.input.assign(inputStr.begin(), inputStr.end());
+    auto const nonceValue = u256(nonce);
     transaction.data.nonce = std::move(nonce);
     transaction.type = static_cast<tars::Char>(protocol::TransactionType::Web3Transaction);
     // extraTransactionBytes must be a genuine Web3 signing preimage: since FIB-New1, verify()
     // recomputes the canonical txHash from it by RLP splicing, so arbitrary bytes are rejected.
-    // Build a minimal legacy (pre-EIP-155) preimage rlp([nonce, gasPrice, gas, to, value, data])
-    // with random nonce/data so each fake tx gets a distinct hash.
+    // Build a minimal legacy (pre-EIP-155) preimage rlp([nonce, gasPrice, gas, to, value, data]).
+    //
+    // The preimage MUST carry the caller's nonce, not a random one. Admission normalizes a Web3
+    // transaction's tars mirror from its signed envelope, so an envelope that disagrees with the
+    // mirror is exactly the forgery shape that normalization exists to undo -- a fake built that
+    // way silently becomes a transaction with a nonce the test never asked for. Hash distinctness
+    // comes from the random `data` string instead.
     std::mt19937_64 random(std::random_device{}());
     auto toAddress = key->address(_cryptoSuite->hashImpl()).asBytes();
     std::string data = "extraData" + std::to_string(random());
     bcos::bytes preimage;
-    bcos::codec::rlp::encode(preimage, static_cast<uint64_t>(random()) | 1U,
-        static_cast<uint64_t>(1), static_cast<uint64_t>(21000), toAddress, static_cast<uint64_t>(0),
-        data);
+    bcos::codec::rlp::encode(preimage, nonceValue, static_cast<uint64_t>(1),
+        static_cast<uint64_t>(21000), toAddress, static_cast<uint64_t>(0), data);
     transaction.extraTransactionBytes.assign(preimage.begin(), preimage.end());
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });

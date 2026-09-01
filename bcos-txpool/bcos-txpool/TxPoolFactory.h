@@ -21,6 +21,7 @@
 #pragma once
 #include "TxPool.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/ledger/LedgerConfigState.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/asio/io_context.hpp>
@@ -41,11 +42,14 @@ public:
 
     virtual ~TxPoolFactory() = default;
     TxPool::Ptr createTxPool(boost::asio::io_context& _ioContext,
-        bcos::IOServicePool::Ptr _ioServicePool,
-        size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 4,
-        uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
+        bcos::IOServicePool::Ptr _ioServicePool, size_t _notifyWorkerNum = 2,
+        size_t _verifierWorkerNum = 4, uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
 
     void setScheduler(std::shared_ptr<bcos::scheduler::SchedulerInterface> _scheduler);
+
+    /// Must be called before createTxPool: the admission validator takes the holder at
+    /// construction and reads through it for the life of the pool.
+    void setLedgerConfigState(bcos::ledger::LedgerConfigState::Ptr ledgerConfigState);
 
 private:
     bcos::crypto::NodeIDPtr m_nodeId;
@@ -60,6 +64,11 @@ private:
     size_t m_txpoolLimit = DEFAULT_POOL_LIMIT;
     bool m_checkTransactionSignature;
     std::weak_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
+    /// Shared with the scheduler, which publishes into it on every commit. Defaulted rather than
+    /// required so a pool built without one (tests) reads an empty configuration instead of
+    /// dereferencing null.
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState =
+        std::make_shared<bcos::ledger::LedgerConfigState>();
     TxPool::Ptr m_txpool;
 };
 }  // namespace bcos::txpool

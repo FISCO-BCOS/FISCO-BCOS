@@ -7,6 +7,7 @@
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/ledger/LedgerConfigState.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
@@ -82,6 +83,15 @@ public:
 
     void reset(std::function<void(Error::Ptr)> callback) override;
     // register a block number receiver
+    /// Bound by SchedulerFactory. The scheduler is the only component holding a configuration
+    /// known to be current -- it refetches one on every commit -- so it is the publisher; readers
+    /// take a snapshot through LedgerConfigState::get(). m_ledgerConfig is left as it is: folding
+    /// the scheduler's own reads onto the holder is a concurrency change, not wiring.
+    void setLedgerConfigState(ledger::LedgerConfigState::Ptr ledgerConfigState)
+    {
+        m_ledgerConfigState = std::move(ledgerConfigState);
+    }
+
     virtual void registerBlockNumberReceiver(
         std::function<void(protocol::BlockNumber blockNumber)> callback);
 
@@ -199,5 +209,9 @@ private:
     bcos::IOServicePool::Ptr m_ioServicePool;
     std::unique_ptr<bcos::Strand> m_exeStrand;
     ledger::LedgerConfig::Ptr m_ledgerConfig;
+    /// Where the freshly committed configuration is republished for readers outside the scheduler
+    /// (transaction admission, today). Null until the factory binds one, and every write is
+    /// guarded, so a scheduler built without one behaves exactly as before.
+    ledger::LedgerConfigState::Ptr m_ledgerConfigState;
 };
 }  // namespace bcos::scheduler
