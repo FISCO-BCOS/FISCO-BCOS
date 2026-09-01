@@ -21,7 +21,7 @@
 #include "TxPoolFactory.h"
 #include "bcos-txpool/sync/TransactionSync.h"
 #include "bcos-txpool/sync/protocol/PB/TxsSyncMsgFactoryImpl.h"
-#include "bcos-txpool/txpool/validator/TxValidator.h"
+#include "bcos-txpool/txpool/utilities/SystemTransaction.h"
 #include "txpool/storage/MemoryStorage.h"
 #include <bcos-tx-validator/TxPoolNonceChecker.h>
 #include <bcos-tx-validator/Web3NonceChecker.h>
@@ -58,12 +58,15 @@ TxPool::Ptr TxPoolFactory::createTxPool(boost::asio::io_context& _ioContext,
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction validator");
     auto txpoolNonceChecker = std::make_shared<txvalidator::TxPoolNonceChecker>();
     auto web3NonceChecker = std::make_shared<txvalidator::Web3NonceChecker>(m_ledger);
-    auto validator = std::make_shared<TxValidator>(txpoolNonceChecker, std::move(web3NonceChecker),
-        m_cryptoSuite, m_groupId, m_chainId, m_scheduler);
+    auto validator =
+        std::make_shared<txvalidator::TxValidator>(m_cryptoSuite, m_ledger, m_ledgerConfigState,
+            txpoolNonceChecker, web3NonceChecker, &isSystemTransaction, m_groupId, m_chainId);
+    validator->setScheduler(m_scheduler);
 
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction config");
     auto txpoolConfig = std::make_shared<TxPoolConfig>(validator, m_txResultFactory, m_blockFactory,
-        m_ledger, txpoolNonceChecker, m_blockLimit, m_txpoolLimit, m_checkTransactionSignature);
+        m_ledger, txpoolNonceChecker, web3NonceChecker, m_blockLimit, m_txpoolLimit,
+        m_checkTransactionSignature);
 
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction storage");
     auto txpoolStorage = std::make_shared<MemoryStorage>(
@@ -88,10 +91,14 @@ void TxPoolFactory::setScheduler(std::shared_ptr<bcos::scheduler::SchedulerInter
     m_scheduler = _scheduler;
     if (m_txpool)
     {
-        if (auto txValidator =
-                std::dynamic_pointer_cast<TxValidator>(m_txpool->txpoolConfig()->txValidator()))
-        {
-            txValidator->setScheduler(_scheduler);
-        }
+        m_txpool->txpoolConfig()->txValidator()->setScheduler(_scheduler);
+    }
+}
+
+void TxPoolFactory::setLedgerConfigState(bcos::ledger::LedgerConfigState::Ptr ledgerConfigState)
+{
+    if (ledgerConfigState)
+    {
+        m_ledgerConfigState = std::move(ledgerConfigState);
     }
 }

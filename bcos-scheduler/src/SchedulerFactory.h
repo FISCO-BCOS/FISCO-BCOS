@@ -22,6 +22,8 @@ public:
 
     void setBlockNumberReceiver(std::function<void(protocol::BlockNumber blockNumber)> callback);
 
+    void setLedgerConfigState(bcos::ledger::LedgerConfigState::Ptr ledgerConfigState);
+
     void setTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
             txNotifier);
@@ -43,6 +45,7 @@ private:
     bool m_isSerialExecute;
     size_t m_keyPageSize;
 
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
     std::function<void(protocol::BlockNumber blockNumber)> m_blockNumberReceiver;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
         std::function<void(Error::Ptr)>)>

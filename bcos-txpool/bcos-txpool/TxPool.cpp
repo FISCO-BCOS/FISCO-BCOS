@@ -24,7 +24,6 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
-#include "txpool/validator/TxValidator.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-tx-validator/LedgerNonceChecker.h>
 #include <bcos-utilities/ITTAPI.h>
@@ -650,8 +649,10 @@ void TxPool::init()
     auto ledgerNonceChecker = std::make_shared<txvalidator::LedgerNonceChecker>(
         nonceList, ledgerConfig->blockNumber(), blockLimit, m_checkBlockLimit);
 
-    auto validator = std::dynamic_pointer_cast<TxValidator>(m_config->txValidator());
-    validator->setLedgerNonceChecker(ledgerNonceChecker);
+    // The same instance on both sides: the pool clears committed nonces through it on every
+    // block, and admission checks against the history the pool just replayed from the ledger.
+    m_config->setLedgerNonceChecker(ledgerNonceChecker);
+    m_config->txValidator()->setLedgerNonceChecker(ledgerNonceChecker);
     TXPOOL_LOG(INFO) << LOG_DESC("init txs validator success");
 
     // init syncConfig
@@ -792,7 +793,7 @@ void bcos::txpool::TxPool::tryToSyncTxsFromPeers()
 
 task::Task<std::optional<u256>> bcos::txpool::TxPool::getWeb3PendingNonce(std::string_view address)
 {
-    co_return co_await m_config->txValidator()->web3NonceChecker()->getPendingNonce(address);
+    co_return co_await m_config->web3NonceChecker()->getPendingNonce(address);
 }
 
 void bcos::txpool::TxPool::asyncGetPendingTransactionSize(
