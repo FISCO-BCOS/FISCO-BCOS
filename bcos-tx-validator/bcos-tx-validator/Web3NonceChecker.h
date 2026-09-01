@@ -209,6 +209,25 @@ public:
 
     virtual task::Task<std::optional<u256>> getPendingNonce(std::string_view sender);
 
+    /// The account's nonce as of the last COMMITTED block: cache hit returns immediately, a miss
+    /// reads the ledger and back-fills the cache monotonically.
+    ///
+    /// @param sender RAW 20 bytes, as Transaction::sender() returns them -- not hex. Used
+    /// verbatim as the m_ledgerStateNonces key and hex-encoded once for the ledger read, which
+    /// is what checkWeb3Nonce() and insert() do. Note that getPendingNonce() above is the
+    /// exception on this class: it takes HEX and fromHex()es it to reach the same key. Passing
+    /// hex here would silently miss every cache entry and then hex-encode it a second time for
+    /// the ledger read -- a miss that looks like a cold cache, not like a bug.
+    ///
+    /// getPendingNonce() cannot be used for this. It prefers m_maxNonces, which is "the next
+    /// nonce this pool would accept" -- using that as a lower bound would reject every legitimate
+    /// queued transaction. This deliberately consults neither m_maxNonces nor m_memoryNonces.
+    ///
+    /// Split out of checkWeb3Nonce so the admission layer can apply the window itself while
+    /// keeping the m_ledgerStateNonces cache: reading through to storage on every transaction
+    /// would undo FIB-59.
+    virtual task::Task<std::optional<u256>> committedNonce(std::string_view sender);
+
     // only for test, inset nonce into ledgerStateNonces
     virtual void insert(std::string sender, u256 nonce);
 

@@ -135,6 +135,28 @@ task::Task<bool> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
     co_return true;
 }
 
+task::Task<std::optional<u256>> Web3NonceChecker::committedNonce(std::string_view sender)
+{
+    auto const senderView = std::string(sender);
+    if (auto const cached = co_await bcos::storage2::readOne(m_ledgerStateNonces, senderView))
+    {
+        co_return cached;
+    }
+    auto const senderHex = toHex(sender);
+    if (auto const storageState = co_await m_ledger->getStorageState(senderHex, 0);
+        storageState.has_value())
+    {
+        auto const nonceInStorage = u256(storageState.value().nonce);
+        // Monotonic: only ever raise the cached value (FIB-59).
+        co_await storage2::writeOneIf(m_ledgerStateNonces, senderView, nonceInStorage,
+            [&](u256 const& existing) { return nonceInStorage > existing; });
+        co_return nonceInStorage;
+    }
+    // The account has no on-chain state yet. Reported as absent, not as nonce 0 -- see
+    // txvalidator::AccountState::nonce.
+    co_return std::nullopt;
+}
+
 task::Task<std::optional<u256>> Web3NonceChecker::getPendingNonce(std::string_view sender)
 {
     const auto bytesSender = fromHex<std::string_view, std::string>(sender);
