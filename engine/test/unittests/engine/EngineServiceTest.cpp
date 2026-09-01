@@ -567,6 +567,31 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejected_when_evm_revision_missing)
         });
 }
 
+// A non-empty withdrawals list is rejected at the ATTRIBUTE layer (payloadStatus INVALID,
+// not UnsupportedFork): the withdrawals trie root is not computed, so the hashed header
+// would commit the empty-trie root while geth derives DeriveSha(withdrawals) — a mismatch
+// every peer would reject (T5).
+BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_empty_withdrawals)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    payloadAttributes.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 2, .amount = 3, .address = Address{}}};
+    auto result = task::syncWait(
+        engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
+    BOOST_CHECK_NE(result.payloadStatus.validationError->find("non-empty withdrawals"),
+        std::string::npos);
+}
+
 BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
 {
     MemPoolImpl memPool;
@@ -884,8 +909,15 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_rejects_a_v3_committed_entry_without_withdra
     BOOST_CHECK_EQUAL(
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
 
-    BOOST_CHECK_THROW(
-        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion);
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion,
+        [](const IncompatiblePayloadVersion& e) {
+            // Pin the REWRITE-path message (the entry was rewritten by the V3 commit and
+            // lost its withdrawalsRoot), not just the exception type — a swapped gate that
+            // keeps IncompatiblePayloadVersion must still fail (T4).
+            return std::string(e.what()).find("Payload does not carry the V4+ response shape") !=
+                   std::string::npos;
+        });
     // The V3 view of the same entry is still perfectly serviceable.
     auto v3 = task::syncWait(engineService.getPayload(*result.payloadId, 3));
     BOOST_CHECK(v3);
@@ -1541,6 +1573,14 @@ BOOST_AUTO_TEST_CASE(new_payload_v4_rejects_nonempty_lists_and_missing_fields)
     auto missingRootRequest = makeRequest();
     missingRootRequest.executionPayload.withdrawalsRoot = std::nullopt;
     expectInvalid(missingRootRequest, "withdrawalsRoot");
+
+    // A FOREIGN Isthmus withdrawalsRoot (anything other than withdrawalsRootFor(), i.e.
+    // the empty-trie placeholder) is rejected: the hashed header commits this node's own
+    // root, so a CL submitting a different value cannot reproduce blockHash (T5).
+    auto foreignRootRequest = makeRequest();
+    foreignRootRequest.executionPayload.withdrawalsRoot =
+        h256("9999999999999999999999999999999999999999999999999999999999999999");
+    expectInvalid(foreignRootRequest, "withdrawalsRoot");
 
     // parentBeaconBlockRoot is required at V3 and later.
     auto missingBeaconRequest = makeRequest();

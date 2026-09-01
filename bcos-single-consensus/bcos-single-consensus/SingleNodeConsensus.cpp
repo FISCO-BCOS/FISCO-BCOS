@@ -176,10 +176,32 @@ void SingleNodeConsensus::resolveInitialHead()
     }
     m_headNumber = headNumber;
     m_headHash = task::syncWait(ledger::getBlockHash(*m_ledger, headNumber));
+
+    // Seed m_lastTimestamp from the head header's timestamp (whole-second milliseconds)
+    // so a restart in the same wall-clock second as the parent cannot reseal
+    // parent.timestamp: EIP-2 requires strictly increasing block timestamps, and
+    // produceBlock only steps +1000ms from m_lastTimestamp. Without the seed, a restart
+    // within the parent block's second makes the first produced block share the parent's
+    // timestamp. A legacy genesis without [eth_genesis_header] has timestamp 0, which
+    // seeds to the same default and changes nothing.
+    auto headerPromise =
+        std::make_shared<CallbackPromise<std::tuple<Error::Ptr, protocol::Block::Ptr>>>();
+    m_ledger->asyncGetBlockDataByNumber(headNumber, ledger::HEADER,
+        [headerPromise](Error::Ptr _error, protocol::Block::Ptr _block) {
+            headerPromise->setValue(std::make_tuple(std::move(_error), std::move(_block)));
+        });
+    auto [headHeaderError, headBlock] = headerPromise->wait(m_running);
+    if (!headHeaderError && headBlock && headBlock->blockHeader())
+    {
+        m_lastTimestamp =
+            static_cast<std::uint64_t>(headBlock->blockHeader()->timestamp());
+    }
+
     m_headInitialized = true;
     SINGLE_CONSENSUS_LOG(INFO) << LOG_DESC("Resolved initial head")
                                << LOG_KV("number", m_headNumber)
-                               << LOG_KV("hash", m_headHash.hexPrefixed());
+                               << LOG_KV("hash", m_headHash.hexPrefixed())
+                               << LOG_KV("lastTimestampMs", m_lastTimestamp);
 }
 
 bool SingleNodeConsensus::produceBlock()

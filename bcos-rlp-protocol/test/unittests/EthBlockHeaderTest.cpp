@@ -270,6 +270,10 @@ BOOST_AUTO_TEST_CASE(incompleteHeaderReportsError)
     error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
     BOOST_CHECK(error != nullptr);
     BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+    // Pin the distinguishing message, not just the error type: a swapped gate that keeps
+    // InvalidHeader must still fail (T3).
+    BOOST_CHECK_NE(std::string(error->errorMessage()).find("missing or bad stateRoot"),
+        std::string::npos);
 }
 
 // calculateRLPHash rejects a NON_ETH header outright — that is exactly what computeHash

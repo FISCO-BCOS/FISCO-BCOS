@@ -1232,11 +1232,12 @@ BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
 // with the canonical EMPTY-TRIE ROOT (EngineServiceImpl.h, TODO(C4 header fields)) instead
 // of the L2ToL1MessagePasser storage root, and the hashed header commits to the SAME value
 // (a consumer rebuilding the header from the payload's withdrawalsRoot must reproduce
-// blockHash). getPayloadV5 serves that root, and newPayloadV4 accepts it because
-// validateExecutionPayload can only check presence. Nothing about the executor version
-// changes that — buildPayload has no executor-version branch. When C4 computes the real
-// root this test MUST fail and be rewritten to assert the computed value; until then it
-// keeps the gap visible instead of letting the v2 path look covered.
+// blockHash). getPayloadV5 serves that root, and newPayloadV4 rejects any root OTHER than
+// withdrawalsRootFor() (validateExecutionPayload enforces the equality, not just
+// presence); a missing on-chain EVM revision also fails closed with UnsupportedFork.
+// When C4 computes the real root this test MUST fail and be rewritten to assert the
+// computed value; until then it keeps the gap visible instead of letting the v2 path look
+// covered.
 BOOST_AUTO_TEST_CASE(engineServiceKarstServesZeroWithdrawalsRoot)
 {
     task::syncWait([&, this]() -> task::Task<void> {

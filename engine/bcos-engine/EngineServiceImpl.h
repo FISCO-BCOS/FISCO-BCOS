@@ -95,6 +95,9 @@ std::optional<std::string> validateExecutionPayload(
 /// L2ToL1MessagePasser storage root on Isthmus. Non-empty lists are rejected earlier in
 /// validatePayloadAttributes; the hashed header and the served ExecutionPayload both call
 /// this helper so they always carry the same 32 bytes.
+/// FOLLOW-UP (ywy F8): the Isthmus branch is a placeholder pending C4 — a real
+/// L2ToL1MessagePasser storage root would make locally built hashes diverge from op-geth
+/// after the first L1 message; until then newPayloadV4 rejects any root other than this.
 inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
 {
     return bcos::ledger::mpt::emptyRootHash();
@@ -118,6 +121,9 @@ inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
 ///    locally built payload and asserting VALID. Tightening the body half means
 ///    changing that contract first, which belongs with #5468 (the work that makes
 ///    externally supplied payload bodies verifiable at all).
+/// FOLLOW-UP (ywy F5): a full re-derivation of keccak256(rlp(header)) from the submitted
+/// payload on every newPayload is tracked in #5468; the cache-miss path still answers
+/// VALID without execute/store.
 ///
 /// extraData is in scope here because this change puts it into the block hash, so
 /// leaving it unchecked would leave a hash input unchecked.
@@ -580,58 +586,7 @@ private:
             }
         }
 
-        std::unique_lock lock(x_state);
-        auto parentKnown = request.executionPayload.parentHash == m_forkchoiceState.headBlockHash ||
-                           m_blockHashToPayloadId.contains(request.executionPayload.parentHash);
-        if (!parentKnown)
-        {
-            co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
-        }
-
-        auto payloadIdIt = m_blockHashToPayloadId.find(request.executionPayload.blockHash);
         PayloadID payloadId;
-        if (payloadIdIt == m_blockHashToPayloadId.end())
-        {
-            payloadId = nextPayloadID();
-            m_blockHashToPayloadId.emplace(request.executionPayload.blockHash, payloadId);
-        }
-        else
-        {
-            payloadId = payloadIdIt->second;
-            // Local-build hit: the CL is handing back a payload this node built. op-geth
-            // needs no such comparison because it re-derives the block hash from the
-            // payload fields it received and answers INVALID_BLOCK_HASH when the two
-            // disagree (beacon/engine/types.go:287-288, reached from
-            // eth/catalyst/api.go:831). This service cannot re-derive an Ethereum block
-            // hash from an ExecutionPayload, so it compares against what it handed out
-            // instead. Without this a CL could alter the extraData, keep the blockHash it
-            // was given, and have the node commit its own (different) header while
-            // answering VALID — the submitted payload never checked. Only extraData is
-            // compared; the transaction list stays out of scope for the contract reason
-            // spelled out on compareWithBuiltPayload.
-            //
-            // Every cache hit is compared, including a re-submission of an already
-            // committed block (whose entry no longer carries a header). An honest
-            // idempotent re-submit is byte-identical and passes; gating on the header
-            // would let a second, altered submission of the same blockHash overwrite the
-            // cached payload and still be answered VALID. op-geth likewise re-derives the
-            // hash on every newPayload, committed or not.
-            //
-            // SCOPE: payloads this node did NOT build (lookup miss) are a separate,
-            // pre-existing gap — they are answered VALID without being executed or
-            // stored at all. That is tracked as #5468 and deliberately not addressed
-            // here.
-            if (auto builtIt = m_payloadCache.find(payloadId); builtIt != m_payloadCache.end())
-            {
-                if (auto mismatch = detail::compareWithBuiltPayload(
-                        request.executionPayload, builtIt->second.executionPayload))
-                {
-                    co_return makeStatus(
-                        PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
-                }
-            }
-        }
-
         PayloadEntry entry{
             .version = version,
             .executionPayload = request.executionPayload,
@@ -648,77 +603,152 @@ private:
             entry.blobsBundle = BlobsBundleV1{};
         }
 
-        // If this payload was built locally (via updateForkchoice), commit the view's
-        // state changes to storage. Externally received payloads have no view to commit.
-        // NOTE: mergeView() exists (MultiLayerStorage.h) but is intentionally
-        // non-atomic (pushView and mergeBackStorage are independent critical
-        // sections). Using bare pushView here keeps the state change immediate;
-        // mergeBackStorage follows in the co_await block below.
-        auto it = m_payloadCache.find(payloadId);
-        if (it != m_payloadCache.end() && it->second.view)
+        // Commit I/O (ledger persist + state merge) is performed WITHOUT x_state held: a
+        // POSIX mutex must not be locked across a coroutine suspension point, because the
+        // resume can land on a different thread (the FCU path avoids the same hazard).
+        // The locked region below only validates, resolves and prepares; the co_awaits
+        // follow after the lock is released; the cache publish re-acquires it.
+        bool commitState = false;
+        bool persistLedger = false;
+        typename GlobalStateStorageType::MutableStorage prewriteStorage;
+        protocol::Block::Ptr persistBlock;
+        std::shared_ptr<protocol::ConstTransactions> blockTxs;
         {
-            m_globalStateStorage.get().pushView(std::move(*it->second.view));
-            if (m_ledger && it->second.header)
+            std::unique_lock lock(x_state);
+            auto parentKnown =
+                request.executionPayload.parentHash == m_forkchoiceState.headBlockHash ||
+                m_blockHashToPayloadId.contains(request.executionPayload.parentHash);
+            if (!parentKnown)
             {
-                // Locally built payload: persist the ledger block tables atomically with
-                // the state merge, using the same FIB-104 prewriteBlockToBuffer pattern the
-                // BaselineScheduler commit path uses. Without these rows a produced block is
-                // invisible to eth_getBlockByNumber / eth_getBlockByHash /
-                // eth_getTransactionReceipt and to ledger::getBlockHash / getCurrentBlockNumber.
-                typename GlobalStateStorageType::MutableStorage prewriteStorage;
-                auto block = m_blockFactory->createBlock();
-                block->setBlockHeader(it->second.header);
-                // Persist the block-level logsBloom (computed in buildPayload from the
-                // per-receipt blooms). Without it every block produced by this driver
-                // answers eth_getBlockByNumber with 256 zero bytes — the legacy
-                // BaselineScheduler commit path sets the block bloom before commit, so
-                // this restores parity with that path (eth_getLogs uses it as a filter).
-                auto const& bloom = it->second.executionPayload.logsBloom;
-                block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
-                // Raw-only entries (forced transactions) carry no decoded form and are
-                // not modeled as ledger transactions until execution wiring lands; the
-                // persisted transaction list therefore matches the receipts list, which
-                // also only covers the executed (decoded) subset.
-                for (auto const& tx : it->second.executionPayload.transactions)
-                {
-                    if (tx.decoded)
-                    {
-                        block->appendTransaction(tx.decoded);
-                    }
-                }
-                for (auto const& receipt : it->second.receipts)
-                {
-                    block->appendReceipt(receipt);
-                }
-                auto blockTxs = std::make_shared<protocol::ConstTransactions>(
-                    it->second.executionPayload.transactions |
-                    ::ranges::views::filter([](auto const& tx) { return tx.decoded != nullptr; }) |
-                    ::ranges::views::transform([](auto const& tx) {
-                        return protocol::Transaction::ConstPtr(tx.decoded);
-                    }) |
-                    ::ranges::to<std::vector>());
-                co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, prewriteStorage);
-                co_await m_globalStateStorage.get().mergeBackStorage(prewriteStorage);
+                co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            }
+
+            auto payloadIdIt = m_blockHashToPayloadId.find(request.executionPayload.blockHash);
+            if (payloadIdIt == m_blockHashToPayloadId.end())
+            {
+                payloadId = nextPayloadID();
+                m_blockHashToPayloadId.emplace(request.executionPayload.blockHash, payloadId);
             }
             else
             {
-                co_await m_globalStateStorage.get().mergeBackStorage();
+                payloadId = payloadIdIt->second;
+                // Local-build hit: the CL is handing back a payload this node built. op-geth
+                // needs no such comparison because it re-derives the block hash from the
+                // payload fields it received and answers INVALID_BLOCK_HASH when the two
+                // disagree (beacon/engine/types.go:287-288, reached from
+                // eth/catalyst/api.go:831). This service cannot re-derive an Ethereum block
+                // hash from an ExecutionPayload, so it compares against what it handed out
+                // instead. Without this a CL could alter the extraData, keep the blockHash it
+                // was given, and have the node commit its own (different) header while
+                // answering VALID — the submitted payload never checked. Only extraData is
+                // compared; the transaction list stays out of scope for the contract reason
+                // spelled out on compareWithBuiltPayload.
+                //
+                // Every cache hit is compared, including a re-submission of an already
+                // committed block (whose entry no longer carries a header). An honest
+                // idempotent re-submit is byte-identical and passes; gating on the header
+                // would let a second, altered submission of the same blockHash overwrite the
+                // cached payload and still be answered VALID. op-geth likewise re-derives the
+                // hash on every newPayload, committed or not.
+                //
+                // SCOPE: payloads this node did NOT build (lookup miss) are a separate,
+                // pre-existing gap — they are answered VALID without being executed or
+                // stored at all. That is tracked as #5468 and deliberately not addressed
+                // here.
+                if (auto builtIt = m_payloadCache.find(payloadId); builtIt != m_payloadCache.end())
+                {
+                    if (auto mismatch = detail::compareWithBuiltPayload(
+                            request.executionPayload, builtIt->second.executionPayload))
+                    {
+                        co_return makeStatus(PayloadValidationStatus::InvalidBlockHash,
+                            std::nullopt, mismatch);
+                    }
+                }
             }
+
+            // If this payload was built locally (via updateForkchoice), commit the view's
+            // state changes to storage. Externally received payloads have no view to commit.
+            // NOTE: mergeView() exists (MultiLayerStorage.h) but is intentionally
+            // non-atomic (pushView and mergeBackStorage are independent critical
+            // sections). Using bare pushView here keeps the state change immediate;
+            // mergeBackStorage follows in the co_await block below.
+            auto it = m_payloadCache.find(payloadId);
+            if (it != m_payloadCache.end() && it->second.view)
+            {
+                commitState = true;
+                m_globalStateStorage.get().pushView(std::move(*it->second.view));
+                if (m_ledger && it->second.header)
+                {
+                    // Locally built payload: persist the ledger block tables atomically with
+                    // the state merge, using the same FIB-104 prewriteBlockToBuffer pattern the
+                    // BaselineScheduler commit path uses. Without these rows a produced block
+                    // is invisible to eth_getBlockByNumber / eth_getBlockByHash /
+                    // eth_getTransactionReceipt and to ledger::getBlockHash /
+                    // getCurrentBlockNumber.
+                    persistLedger = true;
+                    persistBlock = m_blockFactory->createBlock();
+                    persistBlock->setBlockHeader(it->second.header);
+                    // Persist the block-level logsBloom (computed in buildPayload from the
+                    // per-receipt blooms). Without it every block produced by this driver
+                    // answers eth_getBlockByNumber with 256 zero bytes — the legacy
+                    // BaselineScheduler commit path sets the block bloom before commit, so
+                    // this restores parity with that path (eth_getLogs uses it as a filter).
+                    auto const& bloom = it->second.executionPayload.logsBloom;
+                    persistBlock->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+                    // Raw-only entries (forced transactions) carry no decoded form and are
+                    // not modeled as ledger transactions until execution wiring lands; the
+                    // persisted transaction list therefore matches the receipts list, which
+                    // also only covers the executed (decoded) subset.
+                    for (auto const& tx : it->second.executionPayload.transactions)
+                    {
+                        if (tx.decoded)
+                        {
+                            persistBlock->appendTransaction(tx.decoded);
+                        }
+                    }
+                    for (auto const& receipt : it->second.receipts)
+                    {
+                        persistBlock->appendReceipt(receipt);
+                    }
+                    blockTxs = std::make_shared<protocol::ConstTransactions>(
+                        it->second.executionPayload.transactions |
+                        ::ranges::views::filter([](auto const& tx) { return tx.decoded != nullptr; }) |
+                        ::ranges::views::transform([](auto const& tx) {
+                            return protocol::Transaction::ConstPtr(tx.decoded);
+                        }) |
+                        ::ranges::to<std::vector>());
+                }
+            }
+        }  // x_state released — safe to co_await below.
+
+        if (persistLedger)
+        {
+            co_await ledger::prewriteBlockToBuffer(
+                *m_ledger, blockTxs, persistBlock, prewriteStorage);
+            co_await m_globalStateStorage.get().mergeBackStorage(prewriteStorage);
+        }
+        else if (commitState)
+        {
+            co_await m_globalStateStorage.get().mergeBackStorage();
         }
 
-        m_payloadCache[payloadId] = std::move(entry);
+        {
+            std::unique_lock lock(x_state);
+            m_payloadCache[payloadId] = std::move(entry);
 
-        // Evict stale payload entries. A payload is only read between updateForkchoice /
-        // getPayload and newPayload, so once a block is committed its payloadId and
-        // blockHash are unreachable. The built-in single-node driver mints one new
-        // payloadId per block_interval tick, so without eviction both maps grow by one
-        // row per produced block and hold strong references to every transaction ever
-        // executed (unbounded memory over time). Keep only the just-committed block; the
-        // newPayload() parent check accepts the head hash directly, so dropping older
-        // blockHash rows is safe.
-        std::erase_if(m_blockHashToPayloadId,
-            [&](auto const& kv) { return kv.first != request.executionPayload.blockHash; });
-        std::erase_if(m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });
+            // Evict stale payload entries. A payload is only read between updateForkchoice /
+            // getPayload and newPayload, so once a block is committed its payloadId and
+            // blockHash are unreachable. The built-in single-node driver mints one new
+            // payloadId per block_interval tick, so without eviction both maps grow by one
+            // row per produced block and hold strong references to every transaction ever
+            // executed (unbounded memory over time). Keep only the just-committed block; the
+            // newPayload() parent check accepts the head hash directly, so dropping older
+            // blockHash rows is safe.
+            std::erase_if(m_blockHashToPayloadId, [&](auto const& kv) {
+                return kv.first != request.executionPayload.blockHash;
+            });
+            std::erase_if(m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });
+        }
 
         co_return makeStatus(
             PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);
