@@ -23,8 +23,8 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <memory>
 #include <boost/test/unit_test.hpp>
+#include <memory>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -210,9 +210,9 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 3);
 }
 
-// The one method version this node really does not implement: the service-layer forkchoice
-// window tops out at V3 (isForkchoiceVersionSupported), so V4 answers -38005 without
-// reaching the engine service.
+// The one method version this node really does not implement: forkchoiceUpdatedV4 is
+// refused at the RPC endpoint (-38005) before the engine service; OP mode constructs
+// maxEngineVersion=V4, so isForkchoiceVersionSupported would otherwise admit it.
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
 {
     Json::Value params(Json::arrayValue);

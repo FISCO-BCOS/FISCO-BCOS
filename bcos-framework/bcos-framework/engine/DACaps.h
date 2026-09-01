@@ -22,7 +22,6 @@
 
 #include <atomic>
 #include <cstdint>
-#include <memory>
 
 namespace bcos::engine
 {

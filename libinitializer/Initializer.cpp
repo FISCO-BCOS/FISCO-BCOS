@@ -512,14 +512,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto forkFlags = bcos::evm::opstack::OpForkFlags{
             .jovianActive = m_nodeConfig->opJovianActive(),
         };
-        // chainId must be numeric (decimal or 0x-hex). A leading '-' must be rejected
-        // explicitly: stoull(base 0) parses "-1" as a valid negative and wraps it to a huge
-        // positive chainId, silently putting the chain under an unintended EIP-155 domain.
-        // stoull also stops at the first invalid character, so "1abc" would yield 1 — reject
-        // anything the parse did not consume so a typo cannot silently change the chainId.
+        // chainId must be decimal or 0x-hex. Reject a leading '-' (stoull wraps it to a
+        // huge positive) and a leading '+' (not a config spelling we accept). Use base 10
+        // unless the value is 0x-prefixed: stoull(base 0) would treat "010" as octal 8.
+        // stoull also stops at the first invalid character, so "1abc" would yield 1 —
+        // reject anything the parse did not consume so a typo cannot silently change the
+        // chainId.
         uint64_t opChainId = 0;
         auto chainIdStr = m_nodeConfig->chainId();
-        if (chainIdStr.empty() || chainIdStr.front() == '-')
+        if (chainIdStr.empty() || chainIdStr.front() == '-' || chainIdStr.front() == '+')
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                                       "OP mode (executor_version>=3) requires a numeric chain_id "
@@ -528,12 +529,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         try
         {
             size_t consumed = 0;
-            opChainId = std::stoull(chainIdStr, &consumed, 0);
+            int const base = (chainIdStr.size() >= 2 && chainIdStr[0] == '0' &&
+                                 (chainIdStr[1] == 'x' || chainIdStr[1] == 'X')) ?
+                                 16 :
+                                 10;
+            opChainId = std::stoull(chainIdStr, &consumed, base);
             if (consumed != chainIdStr.size())
             {
-                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                          "OP mode (executor_version>=3) requires a numeric chain_id "
-                                          "(decimal or 0x-prefixed hex)"));
+                BOOST_THROW_EXCEPTION(
+                    bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                        "OP mode (executor_version>=3) requires a numeric chain_id "
+                        "(decimal or 0x-prefixed hex)"));
             }
         }
         catch (const std::invalid_argument&)
@@ -555,6 +561,20 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         const auto& opL1 = m_nodeConfig->opL1Info();
         if (!opL1.blockHashHex.empty())
         {
+            auto hex = opL1.blockHashHex;
+            if (hex.size() >= 2 && hex[0] == '0' && (hex[1] == 'x' || hex[1] == 'X'))
+            {
+                hex.erase(0, 2);
+            }
+            // fromHex left-pads an odd nibble count; that would pass a 32-byte size
+            // check for a 63-nibble typo. Require a full 64 hex chars, like the RPC
+            // hash readers.
+            if (hex.size() != 2 * sizeof(evmc::bytes32))
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                          "OP mode (executor_version>=3): op_l1.l1_block_hash "
+                                          "must be a 32-byte (64 hex chars) block hash"));
+            }
             bcos::bytes hashBytes;
             try
             {
@@ -850,10 +870,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             // constants so the driver attributes can never drift from the zero-pair
             // translation in encodeOptimismExtraData.
             auto params = bcos::bytes(8, 0);
-            bcos::toBigEndian(bcos::engine::c_eip1559DenominatorCanyon,
-                std::span<uint8_t, 4>(params.data(), 4));
-            bcos::toBigEndian(bcos::engine::c_eip1559ElasticityCanyon,
-                std::span<uint8_t, 4>(params.data() + 4, 4));
+            auto denom = std::span<uint8_t, 4>(params.data(), 4);
+            auto elasticity = std::span<uint8_t, 4>(params.data() + 4, 4);
+            bcos::toBigEndian(bcos::engine::c_eip1559DenominatorCanyon, denom);
+            bcos::toBigEndian(bcos::engine::c_eip1559ElasticityCanyon, elasticity);
             driverEip1559Params = std::move(params);
             // validateOpPayloadAttributes makes minBaseFee mandatory once Jovian is active;
             // without a driver-side producer every FCU attributes would be rejected and the
@@ -868,8 +888,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_nodeConfig->singleNodeConsensusBlockInterval(),
             m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
             m_nodeConfig->singleNodeConsensusFeeRecipient(),
-            m_nodeConfig->singleNodeConsensusFixedTimestamp(), driverGasLimit,
-            driverEip1559Params, driverMinBaseFee);
+            m_nodeConfig->singleNodeConsensusFixedTimestamp(), driverGasLimit, driverEip1559Params,
+            driverMinBaseFee);
     }
 
 #ifdef TOOLS

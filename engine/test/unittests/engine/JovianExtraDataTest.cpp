@@ -30,7 +30,7 @@ PayloadAttributes makeAttributes(
     std::optional<bytes> eip1559Params, std::optional<std::uint64_t> minBaseFee)
 {
     PayloadAttributes attributes;
-    attributes.timestamp = 1;
+    attributes.timestamp = 1'000;
     attributes.withdrawals = std::vector<WithdrawalV1>{};
     attributes.parentBeaconBlockRoot =
         h256("2222222222222222222222222222222222222222222222222222222222222222");
@@ -311,19 +311,42 @@ BOOST_AUTO_TEST_CASE(get_payload_v4_rejects_v1_v2_even_in_op_mode)
         engine::ApiVersion::V4, 4, /*opMode=*/false));
 }
 
-BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_requires_gas_and_params)
+BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_rejects_subsecond_timestamp)
 {
     PayloadAttributes attrs;
     attrs.timestamp = 1;
+    attrs.gasLimit = 30'000'000;
+    attrs.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
     attrs.withdrawals = std::vector<WithdrawalV1>{};
     attrs.parentBeaconBlockRoot =
         h256("2222222222222222222222222222222222222222222222222222222222222222");
-    BOOST_REQUIRE(engine::detail::validateOpPayloadAttributes(attrs, false).has_value());
+    auto error = engine::detail::validateOpPayloadAttributes(attrs, false);
+    BOOST_REQUIRE(error.has_value());
+    BOOST_CHECK_NE(error->find("whole number of seconds"), std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_requires_gas_and_params)
+{
+    PayloadAttributes attrs;
+    // Internal ms; must be a whole second or the %1000 gate fires first.
+    attrs.timestamp = 1'000;
+    attrs.withdrawals = std::vector<WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot =
+        h256("2222222222222222222222222222222222222222222222222222222222222222");
+    auto missingGas = engine::detail::validateOpPayloadAttributes(attrs, false);
+    BOOST_REQUIRE(missingGas.has_value());
+    BOOST_CHECK_NE(missingGas->find("gasLimit"), std::string::npos);
 
     attrs.gasLimit = 30'000'000;
+    auto missingParams = engine::detail::validateOpPayloadAttributes(attrs, false);
+    BOOST_REQUIRE(missingParams.has_value());
+    BOOST_CHECK_NE(missingParams->find("eip1559Params"), std::string::npos);
+
     attrs.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
     BOOST_CHECK(!engine::detail::validateOpPayloadAttributes(attrs, false).has_value());
-    BOOST_CHECK(engine::detail::validateOpPayloadAttributes(attrs, true).has_value());
+    auto missingMin = engine::detail::validateOpPayloadAttributes(attrs, true);
+    BOOST_REQUIRE(missingMin.has_value());
+    BOOST_CHECK_NE(missingMin->find("minBaseFee"), std::string::npos);
     attrs.minBaseFee = 7;
     BOOST_CHECK(!engine::detail::validateOpPayloadAttributes(attrs, true).has_value());
 }

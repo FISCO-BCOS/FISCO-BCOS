@@ -90,12 +90,12 @@ inline bcos::bytes encodeDepositEnvelope(const bcos::evm::opstack::DepositTx& d)
 /// Production deposits are derived by the op-node and arrive via
 /// payloadAttributes.transactions; this path only serves the built-in single-node CL.
 /// l2BlockTime is unused: the spec sourceHash does not bind L2 time.
-/// Known divergence: this synthesizer keys purely on jovianActive and stamps the 178B
-/// Jovian form even at the Jovian ACTIVATION height, where the read side (and op-geth)
-/// accept only the 176B deposits-only Isthmus form. The read side's activation-block
-/// exception needs the fork schedule height, which the seam does not carry; on the
-/// built-in-CL path the activation block's L1-attributes deposit would be rejected.
-/// Production op-node deposits (the supported path) are derived with the correct form.
+/// FISCO selects Jovian by genesis feature flag (OpForkFlags::jovianActive), not by
+/// an activation height. The synthesizer therefore emits 178B whenever the flag is
+/// on — there is no built-in-CL "activation block" that must be 176B. The read side
+/// still accepts both forms: 176B is treated as the op-geth activation (deposits-only)
+/// shape so an external op-node can send that block; 178B with the Jovian selector is
+/// the post-activation form this path produces. Production deposits come from op-node.
 inline bcos::bytes synthesizeL1AttributesDeposit(
     const L1BlockInfo& l1Info, bool jovianActive, [[maybe_unused]] uint64_t l2BlockTime)
 {

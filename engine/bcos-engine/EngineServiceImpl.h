@@ -409,8 +409,7 @@ public:
                 // never record IDs, so the 64-entry eviction never ran. Rebuilds of an
                 // existing ID also move it to the back so a re-built entry cannot sit in a
                 // stale front slot and get evicted right after being refreshed.
-                auto orderIt = std::find(
-                    m_payloadOrder.begin(), m_payloadOrder.end(), payloadId);
+                auto orderIt = std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId);
                 if (orderIt != m_payloadOrder.end())
                 {
                     m_payloadOrder.erase(orderIt);
@@ -559,7 +558,8 @@ private:
         }
         if (payloadAttributes.transactions.has_value())
         {
-            forcedEnvelopes.reserve(forcedEnvelopes.size() + payloadAttributes.transactions->size());
+            forcedEnvelopes.reserve(
+                forcedEnvelopes.size() + payloadAttributes.transactions->size());
             attrTxHashes.reserve(payloadAttributes.transactions->size());
             for (auto const& forcedHex : *payloadAttributes.transactions)
             {
@@ -571,16 +571,16 @@ private:
                 catch (bcos::BadHexCharacter const&)
                 {
                     BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                        "buildOpPayload: payloadAttributes.transactions contains undecodable hex"});
+                                              "buildOpPayload: payloadAttributes.transactions "
+                                              "contains undecodable hex"});
                 }
                 attrTxHashes.emplace_back(bcos::crypto::keccak256Hash(bcos::ref(raw)));
                 forcedEnvelopes.push_back(std::move(raw));
             }
         }
         // Payload ID from CL attributes only (not pool txs or the synthesized deposit).
-        auto payloadId = bcos::engine::derivePayloadId(
-            payloadAttributes, forkchoiceState.headBlockHash, attrTxHashes,
-            static_cast<uint8_t>(version));
+        auto payloadId = bcos::engine::derivePayloadId(payloadAttributes,
+            forkchoiceState.headBlockHash, attrTxHashes, static_cast<uint8_t>(version));
         // Seal over a throwaway view; the delegate owns the execution view.
         auto sealView = m_globalStateStorage.get().fork();
         std::vector<protocol::Transaction::Ptr> sealedTxs;
@@ -629,17 +629,15 @@ private:
             }
         }
 
-        // Ledger config (gasLimit) off a read-only view.
+        // Ledger config / parent header are storage reads. std::mutex must not be
+        // held across co_await (the coroutine may resume on another thread).
         ledger::LedgerConfig ledgerConfig;
+        u256 baseFee;
         {
+            opLock.unlock();
             auto view = m_globalStateStorage.get().fork();
             co_await ledger::getLedgerConfig(
                 view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
-        }
-        // Holocene/Jovian baseFee from the parent header.
-        u256 baseFee;
-        {
-            auto view = m_globalStateStorage.get().fork();
             auto parentNumberStr = boost::lexical_cast<std::string>(nextBlockNumber - 1);
             if (auto parentHeaderEntry = co_await storage2::readOne(view,
                     executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
@@ -665,6 +663,7 @@ private:
                                           "buildOpPayload: parent block header missing at height " +
                                           parentNumberStr});
             }
+            opLock.lock();
         }
 
         auto const parentBeaconBlockRoot =
@@ -1261,10 +1260,8 @@ private:
             co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
         }
 
-        // Serialize OP execute/commit on the delegate. Do not hold x_state across EVM time.
-        std::unique_lock opLock(x_opExecute);
-
         // parentKnown from SYS_HASH_2_NUMBER (not the in-memory cache).
+        // Do not hold x_opExecute across these storage co_awaits.
         auto view = m_globalStateStorage.get().fork();
         auto parentBlockNumber = co_await bcos::ledger::getBlockNumber(
             view, payload.parentHash, bcos::ledger::fromStorage);
@@ -1290,7 +1287,9 @@ private:
             co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
 
-        // Timestamp must increase vs parent. Missing parent header (first block) skips.
+        // Timestamp / baseFee vs the stored parent header. A missing row at a resolved
+        // parent height is a local storage fault (throw), not a first-block skip: the
+        // parent number was already looked up above, so genesis has a header row.
         const auto parentNumberStr = boost::lexical_cast<std::string>(*parentBlockNumber);
         // Parent header from SYS_NUMBER_2_BLOCK_HEADER (copy string_view into bytes).
         if (auto parentHeaderEntry = co_await storage2::readOne(view,
@@ -1401,6 +1400,10 @@ private:
 
         // extraTransactionBytes is the full envelope, not the signing preimage.
         auto block = buildOpBlock(payload, ethHeader);
+
+        // Serialize delegate execute/commit only. Storage checks above must not hold
+        // this mutex across co_await.
+        std::unique_lock opLock(x_opExecute);
 
         // executeBlock is sync here; errors come back as SchedulerError via the callback.
         bcos::Error::Ptr executeError;

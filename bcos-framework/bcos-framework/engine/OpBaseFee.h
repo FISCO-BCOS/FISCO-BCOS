@@ -16,8 +16,7 @@
  * @file OpBaseFee.h
  * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). Production callers: the
  * EngineService OP path (buildOpPayload / runOpNewPayloadSteps) and the RPC feeHistory
- * consumer (split C, #5521) — the earlier "engine path does not call it" note (finding
- * AR) is stale: calcOpBaseFee is invoked from EngineServiceImpl.h.
+ * consumer. calcOpBaseFee is invoked from EngineServiceImpl.h.
  */
 
 #pragma once

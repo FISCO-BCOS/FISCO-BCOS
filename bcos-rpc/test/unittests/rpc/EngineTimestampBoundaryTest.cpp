@@ -146,7 +146,17 @@ BOOST_AUTO_TEST_CASE(oddNibbleExtraDataIsRejected)
 {
     auto params = makeNewPayloadParams("0x64");
     params[0]["extraData"] = "0x123";
-    BOOST_CHECK_THROW(parseNewPayloadRequest(params, engine::ApiVersion::V1), JsonRpcException);
+    try
+    {
+        parseNewPayloadRequest(params, engine::ApiVersion::V1);
+        BOOST_FAIL("expected JsonRpcException for odd-nibble extraData");
+    }
+    catch (JsonRpcException const& error)
+    {
+        std::string const what = error.what();
+        BOOST_CHECK_NE(what.find("executionPayload.extraData"), std::string::npos);
+        BOOST_CHECK_NE(what.find("hex string"), std::string::npos);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

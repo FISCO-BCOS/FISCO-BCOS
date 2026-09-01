@@ -22,9 +22,9 @@
 
 #include "bcos-rpc/groupmgr/NodeService.h"
 #include "bcos-task/Task.h"
+#include <json/json.h>
 #include <atomic>
 #include <chrono>
-#include <json/json.h>
 
 namespace bcos::rpc
 {
@@ -61,7 +61,7 @@ private:
     /// Build the -38005 answer for a method version this node does not implement.
     void buildUnimplementedVersionError(std::string_view method, Json::Value& response) const;
 
-    /// Minimum interval between FCU calls that carry payload attributes (rate-limit, I10):
+    /// Minimum interval between FCU calls that carry payload attributes:
     /// payload building runs two full block executions, so an unthrottled flood is a CPU
     /// DoS even behind the mandatory JWT. A normal CL sends one FCU-with-attrs per block
     /// (seconds apart); 100ms is generous headroom.

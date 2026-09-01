@@ -67,6 +67,18 @@ BOOST_AUTO_TEST_CASE(MinimalV1)
     BOOST_CHECK_EQUAL(derivePayloadId(attrs, f.parentHash, {}, 0x01), "0x010f846a7ea7b1aa");
 }
 
+/// op-geth rlp.Encode(nil) and rlp.Encode([]Withdrawal{}) are both 0xc0.
+BOOST_AUTO_TEST_CASE(NulloptAndEmptyWithdrawalsMatch)
+{
+    FixtureInputs f;
+    auto absent = makeAttrs(f);
+    auto emptyList = makeAttrs(f);
+    emptyList.withdrawals = std::vector<WithdrawalV1>{};
+    BOOST_CHECK_EQUAL(derivePayloadId(absent, f.parentHash, {}, 0x01),
+        derivePayloadId(emptyList, f.parentHash, {}, 0x01));
+    BOOST_CHECK_EQUAL(derivePayloadId(absent, f.parentHash, {}, 0x01), "0x010f846a7ea7b1aa");
+}
+
 /// (f1) version byte difference: same as (a) but V3.
 BOOST_AUTO_TEST_CASE(VersionByteOverwritesDigestByte0)
 {

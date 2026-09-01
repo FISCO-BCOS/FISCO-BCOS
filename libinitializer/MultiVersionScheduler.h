@@ -3,6 +3,7 @@
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-utilities/Exceptions.h"
+#include <array>
 
 namespace bcos::scheduler_v1
 {

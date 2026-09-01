@@ -99,11 +99,13 @@ void EngineEndpoint::buildUnimplementedVersionError(
     std::string_view method, Json::Value& response) const
 {
     // -38005 Unsupported fork for a method version this node does not implement at all
-    // (currently only forkchoiceUpdatedV4: the service layer's forkchoice window tops out
-    // at V3, see isForkchoiceVersionSupported). This is NOT a declaration that older
-    // versions are incompatible: every version that IS implemented stays served, so a
-    // pre-Karst CL — the v1 Engine API harness kept alive by unsafe_allow_v1_executor, or
-    // a stock Lodestar driving V1-V3 — keeps working.
+    // (currently only forkchoiceUpdatedV4). isForkchoiceVersionSupported admits V4 when
+    // the instance was built with maxEngineVersion=V4 (OP mode); the RPC endpoint is the
+    // piece that refuses V4, because no engine mode implements a V4 forkchoiceUpdated
+    // request. This is NOT a declaration that older versions are incompatible: every
+    // version that IS implemented stays served, so a pre-Karst CL — the v1 Engine API
+    // harness kept alive by unsafe_allow_v1_executor, or a stock Lodestar driving V1-V3
+    // — keeps working.
     //
     // Built inline instead of through buildJsonError(request, ...) because a handler only
     // ever receives the params array, never the request envelope: the JSON-RPC id is
@@ -168,8 +170,8 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
         // non-spec Web3DefaultError.
         auto last = m_lastFcuBuildAt.load(std::memory_order_relaxed);
         if ((last.time_since_epoch().count() != 0 && now - last < c_opFcuBuildMinInterval) ||
-            !m_lastFcuBuildAt.compare_exchange_strong(last, now, std::memory_order_relaxed,
-                std::memory_order_relaxed))
+            !m_lastFcuBuildAt.compare_exchange_strong(
+                last, now, std::memory_order_relaxed, std::memory_order_relaxed))
         {
             Json::Value error;
             error["code"] = -32000;

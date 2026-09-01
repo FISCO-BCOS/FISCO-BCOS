@@ -21,8 +21,8 @@
 #pragma once
 
 #include "bcos-framework/engine/Types.h"
-#include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -160,9 +160,11 @@ inline std::string derivePayloadId(PayloadAttributes const& attrs, h256 const& p
     updateBytes(attrs.prevRandao.data(), attrs.prevRandao.size());
     updateBytes(attrs.suggestedFeeRecipient.data(), attrs.suggestedFeeRecipient.size());
 
-    // RLP list of withdrawals; empty list is 0xc0.
-    // Header length depends on the item payload, so encode items first, then stream
-    // the header and items into the hasher without a third concatenated buffer.
+    // op-geth BuildPayloadArgs.Id() always does rlp.Encode(hasher, args.Withdrawals).
+    // Go RLP encodes both a nil slice and an empty slice as the empty list 0xc0, so
+    // nullopt and empty-vector withdrawals hash identically (V1 attrs have no
+    // withdrawals field; V2+ send []). Do not skip the encode when nullopt — that
+    // would diverge from op-geth.
     {
         bcos::bytes withdrawalsPayload;
         if (attrs.withdrawals.has_value())

@@ -282,11 +282,17 @@ bool SingleNodeConsensus::produceBlock()
         return false;
     }
     auto& executionPayload = payload->executionPayload;
-    bool const sealedTxBlock = !executionPayload.transactions.empty();
+    // OP buildOpPayload stores envelopes only in rawTransactions and leaves
+    // transactions[] empty; the generic path is the reverse. Count whichever
+    // carrier the payload actually filled.
+    auto const payloadTxCount = executionPayload.rawTransactions.has_value() ?
+                                    executionPayload.rawTransactions->size() :
+                                    executionPayload.transactions.size();
+    bool const sealedTxBlock = payloadTxCount > 0;
 
     // produceEmptyBlocks=false: only produce a block that carries at least one transaction
     // (used by EEST fixture runs so the produced block environment matches the fixture).
-    if (executionPayload.transactions.empty() && !m_produceEmptyBlocks)
+    if (payloadTxCount == 0 && !m_produceEmptyBlocks)
     {
         SINGLE_CONSENSUS_LOG(DEBUG) << LOG_DESC("Skip empty block (produceEmptyBlocks=false)");
         return false;
@@ -322,7 +328,7 @@ bool SingleNodeConsensus::produceBlock()
     SINGLE_CONSENSUS_LOG(INFO) << LOG_DESC("Committed block")
                                << LOG_KV("number", request.executionPayload.blockNumber)
                                << LOG_KV("hash", request.executionPayload.blockHash.hexPrefixed())
-                               << LOG_KV("txs", request.executionPayload.transactions.size())
+                               << LOG_KV("txs", payloadTxCount)
                                << LOG_KV("gasUsed", request.executionPayload.gasUsed.str())
                                << LOG_KV("stateRoot",
                                       request.executionPayload.stateRoot.hexPrefixed());
