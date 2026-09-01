@@ -32,6 +32,8 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/EthTrieRoots.h"
+#include "bcos-rlp-protocol/EthReceipt.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/BoostLog.h"
@@ -840,6 +842,12 @@ private:
         // and logsBloom is not part of BlockHeader hash computation in FISCO-BCOS).
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
 
+        // Ethereum-compatible roots (executor_version >= 2): txsRoot/receiptsRoot commit to
+        // the transaction / receipt tries and empty blocks get emptyRootHash(); legacy
+        // executors keep the Merkle roots and the zero empty-root behaviour.
+        const bool ethereumRoots =
+            ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION;
+
         // Real EVM execution: execute transactions and compute real hashes.
         if (executionPayload.transactions.empty())
         {
@@ -857,12 +865,14 @@ private:
             // (bcos-tars-protocol/impl/TarsHashable.h).
             emptyHeader->setExtraData(std::move(extraData));
             emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
-            emptyHeader->setReceiptsRoot(h256{});
-            emptyHeader->setTxsRoot(h256{});
+            emptyHeader->setReceiptsRoot(
+                ethereumRoots ? ledger::mpt::emptyRootHash() : h256{});
+            emptyHeader->setTxsRoot(ethereumRoots ? ledger::mpt::emptyRootHash() : h256{});
             emptyHeader->setGasUsed(0);
             emptyHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
             executionPayload.stateRoot = emptyHeader->stateRoot();
-            executionPayload.receiptsRoot = h256{};
+            executionPayload.receiptsRoot =
+                ethereumRoots ? ledger::mpt::emptyRootHash() : h256{};
             executionPayload.gasUsed = 0;
             executionPayload.blockHash = emptyHeader->hash();
             co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
@@ -900,11 +910,22 @@ private:
         auto receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(),
             *blockHeader, executableTransactions | ::ranges::views::indirect, ledgerConfig);
 
-        // Step 2d: Compute transaction root (Merkle over tx hashes)
-        // TODO: Use scheduler_v1::calculateTransactionRoot from BaselineScheduler.h
-        // once MPTStorage is available. The current tx->hash() call lacks exception
-        // handling for malformed transactions.
+        // Step 2d: Compute transaction root.
+        //  - Ethereum executor (v2): commit to the transaction trie over each transaction's
+        //    EIP-2718 wire bytes (ledger::mpt::calculateTransactionsRoot).
+        //  - legacy: Merkle over tx hashes (unchanged).
         h256 txRoot;
+        if (ethereumRoots)
+        {
+            std::vector<bcos::bytesConstRef> txRaws;
+            txRaws.reserve(executionPayload.transactions.size());
+            for (auto const& transaction : executionPayload.transactions)
+            {
+                txRaws.emplace_back(bcos::ref(transaction.raw));
+            }
+            txRoot = ledger::mpt::calculateTransactionsRoot(txRaws);
+        }
+        else
         {
             auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
             auto hasher = hashImpl.hasher();
@@ -929,14 +950,69 @@ private:
             }
         }
 
-        // Step 2e: Compute receipt root (Merkle over receipt hashes)
-        h256 receiptRoot;
+        // Step 2e-0: Validate receipts and (v2) fill per-receipt cumulativeGasUsed + logsBloom.
+        // The raw SchedulerSerialImpl path skips BaselineScheduler's receipt phase (the
+        // documented empty-logsBloom limitation) — the Ethereum receipts trie and the
+        // block-level bloom need those fields.
+        u256 cumulativeGasUsed;
+        for (auto& receipt : receipts)
         {
-            // Validate receipts are non-null before computing hashes
-            if (::ranges::any_of(receipts, [](auto& r) { return !r; }))
+            if (!receipt)
             {
                 BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
             }
+            if (ethereumRoots)
+            {
+                auto logBloom = bcos::getLogsBloom(receipt->logEntries());
+                receipt->setLogsBloom({logBloom.data(), logBloom.size()});
+                cumulativeGasUsed += receipt->gasUsed();
+                receipt->setCumulativeGasUsed(cumulativeGasUsed.str());
+            }
+        }
+
+        // Step 2e: Compute receipt root.
+        //  - Ethereum executor (v2): commit to the receipts trie over EthReceipt RLP
+        //    (ledger::mpt::calculateReceiptsRoot); the EIP-2718 type comes from the executed
+        //    transaction at the same index.
+        //  - legacy: Merkle over receipt hashes (unchanged).
+        h256 receiptRoot;
+        if (ethereumRoots)
+        {
+            std::vector<uint8_t> txTypes;
+            txTypes.reserve(executableTransactions.size());
+            for (auto const& transaction : executableTransactions)
+            {
+                txTypes.push_back(transaction->web3TypedTxKind());
+            }
+            std::vector<bcos::bytes> receiptRlps;
+            receiptRlps.reserve(receipts.size());
+            size_t index = 0;
+            for (auto const& receipt : receipts)
+            {
+                protocol::EthReceiptData eth;
+                if (auto err =
+                        protocol::toEthReceiptData(*receipt, txTypes[index], eth);
+                    err != nullptr)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        std::runtime_error("toEthReceiptData: " + err->errorMessage()));
+                }
+                bcos::bytes encoded;
+                protocol::EthReceipt ethReceipt(std::move(eth));
+                ethReceipt.rlpEncode(encoded);
+                receiptRlps.push_back(std::move(encoded));
+                ++index;
+            }
+            std::vector<bcos::bytesConstRef> refs;
+            refs.reserve(receiptRlps.size());
+            for (auto const& rlp : receiptRlps)
+            {
+                refs.emplace_back(bcos::ref(rlp));
+            }
+            receiptRoot = ledger::mpt::calculateReceiptsRoot(refs);
+        }
+        else
+        {
             auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
             auto hasher = hashImpl.hasher();
             crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
@@ -959,14 +1035,9 @@ private:
         Bloom logsBloom{};
         for (auto& receipt : receipts)
         {
-            if (!receipt)
-            {
-                BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
-            }
             totalGasUsed += receipt->gasUsed();
-            // The v2 (pure-Ethereum) executor's receipts carry an empty logsBloom (a
-            // documented limitation — evmoneReceiptToBcos does not compute it), so tolerate
-            // empty blooms instead of indexing past their (zero) length.
+            // v2 receipts have their bloom filled in Step 2e-0; legacy receipts may carry an
+            // empty bloom (documented limitation), which is tolerated here.
             if (!receipt->logsBloom().empty())
             {
                 orBloom(logsBloom, receipt->logsBloom());
