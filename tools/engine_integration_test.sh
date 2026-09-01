@@ -177,6 +177,9 @@ mkdir -p "${WORK_DIR}"
 
 # Generate genesis config
 cat > "${WORK_DIR}/config.genesis" << GENESIS_EOF
+[version]
+compatibility_version=3.18.0
+
 [consensus]
 consensus_type=pbft
 block_tx_count_limit=1000

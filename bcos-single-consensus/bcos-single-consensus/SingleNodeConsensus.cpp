@@ -139,7 +139,10 @@ void SingleNodeConsensus::loop()
         }
         catch (...)
         {
-            SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("produceBlock iteration threw (unknown)");
+            SINGLE_CONSENSUS_LOG(ERROR)
+                << LOG_DESC("produceBlock iteration threw (unknown)")
+                << LOG_KV("diagnostic",
+                    boost::current_exception_diagnostic_information());
         }
         // Drain the mempool as fast as possible when transactions are available (a tx is
         // sealed immediately after submission instead of waiting for the next interval
@@ -191,18 +194,26 @@ bool SingleNodeConsensus::produceBlock()
     // seconds, matching EEST's currentTimestamp unit). fixed_timestamp (seconds) is pinned by
     // the harness so the produced block's timestamp matches the fixture; 0 = wall clock.
     //
-    // EIP-2 requires strictly increasing block timestamps, so both modes enforce
-    // monotonicity: a fixed timestamp is bumped by the block number (consecutive blocks,
-    // including empty ones, must never share the same value), and wall-clock mode never goes
-    // backwards relative to the last produced block. utcTime() already returns milliseconds
-    // (bcos-utilities/Common.cpp, despite the header comment saying "seconds") — do NOT
-    // multiply by 1000, which would make the block timestamp ~1.786e15 -> year 58577 in the
-    // EVM (block.timestamp / base fee schedules etc).
+    // Ethereum block timestamps are second-granular: BlockHeader stores milliseconds, so the
+    // value must be a whole-second multiple — the Eth RLP bridge (EthBlockHeader ctor) rejects
+    // sub-second ms, and the produced header is hashed as an Eth header. EIP-2 requires
+    // strictly increasing block timestamps, so both modes round down to a whole second and
+    // then enforce monotonicity in whole-second steps (a fixed timestamp is used verbatim for
+    // the first block so EEST's expected block.timestamp == currentTimestamp holds; later
+    // blocks step +1s).
+    //
+    // utcTime() already returns milliseconds (bcos-utilities/Common.cpp, despite the header
+    // comment saying "seconds") — do NOT multiply by 1000, which would make the block
+    // timestamp ~1.786e15 -> year 58577 in the EVM (block.timestamp / base fee schedules etc).
     auto const nowMs = static_cast<std::uint64_t>(utcTime());
-    std::uint64_t const timestamp =
-        m_fixedTimestamp > 0 ?
-            m_fixedTimestamp * 1000 + static_cast<std::uint64_t>(m_headNumber + 1) :
-            std::max(nowMs, m_lastTimestamp + 1);
+    auto const wholeSecondMs = [&]() -> std::uint64_t {
+        if (m_fixedTimestamp > 0)
+        {
+            return m_fixedTimestamp * 1000;
+        }
+        return nowMs / 1000 * 1000;
+    }();
+    std::uint64_t const timestamp = std::max(wholeSecondMs, m_lastTimestamp + 1000);
     m_lastTimestamp = timestamp;
     bcos::engine::PayloadAttributes payloadAttributes;
     payloadAttributes.prevRandao = m_prevRandao;
