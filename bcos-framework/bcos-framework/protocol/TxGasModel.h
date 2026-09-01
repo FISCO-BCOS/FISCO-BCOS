@@ -160,8 +160,27 @@ inline TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, Transaction 
 
     const auto access_list_cost = compute_access_list_cost(tx.web3AccessList());
 
+    // evmone charges this with no gate, and can: its authorization_list is a decoded field that
+    // only the type-4 RLP form populates, so non-empty implies set-code. That guarantee does not
+    // exist here. authorizationList() reads the tars mirror, which the schema documents as
+    // unauthenticated -- the signature binds only extraTransactionBytes -- and nothing clears it
+    // before pricing, because validateTransaction inspects the list only under `case 4`. Ungated,
+    // a peer hangs a list on a legacy or 1559 transaction and the node prices, and can reject
+    // with IntrinsicGasTooLow, something geth charges nothing extra for.
+    //
+    // So restate evmone's precondition here instead of trusting a caller to have established it:
+    // the same mirror the type rules already switch on, plus the revision that makes set-code
+    // transactions exist. Both pipelines do reject a type-4 transaction before Prague on their
+    // own -- EthereumTransition in the `case 4` arm, admission through Check::TypeByRevision,
+    // which its evaluation order puts ahead of Check::IntrinsicGas -- but a header shared by two
+    // pipelines should not depend on either one's ordering. Short-circuiting also keeps the
+    // list from being materialised (and every r/s hex-parsed) for the transactions that cannot
+    // carry one.
+    static constexpr uint8_t SET_CODE_TX_KIND = 4;
     const auto auth_list_cost =
-        static_cast<int64_t>(tx.authorizationList().size()) * AUTHORIZATION_EMPTY_ACCOUNT_COST;
+        (rev >= EVMC_PRAGUE && tx.web3TypedTxKind() == SET_CODE_TX_KIND) ?
+            static_cast<int64_t>(tx.authorizationList().size()) * AUTHORIZATION_EMPTY_ACCOUNT_COST :
+            0;
 
     const auto initcode_cost =
         (is_create && rev >= EVMC_SHANGHAI) ? INITCODE_WORD_COST * num_words(data.size()) : 0;
