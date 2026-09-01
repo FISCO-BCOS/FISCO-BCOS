@@ -22,7 +22,10 @@
 
 #include "bcos-ledger/LedgerMethods.h"
 #include <bcos-framework/ledger/Ledger.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
+#include <boost/throw_exception.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -33,19 +36,21 @@ task::Task<void> NetEndpoint::version(const Json::Value&, Json::Value& response)
     Json::Value result;
     if (config.has_value())
     {
-        try
+        auto [chainId, _] = config.value();
+        // Same parseWeb3ChainId as eth_chainId / sendRawTransaction / TxValidator.
+        // std::stoull("0x539") silently returned 0; the catch-all forged 20200.
+        auto const parsed = ledger::parseWeb3ChainId(chainId);
+        if (!parsed.has_value())
         {
-            auto [chainId, _] = config.value();
-            result = toQuantity(std::stoull(chainId));
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
         }
-        catch (...)
-        {
-            result = "0x4ee8";  // 20200
-        }
+        result = toQuantity(*parsed);
     }
     else
     {
-        result = "0x4ee8";  // 20200
+        // Absent row is not a parse failure. Match eth_chainId's unset default
+        // ("0x0"), not the historical 20200 forge.
+        result = "0x0";
     }
     buildJsonContent(result, response);
     co_return;

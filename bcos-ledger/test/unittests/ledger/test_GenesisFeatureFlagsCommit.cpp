@@ -24,6 +24,7 @@
 #include "bcos-ledger/GenesisStateRoot.h"
 #include "bcos-ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/Exceptions.h"
 #include <bcos-framework/testutils/faker/FakeBlock.h>
@@ -108,8 +109,9 @@ BOOST_AUTO_TEST_CASE(MissingFlagsSlotRefusesToBuild)
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
         auto param = makeParam();
         auto genesisConfig = makeConfigWithoutFlagsSlot();  // slot absent
-        BOOST_CHECK_THROW(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
-            bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
+            bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "must carry the SystemConfig"); });
         co_return;
     }());
 }
@@ -126,8 +128,44 @@ BOOST_AUTO_TEST_CASE(MismatchingFlagsSlotRefusesToBuild)
         // set than the node runs with -> fail-fast.
         auto& slotValue = genesisConfig.m_allocs[0].storage.back().second;
         slotValue[slotValue.size() - 1] = (slotValue.back() == '0') ? '1' : '0';
-        BOOST_CHECK_THROW(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
-            bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
+            bcos::tool::InvalidConfig, [](auto const& e) {
+                return errinfoContains(
+                    e, "feature_flags slot in the genesis allocs does not match");
+            });
+        co_return;
+    }());
+}
+
+// The feature_flags gate runs on the FIRST-INIT path only. On restart the
+// pinned stateRoot / genesis-data comparisons are the guards: an unchanged
+// config restarts fine, and a config that perturbs the purely-computed
+// expected feature set (here an extra enabled feature — feature_op_jovian is
+// set by no genesis-default path) is refused by the genesis-pin guard, NOT by
+// the feature-flags message. The latter would tell the operator to
+// "regenerate the allocs", which is impossible for an initialized chain
+// (B0's stateRoot pins them); it must also never fire just because a newer
+// binary computes a different expected set.
+BOOST_AUTO_TEST_CASE(RestartGuardsOnGenesisPinNotFeatureFlags)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeL2GenesisTestStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        auto param = makeParam();
+        auto genesisConfig = makeConfigWithoutFlagsSlot();
+        appendGenesisFeatureFlagsSlot(genesisConfig);
+        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param));
+
+        // Unchanged config: plain restart succeeds.
+        BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param));
+
+        // Perturbed expected feature set: refused by the pin comparison.
+        auto perturbed = genesisConfig;
+        perturbed.m_features.push_back(FeatureSet{Features::Flag::feature_op_jovian, 1});
+        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, perturbed, param),
+            bcos::tool::InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "Genesis Data is inconsistent");
+            });
         co_return;
     }());
 }

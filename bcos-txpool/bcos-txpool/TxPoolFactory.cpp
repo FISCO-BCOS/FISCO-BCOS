@@ -22,9 +22,9 @@
 #include "bcos-txpool/sync/TransactionSync.h"
 #include "bcos-txpool/sync/protocol/PB/TxsSyncMsgFactoryImpl.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
-#include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include "txpool/storage/MemoryStorage.h"
-#include "txpool/validator/TxPoolNonceChecker.h"
+#include <bcos-tx-validator/TxPoolNonceChecker.h>
+#include <bcos-tx-validator/Web3NonceChecker.h>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -52,12 +52,12 @@ TxPoolFactory::TxPoolFactory(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite,
 
 
 TxPool::Ptr TxPoolFactory::createTxPool(boost::asio::io_context& _ioContext,
-    bcos::IOServicePool::Ptr _ioServicePool,
-    size_t _notifyWorkerNum, size_t _verifierWorkerNum, uint64_t _txsExpirationTime)
+    bcos::IOServicePool::Ptr _ioServicePool, size_t _notifyWorkerNum, size_t _verifierWorkerNum,
+    uint64_t _txsExpirationTime)
 {
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction validator");
-    auto txpoolNonceChecker = std::make_shared<TxPoolNonceChecker>();
-    auto web3NonceChecker = std::make_shared<Web3NonceChecker>(m_ledger);
+    auto txpoolNonceChecker = std::make_shared<txvalidator::TxPoolNonceChecker>();
+    auto web3NonceChecker = std::make_shared<txvalidator::Web3NonceChecker>(m_ledger);
     auto validator = std::make_shared<TxValidator>(txpoolNonceChecker, std::move(web3NonceChecker),
         m_cryptoSuite, m_groupId, m_chainId, m_scheduler);
 
@@ -66,8 +66,8 @@ TxPool::Ptr TxPoolFactory::createTxPool(boost::asio::io_context& _ioContext,
         m_ledger, txpoolNonceChecker, m_blockLimit, m_txpoolLimit, m_checkTransactionSignature);
 
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction storage");
-    auto txpoolStorage =
-        std::make_shared<MemoryStorage>(txpoolConfig, _ioContext, _notifyWorkerNum, _txsExpirationTime);
+    auto txpoolStorage = std::make_shared<MemoryStorage>(
+        txpoolConfig, _ioContext, _notifyWorkerNum, _txsExpirationTime);
 
     auto syncMsgFactory = std::make_shared<TxsSyncMsgFactoryImpl>();
     TXPOOL_LOG(INFO) << LOG_DESC("create sync config");
@@ -78,8 +78,8 @@ TxPool::Ptr TxPoolFactory::createTxPool(boost::asio::io_context& _ioContext,
 
     TXPOOL_LOG(INFO) << LOG_DESC("create txpool") << LOG_KV("submitWorkerNum", _verifierWorkerNum)
                      << LOG_KV("notifyWorkerNum", _notifyWorkerNum);
-    m_txpool = std::make_shared<TxPool>(txpoolConfig, txpoolStorage, txsSync, _verifierWorkerNum,
-        std::move(_ioServicePool));
+    m_txpool = std::make_shared<TxPool>(
+        txpoolConfig, txpoolStorage, txsSync, _verifierWorkerNum, std::move(_ioServicePool));
     return m_txpool;
 }
 

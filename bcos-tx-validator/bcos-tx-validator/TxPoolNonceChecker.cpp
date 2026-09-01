@@ -22,7 +22,7 @@
 
 using namespace bcos;
 using namespace bcos::protocol;
-using namespace bcos::txpool;
+using namespace bcos::txvalidator;
 
 bool TxPoolNonceChecker::exists(NonceType const& _nonce)
 {

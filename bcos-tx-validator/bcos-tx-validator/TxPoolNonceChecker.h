@@ -19,15 +19,15 @@
  * @date 2021-05-10
  */
 #pragma once
-#include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
+#include "bcos-tx-validator/NonceCheckerInterface.h"
 #include "bcos-utilities/BucketMap.h"
 
-namespace bcos::txpool
+namespace bcos::txvalidator
 {
 class TxPoolNonceChecker : public NonceCheckerInterface
 {
 public:
-    TxPoolNonceChecker() : m_nonces(std::max(1u, std::thread::hardware_concurrency())) {};
+    TxPoolNonceChecker() : m_nonces(std::max(1u, std::thread::hardware_concurrency())){};
     bcos::protocol::TransactionStatus checkNonce(const bcos::protocol::Transaction& _tx) override;
     void batchInsert(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::NonceListPtr const& _nonceList) override;
@@ -44,4 +44,4 @@ protected:
     using NonceSet = bcos::BucketSet<bcos::protocol::NonceType, StringHash>;
     NonceSet m_nonces;
 };
-}  // namespace bcos::txpool
+}  // namespace bcos::txvalidator

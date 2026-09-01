@@ -1839,35 +1839,154 @@ static constexpr std::string_view c_l2SystemConfigAddress =
 static constexpr std::string_view c_l2FeatureFlagsKey = "feature_flags";
 static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
 
+// Verify the L2 SystemConfig feature_flags alloc slot against this node's
+// feature set. Called from TWO places: buildGenesisBlock runs it with the
+// purely-computed expected feature set on the FIRST-INIT path (after the
+// genesis-exists early return) — before ANY genesis write, so a mismatching
+// config cannot leave B0 committed under a state root no alloc rows back (the
+// datadir stays untouched and a config fix is a plain retry); on restart the
+// pinned stateRoot comparison is the guard instead, so a binary-side Features
+// enum/default change can never strand an initialized chain here.
+// importGenesisState re-runs it with the persisted feature set before the
+// first ACCOUNT-row write (genesis import is not transactional, and
+// asyncCreateTable is not idempotent). Hex itself is accepted by
+// computeGenesisStateTrie; this compares VALUES.
+static void verifyL2FeatureFlagsSlot(
+    ::ranges::input_range auto const& allocs, Features const& features)
+{
+    for (auto const& importAccount : allocs)
+    {
+        // Normalize before comparing: NodeConfig lowercases alloc addresses,
+        // but direct GenesisConfig callers may pass uppercase — an unmatched
+        // case must not silently skip the verification below.
+        std::string addressHexLower(ledger::stripHexPrefix(importAccount.address));
+        std::transform(addressHexLower.begin(), addressHexLower.end(), addressHexLower.begin(),
+            [](unsigned char c) { return std::tolower(c); });
+        if (addressHexLower != c_l2SystemConfigAddress)
+        {
+            continue;
+        }
+        // The feature_flags Entry slot must arrive IN the alloc (written
+        // by build-allocs.py) so the genesis state root — computed over
+        // the allocs alone — commits it, and the same alloc JSON feeds
+        // the op-reth oracle. This path only VERIFIES the slot against
+        // the feature set the node actually runs with; injecting it here
+        // (the previous behavior) left the root not covering it.
+        //
+        // slot = keccak256(utf8("feature_flags") || be32(101))
+        bcos::bytes slotInput;
+        slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
+        slotInput.insert(
+            slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
+        bcos::bytes baseSlotBytes(32, 0);
+        baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
+        slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());
+        auto slotHash = crypto::keccak256Hash(bcos::ref(slotInput));
+        auto slotKeyHex = slotHash.hex();  // lowercase, 64 chars
+
+        // expected value = packed flags number as 32-byte big-endian
+        // (enableNumber = 0)
+        std::array<uint8_t, 32> expectedValue{};
+        auto flagsNumber = features.toFlagsNumber();
+        for (size_t i = 0; i < expectedValue.size(); ++i)
+        {
+            expectedValue[expectedValue.size() - 1 - i] =
+                (flagsNumber & 0xFF).convert_to<uint8_t>();
+            flagsNumber >>= 8;
+        }
+
+        const ledger::Alloc::State* featureFlagsSlot = nullptr;
+        for (auto const& state : importAccount.storage)
+        {
+            std::string keyHex(ledger::stripHexPrefix(state.first));
+            std::transform(keyHex.begin(), keyHex.end(), keyHex.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+            if (keyHex == slotKeyHex)
+            {
+                featureFlagsSlot = &state;
+                break;
+            }
+        }
+        if (featureFlagsSlot == nullptr)
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
+                                      "L2 genesis allocs must carry the SystemConfig "
+                                      "feature_flags Entry slot (keccak256(\"feature_flags\" "
+                                      "|| be32(101)) = 0x" +
+                                      slotKeyHex +
+                                      ") so the genesis state root commits it; regenerate "
+                                      "the allocs with build-allocs.py"));
+        }
+        auto valueHex = ledger::stripHexPrefix(featureFlagsSlot->second);
+        std::array<uint8_t, 32> actualValue{};
+        ledger::unhexAllocExact(
+            valueHex, "feature_flags slot value", actualValue.data(), actualValue.size());
+        if (actualValue != expectedValue)
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << errinfo_comment(
+                    "SystemConfig feature_flags slot in the genesis allocs does not match "
+                    "this node's genesis feature set (Features::toFlagsNumber()): alloc=0x" +
+                    toHex(actualValue) + " expected=0x" + toHex(expectedValue) +
+                    "; the alloc artifact and the node's [features] config disagree"));
+        }
+    }
+}
+
 static task::Task<void> importGenesisState(
-    ::ranges::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+    ::ranges::forward_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
 {
     // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
-    // a prefix. Strip a leading 0x so both shapes unhex cleanly.
+    // a prefix. Strip a leading 0x so both shapes unhex cleanly. The exact-width /
+    // even-length unhex guards are shared with the genesis trie hasher and the
+    // Ethereum genesis loader (ledger::unhexAllocExact / unhexAllocBytes), so the
+    // state root can never be computed over hex this importer would reject.
     auto strip0x = [](std::string_view hex) { return hex.starts_with("0x") ? hex.substr(2) : hex; };
 
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
 
+    // Verify the SystemConfig feature_flags slot BEFORE the first write (see
+    // verifyL2FeatureFlagsSlot): a mismatch must not leave partially-written
+    // accounts in the genesis batch.
+    verifyL2FeatureFlagsSlot(allocs, features);
+
     for (auto&& importAccount : allocs)
     {
+        // Decode & validate EVERY hex field of the alloc BEFORE the first
+        // write: genesis import is not transactional, so a bad code/slot hex
+        // discovered after create() would leave a partially-written account in
+        // the genesis batch.
         auto addressHex = strip0x(importAccount.address);
         evmc_address address{};
-        boost::algorithm::unhex(addressHex.begin(), addressHex.end(), address.bytes);
+        ledger::unhexAllocExact(addressHex, "address", address.bytes, sizeof(address.bytes));
+
+        bcos::bytes binaryCode;
+        std::optional<crypto::HashType> codeHash;
+        if (!strip0x(importAccount.code).empty())
+        {
+            binaryCode = ledger::unhexAllocBytes(importAccount.code, "code");
+            codeHash = hashImpl.hash(binaryCode);
+        }
+        std::vector<std::pair<evmc_bytes32, evmc_bytes32>> slots;
+        slots.reserve(importAccount.storage.size());
+        for (auto const& [key, value] : importAccount.storage)
+        {
+            evmc_bytes32 evmKey{};
+            ledger::unhexAllocExact(key, "storage slot key", evmKey.bytes, sizeof(evmKey.bytes));
+            evmc_bytes32 evmValue{};
+            ledger::unhexAllocExact(
+                value, "storage slot value", evmValue.bytes, sizeof(evmValue.bytes));
+            slots.emplace_back(evmKey, evmValue);
+        }
 
         account::EVMAccount account(
             storage, address, features.get(Features::Flag::feature_raw_address));
         co_await account.create();
 
-        if (!importAccount.code.empty())
+        if (codeHash.has_value())
         {
-            auto codeHex = strip0x(importAccount.code);
-            bcos::bytes binaryCode;
-            binaryCode.reserve(codeHex.size() / 2);
-            boost::algorithm::unhex(codeHex.begin(), codeHex.end(), std::back_inserter(binaryCode));
-
-            auto codeHash = hashImpl.hash(binaryCode);
-            co_await account.setCode(std::move(binaryCode), std::string{}, codeHash);
+            co_await account.setCode(std::move(binaryCode), std::string{}, *codeHash);
         }
 
         if (!importAccount.nonce.empty())
@@ -1880,92 +1999,9 @@ static task::Task<void> importGenesisState(
             co_await account.setBalance(importAccount.balance);
         }
 
-        if (!importAccount.storage.empty())
+        for (auto const& [evmKey, evmValue] : slots)
         {
-            for (auto const& [key, value] : importAccount.storage)
-            {
-                auto keyHex = strip0x(key);
-                auto valueHex = strip0x(value);
-                evmc_bytes32 evmKey{};
-                boost::algorithm::unhex(keyHex.begin(), keyHex.end(), evmKey.bytes);
-                evmc_bytes32 evmValue{};
-                boost::algorithm::unhex(valueHex.begin(), valueHex.end(), evmValue.bytes);
-
-                co_await account.setStorage(evmKey, evmValue);
-            }
-        }
-
-        // Normalize before comparing: NodeConfig lowercases alloc addresses,
-        // but direct GenesisConfig callers may pass uppercase — an unmatched
-        // case must not silently skip the verification below.
-        std::string addressHexLower(addressHex);
-        std::transform(addressHexLower.begin(), addressHexLower.end(), addressHexLower.begin(),
-            [](unsigned char c) { return std::tolower(c); });
-        if (addressHexLower == c_l2SystemConfigAddress)
-        {
-            // The feature_flags Entry slot must arrive IN the alloc (written
-            // by build-allocs.py) so the genesis state root — computed over
-            // the allocs alone — commits it, and the same alloc JSON feeds
-            // the op-reth oracle. This path only VERIFIES the slot against
-            // the feature set the node actually runs with; injecting it here
-            // (the previous behavior) left the root not covering it.
-            //
-            // slot = keccak256(utf8("feature_flags") || be32(101))
-            bcos::bytes slotInput;
-            slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
-            slotInput.insert(
-                slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
-            bcos::bytes baseSlotBytes(32, 0);
-            baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
-            slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());
-            auto slotHash = crypto::keccak256Hash(bcos::ref(slotInput));
-            auto slotKeyHex = slotHash.hex();  // lowercase, 64 chars
-
-            // expected value = packed flags number as 32-byte big-endian
-            // (enableNumber = 0)
-            std::array<uint8_t, 32> expectedValue{};
-            auto flagsNumber = features.toFlagsNumber();
-            for (size_t i = 0; i < expectedValue.size(); ++i)
-            {
-                expectedValue[expectedValue.size() - 1 - i] =
-                    (flagsNumber & 0xFF).convert_to<uint8_t>();
-                flagsNumber >>= 8;
-            }
-
-            const ledger::Alloc::State* featureFlagsSlot = nullptr;
-            for (auto const& state : importAccount.storage)
-            {
-                std::string keyHex(strip0x(state.first));
-                std::transform(keyHex.begin(), keyHex.end(), keyHex.begin(),
-                    [](unsigned char c) { return std::tolower(c); });
-                if (keyHex == slotKeyHex)
-                {
-                    featureFlagsSlot = &state;
-                    break;
-                }
-            }
-            if (featureFlagsSlot == nullptr)
-            {
-                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
-                                          "L2 genesis allocs must carry the SystemConfig "
-                                          "feature_flags Entry slot (keccak256(\"feature_flags\" "
-                                          "|| be32(101)) = 0x" +
-                                          slotKeyHex +
-                                          ") so the genesis state root commits it; regenerate "
-                                          "the allocs with build-allocs.py"));
-            }
-            auto valueHex = strip0x(featureFlagsSlot->second);
-            std::array<uint8_t, 32> actualValue{};
-            boost::algorithm::unhex(valueHex.begin(), valueHex.end(), actualValue.begin());
-            if (actualValue != expectedValue)
-            {
-                BOOST_THROW_EXCEPTION(
-                    bcos::tool::InvalidConfig() << errinfo_comment(
-                        "SystemConfig feature_flags slot in the genesis allocs does not match "
-                        "this node's genesis feature set (Features::toFlagsNumber()): alloc=0x" +
-                        toHex(actualValue) + " expected=0x" + toHex(expectedValue) +
-                        "; the alloc artifact and the node's [features] config disagree"));
-            }
+            co_await account.setStorage(evmKey, evmValue);
         }
     }
 }
@@ -2012,13 +2048,60 @@ static void applyEthGenesisHeader(
     header.setExtraData(bcos::bytes(ethHeader.m_extraData));
     header.setPrevRandao(ethHeader.m_mixHash);
     header.setNonce(ethHeader.m_nonce);
-    header.setBaseFee(ethHeader.m_baseFeePerGas);
-    header.setWithdrawalsRoot(ethHeader.m_withdrawalsRoot);
-    header.setBlobGasUsed(ethHeader.m_blobGasUsed);
-    header.setExcessBlobGas(ethHeader.m_excessBlobGas);
-    header.setParentBeaconBlockRoot(ethHeader.m_parentBeaconBlockRoot);
-    header.setRequestsHash(ethHeader.m_requestsHash);
-    header.setEthBlockVersion(bcos::protocol::EthBlockVersion::PRAGUE);
+    // Fork-gated fields are set ONLY when the genesis header carries them:
+    // on a pre-Cancun chain (Sepolia's London-era genesis) they are absent, so
+    // they stay nullopt and the RLP re-encoding is byte-exact. The EthBlockHeader
+    // constructor (and the RLP codec) skip nullopt fields automatically — the
+    // single source of truth for the field order — so the resulting hash is
+    // keccak256(rlp(header)) over exactly the fields this chain's genesis has.
+    if (ethHeader.m_baseFeePerGas.has_value())
+    {
+        header.setBaseFee(*ethHeader.m_baseFeePerGas);
+    }
+    if (ethHeader.m_withdrawalsRoot.has_value())
+    {
+        header.setWithdrawalsRoot(*ethHeader.m_withdrawalsRoot);
+    }
+    if (ethHeader.m_blobGasUsed.has_value())
+    {
+        header.setBlobGasUsed(*ethHeader.m_blobGasUsed);
+    }
+    if (ethHeader.m_excessBlobGas.has_value())
+    {
+        header.setExcessBlobGas(*ethHeader.m_excessBlobGas);
+    }
+    if (ethHeader.m_parentBeaconBlockRoot.has_value())
+    {
+        header.setParentBeaconBlockRoot(*ethHeader.m_parentBeaconBlockRoot);
+    }
+    if (ethHeader.m_requestsHash.has_value())
+    {
+        header.setRequestsHash(*ethHeader.m_requestsHash);
+    }
+    // Derive the fork version from the presence of fork-gated fields, exactly
+    // mirroring EthBlockHeader::rlpDecode: requestsHash -> PRAGUE,
+    // parentBeaconBlockRoot -> CANCUN, withdrawalsRoot -> SHANGHAI, baseFee ->
+    // LONDON, else PRE_LONDON. validateHeader (inside calculateHash) requires
+    // every field its declared version demands, so a header whose optional
+    // fields disagree with its version would fail fast here.
+    EthBlockVersion version = EthBlockVersion::PRE_LONDON;
+    if (ethHeader.m_requestsHash.has_value())
+    {
+        version = bcos::protocol::EthBlockVersion::PRAGUE;
+    }
+    else if (ethHeader.m_parentBeaconBlockRoot.has_value())
+    {
+        version = bcos::protocol::EthBlockVersion::CANCUN;
+    }
+    else if (ethHeader.m_withdrawalsRoot.has_value())
+    {
+        version = bcos::protocol::EthBlockVersion::SHANGHAI;
+    }
+    else if (ethHeader.m_baseFeePerGas.has_value())
+    {
+        version = bcos::protocol::EthBlockVersion::LONDON;
+    }
+    header.setEthBlockVersion(version);
 }
 
 // sync method, to be split
@@ -2169,6 +2252,48 @@ bool Ledger::buildGenesisBlock(
             {
                 LEDGER_LOG(INFO) << "failed, initialGenesisDate is null";
             }
+        }
+
+        // First-init path only (a restart either returned true above or threw
+        // on the pin/stateRoot guards): verify the L2 SystemConfig
+        // feature_flags alloc slot NOW — before ANY genesis write (the first
+        // is the asyncCreateTable loop far below). A mismatch surfacing after
+        // prewriteBlockToStorage would leave B0 committed under a state root
+        // no alloc rows back: the next start would then pass the restart
+        // guards on an empty world state, block 1 would die on a missing trie
+        // node, and the datadir would be unrecoverable without a wipe. The
+        // expected feature set is computed purely here — version defaults +
+        // the rpbft auto-flag + [features] — identical to what the write side
+        // persists below; the importGenesisState-internal re-check compares
+        // against what was actually persisted.
+        //
+        // This must NOT run on the restart path: the stateRoot comparison
+        // above already refuses to start on any alloc drift (the slot value
+        // is part of the trie), while expectedFeatures derives from this
+        // binary's Features enum and version defaults — re-checking it on
+        // every start would let a future release that changes the enum or a
+        // genesis default strand an initialized chain with an unactionable
+        // "regenerate the allocs" error (the allocs are pinned by B0's
+        // stateRoot and cannot be regenerated for a live chain).
+        if (!genesis.m_allocs.empty())
+        {
+            Features expectedFeatures;
+            expectedFeatures.setGenesisFeatures(
+                protocol::BlockVersion(genesis.m_compatibilityVersion));
+            if (RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
+                genesis.m_compatibilityVersion >=
+                    static_cast<uint32_t>(protocol::BlockVersion::V3_5_VERSION))
+            {
+                expectedFeatures.set(ledger::Features::Flag::feature_rpbft);
+            }
+            for (auto const& featureSet : genesis.m_features)
+            {
+                if (featureSet.enable > 0)
+                {
+                    expectedFeatures.set(featureSet.flag);
+                }
+            }
+            verifyL2FeatureFlagsSlot(genesis.m_allocs, expectedFeatures);
         }
 
         auto versionNumber = genesis.m_compatibilityVersion;

@@ -19,10 +19,13 @@
  * @date 2024-12-11
  */
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
+#include "bcos-framework/bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include <bcos-codec/rlp/RLPEncode.h>
 
 #include "bcos-task/Wait.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
@@ -125,6 +128,168 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
 
     txpool->txpoolStorage()->clear();
     std::cout << "#### testTransactionValidator finish" << std::endl;
+}
+
+// Finding BO: a blob (0x03) tx reaching the P2P-sync chainId gate must be refused with
+// BlobTxNotAllowed — the InvalidChainId previously shared with the Deposit/Malformed/
+// chainId-mismatch arms made pool logs blame the chainId for a type-policy refusal.
+// The fixture is an independently assembled EIP-4844 wire envelope, so it exercises the
+// dispatch gate itself: deleting the gate flips this test red.
+BOOST_AUTO_TEST_CASE(testBlobTxRejectedWithDedicatedStatus)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto keyPair = signatureImpl->generateKeyPair();
+    std::string groupId = "group_test_for_txpool";
+    std::string chainId = "chain_test_for_txpool";
+    int64_t blockLimit = 10;
+    auto fakeGateWay = std::make_shared<FakeGateWay>();
+    auto faker = std::make_shared<TxPoolFixture>(
+        keyPair->publicKey(), cryptoSuite, groupId, chainId, blockLimit, fakeGateWay, false, false);
+    faker->init();
+    auto txpoolConfig = faker->txpool()->txpoolConfig();
+    auto ledger = faker->ledger();
+
+    // Independently assembled EIP-4844 wire envelope: 0x03 || rlp([chainId, nonce,
+    // maxPriorityFeePerGas, maxFeePerGas, gas, to, value, data, accessList,
+    // maxFeePerBlobGas, blobVersionedHashes, yParity, r, s]).
+    namespace codec_rlp = bcos::codec::rlp;
+    auto const eoaKey = cryptoSuite->signatureImpl()->generateKeyPair();
+    bcos::bytes fields;
+    codec_rlp::encode(fields, static_cast<uint64_t>(1));
+    codec_rlp::encode(fields, static_cast<uint64_t>(0));
+    codec_rlp::encode(fields, static_cast<uint64_t>(1));
+    codec_rlp::encode(fields, static_cast<uint64_t>(2));
+    codec_rlp::encode(fields, static_cast<uint64_t>(21000));
+    codec_rlp::encode(fields, eoaKey->address(hashImpl).asBytes());
+    codec_rlp::encode(fields, static_cast<uint64_t>(0));
+    codec_rlp::encode(fields, bcos::bytes{});
+    bcos::bytes emptyList;
+    codec_rlp::encodeHeader(emptyList, {.isList = true, .payloadLength = 0});
+    fields.insert(fields.end(), emptyList.begin(), emptyList.end());  // accessList
+    codec_rlp::encode(fields, static_cast<uint64_t>(1));              // maxFeePerBlobGas
+    fields.insert(fields.end(), emptyList.begin(), emptyList.end());  // blobVersionedHashes
+    codec_rlp::encode(fields, static_cast<uint64_t>(1));              // yParity
+    codec_rlp::encode(fields, bcos::bytes(32, 0x01));                 // r
+    codec_rlp::encode(fields, bcos::bytes(32, 0x02));                 // s
+    bcos::bytes wire;
+    wire.push_back(0x03);
+    codec_rlp::encodeHeader(wire, {.isList = true, .payloadLength = fields.size()});
+    wire.insert(wire.end(), fields.begin(), fields.end());
+
+    // Sanity: the fixture keys the dispatch table on 0x03 independent of the gate.
+    BOOST_CHECK(bcos::engine::dispatchRawTransaction(bcos::ref(wire)) ==
+                bcos::engine::RawTransactionKind::Blob);
+
+    bcostars::Transaction transaction;
+    transaction.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    transaction.extraTransactionBytes.assign(wire.begin(), wire.end());
+    auto blobTx = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
+
+    auto result = task::syncWait(txpoolConfig->txValidator()->validateChainId(*blobTx, ledger));
+    BOOST_CHECK(result == TransactionStatus::BlobTxNotAllowed);
+}
+
+BOOST_AUTO_TEST_CASE(testValidateChainIdTypedAdmitAndUnsupported)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto keyPair = signatureImpl->generateKeyPair();
+    std::string groupId = "group_test_for_txpool";
+    std::string chainId = "chain_test_for_txpool";
+    int64_t blockLimit = 10;
+    auto fakeGateWay = std::make_shared<FakeGateWay>();
+    auto faker = std::make_shared<TxPoolFixture>(
+        keyPair->publicKey(), cryptoSuite, groupId, chainId, blockLimit, fakeGateWay, false, false);
+    faker->init();
+    auto txpoolConfig = faker->txpool()->txpoolConfig();
+    auto ledger = faker->ledger();
+    ledger->setSystemConfig(std::string(bcos::ledger::SYSTEM_KEY_WEB3_CHAIN_ID), "1");
+
+    namespace codec_rlp = bcos::codec::rlp;
+    auto makeTypedChainIdWire = [](uint8_t type, uint64_t envelopeChainId) {
+        bcos::bytes fields;
+        codec_rlp::encode(fields, envelopeChainId);
+        bcos::bytes wire;
+        wire.push_back(type);
+        codec_rlp::encodeHeader(wire, {.isList = true, .payloadLength = fields.size()});
+        wire.insert(wire.end(), fields.begin(), fields.end());
+        return wire;
+    };
+    auto asWeb3Tx = [](bcos::bytes const& wire) {
+        bcostars::Transaction transaction;
+        transaction.type =
+            static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+        transaction.extraTransactionBytes.assign(wire.begin(), wire.end());
+        return std::make_shared<bcostars::protocol::TransactionImpl>(
+            [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
+    };
+
+    // 0x01 / 0x02 / 0x04 with inner-list field0 matching the node chainId are admitted.
+    for (uint8_t const type : {uint8_t{0x01}, uint8_t{0x02}, uint8_t{0x04}})
+    {
+        auto const wire = makeTypedChainIdWire(type, 1);
+        BOOST_CHECK(bcos::engine::dispatchRawTransaction(bcos::ref(wire)) !=
+                    bcos::engine::RawTransactionKind::Unsupported);
+        auto result =
+            task::syncWait(txpoolConfig->txValidator()->validateChainId(*asWeb3Tx(wire), ledger));
+        BOOST_CHECK(result == TransactionStatus::None);
+    }
+
+    // Matching type, mismatched chainId.
+    {
+        auto const wire = makeTypedChainIdWire(0x02, 999);
+        auto result =
+            task::syncWait(txpoolConfig->txValidator()->validateChainId(*asWeb3Tx(wire), ledger));
+        BOOST_CHECK(result == TransactionStatus::InvalidChainId);
+    }
+
+    // R3 #2: legacy SEALED envelope at real signature width (32-byte r/s, v=38 = chainId 1)
+    // must be admitted — validateChainId was previously driven only with typed envelopes,
+    // and inline-width classifier fixtures hide the emptySeen cursor defect that misreads
+    // real-width tails (Malformed instead of Protected).
+    {
+        auto makeLegacySealedWire = []() {
+            bcos::bytes items;
+            for (int i = 0; i < 6; ++i)
+            {
+                codec_rlp::encode(items, static_cast<uint64_t>(0));
+            }
+            codec_rlp::encode(items, static_cast<uint64_t>(38));  // v: chainId 1, parity 1
+            items.push_back(0xa0);                                // 32-byte r
+            items.insert(items.end(), 32, 0x11);
+            items[items.size() - 32] = 0xc1;  // first payload byte >= 0xc0: a list header if the
+                                              // emptySeen walk starts mid-r (pre-fix)
+            items.push_back(0xa0);            // 32-byte s
+            items.insert(items.end(), 32, 0x22);
+            bcos::bytes wire;
+            codec_rlp::encodeHeader(wire, {.isList = true, .payloadLength = items.size()});
+            wire.insert(wire.end(), items.begin(), items.end());
+            return wire;
+        };
+        auto const wire = makeLegacySealedWire();
+        BOOST_CHECK(bcos::engine::dispatchRawTransaction(bcos::ref(wire)) !=
+                    bcos::engine::RawTransactionKind::Unsupported);
+        auto result =
+            task::syncWait(txpoolConfig->txValidator()->validateChainId(*asWeb3Tx(wire), ledger));
+        BOOST_CHECK(result == TransactionStatus::None);
+    }
+
+    // Unsupported type byte (0x05) and empty extra are Malformed, not InvalidChainId.
+    {
+        bcos::bytes unsupported{0x05};
+        auto result = task::syncWait(
+            txpoolConfig->txValidator()->validateChainId(*asWeb3Tx(unsupported), ledger));
+        BOOST_CHECK(result == TransactionStatus::Malformed);
+    }
+    {
+        auto result = task::syncWait(
+            txpoolConfig->txValidator()->validateChainId(*asWeb3Tx(bcos::bytes{}), ledger));
+        BOOST_CHECK(result == TransactionStatus::Malformed);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(testValidateBalanceIncludesGasCost)

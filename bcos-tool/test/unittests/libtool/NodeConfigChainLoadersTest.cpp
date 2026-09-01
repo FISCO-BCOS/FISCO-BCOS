@@ -101,9 +101,19 @@ BOOST_AUTO_TEST_CASE(web3ChainConfigValidAndInvalid)
 {
     LoaderProbe a;
     a.loadWeb3ChainConfig(fromIni("[web3]\nchain_id=42\n"));
+    BOOST_CHECK_EQUAL(a.genesisConfig().m_web3ChainID, "42");
+    LoaderProbe hex;
+    hex.loadWeb3ChainConfig(fromIni("[web3]\nchain_id=0x539\n"));
+    BOOST_CHECK_EQUAL(hex.genesisConfig().m_web3ChainID, "0x539");
     LoaderProbe b;
     BOOST_CHECK_THROW(
         b.loadWeb3ChainConfig(fromIni("[web3]\nchain_id=notnum\n")), bcos::tool::InvalidConfig);
+    LoaderProbe neg;
+    BOOST_CHECK_THROW(
+        neg.loadWeb3ChainConfig(fromIni("[web3]\nchain_id=-5\n")), bcos::tool::InvalidConfig);
+    LoaderProbe negZero;
+    BOOST_CHECK_THROW(
+        negZero.loadWeb3ChainConfig(fromIni("[web3]\nchain_id=-0\n")), bcos::tool::InvalidConfig);
 }
 
 

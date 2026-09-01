@@ -1575,6 +1575,58 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
     }());
 }
 
+// Finding AO (fail-stop decision): getLedgerConfig must propagate InvalidWeb3ChainIdConfig
+// when the stored web3_chain_id row is malformed. The base already fail-stopped via
+// boost::lexical_cast; this path now throws a typed exception, accepts 0x QUANTITY, and
+// rejects a leading '-' (lexical_cast<u256> wrapped that modulo 2^256). Same scaffolding
+// as the getLedgerConfig case above.
+BOOST_AUTO_TEST_CASE(getLedgerConfigMalformedWeb3ChainIdFailStop)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        initFixture();
+
+        using KeyType = executor_v1::StateKey;
+        Entry value;
+        SystemConfigEntry config;
+
+        config = {"12", 0};
+        value.set(bcos::storage::serialize::encode(config));
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_TX_COUNT_LIMIT}, value);
+
+        config = {"not-a-number", 0};
+        value.set(bcos::storage::serialize::encode(config));
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_WEB3_CHAIN_ID}, value);
+
+        value.set("10086");
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}, value);
+
+        auto block = std::make_shared<bcostars::protocol::BlockImpl>();
+        auto blockHeader = block->blockHeader();
+        blockHeader->setNumber(10086);
+        blockHeader->setVersion(200);
+        blockHeader->setTimestamp(110);
+        auto hashImpl = std::make_shared<Keccak256>();
+        blockHeader->calculateHash(*hashImpl);
+        co_await ledger::prewriteBlock(*m_ledger,
+            std::make_shared<bcos::protocol::ConstTransactions>(), block, false, m_storage);
+        bytes headerBuffer;
+        blockHeader->encode(headerBuffer);
+
+        storage::Entry number2HeaderEntry;
+        number2HeaderEntry.set(std::move(headerBuffer));
+        co_await storage2::writeOne(*m_storage,
+            KeyType{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(blockHeader->number())},
+            std::move(number2HeaderEntry));
+
+        auto ledgerConfig = std::make_shared<LedgerConfig>();
+        BOOST_CHECK_THROW(co_await ledger::getLedgerConfig(*m_ledger, *ledgerConfig),
+            ledger::InvalidWeb3ChainIdConfig);
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -1777,6 +1829,25 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
         BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
         BOOST_CHECK_EQUAL(static_cast<int>(*parsed.evmcRevisionForBlock(0)), rev);
     }
+}
+
+BOOST_AUTO_TEST_CASE(web3ChainIdConfigFailStop)
+{
+    // Finding AO (fail-stop decision): a malformed web3_chain_id SYS_CONFIG value must
+    // throw InvalidWeb3ChainIdConfig from the shared config-apply helper — it feeds the
+    // EVM CHAINID opcode, and silently serving 0 would be indistinguishable from unset
+    // while the admission side rejects the same value (silent-divergence hazard).
+    for (std::string_view bad : {"", "abc", "-5", "0x", "0xZZ", "1 2", "12abc"})
+    {
+        BOOST_CHECK_THROW(
+            (void)ledger::parseConfiguredWeb3ChainId(bad), ledger::InvalidWeb3ChainIdConfig);
+    }
+
+    // Legitimate forms keep parsing; the absent-config default "0" stays 0.
+    BOOST_CHECK_EQUAL(ledger::parseConfiguredWeb3ChainId("0"), bcos::u256(0));
+    BOOST_CHECK_EQUAL(ledger::parseConfiguredWeb3ChainId("1"), bcos::u256(1));
+    BOOST_CHECK_EQUAL(ledger::parseConfiguredWeb3ChainId("0x539"), bcos::u256(1337));
+    BOOST_CHECK_EQUAL(ledger::parseConfiguredWeb3ChainId("0x0539"), bcos::u256(1337));
 }
 
 BOOST_AUTO_TEST_CASE(replaceBinary)

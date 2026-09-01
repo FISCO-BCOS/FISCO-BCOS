@@ -25,4 +25,13 @@ namespace bcos::engine
 /// a storage fault is not a consensus verdict on the payload. Lives in bcos-framework (not the
 /// engine library) so opstack-executor can throw it without depending on bcos-engine.
 DERIVE_BCOS_EXCEPTION(OpExecutionInternalError);
+
+// Engine API errors for EngineErrorMapper — forward reference: the mapper lands with
+// split C (#5521); until then only InvalidForkchoiceState has a throw site. Do not
+// redeclare Types.h's UnknownPayload / IncompatiblePayloadVersion. -38002 forkchoice,
+// -38005 unsupported fork, -38003 attributes.
+DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
+DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
+DERIVE_BCOS_EXCEPTION(UnsupportedFork);
+DERIVE_BCOS_EXCEPTION(UnsupportedOpPayloadAttributes);
 }  // namespace bcos::engine

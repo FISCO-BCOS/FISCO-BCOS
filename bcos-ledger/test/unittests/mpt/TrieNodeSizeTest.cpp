@@ -26,8 +26,11 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
 
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
+
 namespace bcos::ledger::mpt::test
 {
+using bcos::test::errinfoContains;
 
 // The point of the fixed-size NodeRef: payload(32) + len(1) = 33 bytes flat, no heap. The old
 // representation held bytes(24) + h256(32) + kind side by side → 64 bytes and one heap
@@ -74,7 +77,8 @@ BOOST_AUTO_TEST_CASE(BranchChildrenWidthInvariant)
 
     BranchNode malformed;
     malformed.children.pop_back();
-    BOOST_CHECK_THROW(encodeRaw(TrieNode{std::move(malformed)}), MPTInvariantViolation);
+    BOOST_CHECK_EXCEPTION(encodeRaw(TrieNode{std::move(malformed)}), MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "must hold exactly NIBBLE_RANGE"); });
 }
 
 // Inline form survives encoder → decoder: a tiny leaf child comes back byte-identical.
