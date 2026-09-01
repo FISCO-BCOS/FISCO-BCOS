@@ -147,14 +147,25 @@ public:
     task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
         std::string_view, std::string_view, bcos::protocol::BlockNumber) override
     {
-        co_return std::nullopt;
+        // No error channel on this interface: throw the same refusal the callback-based
+        // methods report, so a misconfigured node fails loud instead of serving a
+        // fabricated nullopt (finding N2).
+        throw *BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+            "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)");
+        co_return std::nullopt;  // unreachable; satisfies the coroutine's return type
     }
     void status(
         std::function<void(bcos::Error::Ptr, bcos::protocol::Session::ConstPtr)> cb) override
     {
-        cb({}, {});
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
+            nullptr);
     }
-    void reset(std::function<void(bcos::Error::Ptr)> cb) override { cb({}); }
+    void reset(std::function<void(bcos::Error::Ptr)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+            "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"));
+    }
     // callAtBlock uses the SchedulerInterface default (forwards to call).
 };
 }  // namespace

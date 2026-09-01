@@ -14,9 +14,10 @@
  *  limitations under the License.
  *
  * @file OpBaseFee.h
- * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). No production caller in this
- * PR — the RPC feeHistory consumer lands with split C (#5521); the engine path does not
- * call it (finding AR — the earlier "shared by engine and RPC" claim was aspirational).
+ * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). Production callers: the
+ * EngineService OP path (buildOpPayload / runOpNewPayloadSteps) and the RPC feeHistory
+ * consumer (split C, #5521) — the earlier "engine path does not call it" note (finding
+ * AR) is stale: calcOpBaseFee is invoked from EngineServiceImpl.h.
  */
 
 #pragma once

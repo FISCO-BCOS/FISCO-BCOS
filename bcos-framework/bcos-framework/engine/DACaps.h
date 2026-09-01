@@ -14,7 +14,8 @@
  *  limitations under the License.
  *
  * @file DACaps.h
- * @brief DA size caps shared by miner_setMaxDASize and OP payload build.
+ * @brief DA size caps for OP payload build. The miner_setMaxDASize RPC that writes these
+ * is a follow-up; until it lands the caps stay 0 = uncapped (finding S2).
  */
 
 #pragma once

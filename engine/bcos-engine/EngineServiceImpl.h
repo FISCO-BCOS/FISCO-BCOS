@@ -641,6 +641,19 @@ private:
                     m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
                 baseFee = calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
             }
+            else
+            {
+                // Parent header row missing at the height the forkchoice head just resolved:
+                // a storage fault, not a normal first block (a real first block has no
+                // parent). The 1e9 fallback keeps the build moving, but the divergence must
+                // be loud — every such build would otherwise be rejected by the CL's own
+                // baseFee validation with no local diagnostics (finding S1).
+                BCOS_LOG(WARNING) << LOG_BADGE("EngineService")
+                                  << LOG_DESC(
+                                         "buildOpPayload: parent block header missing; using "
+                                         "the 1e9 fallback baseFee")
+                                  << LOG_KV("parentNumber", nextBlockNumber - 1);
+            }
         }
 
         auto const parentBeaconBlockRoot =
@@ -1383,7 +1396,7 @@ private:
                 // (Web3Transaction RLP decode returned an error) -- a consensus-level rejection
                 // of the block, classified INVALID (OpConsensusError -> INVALID), never -32603.
                 // The verdict is issued by the delegate's execute hook: the type-byte gate
-                // (OpScheduler.h:586-590, unsupported type byte -> OpConsensusError), or for a
+                // (OpScheduler.h:813-819, unsupported type byte -> OpConsensusError), or for a
                 // malformed-but-supported 0x01/0x02/0x04 envelope, opValidate's type whitelist
                 // with the all-zero fallback tars tx failing validate_transaction. Step 2
                 // (validateOpNewPayloadRequest) does NOT decode envelopes, so reaching assembly

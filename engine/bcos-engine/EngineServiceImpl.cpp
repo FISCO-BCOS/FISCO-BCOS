@@ -359,15 +359,10 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     {
         return std::string("eip1559Params must be exactly 8 bytes");
     }
-    // denom and elasticity must both be zero or both non-zero.
-    const auto readU32BE = [&](std::size_t off) {
-        return (static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off]) << 24) |
-               (static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off + 1]) << 16) |
-               (static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off + 2]) << 8) |
-               static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off + 3]);
-    };
-    const auto denominator = readU32BE(0);
-    const auto elasticity = readU32BE(4);
+    // denom and elasticity must both be zero or both non-zero. Shared decoder with
+    // encodeOptimismExtraData / validateOptimismExtraDataShape (single source of truth for
+    // the 8-byte layout, finding S6).
+    const auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
     if ((denominator == 0) != (elasticity == 0))
     {
         return std::string(
