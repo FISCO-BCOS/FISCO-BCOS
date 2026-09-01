@@ -862,13 +862,26 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // OP mode (executor_version>=3) additionally mandates gasLimit + Holocene
         // eip1559Params in FCU attributes (validateOpPayloadAttributes); the generic V1
         // driver must keep them absent (pre-V3 attributes reject eip1559Params). Defaults:
-        // 30M gas; Canyon EIP-1559 denominator 250 / elasticity 6.
+        // the chain's configured gas limit (from the genesis/system config), falling back
+        // to 30M only when nothing is configured; Canyon EIP-1559 denominator 250 /
+        // elasticity 6.
         std::optional<std::uint64_t> driverGasLimit;
         std::optional<bcos::bytes> driverEip1559Params;
         std::optional<std::uint64_t> driverMinBaseFee;
         if (opStackMode)
         {
-            driverGasLimit = 30'000'000ull;
+            // A real OP chain takes its gas limit from the L1 SystemConfig; the built-in CL
+            // stands in for that, so seed from the chain's own configured value instead of
+            // hard-coding 30M (which would silently override an operator's gas_limit setting
+            // and make the anti-censorship re-probe fire on every chain whose limit is not
+            // exactly 30M).
+            ledger::LedgerConfig ledgerConfig;
+            task::syncWait(ledger::getLedgerConfig(*m_ledger, ledgerConfig));
+            driverGasLimit = std::get<0>(ledgerConfig.gasLimit());
+            if (driverGasLimit == 0)
+            {
+                driverGasLimit = 30'000'000ull;
+            }
             // Canyon EIP-1559 denominator 250 / elasticity 6, assembled from the shared
             // constants so the driver attributes can never drift from the zero-pair
             // translation in encodeOptimismExtraData.

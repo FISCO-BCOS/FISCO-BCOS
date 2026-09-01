@@ -152,20 +152,21 @@ void bcos::boostssl::http::HttpSession::handleRequest(const HttpRequest& _httpRe
     if (m_httpReqHandler)
     {
         m_httpReqHandler(_httpRequest,
-            [session = shared_from_this(), version, startT, keepAlive = _httpRequest.keep_alive()](
+            [session = shared_from_this(), version, startT,
+                keepAlive = _httpRequest.keep_alive()](
                 bcos::bytes _content, boost::beast::http::status status) {
-                auto resp = session->buildHttpResp(
-                    status, keepAlive, version, std::move(_content), session->corsConfig());
-                // put the response into the queue and waiting to be send
-                BCOS_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("response")
-                                << LOG_KV("body", std::string_view((const char*)resp->body().data(),
-                                                      resp->body().size()))
-                                << LOG_KV("status", static_cast<unsigned>(status))
-                                << LOG_KV("keep_alive", resp->keep_alive())
-                                << LOG_KV("need_eof", resp->need_eof())
-                                << LOG_KV("timecost", (utcTime() - startT));
-                session->queue().enqueue(std::move(resp));
-            });
+            auto resp = session->buildHttpResp(
+                status, keepAlive, version, std::move(_content), session->corsConfig());
+            // put the response into the queue and waiting to be send
+            BCOS_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("response")
+                            << LOG_KV("body", std::string_view((const char*)resp->body().data(),
+                                                  resp->body().size()))
+                            << LOG_KV("status", static_cast<unsigned>(status))
+                            << LOG_KV("keep_alive", resp->keep_alive())
+                            << LOG_KV("need_eof", resp->need_eof())
+                            << LOG_KV("timecost", (utcTime() - startT));
+            session->queue().enqueue(std::move(resp));
+        });
     }
     else
     {

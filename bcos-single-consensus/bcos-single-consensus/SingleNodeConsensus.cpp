@@ -145,13 +145,27 @@ void SingleNodeConsensus::loop()
         {
             SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("produceBlock iteration threw (unknown)");
         }
-        // Drain the mempool as fast as possible when transactions are available (a tx is
-        // sealed immediately after submission instead of waiting for the next interval
-        // tick — the EEST harness runs one tx per unit, so this removes ~1s/unit of
-        // latency). Only pace the loop when nothing was sealed (empty block or skipped).
+        // Wall-clock arm: the block timestamp advances in whole-second steps
+        // (max(nowWholeSecondMs, m_lastTimestamp + 1000)), so a fast drain must NOT outrun
+        // the wall clock — otherwise chain time drifts ahead and a restart can no longer
+        // produce a timestamp strictly greater than the head (EIP-2). Wait until the wall
+        // clock reaches m_lastTimestamp + 1000 even when a tx block was just sealed.
+        // The fixed-timestamp (EEST) arm never consults the wall clock, so it still drains
+        // as fast as possible (its monotonicity comes from m_headNumber, not time).
         // stop() notifies the condition variable so shutdown is prompt even with a large
         // block_interval.
-        if (!sealedTxBlock)
+        if (m_fixedTimestamp == 0)
+        {
+            auto const nowMs = static_cast<std::uint64_t>(utcTime());
+            auto const targetMs = m_lastTimestamp + 1000;
+            if (nowMs < targetMs)
+            {
+                std::unique_lock lock(m_cvMutex);
+                m_cv.wait_for(lock, std::chrono::milliseconds(targetMs - nowMs),
+                    [this] { return !m_running.load(); });
+            }
+        }
+        else if (!sealedTxBlock)
         {
             std::unique_lock lock(m_cvMutex);
             m_cv.wait_for(lock, std::chrono::milliseconds(m_blockIntervalMs),
@@ -177,6 +191,29 @@ void SingleNodeConsensus::resolveInitialHead()
     }
     m_headNumber = headNumber;
     m_headHash = task::syncWait(ledger::getBlockHash(*m_ledger, headNumber));
+    // Seed the wall-clock timestamp from the stored head so a restart cannot propose a
+    // timestamp behind the head block (which runOpNewPayloadSteps rejects with
+    // "timestamp must be strictly greater than the parent's"). Header timestamps are ms.
+    auto headPromise2 =
+        std::make_shared<CallbackPromise<std::tuple<Error::Ptr, protocol::Block::Ptr>>>();
+    m_ledger->asyncGetBlockDataByNumber(headNumber, bcos::ledger::HEADER,
+        [headPromise2](Error::Ptr _error, protocol::Block::Ptr _block) {
+            headPromise2->setValue(std::make_tuple(std::move(_error), std::move(_block)));
+        });
+    auto [headErr, headBlock] = headPromise2->wait(m_running);
+    if (!headErr && headBlock && headBlock->blockHeader())
+    {
+        m_lastTimestamp = static_cast<std::uint64_t>(headBlock->blockHeader()->timestamp());
+        SINGLE_CONSENSUS_LOG(INFO)
+            << LOG_DESC("Seeded last timestamp from head") << LOG_KV("number", m_headNumber)
+            << LOG_KV("timestampMs", m_lastTimestamp);
+    }
+    else
+    {
+        SINGLE_CONSENSUS_LOG(WARNING)
+            << LOG_DESC("Could not seed last timestamp from head")
+            << LOG_KV("err", headErr ? headErr->errorMessage() : "no header");
+    }
     m_headInitialized = true;
     SINGLE_CONSENSUS_LOG(INFO) << LOG_DESC("Resolved initial head")
                                << LOG_KV("number", m_headNumber)

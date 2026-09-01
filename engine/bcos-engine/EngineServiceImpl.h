@@ -539,6 +539,44 @@ private:
         const PayloadAttributes& payloadAttributes, std::uint32_t version,
         bcos::protocol::BlockNumber nextBlockNumber)
     {
+        // Ledger config / parent header are storage reads. They are performed BEFORE
+        // x_opExecute is taken so the lock is held once and covers the whole
+        // reset -> execute -> commit sequence: releasing the lock across the co_awaits
+        // would let a concurrent buildOpPayload run its own probe+canonical passes and
+        // overwrite the shared delegate's pending block while this build is suspended.
+        ledger::LedgerConfig ledgerConfig;
+        u256 baseFee;
+        {
+            auto view = m_globalStateStorage.get().fork();
+            co_await ledger::getLedgerConfig(
+                view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
+            auto parentNumberStr = boost::lexical_cast<std::string>(nextBlockNumber - 1);
+            if (auto parentHeaderEntry = co_await storage2::readOne(view,
+                    executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
+                parentHeaderEntry.has_value())
+            {
+                auto stored = parentHeaderEntry->get();
+                bcos::bytes parentHeaderBytes(stored.begin(), stored.end());
+                auto parentHeader =
+                    m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
+                try
+                {
+                    baseFee = calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
+                }
+                catch (std::exception const& e)
+                {
+                    BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                              std::string("calcOpBaseFee failed: ") + e.what()});
+                }
+            }
+            else
+            {
+                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                          "buildOpPayload: parent block header missing at height " +
+                                          parentNumberStr});
+            }
+        }
+
         // Serialize OP reset/execute/commit on the shared delegate. Cache maps stay
         // under x_state only for the publish window (not across EVM time).
         std::unique_lock opLock(x_opExecute);
@@ -628,43 +666,6 @@ private:
                                       m_daCaps->maxTxSize.load(std::memory_order_relaxed));
                 sealedEnvelopes.erase(it, sealedEnvelopes.end());
             }
-        }
-
-        // Ledger config / parent header are storage reads. std::mutex must not be
-        // held across co_await (the coroutine may resume on another thread).
-        ledger::LedgerConfig ledgerConfig;
-        u256 baseFee;
-        {
-            opLock.unlock();
-            auto view = m_globalStateStorage.get().fork();
-            co_await ledger::getLedgerConfig(
-                view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
-            auto parentNumberStr = boost::lexical_cast<std::string>(nextBlockNumber - 1);
-            if (auto parentHeaderEntry = co_await storage2::readOne(view,
-                    executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
-                parentHeaderEntry.has_value())
-            {
-                auto stored = parentHeaderEntry->get();
-                bcos::bytes parentHeaderBytes(stored.begin(), stored.end());
-                auto parentHeader =
-                    m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
-                try
-                {
-                    baseFee = calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
-                }
-                catch (std::exception const& e)
-                {
-                    BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                              std::string("calcOpBaseFee failed: ") + e.what()});
-                }
-            }
-            else
-            {
-                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                          "buildOpPayload: parent block header missing at height " +
-                                          parentNumberStr});
-            }
-            opLock.lock();
         }
 
         auto const parentBeaconBlockRoot =

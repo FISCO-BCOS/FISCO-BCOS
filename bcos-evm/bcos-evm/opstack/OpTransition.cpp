@@ -497,8 +497,7 @@ private:
 bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     const DepositTx& dep, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,
-    [[maybe_unused]] int64_t blockGasLeft,
-    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
+    int64_t blockGasLeft, const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     evmone::state::StateDiff& outStateDiff)
 {
     if (dep.is_system_tx)
@@ -522,16 +521,18 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     tx.max_priority_gas_price = 0;
     tx.nonce = preNonce;
 
-    // Deposit skips the fee cap validation; validate is used only to compute intrinsic gas / the
-    // EIP-7623 floor. Deposits are also exempt from the block gas pool — op-geth does not
-    // charge deposited transactions against the block gas limit, and op-node's L1-attributes
-    // deposit carries ~150M gas, far above any realistic block gas limit. Passing an unbounded
-    // pool keeps the intrinsic-gas/floor computation while dropping the pool-bound check.
+    // Deposit skips the fee cap validation; validate is used to compute intrinsic gas / the
+    // EIP-7623 floor AND to enforce the block gas pool (GAS_LIMIT_REACHED is one of the two
+    // block-level deposit errors op-geth names in state_transition.go:486, the other being
+    // ErrSystemTxNotSupported, handled at the top of runDeposit). A deposit whose gas_limit
+    // exceeds the running block gas pool is a block error, not a processing-level failure —
+    // op-geth charges every transaction (including deposits) against gp.SubGas; only SYSTEM
+    // transactions are exempt, and dep.is_system_tx is already rejected above.
     evmone::state::BlockInfo validateBlock = block;
     validateBlock.base_fee = 0;
     const DepositValidationView maskedView{view, dep.from};
-    const auto props = evmone::state::validate_transaction(maskedView, validateBlock, tx, cfg.rev,
-        std::numeric_limits<int64_t>::max(), 0);
+    const auto props = evmone::state::validate_transaction(
+        maskedView, validateBlock, tx, cfg.rev, blockGasLeft, 0);
 
     evmone::state::TransactionReceipt receipt;
     receipt.type = kDepositTxType;
