@@ -23,7 +23,7 @@
  * SHA-256 is quoted in each case.
  */
 
-#include "bcos-framework/engine/PayloadId.h"
+#include "bcos-engine/PayloadId.h"
 #include <boost/test/unit_test.hpp>
 #include <string>
 
@@ -125,8 +125,8 @@ BOOST_AUTO_TEST_CASE(BeaconRootOnlyV2)
 }
 
 /// Two non-trivial withdrawals whose combined RLP payload (66 bytes) crosses the 55-byte
-/// long-form list-header boundary: f8 42 header, exercising the >56 rlpAppendHeader arm on
-/// the withdrawals list itself.
+/// long-form list-header boundary: f8 42 header, exercising codec::rlp::encodeHeader's
+/// >=56 long-form arm on the withdrawals list itself.
 /// Byte stream: 11x32 || 000000006553f100 || 22x32 || 33x20 ||
 ///              f8 42 e0 01 02 94 77x20 88 de0b6b3a7640000 e0 03 04 94 88x20 88 de0b6b3a7640000
 BOOST_AUTO_TEST_CASE(TwoWithdrawalsV2)

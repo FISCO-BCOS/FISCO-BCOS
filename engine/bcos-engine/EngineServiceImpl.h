@@ -22,10 +22,11 @@
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-engine/PayloadId.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/engine/EngineService.h"
 #include "bcos-framework/engine/Errors.h"
-#include "bcos-framework/engine/PayloadId.h"
+#include "bcos-framework/engine/OpCulpritTx.h"
 #include "bcos-framework/engine/Types.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -700,29 +701,6 @@ private:
             return candidate;
         };
 
-        // Executor embeds the failing tx hash as "[tx=0x<hex>]" in the error string.
-        auto parseCulpritHash = [](std::string const& message) -> std::optional<crypto::HashType> {
-            constexpr std::string_view kTag = "[tx=0x";
-            auto pos = message.rfind(kTag);
-            if (pos == std::string::npos)
-            {
-                return std::nullopt;
-            }
-            auto hex = message.substr(pos + kTag.size(), 64);
-            if (hex.size() != 64)
-            {
-                return std::nullopt;
-            }
-            try
-            {
-                return crypto::HashType("0x" + hex);
-            }
-            catch (...)
-            {
-                return std::nullopt;
-            }
-        };
-
         // Probe: evict a sealed tx that fails validation and retry. Forced/deposit failures abort.
         std::set<crypto::HashType> evicted;
         ExecutionPayload payload;
@@ -778,7 +756,7 @@ private:
             }
             auto const message =
                 executeError ? executeError->errorMessage() : std::string("no executed header");
-            auto culprit = parseCulpritHash(message);
+            auto culprit = parseOpCulpritHash(message);
             if (culprit.has_value() && evicted.count(*culprit) == 0 &&
                 std::any_of(sealedEnvelopes.begin(), sealedEnvelopes.end(),
                     [&culprit](auto const& entry) { return entry.first == *culprit; }))

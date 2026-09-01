@@ -21,90 +21,39 @@
 #pragma once
 
 #include "bcos-framework/engine/Types.h"
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
+#include <vector>
 
 namespace bcos::engine
 {
 namespace detail
 {
-/// Local RLP subset for payload-ID hashing only. bcos-framework cannot depend on
-/// bcos-codec (layering); these helpers match go-ethereum rlp.encBuffer / codec
-/// RLPEncode.h for the withdrawals list that BuildPayloadArgs.Id() hashes.
-/// Minimal big-endian encoding of an unsigned integer (no leading zero bytes;
-/// zero -> empty). Mirrors RLP integer semantics used by the Ethereum clients.
-inline void appendCompactBigEndian(bcos::bytes& out, u256 const& value)
+/// RLP-encode the withdrawals list the way go-ethereum `rlp.Encode` does:
+/// a nil slice and an empty slice are both the empty list `0xc0`. Each item
+/// is `[index, validatorIndex, address (20B), amount]`. Lives in engine
+/// (not framework) so it can use `bcos-codec` instead of a handwritten RLP
+/// subset.
+inline void encodeWithdrawalsRlp(
+    bcos::bytes& out, std::optional<std::vector<WithdrawalV1>> const& withdrawals)
 {
-    std::array<uint8_t, 32> buf{};
-    u256 v = value;
-    for (int i = 31; i >= 0; --i)
+    bcos::bytes items;
+    if (withdrawals.has_value())
     {
-        buf[static_cast<size_t>(i)] = static_cast<uint8_t>(v & 0xff);
-        v >>= 8;
+        for (auto const& w : *withdrawals)
+        {
+            codec::rlp::encode(items, w.index, w.validatorIndex, w.address, w.amount);
+        }
     }
-    size_t start = 0;
-    while (start < 32 && buf[start] == 0)
-    {
-        ++start;
-    }
-    out.insert(out.end(), buf.begin() + static_cast<ptrdiff_t>(start), buf.end());
-}
-
-/// RLP header for a payload of @p payloadLength bytes (@p isList selects the
-/// list vs string base). Emits the short form (< 56 bytes) or the long form
-/// (>= 56 bytes: base + size-of-length + length bytes), matching go-ethereum's
-/// rlp.encBuffer: short form base 0x80/0xc0 + len; long form 0xb7/0xf7 +
-/// len-of-len + big-endian length.
-inline void rlpAppendHeader(bcos::bytes& out, bool isList, size_t payloadLength)
-{
-    if (payloadLength < 56)
-    {
-        out.push_back(static_cast<uint8_t>((isList ? 0xc0 : 0x80) + payloadLength));
-        return;
-    }
-    bcos::bytes lengthBytes;
-    appendCompactBigEndian(lengthBytes, u256{payloadLength});
-    out.push_back(static_cast<uint8_t>((isList ? 0xf7 : 0xb7) + lengthBytes.size()));
-    out.insert(out.end(), lengthBytes.begin(), lengthBytes.end());
-}
-
-/// RLP-encode one unsigned integer (integer semantics: 0 -> 0x80, single byte
-/// < 0x80 -> itself, otherwise string header + minimal BE bytes).
-inline void rlpAppendU256(bcos::bytes& out, u256 const& value)
-{
-    if (value == 0)
-    {
-        out.push_back(0x80);
-        return;
-    }
-    bcos::bytes be;
-    appendCompactBigEndian(be, value);
-    if (be.size() == 1 && be[0] < 0x80)
-    {
-        out.push_back(be[0]);
-        return;
-    }
-    rlpAppendHeader(out, false, be.size());
-    out.insert(out.end(), be.begin(), be.end());
-}
-
-/// RLP-encode one WithdrawalV1: a 4-item list
-/// [index, validatorIndex, address (20 bytes), amount].
-inline void rlpAppendWithdrawal(bcos::bytes& out, WithdrawalV1 const& w)
-{
-    bcos::bytes item;
-    rlpAppendU256(item, w.index);
-    rlpAppendU256(item, w.validatorIndex);
-    rlpAppendHeader(item, false, w.address.size());
-    item.insert(item.end(), w.address.begin(), w.address.end());
-    rlpAppendU256(item, w.amount);
-    rlpAppendHeader(out, true, item.size());
-    out.insert(out.end(), item.begin(), item.end());
+    codec::rlp::encodeHeader(out, {.isList = true, .payloadLength = items.size()});
+    out.insert(out.end(), items.begin(), items.end());
 }
 }  // namespace detail
 
@@ -164,20 +113,12 @@ inline std::string derivePayloadId(PayloadAttributes const& attrs, h256 const& p
     // Go RLP encodes both a nil slice and an empty slice as the empty list 0xc0, so
     // nullopt and empty-vector withdrawals hash identically (V1 attrs have no
     // withdrawals field; V2+ send []). Do not skip the encode when nullopt — that
-    // would diverge from op-geth.
+    // would diverge from op-geth. codec::rlp::encode(optional) emits nothing for
+    // nullopt, so the empty-list case is handled here explicitly.
     {
-        bcos::bytes withdrawalsPayload;
-        if (attrs.withdrawals.has_value())
-        {
-            for (auto const& w : *attrs.withdrawals)
-            {
-                detail::rlpAppendWithdrawal(withdrawalsPayload, w);
-            }
-        }
-        bcos::bytes withdrawalsHeader;
-        detail::rlpAppendHeader(withdrawalsHeader, true, withdrawalsPayload.size());
-        updateBytes(withdrawalsHeader.data(), withdrawalsHeader.size());
-        updateBytes(withdrawalsPayload.data(), withdrawalsPayload.size());
+        bcos::bytes withdrawalsRlp;
+        detail::encodeWithdrawalsRlp(withdrawalsRlp, attrs.withdrawals);
+        updateBytes(withdrawalsRlp.data(), withdrawalsRlp.size());
     }
 
     if (attrs.parentBeaconBlockRoot.has_value())

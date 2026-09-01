@@ -4,6 +4,7 @@
 
 // OP block types and header conversions. Commitment comparison lives in OpCommitments.h.
 
+#include <bcos-framework/engine/OpCulpritTx.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
@@ -31,11 +32,16 @@ namespace bcos::evm
 /// namespaces (and the code that references it from either) resolve it by outer-scope lookup.
 struct OpConsensusError : std::runtime_error
 {
-    using std::runtime_error::runtime_error;
-    /// Offending tx (when the rejection is per-tx). Downstream pool eviction reads this
-    /// field, never the message text — a string-format contract would silently break the
-    /// moment anyone rewords the message.
     std::optional<bcos::h256> txHash;
+
+    explicit OpConsensusError(std::string const& what_arg) : std::runtime_error(what_arg) {}
+
+    /// Per-tx reject. Embeds `[tx=0x<64 hex>]` in `what()` so the hash survives the
+    /// `bcos::Error` delegate boundary that `buildOpPayload` parses.
+    OpConsensusError(std::string what_arg, bcos::h256 hash)
+      : std::runtime_error(bcos::engine::appendOpCulpritTag(std::move(what_arg), hash)),
+        txHash(hash)
+    {}
 };
 }  // namespace bcos::evm
 

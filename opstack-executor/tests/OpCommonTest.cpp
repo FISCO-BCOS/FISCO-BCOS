@@ -121,4 +121,15 @@ BOOST_AUTO_TEST_CASE(ClassifyTxTypeMapping)
     BOOST_CHECK_EQUAL(op::classifyTxType(0x05), 0x05);
 }
 
+BOOST_AUTO_TEST_CASE(PerTxCtorEmbedsCulpritTag)
+{
+    bcos::h256 const hash(std::string(64, 'e'), bcos::h256::FromHex);
+    OpConsensusError const err("OpScheduler: normal tx validation failed: nonce too low", hash);
+    BOOST_REQUIRE(err.txHash.has_value());
+    BOOST_CHECK_EQUAL(err.txHash->hex(), hash.hex());
+    auto parsed = bcos::engine::parseOpCulpritHash(err.what());
+    BOOST_REQUIRE(parsed.has_value());
+    BOOST_CHECK_EQUAL(parsed->hex(), hash.hex());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
