@@ -10,11 +10,13 @@
 
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
+#include <functional>
 #include <stdexcept>
 
 using namespace bcos;
@@ -23,6 +25,44 @@ using namespace bcostars::protocol;
 
 namespace bcos::test
 {
+// Match exception what() — several sites throw the same type.
+static void expectThrowMessage(const std::function<void()>& call, std::string_view expectedText)
+{
+    bool threw = false;
+    try
+    {
+        call();
+    }
+    catch (std::invalid_argument const& e)
+    {
+        threw = true;
+        BOOST_CHECK_MESSAGE(std::string_view(e.what()).find(expectedText) != std::string_view::npos,
+            "expected \"" << expectedText << "\" in what(): " << e.what());
+    }
+    BOOST_CHECK_MESSAGE(
+        threw, "expected std::invalid_argument containing \"" << expectedText << "\"");
+}
+
+// Match throwDecode stage text, not just the exception type.
+static void expectReassembleThrows(
+    bcos::bytesConstRef payload, bcos::bytesConstRef sig, std::string_view expectedStage)
+{
+    bool threw = false;
+    try
+    {
+        (void)bcostars::protocol::reassembleWeb3RawTransaction(payload, sig);
+    }
+    catch (std::invalid_argument const& e)
+    {
+        threw = true;
+        BOOST_CHECK_MESSAGE(
+            std::string_view(e.what()).find(expectedStage) != std::string_view::npos,
+            "expected stage \"" << expectedStage << "\" in what(): " << e.what());
+    }
+    BOOST_CHECK_MESSAGE(
+        threw, "expected std::invalid_argument for stage \"" << expectedStage << "\", got success");
+}
+
 namespace
 {
 CryptoSuite::Ptr makeSuite()
@@ -188,9 +228,10 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonHexQuantityV1)
     bcos::bytes encoded;
     impl->encode(encoded);
 
-    BOOST_CHECK_THROW(
-        factory.createTransaction(bcos::ref(encoded), false, false), std::invalid_argument);
-    BOOST_CHECK_THROW(factory.decodeTransaction(bcos::ref(encoded)), std::invalid_argument);
+    expectThrowMessage([&] { (void)factory.createTransaction(bcos::ref(encoded), false, false); },
+        "is not hex string");
+    expectThrowMessage(
+        [&] { (void)factory.decodeTransaction(bcos::ref(encoded)); }, "is not hex string");
 }
 
 // isHexStringV2 is deliberately lenient: an empty quantity is treated as valid.
@@ -226,9 +267,12 @@ BOOST_AUTO_TEST_CASE(decodeRejectsHashMismatch)
     bcos::bytes encoded;
     impl->encode(encoded);
 
-    BOOST_CHECK_THROW(factory.createTransaction(bcos::ref(encoded), /*checkSig=*/false,
-                          /*checkHash=*/true),
-        std::invalid_argument);
+    expectThrowMessage(
+        [&] {
+            (void)factory.createTransaction(
+                bcos::ref(encoded), /*checkSig=*/false, /*checkHash=*/true);
+        },
+        "hash mismatching");
     // With checkHash disabled the same bytes decode without complaint.
     BOOST_CHECK_NO_THROW(
         factory.createTransaction(bcos::ref(encoded), /*checkSig=*/false, /*checkHash=*/false));
@@ -239,9 +283,12 @@ BOOST_AUTO_TEST_CASE(builderRejectsNonHexQuantityV1)
 {
     auto suite = makeSuite();
     TransactionFactoryImpl factory(suite);
-    BOOST_CHECK_THROW(factory.createTransaction(1, "0xto", bcos::bytes{0x01}, "0x1", 100, "chain0",
-                          "group0", 0, "abi", /*value=*/"100"),
-        std::invalid_argument);
+    expectThrowMessage(
+        [&] {
+            (void)factory.createTransaction(1, "0xto", bcos::bytes{0x01}, "0x1", 100, "chain0",
+                "group0", 0, "abi", /*value=*/"100");
+        },
+        "not hex string");
 }
 
 // A V0 transaction ignores the gas/fee fields: the builder forces them to
@@ -274,6 +321,7 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     auto& inner = tx->mutableInner();
     inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     inner.web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    inner.extraTransactionBytes = {static_cast<char>(0x7e)};
     // hex without 0x prefix, matching Web3Transaction::takeToTarsTransaction (h256::hex())
     inner.sourceHash = "6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7";
     // "0x"+hex, matching takeToTarsTransaction (mint() parses via bcos::u256)
@@ -288,11 +336,12 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     BOOST_CHECK(tx->size() >= inner.sourceHash.size() + inner.mint.size());
 
     // A non-system deposit (isSystemTx=false) must still be a deposit: isDepositTx() keys off
-    // web3TypedTxKind(), never off the per-transaction isSystemTransaction flag.
+    // the envelope's first byte, never off the per-transaction isSystemTransaction flag.
     auto nonSystemDeposit = std::make_shared<TransactionImpl>();
     nonSystemDeposit->mutableInner().type =
         static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     nonSystemDeposit->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    nonSystemDeposit->mutableInner().extraTransactionBytes = {static_cast<char>(0x7e)};
     nonSystemDeposit->mutableInner().isSystemTransaction = 0;
     BOOST_CHECK(nonSystemDeposit->isDepositTx());
 
@@ -301,6 +350,7 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     noMint->mutableInner().type =
         static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     noMint->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    noMint->mutableInner().extraTransactionBytes = {static_cast<char>(0x7e)};
     BOOST_CHECK(noMint->isDepositTx());
     BOOST_CHECK_EQUAL(noMint->mint(), u256(0));
     BOOST_CHECK(noMint->sourceHash().empty());
@@ -312,6 +362,7 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     wideMint->mutableInner().type =
         static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     wideMint->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    wideMint->mutableInner().extraTransactionBytes = {static_cast<char>(0x7e)};
     wideMint->mutableInner().mint = std::string(65, 'a');  // 65 hex digits, no prefix
     BOOST_CHECK(wideMint->isDepositTx());
     BOOST_CHECK_EQUAL(wideMint->mint(), u256(0));
@@ -321,6 +372,7 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     maxMint->mutableInner().type =
         static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     maxMint->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    maxMint->mutableInner().extraTransactionBytes = {static_cast<char>(0x7e)};
     maxMint->mutableInner().mint = "0x" + std::string(64, 'f');  // exactly 256-bit
     BOOST_CHECK(maxMint->isDepositTx());
     BOOST_CHECK(maxMint->mint() != u256(0));
@@ -415,6 +467,485 @@ BOOST_AUTO_TEST_CASE(web3ChainIdFromEnvelopeReadsEnvelopeNotTarsMirror)
     legacyInner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::BCOSTransaction);
     legacyInner.extraTransactionBytes.assign(env.begin(), env.end());
     BOOST_CHECK(!legacy->web3ChainIdFromEnvelope().has_value());
+}
+
+// Dual-layout typed reassemble: unknown type byte (0x05) must throw, not dereference end().
+// std::array::end() is a non-null pointer; `if (!expected)` never fired.
+BOOST_AUTO_TEST_CASE(typedUnknownTypeReassembleThrows)
+{
+    auto suite = makeSuite();
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));
+    bcos::bytes env;
+    env.push_back(0x05);
+    rlp::encodeHeader(env, rlp::Header{true, items.size()});
+    env.insert(env.end(), items.begin(), items.end());
+
+    auto tx = std::make_shared<TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.web3TypedTxKind = 0x05;
+    inner.extraTransactionBytes.assign(env.begin(), env.end());
+    inner.signature.assign(65, 0);
+    expectThrowMessage([&] { tx->calculateHash(*suite->hashImpl()); }, "typed unknown type");
+}
+
+
+// Sealed-block wire-form envelopes (type || fields || yParity,r,s): reassembleWeb3RawTransaction
+// must adopt them verbatim ONLY when the trailer matches the tars signature — a tampered
+// trailer is rejected (the typed twin of the legacy wire-form cross-check).
+BOOST_AUTO_TEST_CASE(reassembleTypedWireFormCrossChecksSignature)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+    uint8_t const yParity = 1;
+
+    auto buildWire = [&](bcos::bytes const& rSig, bcos::bytes const& sSig, uint64_t yp) {
+        // EIP-1559 fields (9) + trailer (yParity, r, s).
+        bcos::bytes items;
+        rlp::encode(items, static_cast<uint64_t>(1));      // chainId
+        rlp::encode(items, static_cast<uint64_t>(0));      // nonce
+        rlp::encode(items, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
+        rlp::encode(items, static_cast<uint64_t>(1));      // maxFeePerGas
+        rlp::encode(items, static_cast<uint64_t>(21000));  // gasLimit
+        rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+        rlp::encode(items, static_cast<uint64_t>(0));  // value
+        rlp::encode(items, bcos::bytes{});             // data
+        rlp::encode(items, bcos::bytes{});             // accessList
+        rlp::encode(items, yp);
+        rlp::encode(items, rSig);
+        rlp::encode(items, sSig);
+        bcos::bytes env{0x02};
+        rlp::encodeHeader(env, rlp::Header{true, items.size()});
+        env.insert(env.end(), items.begin(), items.end());
+        return env;
+    };
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = yParity;
+
+    // Matching trailer -> adopted verbatim.
+    auto wire = buildWire(r, s, yParity);
+    auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(wire), bcos::bytesConstRef(sig.data(), sig.size()));
+    BOOST_CHECK(reassembled == wire);
+
+    // Tampered r in the trailer -> rejected (would otherwise produce a txHash inconsistent
+    // with the stored signature).
+    auto tampered = buildWire(bcos::bytes(32, 0x33), s, yParity);
+    expectReassembleThrows(bcos::ref(tampered), bcos::bytesConstRef(sig.data(), sig.size()),
+        "typed signature mismatch");
+
+    // Round-2 F6: leading-zero r. Tars stores the full 32-byte scalar (first byte 0x00),
+    // the wire trailer carries its MINIMAL 31-byte RLP form — trimLeadingZeros must bridge
+    // the two on this txHash contract path (~1/256 of real signatures hit it).
+    bcos::bytes rz(32, 0x11);
+    rz[0] = 0x00;
+    bcos::bytes const rzMinimal(rz.begin() + 1, rz.end());  // 31 bytes, first byte nonzero
+    bcos::bytes sigz(65, 0x00);
+    std::copy(rz.begin(), rz.end(), sigz.begin());
+    std::copy(s.begin(), s.end(), sigz.begin() + 32);
+    sigz[64] = yParity;
+
+    auto wirez = buildWire(rzMinimal, s, yParity);
+    auto reassembledz = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(wirez), bcos::bytesConstRef(sigz.data(), sigz.size()));
+    BOOST_CHECK(reassembledz == wirez);
+}
+
+// yParity=0 (RLP-encoded as the empty payload 0x80) must be read directly, not RLP-decoded —
+// decode() on 0x80 would fail InputTooShort. The reassembly must adopt the wire verbatim.
+BOOST_AUTO_TEST_CASE(reassembleTypedWireFormYParityZero)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+    uint8_t const yParity = 0;
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));      // chainId
+    rlp::encode(items, static_cast<uint64_t>(0));      // nonce
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(21000));  // gasLimit
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));        // value
+    rlp::encode(items, bcos::bytes{});                   // data
+    rlp::encode(items, bcos::bytes{});                   // accessList
+    rlp::encode(items, static_cast<uint64_t>(yParity));  // 0 -> RLP 0x80 (empty payload)
+    rlp::encode(items, r);
+    rlp::encode(items, s);
+    bcos::bytes wire{0x02};
+    rlp::encodeHeader(wire, rlp::Header{true, items.size()});
+    wire.insert(wire.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = yParity;
+
+    auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(wire), bcos::bytesConstRef(sig.data(), sig.size()));
+    BOOST_CHECK(reassembled == wire);  // verbatim adoption, parity 0 preserved
+}
+
+// Bytes after the typed inner list must be rejected.
+BOOST_AUTO_TEST_CASE(reassembleTypedWireTrailingGarbageThrows)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+    uint64_t const yParity = 1;  // inline 0x01 form
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));      // chainId
+    rlp::encode(items, static_cast<uint64_t>(0));      // nonce
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(21000));  // gasLimit
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));  // value
+    rlp::encode(items, bcos::bytes{});             // data
+    rlp::encode(items, bcos::bytes{});             // accessList
+    rlp::encode(items, yParity);                   // 0x01 canonical inline
+    rlp::encode(items, r);
+    rlp::encode(items, s);
+    auto buildEnvelope = [&]() {
+        bcos::bytes wire{0x02};
+        rlp::encodeHeader(wire, rlp::Header{true, items.size()});
+        wire.insert(wire.end(), items.begin(), items.end());
+        return wire;
+    };
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = static_cast<bcos::byte>(yParity);
+
+    // Clean envelope still reassembles (and returns verbatim).
+    auto clean = buildEnvelope();
+    auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(clean), bcos::bytesConstRef(sig.data(), sig.size()));
+    BOOST_CHECK(reassembled == clean);
+
+    // One junk byte after the list -> "typed trailing garbage".
+    auto tampered = buildEnvelope();
+    tampered.push_back(0xde);
+    expectReassembleThrows(
+        bcos::ref(tampered), bcos::bytesConstRef(sig.data(), sig.size()), "typed trailing garbage");
+}
+
+// Typed *preimage* (9 fields, no y/r/s) plus junk after the inner list — same guard as wire.
+BOOST_AUTO_TEST_CASE(reassembleTypedPreimageTrailingGarbageThrows)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, bcos::bytes{});
+
+    bcos::bytes preimage{0x02};
+    rlp::encodeHeader(preimage, rlp::Header{true, items.size()});
+    preimage.insert(preimage.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = 1;
+
+    auto clean = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(preimage), bcos::bytesConstRef(sig.data(), sig.size()));
+    BOOST_CHECK(!clean.empty());
+
+    preimage.push_back(0xde);
+    expectReassembleThrows(
+        bcos::ref(preimage), bcos::bytesConstRef(sig.data(), sig.size()), "typed trailing garbage");
+}
+
+// Bare 0x00 yParity is rejected; only 0x80 / 0x01 are valid.
+BOOST_AUTO_TEST_CASE(reassembleTypedWireBareZeroYParityThrows)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, bcos::bytes{});  // accessList
+    items.push_back(0x00);              // BARE ZERO: non-canonical yParity slot
+    rlp::encode(items, r);
+    rlp::encode(items, s);
+    bcos::bytes wire{0x02};
+    rlp::encodeHeader(wire, rlp::Header{true, items.size()});
+    wire.insert(wire.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = 0;
+
+    expectReassembleThrows(
+        bcos::ref(wire), bcos::bytesConstRef(sig.data(), sig.size()), "typed yParity");
+}
+
+// Legacy sealed-block wire form: rlp([6 fields, v, r, s]). Matching trailer adopted verbatim;
+// a tampered r or s rejected ("legacy signature mismatch") — the legacy twin of the typed check.
+BOOST_AUTO_TEST_CASE(reassembleLegacyWireFormCrossChecksSignature)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+    uint64_t const v = 37;  // chainId 1, parity 0
+
+    auto buildWire = [&](bcos::bytes const& rSig, bcos::bytes const& sSig, uint64_t vParam) {
+        bcos::bytes items;
+        rlp::encode(items, static_cast<uint64_t>(0));  // nonce
+        rlp::encode(items, static_cast<uint64_t>(1));  // gasPrice
+        rlp::encode(items, static_cast<uint64_t>(21000));
+        rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+        rlp::encode(items, static_cast<uint64_t>(0));  // value
+        rlp::encode(items, bcos::bytes{});             // data
+        rlp::encode(items, vParam);
+        rlp::encode(items, rSig);
+        rlp::encode(items, sSig);
+        bcos::bytes env;
+        rlp::encodeHeader(env, rlp::Header{true, items.size()});
+        env.insert(env.end(), items.begin(), items.end());
+        return env;
+    };
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = 0;  // parity 0
+
+    auto wire = buildWire(r, s, v);
+    auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(wire), bcos::bytesConstRef(sig.data(), sig.size()));
+    BOOST_CHECK(reassembled == wire);
+
+    // Tampered r -> rejected.
+    auto tamperedR = buildWire(bcos::bytes(32, 0x33), s, v);
+    expectReassembleThrows(bcos::ref(tamperedR), bcos::bytesConstRef(sig.data(), sig.size()),
+        "legacy signature mismatch");
+
+    // Relabeled v (parity flip) with the same r/s must be rejected.
+    auto relabeledV = buildWire(r, s, /*v=*/38);  // parity 1 vs tars parity 0
+    expectReassembleThrows(
+        bcos::ref(relabeledV), bcos::bytesConstRef(sig.data(), sig.size()), "legacy v mismatch");
+
+    // Round-2 F6: leading-zero r. Tars stores the full 32-byte scalar (first byte 0x00),
+    // the wire trailer carries its MINIMAL 31-byte RLP form — trimLeadingZeros must bridge
+    // the two on this txHash contract path (~1/256 of real signatures hit it).
+    bcos::bytes rz(32, 0x11);
+    rz[0] = 0x00;
+    bcos::bytes const rzMinimal(rz.begin() + 1, rz.end());  // 31 bytes, first byte nonzero
+    bcos::bytes sigz(65, 0x00);
+    std::copy(rz.begin(), rz.end(), sigz.begin());
+    std::copy(s.begin(), s.end(), sigz.begin() + 32);
+    sigz[64] = 0;  // parity 0
+
+    auto wirez = buildWire(rzMinimal, s, v);
+    auto reassembledz = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(wirez), bcos::bytesConstRef(sigz.data(), sigz.size()));
+    BOOST_CHECK(reassembledz == wirez);
+
+    // Bytes after the outer list header (not inside the list payload).
+    auto trailing = buildWire(r, s, v);
+    trailing.push_back(0xde);
+    expectReassembleThrows(
+        bcos::ref(trailing), bcos::bytesConstRef(sig.data(), sig.size()), "trailing garbage");
+}
+
+// A signing preimage with chainId 27/28 has the same trailer bytes as an invalid Homestead
+// envelope with empty r/s. extraTransactionBytes stores signing preimages on the admission path,
+// so these valid chain IDs must not be excluded merely because they equal Homestead v values.
+BOOST_AUTO_TEST_CASE(reassembleLegacyChainId27And28Preimages)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = 0;
+
+    auto buildEnvelope = [&](uint64_t chainId, bool signedForm) {
+        bcos::bytes items;
+        rlp::encode(items, uint64_t{0});
+        rlp::encode(items, uint64_t{1});
+        rlp::encode(items, uint64_t{21000});
+        rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+        rlp::encode(items, uint64_t{0});
+        rlp::encode(items, bcos::bytes{});
+        if (signedForm)
+        {
+            rlp::encode(items, chainId * 2 + 35);  // parity 0
+            rlp::encode(items, r);
+            rlp::encode(items, s);
+        }
+        else
+        {
+            rlp::encode(items, chainId);
+            rlp::encode(items, uint64_t{0});
+            rlp::encode(items, uint64_t{0});
+        }
+        bcos::bytes envelope;
+        rlp::encodeHeader(envelope, rlp::Header{true, items.size()});
+        envelope.insert(envelope.end(), items.begin(), items.end());
+        return envelope;
+    };
+
+    for (auto const chainId : {uint64_t{27}, uint64_t{28}})
+    {
+        auto preimage = buildEnvelope(chainId, false);
+        auto expected = buildEnvelope(chainId, true);
+        auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
+            bcos::ref(preimage), bcos::bytesConstRef(sig.data(), sig.size()));
+        BOOST_CHECK(reassembled == expected);
+    }
+}
+
+// calculateHash must key the deposit path on extraBytes[0]==0x7e, never the forgeable
+// web3TypedTxKind mirror. A signed typed envelope with kind rewritten to 0x7e still
+// hashes as keccak(reassemble), not keccak(extraBytes).
+BOOST_AUTO_TEST_CASE(calculateHashIgnoresForgeableDepositKindMirror)
+{
+    auto suite = makeSuite();
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));      // chainId
+    rlp::encode(items, static_cast<uint64_t>(0));      // nonce
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(1));      // maxFeePerGas
+    rlp::encode(items, static_cast<uint64_t>(21000));  // gasLimit
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, bcos::bytes{});  // accessList
+    bcos::bytes env{0x02};
+    rlp::encodeHeader(env, rlp::Header{true, items.size()});
+    env.insert(env.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x11);
+    sig[64] = 1;
+
+    auto tx = std::make_shared<TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.web3TypedTxKind = static_cast<tars::Char>(0x7e);  // forged deposit mirror
+    inner.extraTransactionBytes.assign(env.begin(), env.end());
+    inner.signature.assign(sig.begin(), sig.end());
+
+    tx->calculateHash(*suite->hashImpl());
+    auto const raw = bcostars::protocol::reassembleWeb3RawTransaction(
+        bcos::ref(env), bcos::bytesConstRef(sig.data(), sig.size()));
+    auto const expect = bcos::crypto::keccak256Hash(bcos::ref(raw));
+    BOOST_CHECK(tx->hash() == expect);
+    BOOST_CHECK(tx->hash() != bcos::crypto::keccak256Hash(bcos::ref(env)));
+    BOOST_CHECK(!tx->isDepositTx());
+}
+
+// isDepositTx() keys on extraBytes[0]==0x7e, never the forgeable kind mirror.
+BOOST_AUTO_TEST_CASE(isDepositTxKeysOnEnvelopeByte)
+{
+    auto forgedKind = std::make_shared<TransactionImpl>();
+    forgedKind->mutableInner().type =
+        static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    forgedKind->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    forgedKind->mutableInner().extraTransactionBytes = {static_cast<char>(0x02)};
+    BOOST_CHECK(!forgedKind->isDepositTx());
+
+    auto genuineEnvelope = std::make_shared<TransactionImpl>();
+    genuineEnvelope->mutableInner().type =
+        static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    genuineEnvelope->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x02);
+    genuineEnvelope->mutableInner().extraTransactionBytes = {static_cast<char>(0x7e)};
+    BOOST_CHECK(genuineEnvelope->isDepositTx());
+}
+
+
+// Finding BG: the preimage v derivation (chainId*2+35+yParity) must reject chainId >= 2^63
+// instead of wrapping a uint64 and failing downstream with a confusing parity mismatch.
+BOOST_AUTO_TEST_CASE(reassembleLegacyPreimageHugeChainIdThrows)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, static_cast<uint64_t>(1) << 63);  // chainId == 2^63: v would wrap
+    items.push_back(0x80);
+    items.push_back(0x80);
+    bcos::bytes env;
+    rlp::encodeHeader(env, rlp::Header{true, items.size()});
+    env.insert(env.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = 0;
+
+    expectReassembleThrows(
+        bcos::ref(env), bcos::bytesConstRef(sig.data(), sig.size()), "legacy chainId too large");
+}
+
+// Finding N2: a tars parity byte > 1 recovers an uncontrollable sender and produces a
+// preimage display-side decode rejects — reassembly must fail closed.
+BOOST_AUTO_TEST_CASE(reassembleTarsParityByteAboveOneThrows)
+{
+    namespace rlp = bcos::codec::rlp;
+    auto const r = bcos::bytes(32, 0x11);
+    auto const s = bcos::bytes(32, 0x22);
+
+    bcos::bytes items;
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(1));
+    rlp::encode(items, static_cast<uint64_t>(21000));
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, static_cast<uint64_t>(0));
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, bcos::bytes{});  // accessList
+    bcos::bytes env{0x02};
+    rlp::encodeHeader(env, rlp::Header{true, items.size()});
+    env.insert(env.end(), items.begin(), items.end());
+
+    bcos::bytes sig(65, 0x00);
+    std::copy(r.begin(), r.end(), sig.begin());
+    std::copy(s.begin(), s.end(), sig.begin() + 32);
+    sig[64] = 2;  // parity byte 2: valid recid, invalid envelope parity
+
+    expectReassembleThrows(
+        bcos::ref(env), bcos::bytesConstRef(sig.data(), sig.size()), "signature yParity byte");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

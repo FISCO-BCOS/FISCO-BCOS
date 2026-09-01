@@ -19,6 +19,7 @@
  */
 
 #include "bcos-rlp-protocol/Web3Transaction.h"
+#include "bcos-rlp-protocol/Web3TxEnvelope.h"
 #include "bcos-rlp-protocol/Web3TxHandler.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -32,16 +33,12 @@
 
 namespace bcos
 {
-namespace
-{
-// EIP-2 canonical-s guard: s > n/2 is "malleable" — flipping s -> n - s recovers the same
-// sender, so op-geth rejects it at both admission and block processing. Threshold shared via
-// Secp256k1Crypto.h (c_secp256k1n / c_secp256k1nOver2).
+// EIP-2: s > n/2 is malleable. Shared with TxValidator (P2P tars never hits decode()).
 
 /// Returns a decode error if r/s fall outside EIP-2's valid range (r,s in [1, n-1], s <= n/2),
 /// else nullptr. r/s are the raw 32-byte big-endian scalars (already zero-padded by the handler).
 bcos::Error::UniquePtr checkEip2Signature(
-    bcos::bytes const& signatureR, bcos::bytes const& signatureS)
+    bcos::bytesConstRef signatureR, bcos::bytesConstRef signatureS)
 {
     // Width gate first: padSignature only zero-pads shorter input, and fromBigEndian truncates
     // wider input — without this a 33-byte 0x00||r would pass the range check below on truncation,
@@ -64,7 +61,6 @@ bcos::Error::UniquePtr checkEip2Signature(
     }
     return nullptr;
 }
-}  // namespace
 
 namespace rpc
 {
@@ -130,9 +126,13 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
     // decode path feeding block execution, part 5/5) — so the check covers admission AND block
     // processing, matching op-geth. Deposits (0x7e) are unsigned; the EIP-7702 authorization
     // entries are gated separately (Eip7702Recover.h) and left untouched here.
-    if (err == nullptr && withSig && type != TransactionType::Deposit)
+    // EIP-2 on any decoded (y,r,s). Preimage leftovers have empty r/s and stay exempt.
+    bool const decodedSigTrailer =
+        withSig || !signatureR.empty() || !signatureS.empty() || signatureV != 0;
+    if (err == nullptr && decodedSigTrailer && type != TransactionType::Deposit)
     {
-        err = checkEip2Signature(signatureR, signatureS);
+        err = checkEip2Signature(bcos::bytesConstRef(signatureR.data(), signatureR.size()),
+            bcos::bytesConstRef(signatureS.data(), signatureS.size()));
     }
     return err;
 }
@@ -244,6 +244,7 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) n
 {
     // Each authorization entry is itself an RLP list:
     // [chain_id, address, nonce, y_parity, r, s]
+    // Canonical integers / yParity: authority hash is re-encoded from these values.
     auto&& [error, header] = decodeHeader(in);
     if (error != nullptr)
     {
@@ -255,24 +256,35 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) n
     }
     const uint64_t leftover{in.size() - header.payloadLength};
     u256 chainId = 0;
-    if (auto e = decodeItems(in, chainId, out.address); e != nullptr)
+    if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); e != nullptr)
+    {
+        return e;
+    }
+    if (auto e = decode(in, out.address); e != nullptr)
     {
         return e;
     }
     uint64_t nonce = 0;
-    if (auto e = decode(in, nonce); e != nullptr)
+    if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, nonce); e != nullptr)
     {
         return e;
     }
-    if (auto e = decode(in, out.yParity); e != nullptr)
+    uint64_t yParity = 0;
+    if (auto e = bcos::rlp::protocol::decodeCanonicalYParity(in, yParity); e != nullptr)
+    {
+        // Strict whole-item forms only (0x80/0x01) — an auth entry never carries the legacy
+        // wide-v spelling. Deliberate REJECT-side divergence vs op-geth (finding S5): geth
+        // decodes a canonical uint8 and skips V-not-in-{0,1} authorizations per-entry at
+        // execution; this decode rejects 0x02+ for the whole transaction, so adversarial
+        // blocks op-geth would accept (minus the bad entry) are rejected here. Aligning
+        // requires per-entry skip semantics in Eip7702Recover — revisit if that lands.
+        return e;
+    }
+    if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.r); e != nullptr)
     {
         return e;
     }
-    if (auto e = decode(in, out.r); e != nullptr)
-    {
-        return e;
-    }
-    if (auto e = decode(in, out.s); e != nullptr)
+    if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.s); e != nullptr)
     {
         return e;
     }
@@ -283,6 +295,7 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) n
     }
     out.chainId = chainId;
     out.nonce = nonce;
+    out.yParity = static_cast<uint8_t>(yParity);
     return nullptr;
 }
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept

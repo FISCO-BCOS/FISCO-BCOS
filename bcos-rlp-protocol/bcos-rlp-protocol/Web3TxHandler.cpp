@@ -1,24 +1,20 @@
 // bcos-rlp-protocol/bcos-rlp-protocol/Web3TxHandler.cpp
 #include "Web3TxHandler.h"
+#include "Web3TxEnvelope.h"  // isLegacyPreimageTail (shared discriminator)
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Log.h>
 #include <cstddef>  // std::ptrdiff_t (ListEnd pointer arithmetic)
 #include <cstdint>
 
-// These using-declarations are NOT dead: they are the ADL bridge that lets the generic codec
-// templates (RLPEncode.h encodeItems / Common.h lengthOfItems / RLPDecode.h decodeItems) find the
-// AccessListEntry overloads defined at the bottom of this file. Those overloads live in namespace
-// codec::rlp, which is not an associated namespace of bcos::rpc::AccessListEntry; without the
-// using-declaration a standalone TU (or a unity-batch reorder) fails with "neither visible in the
-// template definition nor found by argument-dependent lookup". Keep the three in sync with the
-// overloads.
+namespace bcos::rpc
+{
+// ADL bridge: AccessListEntry's associated namespace is bcos::rpc, but the overloads live in
+// codec::rlp. File-scope using-declarations are invisible to two-phase lookup; these must sit
+// in this namespace so a standalone TU (AppleClang) can find them at the template POI.
 using bcos::codec::rlp::decode;
 using bcos::codec::rlp::encode;
 using bcos::codec::rlp::length;
-
-namespace bcos::rpc
-{
 namespace
 {
 // Strip leading zero bytes from signature data (R/S) to keep RLP encoding canonical.
@@ -47,6 +43,41 @@ void padSignature(bcos::bytes& signatureR, bcos::bytes& signatureS) noexcept
         signatureS.insert(signatureS.begin(),
             bcos::crypto::SECP256K1_SIGNATURE_S_LEN - signatureS.size(), bcos::byte{0});
     }
+}
+
+// Canonical integer RLP for r/s (same re-encode memcmp as chainId / v / auth r/s).
+// 0x80 stays empty so unsigned/preimage trailers are not padded into 32 zero bytes.
+[[nodiscard]] bcos::Error::UniquePtr decodeCanonicalSignatureBytes(
+    bcos::bytesRef& from, bcos::bytes& to)
+{
+    if (!from.empty() && from[0] == bcos::codec::rlp::BYTES_HEAD_BASE)
+    {
+        from = from.getCroppedData(1);
+        to.clear();
+        return nullptr;
+    }
+    // Over-wide scalars keep the funnel's InvalidVInSignature classification (they used to
+    // be rejected by checkEip2Signature's width gate; Web3TypeTest pins that code), while
+    // in-width non-canonical scalars keep the codec's NonCanonicalSize
+    // (ExtraTxBytesDualLayoutTest pins leading-zero r).
+    {
+        bcos::bytesRef probe = from;
+        auto&& [headerError, header] = bcos::codec::rlp::decodeHeader(probe);
+        if (headerError == nullptr && !header.isList &&
+            header.payloadLength > bcos::crypto::SECP256K1_SIGNATURE_R_LEN)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(bcos::codec::rlp::DecodingError::InvalidVInSignature,
+                "signature r/s wider than 32 bytes");
+        }
+    }
+    bcos::u256 value = 0;
+    if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(from, value); error != nullptr)
+    {
+        return error;
+    }
+    to.assign(bcos::crypto::SECP256K1_SIGNATURE_R_LEN, bcos::byte{0});
+    bcos::toBigEndian(value, to);
+    return nullptr;
 }
 
 // ⚠️ decode contract: each handler's decode is self-contained (consumes the envelope itself —
@@ -170,14 +201,20 @@ struct LegacyTxHandler : Web3TxHandler
         auto const payloadLength = head.payloadLength;
         out.type = TransactionType::Legacy;
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (decodeError = codec::rlp::decodeItems(in, out.nonce, out.maxPriorityFeePerGas);
+        if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
+            decodeError != nullptr)
+        {
+            return decodeError;
+        }
+        if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
             decodeError != nullptr)
         {
             return decodeError;
         }
         out.maxFeePerGas = out.maxPriorityFeePerGas;
 
-        if (decodeError = codec::rlp::decode(in, out.gasLimit); decodeError != nullptr)
+        if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
+            decodeError != nullptr)
         {
             return decodeError;
         }
@@ -205,14 +242,28 @@ struct LegacyTxHandler : Web3TxHandler
         // ⚠️ Check value/data decode errors immediately: if deferred to the withSig branch,
         // a later successful signature decode would overwrite decodeError and misjudge
         // malformed input as valid.
-        if (auto err = codec::rlp::decodeItems(in, out.value, out.data); err != nullptr)
+        if (auto err = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value); err != nullptr)
+        {
+            return err;
+        }
+        if (auto err = codec::rlp::decode(in, out.data); err != nullptr)
         {
             return err;
         }
         if (withSig)
         {
-            if (decodeError =
-                    codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // Canonical v; r/s stay byte strings (signature material).
+            if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.signatureV);
+                decodeError != nullptr)
+            {
+                return decodeError;
+            }
+            if (decodeError = decodeCanonicalSignatureBytes(in, out.signatureR);
+                decodeError != nullptr)
+            {
+                return decodeError;
+            }
+            if (decodeError = decodeCanonicalSignatureBytes(in, out.signatureS);
                 decodeError != nullptr)
             {
                 return decodeError;
@@ -257,40 +308,66 @@ struct LegacyTxHandler : Web3TxHandler
             }
             else
             {
-                // chainId is decoded as uint64 (narrower than EIP-155's u256) — the shared
-                // RLP UnsignedIntegral width gate (RLPDecode.h) rejects payloads >8 bytes, so
-                // chainIds >2^64-1 are rejected at decode rather than silently truncated. This
-                // narrower accept set covers all production chains; op-geth uses uint256.Int.
-                uint64_t chainId = 0;
-                decodeError = codec::rlp::decode(in, chainId);
-                if (decodeError != nullptr)
-                {
-                    return decodeError;
-                }
-                out.chainId.emplace(chainId);
-                // An EIP-155 signing preimage ends with (chainId, 0, 0): consume the two empty
-                // r/s placeholders. The tail must be exactly 2 items — a 7/8-field preimage
-                // (chainId without both placeholders) is malformed (op-geth preimages are 6 or 9
-                // fields), so there is no "placeholders optional" leniency.
-                // Zero-copy like the deposit isSystemTransaction decode (bcos::bytes would
-                // heap-allocate per decode just to assert emptiness).
-                bcos::bytesRef placeholderR;
-                bcos::bytesRef placeholderS;
-                if (decodeError = codec::rlp::decodeItems(in, placeholderR, placeholderS);
+                // Empty r/s => preimage (chainId, 0, 0); otherwise sealed (v, r, s).
+                uint64_t item7 = 0;
+                bcos::bytes item8;
+                bcos::bytes item9;
+                // Canonical trailer scalar.
+                if (decodeError = bcos::rlp::protocol::decodeCanonicalRlpUint(in, item7);
                     decodeError != nullptr)
                 {
                     return decodeError;
                 }
-                if (!placeholderR.empty() || !placeholderS.empty())
+                if (decodeError = decodeCanonicalSignatureBytes(in, item8); decodeError != nullptr)
                 {
-                    return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
-                        "legacy signing preimage: non-empty r/s placeholders in EIP-155 tail");
+                    return decodeError;
+                }
+                if (decodeError = decodeCanonicalSignatureBytes(in, item9); decodeError != nullptr)
+                {
+                    return decodeError;
+                }
+                if (bcos::rlp::protocol::isLegacyPreimageTail(item7, item8.empty(), item9.empty()))
+                {
+                    // EIP-155 signing preimage tail: chainId with the two r/s placeholders.
+                    out.chainId.emplace(item7);
+                }
+                else
+                {
+                    // Sealed: item7 is v. Put r/s/yParity in signature* so EIP-2 still runs.
+                    uint64_t normalizedV = 0;
+                    if (item7 == 27 || item7 == 28)
+                    {
+                        out.chainId = std::nullopt;  // pre-EIP-155 wire envelope
+                        normalizedV = item7 - 27;
+                    }
+                    else if (item7 < 35)
+                    {
+                        return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
+                            "Invalid V in signature");
+                    }
+                    else
+                    {
+                        out.chainId.emplace((item7 - 35) >> 1);  // EIP-155 wire envelope
+                        normalizedV = (item7 - 35) & 1;
+                    }
+                    out.signatureV = normalizedV;
+                    out.signatureR = std::move(item8);
+                    out.signatureS = std::move(item9);
+                    // Pad on adoption too: a minimal-width RLP item
+                    // (leading-zero r/s) stored trimmed would flow into sender()'s 65-byte
+                    // r||s||v recovery input as 64 bytes and break it. padSignature is
+                    // idempotent, so the withSig re-pad below is a no-op now.
+                    padSignature(out.signatureR, out.signatureS);
                 }
             }
         }
-        if (withSig)
+        // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
+        // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
+        // must store 32-byte r/s exactly like the withSig sibling and the legacy handler.
+        // A genuinely unsigned spelling (both empty) stays unpadded — padSignature would
+        // fabricate 32 zero bytes for it.
+        if (withSig || !out.signatureR.empty() || !out.signatureS.empty())
         {
-            // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
         }
         // ListEnd parity (op-geth List/ListEnd): fields must consume exactly the declared
@@ -425,7 +502,17 @@ struct EIP2930TxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
-        if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
+        // Canonical RLP integers.
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
+            error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
             error != nullptr)
         {
             return error;
@@ -434,7 +521,8 @@ struct EIP2930TxHandler : Web3TxHandler
         // EIP2930: gasPrice is carried in maxFeePerGas
         out.maxFeePerGas = out.maxPriorityFeePerGas;
 
-        if (auto error = codec::rlp::decode(in, out.gasLimit); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
+            error != nullptr)
         {
             return error;
         }
@@ -459,17 +547,33 @@ struct EIP2930TxHandler : Web3TxHandler
             out.to.emplace(addr);
         }
 
-        if (auto error = codec::rlp::decodeItems(in, out.value, out.data, out.accessList);
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value);
             error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = codec::rlp::decodeItems(in, out.data, out.accessList); error != nullptr)
         {
             return error;
         }
 
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (withSig)
+        if (withSig || !in.empty())
         {
-            decodeError =
-                codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // Dual-form: consume (yParity, r, s) when present. yParity must be 0x80 or 0x01.
+            // NOTE the unsigned spelling this admits when withSig is false: an all-empty
+            // trailer (0x80 0x80 0x80) decodes to parity 0 with empty r/s — the typed twin
+            // of the legacy chainId 27/28 preimage ambiguity, hashing differently from the
+            // bare field-only preimage wherever these bytes are committed verbatim.
+            decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
+            if (decodeError == nullptr)
+            {
+                decodeError = decodeCanonicalSignatureBytes(in, out.signatureR);
+                if (decodeError == nullptr)
+                {
+                    decodeError = decodeCanonicalSignatureBytes(in, out.signatureS);
+                }
+            }
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
             // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
             // transactions.
@@ -486,9 +590,13 @@ struct EIP2930TxHandler : Web3TxHandler
         {
             return decodeError;
         }
-        if (withSig)
+        // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
+        // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
+        // must store 32-byte r/s exactly like the withSig sibling and the legacy handler.
+        // A genuinely unsigned spelling (both empty) stays unpadded — padSignature would
+        // fabricate 32 zero bytes for it.
+        if (withSig || !out.signatureR.empty() || !out.signatureS.empty())
         {
-            // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
         }
         // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
@@ -620,18 +728,30 @@ struct EIP1559TxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
-        if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
+        // Canonical RLP integers.
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
+            error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
             error != nullptr)
         {
             return error;
         }
         out.chainId.emplace(chainId);
-        if (auto error = codec::rlp::decode(in, out.maxFeePerGas); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxFeePerGas);
+            error != nullptr)
         {
             return error;
         }
 
-        if (auto error = codec::rlp::decode(in, out.gasLimit); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
+            error != nullptr)
         {
             return error;
         }
@@ -656,17 +776,33 @@ struct EIP1559TxHandler : Web3TxHandler
             out.to.emplace(addr);
         }
 
-        if (auto error = codec::rlp::decodeItems(in, out.value, out.data, out.accessList);
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value);
             error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = codec::rlp::decodeItems(in, out.data, out.accessList); error != nullptr)
         {
             return error;
         }
 
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (withSig)
+        if (withSig || !in.empty())
         {
-            decodeError =
-                codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // Dual-form: consume (yParity, r, s) when present. yParity must be 0x80 or 0x01.
+            // NOTE the unsigned spelling this admits when withSig is false: an all-empty
+            // trailer (0x80 0x80 0x80) decodes to parity 0 with empty r/s — the typed twin
+            // of the legacy chainId 27/28 preimage ambiguity, hashing differently from the
+            // bare field-only preimage wherever these bytes are committed verbatim.
+            decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
+            if (decodeError == nullptr)
+            {
+                decodeError = decodeCanonicalSignatureBytes(in, out.signatureR);
+                if (decodeError == nullptr)
+                {
+                    decodeError = decodeCanonicalSignatureBytes(in, out.signatureS);
+                }
+            }
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
             // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
             // transactions.
@@ -683,9 +819,13 @@ struct EIP1559TxHandler : Web3TxHandler
         {
             return decodeError;
         }
-        if (withSig)
+        // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
+        // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
+        // must store 32-byte r/s exactly like the withSig sibling and the legacy handler.
+        // A genuinely unsigned spelling (both empty) stays unpadded — padSignature would
+        // fabricate 32 zero bytes for it.
+        if (withSig || !out.signatureR.empty() || !out.signatureS.empty())
         {
-            // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
         }
         // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
@@ -806,40 +946,33 @@ struct DepositTxHandler : Web3TxHandler
                 return err;
             out.to.emplace(addr);
         }
-        // Width note: this layer is display-grade — mint/value/gas go through the shared RLP
-        // UnsignedIntegral width gate (RLPDecode.h: payloadLength > digits/8 → UnexpectedLength),
-        // so over-wide integers are REJECTED here too, matching the consensus path's accept set
-        // (no silent truncation). Only non-canonical prefixes (leading zeros / bare 0x00) remain
-        // display-layer-tolerant; the consensus path additionally rejects those via
-        // decodeDepositEnvelope (OpstackExecutor.h, integerPayloadLength canonicality checks).
-        if (auto err = codec::rlp::decode(in, out.mint); err != nullptr)
+        // mint/value/gas: same canonical integers as the executor deposit decoder.
+        if (auto err = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.mint); err != nullptr)
             return err;  // u256
-        if (auto err = codec::rlp::decode(in, out.value); err != nullptr)
+        if (auto err = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value); err != nullptr)
             return err;  // u256
-        if (auto err = codec::rlp::decode(in, out.gasLimit); err != nullptr)
+        if (auto err = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
+            err != nullptr)
             return err;  // uint64
-        // ⚠️ isSystemTransaction cannot use codec::rlp::decode(bool) (RLPDecode.h:200-217
-        // requires payloadLength==1 and would report UnexpectedLength for the golden 0x80 empty
-        // string). Byte semantics are required: empty string 0x80 → false (op-geth RLP nil);
-        // single byte 0x01 → true; anything else is an error.
+        // isSystemTx: only 0x80 (false) or 0x01 (true). decode(bool) rejects 0x80.
         {
-            // Zero-copy view into the input (not bcos::bytes, which heap-allocates per decode).
-            bcos::bytesRef raw{};
-            if (auto err = codec::rlp::decode(in, raw); err != nullptr)
-                return err;
-            if (raw.empty())
+            auto const* const start = in.data();
+            auto&& [boolHeaderError, boolHeader] = codec::rlp::decodeHeader(in);
+            if (boolHeaderError != nullptr)
             {
-                out.isSystemTx = false;
+                return std::move(boolHeaderError);
             }
-            else if (raw.size() == 1 && raw[0] == 1)
+            size_t const itemLength =
+                static_cast<size_t>(in.data() - start) + boolHeader.payloadLength;
+            bool const systemFlag = (itemLength == 1 && start[0] == 0x01);
+            if (!systemFlag && !(itemLength == 1 && start[0] == 0x80)) [[unlikely]]
             {
-                out.isSystemTx = true;
-            }
-            else
-            {
-                return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedLength,
+                return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::NonCanonicalSize,
                     "deposit: invalid isSystemTransaction value");
             }
+            // decodeHeader leaves sub-0x80 items uncropped.
+            in = in.getCroppedData(boolHeader.payloadLength);
+            out.isSystemTx = systemFlag;
         }
         if (auto err = codec::rlp::decode(in, out.data); err != nullptr)
             return err;  // bytes
@@ -979,18 +1112,30 @@ struct EIP4844TxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
-        if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
+        // Canonical RLP integers.
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
+            error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
             error != nullptr)
         {
             return error;
         }
         out.chainId.emplace(chainId);
-        if (auto error = codec::rlp::decode(in, out.maxFeePerGas); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxFeePerGas);
+            error != nullptr)
         {
             return error;
         }
 
-        if (auto error = codec::rlp::decode(in, out.gasLimit); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
+            error != nullptr)
         {
             return error;
         }
@@ -1015,23 +1160,43 @@ struct EIP4844TxHandler : Web3TxHandler
             out.to.emplace(addr);
         }
 
-        if (auto error = codec::rlp::decodeItems(in, out.value, out.data, out.accessList);
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value);
             error != nullptr)
         {
             return error;
         }
+        if (auto error = codec::rlp::decodeItems(in, out.data, out.accessList); error != nullptr)
+        {
+            return error;
+        }
 
-        if (auto error = codec::rlp::decodeItems(in, out.maxFeePerBlobGas, out.blobVersionedHashes);
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxFeePerBlobGas);
             error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = codec::rlp::decode(in, out.blobVersionedHashes); error != nullptr)
         {
             return error;
         }
 
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (withSig)
+        if (withSig || !in.empty())
         {
-            decodeError =
-                codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // Dual-form: consume (yParity, r, s) when present. yParity must be 0x80 or 0x01.
+            // NOTE the unsigned spelling this admits when withSig is false: an all-empty
+            // trailer (0x80 0x80 0x80) decodes to parity 0 with empty r/s — the typed twin
+            // of the legacy chainId 27/28 preimage ambiguity, hashing differently from the
+            // bare field-only preimage wherever these bytes are committed verbatim.
+            decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
+            if (decodeError == nullptr)
+            {
+                decodeError = decodeCanonicalSignatureBytes(in, out.signatureR);
+                if (decodeError == nullptr)
+                {
+                    decodeError = decodeCanonicalSignatureBytes(in, out.signatureS);
+                }
+            }
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
             // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
             // transactions.
@@ -1048,9 +1213,13 @@ struct EIP4844TxHandler : Web3TxHandler
         {
             return decodeError;
         }
-        if (withSig)
+        // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
+        // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
+        // must store 32-byte r/s exactly like the withSig sibling and the legacy handler.
+        // A genuinely unsigned spelling (both empty) stays unpadded — padSignature would
+        // fabricate 32 zero bytes for it.
+        if (withSig || !out.signatureR.empty() || !out.signatureS.empty())
         {
-            // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
         }
         // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
@@ -1185,18 +1354,30 @@ struct EIP7702TxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
-        if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
+        // Canonical RLP integers.
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
+            error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
             error != nullptr)
         {
             return error;
         }
         out.chainId.emplace(chainId);
-        if (auto error = codec::rlp::decode(in, out.maxFeePerGas); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxFeePerGas);
+            error != nullptr)
         {
             return error;
         }
 
-        if (auto error = codec::rlp::decode(in, out.gasLimit); error != nullptr)
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
+            error != nullptr)
         {
             return error;
         }
@@ -1221,8 +1402,12 @@ struct EIP7702TxHandler : Web3TxHandler
             out.to.emplace(addr);
         }
 
-        if (auto error = codec::rlp::decodeItems(in, out.value, out.data, out.accessList);
+        if (auto error = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value);
             error != nullptr)
+        {
+            return error;
+        }
+        if (auto error = codec::rlp::decodeItems(in, out.data, out.accessList); error != nullptr)
         {
             return error;
         }
@@ -1233,10 +1418,22 @@ struct EIP7702TxHandler : Web3TxHandler
         }
 
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (withSig)
+        if (withSig || !in.empty())
         {
-            decodeError =
-                codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // Dual-form: consume (yParity, r, s) when present. yParity must be 0x80 or 0x01.
+            // NOTE the unsigned spelling this admits when withSig is false: an all-empty
+            // trailer (0x80 0x80 0x80) decodes to parity 0 with empty r/s — the typed twin
+            // of the legacy chainId 27/28 preimage ambiguity, hashing differently from the
+            // bare field-only preimage wherever these bytes are committed verbatim.
+            decodeError = bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
+            if (decodeError == nullptr)
+            {
+                decodeError = decodeCanonicalSignatureBytes(in, out.signatureR);
+                if (decodeError == nullptr)
+                {
+                    decodeError = decodeCanonicalSignatureBytes(in, out.signatureS);
+                }
+            }
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
             // input (same for EIP-2930/1559/4844/7702); silently accepting it would hide bad
             // transactions.
@@ -1253,9 +1450,13 @@ struct EIP7702TxHandler : Web3TxHandler
         {
             return decodeError;
         }
-        if (withSig)
+        // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
+        // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
+        // must store 32-byte r/s exactly like the withSig sibling and the legacy handler.
+        // A genuinely unsigned spelling (both empty) stays unpadded — padSignature would
+        // fabricate 32 zero bytes for it.
+        if (withSig || !out.signatureR.empty() || !out.signatureS.empty())
         {
-            // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
         }
         // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.

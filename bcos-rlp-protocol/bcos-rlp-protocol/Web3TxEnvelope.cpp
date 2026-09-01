@@ -42,25 +42,41 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     // decode() requires a mutable bytesRef cursor even for read-only parsing; the cast is safe
     // because this function never writes through the cursor — only reads via decodeHeader/decode.
     bcos::bytesRef cursor(const_cast<bcos::byte*>(payload.data()), payload.size());
-    // 0x7E (Deposit) has no chainId field — field 0 is sourceHash (h256). A naive typed-tx
-    // decode would fail the uint64_t width gate on sourceHash and return nullopt, which is
-    // misleading (nullopt is documented as "pre-EIP-155 unprotected legacy"). Return early
-    // so callers that gate on nullopt+isTyped see a clean signal.
+    // 0x7E deposit: field 0 is sourceHash, not chainId.
     if (firstByte == 0x7E) [[unlikely]]
     {
-        return malformed();
+        return {.kind = Web3EnvelopeChainIdKind::Deposit};
     }
     if (firstByte > 0 && firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
     {
-        // Typed (EIP-2718: 0x01-0x04): chainId is RLP field 0 of the inner list.
+        // Typed: chainId is inner-list field 0. Non-minimal RLP is Malformed.
         cursor = cursor.getCroppedData(1);
         auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
         if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
         {
             return malformed();
         }
+        bcos::bytesRef listPayload = cursor.getCroppedData(0, header.payloadLength);
+        cursor = cursor.getCroppedData(header.payloadLength);
         uint64_t chainId = 0;
-        if (auto e = bcos::codec::rlp::decode(cursor, chainId); e != nullptr) [[unlikely]]
+        if (auto e = decodeCanonicalRlpUint(listPayload, chainId); e != nullptr) [[unlikely]]
+        {
+            return malformed();
+        }
+        // Finding S6: the inner list must close at its declared payload boundary and no
+        // bytes may follow the list — decode() rejects post-list junk and overrunning
+        // items, so the classifier must see the same bytes as invalid (same rationale as
+        // the legacy ListEnd gate below).
+        while (!listPayload.empty())
+        {
+            auto [tailError, tailHeader] = bcos::codec::rlp::decodeHeader(listPayload);
+            if (tailError || tailHeader.payloadLength > listPayload.size()) [[unlikely]]
+            {
+                return malformed();
+            }
+            listPayload = listPayload.getCroppedData(tailHeader.payloadLength);
+        }
+        if (!cursor.empty()) [[unlikely]]
         {
             return malformed();
         }
@@ -80,6 +96,14 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     {
         return malformed();
     }
+    // The outer list must be the LAST thing in the envelope — the typed arm rejects the
+    // same shape with `!cursor.empty()` (post-list junk), and reassembleWeb3RawTransaction
+    // rejects it too; a legacy envelope with bytes after the list would otherwise classify
+    // Protected and pass admission gates that decode() later refuses (poisoning window).
+    if (cursor.size() != header.payloadLength) [[unlikely]]
+    {
+        return malformed();
+    }
     bcos::bytesRef walker(cursor.data(), header.payloadLength);
     for (int i = 0; i < 6; ++i)
     {
@@ -96,14 +120,8 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         // op-geth HomesteadSigner.
         return unprotected();
     }
-    // Peek field 8 (without consuming field 7 yet) to classify preimage vs full envelope.
-    // Only field 8 is checked here — field 9 validation is deferred to
-    // reassembleWeb3RawTransaction (which validates the full 0,0 tail). This keeps the
-    // walker simple and avoids cursor arithmetic pitfalls with multi-field lookahead.
-    // field7Item keeps the WHOLE field-7 item (header + payload): decodeHeader advances the
-    // walker to the payload start, and decoding that payload as a fresh item mis-reads any
-    // multi-byte chainId/v (e.g. chainId 8453 -> 33) or classifies it as a list header
-    // (chainId 200 -> nullopt -> bogus "unprotected" exemption). Decode from the item start.
+    // Peek r/s emptiness before consuming field 7. Decode field 7 from the item start
+    // (header + payload); a payload-only decode misreads multi-byte chainId/v.
     bcos::bytesRef field7Item = walker;
     auto [field7Error, field7Header] = bcos::codec::rlp::decodeHeader(walker);
     if (field7Error || field7Header.payloadLength > walker.size()) [[unlikely]]
@@ -111,19 +129,103 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         return malformed();
     }
     bcos::bytesRef afterField7 = walker.getCroppedData(field7Header.payloadLength);
+    // ListEnd parity: both 9-item spellings — full form (v, r, s) and preimage tail
+    // (chainId, 0, 0) — must END at the list boundary. Web3TxHandler's decode rejects
+    // junk after the envelope, so the classifier must see the same bytes as invalid;
+    // otherwise a junk-tailed envelope passes classifier-based admission gates it would
+    // later fail in decode (poisoning window). Fail closed on any other tail shape.
+    {
+        bcos::bytesRef tail = afterField7;
+        int tailItems = 0;
+        while (!tail.empty())
+        {
+            auto [tailError, tailHeader] = bcos::codec::rlp::decodeHeader(tail);
+            if (tailError || tailHeader.payloadLength > tail.size()) [[unlikely]]
+            {
+                return malformed();
+            }
+            tail = tail.getCroppedData(tailHeader.payloadLength);
+            ++tailItems;
+        }
+        if (tailItems != 2) [[unlikely]]
+        {
+            return malformed();
+        }
+    }
+    // Probe the tail on a LOCAL copy: codec::rlp::decodeHeader advances its argument, and
+    // the emptySeen walk below re-walks the same tail from the pristine afterField7 — a
+    // shared probe cursor would leave that walk starting inside r/s payloads, yielding
+    // data-dependent Malformed verdicts on real-width (32-byte) signatures (kyonRay R3 #1).
     bool const isPreimageTail = [&] {
-        if (afterField7.empty()) [[unlikely]]
+        bcos::bytesRef tailProbe = afterField7;
+        if (tailProbe.empty()) [[unlikely]]
         {
             return false;  // no 0,0 placeholders — treat as full form (or malformed)
         }
-        auto [field8Error, field8Header] = bcos::codec::rlp::decodeHeader(afterField7);
-        return field8Error == nullptr && !field8Header.isList && field8Header.payloadLength == 0;
+        // Emptiness is computed once as the full predicate and doubles as the guard, so
+        // the values handed to the shared discriminator are the real decoded results —
+        // never a tautology re-derived after a guard that already proved them (Codacy:
+        // 'field9Header.payloadLength == 0 is always true').
+        auto [field8Error, field8Header] = bcos::codec::rlp::decodeHeader(tailProbe);
+        bool const field8Empty =
+            field8Error == nullptr && !field8Header.isList && field8Header.payloadLength == 0;
+        if (!field8Empty)
+        {
+            return false;
+        }
+        if (tailProbe.empty()) [[unlikely]]
+        {
+            return false;
+        }
+        auto [field9Error, field9Header] = bcos::codec::rlp::decodeHeader(tailProbe);
+        bool const field9Empty =
+            field9Error == nullptr && !field9Header.isList && field9Header.payloadLength == 0;
+        if (!field9Empty)
+        {
+            return false;
+        }
+        uint64_t field7 = 0;
+        bcos::bytesRef field7Cursor = field7Item;
+        if (auto field7Error = decodeCanonicalRlpUint(field7Cursor, field7); field7Error != nullptr)
+        {
+            return false;
+        }
+        return isLegacyPreimageTail(field7, field8Empty, field9Empty);
     }();
+    if (!isPreimageTail)
+    {
+        // Finding S6: the full form must match what decode()'s sealed branch accepts —
+        // EIP-2 keeps r,s in [1, n-1], so a sealed envelope never carries an empty r/s
+        // item (only the preimage tail's 0,0 placeholders are empty). Exactly one empty
+        // item classified Unprotected/Protected here but is rejected in decode — fail
+        // closed instead. Anchored on the PRISTINE tail cursor (afterField7), never on a
+        // cursor the preimage probe above moved.
+        bcos::bytesRef tailCheck = afterField7;
+        bool emptySeen = false;
+        for (int i = 0; i < 2; ++i)
+        {
+            auto [itemError, itemHeader] = bcos::codec::rlp::decodeHeader(tailCheck);
+            if (itemError || itemHeader.isList || itemHeader.payloadLength > tailCheck.size())
+                [[unlikely]]
+            {
+                return malformed();
+            }
+            if (itemHeader.payloadLength == 0)
+            {
+                emptySeen = true;
+            }
+            tailCheck = tailCheck.getCroppedData(itemHeader.payloadLength);
+        }
+        if (emptySeen) [[unlikely]]
+        {
+            return malformed();
+        }
+    }
     if (isPreimageTail)
     {
-        // preimage form: field 7 is the EIP-155 chainId.
+        // Preimage: field 7 is the EIP-155 chainId.
         uint64_t chainId = 0;
-        if (auto e = bcos::codec::rlp::decode(field7Item, chainId); e != nullptr) [[unlikely]]
+        if (auto e = decodeCanonicalRlpUint(field7Item, chainId); e != nullptr) [[unlikely]]
         {
             return malformed();
         }
@@ -133,7 +235,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     // protected, chainId = (v - 35) >> 1. Anything else (0/1, 29-34) is malformed — fail
     // closed rather than folding it into the unprotected exemption.
     uint64_t v = 0;
-    if (auto e = bcos::codec::rlp::decode(field7Item, v); e != nullptr) [[unlikely]]
+    if (auto e = decodeCanonicalRlpUint(field7Item, v); e != nullptr) [[unlikely]]
     {
         return malformed();
     }

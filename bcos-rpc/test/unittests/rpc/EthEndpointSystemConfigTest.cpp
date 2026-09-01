@@ -50,8 +50,9 @@ public:
         Json::Value value;
         Json::Reader reader;
         std::promise<bcos::bytes> promise;
-        web3JsonRpc->onRPCRequest(
-            req, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+        web3JsonRpc->onRPCRequest(req, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
         auto jsonBytes = promise.get_future().get();
         std::string_view json((char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
         reader.parse(json.begin(), json.end(), value);
@@ -105,6 +106,67 @@ BOOST_AUTO_TEST_CASE(chainIdRoutesThroughLedgerConfigNotRawScalar)
     BOOST_TEST(resp["result"].asString() == "0x10000000000000001");
     // Guard against the old degraded behaviour.
     BOOST_TEST(resp["result"].asString() != "0x0");
+}
+
+// net_version must share parseWeb3ChainId with eth_chainId. The previous
+// std::stoull path treated "0x539" as 0 (stops at 'x') and forged 20200 on
+// any exception or a missing row.
+BOOST_AUTO_TEST_CASE(netVersionHexQuantityMatchesEthChainId)
+{
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "0x539");
+
+    auto net = request(R"({"jsonrpc":"2.0","id":3,"method":"net_version","params":[]})");
+    auto eth = request(R"({"jsonrpc":"2.0","id":4,"method":"eth_chainId","params":[]})");
+    validRespCheck(net);
+    validRespCheck(eth);
+    BOOST_TEST(fromQuantity(net["result"].asString()) == 1337ULL);
+    BOOST_TEST(net["result"].asString() != "0x0");
+    BOOST_TEST(net["result"].asString() != "0x4ee8");
+    BOOST_TEST(fromQuantity(net["result"].asString()) == fromQuantity(eth["result"].asString()));
+}
+
+BOOST_AUTO_TEST_CASE(netVersionDecimalAgreesWithEthChainId)
+{
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "1337");
+
+    auto net = request(R"({"jsonrpc":"2.0","id":5,"method":"net_version","params":[]})");
+    auto eth = request(R"({"jsonrpc":"2.0","id":6,"method":"eth_chainId","params":[]})");
+    validRespCheck(net);
+    validRespCheck(eth);
+    BOOST_TEST(fromQuantity(net["result"].asString()) == 1337ULL);
+    BOOST_TEST(fromQuantity(net["result"].asString()) == fromQuantity(eth["result"].asString()));
+}
+
+BOOST_AUTO_TEST_CASE(netVersionMalformedDoesNotForge20200)
+{
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "not-a-number");
+
+    auto resp = request(R"({"jsonrpc":"2.0","id":7,"method":"net_version","params":[]})");
+    BOOST_TEST(resp.isMember("error"));
+    if (resp.isMember("result"))
+    {
+        BOOST_TEST(resp["result"].asString() != "0x4ee8");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(netVersionNegativeDoesNotWrap)
+{
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "-5");
+
+    auto resp = request(R"({"jsonrpc":"2.0","id":8,"method":"net_version","params":[]})");
+    BOOST_TEST(resp.isMember("error"));
+    if (resp.isMember("result"))
+    {
+        BOOST_TEST(resp["result"].asString() != "0x4ee8");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(netVersionMissingIsZeroNot20200)
+{
+    auto resp = request(R"({"jsonrpc":"2.0","id":9,"method":"net_version","params":[]})");
+    validRespCheck(resp);
+    BOOST_TEST(resp["result"].asString() == "0x0");
+    BOOST_TEST(resp["result"].asString() != "0x4ee8");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

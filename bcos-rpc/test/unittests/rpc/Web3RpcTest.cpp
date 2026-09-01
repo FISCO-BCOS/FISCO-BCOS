@@ -523,6 +523,25 @@ BOOST_AUTO_TEST_CASE(handleMempoolChainIdGateUnconfiguredTest)
     }
 }
 
+// Configured-mismatch: a typed EIP-1559 envelope with chainId=1 must be rejected when
+// web3_chain_id is some other value. Same sendRaw gate as the unconfigured case above.
+BOOST_AUTO_TEST_CASE(handleSendRawTypedChainIdMismatchTest)
+{
+    bcos::txpool::MemPoolImpl memPool;
+    nodeService->setMemPool(memPool);
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, std::to_string(999));
+    const std::string request =
+        R"({"jsonrpc":"2.0","id":1132123, "method":"eth_sendRawTransaction","params":[")"
+        "0x02f871018308b3e6808501cd2ec1d7826ac194ba1951df0c0a52af23857c5ab48b4c43a57e7ed1872700"
+        "f2d0ba3db080c001a069be171dfa805790a28f1bfcd131eb2aa8f345f601c4a3659de4ae8d624a7b89a06e"
+        "0f6ed7d035397547aeac0e5130847570f4b607350f71c1391b7cb7f9dd604c"
+        R"("]})";
+    auto response = onRPCRequestWrapper(request);
+    BOOST_TEST(response.isMember("error"));
+    BOOST_TEST(response["error"]["code"].asInt() == InvalidParams);
+    BOOST_TEST(response["error"]["message"].asString() == "invalid chainId");
+}
+
 BOOST_AUTO_TEST_CASE(handleEIP4844TxTest)
 {
     // L2 (OP Stack, Ecotone onwards) never admits blob transactions:
@@ -626,21 +645,21 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadVersion.has_value());
     BOOST_TEST(*testEngineService.m_state->capturedNewPayloadVersion == 4);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
-            .withdrawalsRoot.has_value());
+                      .withdrawalsRoot.has_value());
     BOOST_REQUIRE(
         testEngineService.m_state->capturedNewPayloadRequest->executionRequests.has_value());
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionRequests->empty());
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions
                    .size() == 1);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals
-            .has_value());
+                      .has_value());
     BOOST_TEST(
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front()
             .amount == expectedLargeValue);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed
-            .has_value());
+                      .has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
-            .excessBlobGas.has_value());
+                      .excessBlobGas.has_value());
     BOOST_TEST(
         *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed ==
         expectedLargeValue);
@@ -650,8 +669,8 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
 
     // Raw-bytes carrier: newPayload preserves the wire bytes verbatim (no decoding).
     BOOST_TEST(toHexStringWithPrefix(testEngineService.m_state->capturedNewPayloadRequest
-                       ->executionPayload.transactions.front()
-                       .raw) == encodedTxHex);
+                                         ->executionPayload.transactions.front()
+                                         .raw) == encodedTxHex);
 
     testEngineService.m_state->getPayloadResult->executionPayload =
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload;

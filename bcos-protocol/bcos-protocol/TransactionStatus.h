@@ -68,6 +68,7 @@ enum class TransactionStatus : int32_t
     MaxInitCodeSizeExceeded = 10013,
     SenderNoEOA = 10014,
     InsufficientFunds = 10015,
+    BlobTxNotAllowed = 10016,  ///< blob (EIP-4844) txs parse but are never admitted on L2
 };
 
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionStatus const& _er)
@@ -160,6 +161,9 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
         break;
     case bcos::protocol::TransactionStatus::InvalidChainId:
         _out << "InvalidChainId";
+        break;
+    case bcos::protocol::TransactionStatus::BlobTxNotAllowed:
+        _out << "BlobTxNotAllowed";
         break;
     case bcos::protocol::TransactionStatus::InvalidGroupId:
         _out << "InvalidGroupId";

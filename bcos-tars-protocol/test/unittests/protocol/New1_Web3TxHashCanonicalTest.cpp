@@ -331,6 +331,42 @@ BOOST_AUTO_TEST_CASE(N1_T11_legacy_malformed_item_count_throws)
     }
 }
 
+// F2 txHash contract: calculateHash (the path that writes extraTransactionHash) must
+// throw on P||junk *before* storing a hash, so the twin cannot share the victim's txHash.
+// Covers typed preimage (admission extraTransactionBytes) and legacy after-list junk.
+BOOST_AUTO_TEST_CASE(N1_T12_trailing_junk_cannot_share_txhash)
+{
+    auto expectHashThrows = [&](Vector const& v, std::string_view stage) {
+        auto cleanTars = buildTars(v, /*prewriteCanonicalHash=*/false);
+        auto cleanTx = wrap(bcostars::Transaction{cleanTars});
+        cleanTx->calculateHash(hashImpl);
+        BOOST_CHECK_EQUAL(cleanTx->hash(), expectedHash(v));
+
+        auto junkTars = std::move(cleanTars);
+        junkTars.extraTransactionBytes.push_back(static_cast<char>(0xde));
+        junkTars.extraTransactionHash.clear();
+        auto junkTx = wrap(std::move(junkTars));
+        bool threw = false;
+        try
+        {
+            junkTx->calculateHash(hashImpl);
+        }
+        catch (std::invalid_argument const& e)
+        {
+            threw = true;
+            BOOST_CHECK_MESSAGE(std::string_view(e.what()).find(stage) != std::string_view::npos,
+                "expected stage \"" << stage << "\" in what(): " << e.what());
+        }
+        BOOST_CHECK_MESSAGE(threw, "P||junk must throw so it cannot store the victim's txHash");
+        BOOST_CHECK_MESSAGE(junkTx->inner().extraTransactionHash.empty(),
+            "calculateHash must not write extraTransactionHash on the junk twin");
+    };
+
+    expectHashThrows(VECTORS[3], "typed trailing garbage");  // eip1559 preimage
+    expectHashThrows(VECTORS[4], "typed trailing garbage");  // eip2930 preimage
+    expectHashThrows(VECTORS[1], "trailing garbage");        // legacy EIP-155 after the outer list
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::test

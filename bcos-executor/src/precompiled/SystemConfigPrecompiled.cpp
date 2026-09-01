@@ -30,8 +30,8 @@
 #include "bcos-task/Wait.h"
 #include "bcos-tool/VersionConverter.h"
 #include <bcos-framework/storage/Serialize.h>
-#include <range/v3/algorithm/find.hpp>
 #include <boost/algorithm/string.hpp>
+#include <range/v3/algorithm/find.hpp>
 
 using namespace bcos;
 using namespace bcos::storage;
@@ -173,18 +173,18 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
                 BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion{} << errinfo_comment(fmt::format(
                                           "unsupported key {}", SYSTEM_KEY_WEB3_CHAIN_ID)));
             }
-            u256 number = 0;
-            try
-            {
-                number = boost::lexical_cast<u256>(_value);
-            }
-            catch (...)
+            // Same accept set as every web3_chain_id reader (parseWeb3ChainId): reject a
+            // leading '-' (lexical_cast<u256> wraps) and accept 0x QUANTITY. A value the
+            // writer stores must be readable by getLedgerConfig or every node fail-stops.
+            auto const parsed = ledger::parseWeb3ChainId(_value);
+            if (!parsed)
             {
                 BOOST_THROW_EXCEPTION(
                     PrecompiledError{} << errinfo_comment(
                         fmt::format("Invalid value {}, the value for {} must be a number string.",
                             _value, SYSTEM_KEY_WEB3_CHAIN_ID)));
             }
+            u256 const number = *parsed;
             if (number > UINT32_MAX)
             {
                 BOOST_THROW_EXCEPTION(
