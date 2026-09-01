@@ -38,6 +38,10 @@ except ImportError:
 RPC_URL = "http://127.0.0.1:8545"
 HEADERS = {"Content-Type": "application/json"}
 TIMEOUT = 30
+# EngineEndpoint::c_opFcuBuildMinInterval is 100ms. Pace attribute-bearing FCUs
+# so the mock CL does not trip the CPU-DoS window (CI hung on noTxPool=false).
+_FCU_ATTRS_MIN_INTERVAL_S = 0.11
+_last_fcu_attrs_at = 0.0
 
 ZERO_HASH = "0x" + "00" * 32
 FEE_RECIPIENT = "0x0000000000000000000000000000000000000001"
@@ -147,8 +151,23 @@ def _log_info(msg: str) -> None:
     print(f"  {YELLOW}ℹ️  {msg}{NC}")
 
 
+def _pace_attribute_bearing_fcu(method: str, params: List[Any]) -> None:
+    """Wait out EngineEndpoint's 100ms FCU-with-attrs window before sending."""
+    global _last_fcu_attrs_at
+    if not method.startswith("engine_forkchoiceUpdated"):
+        return
+    if len(params) < 2 or params[1] is None:
+        return
+    now = time.monotonic()
+    wait = _FCU_ATTRS_MIN_INTERVAL_S - (now - _last_fcu_attrs_at)
+    if wait > 0:
+        time.sleep(wait)
+    _last_fcu_attrs_at = time.monotonic()
+
+
 def rpc_raw(method: str, params: List[Any], req_id: int = 1) -> Dict[str, Any]:
     """Send a JSON-RPC request, return the full response dict (error included)."""
+    _pace_attribute_bearing_fcu(method, params)
     payload: Dict[str, Any] = {
         "jsonrpc": "2.0",
         "id": req_id,

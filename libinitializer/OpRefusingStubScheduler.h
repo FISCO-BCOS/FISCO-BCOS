@@ -54,12 +54,17 @@ public:
                bcos::scheduler::SchedulerError::UnknownError, std::string(kRefuseMessage)),
             {});
     }
-    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
-        std::string_view, std::string_view, bcos::protocol::BlockNumber) override
+    [[noreturn]] static void raiseRefuse()
     {
         throw *BCOS_ERROR_PTR(
             bcos::scheduler::SchedulerError::UnknownError, std::string(kRefuseMessage));
-        co_return std::nullopt;
+    }
+
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view, std::string_view, bcos::protocol::BlockNumber) override
+    {
+        // No error channel on this interface; [[noreturn]] is the whole body.
+        raiseRefuse();
     }
     void status(
         std::function<void(bcos::Error::Ptr, bcos::protocol::Session::ConstPtr)> cb) override
