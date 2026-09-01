@@ -106,9 +106,11 @@ std::vector<std::string> bcos::engine::detail::supportedCapabilities()
     // here would also break the pre-Karst callers this node still serves — the v1 Engine
     // API harness behind unsafe_allow_v1_executor and the V1-V3 integration suites.
     //
-    // forkchoiceUpdatedV4 is the one absentee, and genuinely so: the forkchoice version
-    // window tops out at V3 (isForkchoiceVersionSupported), so the endpoint answers
-    // -38005. getPayloadV5 and newPayloadV4 were added by B4.
+    // forkchoiceUpdatedV4 is the one absentee, and genuinely so: no engine mode implements
+    // a V4 forkchoiceUpdated request, so EngineEndpoint::forkchoiceUpdatedV4 answers -38005
+    // (isForkchoiceVersionSupported is per-instance and accepts V4 in OP mode — the
+    // endpoint itself is the absent piece, not the version gate). getPayloadV5 and
+    // newPayloadV4 were added by B4.
     return {"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
         "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
         "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
@@ -119,7 +121,7 @@ std::vector<std::string> bcos::engine::detail::supportedOpCapabilities()
 {
     // OP Engine API is V4-only.
     // Same advertised set as supportedCapabilities(); do not duplicate V4 entries.
-    // forkchoiceUpdatedV4 stays absent (window tops out at V3 → -38005).
+    // forkchoiceUpdatedV4 stays absent: the RPC endpoint answers -38005 (see above).
     return supportedCapabilities();
 }
 

@@ -382,6 +382,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // (a state-root fork). v2 chains therefore have no Engine API; engine RPC endpoints
     // respond "engine service not available" (see EngineEndpoint.cpp).
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
+    // OP mode (executor_version >= 3) assembles its own EngineService below; the v2
+    // single-node driver must not build one that would be discarded and overwritten.
+    const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
 
     // OP engine RPC requires executor_version >= 2 (test-only escape: unsafe_allow_v1_executor).
     if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
@@ -463,7 +466,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // wired to the ethereum scheduler + EthereumExecutor so blocks are built with
         // Ethereum-compliant semantics. In this mode the EngineService is the sole block
         // producer, so the v1-only gate above does not apply.
-        if (!engineApiForV1Only && m_nodeConfig->enableSingleNodeConsensus())
+        if (!engineApiForV1Only && !opStackMode && m_nodeConfig->enableSingleNodeConsensus())
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
@@ -494,7 +497,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
         // Single-node consensus mode on the v2 EthereumExecutor (serial pipeline).
-        if (!engineApiForV1Only && m_nodeConfig->enableSingleNodeConsensus())
+        if (!engineApiForV1Only && !opStackMode && m_nodeConfig->enableSingleNodeConsensus())
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
@@ -503,7 +506,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
 
     // executor_version >= 3: OP mode (OpSchedulerSeam / c_opMode).
-    const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
     if (opStackMode)
     {
         // Isthmus baseline; Jovian is feature-gated.
@@ -513,6 +515,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // chainId must be numeric (decimal or 0x-hex). A leading '-' must be rejected
         // explicitly: stoull(base 0) parses "-1" as a valid negative and wraps it to a huge
         // positive chainId, silently putting the chain under an unintended EIP-155 domain.
+        // stoull also stops at the first invalid character, so "1abc" would yield 1 — reject
+        // anything the parse did not consume so a typo cannot silently change the chainId.
         uint64_t opChainId = 0;
         auto chainIdStr = m_nodeConfig->chainId();
         if (chainIdStr.empty() || chainIdStr.front() == '-')
@@ -523,7 +527,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
         try
         {
-            opChainId = std::stoull(chainIdStr, nullptr, 0);
+            size_t consumed = 0;
+            opChainId = std::stoull(chainIdStr, &consumed, 0);
+            if (consumed != chainIdStr.size())
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                          "OP mode (executor_version>=3) requires a numeric chain_id "
+                                          "(decimal or 0x-prefixed hex)"));
+            }
         }
         catch (const std::invalid_argument&)
         {

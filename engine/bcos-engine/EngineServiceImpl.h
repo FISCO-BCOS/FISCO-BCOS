@@ -552,8 +552,10 @@ private:
         std::vector<h256> attrTxHashes;
         if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
         {
-            forcedEnvelopes.push_back(
-                m_scheduler.get().synthesizeL1AttributesEnvelope(payloadAttributes.timestamp));
+            // The seam parameter is Engine-API seconds (payloadAttributes.timestamp is
+            // FISCO-internal milliseconds, same convention PayloadId.h divides by 1000).
+            forcedEnvelopes.push_back(m_scheduler.get().synthesizeL1AttributesEnvelope(
+                payloadAttributes.timestamp / 1000));
         }
         if (payloadAttributes.transactions.has_value())
         {
@@ -790,7 +792,9 @@ private:
                 if (payloadAttributes.gasLimit.has_value() &&
                     *payloadAttributes.gasLimit != std::get<0>(ledgerConfig.gasLimit()))
                 {
-                    auto ledgerGasPayload = assemblePayload(candidateEnvelopes);
+                    // candidateEnvelopes was moved into assemblePayload above; the envelope
+                    // set survives in payload.rawTransactions, so re-probe from there.
+                    auto ledgerGasPayload = assemblePayload(*payload.rawTransactions);
                     ledgerGasPayload.gasLimit = u256(std::get<0>(ledgerConfig.gasLimit()));
                     auto ledgerGasHeader = detail::rebuildOpEthHeader(
                         m_blockFactory->blockHeaderFactory(), ledgerGasPayload,
@@ -1158,8 +1162,6 @@ private:
     bcos::task::Task<PayloadStatus> handleOpNewPayload(
         const NewPayloadRequest& request, std::uint32_t version)
     {
-        auto const& payload = request.executionPayload;
-
         // Isthmus+ requires newPayloadV4 (-38005). Thrown before the try so it is not rewrapped.
         constexpr std::uint32_t c_opIsthmusPayloadVersion = 4;
         if (version != c_opIsthmusPayloadVersion)

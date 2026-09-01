@@ -153,14 +153,9 @@ inline std::string derivePayloadId(PayloadAttributes const& attrs, h256 const& p
     // Timestamp as uint64 big-endian seconds.
     const uint64_t timestampSec = attrs.timestamp / 1000;
     {
-        uint64_t ts = timestampSec;
-        uint8_t timestampBE[8];
-        for (int i = 7; i >= 0; --i)
-        {
-            timestampBE[static_cast<size_t>(i)] = static_cast<uint8_t>(ts & 0xff);
-            ts >>= 8;
-        }
-        updateBytes(timestampBE, sizeof(timestampBE));
+        std::array<uint8_t, 8> timestampBE{};
+        bcos::toBigEndian(timestampSec, timestampBE);
+        updateBytes(timestampBE.data(), timestampBE.size());
     }
     updateBytes(attrs.prevRandao.data(), attrs.prevRandao.size());
     updateBytes(attrs.suggestedFeeRecipient.data(), attrs.suggestedFeeRecipient.size());
@@ -194,14 +189,9 @@ inline std::string derivePayloadId(PayloadAttributes const& attrs, h256 const& p
     {
         const uint8_t noTxPoolByte = noTxPool ? 1 : 0;
         updateBytes(&noTxPoolByte, 1);
-        uint8_t txCountBE[8];
-        uint64_t txCount = txHashes.size();
-        for (int i = 7; i >= 0; --i)
-        {
-            txCountBE[static_cast<size_t>(i)] = static_cast<uint8_t>(txCount & 0xff);
-            txCount >>= 8;
-        }
-        updateBytes(txCountBE, sizeof(txCountBE));
+        std::array<uint8_t, 8> txCountBE{};
+        bcos::toBigEndian(txHashes.size(), txCountBE);
+        updateBytes(txCountBE.data(), txCountBE.size());
         for (auto const& txHash : txHashes)
         {
             updateBytes(txHash.data(), txHash.size());
@@ -210,14 +200,9 @@ inline std::string derivePayloadId(PayloadAttributes const& attrs, h256 const& p
 
     if (attrs.gasLimit.has_value())
     {
-        uint8_t gasLimitBE[8];
-        uint64_t gasLimit = *attrs.gasLimit;
-        for (int i = 7; i >= 0; --i)
-        {
-            gasLimitBE[static_cast<size_t>(i)] = static_cast<uint8_t>(gasLimit & 0xff);
-            gasLimit >>= 8;
-        }
-        updateBytes(gasLimitBE, sizeof(gasLimitBE));
+        std::array<uint8_t, 8> gasLimitBE{};
+        bcos::toBigEndian(*attrs.gasLimit, gasLimitBE);
+        updateBytes(gasLimitBE.data(), gasLimitBE.size());
     }
     if (attrs.eip1559Params.has_value())
     {
@@ -225,14 +210,9 @@ inline std::string derivePayloadId(PayloadAttributes const& attrs, h256 const& p
     }
     if (attrs.minBaseFee.has_value())
     {
-        uint8_t minBaseFeeBE[8];
-        uint64_t minBaseFee = *attrs.minBaseFee;
-        for (int i = 7; i >= 0; --i)
-        {
-            minBaseFeeBE[static_cast<size_t>(i)] = static_cast<uint8_t>(minBaseFee & 0xff);
-            minBaseFee >>= 8;
-        }
-        updateBytes(minBaseFeeBE, sizeof(minBaseFeeBE));
+        std::array<uint8_t, 8> minBaseFeeBE{};
+        bcos::toBigEndian(*attrs.minBaseFee, minBaseFeeBE);
+        updateBytes(minBaseFeeBE.data(), minBaseFeeBE.size());
     }
 
     std::array<uint8_t, 32> digest{};
