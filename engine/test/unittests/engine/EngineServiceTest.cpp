@@ -32,7 +32,7 @@ using namespace bcos::engine;
 
 namespace
 {
-constexpr std::uint64_t c_timestamp = 123456;
+constexpr std::uint64_t c_timestamp = 123000;
 constexpr bcos::protocol::BlockNumber c_initialBlockNumber = 5;
 constexpr bcos::protocol::BlockNumber c_trackedInitialBlockNumber = 10;
 constexpr bcos::protocol::BlockNumber c_trackedNextBlockNumber = 11;
