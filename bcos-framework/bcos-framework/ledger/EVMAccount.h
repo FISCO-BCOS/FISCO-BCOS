@@ -36,12 +36,28 @@ public:
             storage::Entry{std::string_view{"value"}});
     }
 
-    task::Task<std::optional<storage::Entry>> code()
+    task::Task<std::optional<storage::Entry>> codeHashEntry()
+    {
+        co_return co_await storage2::readOne(m_storage.get(),
+            executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH});
+    }
+
+    static h256 toCodeHash(const storage::Entry& entry)
+    {
+        auto view = entry.get();
+        return h256((const bcos::byte*)view.data(), view.size());
+    }
+
+    // 用已经读出来的code hash条目取代码，避免重复读codeHash字段
+    // Resolve the code for an already-read code hash entry. Callers that need both the hash and
+    // the code read the entry once with codeHashEntry() and pass it here, instead of calling
+    // code(), which reads that field again.
+    task::Task<std::optional<storage::Entry>> code(
+        const std::optional<storage::Entry>& codeHashEntry)
     {
         // 先通过code hash从s_code_binary找代码
         // Start by using the code hash to find the code from the s_code_binary
-        if (auto codeHashEntry = co_await storage2::readOne(m_storage.get(),
-                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
+        if (codeHashEntry)
         {
             if (auto codeEntry = co_await storage2::readOne(m_storage.get(),
                     executor_v1::StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry->get()}))
@@ -60,6 +76,11 @@ public:
             co_return codeEntry;
         }
         co_return {};
+    }
+
+    task::Task<std::optional<storage::Entry>> code()
+    {
+        co_return co_await code(co_await codeHashEntry());
     }
 
     task::Task<void> setCode(bytes code, std::string abi, const crypto::HashType& codeHash)
@@ -89,12 +110,9 @@ public:
 
     task::Task<h256> codeHash()
     {
-        if (auto codeHashEntry = co_await storage2::readOne(m_storage.get(),
-                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
+        if (auto entry = co_await codeHashEntry())
         {
-            auto view = codeHashEntry->get();
-            h256 codeHash((const bcos::byte*)view.data(), view.size());
-            co_return codeHash;
+            co_return toCodeHash(*entry);
         }
         co_return {};
     }

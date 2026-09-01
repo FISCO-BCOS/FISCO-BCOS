@@ -45,6 +45,7 @@
 #include "bcos-transaction-executor/EVMCResult.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/FixedBytes.h"
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -53,6 +54,7 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/concept_archetype.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/functional/hash.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
 #include <functional>
@@ -91,27 +93,90 @@ struct Executable
 template <class Storage>
 using Account = ledger::account::EVMAccount<Storage>;
 
+// Key of the analyzed-code cache. It must name everything the cached
+// Executable depends on, and nothing that depends on the storage view:
+//   - codeHash identifies the bytecode itself. Code is content-addressed in
+//     storage (the account table holds a code hash, s_code_binary holds the
+//     bytes keyed by that hash), so the same hash always means the same bytes.
+//   - revision selects the analysis, because evmone::baseline::analyze() builds
+//     a revision-specific CodeAnalysis (see VMFactory::create).
+// The account address is deliberately NOT part of the key: "which code does
+// this address hold" is view-dependent state and must be read from the storage
+// view on every call.
+struct ExecutableKey
+{
+    h256 codeHash;
+    evmc_revision revision{};
+
+    friend bool operator==(const ExecutableKey& lhs, const ExecutableKey& rhs) noexcept = default;
+};
+
+struct ExecutableKeyHash
+{
+    size_t operator()(const ExecutableKey& key) const noexcept
+    {
+        size_t seed = std::hash<h256>{}(key.codeHash);
+        boost::hash_combine(seed, static_cast<int>(key.revision));
+        return seed;
+    }
+};
+
 using CacheExecutables =
-    storage2::memory_storage::MemoryStorage<evmc_address, std::shared_ptr<Executable>,
+    storage2::memory_storage::MemoryStorage<ExecutableKey, std::shared_ptr<Executable>,
         storage2::memory_storage::Attribute(
             storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
-        std::hash<evmc_address>>;
+        ExecutableKeyHash>;
 CacheExecutables& getCacheExecutables();
 
+// Resolve an account's code and its analyzed form.
+//
+// getCacheExecutables() is a process-wide singleton shared by every execution,
+// including speculative ones whose storage view is thrown away afterwards:
+// eth_call / eth_estimateGas (BaselineScheduler::call forks a view and never
+// pushes it), block execution that fails sync verification (returns before
+// pushView), and abandoned consensus proposals. Keying that cache by address
+// let such an execution publish "this address has code" to every later
+// execution on the node, including consensus ones, which then executed bytecode
+// absent from their own state view and diverged from the rest of the network.
+//
+// Reading the code hash from `storage` on every call keeps the view-dependent
+// half of the lookup inside the view; only the content-addressed half (bytecode
+// -> CodeAnalysis) is cached.
 task::Task<std::shared_ptr<Executable>> getExecutable(
     auto& storage, const evmc_address& address, const evmc_revision& revision, bool binaryAddress)
 {
-    if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
+    using AccountType = Account<std::decay_t<decltype(storage)>>;
+    AccountType account(storage, address, binaryAddress);
+    auto codeHashEntry = co_await account.codeHashEntry();
+    if (codeHashEntry)
     {
-        co_return std::move(*executable);
+        ExecutableKey key{
+            .codeHash = AccountType::toCodeHash(*codeHashEntry), .revision = revision};
+        if (auto executable = co_await storage2::readOne(getCacheExecutables(), key))
+        {
+            co_return std::move(*executable);
+        }
+
+        if (auto codeEntry = co_await account.code(codeHashEntry))
+        {
+            auto executable = std::make_shared<Executable>(std::move(*codeEntry), revision);
+            co_await storage2::writeOne(getCacheExecutables(), key, executable);
+            co_return executable;
+        }
+        co_return {};
     }
 
-    if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
-        auto codeEntry = co_await account.code())
+    // The account table holds no code hash. Most callers land here: an EOA or a
+    // never-touched address has no code at all, account.code() comes back empty
+    // and nothing is analyzed. It also covers the historical layout where code
+    // sits in the account table's own code field with no hash beside it - every
+    // writer in the tree records a code hash today, so that shape is not
+    // produced any more, but EVMAccount::code() still falls back to it and this
+    // branch keeps that reachable. Either way there is nothing content-addressed
+    // to key the cache on, so no entry is published.
+    if (auto codeEntry = co_await account.code(codeHashEntry))
     {
-        auto executable = std::make_shared<Executable>(std::move(*codeEntry), revision);
-        co_await storage2::writeOne(getCacheExecutables(), address, executable);
-        co_return executable;
+        co_return std::make_shared<Executable>(std::move(*codeEntry), revision);
     }
     co_return {};
 }
