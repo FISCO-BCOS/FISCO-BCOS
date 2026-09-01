@@ -20,6 +20,7 @@
  */
 #include "bcos-txpool/sync/TransactionSync.h"
 #include "bcos-task/Wait.h"
+#include "bcos-tx-validator/Normalize.h"
 #include "bcos-txpool/sync/utilities/Common.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -266,7 +267,8 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                    decltype(networkTimeout) _networkTimeout, decltype(protocolID) _protocolID,
                    decltype(_generatedNodeID) _generatedNodeID, decltype(encodedData) _encodedData,
                    decltype(_missedTxs) _missedTxs, decltype(_verifiedProposal) _verifiedProposal,
-                   decltype(_onVerifyFinished) _onVerifyFinished) mutable -> task::Task<void> {
+                   decltype(_onVerifyFinished) _onVerifyFinished) mutable
+                   -> task::Task<void> {
         // result is declared outside the try so the catch below can still log the peer on a
         // synchronous send failure
         bcos::front::SendResult result;
@@ -298,8 +300,7 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                     SYNC_LOG(DEBUG)
                         << LOG_DESC("requestMissedTxs: response verify result")
                         << LOG_KV("propIndex", _verifiedProposal->blockHeader()->number())
-                        << LOG_KV("propHash",
-                            _verifiedProposal->blockHeader()->hash().abridged())
+                        << LOG_KV("propHash", _verifiedProposal->blockHeader()->hash().abridged())
                         << LOG_KV("_result", _result) << LOG_KV("networkT", networkT)
                         << LOG_KV("verifyAndSubmitT", (utcTime() - recordT));
                 });
@@ -312,14 +313,14 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                 << LOG_KV("_peer", result.nodeID ? result.nodeID->shortHex() : "unknown");
             if (_onVerifyFinished)
             {
-                _onVerifyFinished(BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed,
-                                      "verifyFetchedTxs exception: " +
-                                          boost::diagnostic_information(e)),
+                _onVerifyFinished(
+                    BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed,
+                        "verifyFetchedTxs exception: " + boost::diagnostic_information(e)),
                     false);
             }
         }
     }(front, self, startT, networkTimeout, protocolID, std::move(_generatedNodeID),
-        std::move(encodedData), _missedTxs, _verifiedProposal, _onVerifyFinished));
+                       std::move(encodedData), _missedTxs, _verifiedProposal, _onVerifyFinished));
 }
 
 void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data,
@@ -376,6 +377,28 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
         _onVerifyFinished(
             BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), false);
         return;
+    }
+    // Rebuild every Web3 transaction's tars mirror from its signed envelope before anything reads
+    // a hash. This is the untrusted ingress: the signature covers only extraTransactionBytes, and
+    // TransactionImpl::hash() hands back the peer-supplied extraTransactionHash verbatim, so the
+    // comparison below would otherwise be checking a value the peer chose against a value the peer
+    // chose. normalize() leaves BCOS transactions untouched and leaves a rejected transaction
+    // byte-identical.
+    for (auto&& tx : transactions->transactions())
+    {
+        if (auto status = txvalidator::normalize(*tx); status != TransactionStatus::None)
+        {
+            SYNC_LOG(WARNING) << LOG_DESC("verifyFetchedTxs: normalize failed")
+                              << LOG_KV("peer", _nodeID->shortHex()) << LOG_KV("status", status)
+                              << LOG_KV("hash",
+                                     (_verifiedProposal) ?
+                                         _verifiedProposal->blockHeader()->hash().abridged() :
+                                         "unknown");
+            _onVerifyFinished(
+                BCOS_ERROR_PTR(CommonError::InconsistentTransactions, "InconsistentTransactions"),
+                false);
+            return;
+        }
     }
     // Verify transaction hashes match requested hashes BEFORE import
     const auto hashMismatch = ::ranges::any_of(
