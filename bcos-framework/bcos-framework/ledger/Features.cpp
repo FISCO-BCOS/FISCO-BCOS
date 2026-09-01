@@ -195,15 +195,18 @@ void Features::setUpgradeFeatures(
                     Flag::bugfix_v1_timestamp}},
             {.to = protocol::BlockVersion::V3_16_4_VERSION, .flags = {Flag::bugfix_revert_logs}},
             {.to = protocol::BlockVersion::V3_17_0_VERSION,
-                .flags = {
-                    Flag::bugfix_auth_check,
-                    Flag::bugfix_v1_error_handling,
-                    Flag::bugfix_gas_payment_balance_precheck,
-                    Flag::bugfix_precompiled_feature_gate,
-                    Flag::bugfix_evm_storage_status,
-                    Flag::bugfix_statestorage_hash_v3_17,
-                    Flag::bugfix_nonce_ordering,
-                }}});
+                .flags =
+                    {
+                        Flag::bugfix_auth_check,
+                        Flag::bugfix_v1_error_handling,
+                        Flag::bugfix_gas_payment_balance_precheck,
+                        Flag::bugfix_precompiled_feature_gate,
+                        Flag::bugfix_evm_storage_status,
+                        Flag::bugfix_statestorage_hash_v3_17,
+                        Flag::bugfix_nonce_ordering,
+                    }},
+            {.to = protocol::BlockVersion::V3_17_1_VERSION,
+                .flags = {Flag::bugfix_v1_eoa_as_contract}}});
     for (const auto& upgradeFeatures : upgradeRoadmap)
     {
         if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&

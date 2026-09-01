@@ -29,6 +29,7 @@
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -368,7 +369,9 @@ public:
         if (auto executable = co_await getExecutable(m_rollbackableStorage.get(), address,
                 m_revision,
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
-            executable && executable->m_code)
+            executable && executable->m_code &&
+            !precompiled::hideDynamicAccountCode(
+                m_ledgerConfig.get().features(), executable->m_code->get()))
         {
             co_return executable->m_code;
         }
@@ -392,6 +395,16 @@ public:
 
     task::Task<h256> codeHashAt(const evmc_address& address, auto&&... /*unused*/)
     {
+        // Resolve through the same filtered path codeSizeAt uses, so EXTCODESIZE
+        // and EXTCODEHASH cannot disagree within one execution. code() also
+        // returns empty when the account records a code hash whose bytes are
+        // missing, and that case must report a zero hash too.
+        if (m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_v1_eoa_as_contract) &&
+            !co_await code(address))
+        {
+            co_return {};
+        }
         Account<Storage> account(m_rollbackableStorage.get(), address,
             m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
         co_return co_await account.codeHash();

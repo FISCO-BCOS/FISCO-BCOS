@@ -185,6 +185,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_evm_storage_status",
         "bugfix_statestorage_hash_v3_17",
         "bugfix_nonce_ordering",
+        "bugfix_v1_eoa_as_contract",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -574,6 +575,16 @@ BOOST_AUTO_TEST_CASE(genesis)
     {
         BOOST_CHECK(features3_17_0.get(feature));
     }
+
+    // 3.17.1: everything in 3.17.0 plus the executor-v1 EOA code filter. The
+    // filter changes EXTCODESIZE / EXTCODEHASH / getCode, so it must stay off at
+    // 3.17.0 and below, where blocks were already committed without it.
+    Features features3_17_1;
+    features3_17_1.setGenesisFeatures(bcos::protocol::BlockVersion::V3_17_1_VERSION);
+    BOOST_CHECK_EQUAL(
+        validFlags(features3_17_1).size(), expect3_16_5.size() + extra3_17_0.size() + 1);
+    BOOST_CHECK(features3_17_1.get("bugfix_v1_eoa_as_contract"));
+    BOOST_CHECK(!features3_17_0.get("bugfix_v1_eoa_as_contract"));
 }
 
 
