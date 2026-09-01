@@ -23,16 +23,13 @@
 #include <bcos-boostssl/websocket/WsConnector.h>
 #include <bcos-utilities/BoostLog.h>
 #include <boost/asio/error.hpp>
+#include <boost/asio/ip/tcp.hpp>
 #include <memory>
 
 using namespace bcos;
 using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::context;
-
-WsConnector::WsConnector(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver)
-  : m_resolver(std::move(_resolver))
-{}
 
 bool WsConnector::erasePendingConns(const std::string& _nodeIPEndpoint)
 {
@@ -45,16 +42,6 @@ bool WsConnector::insertPendingConns(const std::string& _nodeIPEndpoint)
     std::lock_guard<std::mutex> lock(x_pendingConns);
     auto result = m_pendingConns.insert(_nodeIPEndpoint);
     return result.second;
-}
-
-void WsConnector::setResolver(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver)
-{
-    m_resolver = std::move(_resolver);
-}
-
-std::shared_ptr<boost::asio::ip::tcp::resolver> WsConnector::resolver() const
-{
-    return m_resolver;
 }
 
 void WsConnector::setIOServicePool(IOServicePool::Ptr _ioservicePool)
@@ -70,16 +57,6 @@ void WsConnector::setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx)
 std::shared_ptr<boost::asio::ssl::context> WsConnector::ctx() const
 {
     return m_ctx;
-}
-
-void WsConnector::setBuilder(std::shared_ptr<WsStreamDelegateBuilder> _builder)
-{
-    m_builder = std::move(_builder);
-}
-
-std::shared_ptr<WsStreamDelegateBuilder> WsConnector::builder() const
-{
-    return m_builder;
 }
 
 // TODO: how to set timeout for connect to wsServer ???
@@ -102,13 +79,16 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
         return;
     }
 
-    auto resolver = m_resolver;
-    auto builder = m_builder;
+    // the resolver must outlive the async_resolve operation (it is only valid
+    // until the handler is invoked), so it is heap-allocated and captured by the
+    // async_resolve handler instead of being a stack-local that would be
+    // destroyed as soon as connectToWsServer returns
+    auto resolver = std::make_shared<boost::asio::ip::tcp::resolver>(*ioc);
     auto connector = shared_from_this();
 
     // resolve host
     resolver->async_resolve(_host, std::to_string(_port),
-        [_host, _port, _disableSsl, endpoint, ioc, ctx, connector, builder, _callback](
+        [_host, _port, _disableSsl, endpoint, ioc, ctx, connector, resolver, _callback](
             boost::beast::error_code _ec, boost::asio::ip::tcp::resolver::results_type _results) {
             if (_ec)
             {
@@ -131,8 +111,8 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
 
             // async connect
             rawStream->async_connect(_results,
-                [_host, _port, _disableSsl, endpoint, ctx, connector, builder, rawStream,
-                    _callback](boost::beast::error_code _ec,
+                [_host, _port, _disableSsl, endpoint, ctx, connector, rawStream, _callback](
+                    boost::beast::error_code _ec,
                     boost::asio::ip::tcp::resolver::results_type::endpoint_type _ep) mutable {
                     if (_ec)
                     {
@@ -148,7 +128,8 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
                         << LOG_BADGE("connectToWsServer") << LOG_DESC("async_connect success")
                         << LOG_KV("endpoint", endpoint);
 
-                    auto wsStreamDelegate = builder->build(_disableSsl, ctx, rawStream);
+                    auto wsStreamDelegate =
+                        WsStreamDelegateBuilder{}.build(_disableSsl, ctx, rawStream);
 
                     std::shared_ptr<std::string> nodeId = std::make_shared<std::string>();
                     wsStreamDelegate->setVerifyCallback(

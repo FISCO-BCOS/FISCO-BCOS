@@ -312,7 +312,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                       << LOG_KV("enNodeKey", _nodeConfig->enSmNodeKey());
     }
 
-    wsConfig->setContextConfig(contextConfig);
+    wsConfig->setContextConfig(*contextConfig);
 
     return wsConfig;
 }

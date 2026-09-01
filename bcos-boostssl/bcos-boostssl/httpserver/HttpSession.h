@@ -81,8 +81,8 @@ public:
     HttpStream::Ptr httpStream();
     void setHttpStream(HttpStream::Ptr _httpStream);
 
-    std::shared_ptr<std::string> nodeId();
-    void setNodeId(std::shared_ptr<std::string> _nodeId);
+    const std::string& nodeId();
+    void setNodeId(std::string _nodeId);
 
     uint32_t httpBodySizeLimit() const;
     void setHttpBodySizeLimit(uint32_t _httpBodySizeLimit);
@@ -99,7 +99,7 @@ private:
     // the parser is stored in an optional container so we can
     // construct it from scratch it at the beginning of each new message.
     std::optional<boost::beast::http::request_parser<boost::beast::http::string_body>> m_parser;
-    std::shared_ptr<std::string> m_nodeId;
+    std::string m_nodeId;
 
     uint32_t m_httpBodySizeLimit;
     CorsConfig m_corsConfig;

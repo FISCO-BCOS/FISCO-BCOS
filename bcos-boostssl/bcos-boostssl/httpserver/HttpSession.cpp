@@ -241,11 +241,11 @@ void bcos::boostssl::http::HttpSession::setHttpStream(HttpStream::Ptr _httpStrea
 {
     m_httpStream = std::move(_httpStream);
 }
-std::shared_ptr<std::string> bcos::boostssl::http::HttpSession::nodeId()
+const std::string& bcos::boostssl::http::HttpSession::nodeId()
 {
     return m_nodeId;
 }
-void bcos::boostssl::http::HttpSession::setNodeId(std::shared_ptr<std::string> _nodeId)
+void bcos::boostssl::http::HttpSession::setNodeId(std::string _nodeId)
 {
     m_nodeId = std::move(_nodeId);
 }
