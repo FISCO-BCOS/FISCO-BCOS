@@ -20,7 +20,7 @@
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
