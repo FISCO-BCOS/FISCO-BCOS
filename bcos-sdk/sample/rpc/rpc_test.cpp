@@ -102,7 +102,7 @@ static std::shared_ptr<bcos::boostssl::ws::WsConfig> initWsConfig(
         certConfig.nodeCert = config->cert_config.node_cert;
         certConfig.nodeKey = config->cert_config.node_key;
         contextConfig->setCertConfig(certConfig);
-        wsConfig->setContextConfig(contextConfig);
+        wsConfig->setContextConfig(*contextConfig);
     }
     return wsConfig;
 }

@@ -17,6 +17,7 @@
 #pragma once
 
 #include "bcos-framework/protocol/Authorization.h"
+#include "bcos-framework/protocol/TxGasModel.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-codec/rlp/RLPEncode.h>
@@ -178,7 +179,8 @@ constexpr auto GAS_PER_BLOB = 0x20000;  // 2**17
 constexpr auto MAX_TX_BLOB_COUNT = 6;
 
 /// The maximum allowed gas limit for a transaction (EIP-7825).
-constexpr auto MAX_TX_GAS_LIMIT = 0x1000000;  // 2**24
+/// Defined in bcos-framework/protocol/TxGasModel.h -- admission enforces the same cap.
+using bcos::protocol::MAX_TX_GAS_LIMIT;
 
 /// The blob schedule entry for an EVM revision (EIP-7840).
 struct BlobParams
@@ -278,8 +280,10 @@ inline const bcos::u256 SECP256K1N_OVER_2 =
 /// EIP-7702 authorization magic byte (prefix of the signing hash).
 inline constexpr uint8_t kSetCodeMagic = 0x05;
 
-/// EIP-7702: The cost of authorization that sets delegation to an account that didn't exist before.
-inline constexpr int64_t AUTHORIZATION_EMPTY_ACCOUNT_COST = 25000;
+/// EIP-7702: The cost of authorization that sets delegation to an account that didn't exist
+/// before. Defined in bcos-framework/protocol/TxGasModel.h -- it is part of the intrinsic-gas
+/// formula, which admission must compute identically.
+using bcos::protocol::AUTHORIZATION_EMPTY_ACCOUNT_COST;
 /// EIP-7702: The cost of authorization that sets delegation to an account that already exists.
 inline constexpr int64_t AUTHORIZATION_BASE_COST = 12500;
 

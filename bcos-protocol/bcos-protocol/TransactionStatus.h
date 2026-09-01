@@ -69,6 +69,23 @@ enum class TransactionStatus : int32_t
     SenderNoEOA = 10014,
     InsufficientFunds = 10015,
     BlobTxNotAllowed = 10016,  ///< blob (EIP-4844) txs parse but are never admitted on L2
+    /// Envelope type is deposit(0x7e) or reserved, or the type is not yet enabled by the chain's
+    /// EVM revision. Blob envelopes have their own code above; they are refused by the same
+    /// classifier but the distinction is worth keeping, since a blob is well-formed and simply
+    /// not admitted here.
+    TxTypeNotSupported = 10017,
+    /// EIP-1559/7702: maxPriorityFeePerGas exceeds maxFeePerGas.
+    TipGreaterThanFeeCap = 10018,
+    /// EIP-7702: a set-code transaction must have a `to` address.
+    CreateSetCodeTx = 10019,
+    /// EIP-7702: the authorization list must not be empty.
+    EmptyAuthorizationList = 10020,
+    /// EIP-2681: the sender account nonce has reached 2^64-1.
+    NonceHasMaxValue = 10021,
+    /// The transaction's fee cap is below the chain's base fee (tx_gas_price).
+    FeeCapLessThanBaseFee = 10022,
+    /// gasLimit exceeds the per-transaction cap (tx_gas_limit, or the Osaka constant cap).
+    MaxGasLimitExceeded = 10023,
 };
 
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionStatus const& _er)
@@ -188,6 +205,27 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
         break;
     case TransactionStatus::InsufficientFunds:
         _out << "InsufficientFunds";
+        break;
+    case TransactionStatus::TxTypeNotSupported:
+        _out << "TxTypeNotSupported";
+        break;
+    case TransactionStatus::TipGreaterThanFeeCap:
+        _out << "TipGreaterThanFeeCap";
+        break;
+    case TransactionStatus::CreateSetCodeTx:
+        _out << "CreateSetCodeTx";
+        break;
+    case TransactionStatus::EmptyAuthorizationList:
+        _out << "EmptyAuthorizationList";
+        break;
+    case TransactionStatus::NonceHasMaxValue:
+        _out << "NonceHasMaxValue";
+        break;
+    case TransactionStatus::FeeCapLessThanBaseFee:
+        _out << "FeeCapLessThanBaseFee";
+        break;
+    case TransactionStatus::MaxGasLimitExceeded:
+        _out << "MaxGasLimitExceeded";
         break;
     case TransactionStatus::AlreadyInTxPoolAndAccept:
         _out << "AlreadyInTxPoolAndAccept";

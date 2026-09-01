@@ -56,12 +56,10 @@ public:
         m_ioServicePool = std::make_shared<IOServicePool>(std::thread::hardware_concurrency() + 1, "archive");
         m_httpServer = std::make_shared<bcos::boostssl::http::HttpServer>(
             m_listenIP, m_listenPort, -1, bcos::boostssl::http::CorsConfig());
-        auto acceptor =
-            std::make_shared<boost::asio::ip::tcp::acceptor>((*m_ioServicePool->getIOService()));
-        auto httpStreamFactory = std::make_shared<bcos::boostssl::http::HttpStreamFactory>();
         m_httpServer->setDisableSsl(true);
-        m_httpServer->setAcceptor(acceptor);
-        m_httpServer->setHttpStreamFactory(httpStreamFactory);
+        m_httpServer->setAcceptor(
+            boost::asio::ip::tcp::acceptor{*m_ioServicePool->getIOService()});
+        m_httpServer->setHttpStreamFactory(bcos::boostssl::http::HttpStreamFactory{});
         m_httpServer->setIOServicePool(m_ioServicePool);
         // m_httpServer->setThreadPool(std::make_shared<ThreadPool>("archiveThread", 1));
         m_methodToFunc["deleteArchivedData"] = [this](const Json::Value& request,

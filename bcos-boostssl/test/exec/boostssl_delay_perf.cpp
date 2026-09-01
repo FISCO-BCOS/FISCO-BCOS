@@ -100,7 +100,7 @@ void workAsClient(
     {
         auto contextConfig = std::make_shared<ContextConfig>();
         contextConfig->initConfig("./boostssl.ini");
-        config->setContextConfig(contextConfig);
+        config->setContextConfig(*contextConfig);
     }
 
     auto wsService = std::make_shared<ws::WsService>();
@@ -182,7 +182,7 @@ void workAsServer(std::string listenIp, uint16_t listenPort, bool disableSsl)
     {
         auto contextConfig = std::make_shared<ContextConfig>();
         contextConfig->initConfig("./boostssl.ini");
-        config->setContextConfig(contextConfig);
+        config->setContextConfig(*contextConfig);
     }
 
     auto wsService = std::make_shared<ws::WsService>();

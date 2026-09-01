@@ -40,7 +40,7 @@ public:
     using Ptr = std::shared_ptr<WsConnector>;
     using ConstPtr = std::shared_ptr<const WsConnector>;
 
-        explicit WsConnector(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver);
+    WsConnector() = default;
 
     /**
      * @brief: connect to the server
@@ -59,20 +59,12 @@ public:
 
     bool insertPendingConns(const std::string& _nodeIPEndpoint);
 
-    void setResolver(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver);
-    std::shared_ptr<boost::asio::ip::tcp::resolver> resolver() const;
-
     void setIOServicePool(IOServicePool::Ptr _ioservicePool);
 
     void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx);
     std::shared_ptr<boost::asio::ssl::context> ctx() const;
 
-    void setBuilder(std::shared_ptr<WsStreamDelegateBuilder> _builder);
-    std::shared_ptr<WsStreamDelegateBuilder> builder() const;
-
 private:
-    std::shared_ptr<WsStreamDelegateBuilder> m_builder;
-    std::shared_ptr<boost::asio::ip::tcp::resolver> m_resolver;
     std::shared_ptr<boost::asio::ssl::context> m_ctx;
 
     mutable std::mutex x_pendingConns;

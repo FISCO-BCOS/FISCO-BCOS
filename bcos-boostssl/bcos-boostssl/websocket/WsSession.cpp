@@ -95,16 +95,6 @@ const WsRecvMessageHandler& WsSession::recvMessageHandler()
     return m_recvMessageHandler;
 }
 
-std::shared_ptr<boost::asio::io_context> WsSession::ioc() const
-{
-    return m_ioc;
-}
-
-void WsSession::setIoc(std::shared_ptr<boost::asio::io_context> _ioc)
-{
-    m_ioc = std::move(_ioc);
-}
-
 void WsSession::setVersion(uint16_t _version)
 {
     m_version.store(_version);
@@ -544,7 +534,7 @@ void WsSession::asyncSendMessage(const WsMessage& _msg, Options _options, RespCa
         {
             // create new timer to handle timeout
             auto timer = std::make_shared<boost::asio::steady_timer>(
-                *m_ioc, std::chrono::milliseconds(timeout));
+                *(m_ioServicePool->getIOService()), std::chrono::milliseconds(timeout));
 
             callback->timer = timer;
             auto self = weak_from_this();
