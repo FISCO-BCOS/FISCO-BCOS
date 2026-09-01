@@ -220,6 +220,16 @@ void SingleNodeConsensus::resolveInitialHead()
                                << LOG_KV("hash", m_headHash.hexPrefixed());
 }
 
+std::uint64_t SingleNodeConsensus::nextBlockTimestamp(std::uint64_t fixedTimestamp,
+    std::uint64_t headNumber, std::uint64_t lastTimestamp, std::uint64_t nowMs)
+{
+    // utcTime() returns milliseconds; floor to a whole second and keep monotonicity by
+    // advancing in whole-second steps (EIP-2 + EthBlockHeader whole-second requirement).
+    std::uint64_t const nowWholeSecondMs = nowMs - nowMs % 1000;
+    return fixedTimestamp > 0 ? (fixedTimestamp + headNumber) * 1000 :
+                                std::max(nowWholeSecondMs, lastTimestamp + 1000);
+}
+
 bool SingleNodeConsensus::produceBlock()
 {
     if (!m_headInitialized)
@@ -242,11 +252,8 @@ bool SingleNodeConsensus::produceBlock()
     // comment saying "seconds") — do NOT multiply by 1000, which would make the block
     // timestamp ~1.786e15 -> year 58577 in the EVM (block.timestamp / base fee schedules etc).
     auto const nowMs = static_cast<std::uint64_t>(utcTime());
-    std::uint64_t const nowWholeSecondMs = nowMs - nowMs % 1000;
-    std::uint64_t const timestamp =
-        m_fixedTimestamp > 0 ?
-            (m_fixedTimestamp + static_cast<std::uint64_t>(m_headNumber)) * 1000 :
-            std::max(nowWholeSecondMs, m_lastTimestamp + 1000);
+    std::uint64_t const timestamp = nextBlockTimestamp(
+        m_fixedTimestamp, static_cast<std::uint64_t>(m_headNumber), m_lastTimestamp, nowMs);
     m_lastTimestamp = timestamp;
     bcos::engine::PayloadAttributes payloadAttributes;
     payloadAttributes.prevRandao = m_prevRandao;

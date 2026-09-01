@@ -1,5 +1,6 @@
 // MultiVersionScheduler slot 3 (OP) routing and setVersion saturation.
 #define BOOST_TEST_MODULE LibinitializerTests
+#include <bcos-framework/engine/OpBaseFee.h>
 #include <bcos-framework/storage/Entry.h>  // complete bcos::storage::Entry (fake's co_return nullopt)
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Exceptions.h>
@@ -180,5 +181,30 @@ BOOST_AUTO_TEST_CASE(VersionOneAndTwoRouting)
     mvs.call(nullptr, [](bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr) {});
     BOOST_CHECK_EQUAL(*recorder, 2);
 }
+
+
+// R2-F4: the built-in OP driver's gas limit comes from the chain's configured value,
+// falling back to 30M only when nothing is configured (0). A hard-coded override would
+// silently ignore an operator's gas_limit and make the anti-censorship re-probe fire on
+// every chain whose limit is not exactly 30M.
+BOOST_AUTO_TEST_SUITE(DriverGasLimitTests)
+
+BOOST_AUTO_TEST_CASE(configured_gas_limit_is_used)
+{
+    // A chain configured with a non-30M limit keeps its own value.
+    BOOST_CHECK_EQUAL(bcos::engine::resolveDriverGasLimit(25'000'000ull), 25'000'000ull);
+    BOOST_CHECK_EQUAL(bcos::engine::resolveDriverGasLimit(40'000'000ull), 40'000'000ull);
+    BOOST_CHECK_EQUAL(bcos::engine::resolveDriverGasLimit(1'000'000ull), 1'000'000ull);
+}
+
+BOOST_AUTO_TEST_CASE(unset_gas_limit_falls_back_to_30m)
+{
+    // 0 / unset -> the documented 30M default.
+    BOOST_CHECK_EQUAL(
+        bcos::engine::resolveDriverGasLimit(0), bcos::engine::c_defaultDriverGasLimit);
+    BOOST_CHECK_EQUAL(bcos::engine::c_defaultDriverGasLimit, 30'000'000ull);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE_END()

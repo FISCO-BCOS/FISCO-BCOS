@@ -142,4 +142,15 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
     return result;
 }
 
+/// Built-in OP driver gas limit: the chain's configured value (from the ledger's
+/// SystemConfig), falling back to 30M only when nothing is configured (0). A real OP
+/// chain takes its gas limit from the L1 SystemConfig; the built-in CL stands in with
+/// the configured value, not a hard-coded override (R2-F4).
+inline constexpr std::uint64_t c_defaultDriverGasLimit = 30'000'000ull;
+
+inline std::uint64_t resolveDriverGasLimit(std::uint64_t configuredGasLimit)
+{
+    return configuredGasLimit == 0 ? c_defaultDriverGasLimit : configuredGasLimit;
+}
+
 }  // namespace bcos::engine

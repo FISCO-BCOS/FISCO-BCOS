@@ -877,11 +877,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             // exactly 30M).
             ledger::LedgerConfig ledgerConfig;
             task::syncWait(ledger::getLedgerConfig(*m_ledger, ledgerConfig));
-            driverGasLimit = std::get<0>(ledgerConfig.gasLimit());
-            if (driverGasLimit == 0)
-            {
-                driverGasLimit = 30'000'000ull;
-            }
+            driverGasLimit =
+                bcos::engine::resolveDriverGasLimit(std::get<0>(ledgerConfig.gasLimit()));
             // Canyon EIP-1559 denominator 250 / elasticity 6, assembled from the shared
             // constants so the driver attributes can never drift from the zero-pair
             // translation in encodeOptimismExtraData.
@@ -1132,6 +1129,7 @@ void Initializer::start()
     }
 #endif
 }
+
 
 void Initializer::stop()
 {

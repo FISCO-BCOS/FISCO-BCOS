@@ -53,8 +53,7 @@ public:
         bool _produceEmptyBlocks = true,
         bcos::crypto::HashType _prevRandao = bcos::crypto::HashType{},
         std::string _feeRecipient = "0x0000000000000000000000000000000000000000",
-        std::uint64_t _fixedTimestamp = 0,
-        std::optional<std::uint64_t> _gasLimit = std::nullopt,
+        std::uint64_t _fixedTimestamp = 0, std::optional<std::uint64_t> _gasLimit = std::nullopt,
         std::optional<bcos::bytes> _eip1559Params = std::nullopt,
         std::optional<std::uint64_t> _minBaseFee = std::nullopt);
 
@@ -67,6 +66,13 @@ public:
     void stop();
     bool running() const noexcept { return m_running.load(); }
 
+    /// Next block timestamp (ms) under the driver's two modes. Pure and testable: the wall-clock
+    /// arm floors @p nowMs to a whole second and advances by whole-second steps from
+    /// @p lastTimestamp (EIP-2 strict monotonicity + EthBlockHeader whole-second requirement);
+    /// the fixed-timestamp (EEST) arm derives from @p fixedTimestamp + @p headNumber.
+    static std::uint64_t nextBlockTimestamp(std::uint64_t fixedTimestamp, std::uint64_t headNumber,
+        std::uint64_t lastTimestamp, std::uint64_t nowMs);
+
 private:
     void loop();
     /// Produce one block through the EngineService. Returns true if a block carrying at least
@@ -74,6 +80,7 @@ private:
     /// otherwise (empty block or skipped — the caller sleeps @p m_blockIntervalMs before the
     /// next tick).
     bool produceBlock();
+
     /// Resolve the current committed head (number + hash) from the ledger once at startup.
     void resolveInitialHead();
 
