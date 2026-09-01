@@ -82,9 +82,11 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
 
 
 // ---- Jovian L1-attributes block shape ----
-// The L1-attributes deposit's calldata is 176B on the Jovian activation block, 178B with the
-// Jovian selector thereafter. Lengths/selectors live in OpTransition.h (shared with the
-// deposit synthesis in OpDepositEncode.h).
+// The L1-attributes deposit's calldata is 176B on the Isthmus form, 178B with the Jovian
+// selector once Jovian is active (FISCO selects Jovian by genesis flag, so the 176B form is
+// the op-geth activation-block shape accepted on read, never produced by this path).
+// Lengths/selectors live in OpTransition.h (shared with the deposit synthesis in
+// OpDepositEncode.h).
 
 /// Shared Jovian L1-attributes shape (selector/length + activation deposits-only).
 /// `lastTxIsDeposit` is the path-specific last-tx probe: processOpBlock uses the DepositTx

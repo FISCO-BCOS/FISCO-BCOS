@@ -28,7 +28,6 @@ DERIVE_BCOS_EXCEPTION(OpExecutionInternalError);
 
 // Engine API exceptions (bcos-framework so RPC can map them without linking bcos-engine).
 DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
-DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
 DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
 DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
 DERIVE_BCOS_EXCEPTION(UnknownPayload);
@@ -37,8 +36,4 @@ DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 /// JSON-RPC -38005: Isthmus+ payloads require V4.
 DERIVE_BCOS_EXCEPTION(UnsupportedFork);
 
-/// JSON-RPC -38003: OP forkchoiceUpdated refused the payload attributes.
-DERIVE_BCOS_EXCEPTION(UnsupportedOpPayloadAttributes);
-
-DERIVE_BCOS_EXCEPTION(OpPayloadBuildingUnsupported);
 }  // namespace bcos::engine

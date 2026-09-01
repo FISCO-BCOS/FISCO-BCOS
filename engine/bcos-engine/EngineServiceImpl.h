@@ -86,8 +86,7 @@ std::vector<std::string> supportedCapabilities();
 /// OP capability list. V4 get/newPayload are already in supportedCapabilities().
 std::vector<std::string> supportedOpCapabilities();
 
-bool isGetPayloadVersionCompatible(
-    ApiVersion requestVersion, std::uint32_t payloadVersion, bool opMode);
+bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payloadVersion);
 
 std::optional<std::string> validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version);
@@ -118,8 +117,6 @@ bcos::h2048 toEthLogsBloom(const Bloom& logsBloom);
 /// OP newPayload static checks (not blockHash). jovianActive selects the blobGasUsed rule.
 std::optional<std::string> validateOpNewPayloadRequest(
     const NewPayloadRequest& request, bool jovianActive);
-
-/// Expected baseFeePerGas from the parent header (OpBaseFee.h).
 
 /// Set post-merge ommersHash / difficulty / nonce constants.
 void applyOpHeaderConstants(bcos::protocol::BlockHeader& header);
@@ -568,6 +565,16 @@ private:
                     BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
                                               std::string("calcOpBaseFee failed: ") + e.what()});
                 }
+                // op-geth rejects attrs.timestamp <= parent at build time (-38003,
+                // checkOptimismPayloadAttributes); without this gate we would build a payload
+                // whose read-back is rejected at newPayload — a one-block stall (R54/R72).
+                if (payloadAttributes.timestamp <=
+                    static_cast<std::uint64_t>(parentHeader->timestamp()))
+                {
+                    BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                              "buildOpPayload: payloadAttributes.timestamp must be "
+                                              "strictly greater than the parent header timestamp"});
+                }
             }
             else
             {
@@ -575,6 +582,16 @@ private:
                                           "buildOpPayload: parent block header missing at height " +
                                           parentNumberStr});
             }
+        }
+
+        // Execute and commit through the OpScheduler delegate (R80): same guard as
+        // runOpNewPayloadSteps so a delegate-less OP engine fails cleanly instead of
+        // dereferencing null at the first reset().
+        if (!m_delegate)
+        {
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    "OP payload build requires an m_delegate (OpScheduler) for block execution"});
         }
 
         // Serialize OP reset/execute/commit on the shared delegate. Cache maps stay
@@ -729,7 +746,8 @@ private:
                 }
                 if (budget && !budget->admits(env.size()))
                 {
-                    break;  // size-ordered stop, not a skip: keep the block prefix stable
+                    break;  // pool-order prefix stop (seal order, not size order): deterministic
+                            // prefix
                 }
                 candidateEnvelopes.push_back(env);
             }
@@ -915,7 +933,7 @@ private:
                 BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
             }
             if (!detail::isGetPayloadVersionCompatible(
-                    static_cast<ApiVersion>(version), it->second.version, c_opMode))
+                    static_cast<ApiVersion>(version), it->second.version))
             {
                 BOOST_THROW_EXCEPTION(
                     IncompatiblePayloadVersion{} << bcos::errinfo_comment{

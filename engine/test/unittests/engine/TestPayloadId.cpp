@@ -128,7 +128,7 @@ BOOST_AUTO_TEST_CASE(BeaconRootOnlyV2)
 /// long-form list-header boundary: f8 42 header, exercising codec::rlp::encodeHeader's
 /// >=56 long-form arm on the withdrawals list itself.
 /// Byte stream: 11x32 || 000000006553f100 || 22x32 || 33x20 ||
-///              f8 42 e0 01 02 94 77x20 88 de0b6b3a7640000 e0 03 04 94 88x20 88 de0b6b3a7640000
+///              f8 42 e0 01 02 94 77x20 88 0de0b6b3a7640000 e0 03 04 94 88x20 88 de0b6b3a7640000
 BOOST_AUTO_TEST_CASE(TwoWithdrawalsV2)
 {
     FixtureInputs f;
