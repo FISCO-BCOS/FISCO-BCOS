@@ -112,6 +112,29 @@ BOOST_AUTO_TEST_CASE(BeaconRootOnlyV2)
     BOOST_CHECK_EQUAL(derivePayloadId(attrs, f.parentHash, {}, 0x02), "0x02311bf76bd95ce9");
 }
 
+/// Two non-trivial withdrawals whose combined RLP payload (66 bytes) crosses the 55-byte
+/// long-form list-header boundary: f8 42 header, exercising the >56 rlpAppendHeader arm on
+/// the withdrawals list itself.
+/// Byte stream: 11x32 || 000000006553f100 || 22x32 || 33x20 ||
+///              f8 42 e0 01 02 94 77x20 88 de0b6b3a7640000 e0 03 04 94 88x20 88 de0b6b3a7640000
+BOOST_AUTO_TEST_CASE(TwoWithdrawalsV2)
+{
+    FixtureInputs f;
+    auto attrs = makeAttrs(f);
+    WithdrawalV1 w1;
+    w1.index = 1;
+    w1.validatorIndex = 2;
+    w1.amount = 1'000'000'000'000'000'000;             // 10^18
+    w1.address = bcos::Address(std::string(40, '7'));  // 0x77 x 20
+    WithdrawalV1 w2;
+    w2.index = 3;
+    w2.validatorIndex = 4;
+    w2.amount = 1'000'000'000'000'000'000;             // 10^18
+    w2.address = bcos::Address(std::string(40, '8'));  // 0x88 x 20
+    attrs.withdrawals = std::vector<WithdrawalV1>{w1, w2};
+    BOOST_CHECK_EQUAL(derivePayloadId(attrs, f.parentHash, {}, 0x02), "0x0255727e1723047f");
+}
+
 /// (d) two txs, noTxPool=false, V3.
 /// Byte stream: 11x32 || 000000006553f100 || 22x32 || 33x20 || c0 ||
 ///              00 0000000000000002 55x32 66x32

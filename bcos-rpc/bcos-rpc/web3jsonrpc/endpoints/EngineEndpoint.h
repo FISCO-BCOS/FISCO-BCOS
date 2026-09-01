@@ -67,6 +67,10 @@ private:
     /// (seconds apart); 100ms is generous headroom.
     static constexpr std::chrono::milliseconds c_opFcuBuildMinInterval{100};
     std::atomic<std::chrono::steady_clock::time_point> m_lastFcuBuildAt{};
+    /// One-in-flight guard for OP (V4) newPayload executions: a second concurrent request is
+    /// answered with the spec-recognized SYNCING status instead of queueing another full
+    /// block execution + commit (CPU DoS bound; op-node retries).
+    std::atomic<bool> m_opPayloadBusy{false};
 
     NodeService::Ptr m_nodeService;
 };

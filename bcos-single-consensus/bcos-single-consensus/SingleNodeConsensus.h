@@ -55,7 +55,8 @@ public:
         std::string _feeRecipient = "0x0000000000000000000000000000000000000000",
         std::uint64_t _fixedTimestamp = 0,
         std::optional<std::uint64_t> _gasLimit = std::nullopt,
-        std::optional<bcos::bytes> _eip1559Params = std::nullopt);
+        std::optional<bcos::bytes> _eip1559Params = std::nullopt,
+        std::optional<std::uint64_t> _minBaseFee = std::nullopt);
 
     ~SingleNodeConsensus();
 
@@ -88,9 +89,12 @@ private:
     std::uint64_t m_fixedTimestamp;
     /// OP-mode (FCU V3+) attributes: gasLimit and Holocene eip1559Params are mandatory on the
     /// OP path but rejected pre-V3, so they stay nullopt for the generic V1 driver and are
-    /// populated by the OP-mode constructor call (Initializer).
+    /// populated by the OP-mode constructor call (Initializer). minBaseFee is mandatory only
+    /// after the Jovian fork, so the OP arm supplies it (0 = no floor) exactly when
+    /// feature_op_jovian is active — without it every FCU attributes would be rejected.
     std::optional<std::uint64_t> m_gasLimit;
     std::optional<bcos::bytes> m_eip1559Params;
+    std::optional<std::uint64_t> m_minBaseFee;
 
     /// CL-side head tracking. newPayload() persists the ledger block tables — including
     /// SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER — via ledger::prewriteBlockToBuffer

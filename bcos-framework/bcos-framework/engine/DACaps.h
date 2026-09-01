@@ -72,7 +72,9 @@ struct DACaps
             {
                 return true;
             }
-            if (m_used + envelopeSize > cap)
+            // Wrap-safe form: `m_used + envelopeSize` could wrap only at ~2^64 bytes, but the
+            // comparison is cheap to write without the addition.
+            if (cap < m_used || envelopeSize > cap - m_used)
             {
                 return false;
             }

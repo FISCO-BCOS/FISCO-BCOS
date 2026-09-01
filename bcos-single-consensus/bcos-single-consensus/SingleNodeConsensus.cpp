@@ -80,7 +80,7 @@ SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engine
     bcos::ledger::LedgerInterface::Ptr _ledger, std::uint64_t _blockIntervalMs,
     bool _produceEmptyBlocks, bcos::crypto::HashType _prevRandao, std::string _feeRecipient,
     std::uint64_t _fixedTimestamp, std::optional<std::uint64_t> _gasLimit,
-    std::optional<bcos::bytes> _eip1559Params)
+    std::optional<bcos::bytes> _eip1559Params, std::optional<std::uint64_t> _minBaseFee)
   : m_engineService(_engineService),
     m_ledger(std::move(_ledger)),
     m_blockIntervalMs(_blockIntervalMs > 0 ? _blockIntervalMs : 1000),
@@ -91,7 +91,8 @@ SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engine
     m_feeRecipient(toAddress(_feeRecipient)),
     m_fixedTimestamp(_fixedTimestamp),
     m_gasLimit(_gasLimit),
-    m_eip1559Params(std::move(_eip1559Params))
+    m_eip1559Params(std::move(_eip1559Params)),
+    m_minBaseFee(_minBaseFee)
 {}
 
 SingleNodeConsensus::~SingleNodeConsensus()
@@ -195,17 +196,20 @@ bool SingleNodeConsensus::produceBlock()
     // the harness so the produced block's timestamp matches the fixture; 0 = wall clock.
     //
     // EIP-2 requires strictly increasing block timestamps, so both modes enforce
-    // monotonicity: a fixed timestamp is bumped by the block number (consecutive blocks,
-    // including empty ones, must never share the same value), and wall-clock mode never goes
-    // backwards relative to the last produced block. utcTime() already returns milliseconds
-    // (bcos-utilities/Common.cpp, despite the header comment saying "seconds") — do NOT
-    // multiply by 1000, which would make the block timestamp ~1.786e15 -> year 58577 in the
-    // EVM (block.timestamp / base fee schedules etc).
+    // monotonicity, and EthBlockHeader::computeHash requires whole-second internal ms
+    // (rlpEncode divides by 1000; a sub-second value throws std::invalid_argument and used
+    // to stall the driver at block one — both historical arms produced sub-second values:
+    // fixed stamped +n ms, wall clock stamped raw utcTime() ms). Floor to whole seconds and
+    // keep monotonicity by advancing in whole-second steps.
+    // utcTime() already returns milliseconds (bcos-utilities/Common.cpp, despite the header
+    // comment saying "seconds") — do NOT multiply by 1000, which would make the block
+    // timestamp ~1.786e15 -> year 58577 in the EVM (block.timestamp / base fee schedules etc).
     auto const nowMs = static_cast<std::uint64_t>(utcTime());
+    std::uint64_t const nowWholeSecondMs = nowMs - nowMs % 1000;
     std::uint64_t const timestamp =
         m_fixedTimestamp > 0 ?
-            m_fixedTimestamp * 1000 + static_cast<std::uint64_t>(m_headNumber + 1) :
-            std::max(nowMs, m_lastTimestamp + 1);
+            (m_fixedTimestamp + static_cast<std::uint64_t>(m_headNumber)) * 1000 :
+            std::max(nowWholeSecondMs, m_lastTimestamp + 1000);
     m_lastTimestamp = timestamp;
     bcos::engine::PayloadAttributes payloadAttributes;
     payloadAttributes.prevRandao = m_prevRandao;
@@ -236,6 +240,14 @@ bool SingleNodeConsensus::produceBlock()
     if (m_eip1559Params.has_value())
     {
         payloadAttributes.eip1559Params = m_eip1559Params;
+    }
+    // Jovian makes minBaseFee mandatory on OP attributes (validateOpPayloadAttributes); the
+    // OP arm supplies it whenever feature_op_jovian is active (0 = no floor) so the driver's
+    // FCU attributes never stall block production after the fork. Pre-Jovian / generic V1
+    // drivers keep it absent (minBaseFee must be null before Jovian).
+    if (m_minBaseFee.has_value())
+    {
+        payloadAttributes.minBaseFee = m_minBaseFee;
     }
 
     // forkchoiceUpdated(head, attributes): the EL resolves the head hash from storage, removes

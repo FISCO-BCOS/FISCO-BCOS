@@ -27,6 +27,24 @@
 using namespace bcos;
 using namespace bcos::rpc;
 
+namespace
+{
+/// RAII release for the one-in-flight OP newPayload guard. The destructor must also run on
+/// exception unwind from the co_await below — a failed execution must not latch the flag
+/// shut and permanently answer SYNCING.
+struct OpPayloadBusyReset
+{
+    std::atomic<bool>& flag;
+    bool owned;
+    ~OpPayloadBusyReset()
+    {
+        if (owned)
+        {
+            flag.store(false, std::memory_order_release);
+        }
+    }
+};
+}  // namespace
 
 EngineEndpoint::EngineEndpoint(NodeService::Ptr nodeService) : m_nodeService(std::move(nodeService))
 {}
@@ -143,11 +161,18 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
     if (payloadAttrs.has_value())
     {
         const auto now = std::chrono::steady_clock::now();
-        const auto last = m_lastFcuBuildAt.exchange(now, std::memory_order_relaxed);
-        if (last.time_since_epoch().count() != 0 && now - last < c_opFcuBuildMinInterval)
+        // CAS-accept (not exchange): a rejected call must NOT refresh the window, or a flood
+        // could starve the honest CL forever — only the winning call sets the window anchor.
+        // The rejection carries the generic JSON-RPC server-error range (-32000), which
+        // op-node's error handling treats as a retryable server failure, instead of the
+        // non-spec Web3DefaultError.
+        auto last = m_lastFcuBuildAt.load(std::memory_order_relaxed);
+        if ((last.time_since_epoch().count() != 0 && now - last < c_opFcuBuildMinInterval) ||
+            !m_lastFcuBuildAt.compare_exchange_strong(last, now, std::memory_order_relaxed,
+                std::memory_order_relaxed))
         {
             Json::Value error;
-            error["code"] = Web3DefaultError;
+            error["code"] = -32000;
             error["message"] =
                 "forkchoiceUpdated with payloadAttributes is rate-limited (minimum interval "
                 "between attribute-bearing calls)";
@@ -284,6 +309,16 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     // TODO: engineService->newPayload() MUST throw JsonRpcException in these cases:
     //   -32602 InvalidParams: wrong version of ExecutionPayload structure (V2)
     //   -38005 UnsupportedFork: timestamp out of fork window (V2/V3)
+    // V4 (OP) execution runs a full block execution + commit per call. Bound it to one
+    // in-flight execution: a concurrent request gets the spec-recognized SYNCING status
+    // (op-node retries) instead of queueing unbounded execution work behind a flood.
+    const bool opExecution = version == engine::ApiVersion::V4;
+    if (opExecution && m_opPayloadBusy.exchange(true, std::memory_order_acq_rel))
+    {
+        buildJsonContent(serializePayloadStatus(engine::PayloadStatus{}, version), response);
+        co_return;
+    }
+    OpPayloadBusyReset busyReset{m_opPayloadBusy, opExecution};
     auto engineResult =
         co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
     auto result = serializePayloadStatus(engineResult, version);

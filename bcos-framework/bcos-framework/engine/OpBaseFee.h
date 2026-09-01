@@ -33,6 +33,12 @@
 namespace bcos::engine
 {
 
+/// Canyon EIP-1559 parameters (op-geth params/rollup.go). Single source for the
+/// zero-pair translation in encodeOptimismExtraData and for the built-in single-node
+/// driver's FCU attribute defaults (Initializer) — the two must never drift.
+inline constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
+inline constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;
+
 /// Decode the 8-byte Holocene eip1559Params / extraData[1:9] pair (u32 BE denom, u32 BE
 /// elasticity).
 inline std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(

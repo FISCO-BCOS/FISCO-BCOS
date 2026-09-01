@@ -231,8 +231,8 @@ struct DepositTx
 constexpr auto kDepositTxType = static_cast<evmone::state::Transaction::Type>(0x7e);
 
 // ---- L1-attributes deposit calldata layout (shared by synthesis and validation) ----
-// The calldata is 176B on the Jovian activation block, 178B with the Jovian selector
-// thereafter. Selectors mirror op-geth core/types (setL1BlockValues dispatch); the
+// 176B with the Isthmus selector (0x098999be), 178B with the Jovian selector (0x3db6be2b).
+// Selectors mirror op-geth core/types (setL1BlockValues dispatch); the
 // pre-Isthmus Ecotone form (164B, 0x440a5e20) predates this chain's Isthmus baseline and
 // is never synthesized.
 inline constexpr std::size_t IsthmusL1AttributesLen = 176;
@@ -240,11 +240,11 @@ inline constexpr std::size_t JovianL1AttributesLen = 178;
 inline constexpr std::array<uint8_t, 4> IsthmusL1AttributesSelector = {0x09, 0x89, 0x99, 0xbe};
 inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6, 0xbe, 0x2b};
 /// op-geth L1InfoDepositGas (core/types/deposit_tx.go) — the reference L1-attributes
-/// deposit gas limit. Not used by the built-in-CL synthesis: FISCO's runDeposit rejects a
-/// deposit whose gas exceeds the block gas pool (op-geth ErrGasLimitReached, block-level
-/// error), and 150M exceeds every realistic block gasLimit this chain configures, so the
-/// fallback mints 1M — enough for the intrinsic gas + calldata the attributes deposit
-/// actually consumes.
+/// deposit gas limit. Deposits are exempt from the block gas pool (runDeposit validates
+/// them against an unbounded pool, matching op-geth, which does not charge deposited
+/// transactions against the block gas limit), so an op-node-provided 150M deposit passes.
+/// The built-in-CL synthesis keeps 1M — enough for the intrinsic gas + calldata the
+/// attributes deposit actually consumes.
 inline constexpr int64_t c_l1InfoDepositGas = 1'000'000;
 
 /// L1 block information used to synthesize the L1-attributes deposit (mirrors op-geth

@@ -188,11 +188,29 @@ constexpr bcos::byte c_holoceneExtraDataVersion = 0x00;
 constexpr bcos::byte c_jovianExtraDataVersion = 0x01;
 constexpr std::size_t c_holoceneExtraDataBytes = 9;
 constexpr std::size_t c_jovianExtraDataBytes = 17;
-constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
-constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;
 constexpr std::size_t c_eip1559ParamsBytes = 8;
 
+using bcos::engine::c_eip1559DenominatorCanyon;
+using bcos::engine::c_eip1559ElasticityCanyon;
 using bcos::engine::decodeEip1559Params;
+
+/// Shared 8-byte length + zero-pairing rule for eip1559Params, consumed by both attribute
+/// validators (generic and OP). The throwing encoder keeps its own precondition; this
+/// returns the INVALID-class message so the two validators cannot drift.
+std::optional<std::string> validateEip1559ParamsShape(std::span<const bcos::byte> params)
+{
+    if (params.size() != 8)
+    {
+        return std::string("eip1559Params must be exactly 8 bytes");
+    }
+    const auto [denominator, elasticity] = decodeEip1559Params(params);
+    if ((denominator == 0) != (elasticity == 0))
+    {
+        return std::string(
+            "eip1559Params denominator and elasticity must both be zero or both non-zero");
+    }
+    return std::nullopt;
+}
 
 std::optional<std::string> validateOptimismExtraDataShape(const bcos::bytes& extraData)
 {
@@ -305,27 +323,30 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     }
     if (version <= 2 && payloadAttributes.eip1559Params.has_value())
     {
-        return std::string("eip1559Params is only valid for PayloadAttributesV3");
+        return std::string("eip1559Params is only valid for PayloadAttributesV3 and V4");
     }
     if (version <= 2 && payloadAttributes.minBaseFee.has_value())
     {
-        return std::string("minBaseFee is only valid for PayloadAttributesV3");
+        return std::string("minBaseFee is only valid for PayloadAttributesV3 and V4");
     }
     if (payloadAttributes.minBaseFee.has_value() && !payloadAttributes.eip1559Params.has_value())
     {
         return std::string("minBaseFee requires eip1559Params (Jovian attributes carry both)");
     }
+    // Internal timestamps are milliseconds and must be whole seconds: EthBlockHeader::computeHash
+    // throws std::invalid_argument on ms%1000!=0 (rlpEncode's /1000 must be lossless). External
+    // CLs send wire seconds which always convert to whole ms, so only a buggy or hostile
+    // attributes source produces sub-second values — reject them as INVALID instead of failing
+    // the build deep inside computeHash.
+    if (payloadAttributes.timestamp % 1000 != 0)
+    {
+        return std::string("timestamp must be a whole number of seconds (internal ms)");
+    }
     if (payloadAttributes.eip1559Params.has_value())
     {
-        if (payloadAttributes.eip1559Params->size() != 8)
+        if (auto error = validateEip1559ParamsShape(*payloadAttributes.eip1559Params))
         {
-            return std::string("eip1559Params must be exactly 8 bytes");
-        }
-        auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
-        if ((denominator == 0) != (elasticity == 0))
-        {
-            return std::string(
-                "eip1559Params denominator and elasticity must be both zero or both non-zero");
+            return error;
         }
     }
     return std::nullopt;
@@ -335,6 +356,10 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     const PayloadAttributes& payloadAttributes, bool jovianActive)
 {
     // OP FCU attrs: gasLimit, eip1559Params, empty withdrawals, Jovian minBaseFee.
+    if (payloadAttributes.timestamp % 1000 != 0)
+    {
+        return std::string("timestamp must be a whole number of seconds (internal ms)");
+    }
     if (!payloadAttributes.gasLimit.has_value())
     {
         return std::string("gasLimit parameter is required (OP rollup)");
@@ -343,17 +368,10 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     {
         return std::string("eip1559Params is required on the OP path (Holocene+)");
     }
-    if (payloadAttributes.eip1559Params->size() != 8)
+    // Shared 8-byte length + zero-pairing rule with the generic validator.
+    if (auto error = validateEip1559ParamsShape(*payloadAttributes.eip1559Params))
     {
-        return std::string("eip1559Params must be exactly 8 bytes");
-    }
-    // denom and elasticity must both be zero or both non-zero. Shared decoder with
-    // encodeOptimismExtraData / validateOptimismExtraDataShape.
-    const auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
-    if ((denominator == 0) != (elasticity == 0))
-    {
-        return std::string(
-            "eip1559Params denominator and elasticity must both be zero or both non-zero");
+        return error;
     }
     // OP withdrawals list must be empty.
     if (payloadAttributes.withdrawals.has_value() && !payloadAttributes.withdrawals->empty())

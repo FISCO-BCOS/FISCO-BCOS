@@ -376,13 +376,18 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
     }
     // OP carrier mirror: validateOpNewPayloadRequest requires rawTransactions to be present
     // on the OP path, and its content is the same raw envelopes as transactions[].raw. Fill
-    // it unconditionally (present-but-empty for a block with no transactions) so an external
-    // op-node's newPayloadV4 is never rejected for a missing field at the RPC boundary.
-    payload.rawTransactions = std::vector<bcos::bytes>{};
-    payload.rawTransactions->reserve(payload.transactions.size());
-    for (auto const& tx : payload.transactions)
+    // it only for V4 (the OP carrier is read exclusively on the OP path; generic V1-V3
+    // never consume it, so copying N envelopes per submission would be pure waste). V4
+    // gets present-but-empty for a block with no transactions so an external op-node's
+    // newPayloadV4 is never rejected for a missing field at the RPC boundary.
+    if (version >= engine::ApiVersion::V4)
     {
-        payload.rawTransactions->push_back(tx.raw);
+        payload.rawTransactions = std::vector<bcos::bytes>{};
+        payload.rawTransactions->reserve(payload.transactions.size());
+        for (auto const& tx : payload.transactions)
+        {
+            payload.rawTransactions->push_back(tx.raw);
+        }
     }
     if (ep.isMember("withdrawals") && !ep["withdrawals"].isNull())
     {
@@ -593,15 +598,15 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
     // forged value) and report malformed input as std::invalid_argument, which the RPC
     // entry point would surface as -32603 InternalError.
     //
-    // KNOWN GAP: gasLimit is parsed and carried on PayloadAttributes but buildPayload
-    // IGNORES it — the built block's gas limit always comes from this chain's own
-    // SystemConfig (EngineServiceImpl.h, ledgerConfig.gasLimit()). op-geth does the
-    // opposite: the attribute is mandatory on an OP chain (checkOptimismPayloadAttributes,
-    // eth/catalyst/api_optimism.go:41-43, else -38003) and sets header.GasLimit verbatim
-    // (miner/worker.go:362-363), and op-node always sends it from the L1 SystemConfig
-    // (op-node/rollup/derive/attributes.go:207-215). Honouring it changes what block this
-    // node produces, which belongs to the header-fields work rather than to this
-    // method-surface change.
+    // KNOWN GAP (generic path): the generic buildPayload IGNORES payloadAttributes.gasLimit —
+    // the built block's gas limit always comes from this chain's own SystemConfig
+    // (EngineServiceImpl.h, ledgerConfig.gasLimit()). The OP path (buildOpPayload) is the
+    // opposite: it prefers attrs.gasLimit and falls back to ledgerConfig, matching op-geth's
+    // mandatory-gasLimit semantics (checkOptimismPayloadAttributes, eth/catalyst/
+    // api_optimism.go:41-43, else -38003; miner/worker.go:362-363; op-node always sends it
+    // from the L1 SystemConfig, op-node/rollup/derive/attributes.go:207-215). Honouring it on
+    // the generic path changes what block this node produces, which belongs to the
+    // header-fields work rather than to this method-surface change.
     if (pa.isMember("gasLimit") && !pa["gasLimit"].isNull())
     {
         attrs.gasLimit = parseQuantity(pa["gasLimit"], "payloadAttributes.gasLimit");

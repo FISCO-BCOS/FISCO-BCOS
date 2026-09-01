@@ -5,6 +5,7 @@
 // Engine-facing OP seam. executeBlock exists only for the scheduler concept check.
 
 #include <bcos-evm/opstack/OpForkSchedule.h>
+#include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>

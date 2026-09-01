@@ -37,6 +37,7 @@
 #include "StorageInitializer.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
+#include "bcos-framework/engine/OpBaseFee.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
@@ -509,11 +510,20 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto forkFlags = bcos::evm::opstack::OpForkFlags{
             .jovianActive = m_nodeConfig->opJovianActive(),
         };
-        // chainId must be numeric (decimal or 0x-hex).
+        // chainId must be numeric (decimal or 0x-hex). A leading '-' must be rejected
+        // explicitly: stoull(base 0) parses "-1" as a valid negative and wraps it to a huge
+        // positive chainId, silently putting the chain under an unintended EIP-155 domain.
         uint64_t opChainId = 0;
+        auto chainIdStr = m_nodeConfig->chainId();
+        if (chainIdStr.empty() || chainIdStr.front() == '-')
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "OP mode (executor_version>=3) requires a numeric chain_id "
+                                      "(decimal or 0x-prefixed hex)"));
+        }
         try
         {
-            opChainId = std::stoull(m_nodeConfig->chainId(), nullptr, 0);
+            opChainId = std::stoull(chainIdStr, nullptr, 0);
         }
         catch (const std::invalid_argument&)
         {
@@ -821,17 +831,34 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // 30M gas; Canyon EIP-1559 denominator 250 / elasticity 6.
         std::optional<std::uint64_t> driverGasLimit;
         std::optional<bcos::bytes> driverEip1559Params;
+        std::optional<std::uint64_t> driverMinBaseFee;
         if (opStackMode)
         {
             driverGasLimit = 30'000'000ull;
-            driverEip1559Params = bcos::bytes{0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06};
+            // Canyon EIP-1559 denominator 250 / elasticity 6, assembled from the shared
+            // constants so the driver attributes can never drift from the zero-pair
+            // translation in encodeOptimismExtraData.
+            auto params = bcos::bytes(8, 0);
+            bcos::toBigEndian(bcos::engine::c_eip1559DenominatorCanyon,
+                std::span<uint8_t, 4>(params.data(), 4));
+            bcos::toBigEndian(bcos::engine::c_eip1559ElasticityCanyon,
+                std::span<uint8_t, 4>(params.data() + 4, 4));
+            driverEip1559Params = std::move(params);
+            // validateOpPayloadAttributes makes minBaseFee mandatory once Jovian is active;
+            // without a driver-side producer every FCU attributes would be rejected and the
+            // built-in CL would stop producing blocks at the fork. 0 = no floor.
+            if (m_nodeConfig->opJovianActive())
+            {
+                driverMinBaseFee = 0ull;
+            }
         }
         m_singleNodeConsensus = std::make_shared<single_consensus::SingleNodeConsensus>(
             *m_engineServiceInitializer->engineService(), m_ledger,
             m_nodeConfig->singleNodeConsensusBlockInterval(),
             m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
             m_nodeConfig->singleNodeConsensusFeeRecipient(),
-            m_nodeConfig->singleNodeConsensusFixedTimestamp(), driverGasLimit, driverEip1559Params);
+            m_nodeConfig->singleNodeConsensusFixedTimestamp(), driverGasLimit,
+            driverEip1559Params, driverMinBaseFee);
     }
 
 #ifdef TOOLS

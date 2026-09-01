@@ -406,12 +406,16 @@ public:
                 m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
                 // Dedupe against the order deque *before* assigning the cache slot.
                 // contains(payloadId) after operator[] / assign is always true and would
-                // never record IDs, so the 64-entry eviction never ran.
-                if (std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId) ==
-                    m_payloadOrder.end())
+                // never record IDs, so the 64-entry eviction never ran. Rebuilds of an
+                // existing ID also move it to the back so a re-built entry cannot sit in a
+                // stale front slot and get evicted right after being refreshed.
+                auto orderIt = std::find(
+                    m_payloadOrder.begin(), m_payloadOrder.end(), payloadId);
+                if (orderIt != m_payloadOrder.end())
                 {
-                    m_payloadOrder.push_back(payloadId);
+                    m_payloadOrder.erase(orderIt);
                 }
+                m_payloadOrder.push_back(payloadId);
                 m_payloadCache[payloadId] = std::move(entry);
                 while (m_payloadOrder.size() > c_maxPayloadEntries)
                 {
@@ -539,16 +543,42 @@ private:
         // under x_state only for the publish window (not across EVM time).
         std::unique_lock opLock(x_opExecute);
 
-        // Payload ID from CL attributes only (not pool txs or the synthesized deposit).
-        auto payloadIdOpt =
-            derivePayloadId(payloadAttributes, forkchoiceState.headBlockHash, version);
-        if (!payloadIdOpt.has_value())
+        // Leading L1-attributes deposit, then attrs.transactions, then sealed pool txs.
+        // Synthesize the deposit only when the CL did not supply one. Attribute envelopes
+        // are decoded EXACTLY ONCE here and reused for both the payload-ID hashes and the
+        // forced-envelope list below (the old flow decoded them a second time inside
+        // derivePayloadId).
+        std::vector<bytes> forcedEnvelopes;
+        std::vector<h256> attrTxHashes;
+        if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
         {
-            BOOST_THROW_EXCEPTION(
-                OpExecutionInternalError{} << bcos::errinfo_comment{
-                    "buildOpPayload: payloadAttributes.transactions contains undecodable hex"});
+            forcedEnvelopes.push_back(
+                m_scheduler.get().synthesizeL1AttributesEnvelope(payloadAttributes.timestamp));
         }
-        auto payloadId = *payloadIdOpt;
+        if (payloadAttributes.transactions.has_value())
+        {
+            forcedEnvelopes.reserve(forcedEnvelopes.size() + payloadAttributes.transactions->size());
+            attrTxHashes.reserve(payloadAttributes.transactions->size());
+            for (auto const& forcedHex : *payloadAttributes.transactions)
+            {
+                bcos::bytes raw;
+                try
+                {
+                    raw = bcos::fromHex(forcedHex);
+                }
+                catch (bcos::BadHexCharacter const&)
+                {
+                    BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                        "buildOpPayload: payloadAttributes.transactions contains undecodable hex"});
+                }
+                attrTxHashes.emplace_back(bcos::crypto::keccak256Hash(bcos::ref(raw)));
+                forcedEnvelopes.push_back(std::move(raw));
+            }
+        }
+        // Payload ID from CL attributes only (not pool txs or the synthesized deposit).
+        auto payloadId = bcos::engine::derivePayloadId(
+            payloadAttributes, forkchoiceState.headBlockHash, attrTxHashes,
+            static_cast<uint8_t>(version));
         // Seal over a throwaway view; the delegate owns the execution view.
         auto sealView = m_globalStateStorage.get().fork();
         std::vector<protocol::Transaction::Ptr> sealedTxs;
@@ -560,21 +590,6 @@ private:
             // DA throttle is applied later, when envelope sizes are known.
         }
 
-        // Leading L1-attributes deposit, then attrs.transactions, then sealed pool txs.
-        // Synthesize the deposit only when the CL did not supply one.
-        std::vector<bytes> forcedEnvelopes;
-        if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
-        {
-            forcedEnvelopes.push_back(
-                m_scheduler.get().synthesizeL1AttributesEnvelope(payloadAttributes.timestamp));
-        }
-        if (payloadAttributes.transactions.has_value())
-        {
-            for (auto const& forcedHex : *payloadAttributes.transactions)
-            {
-                forcedEnvelopes.push_back(fromHex(forcedHex));
-            }
-        }
         // Tag sealed txs by hash so a validation failure can evict that tx and retry.
         std::vector<std::pair<crypto::HashType, bytes>> sealedEnvelopes;
         for (auto& sealedTx : sealedTxs)
@@ -878,12 +893,14 @@ private:
             std::unique_lock stateLock(x_state);
             m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
             m_payloadCache[payloadId] = std::move(entry);
-            // Dedupe: identical attributes rebuild the same payload ID.
-            if (std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId) ==
-                m_payloadOrder.end())
+            // Dedupe: identical attributes rebuild the same payload ID. Move a rebuilt ID to
+            // the back so it cannot sit in a stale front slot and be evicted right after.
+            auto orderIt = std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId);
+            if (orderIt != m_payloadOrder.end())
             {
-                m_payloadOrder.push_back(payloadId);
+                m_payloadOrder.erase(orderIt);
             }
+            m_payloadOrder.push_back(payloadId);
             while (m_payloadOrder.size() > c_maxPayloadEntries)
             {
                 auto const evictedId = m_payloadOrder.front();
