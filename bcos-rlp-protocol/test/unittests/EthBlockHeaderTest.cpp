@@ -272,6 +272,25 @@ BOOST_AUTO_TEST_CASE(incompleteHeaderReportsError)
     BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
 }
 
+// calculateRLPHash rejects a NON_ETH header outright — that is exactly what computeHash
+// exists for (computeHash skips validateHeader so FISCO-native/OP headers can be hashed).
+// Pin the rejection so the two entry points stay distinct.
+BOOST_AUTO_TEST_CASE(calculateRLPHashRejectsNonEthHeader)
+{
+    auto header = makeEthHeader();
+    header->setEthBlockVersion(EthBlockVersion::NON_ETH);
+
+    bcos::Error::UniquePtr error;
+    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
+    BOOST_REQUIRE(error != nullptr);
+    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+    BOOST_CHECK_NE(std::string(error->errorMessage()).find("not an Ethereum header"),
+        std::string::npos);
+    // computeHash, by contrast, hashes without validation.
+    BOOST_CHECK_NO_THROW(
+        bcos::protocol::EthBlockHeader::computeHash(*header));
+}
+
 // A truncated RLP header (fields stop mid-cascade) must decode cleanly instead of throwing
 // on an empty optional.
 BOOST_AUTO_TEST_CASE(decodeTruncatedCascadeNoCrash)
@@ -695,6 +714,24 @@ BOOST_AUTO_TEST_CASE(toTarsHeaderRejectsOverflowingTimestamp)
     BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
     // The destination must be empty on failure, matching the validateHeader error path.
     BOOST_CHECK_EQUAL(decodedHeader->number(), 0);
+}
+
+// The constructor's sub-second guard is the sole protection for direct ctor+rlpEncode
+// callers (EthBlockHeader::computeHash — the OP scheduler's block-identity hash — is one):
+// rlpEncode rejects negatives only, so a non-whole-second millisecond timestamp would
+// silently floor and corrupt the hash input. Pin the throw.
+BOOST_AUTO_TEST_CASE(constructorRejectsSubSecondTimestamp)
+{
+    auto header = makeEthHeader();
+    header->setTimestamp(1001);  // 1s + 1ms
+
+    BOOST_CHECK_THROW(EthBlockHeader ethHeader(*header), std::invalid_argument);
+    // validateHeader reports the same condition through its Error-return contract.
+    bcos::Error::UniquePtr error;
+    BOOST_CHECK(!EthBlockHeader::validateHeader(*header, error));
+    BOOST_REQUIRE(error != nullptr);
+    BOOST_CHECK_NE(std::string(error->errorMessage()).find("whole number of seconds"),
+        std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

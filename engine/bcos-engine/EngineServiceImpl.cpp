@@ -60,6 +60,11 @@ std::vector<std::string> bcos::engine::detail::supportedCapabilities()
     // here would also break the pre-Karst callers this node still serves — the v1 Engine
     // API harness behind unsafe_allow_v1_executor and the V1-V3 integration suites.
     //
+    // Note: serving a method VERSION is not the same as being able to BUILD with it.
+    // buildPayload requires an on-chain EVM revision (executor_version >= 2); the
+    // unsafe_allow_v1_executor harness (executor_version < 2) can no longer build any
+    // payload, only answer capability/state queries.
+    //
     // forkchoiceUpdatedV4 is the one absentee, and genuinely so: the forkchoice version
     // window tops out at V3 (isForkchoiceVersionSupported), so the endpoint answers
     // -38005. getPayloadV5 and newPayloadV4 were added by B4.
@@ -446,9 +451,21 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
     // Isthmus: an ExecutionPayloadV4 always carries the L2ToL1MessagePasser storage root.
     // Pre-V4 payloads with the field present are tolerated (mirrors the parse side, which
     // ignores it below V4 the way op-geth's NewPayloadV3 performs no withdrawalsRoot check).
-    if (version >= 4 && !executionPayload.withdrawalsRoot.has_value())
+    // The submitted root must equal the value this node itself commits (withdrawalsRootFor
+    // — currently the empty-trie placeholder): a CL submitting a foreign root under the
+    // blockHash this node minted would otherwise commit a header hash nobody can reproduce.
+    if (version >= 4)
     {
-        return std::string("withdrawalsRoot is required for ExecutionPayloadV4 and later");
+        if (!executionPayload.withdrawalsRoot.has_value())
+        {
+            return std::string("withdrawalsRoot is required for ExecutionPayloadV4 and later");
+        }
+        auto expectedRoot = withdrawalsRootFor(executionPayload);
+        if (*executionPayload.withdrawalsRoot != expectedRoot)
+        {
+            return std::string("withdrawalsRoot does not match the value this node commits "
+                                "for the built header");
+        }
     }
     // extraData is a V1-onwards field, so this applies at every newPayload version.
     // Since this PR makes extraData part of the block hash, an unchecked extraData is
@@ -529,10 +546,11 @@ void bcos::engine::detail::finalizeEthBlockHeader(bcos::protocol::BlockHeader& h
     header.setBaseFee(payload.baseFeePerGas);
 
     // SHANGHAI+ : withdrawalsRoot. The withdrawals trie root is not computed yet, so the
-    // empty-trie root is used as a placeholder.
+    // empty-trie root is used as a placeholder (same bytes as the served payload — see
+    // withdrawalsRootFor).
     if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)
     {
-        header.setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
+        header.setWithdrawalsRoot(bcos::engine::detail::withdrawalsRootFor(payload));
     }
 
     // CANCUN+ : blob gas fields and parent beacon block root. buildPayload always fills the

@@ -168,18 +168,24 @@ struct RealGlobalStateStorageFixture
     RealGlobalCheckpointBackend checkpointBackend{backendStorage};
     RealGlobalStateStorage storage{checkpointBackend};
 
-    explicit RealGlobalStateStorageFixture(evmc_revision rev = EVMC_CANCUN)
+    explicit RealGlobalStateStorageFixture(
+        evmc_revision rev = EVMC_CANCUN, bool writeEvmcRevision = true)
     {
         // The Engine service runs only on executor_version=2 with an explicit EVMC
         // revision. The default models the "Karst" chain (CANCUN) these tests mostly
         // drive; tests that exercise older FCU method versions (V1/V2) pass SHANGHAI so
-        // the attribute shape the request can express matches the chain fork. Without an
-        // explicit revision, buildPayload's header-fork derivation would fall back to the
-        // compile-time default (OSAKA -> PRAGUE) instead of the intended era.
+        // the attribute shape the request can express matches the chain fork.
+        // buildPayload FAILS CLOSED when the revision is absent (it never falls back to
+        // the compile-time default), so the missing-revision test passes writeEvmcRevision
+        // = false to reach that branch.
         writeSysConfig(
             magic_enum::enum_name(ledger::SystemConfig::executor_version),
             std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
-        writeSysConfig(ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(rev, {}));
+        if (writeEvmcRevision)
+        {
+            writeSysConfig(
+                ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(rev, {}));
+        }
     }
 
     void setBlockNumber(const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
@@ -515,6 +521,49 @@ BOOST_AUTO_TEST_CASE(forkchoice_v2_rejected_on_cancun_chain)
         UnsupportedFork, [](const UnsupportedFork& e) {
             return std::string(e.what()).find("requires the V3 payload attributes") !=
                    std::string::npos;
+        });
+}
+
+// The reverse direction of the fork/method-version gate: a V3 forkchoiceUpdated on a
+// SHANGHAI chain would build a payload whose required blob pair is absent (the payload
+// fields are filled by the chain-derived forkVersion, but getPayloadV3's response shape
+// requires them). Reject with the same UnsupportedFork as the older-FCU case.
+BOOST_AUTO_TEST_CASE(forkchoice_v3_rejected_on_shanghai_chain)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3)),
+        UnsupportedFork, [](const UnsupportedFork& e) {
+            return std::string(e.what()).find("requires a CANCUN-or-later chain fork") !=
+                   std::string::npos;
+        });
+}
+
+// A v2 chain with no on-chain EVM revision must fail closed: hashing under an assumed fork
+// (the compile-time default, OSAKA -> PRAGUE) would stamp requestsHash into every RLP hash.
+// The gate throws UnsupportedFork with a distinguishing message; pin it.
+BOOST_AUTO_TEST_CASE(forkchoice_rejected_when_evm_revision_missing)
+{
+    MemPoolImpl memPool;
+    // executor_version=2 but NO SYSTEM_KEY_EVMC_REVISION row.
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_CANCUN, /*writeEvmcRevision=*/false);
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3)),
+        UnsupportedFork, [](const UnsupportedFork& e) {
+            return std::string(e.what()).find("no on-chain EVM revision") != std::string::npos;
         });
 }
 
@@ -1416,13 +1465,21 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
     auto result =
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
     BOOST_REQUIRE(result.payloadId.has_value());
-    BOOST_CHECK_THROW(
-        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion);
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion,
+        [](const IncompatiblePayloadVersion& e) {
+            return std::string(e.what()).find("incompatible with requested method version") !=
+                   std::string::npos;
+        });
     // getPayloadV4 has the same window: op-geth's GetPayloadV4 also admits only
     // PayloadV3 builds, and the V4 response shape needs the same three fields a V2 build
     // does not have.
-    BOOST_CHECK_THROW(
-        task::syncWait(engineService.getPayload(*result.payloadId, 4)), IncompatiblePayloadVersion);
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.getPayload(*result.payloadId, 4)), IncompatiblePayloadVersion,
+        [](const IncompatiblePayloadVersion& e) {
+            return std::string(e.what()).find("incompatible with requested method version") !=
+                   std::string::npos;
+        });
     // The same build is still retrievable through its own method version.
     BOOST_CHECK_NO_THROW(task::syncWait(engineService.getPayload(*result.payloadId, 2)));
 }

@@ -65,19 +65,9 @@ void bcos::rpc::combineBlockResponse(
         }
     }
 
-    rpc::Logs logs;
-    for (auto receipt : block.receipts())
-    {
-        for (auto const& log : receipt->logEntries())
-        {
-            rpc::Log logObj{
-                .address = bcos::bytes(log.address().begin(), log.address().end()),
-                .topics = bcos::h256s(log.topics().begin(), log.topics().end()),
-                .data = bcos::bytes(log.data().begin(), log.data().end()),
-            };
-            logs.push_back(std::move(logObj));
-        }
-    }
+    // logsBloom: the Eth branch reads the header's bloom (part of the RLP hash), the
+    // NON_ETH branch the block's own bloom. A per-log copy was previously built here and
+    // never read; removed.
     result["logsBloom"] = toPaddingHexStringWithPrefix(
         BloomBytesSize, isEth ? blockHeader->logsBloom() : block.logsBloom());
     result["transactionsRoot"] = blockHeader->txsRoot().hexPrefixed();

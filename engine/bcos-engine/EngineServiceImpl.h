@@ -90,6 +90,16 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 
+/// The withdrawals trie root this node commits for a block: the empty-trie root while the
+/// list is empty (matching geth's DeriveSha([])), and — when MPT work lands — the
+/// L2ToL1MessagePasser storage root on Isthmus. Non-empty lists are rejected earlier in
+/// validatePayloadAttributes; the hashed header and the served ExecutionPayload both call
+/// this helper so they always carry the same 32 bytes.
+inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
+{
+    return bcos::ledger::mpt::emptyRootHash();
+}
+
 /// Compares a payload the CL submitted through newPayload against the one this node
 /// built and handed out under the same blockHash.
 ///
@@ -420,10 +430,12 @@ private:
 
     /// Per-method Engine API version windows. forkchoiceUpdated tops out at V3 (the
     /// version Karst payload building runs on), newPayload at V4 (Isthmus payload with
-    /// executionRequests), getPayload at V5 (Osaka response shape). Every version from V1
-    /// up is served: adapting to Karst does not make the older versions incompatible, and
-    /// the V1-V3 callers (the unsafe_allow_v1_executor harness, the integration suites)
-    /// keep working.
+    /// executionRequests), getPayload at V5 (Osaka response shape). The windows span V1
+    /// up: adapting to Karst does not make the older versions incompatible at the window
+    /// level. BUILDING a payload however requires an on-chain EVM revision and therefore
+    /// executor_version >= 2 — buildPayload's fork/version gates reject a method version
+    /// whose response shape the chain fork cannot fill, so the unsafe_allow_v1_executor
+    /// escape hatch (executor_version < 2) can no longer build any payload.
     static bool isForkchoiceVersionSupported(std::uint32_t version)
     {
         return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
@@ -726,7 +738,7 @@ private:
 
     bcos::task::Task<BuildPayloadResult> buildPayload(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
-        std::uint32_t version [[maybe_unused]], bcos::protocol::BlockNumber nextBlockNumber,
+        std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
     {
         // Dual carrier: every sealed transaction is stored with both its raw EIP-2718
@@ -864,6 +876,29 @@ private:
                 "EngineService: chain EVM revision requires the V2 payload attributes "
                 "(withdrawals); forkchoiceUpdated must be called at version >= 2"});
         }
+        // The reverse direction: a method version NEWER than the chain fork cannot be
+        // served either. The served ExecutionPayload shape is contracted by the method the
+        // CL called (getPayloadV3 requires the blob pair, getPayloadV2 requires
+        // withdrawals), while the payload fields are filled by the chain-derived
+        // forkVersion — so a V3 FCU on a SHANGHAI chain would build a payload whose
+        // required fields are absent, and serializeExecutionPayload would silently omit
+        // them. Same class of truncated response the V4/V5 windows already guard against.
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+            forkVersion < bcos::protocol::EthBlockVersion::CANCUN)
+        {
+            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
+                "EngineService: forkchoiceUpdatedV3 requires a CANCUN-or-later chain fork; "
+                "chain EVM revision maps to " +
+                std::to_string(static_cast<int>(forkVersion))});
+        }
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
+            forkVersion < bcos::protocol::EthBlockVersion::SHANGHAI)
+        {
+            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
+                "EngineService: forkchoiceUpdatedV2 requires a SHANGHAI-or-later chain "
+                "fork; chain EVM revision maps to " +
+                std::to_string(static_cast<int>(forkVersion))});
+        }
 
         // The payload SHAPE also follows the chain fork, not the request's method version
         // (geth's config.LatestFork(timestamp) analog): a CANCUN chain built through a V1/V2
@@ -881,12 +916,13 @@ private:
             // Isthmus payload shape (V4/V5, fed by forkchoiceUpdatedV3 on Karst): the
             // field must be present so getPayloadV5 -> newPayloadV4 round-trips.
             //
-            // TODO(C4 header fields): this is a zero PLACEHOLDER, not a computed value.
-            // On OP Stack withdrawalsRoot is the storage root of the L2ToL1MessagePasser
-            // predeploy and is what L1 withdrawal proofs are checked against, so until
-            // the real header wiring lands, validateExecutionPayload can only check that
-            // the field is present — never that its value is right, and a malicious CL
-            // submitting a zero root is indistinguishable from this node's own builds.
+            // TODO(C4 header fields): the served root is a placeholder, not a computed
+            // value. On OP Stack withdrawalsRoot is the storage root of the
+            // L2ToL1MessagePasser predeploy and is what L1 withdrawal proofs are checked
+            // against; until the real header wiring lands, validateExecutionPayload can
+            // only check the placeholder equals the value this node itself commits (both
+            // go through detail::withdrawalsRootFor), so a CL submitting the same
+            // placeholder round-trips while a foreign root is rejected.
             //
             // This is a KNOWN UNCONTAINED gap, not a test-harness-only one. The
             // [op_engine_rpc] guard in libinitializer/Initializer.cpp REQUIRES
@@ -903,10 +939,11 @@ private:
             // TestEthereumExecutorScheduler/engineServiceKarstServesZeroWithdrawalsRoot,
             // which has to be updated when the real value lands.
             //
-            // The served payload value and the hashed header value must agree (both the
-            // empty-trie root): a consumer rebuilding the header from the payload's
-            // withdrawalsRoot field must reproduce blockHash.
-            executionPayload.withdrawalsRoot = bcos::ledger::mpt::emptyRootHash();
+            // The served payload value and the hashed header value must agree (both go
+            // through withdrawalsRootFor): a consumer rebuilding the header from the
+            // payload's withdrawalsRoot field must reproduce blockHash.
+            executionPayload.withdrawalsRoot = bcos::engine::detail::withdrawalsRootFor(
+                executionPayload);
         }
 
         // Fill gasLimit from ledger config. baseFeePerGas is carried in the payload (currently

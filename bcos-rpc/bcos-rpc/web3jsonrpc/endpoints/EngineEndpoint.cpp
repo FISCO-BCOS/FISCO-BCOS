@@ -147,15 +147,17 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
         engineResult = co_await engineService->updateForkchoice(forkchoiceState,
             payloadAttrs.has_value() ? &*payloadAttrs : nullptr, static_cast<uint32_t>(version));
     }
-    catch (engine::UnsupportedFork const&)
+    catch (engine::UnsupportedFork const& e)
     {
-        // The request's attribute shape cannot express the chain's fork era (e.g. a V2
-        // forkchoiceUpdated on a CANCUN+ chain). geth answers -38005 Unsupported fork for
-        // the same CL/chain mismatch; the service layer throws UnsupportedFork so this
-        // stays a diagnosable fork error instead of a generic -32603 InternalError.
+        // The request's attribute shape cannot express the chain's fork era, or the chain
+        // lacks an on-chain EVM revision entirely. geth answers -38005 Unsupported fork
+        // for the same CL/chain mismatch; the service layer throws UnsupportedFork so this
+        // stays a diagnosable fork error instead of a generic -32603 InternalError. Keep
+        // the exception's errinfo_comment so the operator can tell which gate fired — the
+        // missing-revision case is a NODE-side misconfiguration and the generic shape
+        // message would wrongly point at the CL.
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
-            "Unsupported fork: the requested attribute shape does not match the chain's "
-            "EVM revision"));
+            std::string("Unsupported fork: ") + e.what()));
     }
     auto jsonResult = combineForkchoiceUpdatedResult(engineResult, version);
     buildJsonContent(jsonResult, response);
