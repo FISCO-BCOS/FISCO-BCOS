@@ -21,7 +21,10 @@
 
 #include <bcos-boostssl/websocket/WsConnector.h>
 
+#include <boost/asio/ip/tcp.hpp>
 #include <boost/test/unit_test.hpp>
+#include <chrono>
+#include <future>
 #include <memory>
 #include <string>
 
@@ -49,6 +52,50 @@ BOOST_AUTO_TEST_CASE(test_WsConnectorTest)
         r = connector->insertPendingConns(endpoint);
         BOOST_CHECK(r);
     }
+}
+
+// Drives connectToWsServer so the resolver lifetime is covered: the resolver
+// must outlive the call until the async_resolve handler runs. With the previous
+// stack-local resolver the resolve was cancelled on return and the callback
+// received operation_aborted; here the resolve must reach the connect stage,
+// which fails against a loopback port with no websocket server behind it.
+BOOST_AUTO_TEST_CASE(test_connectToWsServerResolveFailure)
+{
+    auto connector = std::make_shared<WsConnector>();
+    auto ioServicePool = std::make_shared<IOServicePool>(1);
+    connector->setIOServicePool(ioServicePool);
+    connector->setCtx(std::make_shared<boost::asio::ssl::context>(
+        boost::asio::ssl::context::tls_client));
+
+    // grab a free loopback port, then release it so nothing listens on it
+    uint16_t port = 0;
+    {
+        boost::asio::io_context ioc;
+        boost::asio::ip::tcp::acceptor acceptor(
+            ioc, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 0));
+        port = acceptor.local_endpoint().port();
+    }
+
+    std::string host = "127.0.0.1";
+    std::string endpoint = host + ":" + std::to_string(port);
+
+    std::promise<boost::beast::error_code> result;
+    auto future = result.get_future();
+    connector->connectToWsServer(host, port, true,
+        [&result](boost::beast::error_code _ec, const std::string&,
+            std::shared_ptr<WsStreamDelegate>, std::shared_ptr<std::string>) {
+            result.set_value(_ec);
+        });
+
+    BOOST_REQUIRE(future.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
+    auto ec = future.get();
+    // no websocket server is listening, so the connect must fail eventually —
+    // but with a real connect/handshake error, not with operation_aborted,
+    // which would mean the resolver was destroyed before async_resolve finished
+    BOOST_CHECK_MESSAGE(ec && ec != boost::asio::error::operation_aborted,
+        "expected a connect-stage error, got: " << ec.message());
+    // the failed connect must erase the pending conns entry
+    BOOST_CHECK(connector->insertPendingConns(endpoint));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

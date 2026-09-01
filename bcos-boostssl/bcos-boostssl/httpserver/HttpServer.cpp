@@ -121,6 +121,16 @@ void HttpServer::stop()
 
 void HttpServer::accept()
 {
+    if (!m_acceptor)
+    {
+        // the acceptor may have been reset by setAcceptor(nullptr); do not
+        // dereference an empty optional. This is a no-op rather than an
+        // exception because accept() is also called from onAccept retries,
+        // where throwing would escape into io_context::run
+        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_DESC("acceptor is not initialized");
+        return;
+    }
+
     // The new connection gets its own strand
     m_acceptor->async_accept(*(m_ioservicePool->getIOService()),
         boost::beast::bind_front_handler(&HttpServer::onAccept, shared_from_this()));
@@ -264,6 +274,16 @@ boost::asio::ip::tcp::acceptor& HttpServer::acceptor()
 
 void HttpServer::setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor)
 {
+    if (m_acceptor)
+    {
+        // cancel any pending async_accept and close the old acceptor before it
+        // is replaced or destroyed, so that its completion handlers receive
+        // operation_aborted rather than referencing a destroyed acceptor
+        boost::system::error_code ec;
+        m_acceptor->cancel(ec);
+        m_acceptor->close(ec);
+    }
+
     if (_acceptor)
     {
         m_acceptor.emplace(std::move(*_acceptor));
