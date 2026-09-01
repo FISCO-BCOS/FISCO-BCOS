@@ -53,6 +53,7 @@ inline void encodeWithdrawalsRlp(
         }
     }
     codec::rlp::encodeHeader(out, {.isList = true, .payloadLength = items.size()});
+    out.reserve(out.size() + items.size());  // single realloc for the common empty/near-empty case
     out.insert(out.end(), items.begin(), items.end());
 }
 }  // namespace detail

@@ -53,7 +53,10 @@ inline std::optional<h256> parseOpCulpritHash(std::string_view message)
         return std::nullopt;
     }
     auto const hex = message.substr(pos + c_opCulpritTxTag.size(), 64);
-    if (hex.size() != 64)
+    // The tag must be terminated: a bare 64-hex run inside unrelated text (e.g. a future
+    // error message embedding attacker-controlled bytes) must not parse as a culprit.
+    if (hex.size() != 64 || pos + c_opCulpritTxTag.size() + 64 >= message.size() ||
+        message[pos + c_opCulpritTxTag.size() + 64] != ']')
     {
         return std::nullopt;
     }

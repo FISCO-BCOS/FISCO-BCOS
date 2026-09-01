@@ -126,7 +126,7 @@ std::vector<std::string> bcos::engine::detail::supportedOpCapabilities()
 }
 
 bool bcos::engine::detail::isGetPayloadVersionCompatible(
-    ApiVersion requestVersion, std::uint32_t payloadVersion, [[maybe_unused]] bool opMode)
+    ApiVersion requestVersion, std::uint32_t payloadVersion)
 {
     if (requestVersion == ApiVersion::V1)
     {
@@ -210,6 +210,17 @@ std::optional<std::string> validateEip1559ParamsShape(std::span<const bcos::byte
     {
         return std::string(
             "eip1559Params denominator and elasticity must both be zero or both non-zero");
+    }
+    return std::nullopt;
+}
+
+/// Shared whole-second contract for internal-ms timestamps, consumed by both FCU attribute
+/// validators and validateOpNewPayloadRequest so the message cannot drift (R58).
+std::optional<std::string> validateWholeSecondTimestamp(std::uint64_t timestampMs)
+{
+    if (timestampMs % 1000 != 0)
+    {
+        return std::string("timestamp must be a whole number of seconds (internal ms)");
     }
     return std::nullopt;
 }
@@ -340,9 +351,9 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     // CLs send wire seconds which always convert to whole ms, so only a buggy or hostile
     // attributes source produces sub-second values — reject them as INVALID instead of failing
     // the build deep inside computeHash.
-    if (payloadAttributes.timestamp % 1000 != 0)
+    if (auto error = validateWholeSecondTimestamp(payloadAttributes.timestamp))
     {
-        return std::string("timestamp must be a whole number of seconds (internal ms)");
+        return error;
     }
     if (payloadAttributes.eip1559Params.has_value())
     {
@@ -358,9 +369,9 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     const PayloadAttributes& payloadAttributes, bool jovianActive)
 {
     // OP FCU attrs: gasLimit, eip1559Params, empty withdrawals, Jovian minBaseFee.
-    if (payloadAttributes.timestamp % 1000 != 0)
+    if (auto error = validateWholeSecondTimestamp(payloadAttributes.timestamp))
     {
-        return std::string("timestamp must be a whole number of seconds (internal ms)");
+        return error;
     }
     if (!payloadAttributes.gasLimit.has_value())
     {
@@ -370,7 +381,9 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     {
         return std::string("eip1559Params is required on the OP path (Holocene+)");
     }
-    // Shared 8-byte length + zero-pairing rule with the generic validator.
+    // Shared 8-byte length + zero-pairing rule with the generic validator. Stricter than
+    // op-geth's one-directional ValidateHolocene1559Params ({d==0,e!=0} only): rejecting
+    // {d!=0,e==0} prevents division-by-zero in the base-fee math on foreign blocks (R92).
     if (auto error = validateEip1559ParamsShape(*payloadAttributes.eip1559Params))
     {
         return error;
@@ -380,6 +393,8 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     {
         return std::string("withdrawals must be empty on the OP path");
     }
+    // Stricter than op-geth at the same admission position (its EncodeOptimismExtraData
+    // panics on nil minBaseFee post-Jovian; we answer INVALID cleanly) — R93.
     if (jovianActive && !payloadAttributes.minBaseFee.has_value())
     {
         return std::string("minBaseFee is required after the Jovian fork");
@@ -498,6 +513,13 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     {
         return std::string("timestamp exceeds the int64 range of the ETH header field");
     }
+    // Same whole-second contract as both FCU attribute validators (R79): a sub-second
+    // internal-ms timestamp would otherwise throw inside EthBlockHeader::computeHash and
+    // surface as -32603 instead of a clean INVALID.
+    if (auto error = validateWholeSecondTimestamp(payload.timestamp))
+    {
+        return error;
+    }
     if (!payload.withdrawals.has_value() || !payload.withdrawals->empty())
     {
         return std::string("withdrawals must be present and empty on the OP path");
@@ -598,10 +620,16 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
         return std::string("DA footprint (blobGasUsed) exceeds the block gas limit");
     }
 
-    // OP carries no execution requests.
-    if (request.executionRequests.has_value() && !request.executionRequests->empty())
+    // OP carries no execution requests: op-geth NewPayloadV4 rejects a nil list, so the
+    // field must be present AND empty on the wire (same contract as the generic V4 path;
+    // the RPC layer already requires params[3]) — R62.
+    if (!request.executionRequests.has_value())
     {
-        return std::string("executionRequests must be absent or empty on the OP path");
+        return std::string("executionRequests must be present on the OP path");
+    }
+    if (!request.executionRequests->empty())
+    {
+        return std::string("executionRequests must be empty on the OP path");
     }
     return std::nullopt;
 }
