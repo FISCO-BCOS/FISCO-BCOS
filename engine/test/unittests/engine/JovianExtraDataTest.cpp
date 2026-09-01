@@ -133,10 +133,12 @@ BOOST_AUTO_TEST_CASE(min_base_fee_without_params_is_rejected)
 // by the RPC parse layer, so in-process PayloadAttributes producers are covered too.
 BOOST_AUTO_TEST_CASE(wrong_length_eip1559_params_are_rejected)
 {
-    BOOST_CHECK(
-        engine::detail::validatePayloadAttributes(makeAttributes(bytes(7, 0), 0), 3).has_value());
-    BOOST_CHECK(
-        engine::detail::validatePayloadAttributes(makeAttributes(bytes(9, 0), 0), 3).has_value());
+    // Non-zero fill: all-zero bytes fold into the valid (0,0) pairing at the attribute level,
+    // so a length-gate weakening to a parity-only check would survive all-zero cells (R57).
+    BOOST_CHECK(engine::detail::validatePayloadAttributes(
+        makeAttributes(bytes(7, 0xAA), 0), 3).has_value());
+    BOOST_CHECK(engine::detail::validatePayloadAttributes(
+        makeAttributes(bytes(9, 0xAA), 0), 3).has_value());
 }
 
 // ValidateHolocene1559Params (eip1559.go:89-100): a zero denominator with a non-zero
@@ -299,16 +301,10 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)
 
 BOOST_AUTO_TEST_CASE(get_payload_v4_rejects_v1_v2_even_in_op_mode)
 {
-    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(
-        engine::ApiVersion::V4, 1, /*opMode=*/true));
-    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(
-        engine::ApiVersion::V4, 2, /*opMode=*/true));
-    BOOST_CHECK(engine::detail::isGetPayloadVersionCompatible(
-        engine::ApiVersion::V4, 3, /*opMode=*/true));
-    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(
-        engine::ApiVersion::V4, 4, /*opMode=*/true));
-    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(
-        engine::ApiVersion::V4, 4, /*opMode=*/false));
+    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(engine::ApiVersion::V4, 1));
+    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(engine::ApiVersion::V4, 2));
+    BOOST_CHECK(engine::detail::isGetPayloadVersionCompatible(engine::ApiVersion::V4, 3));
+    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(engine::ApiVersion::V4, 4));
 }
 
 BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_rejects_subsecond_timestamp)
@@ -349,6 +345,26 @@ BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_requires_gas_and_params)
     BOOST_CHECK_NE(missingMin->find("minBaseFee"), std::string::npos);
     attrs.minBaseFee = 7;
     BOOST_CHECK(!engine::detail::validateOpPayloadAttributes(attrs, true).has_value());
+
+    // R83: the three OP-only rejection branches the staged case never reached.
+    // Non-empty withdrawals are rejected on the OP path (generic V1 allows them).
+    attrs.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{}};
+    auto nonEmptyW = engine::detail::validateOpPayloadAttributes(attrs, true);
+    BOOST_REQUIRE(nonEmptyW.has_value());
+    BOOST_CHECK_NE(nonEmptyW->find("withdrawals must be empty"), std::string::npos);
+    attrs.withdrawals = std::vector<WithdrawalV1>{};
+
+    // minBaseFee present before the Jovian fork is rejected.
+    auto preJovianMin = engine::detail::validateOpPayloadAttributes(attrs, false);
+    BOOST_REQUIRE(preJovianMin.has_value());
+    BOOST_CHECK_NE(preJovianMin->find("minBaseFee must be null"), std::string::npos);
+
+    // Wrong-length eip1559Params through the OP validator (shape helper path).
+    attrs.eip1559Params = fromHexWithPrefix("0x000000fa000006");
+    auto opShape = engine::detail::validateOpPayloadAttributes(attrs, true);
+    BOOST_REQUIRE(opShape.has_value());
+    BOOST_CHECK_NE(opShape->find("exactly 8 bytes"), std::string::npos);
+    attrs.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
 }
 
 BOOST_AUTO_TEST_CASE(validate_op_new_payload_requires_raw_transactions)

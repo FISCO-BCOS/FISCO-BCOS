@@ -127,6 +127,30 @@ BOOST_AUTO_TEST_CASE(UnderTargetDecreasesByDeltaFee)
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(958'333'334));
 }
 
+// R84: the version byte must match the length — 9B with 0x01 and 17B with 0x00 are
+// both rejected (a regression dropping this check would stay green without these cells).
+BOOST_AUTO_TEST_CASE(VersionByteMismatchIsRejected)
+{
+    auto badJovian = holoceneParams();
+    badJovian[0] = 0x01;  // 9 bytes claiming Jovian
+    auto const parent9 = makeParent(bcos::u256(30'000'000), bcos::u256(24'000'000),
+        bcos::u256(2'000'000'000), std::move(badJovian));
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(parent9, false); },
+        "version byte does not match length");
+
+    // 17 bytes carrying version 0x00 (Holocene claim on a Jovian-length tail).
+    bcos::bytes seventeen = holoceneParams();
+    seventeen[0] = 0x00;
+    for (int i = 0; i < 8; ++i)
+    {
+        seventeen.push_back(0x00);  // minBaseFee tail, version byte stays 0x00
+    }
+    auto const parent17 = makeParent(bcos::u256(30'000'000), bcos::u256(24'000'000),
+        bcos::u256(2'000'000'000), std::move(seventeen));
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(parent17, false); },
+        "version byte does not match length");
+}
+
 // Short extraData is fail-closed (no Holocene 8/2 default) so a missing parent
 // tail cannot mint a silent consensus-divergent baseFee.
 BOOST_AUTO_TEST_CASE(ShortExtraDataIsRejected)

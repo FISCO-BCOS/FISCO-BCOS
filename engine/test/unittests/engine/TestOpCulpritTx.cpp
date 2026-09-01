@@ -53,6 +53,20 @@ BOOST_AUTO_TEST_CASE(InvalidHexIsNullopt)
     BOOST_CHECK(!parseOpCulpritHash(std::string("failed [tx=0x") + std::string(64, 'z') + "]"));
 }
 
+// R89: a bare 64-hex run without the closing ']' must not parse (unterminated tag).
+// A tag terminated but followed by more text still parses — rfind picks the LAST tag and
+// its closing bracket is what matters.
+BOOST_AUTO_TEST_CASE(UnterminatedTagIsNullopt)
+{
+    BOOST_CHECK(!parseOpCulpritHash(std::string("failed [tx=0x") + std::string(64, 'a')));
+    BOOST_CHECK(
+        !parseOpCulpritHash(std::string("failed [tx=0x") + std::string(64, 'a') + " trailing"));
+    auto const terminated = std::string("failed [tx=0x") + std::string(64, 'a') + "]x";
+    auto parsed = parseOpCulpritHash(terminated);
+    BOOST_REQUIRE(parsed.has_value());
+    BOOST_CHECK_EQUAL(parsed->hex(), std::string(64, 'a'));
+}
+
 BOOST_AUTO_TEST_CASE(LastTagWins)
 {
     bcos::h256 const first(std::string(64, '1'), bcos::h256::FromHex);
