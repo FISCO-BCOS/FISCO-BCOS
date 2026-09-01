@@ -89,7 +89,7 @@ private:
     bool m_enableWebSocket{true};
 
     // cert config for boostssl
-    std::shared_ptr<context::ContextConfig> m_contextConfig;
+    context::ContextConfig m_contextConfig;
 
     // the max message to be send or read
     uint32_t m_maxMsgSize{DEFAULT_MAX_MESSAGE_SIZE};
@@ -136,8 +136,8 @@ public:
     bool enableWebSocket() const;
     void setEnableWebSocket(bool _enableWebSocket);
 
-    std::shared_ptr<context::ContextConfig> contextConfig() const;
-    void setContextConfig(std::shared_ptr<context::ContextConfig> _contextConfig);
+    const context::ContextConfig& contextConfig() const;
+    void setContextConfig(const context::ContextConfig& _contextConfig);
 
     http::CorsConfig corsConfig() const;
     void setCorsConfig(http::CorsConfig _corsConfig);

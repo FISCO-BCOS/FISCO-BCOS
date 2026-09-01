@@ -15,12 +15,24 @@ target_include_directories(bcos-tx-validator PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-tx-validator>)
 
-# The nonce checkers moved here from bcos-txpool: they are admission state, and the pool is not
-# the only ingress that needs them. Deliberately NOT linking any transaction pool -- the
-# dependency runs the other way, and a cycle would make the split pointless.
+# rlp-protocol decodes the signed envelope; protocol-tars is where the mirror lives and is the
+# only way to write it -- protocol::Transaction exposes no setter for a business field, by
+# design (it is an immutable-after-signing value object). `ledger` supplies getSystemConfig and
+# LedgerMethods; TBB backs the nonce checkers' BucketMap.
+#
+# Deliberately NOT linking either transaction pool: the nonce checkers live here now and the
+# dependency runs one way, from the pools to this module. A cycle would make the split
+# pointless. No intx either: the 512-bit balance arithmetic uses bcos::u512 from
+# bcos-utilities, which bcos-framework already propagates.
 target_link_libraries(bcos-tx-validator PUBLIC
-    bcos-framework bcos-protocol ledger TBB::tbb)
+    bcos-framework bcos-protocol bcos-crypto ledger rlp-protocol protocol-tars TBB::tbb)
 set_target_properties(bcos-tx-validator PROPERTIES UNITY_BUILD "ON")
+
+if(TESTS)
+    enable_testing()
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
+    add_subdirectory(test)
+endif()
 
 include(GNUInstallDirs)
 install(TARGETS bcos-tx-validator EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

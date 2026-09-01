@@ -25,8 +25,11 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
 
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
+
 namespace bcos::ledger::mpt::test
 {
+using bcos::test::errinfoContains;
 
 BOOST_AUTO_TEST_SUITE(NodeDecoderSuite)
 
@@ -155,13 +158,15 @@ BOOST_AUTO_TEST_CASE(RoundTripBranchMixedChildren)
 // Malformed input: a non-empty top-level string is not a valid node.
 BOOST_AUTO_TEST_CASE(DecodeRejectsNonNodeString)
 {
-    BOOST_CHECK_THROW(decodeNode(bcos::ref(bcos::bytes{0x83, 0x01, 0x02, 0x03})), MPTDecodeError);
+    BOOST_CHECK_EXCEPTION(decodeNode(bcos::ref(bcos::bytes{0x83, 0x01, 0x02, 0x03})),
+        MPTDecodeError, [](auto const& e) { return errinfoContains(e, "not a node list"); });
 }
 
 // Malformed input: a truncated header (declares 5 payload bytes but only 2 present).
 BOOST_AUTO_TEST_CASE(DecodeRejectsTruncatedItem)
 {
-    BOOST_CHECK_THROW(decodeNode(bcos::ref(bcos::bytes{0xc5, 0x01, 0x02})), MPTDecodeError);
+    BOOST_CHECK_EXCEPTION(decodeNode(bcos::ref(bcos::bytes{0xc5, 0x01, 0x02})), MPTDecodeError,
+        [](auto const& e) { return errinfoContains(e, "malformed RLP header"); });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

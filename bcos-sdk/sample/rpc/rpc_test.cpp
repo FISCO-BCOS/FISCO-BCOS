@@ -102,7 +102,7 @@ static std::shared_ptr<bcos::boostssl::ws::WsConfig> initWsConfig(
         certConfig.nodeCert = config->cert_config.node_cert;
         certConfig.nodeKey = config->cert_config.node_key;
         contextConfig->setCertConfig(certConfig);
-        wsConfig->setContextConfig(contextConfig);
+        wsConfig->setContextConfig(*contextConfig);
     }
     return wsConfig;
 }
@@ -115,8 +115,7 @@ void* thread_function(std::shared_ptr<bcos_sdk_c_config> arg)
         auto sdk = factory->buildSdk(wsConfig, arg->send_rpc_request_to_highest_block_node);
         sdk->start();
         auto rpc = sdk->jsonRpc();
-        rpc->getBlockNumber(
-            "group0", "", [](bcos::Error::Ptr error, bcos::bytes resp) {});
+        rpc->getBlockNumber("group0", "", [](bcos::Error::Ptr error, bcos::bytes resp) {});
         usleep(100);
         sdk->stop();
         sdk.reset(nullptr);

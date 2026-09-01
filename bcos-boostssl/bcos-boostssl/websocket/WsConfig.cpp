@@ -150,14 +150,14 @@ void WsConfig::setEnableWebSocket(bool _enableWebSocket)
     m_enableWebSocket = _enableWebSocket;
 }
 
-std::shared_ptr<bcos::boostssl::context::ContextConfig> WsConfig::contextConfig() const
+const bcos::boostssl::context::ContextConfig& WsConfig::contextConfig() const
 {
     return m_contextConfig;
 }
 
-void WsConfig::setContextConfig(std::shared_ptr<bcos::boostssl::context::ContextConfig> _contextConfig)
+void WsConfig::setContextConfig(const bcos::boostssl::context::ContextConfig& _contextConfig)
 {
-    m_contextConfig = std::move(_contextConfig);
+    m_contextConfig = _contextConfig;
 }
 
 bcos::boostssl::http::CorsConfig WsConfig::corsConfig() const

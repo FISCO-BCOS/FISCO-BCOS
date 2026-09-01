@@ -27,12 +27,12 @@
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/jsonrpc/JsonRpcInterface.h"
 #include <bcos-framework/storage/StorageInterface.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Error.h>
 #include <json/json.h>
 #include <functional>
 #include <future>
 #include <utility>
-#include <bcos-utilities/BoostLog.h>
 
 #define ARCHIVE_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[ARCHIVE]"
 
@@ -53,15 +53,13 @@ public:
         m_listenIP(std::move(_listenIP)),
         m_listenPort(_listenPort)
     {
-        m_ioServicePool = std::make_shared<IOServicePool>(std::thread::hardware_concurrency() + 1, "archive");
+        m_ioServicePool =
+            std::make_shared<IOServicePool>(std::thread::hardware_concurrency() + 1, "archive");
         m_httpServer = std::make_shared<bcos::boostssl::http::HttpServer>(
             m_listenIP, m_listenPort, -1, bcos::boostssl::http::CorsConfig());
-        auto acceptor =
-            std::make_shared<boost::asio::ip::tcp::acceptor>((*m_ioServicePool->getIOService()));
-        auto httpStreamFactory = std::make_shared<bcos::boostssl::http::HttpStreamFactory>();
         m_httpServer->setDisableSsl(true);
-        m_httpServer->setAcceptor(acceptor);
-        m_httpServer->setHttpStreamFactory(httpStreamFactory);
+        m_httpServer->setAcceptor(boost::asio::ip::tcp::acceptor{*m_ioServicePool->getIOService()});
+        m_httpServer->setHttpStreamFactory(bcos::boostssl::http::HttpStreamFactory{});
         m_httpServer->setIOServicePool(m_ioServicePool);
         // m_httpServer->setThreadPool(std::make_shared<ThreadPool>("archiveThread", 1));
         m_methodToFunc["deleteArchivedData"] = [this](const Json::Value& request,
@@ -190,7 +188,8 @@ public:
                 }
             }
         };
-        m_httpServer->setHttpReqHandler([this](const bcos::boostssl::http::HttpRequest& req, auto sender) {
+        m_httpServer->setHttpReqHandler([this](const bcos::boostssl::http::HttpRequest& req,
+                                            auto sender) {
             handleHttpRequest(req.body(), [sender = std::move(sender)](bcos::bytes resp) mutable {
                 sender(std::move(resp), boost::beast::http::status::ok);
             });

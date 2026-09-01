@@ -93,9 +93,6 @@ public:
     bool rawMessage() const { return m_rawMessage; }
     void setRawMessage(bool _rawMessage) { m_rawMessage = _rawMessage; }
 
-    std::shared_ptr<boost::asio::io_context> ioc() const;
-    void setIoc(std::shared_ptr<boost::asio::io_context> _ioc);
-
     void setVersion(uint16_t _version);
     uint16_t version() const;
 
@@ -182,8 +179,6 @@ protected:
     // raw wire format flag
     bool m_rawMessage = false;
 
-    // ioc
-    std::shared_ptr<boost::asio::io_context> m_ioc;
     // send message queue
     mutable bcos::Mutex x_writeQueue;
     std::priority_queue<std::shared_ptr<Message>> m_writeQueue;

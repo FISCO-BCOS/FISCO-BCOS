@@ -34,6 +34,7 @@
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/NewTimer.h>
@@ -41,7 +42,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -312,7 +312,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                       << LOG_KV("enNodeKey", _nodeConfig->enSmNodeKey());
     }
 
-    wsConfig->setContextConfig(contextConfig);
+    wsConfig->setContextConfig(*contextConfig);
 
     return wsConfig;
 }

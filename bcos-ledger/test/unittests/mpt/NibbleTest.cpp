@@ -19,10 +19,12 @@
 
 #include "bcos-ledger/mpt/Nibble.h"
 #include "bcos-ledger/mpt/Errors.h"
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
 #include <boost/test/unit_test.hpp>
 
 namespace bcos::ledger::mpt::test
 {
+using bcos::test::errinfoContains;
 
 BOOST_AUTO_TEST_SUITE(NibbleSuite)
 
@@ -52,14 +54,16 @@ BOOST_AUTO_TEST_CASE(CommonPrefixBasic)
 BOOST_AUTO_TEST_CASE(NibblesToBytesOddThrows)
 {
     bcos::bytes const odd{0x01, 0x02, 0x03};
-    BOOST_CHECK_THROW(nibblesToBytes(bcos::ref(odd)), MPTInvariantViolation);
+    BOOST_CHECK_EXCEPTION(nibblesToBytes(bcos::ref(odd)), MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "requires even nibble count"); });
 }
 
 BOOST_AUTO_TEST_CASE(NibblesToBytesOutOfRangeThrows)
 {
     // 0x10 has bits above the low nibble — violates the strict 4-bit invariant.
     bcos::bytes const bad{0x01, 0x10};
-    BOOST_CHECK_THROW(nibblesToBytes(bcos::ref(bad)), MPTInvariantViolation);
+    BOOST_CHECK_EXCEPTION(nibblesToBytes(bcos::ref(bad)), MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "nibble value out of range"); });
 }
 
 BOOST_AUTO_TEST_CASE(BytesToNibblesRoundTrip)

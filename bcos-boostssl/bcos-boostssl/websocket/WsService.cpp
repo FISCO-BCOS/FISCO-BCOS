@@ -65,7 +65,6 @@ void WsService::setWaitConnectFinishTimeout(int32_t _timeout)
 void WsService::setIOServicePool(IOServicePool::Ptr _ioservicePool)
 {
     m_ioservicePool = std::move(_ioservicePool);
-    m_timerIoc = m_ioservicePool->getIOService();
 }
 
 std::shared_ptr<WsConnector> WsService::connector() const noexcept
@@ -158,7 +157,7 @@ void WsService::start()
     // init m_timerFactory if it is not initialized
     if (!m_timerFactory)
     {
-        m_timerFactory = std::make_shared<timer::TimerFactory>(m_timerIoc);
+        m_timerFactory = std::make_shared<timer::TimerFactory>(m_ioservicePool->getIOService());
     }
 
     // start as server
@@ -460,7 +459,6 @@ std::shared_ptr<WsSession> WsService::newSession(
     auto session = std::make_shared<WsSession>(m_ioservicePool);
 
     session->setWsStreamDelegate(std::move(_wsStreamDelegate));
-    session->setIoc(m_ioservicePool->getIOService());
     session->setRawMessage(m_rawMessage);
     session->setEndPoint(endPoint);
     session->setMaxWriteMsgSize(m_config->maxMsgSize());
@@ -698,8 +696,7 @@ void WsService::asyncSendMessage(
 
     // pick one random session directly, avoid copying and shuffling the whole session list
     thread_local std::default_random_engine e(std::random_device{}());
-    const auto& session =
-        _ss[std::uniform_int_distribution<std::size_t>(0, _ss.size() - 1)(e)];
+    const auto& session = _ss[std::uniform_int_distribution<std::size_t>(0, _ss.size() - 1)(e)];
 
     if (!_respFunc)
     {
