@@ -35,8 +35,11 @@
 #include <utility>
 #include <vector>
 
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
+
 namespace bcos::ledger::mpt::test
 {
+using bcos::test::errinfoContains;
 
 BOOST_AUTO_TEST_SUITE(ComputeTrieRootSuite)
 
@@ -140,13 +143,41 @@ BOOST_AUTO_TEST_CASE(VarKeyRejectsPrefixAndDuplicateKeys)
         {bcos::bytes{0x01}, bcos::bytes{0xaa}},
         {bcos::bytes{0x01, 0x02}, bcos::bytes{0xbb}},
     };
-    BOOST_CHECK_THROW(computeTrieRootVarKey(prefixEntries), MPTInvariantViolation);
+    BOOST_CHECK_EXCEPTION(computeTrieRootVarKey(prefixEntries), MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "is a duplicate of, or a prefix of"); });
 
     std::vector<std::pair<bcos::bytes, bcos::bytes>> duplicateEntries{
         {bcos::bytes{0x03}, bcos::bytes{0xaa}},
         {bcos::bytes{0x03}, bcos::bytes{0xbb}},
     };
-    BOOST_CHECK_THROW(computeTrieRootVarKey(duplicateEntries), MPTInvariantViolation);
+    BOOST_CHECK_EXCEPTION(computeTrieRootVarKey(duplicateEntries), MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "is a duplicate of, or a prefix of"); });
+}
+
+// computeTrieRootFromRawKeys enforces the OTHER half of its precondition the same way:
+// proper-prefix keys are LEGAL there (the branch-own-value support trietest.json exercises),
+// but two identical keys both terminate at the same branch — hbBuildBranch would index one
+// past the shorter key's nibble path and use that out-of-bounds byte to index the 16-entry
+// BranchNode::children. Duplicates must throw, not emit a root.
+BOOST_AUTO_TEST_CASE(RawKeysRejectsDuplicateKeys)
+{
+    bcos::bytes keyA{0x01, 0x02};
+    bcos::bytes keyB{0x01, 0x02};  // same bytes as keyA
+    bcos::bytes valueA{0xaa};
+    bcos::bytes valueB{0xbb};
+    std::vector<std::pair<bcos::bytesConstRef, bcos::bytesConstRef>> duplicates;
+    duplicates.emplace_back(bcos::ref(keyA), bcos::ref(valueA));
+    duplicates.emplace_back(bcos::ref(keyB), bcos::ref(valueB));
+    BOOST_CHECK_EXCEPTION(computeTrieRootFromRawKeys(duplicates), MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "duplicate key"); });
+
+    // Control: a proper-prefix key is supported (branch value) and must NOT throw.
+    bcos::bytes prefix{0x01};
+    std::vector<std::pair<bcos::bytesConstRef, bcos::bytesConstRef>> prefixKeys;
+    prefixKeys.emplace_back(bcos::ref(prefix), bcos::ref(valueA));
+    prefixKeys.emplace_back(bcos::ref(keyA), bcos::ref(valueB));
+    auto const result = computeTrieRootFromRawKeys(prefixKeys);
+    BOOST_CHECK(result.root != emptyRootHash());
 }
 
 // Regression for the W6 L2 divergence (isthmus_big_block_130tx, 131 tx): the OP callers

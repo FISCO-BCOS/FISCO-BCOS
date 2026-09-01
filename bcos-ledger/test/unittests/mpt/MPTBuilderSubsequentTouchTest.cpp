@@ -37,8 +37,11 @@
 #include <string_view>
 #include <vector>
 
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
+
 namespace bcos::ledger::mpt::test
 {
+using bcos::test::errinfoContains;
 
 BOOST_AUTO_TEST_SUITE(MPTBuilderSubsequentTouchSuite)
 
@@ -303,9 +306,10 @@ BOOST_AUTO_TEST_CASE(DeletedFieldOutsideTombstoneThrows)
     auto view = makeFlatView(flatBackend);
     deleteFlatRowLogically(view, accountFieldKey(addr, ROW_NONCE));
 
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false)),
-        MPTInvariantViolation);
+        MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "deleted outside a tombstone"); });
 }
 
 BOOST_AUTO_TEST_CASE(ExtensionOnlyAccountAbsentFromParentStaysOutOfTheMPT)
@@ -486,9 +490,10 @@ BOOST_AUTO_TEST_CASE(DeletedCodeHashRowOnALiveAccountThrows)
     deleteFlatRowLogically(view, accountFieldKey(addr, ROW_CODE_HASH));
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("4"));
 
-    BOOST_CHECK_THROW(bcos::task::syncWait(buildAndCollect(storage, parentRoot, view,
-                          /*l2Mode=*/false)),
-        MPTInvariantViolation);
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(buildAndCollect(storage, parentRoot, view,
+                              /*l2Mode=*/false)),
+        MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "deleted outside a tombstone"); });
 }
 
 BOOST_AUTO_TEST_CASE(LoneDeletedCodeHashOnAFirstTouchAccountThrowsInsteadOfInsertingAnEmptyLeaf)
@@ -505,9 +510,10 @@ BOOST_AUTO_TEST_CASE(LoneDeletedCodeHashOnAFirstTouchAccountThrowsInsteadOfInser
     auto view = makeFlatView(flatBackend);
     deleteFlatRowLogically(view, accountFieldKey(addr, ROW_CODE_HASH));
 
-    BOOST_CHECK_THROW(bcos::task::syncWait(buildAndCollect(storage, parentRoot, view,
-                          /*l2Mode=*/false)),
-        MPTInvariantViolation);
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(buildAndCollect(storage, parentRoot, view,
+                              /*l2Mode=*/false)),
+        MPTInvariantViolation,
+        [](auto const& e) { return errinfoContains(e, "deleted outside a tombstone"); });
 }
 
 BOOST_AUTO_TEST_CASE(BcosExtensionRowSkippedInScenarioAThrowsInL2)
@@ -535,9 +541,10 @@ BOOST_AUTO_TEST_CASE(BcosExtensionRowSkippedInScenarioAThrowsInL2)
 
     // Scenario B (Ethereum-compatible): the same delta throws — an unrecognized row must not
     // silently fall out of the state commitment.
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/true)),
-        UnexpectedBCOSFieldInL2);
+        UnexpectedBCOSFieldInL2,
+        [](auto const& e) { return errinfoContains(e, "BCOS extension field present in L2"); });
 }
 
 BOOST_AUTO_TEST_CASE(UnclassifiedRowFieldThrowsInBothModes)
@@ -557,12 +564,14 @@ BOOST_AUTO_TEST_CASE(UnclassifiedRowFieldThrowsInBothModes)
     writeFlatRow(view, accountFieldKey(addr, "someFutureField"), makeEntry("1"));
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("5"));
 
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false)),
-        UnknownAccountRowField);
-    BOOST_CHECK_THROW(
+        UnknownAccountRowField,
+        [](auto const& e) { return errinfoContains(e, "unclassified account row field"); });
+    BOOST_CHECK_EXCEPTION(
         bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/true)),
-        UnknownAccountRowField);
+        UnknownAccountRowField,
+        [](auto const& e) { return errinfoContains(e, "unclassified account row field"); });
 }
 
 BOOST_AUTO_TEST_CASE(DeleteLastLeafThenInsertNewSlotRecomputesStorageRoot)
