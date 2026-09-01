@@ -19,6 +19,7 @@
  */
 
 #include "EngineEndpoint.h"
+#include <bcos-framework/engine/Errors.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>

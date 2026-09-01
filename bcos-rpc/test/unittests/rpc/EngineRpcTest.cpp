@@ -19,6 +19,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-framework/engine/AnyEngineService.h>
+#include <bcos-framework/engine/Errors.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-task/Wait.h>
