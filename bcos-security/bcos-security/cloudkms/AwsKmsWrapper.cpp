@@ -82,13 +82,13 @@ std::shared_ptr<bytes> AwsKmsWrapper::encryptContents(const std::shared_ptr<byte
 
 std::shared_ptr<bytes> AwsKmsWrapper::encryptFile(const std::string& inputFilePath)
 {
-    auto plaintext = readContents(inputFilePath);
-    if (plaintext == nullptr)
+    bytes plaintext = readContents(inputFilePath);
+    if (plaintext.empty())
     {
         std::cerr << "Failed to read file: " << inputFilePath << "\n";
         return nullptr;
     }
-    return encryptContents(plaintext);
+    return encryptContents(std::make_shared<bytes>(std::move(plaintext)));
 }
 
 std::shared_ptr<bytes> AwsKmsWrapper::decryptContents(const std::shared_ptr<bytes>& ciphertext)
@@ -114,12 +114,12 @@ std::shared_ptr<bytes> AwsKmsWrapper::decryptContents(const std::shared_ptr<byte
 
 std::shared_ptr<bytes> AwsKmsWrapper::decryptFile(const std::string& inputFilePath)
 {
-    std::shared_ptr<bytes> contents = readContents(inputFilePath);
-    if (contents == nullptr)
+    bytes contents = readContents(inputFilePath);
+    if (contents.empty())
     {
         std::cerr << "Failed to read file: " << inputFilePath << "\n";
         return nullptr;
     }
-    return decryptContents(contents);
+    return decryptContents(std::make_shared<bytes>(std::move(contents)));
 }
 }  // namespace bcos::security

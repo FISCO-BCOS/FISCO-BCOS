@@ -1,5 +1,10 @@
+#include <bcos-crypto/encrypt/HsmSM4Crypto.h>
 #include <bcos-security/BcosKmsDataEncryption.h>
+#include <bcos-security/HsmDataEncryption.h>
+#include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
+#include <array>
+#include <memory>
 
 
 using namespace bcos::security;
@@ -52,6 +57,27 @@ BOOST_AUTO_TEST_CASE(testDataEncryption_hsmSM4)
 
     BOOST_CHECK_EQUAL(originData, decryptData);
 #endif
+}
+
+// The HSM decrypt length guards fire BEFORE the SDF provider is touched, so
+// they are testable without an HSM: a stored blob shorter than the IV must
+// throw DecryptFailed instead of wrapping size - SM4_IV_DATA_SIZE into a wild
+// IV pointer / ~2^64 allocation, and a zero-length cipher must be rejected
+// instead of reading back() off an empty buffer.
+BOOST_AUTO_TEST_CASE(testHsmDecryptLengthGuards)
+{
+    auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
+    HsmDataEncryption hsmDataEncryption(nodeConfig);
+    std::array<uint8_t, 8> shortBlob{};
+    BOOST_CHECK_THROW(
+        hsmDataEncryption.decrypt(shortBlob.data(), shortBlob.size()), DecryptFailed);
+
+    bcos::crypto::HsmSM4Crypto sm4("/nonexistent/libsdf.so");
+    std::array<unsigned char, 16> iv{};
+    std::array<unsigned char, 16> cipher{};
+    BOOST_CHECK_THROW(sm4.symmetricDecryptWithInternalKey(
+                          cipher.data(), 0, 0, iv.data(), iv.size()),
+        std::runtime_error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

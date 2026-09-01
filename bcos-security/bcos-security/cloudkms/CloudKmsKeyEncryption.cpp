@@ -110,14 +110,14 @@ std::shared_ptr<bytes> CloudKmsKeyEncryption::decryptContents(
 
 std::shared_ptr<bytes> CloudKmsKeyEncryption::decryptFile(const std::string& filename)
 {
-    std::shared_ptr<bytes> contents = readContents(filename);
-    if (contents == nullptr)
+    bytes contents = readContents(filename);
+    if (contents.empty())
     {
         BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::decryptFile")
                         << LOG_KV("Failed to read file:", filename);
         BOOST_THROW_EXCEPTION(DecryptFailed());
     }
-    return decryptContents(contents);
+    return decryptContents(std::make_shared<bytes>(std::move(contents)));
 }
 
 std::shared_ptr<bytes> CloudKmsKeyEncryption::encryptContents(

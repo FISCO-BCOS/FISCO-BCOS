@@ -25,7 +25,7 @@
 using namespace bcos;
 using namespace bcos::crypto;
 
-bytesPointer bcos::crypto::SM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
+bytes bcos::crypto::SM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize)
 {
     CInputBuffer plain{(const char*)_plainData, _plainDataSize};
@@ -36,20 +36,20 @@ bytesPointer bcos::crypto::SM4Encrypt(const unsigned char* _plainData, size_t _p
     FixedBytes<SM4_IV_SIZE> fixedIVData(_ivData, _ivDataSize);
     CInputBuffer iv{(const char*)fixedIVData.data(), SM4_IV_SIZE};
 
-    auto encryptedData = std::make_shared<bytes>();
-    encryptedData->resize(_plainDataSize + SM4_MAX_PADDING_LEN);
-    COutputBuffer ciper{(char*)(encryptedData->data()), encryptedData->size()};
+    bytes encryptedData;
+    encryptedData.resize(_plainDataSize + SM4_MAX_PADDING_LEN);
+    COutputBuffer ciper{(char*)(encryptedData.data()), encryptedData.size()};
 
     if (wedpr_sm4_encrypt(&plain, &key, &iv, &ciper) == WEDPR_ERROR)
     {
         BOOST_THROW_EXCEPTION(EncryptException() << errinfo_comment("SM4 encrypt exception"));
     }
-    encryptedData->resize(ciper.len);
+    encryptedData.resize(ciper.len);
     return encryptedData;
 }
 
 
-bytesPointer bcos::crypto::SM4Decrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+bytes bcos::crypto::SM4Decrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize)
 {
     CInputBuffer cipher{(const char*)_cipherData, _cipherDataSize};
@@ -60,14 +60,14 @@ bytesPointer bcos::crypto::SM4Decrypt(const unsigned char* _cipherData, size_t _
     FixedBytes<SM4_IV_SIZE> fixedIVData(_ivData, _ivDataSize);
     CInputBuffer iv{(const char*)fixedIVData.data(), SM4_IV_SIZE};
 
-    auto decryptedData = std::make_shared<bytes>();
-    decryptedData->resize(_cipherDataSize);
-    COutputBuffer plain{(char*)decryptedData->data(), decryptedData->size()};
+    bytes decryptedData;
+    decryptedData.resize(_cipherDataSize);
+    COutputBuffer plain{(char*)decryptedData.data(), decryptedData.size()};
 
     if (wedpr_sm4_decrypt(&cipher, &key, &iv, &plain) == WEDPR_ERROR)
     {
         BOOST_THROW_EXCEPTION(DecryptException() << errinfo_comment("SM4 decrypt exception"));
     }
-    decryptedData->resize(plain.len);
+    decryptedData.resize(plain.len);
     return decryptedData;
 }

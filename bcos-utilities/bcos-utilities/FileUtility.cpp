@@ -25,9 +25,9 @@ using namespace std;
 namespace bcos
 {
 template <typename T>
-inline std::shared_ptr<T> genericReadContents(boost::filesystem::path const& _file)
+inline T genericReadContents(boost::filesystem::path const& _file)
 {
-    std::shared_ptr<T> content = std::make_shared<T>();
+    T content;
     size_t const c_elementSize = sizeof(typename T::value_type);
 
     boost::filesystem::ifstream fileStream(_file, std::ifstream::binary);
@@ -43,19 +43,19 @@ inline std::shared_ptr<T> genericReadContents(boost::filesystem::path const& _fi
         return content;
     }
     fileStream.seekg(0, fileStream.beg);
-    content->resize((length + c_elementSize - 1) / c_elementSize);
-    fileStream.read(const_cast<char*>(reinterpret_cast<char const*>(content->data())), length);
+    content.resize((length + c_elementSize - 1) / c_elementSize);
+    fileStream.read(const_cast<char*>(reinterpret_cast<char const*>(content.data())), length);
     return content;
 }
 
-std::shared_ptr<bytes> readContents(boost::filesystem::path const& _file)
+bytes readContents(boost::filesystem::path const& _file)
 {
     return genericReadContents<bytes>(_file);
 }
 
-std::shared_ptr<string> readContentsToString(boost::filesystem::path const& _file)
+std::string readContentsToString(boost::filesystem::path const& _file)
 {
-    return genericReadContents<string>(_file);
+    return genericReadContents<std::string>(_file);
 }
 
 }  // namespace bcos

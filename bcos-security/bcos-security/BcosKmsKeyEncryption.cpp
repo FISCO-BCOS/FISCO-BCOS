@@ -105,7 +105,7 @@ BcosKmsKeyEncryption::BcosKmsKeyEncryption(const std::string& dataKey, const boo
 std::shared_ptr<bytes> BcosKmsKeyEncryption::decryptContents(const std::shared_ptr<bytes>& content)
 {
     std::shared_ptr<bytes> decFileBytes;
-    bytesPointer decFileBytesBase64Ptr = nullptr;
+    bytes decFileBytesBase64;
     try
     {
         std::string encContextsStr((const char*)content->data(), content->size());
@@ -120,21 +120,21 @@ std::shared_ptr<bytes> BcosKmsKeyEncryption::decryptContents(const std::shared_p
         //{
         //     size_t const offsetIv = encFileBytes.size() - 16;
         //     size_t const cipherDataSize = encFileBytes.size() - 16;
-        //     decFileBytesBase64Ptr = m_symmetricEncrypt->symmetricDecrypt(
+        //     decFileBytesBase64 = m_symmetricEncrypt->symmetricDecrypt(
         //         reinterpret_cast<const unsigned char*>(encFileBytes.data()), cipherDataSize,
         //         reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
         //         reinterpret_cast<const unsigned char*>(encFileBytes.data() + offsetIv), 16);
         // }
         // else
         //{
-        decFileBytesBase64Ptr =
+        decFileBytesBase64 =
             m_symmetricEncrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
                 encFileBytes.size(), (const unsigned char*)m_dataKey.data(), m_dataKey.size());
         //}
 
-        BCOS_LOG(DEBUG) << "[ENCFILE] DecryptedFile Base64 key: "
-                        << asString(*decFileBytesBase64Ptr) << endl;
-        decFileBytes = std::make_shared<bytes>(base64DecodeBytes(asString(*decFileBytesBase64Ptr)));
+        BCOS_LOG(DEBUG) << "[ENCFILE] DecryptedFile Base64 key: " << asString(decFileBytesBase64)
+                        << endl;
+        decFileBytes = std::make_shared<bytes>(base64DecodeBytes(asString(decFileBytesBase64)));
     }
     catch (exception& e)
     {
@@ -151,33 +151,33 @@ std::shared_ptr<bytes> BcosKmsKeyEncryption::decryptFile(const std::string& file
     std::shared_ptr<bytes> decFileBytes;
     try
     {
-        std::shared_ptr<bytes> keyContent = readContents(boost::filesystem::path(filename));
-        std::string encContextsStr((const char*)keyContent->data(), keyContent->size());
+        bytes keyContent = readContents(boost::filesystem::path(filename));
+        std::string encContextsStr((const char*)keyContent.data(), keyContent.size());
         bytes encFileBytes = fromHex(encContextsStr);
         BCOS_LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
                         << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
 
-        bytesPointer decFileBytesBase64Ptr = nullptr;
+        bytes decFileBytesBase64;
         // TODO: key manager should fit this logic
         // if (m_compatibilityVersion >=
         //     static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION))
         // {
         //     size_t const offsetIv = encFileBytes.size() - 16;
         //     size_t const cipherDataSize = encFileBytes.size() - 16;
-        //     decFileBytesBase64Ptr = m_symmetricEncrypt->symmetricDecrypt(
+        //     decFileBytesBase64 = m_symmetricEncrypt->symmetricDecrypt(
         //         reinterpret_cast<const unsigned char*>(encFileBytes.data()), cipherDataSize,
         //         reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
         //         reinterpret_cast<const unsigned char*>(encFileBytes.data() + offsetIv), 16);
         // }
         // else
         // {
-        decFileBytesBase64Ptr =
+        decFileBytesBase64 =
             m_symmetricEncrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
                 encFileBytes.size(), (const unsigned char*)m_dataKey.data(), m_dataKey.size());
         //}
-        BCOS_LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: "
-                        << asString(*decFileBytesBase64Ptr) << endl;
-        decFileBytes = std::make_shared<bytes>(base64DecodeBytes(asString(*decFileBytesBase64Ptr)));
+        BCOS_LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: " << asString(decFileBytesBase64)
+                        << endl;
+        decFileBytes = std::make_shared<bytes>(base64DecodeBytes(asString(decFileBytesBase64)));
     }
     catch (exception& e)
     {
