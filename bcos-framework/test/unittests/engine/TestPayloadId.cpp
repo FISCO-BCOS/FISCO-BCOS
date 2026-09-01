@@ -228,12 +228,12 @@ BOOST_AUTO_TEST_CASE(U256RlpEdgeCases)
     w.amount = 0;
     w.address = bcos::Address{};
     attrs.withdrawals = std::vector<WithdrawalV1>{w};
-    // Sanity: a >64-bit index must not change the ID compared with the
-    // zero-withdrawal vector... it must change it (different bytes). Just
-    // assert it differs from the zero-withdrawal vector and is deterministic.
+    // Pin the full ID, not just inequality: 0x02fcd01f27c51b12 is the measured reference
+    // vector over the >64-bit withdrawal index (the 9-byte RLP int hashes differently from
+    // any 64-bit truncation). A mutation that narrows the index to 64 bits changes the hash
+    // and fails this pin.
     auto id = derivePayloadId(attrs, f.parentHash, {}, 0x02);
-    BOOST_CHECK_NE(id, "0x02b67ed1c721e284");
-    BOOST_CHECK_EQUAL(id, derivePayloadId(attrs, f.parentHash, {}, 0x02));
+    BOOST_CHECK_EQUAL(id, "0x02fcd01f27c51b12");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

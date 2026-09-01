@@ -119,4 +119,28 @@ BOOST_AUTO_TEST_CASE(CallAtBlockRouting)
     BOOST_CHECK_EQUAL(*blockRecorder, 7);
 }
 
+/// Negative executor versions must be rejected at setVersion (ExecutorVersionNotSupported),
+/// not routed or saturated silently — the runtime can call setVersion with a corrupted
+/// system-config value.
+BOOST_AUTO_TEST_CASE(NegativeVersionRejected)
+{
+    auto recorder = std::make_shared<int>(-1);
+    bcos::scheduler_v1::MultiVersionScheduler mvs(fakes(recorder));
+    BOOST_CHECK_THROW(
+        mvs.setVersion(-1, {}), bcos::scheduler_v1::ExecutorVersionNotSupported);
+}
+
+/// v1/v2 route to their own slots; the OP slot 3 is only reached at version >= 3.
+BOOST_AUTO_TEST_CASE(VersionOneAndTwoRouting)
+{
+    auto recorder = std::make_shared<int>(-1);
+    bcos::scheduler_v1::MultiVersionScheduler mvs(fakes(recorder));
+    mvs.setVersion(1, {});
+    mvs.call(nullptr, [](bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr) {});
+    BOOST_CHECK_EQUAL(*recorder, 1);
+    mvs.setVersion(2, {});
+    mvs.call(nullptr, [](bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr) {});
+    BOOST_CHECK_EQUAL(*recorder, 2);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

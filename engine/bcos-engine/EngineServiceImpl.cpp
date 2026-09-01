@@ -119,7 +119,9 @@ std::vector<std::string> bcos::engine::detail::supportedOpCapabilities()
 {
     // OP Engine API is V4-only.
     auto caps = supportedCapabilities();
-    caps.push_back("engine_forkchoiceUpdatedV4");
+    // forkchoiceUpdatedV4 is not advertised: the forkchoice version window tops out at V3
+    // (isForkchoiceVersionSupported), so the endpoint answers -38005; a CL following the
+    // advertised capabilities would stall on it. getPayloadV4/newPayloadV4 are routed.
     caps.push_back("engine_getPayloadV4");
     caps.push_back("engine_newPayloadV4");
     return caps;
