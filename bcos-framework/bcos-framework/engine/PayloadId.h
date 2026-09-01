@@ -23,6 +23,8 @@
 #include "bcos-framework/engine/Types.h"
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -31,6 +33,9 @@ namespace bcos::engine
 {
 namespace detail
 {
+/// Local RLP subset for payload-ID hashing only. bcos-framework cannot depend on
+/// bcos-codec (layering); these helpers match go-ethereum rlp.encBuffer / codec
+/// RLPEncode.h for the withdrawals list that BuildPayloadArgs.Id() hashes.
 /// Minimal big-endian encoding of an unsigned integer (no leading zero bytes;
 /// zero -> empty). Mirrors RLP integer semantics used by the Ethereum clients.
 inline void appendCompactBigEndian(bcos::bytes& out, u256 const& value)
@@ -161,7 +166,8 @@ inline std::string derivePayloadId(PayloadAttributes const& attrs, h256 const& p
     updateBytes(attrs.suggestedFeeRecipient.data(), attrs.suggestedFeeRecipient.size());
 
     // RLP list of withdrawals; empty list is 0xc0.
-    // Build the list payload first, then the list header (header precedes payload).
+    // Header length depends on the item payload, so encode items first, then stream
+    // the header and items into the hasher without a third concatenated buffer.
     {
         bcos::bytes withdrawalsPayload;
         if (attrs.withdrawals.has_value())
@@ -171,11 +177,10 @@ inline std::string derivePayloadId(PayloadAttributes const& attrs, h256 const& p
                 detail::rlpAppendWithdrawal(withdrawalsPayload, w);
             }
         }
-        bcos::bytes withdrawalsRlp;
-        detail::rlpAppendHeader(withdrawalsRlp, true, withdrawalsPayload.size());
-        withdrawalsRlp.insert(
-            withdrawalsRlp.end(), withdrawalsPayload.begin(), withdrawalsPayload.end());
-        updateBytes(withdrawalsRlp.data(), withdrawalsRlp.size());
+        bcos::bytes withdrawalsHeader;
+        detail::rlpAppendHeader(withdrawalsHeader, true, withdrawalsPayload.size());
+        updateBytes(withdrawalsHeader.data(), withdrawalsHeader.size());
+        updateBytes(withdrawalsPayload.data(), withdrawalsPayload.size());
     }
 
     if (attrs.parentBeaconBlockRoot.has_value())

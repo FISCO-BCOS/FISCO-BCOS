@@ -98,9 +98,6 @@ public:
     }
     std::shared_ptr<bcos::engine::AnyEngineService> engineService();
 
-    /// DA caps for the OP engine build path and miner_setMaxDASize. Null outside OP mode.
-    std::shared_ptr<bcos::engine::DACaps> daCaps() const { return m_daCaps; }
-
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> singleNodeConsensus()
     {
         return m_singleNodeConsensus;

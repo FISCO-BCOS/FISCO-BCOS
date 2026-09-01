@@ -11,6 +11,7 @@
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <span>
 
@@ -79,7 +80,8 @@ inline bcos::bytes encodeDepositEnvelope(const bcos::evm::opstack::DepositTx& d)
 /// Synthesize the L1-attributes deposit envelope (op-geth l1AttributesDeposited /
 /// deriveL1InfoDepositHash, with the Isthmus/Jovian calldata layout mirrored by
 /// opt8n-ref's l1AttributesLayout and op-geth's rollup_cost.go extractors):
-/// sourceHash = keccak256(l1BlockHash || big-endian(seq) || big-endian(l2Time)),
+/// sourceHash = keccak256(bytes32(1) || keccak256(l1BlockHash || bytes32(seq))),
+/// matching specs.optimism.io L1 attributes deposited (domain 1).
 /// calldata = selector || packed fields ([4:8] baseFeeScalar, [8:12] blobBaseFeeScalar,
 /// [12:20] seq, [20:28] l1 time, [28:36] l1 number, [36:68] l1 baseFee, [68:100] l1
 /// blobBaseFee, [100:132] l1 blockHash, [132:164] batcherHash, Isthmus+ [164:168]
@@ -87,8 +89,9 @@ inline bcos::bytes encodeDepositEnvelope(const bcos::evm::opstack::DepositTx& d)
 /// The scalar/operator-fee fields have no producer in this chain yet and are zero.
 /// Production deposits are derived by the op-node and arrive via
 /// payloadAttributes.transactions; this path only serves the built-in single-node CL.
+/// l2BlockTime is unused: the spec sourceHash does not bind L2 time.
 inline bcos::bytes synthesizeL1AttributesDeposit(
-    const L1BlockInfo& l1Info, bool jovianActive, uint64_t l2BlockTime)
+    const L1BlockInfo& l1Info, bool jovianActive, [[maybe_unused]] uint64_t l2BlockTime)
 {
     bcos::bytes data(jovianActive ? JovianL1AttributesLen : IsthmusL1AttributesLen, 0);
     const auto& selector = jovianActive ? JovianL1AttributesSelector :
@@ -107,25 +110,20 @@ inline bcos::bytes synthesizeL1AttributesDeposit(
         std::span<uint8_t, 32>(dataSpan.subspan(68, 32).data(), 32), l1Info.blobBaseFee);
     std::copy_n(l1Info.blockHash.bytes, sizeof(evmc::bytes32), data.begin() + 100);
 
-    // sourceHash = keccak256(l1BlockHash || minimal-be(seq) || minimal-be(l2Time))
-    bcos::bytes sourcePreimage;
-    sourcePreimage.reserve(32 + 8 + 8);
-    sourcePreimage.insert(sourcePreimage.end(), l1Info.blockHash.bytes,
-        l1Info.blockHash.bytes + sizeof(evmc::bytes32));
-    auto appendMinimalBe = [&](uint64_t v) {
-        std::array<uint8_t, 8> be{};
-        bcos::toBigEndian(v, be);
-        auto first = std::find_if(be.begin(), be.end(), [](uint8_t b) { return b != 0; });
-        if (first == be.end())
-        {
-            sourcePreimage.push_back(0);
-            return;
-        }
-        sourcePreimage.insert(sourcePreimage.end(), first, be.end());
-    };
-    appendMinimalBe(l1Info.sequenceNumber);
-    appendMinimalBe(l2BlockTime);
-    const auto keccak = bcos::crypto::keccak256Hash(bcos::ref(sourcePreimage));
+    // op-node L1InfoDepositSource: inner = keccak(l1Hash[32] || bytes32(seq)),
+    // sourceHash = keccak(bytes32(domain=1) || inner).
+    std::array<uint8_t, 64> innerInput{};
+    std::copy_n(l1Info.blockHash.bytes, sizeof(evmc::bytes32), innerInput.begin());
+    std::array<uint8_t, 8> seqBe{};
+    bcos::toBigEndian(l1Info.sequenceNumber, seqBe);
+    std::copy(seqBe.begin(), seqBe.end(), innerInput.begin() + 56);
+    const auto inner = bcos::crypto::keccak256Hash(
+        bcos::bytesConstRef(innerInput.data(), innerInput.size()));
+    std::array<uint8_t, 64> domainInput{};
+    domainInput[31] = 1;  // bytes32(uint256(1)) — L1InfoDepositSourceDomain
+    std::copy(inner.begin(), inner.end(), domainInput.begin() + 32);
+    const auto keccak = bcos::crypto::keccak256Hash(
+        bcos::bytesConstRef(domainInput.data(), domainInput.size()));
     evmc::bytes32 sourceHash{};
     std::copy_n(keccak.begin(), sizeof(evmc::bytes32), sourceHash.bytes);
 

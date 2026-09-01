@@ -297,4 +297,50 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(alteredTransaction, built).has_value());
 }
 
+BOOST_AUTO_TEST_CASE(get_payload_v4_rejects_v1_v2_even_in_op_mode)
+{
+    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(
+        engine::ApiVersion::V4, 1, /*opMode=*/true));
+    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(
+        engine::ApiVersion::V4, 2, /*opMode=*/true));
+    BOOST_CHECK(engine::detail::isGetPayloadVersionCompatible(
+        engine::ApiVersion::V4, 3, /*opMode=*/true));
+    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(
+        engine::ApiVersion::V4, 4, /*opMode=*/true));
+    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(
+        engine::ApiVersion::V4, 4, /*opMode=*/false));
+}
+
+BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_requires_gas_and_params)
+{
+    PayloadAttributes attrs;
+    attrs.timestamp = 1;
+    attrs.withdrawals = std::vector<WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot =
+        h256("2222222222222222222222222222222222222222222222222222222222222222");
+    BOOST_REQUIRE(engine::detail::validateOpPayloadAttributes(attrs, false).has_value());
+
+    attrs.gasLimit = 30'000'000;
+    attrs.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
+    BOOST_CHECK(!engine::detail::validateOpPayloadAttributes(attrs, false).has_value());
+    BOOST_CHECK(engine::detail::validateOpPayloadAttributes(attrs, true).has_value());
+    attrs.minBaseFee = 7;
+    BOOST_CHECK(!engine::detail::validateOpPayloadAttributes(attrs, true).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(validate_op_new_payload_requires_raw_transactions)
+{
+    NewPayloadRequest request;
+    request.executionPayload = makeExecutionPayloadV3(fromHexWithPrefix("0x00000000fa00000006"));
+    request.parentBeaconBlockRoot =
+        h256("2222222222222222222222222222222222222222222222222222222222222222");
+    request.executionPayload.withdrawalsRoot =
+        h256("3333333333333333333333333333333333333333333333333333333333333333");
+    request.executionPayload.excessBlobGas = 0;
+    request.executionPayload.blobGasUsed = 0;
+    auto error = engine::detail::validateOpNewPayloadRequest(request, false);
+    BOOST_REQUIRE(error.has_value());
+    BOOST_CHECK_NE(error->find("rawTransactions"), std::string::npos);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

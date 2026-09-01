@@ -11,9 +11,8 @@ add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-engine>)
+# Web3Transaction lives in rlp-protocol (EngineServiceImpl.cpp); do not link rpc.
 target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger rlp-protocol)
-# Web3Transaction is used only in the .cpp; keep rpc out of the installed export.
-target_link_libraries(engine PRIVATE $<BUILD_INTERFACE:rpc>)
 set_target_properties(engine PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)

@@ -43,7 +43,7 @@ namespace
 // Build a parent header carrying the OP-Stack 1559 parameters in extraData:
 //   Holocene: version(1) || denominator(u32 BE) || elasticity(u32 BE)          = 9 bytes
 //   Jovian:   ... + minBaseFee(u64 BE)                                          = 17 bytes
-// Passing an empty vector leaves the parameters defaulted (8/2) inside calcOpBaseFee.
+// extraData must be the Holocene (9) or Jovian (17) layout; short/zero params fail closed.
 BlockHeaderImpl makeParent(bcos::u256 gasLimit, bcos::u256 gasUsed, bcos::u256 baseFee,
     bcos::bytes extraData, std::optional<bcos::u256> blobGasUsed = std::nullopt)
 {
@@ -127,14 +127,14 @@ BOOST_AUTO_TEST_CASE(UnderTargetDecreasesByDeltaFee)
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(958'333'334));
 }
 
-// A parent without the 9-byte extraData tail gets the Holocene defaults (8/2) — the
-// RPC can observe foreign/malformed headers and must not read out of bounds.
-BOOST_AUTO_TEST_CASE(ShortExtraDataUsesHoloceneDefaults)
+// Short extraData is fail-closed (no Holocene 8/2 default) so a missing parent
+// tail cannot mint a silent consensus-divergent baseFee.
+BOOST_AUTO_TEST_CASE(ShortExtraDataIsRejected)
 {
     auto const parent =
         makeParent(bcos::u256(30'000'000), bcos::u256(24'000'000), bcos::u256(2'000'000'000), {});
-    // delta = 9M; 2e9 * 9e6 / 15e6 / 8 = 150,000,000.
-    BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(2'150'000'000));
+    expectThrowMessage(
+        [&] { (void)bcos::engine::calcOpBaseFee(parent, false); }, "9 (Holocene) or 17 (Jovian)");
 }
 
 // Jovian minBaseFee floor: a decrease that would land below the floor is clamped up.
@@ -198,21 +198,21 @@ BOOST_AUTO_TEST_CASE(DecreaseWithUnitDenominatorReachesZero)
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(0));
 }
 
-BOOST_AUTO_TEST_CASE(ZeroFeeParametersUseHoloceneDefaults)
+BOOST_AUTO_TEST_CASE(ZeroFeeParametersAreRejected)
 {
     auto zeroDenominator = holoceneParams();
     std::fill(zeroDenominator.begin() + 1, zeroDenominator.begin() + 5, 0);
     auto const denominatorParent = makeParent(bcos::u256(30'000'000), bcos::u256(20'000'000),
         bcos::u256(1'000'000'000), std::move(zeroDenominator));
-    BOOST_CHECK_EQUAL(
-        bcos::engine::calcOpBaseFee(denominatorParent, false), bcos::u256(1'041'666'666));
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(denominatorParent, false); },
+        "non-zero EIP-1559 denominator and elasticity");
 
     auto zeroElasticity = holoceneParams();
     std::fill(zeroElasticity.begin() + 5, zeroElasticity.end(), 0);
     auto const elasticityParent = makeParent(bcos::u256(30'000'000), bcos::u256(20'000'000),
         bcos::u256(1'000'000'000), std::move(zeroElasticity));
-    BOOST_CHECK_EQUAL(
-        bcos::engine::calcOpBaseFee(elasticityParent, false), bcos::u256(1'041'666'666));
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(elasticityParent, false); },
+        "non-zero EIP-1559 denominator and elasticity");
 
     auto const zeroTargetParent =
         makeParent(bcos::u256(1), bcos::u256(1), bcos::u256(1'000'000'000), holoceneParams());

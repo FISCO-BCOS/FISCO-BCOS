@@ -14,9 +14,8 @@
  *  limitations under the License.
  *
  * @file DACaps.h
- * @brief Shared DA throttling caps — the bridge between miner_setMaxDASize (RPC) and the
- *        OP payload build path (engine). The RPC that writes them is a follow-up; until it
- *        lands the caps stay 0 = uncapped (finding S2).
+ * @brief Shared DA throttling caps for the OP payload build path.
+ *        Zero remains uncapped until an RPC writer (miner_setMaxDASize) is added.
  */
 
 #pragma once

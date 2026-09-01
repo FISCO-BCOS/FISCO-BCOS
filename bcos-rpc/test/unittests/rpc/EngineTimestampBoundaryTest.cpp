@@ -142,5 +142,12 @@ BOOST_AUTO_TEST_CASE(int64BoundaryIsExact)
     BOOST_CHECK_EQUAL(ep["timestamp"].asString(), "0x20c49ba5e353f7");
 }
 
+BOOST_AUTO_TEST_CASE(oddNibbleExtraDataIsRejected)
+{
+    auto params = makeNewPayloadParams("0x64");
+    params[0]["extraData"] = "0x123";
+    BOOST_CHECK_THROW(parseNewPayloadRequest(params, engine::ApiVersion::V1), JsonRpcException);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

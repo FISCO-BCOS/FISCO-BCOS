@@ -1,10 +1,15 @@
 // MultiVersionScheduler slot 3 (OP) routing and setVersion saturation.
 #define BOOST_TEST_MODULE LibinitializerTests
 #include <bcos-framework/storage/Entry.h>  // complete bcos::storage::Entry (fake's co_return nullopt)
+#include <bcos-task/Wait.h>
+#include <bcos-utilities/Exceptions.h>
 #include <libinitializer/MultiVersionScheduler.h>
+#include <libinitializer/OpRefusingStubScheduler.h>
+#include <boost/exception/get_error_info.hpp>
 #include <boost/test/unit_test.hpp>
 #include <functional>
 #include <memory>
+#include <string>
 
 namespace
 {
@@ -126,8 +131,41 @@ BOOST_AUTO_TEST_CASE(NegativeVersionRejected)
 {
     auto recorder = std::make_shared<int>(-1);
     bcos::scheduler_v1::MultiVersionScheduler mvs(fakes(recorder));
-    BOOST_CHECK_THROW(
-        mvs.setVersion(-1, {}), bcos::scheduler_v1::ExecutorVersionNotSupported);
+    try
+    {
+        mvs.setVersion(-1, {});
+        BOOST_FAIL("expected ExecutorVersionNotSupported");
+    }
+    catch (bcos::scheduler_v1::ExecutorVersionNotSupported const& e)
+    {
+        auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+        BOOST_REQUIRE(comment != nullptr);
+        BOOST_CHECK(comment->find("must be >= 0") != std::string::npos);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(OpRefusingStubRejectsAllSurfaces)
+{
+    bcos::initializer::OpRefusingStubScheduler stub;
+    bool sawError = false;
+    stub.executeBlock(
+        nullptr, false, [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr, bool) {
+            BOOST_REQUIRE(error);
+            BOOST_CHECK_EQUAL(error->errorCode(), bcos::scheduler::SchedulerError::UnknownError);
+            BOOST_CHECK(error->errorMessage().find("executor_version<3") != std::string::npos);
+            sawError = true;
+        });
+    BOOST_CHECK(sawError);
+
+    sawError = false;
+    stub.call(nullptr, [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr) {
+        BOOST_REQUIRE(error);
+        BOOST_CHECK(error->errorMessage().find("OpRefusingStubScheduler") != std::string::npos);
+        sawError = true;
+    });
+    BOOST_CHECK(sawError);
+
+    BOOST_CHECK_THROW(bcos::task::syncWait(stub.getPendingStorageAt("", "", 0)), bcos::Error);
 }
 
 /// v1/v2 route to their own slots; the OP slot 3 is only reached at version >= 3.

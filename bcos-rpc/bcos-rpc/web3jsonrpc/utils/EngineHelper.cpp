@@ -179,9 +179,16 @@ bcos::bytes parseHexBytesField(Json::Value const& value, std::string_view field)
     {
         return reject();
     }
+    auto const hex = value.asString();
+    // fromHex left-pads an odd nibble; require the same 0x + even-length contract as
+    // parseRawTransactionElement so extraData / logsBloom / eip1559Params stay verbatim.
+    if (hex.size() < 2 || hex.size() % 2 != 0 || hex[0] != '0' || (hex[1] != 'x' && hex[1] != 'X'))
+    {
+        return reject();
+    }
     try
     {
-        return bcos::fromHex(value.asString());
+        return bcos::fromHex(hex);
     }
     catch (bcos::BadHexCharacter const&)
     {
@@ -721,11 +728,20 @@ Json::Value bcos::rpc::serializeExecutionPayload(
     ep["blockHash"] = payload.blockHash.hexPrefixed();
 
     Json::Value transactions(Json::arrayValue);
-    for (auto const& transaction : payload.transactions)
+    if (payload.rawTransactions.has_value())
     {
-        // Raw EIP-2718 bytes out, exactly as carried — byte-for-byte what newPayload
-        // received or what buildPayload reassembled.
-        transactions.append(toHexStringWithPrefix(transaction.raw));
+        // OP path: envelopes live only in rawTransactions.
+        for (auto const& raw : *payload.rawTransactions)
+        {
+            transactions.append(toHexStringWithPrefix(raw));
+        }
+    }
+    else
+    {
+        for (auto const& transaction : payload.transactions)
+        {
+            transactions.append(toHexStringWithPrefix(transaction.raw));
+        }
     }
     ep["transactions"] = std::move(transactions);
 

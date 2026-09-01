@@ -12,8 +12,8 @@ DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
 
 /// The executor version that selects the pure-Ethereum EthereumExecutor
 /// (ethereum-executor). It is index 2 of MultiVersionScheduler's scheduler array.
-/// Versions >= this all select the v2 executor (setVersion saturates), leaving
-/// room above 2 for a future executor without a schema change.
+/// Version 2 selects Ethereum; versions >= 3 select the OP scheduler (setVersion
+/// saturates to the newest assembled slot).
 /// The canonical value lives in bcos-framework/ledger (so lower layers can gate on
 /// it without depending on libinitializer); this keeps the scheduler_v1 spelling.
 constexpr static int ETHEREUM_EXECUTOR_VERSION = ledger::ETHEREUM_EXECUTOR_VERSION;

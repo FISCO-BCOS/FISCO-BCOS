@@ -17,6 +17,7 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/test/unit_test.hpp>
+#include <array>
 #include <stdexcept>
 #include <vector>
 
@@ -120,7 +121,7 @@ BOOST_AUTO_TEST_CASE(SynthesizeL1AttributesIsDepositEnvelope)
 // Production-synthesis layout anchor: the seam's synthesizeL1AttributesEnvelope must produce
 // a 0x7e envelope whose rlp fields carry the op-geth L1-attributes deposit shape — from ==
 // OP_DEPOSITOR, to == OP_L1_BLOCK, gas == c_l1InfoDepositGas, data == Isthmus 176B with the
-// Isthmus selector, and sourceHash == keccak256(blockHash || minimal-be(seq) || minimal-be(time)).
+// Isthmus selector, and sourceHash == keccak256(bytes32(1) || keccak256(l1Hash || bytes32(seq))).
 // The fixture helper (testutil) is NOT the anchor: this decodes the seam's own output.
 BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
 {
@@ -153,18 +154,22 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
         bcos::evm::opstack::IsthmusL1AttributesSelector.begin(),
         bcos::evm::opstack::IsthmusL1AttributesSelector.end());
 
-    // sourceHash == keccak256(0^32 || 0x00 || minimal-be(kL2Time)) for the zero L1 info.
-    bcos::bytes preimage(32, 0);
-    preimage.push_back(0);  // minimal big-endian of sequenceNumber 0
-    const std::array<uint8_t, 8> kTimeBe{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0};
-    preimage.insert(preimage.end(), kTimeBe.begin(), kTimeBe.end());
-    const auto expectedHash = bcos::crypto::keccak256Hash(bcos::ref(preimage));
-    BOOST_CHECK_EQUAL_COLLECTIONS(fields[0].begin(), fields[0].end(), expectedHash.begin(),
-        expectedHash.end());
+    // sourceHash = keccak(bytes32(1) || keccak(l1Hash[32] || bytes32(seq))) for zero L1 info.
+    // l2Time is not part of the spec preimage.
+    std::array<uint8_t, 64> innerInput{};
+    const auto inner =
+        bcos::crypto::keccak256Hash(bcos::bytesConstRef(innerInput.data(), innerInput.size()));
+    std::array<uint8_t, 64> domainInput{};
+    domainInput[31] = 1;
+    std::copy(inner.begin(), inner.end(), domainInput.begin() + 32);
+    const auto expectedHash =
+        bcos::crypto::keccak256Hash(bcos::bytesConstRef(domainInput.data(), domainInput.size()));
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        fields[0].begin(), fields[0].end(), expectedHash.begin(), expectedHash.end());
 }
 
 // Jovian: the synthesized deposit carries the Jovian selector and 178B data (with the
-// zero DA-footprint scalar), and the sourceHash is unique across L2 times.
+// zero DA-footprint scalar). sourceHash does not bind L2 time.
 BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayoutAndUniqueness)
 {
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
@@ -184,7 +189,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayoutAndUniqueness)
     BOOST_CHECK_EQUAL(fields[7][177], 0);
 
     const auto envLater = scheduler.synthesizeL1AttributesEnvelope(1001);
-    BOOST_CHECK(env != envLater);  // sourceHash binds the L2 time
+    BOOST_CHECK(env == envLater);  // sourceHash is domain-1(l1Hash, seq), not L2 time
 }
 
 // Note: the empty-block rejection test lives in PreBlockOpStepsTest (RejectsEmptyBlock).

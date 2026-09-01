@@ -134,9 +134,8 @@ struct ExecutionPayload
     u256 gasUsed = 0;
     u256 baseFeePerGas = 0;
     h256 blockHash;
-    /// Transaction envelopes: each `EngineTransaction::raw` carries the EIP-2718
-    /// encoded bytes (including the OP 0x7E deposit envelope). This is the single
-    /// authoritative carrier for both generic and OP engine paths.
+    /// Generic-path transaction carrier: each `EngineTransaction::raw` is the EIP-2718
+    /// envelope. The OP path does not read this field (see `rawTransactions` below).
     std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;

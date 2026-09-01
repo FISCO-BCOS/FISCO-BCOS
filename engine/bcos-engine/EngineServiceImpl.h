@@ -82,7 +82,7 @@ bcos::h256 syntheticHash(std::string_view seed);
 
 std::vector<std::string> supportedCapabilities();
 
-/// OP capability list: `supportedCapabilities()` plus the V4 methods.
+/// OP capability list. V4 get/newPayload are already in supportedCapabilities().
 std::vector<std::string> supportedOpCapabilities();
 
 bool isGetPayloadVersionCompatible(
@@ -404,20 +404,15 @@ public:
             {
                 std::unique_lock lock(x_state);
                 m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
-                m_payloadCache[payloadId] = std::move(entry);
-                // Bound the payload cache at insert time. A payload is only read between
-                // updateForkchoice / getPayload and newPayload; the single-node driver can skip
-                // newPayload entirely (empty block with produce_empty_blocks=false — the EEST
-                // configuration — or getPayload returning null), and an external CL may abandon
-                // a requested payload. None of those reach handleNewPayload's eviction, so
-                // without a bound here each skipped tick would retain a live storage fork (the
-                // PayloadEntry::view) plus the block's transactions forever.
-                // Deterministic payload IDs can repeat across builds with identical attributes;
-                // dedupe so a stale duplicate order entry cannot evict a live re-built entry.
-                if (!m_payloadCache.contains(payloadId))
+                // Dedupe against the order deque *before* assigning the cache slot.
+                // contains(payloadId) after operator[] / assign is always true and would
+                // never record IDs, so the 64-entry eviction never ran.
+                if (std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId) ==
+                    m_payloadOrder.end())
                 {
                     m_payloadOrder.push_back(payloadId);
                 }
+                m_payloadCache[payloadId] = std::move(entry);
                 while (m_payloadOrder.size() > c_maxPayloadEntries)
                 {
                     auto const evictedId = m_payloadOrder.front();
@@ -540,11 +535,9 @@ private:
         const PayloadAttributes& payloadAttributes, std::uint32_t version,
         bcos::protocol::BlockNumber nextBlockNumber)
     {
-        // The whole build (probe + canonical delegate passes) runs under x_state so a
-        // concurrent newPayload execution cannot race the shared OpScheduler delegate.
-        // Storage2 backends used here complete in-thread, so holding the lock across
-        // co_await is safe (same rationale as runOpNewPayloadSteps).
-        std::unique_lock xStateLock(x_state);
+        // Serialize OP reset/execute/commit on the shared delegate. Cache maps stay
+        // under x_state only for the publish window (not across EVM time).
+        std::unique_lock opLock(x_opExecute);
 
         // Payload ID from CL attributes only (not pool txs or the synthesized deposit).
         auto payloadIdOpt =
@@ -572,8 +565,8 @@ private:
         std::vector<bytes> forcedEnvelopes;
         if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
         {
-            forcedEnvelopes.push_back(m_scheduler.get().synthesizeL1AttributesEnvelope(
-                payloadAttributes.timestamp));
+            forcedEnvelopes.push_back(
+                m_scheduler.get().synthesizeL1AttributesEnvelope(payloadAttributes.timestamp));
         }
         if (payloadAttributes.transactions.has_value())
         {
@@ -627,7 +620,7 @@ private:
                 view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
         }
         // Holocene/Jovian baseFee from the parent header.
-        u256 baseFee{1'000'000'000};
+        u256 baseFee;
         {
             auto view = m_globalStateStorage.get().fork();
             auto parentNumberStr = boost::lexical_cast<std::string>(nextBlockNumber - 1);
@@ -639,20 +632,21 @@ private:
                 bcos::bytes parentHeaderBytes(stored.begin(), stored.end());
                 auto parentHeader =
                     m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
-                baseFee = calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
+                try
+                {
+                    baseFee = calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
+                }
+                catch (std::exception const& e)
+                {
+                    BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                              std::string("calcOpBaseFee failed: ") + e.what()});
+                }
             }
             else
             {
-                // Parent header row missing at the height the forkchoice head just resolved:
-                // a storage fault, not a normal first block (a real first block has no
-                // parent). The 1e9 fallback keeps the build moving, but the divergence must
-                // be loud — every such build would otherwise be rejected by the CL's own
-                // baseFee validation with no local diagnostics (finding S1).
-                BCOS_LOG(WARNING) << LOG_BADGE("EngineService")
-                                  << LOG_DESC(
-                                         "buildOpPayload: parent block header missing; using "
-                                         "the 1e9 fallback baseFee")
-                                  << LOG_KV("parentNumber", nextBlockNumber - 1);
+                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                          "buildOpPayload: parent block header missing at height " +
+                                          parentNumberStr});
             }
         }
 
@@ -660,12 +654,6 @@ private:
             payloadAttributes.parentBeaconBlockRoot.value_or(crypto::HashType{});
         // Assemble a candidate payload; the eviction loop may retry.
         auto assemblePayload = [&](std::vector<bytes> candidateEnvelopes) {
-            std::vector<EngineTransaction> candidateTransactions;
-            candidateTransactions.reserve(candidateEnvelopes.size());
-            for (auto& env : candidateEnvelopes)
-            {
-                candidateTransactions.push_back(EngineTransaction{.raw = env, .decoded = nullptr});
-            }
             ExecutionPayload candidate{
                 .logsBloom = Bloom{},
                 .parentHash = forkchoiceState.headBlockHash,
@@ -679,7 +667,7 @@ private:
                 .gasUsed = 0,
                 .baseFeePerGas = baseFee,
                 .blockHash = h256{},
-                .transactions = std::move(candidateTransactions),
+                .transactions = {},
                 // Holocene extraData: version || denom || elasticity; Jovian appends minBaseFee.
                 .extraData = detail::encodeOptimismExtraData(payloadAttributes),
                 .feeRecipient = payloadAttributes.suggestedFeeRecipient,
@@ -723,7 +711,8 @@ private:
         std::set<crypto::HashType> evicted;
         ExecutionPayload payload;
         bcos::protocol::BlockHeader::Ptr executedHeader;
-        while (true)
+        static constexpr std::size_t c_maxEvictionRetries = 16;
+        while (evicted.size() <= c_maxEvictionRetries)
         {
             std::vector<bytes> candidateEnvelopes = forcedEnvelopes;
             // Forced envelopes always count against the DA budget; sealed ones fill the rest.
@@ -797,17 +786,17 @@ private:
                     bcos::Error::Ptr ledgerGasError;
                     bcos::protocol::BlockHeader::Ptr ledgerGasExecutedHeader;
                     m_delegate->executeBlock(ledgerGasBlock, /*verify=*/false,
-                        [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header,
-                            bool) {
+                        [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
                             ledgerGasError = std::move(error);
                             ledgerGasExecutedHeader = std::move(header);
                         });
                     if (!ledgerGasError && ledgerGasExecutedHeader)
                     {
-                        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                            "OP payload build failed under the CL-supplied gasLimit, while the "
-                            "chain gasLimit executes the same transactions: the CL gasLimit is "
-                            "below the chain's own"});
+                        BOOST_THROW_EXCEPTION(
+                            OpExecutionInternalError{} << bcos::errinfo_comment{
+                                "OP payload build failed under the CL-supplied gasLimit, while the "
+                                "chain gasLimit executes the same transactions: the CL gasLimit is "
+                                "below the chain's own"});
                     }
                 }
                 evicted.insert(*culprit);
@@ -822,6 +811,12 @@ private:
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
                     std::string("OP payload build execution failed: ") + message});
+        }
+        if (!executedHeader)
+        {
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    "OP payload build: eviction retry limit reached without a valid probe"});
         }
 
         // Fill commitments and the final OP blockHash.
@@ -842,7 +837,9 @@ private:
             SchedulerType::computeTxRoot(*payload.rawTransactions), parentBeaconBlockRoot);
         payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
 
-        // Canonical pass with the final commitments (verify=true).
+        // Canonical pass with the final commitments (verify=true). A probe does not
+        // stash m_pending; commitBlock requires a verified pending whose header hash
+        // matches this rebuilt header.
         auto finalBlock = buildOpBlock(payload, finalHeader);
         m_delegate->reset([](bcos::Error::Ptr) {});
         bcos::Error::Ptr canonicalError;
@@ -877,22 +874,24 @@ private:
         {
             entry.blobsBundle = BlobsBundleV1{};
         }
-        // xStateLock is held for the whole function; publish directly.
-        m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
-        m_payloadCache[payloadId] = std::move(entry);
-        // Dedupe: identical attributes rebuild the same payload ID.
-        if (std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId) ==
-            m_payloadOrder.end())
         {
-            m_payloadOrder.push_back(payloadId);
-        }
-        while (m_payloadOrder.size() > c_maxPayloadEntries)
-        {
-            auto const evictedId = m_payloadOrder.front();
-            m_payloadOrder.pop_front();
-            m_payloadCache.erase(evictedId);
-            std::erase_if(
-                m_blockHashToPayloadId, [&](auto const& kv) { return kv.second == evictedId; });
+            std::unique_lock stateLock(x_state);
+            m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
+            m_payloadCache[payloadId] = std::move(entry);
+            // Dedupe: identical attributes rebuild the same payload ID.
+            if (std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId) ==
+                m_payloadOrder.end())
+            {
+                m_payloadOrder.push_back(payloadId);
+            }
+            while (m_payloadOrder.size() > c_maxPayloadEntries)
+            {
+                auto const evictedId = m_payloadOrder.front();
+                m_payloadOrder.pop_front();
+                m_payloadCache.erase(evictedId);
+                std::erase_if(
+                    m_blockHashToPayloadId, [&](auto const& kv) { return kv.second == evictedId; });
+            }
         }
         co_return ForkchoiceUpdatedResult{
             .payloadStatus = makeStatus(
@@ -931,16 +930,22 @@ private:
                                           "Payload does not carry the V4+ response shape"});
             }
 
+            auto executionPayload = it->second.executionPayload;
+            auto blockValue = it->second.blockValue;
+            auto blobsBundle = it->second.blobsBundle;
+            auto shouldOverrideBuilder = it->second.shouldOverrideBuilder;
+            auto parentBeaconBlockRoot = it->second.parentBeaconBlockRoot;
+            lock.unlock();
             return std::make_unique<GetPayloadData>(GetPayloadData{
-                .executionPayload = it->second.executionPayload,
-                .blockValue = it->second.blockValue,
-                .blobsBundle = it->second.blobsBundle,
-                .shouldOverrideBuilder = it->second.shouldOverrideBuilder,
+                .executionPayload = std::move(executionPayload),
+                .blockValue = std::move(blockValue),
+                .blobsBundle = std::move(blobsBundle),
+                .shouldOverrideBuilder = shouldOverrideBuilder,
                 // V4/V5: present-but-empty executionRequests.
                 .executionRequests = version >= static_cast<std::uint32_t>(ApiVersion::V4) ?
                                          std::optional<std::vector<bytes>>{std::in_place} :
                                          std::nullopt,
-                .parentBeaconBlockRoot = it->second.parentBeaconBlockRoot,
+                .parentBeaconBlockRoot = parentBeaconBlockRoot,
             });
         }
     }
@@ -999,36 +1004,107 @@ private:
                                 "later"));
             }
 
-            std::unique_lock lock(x_state);
-            auto parentKnown =
-                request.executionPayload.parentHash == m_forkchoiceState.headBlockHash ||
-                m_blockHashToPayloadId.contains(request.executionPayload.parentHash);
-            if (!parentKnown)
-            {
-                co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
-            }
-
-            auto payloadIdIt = m_blockHashToPayloadId.find(request.executionPayload.blockHash);
+            std::shared_ptr<ViewType> viewToCommit;
+            bcos::protocol::BlockHeader::Ptr builtHeader;
+            std::vector<protocol::TransactionReceipt::Ptr> builtReceipts;
+            ExecutionPayload builtPayload;
             PayloadID payloadId;
-            if (payloadIdIt == m_blockHashToPayloadId.end())
             {
-                // External payload: cache key is the first 8 bytes of keccak256(blockHash).
-                auto hash = bcos::crypto::keccak256Hash(request.executionPayload.blockHash.ref());
-                payloadId = bcos::toHex(hash.ref().getCroppedData(0, 8), "0x");
-                m_blockHashToPayloadId.emplace(request.executionPayload.blockHash, payloadId);
-            }
-            else
-            {
-                payloadId = payloadIdIt->second;
-                if (auto builtIt = m_payloadCache.find(payloadId); builtIt != m_payloadCache.end())
+                std::unique_lock lock(x_state);
+                auto parentKnown =
+                    request.executionPayload.parentHash == m_forkchoiceState.headBlockHash ||
+                    m_blockHashToPayloadId.contains(request.executionPayload.parentHash);
+                if (!parentKnown)
                 {
-                    if (auto mismatch = detail::compareWithBuiltPayload(
-                            request.executionPayload, builtIt->second.executionPayload))
+                    co_return makeStatus(
+                        PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+                }
+
+                auto payloadIdIt = m_blockHashToPayloadId.find(request.executionPayload.blockHash);
+                if (payloadIdIt == m_blockHashToPayloadId.end())
+                {
+                    // External payload: cache key is the first 8 bytes of keccak256(blockHash).
+                    auto hash =
+                        bcos::crypto::keccak256Hash(request.executionPayload.blockHash.ref());
+                    payloadId = bcos::toHex(hash.ref().getCroppedData(0, 8), "0x");
+                    m_blockHashToPayloadId.emplace(request.executionPayload.blockHash, payloadId);
+                }
+                else
+                {
+                    payloadId = payloadIdIt->second;
+                    if (auto builtIt = m_payloadCache.find(payloadId);
+                        builtIt != m_payloadCache.end())
                     {
-                        co_return makeStatus(
-                            PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
+                        if (auto mismatch = detail::compareWithBuiltPayload(
+                                request.executionPayload, builtIt->second.executionPayload))
+                        {
+                            co_return makeStatus(
+                                PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
+                        }
                     }
                 }
+
+                if (auto it = m_payloadCache.find(payloadId);
+                    it != m_payloadCache.end() && it->second.view)
+                {
+                    viewToCommit = std::move(it->second.view);
+                    builtHeader = it->second.header;
+                    builtReceipts = it->second.receipts;
+                    builtPayload = it->second.executionPayload;
+                }
+            }
+
+            if (viewToCommit)
+            {
+                m_globalStateStorage.get().pushView(std::move(*viewToCommit));
+                bool merged = false;
+                struct PushViewRollback
+                {
+                    GlobalStateStorageType& storage;
+                    bool& merged;
+                    ~PushViewRollback()
+                    {
+                        if (!merged)
+                        {
+                            storage.popFrontStorage();
+                        }
+                    }
+                } rollback{m_globalStateStorage.get(), merged};
+                if (m_ledger && builtHeader)
+                {
+                    typename GlobalStateStorageType::MutableStorage prewriteStorage;
+                    auto block = m_blockFactory->createBlock();
+                    block->setBlockHeader(builtHeader);
+                    auto const& bloom = builtPayload.logsBloom;
+                    block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+                    for (auto const& tx : builtPayload.transactions)
+                    {
+                        if (tx.decoded)
+                        {
+                            block->appendTransaction(tx.decoded);
+                        }
+                    }
+                    for (auto const& receipt : builtReceipts)
+                    {
+                        block->appendReceipt(receipt);
+                    }
+                    auto blockTxs = std::make_shared<protocol::ConstTransactions>(
+                        builtPayload.transactions | ::ranges::views::filter([](auto const& tx) {
+                            return tx.decoded != nullptr;
+                        }) |
+                        ::ranges::views::transform([](auto const& tx) {
+                            return protocol::Transaction::ConstPtr(tx.decoded);
+                        }) |
+                        ::ranges::to<std::vector>());
+                    co_await ledger::prewriteBlockToBuffer(
+                        *m_ledger, blockTxs, block, prewriteStorage);
+                    co_await m_globalStateStorage.get().mergeBackStorage(prewriteStorage);
+                }
+                else
+                {
+                    co_await m_globalStateStorage.get().mergeBackStorage();
+                }
+                merged = true;
             }
 
             PayloadEntry entry{
@@ -1046,72 +1122,16 @@ private:
             {
                 entry.blobsBundle = BlobsBundleV1{};
             }
-
-            // If this payload was built locally (via updateForkchoice), commit the view's
-            // state changes to storage. Externally received payloads have no view to commit.
-            // TODO: merge pushView + mergeBackStorage into a single atomic mergeView()
-            // operation. This will eliminate the risk of leaking a mutable layer if
-            // mergeBackStorage throws, and avoid holding x_state across a co_await.
-            auto it = m_payloadCache.find(payloadId);
-            if (it != m_payloadCache.end() && it->second.view)
             {
-                m_globalStateStorage.get().pushView(std::move(*it->second.view));
-                if (m_ledger && it->second.header)
-                {
-                    // Persist ledger block tables with the state merge so RPC can see the block.
-                    typename GlobalStateStorageType::MutableStorage prewriteStorage;
-                    auto block = m_blockFactory->createBlock();
-                    block->setBlockHeader(it->second.header);
-                    // Persist the block-level logsBloom (computed in buildPayload from the
-                    // per-receipt blooms). Without it every block produced by this driver
-                    // answers eth_getBlockByNumber with 256 zero bytes — the legacy
-                    // BaselineScheduler commit path sets the block bloom before commit, so
-                    // this restores parity with that path (eth_getLogs uses it as a filter).
-                    auto const& bloom = it->second.executionPayload.logsBloom;
-                    block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
-                    // Persist only decoded txs; receipts cover the same subset.
-                    for (auto const& tx : it->second.executionPayload.transactions)
-                    {
-                        if (tx.decoded)
-                        {
-                            block->appendTransaction(tx.decoded);
-                        }
-                    }
-                    for (auto const& receipt : it->second.receipts)
-                    {
-                        block->appendReceipt(receipt);
-                    }
-                    auto blockTxs = std::make_shared<protocol::ConstTransactions>(
-                        it->second.executionPayload.transactions |
-                        ::ranges::views::filter(
-                            [](auto const& tx) { return tx.decoded != nullptr; }) |
-                        ::ranges::views::transform([](auto const& tx) {
-                            return protocol::Transaction::ConstPtr(tx.decoded);
-                        }) |
-                        ::ranges::to<std::vector>());
-                    co_await ledger::prewriteBlockToBuffer(
-                        *m_ledger, blockTxs, block, prewriteStorage);
-                    co_await m_globalStateStorage.get().mergeBackStorage(prewriteStorage);
-                }
-                else
-                {
-                    co_await m_globalStateStorage.get().mergeBackStorage();
-                }
+                std::unique_lock lock(x_state);
+                m_payloadCache[payloadId] = std::move(entry);
+                // Keep only the just-committed block; the newPayload parent check accepts
+                // the head hash directly, so dropping older blockHash rows is safe.
+                std::erase_if(m_blockHashToPayloadId,
+                    [&](auto const& kv) { return kv.first != request.executionPayload.blockHash; });
+                std::erase_if(
+                    m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });
             }
-
-            m_payloadCache[payloadId] = std::move(entry);
-
-            // Evict stale payload entries. A payload is only read between updateForkchoice /
-            // getPayload and newPayload, so once a block is committed its payloadId and
-            // blockHash are unreachable. The built-in single-node driver mints one new
-            // payloadId per block_interval tick, so without eviction both maps grow by one
-            // row per produced block and hold strong references to every transaction ever
-            // executed (unbounded memory over time). Keep only the just-committed block; the
-            // newPayload() parent check accepts the head hash directly, so dropping older
-            // blockHash rows is safe.
-            std::erase_if(m_blockHashToPayloadId,
-                [&](auto const& kv) { return kv.first != request.executionPayload.blockHash; });
-            std::erase_if(m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });
 
             co_return makeStatus(
                 PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);
@@ -1210,6 +1230,7 @@ private:
                     PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
             }
             bcos::Error::Ptr commitError;
+            std::unique_lock opLock(x_opExecute);
             m_delegate->commitBlock(
                 builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
                     commitError = std::move(error);
@@ -1218,13 +1239,11 @@ private:
             {
                 co_return mapDelegateError(*commitError, std::nullopt);
             }
-            co_return makeStatus(
-                PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
+            co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
         }
 
-        // Serialize OP execution under x_state. Storage2 backends used here complete
-        // in-thread, so holding the lock across co_await is safe.
-        std::unique_lock lock(x_state);
+        // Serialize OP execute/commit on the delegate. Do not hold x_state across EVM time.
+        std::unique_lock opLock(x_opExecute);
 
         // parentKnown from SYS_HASH_2_NUMBER (not the in-memory cache).
         auto view = m_globalStateStorage.get().fork();
@@ -1291,15 +1310,30 @@ private:
 
             // baseFee must match calcOpBaseFee(parent).
             {
-                auto expectedBaseFee =
-                    calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
-                if (payload.baseFeePerGas != expectedBaseFee)
+                try
                 {
-                    co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-                        std::string("baseFeePerGas does not match the value computed "
-                                    "from the parent"));
+                    auto expectedBaseFee =
+                        calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
+                    if (payload.baseFeePerGas != expectedBaseFee)
+                    {
+                        co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+                            std::string("baseFeePerGas does not match the value computed "
+                                        "from the parent"));
+                    }
+                }
+                catch (std::exception const& e)
+                {
+                    BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                              std::string("calcOpBaseFee failed: ") + e.what()});
                 }
             }
+        }
+        else
+        {
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    "runOpNewPayloadSteps: parent block header missing at height " +
+                    parentNumberStr});
         }
 
         // Already-known block: VALID without re-execute (after static checks, before
@@ -1770,6 +1804,9 @@ private:
     }
 
     mutable std::shared_mutex x_state;
+    /// Serializes OP delegate reset/execute/commit. Distinct from x_state so cache
+    /// lookups do not hold the map lock across EVM time.
+    mutable std::mutex x_opExecute;
     std::reference_wrapper<MemPoolType> m_memPool;
 
     std::reference_wrapper<GlobalStateStorageType> m_globalStateStorage;
@@ -1785,7 +1822,7 @@ private:
     /// OP execute/commit delegate (OpScheduler). Null on the generic engine and some fixtures.
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
 
-    /// DA throttling caps shared with the RPC's miner_setMaxDASize (null = uncapped).
+    /// DA throttling caps (null or all-zero = uncapped). No RPC writer on this node yet.
     std::shared_ptr<bcos::engine::DACaps> m_daCaps;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHeadBlock;

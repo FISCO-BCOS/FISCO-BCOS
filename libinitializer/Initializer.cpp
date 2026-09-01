@@ -32,6 +32,7 @@
 #include "GlobalStateStorageInitializer.h"
 #include "LedgerInitializer.h"
 #include "MemPoolInitializer.h"
+#include "OpRefusingStubScheduler.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
@@ -80,13 +81,13 @@
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
-#include <algorithm>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
 #include <txpool/validator/TxValidator.h>
 #include <util/tc_clientsocket.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -98,77 +99,6 @@ using namespace bcos::tool;
 using namespace bcos::protocol;
 using namespace bcos::initializer;
 namespace fs = boost::filesystem;
-
-namespace
-{
-/// Stub for MultiVersionScheduler slot 3 when OP mode is off.
-class OpRefusingStubScheduler : public bcos::scheduler::SchedulerInterface
-{
-public:
-    void executeBlock(bcos::protocol::Block::Ptr, bool,
-        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> cb) override
-    {
-        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
-            nullptr, false);
-    }
-    void commitBlock(bcos::protocol::BlockHeader::Ptr,
-        std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> cb) override
-    {
-        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
-            nullptr);
-    }
-    void call(bcos::protocol::Transaction::Ptr,
-        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr)> cb) override
-    {
-        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
-            nullptr);
-    }
-    void preExecuteBlock(
-        bcos::protocol::Block::Ptr, bool, std::function<void(bcos::Error::Ptr)> cb) override
-    {
-        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-            "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"));
-    }
-    void getCode(std::string_view, std::function<void(bcos::Error::Ptr, bcos::bytes)> cb) override
-    {
-        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
-            {});
-    }
-    void getABI(std::string_view, std::function<void(bcos::Error::Ptr, std::string)> cb) override
-    {
-        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
-            {});
-    }
-    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
-        std::string_view, std::string_view, bcos::protocol::BlockNumber) override
-    {
-        // No error channel on this interface: throw the same refusal the callback-based
-        // methods report, so a misconfigured node fails loud instead of serving a
-        // fabricated nullopt (finding N2).
-        throw *BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-            "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)");
-        co_return std::nullopt;  // unreachable; satisfies the coroutine's return type
-    }
-    void status(
-        std::function<void(bcos::Error::Ptr, bcos::protocol::Session::ConstPtr)> cb) override
-    {
-        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
-            nullptr);
-    }
-    void reset(std::function<void(bcos::Error::Ptr)> cb) override
-    {
-        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-            "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"));
-    }
-    // callAtBlock uses the SchedulerInterface default (forwards to call).
-};
-}  // namespace
 
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, const std::string& _logPath)
@@ -478,13 +408,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     if (m_nodeConfig->enableOpEngineRpc() &&
         m_executorVersion == scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "op_engine_rpc with executor_version == " +
-            std::to_string(scheduler_v1::ETHEREUM_EXECUTOR_VERSION) +
-            " builds no EngineService for the endpoint: the v2 pipeline assembles it only "
-            "for the built-in single-node driver. Use executor_version >= " +
-            std::to_string(scheduler_v1::OPSTACK_EXECUTOR_VERSION) +
-            " (OP mode) to serve an external op-node"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "op_engine_rpc with executor_version == " +
+                std::to_string(scheduler_v1::ETHEREUM_EXECUTOR_VERSION) +
+                " builds no EngineService for the endpoint: the v2 pipeline assembles it only "
+                "for the built-in single-node driver. Use executor_version >= " +
+                std::to_string(scheduler_v1::OPSTACK_EXECUTOR_VERSION) +
+                " (OP mode) to serve an external op-node"));
     }
 
     if (baselineSchedulerConfig.parallel)
@@ -620,8 +551,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                                           "OP mode (executor_version>=3): op_l1.l1_block_hash "
                                           "must be a 32-byte (64 hex chars) block hash"));
             }
-            std::copy_n(
-                hashBytes.begin(), sizeof(evmc::bytes32), l1BlockInfo.blockHash.bytes);
+            std::copy_n(hashBytes.begin(), sizeof(evmc::bytes32), l1BlockInfo.blockHash.bytes);
         }
         l1BlockInfo.number = opL1.blockNumber;
         l1BlockInfo.time = opL1.timestamp;
@@ -674,7 +604,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager, m_ioServicePool),
                 m_baselineSchedulerHolder(), m_ethereumSchedulerHolder(),
-                m_opScheduler ? m_opScheduler : std::make_shared<OpRefusingStubScheduler>()}));
+                m_opScheduler ? m_opScheduler :
+                                std::make_shared<bcos::initializer::OpRefusingStubScheduler>()}));
 
     // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
     INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
@@ -893,16 +824,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         if (opStackMode)
         {
             driverGasLimit = 30'000'000ull;
-            driverEip1559Params =
-                bcos::bytes{0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06};
+            driverEip1559Params = bcos::bytes{0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06};
         }
         m_singleNodeConsensus = std::make_shared<single_consensus::SingleNodeConsensus>(
             *m_engineServiceInitializer->engineService(), m_ledger,
             m_nodeConfig->singleNodeConsensusBlockInterval(),
             m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
             m_nodeConfig->singleNodeConsensusFeeRecipient(),
-            m_nodeConfig->singleNodeConsensusFixedTimestamp(), driverGasLimit,
-            driverEip1559Params);
+            m_nodeConfig->singleNodeConsensusFixedTimestamp(), driverGasLimit, driverEip1559Params);
     }
 
 #ifdef TOOLS
