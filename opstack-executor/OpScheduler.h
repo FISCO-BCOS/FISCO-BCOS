@@ -145,10 +145,10 @@ public:
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
             callback) override
     {
-        task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block,
-                       std::function<void(
-                           bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
-                           callback) -> task::Task<void> {
+        task::syncWait([](decltype(this) self, bcos::protocol::Block::Ptr block,
+                           std::function<void(
+                               bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
+                               callback) -> task::Task<void> {
             std::apply(callback, co_await self->coAdoptProbe(std::move(block)));
         }(this, std::move(block), std::move(callback)));
     }
