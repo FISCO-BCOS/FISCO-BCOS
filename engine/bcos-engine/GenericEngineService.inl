@@ -54,8 +54,8 @@ task::Task<ForkchoiceUpdatedResult> GenericEngineService<MemPoolType, GlobalStat
         !finalizedBlockNumber.has_value())
     {
         co_return ForkchoiceUpdatedResult{
-            .payloadStatus =
-                split_detail::makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
+            .payloadStatus = split_detail::makeStatus(
+                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
             .payloadId = std::nullopt,
         };
     }
@@ -118,13 +118,14 @@ task::Task<ForkchoiceUpdatedResult> GenericEngineService<MemPoolType, GlobalStat
         m_memPool.seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
     }
 
-    auto payloadIdOpt = split_detail::derivePayloadId(
-        *payloadAttributes, forkchoiceState.headBlockHash, version);
+    auto payloadIdOpt =
+        split_detail::derivePayloadId(*payloadAttributes, forkchoiceState.headBlockHash, version);
     if (!payloadIdOpt.has_value())
     {
         co_return ForkchoiceUpdatedResult{
-            .payloadStatus = split_detail::makeStatus(PayloadValidationStatus::Invalid,
-                std::nullopt, std::string("payloadAttributes.transactions contains undecodable hex")),
+            .payloadStatus =
+                split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                    std::string("payloadAttributes.transactions contains undecodable hex")),
             .payloadId = std::nullopt,
         };
     }
@@ -167,8 +168,9 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
              scheduler_v1::TransactionScheduler<SchedulerType,
                  typename GlobalStateStorageType::ViewType, ExecutorType,
                  std::vector<protocol::Transaction::Ptr>>
-task::Task<PayloadStatus> GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
-    SchedulerType>::newPayload(const NewPayloadRequest& request, std::uint32_t version)
+task::Task<PayloadStatus>
+GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::newPayload(
+    const NewPayloadRequest& request, std::uint32_t version)
 {
     if (!isNewPayloadVersionSupported(version))
     {
@@ -217,7 +219,8 @@ task::Task<PayloadStatus> GenericEngineService<MemPoolType, GlobalStateStorageTy
                        guard.payloadIdForHash(request.executionPayload.parentHash).has_value();
     if (!parentKnown)
     {
-        co_return split_detail::makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+        co_return split_detail::makeStatus(
+            PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
     }
 
     PayloadID payloadId;
@@ -262,9 +265,8 @@ task::Task<PayloadStatus> GenericEngineService<MemPoolType, GlobalStateStorageTy
             auto blockTxs = std::make_shared<protocol::ConstTransactions>(
                 cached->executionPayload.transactions |
                 ::ranges::views::filter([](auto const& tx) { return tx.decoded != nullptr; }) |
-                ::ranges::views::transform([](auto const& tx) {
-                    return protocol::Transaction::ConstPtr(tx.decoded);
-                }) |
+                ::ranges::views::transform(
+                    [](auto const& tx) { return protocol::Transaction::ConstPtr(tx.decoded); }) |
                 ::ranges::to<std::vector>());
             co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, prewriteStorage);
             co_await m_globalStateStorage.mergeBackStorage(prewriteStorage);
@@ -287,9 +289,8 @@ task::Task<PayloadStatus> GenericEngineService<MemPoolType, GlobalStateStorageTy
         entry->blobsBundle = BlobsBundleV1{};
     }
 
-    guard.putAndRetainPayload(
-        payloadId, request.executionPayload.blockHash, std::move(entry));
-    m_artifacts.clear();
+    generic_detail::commitRetainedPayload(
+        guard, m_artifacts, payloadId, request.executionPayload.blockHash, std::move(entry));
 
     co_return split_detail::makeStatus(
         PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);
@@ -303,14 +304,16 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
                  std::vector<protocol::Transaction::Ptr>>
 task::Task<typename GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
     SchedulerType>::BuildPayloadResult>
-GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::buildPayload(
-    const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
-    const PayloadID& payloadId, std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
-    std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
+GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+    SchedulerType>::buildPayload(const ForkchoiceState& forkchoiceState,
+    const PayloadAttributes& payloadAttributes, const PayloadID& payloadId, std::uint32_t version,
+    bcos::protocol::BlockNumber nextBlockNumber, std::vector<protocol::Transaction::Ptr> sealedTxs,
+    ViewType& view) const
 {
     std::vector<EngineTransaction> engineTransactions;
     engineTransactions.reserve(
-        payloadAttributes.transactions.value_or(std::vector<std::string>{}).size() + sealedTxs.size());
+        payloadAttributes.transactions.value_or(std::vector<std::string>{}).size() +
+        sealedTxs.size());
     if (payloadAttributes.transactions.has_value())
     {
         for (auto const& forcedHex : *payloadAttributes.transactions)

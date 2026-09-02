@@ -73,6 +73,25 @@ PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guar
         throw;
     }
 }
+
+template <class Guard, class ArtifactsMap>
+void commitRetainedPayload(Guard& guard, ArtifactsMap& artifacts, PayloadID const& payloadId,
+    h256 const& blockHash, CommonPayloadEntryPtr entry)
+{
+    PayloadCache cacheRollback = guard.snapshotPayloadCache();
+    ArtifactsMap artifactsRollback = artifacts;
+    try
+    {
+        guard.putAndRetainPayload(payloadId, blockHash, std::move(entry));
+        artifacts.clear();
+    }
+    catch (...)
+    {
+        guard.restorePayloadCache(std::move(cacheRollback));
+        artifacts = std::move(artifactsRollback);
+        throw;
+    }
+}
 }  // namespace generic_detail
 
 template <class ViewType>
