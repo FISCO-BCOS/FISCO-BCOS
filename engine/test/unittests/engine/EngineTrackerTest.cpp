@@ -9,9 +9,14 @@
 
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/Exceptions.h>
 #include <boost/test/unit_test.hpp>
 
 #include <atomic>
+#include <barrier>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
 #include <thread>
 
 using namespace bcos;
@@ -43,6 +48,15 @@ CommonPayloadEntryPtr makePayload(std::uint32_t version, bool withWithdrawalsRoo
         entry->executionPayload.withdrawalsRoot = h256(42);
     }
     return entry;
+}
+
+template <typename Exception>
+void checkExceptionMessage(auto&& action, const char* expectedMessage)
+{
+    BOOST_CHECK_EXCEPTION(action(), Exception, [&](Exception const& e) {
+        auto const* comment = boost::get_error_info<errinfo_comment>(e);
+        return comment != nullptr && *comment == expectedMessage;
+    });
 }
 
 }  // namespace
@@ -104,12 +118,44 @@ BOOST_AUTO_TEST_CASE(engine_tracker_swallows_old_head_without_attributes)
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
 }
 
+BOOST_AUTO_TEST_CASE(engine_tracker_swallows_noncanonical_parent_even_with_attributes)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    auto outcome = tracker.applyForkchoice(resolved(h256(9), 9, false, true));
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_swallows_older_than_parent_with_attributes)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    auto outcome = tracker.applyForkchoice(resolved(h256(8), 8, true, true));
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_allows_canonical_same_height_reorg_sibling)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    auto outcome = tracker.applyForkchoice(resolved(h256(1010), 10, true, false));
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::Applied);
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(1010));
+}
+
 BOOST_AUTO_TEST_CASE(engine_tracker_rejects_noncanonical_same_height)
 {
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
-    BOOST_CHECK_THROW(
-        tracker.applyForkchoice(resolved(h256(1010), 10, false, false)), InvalidForkchoiceState);
+    checkExceptionMessage<InvalidForkchoiceState>(
+        [&]() { tracker.applyForkchoice(resolved(h256(1010), 10, false, false)); },
+        "Forkchoice head block hash conflicts with tracked block number");
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_rejects_safe_above_head)
@@ -123,7 +169,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_rejects_safe_above_head)
         .headCanonical = true,
         .payloadAttributesPresent = false,
     };
-    BOOST_CHECK_THROW(tracker.applyForkchoice(bad), InvalidForkchoiceState);
+    checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(bad); },
+        "Forkchoice safe block number must not exceed head block number");
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_rejects_finalized_above_head)
@@ -137,7 +184,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_rejects_finalized_above_head)
         .headCanonical = true,
         .payloadAttributesPresent = false,
     };
-    BOOST_CHECK_THROW(tracker.applyForkchoice(bad), InvalidForkchoiceState);
+    checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(bad); },
+        "Forkchoice finalized block number must not exceed head block number");
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_rejects_finalized_above_safe)
@@ -151,15 +199,17 @@ BOOST_AUTO_TEST_CASE(engine_tracker_rejects_finalized_above_safe)
         .headCanonical = true,
         .payloadAttributesPresent = false,
     };
-    BOOST_CHECK_THROW(tracker.applyForkchoice(bad), InvalidForkchoiceState);
+    checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(bad); },
+        "Forkchoice finalized block number must not exceed safe block number");
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_rejects_head_jump)
 {
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
-    BOOST_CHECK_THROW(
-        tracker.applyForkchoice(resolved(h256(12), 12, true, false)), InvalidForkchoiceState);
+    checkExceptionMessage<InvalidForkchoiceState>(
+        [&]() { tracker.applyForkchoice(resolved(h256(12), 12, true, false)); },
+        "Forkchoice head block number must increase by exactly 1");
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_updates_safe_and_finalized_on_apply)
@@ -262,24 +312,34 @@ BOOST_AUTO_TEST_CASE(engine_tracker_shared_guard_allows_concurrent_readers)
         guard.putPayload(id, h256(10), makePayload(1));
     }
 
-    std::atomic<int> readers{0};
-    std::atomic<bool> failed{false};
+    std::atomic<int> activeReaders{0};
+    std::atomic<int> peakReaders{0};
+    std::barrier sync(3);
+
     auto read = [&]() {
         auto guard = tracker.lockShared();
-        ++readers;
-        if (!guard.findPayload(id) || guard.forkchoiceState().headBlockHash != h256(10))
+        BOOST_REQUIRE(guard.findPayload(id));
+        BOOST_CHECK_EQUAL(guard.forkchoiceState().headBlockHash, h256(10));
+
+        int current = ++activeReaders;
+        int observed = peakReaders.load();
+        while (observed < current && !peakReaders.compare_exchange_weak(observed, current))
         {
-            failed = true;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        --readers;
+
+        sync.arrive_and_wait();
+        sync.arrive_and_wait();
+        --activeReaders;
     };
 
     std::thread t1(read);
     std::thread t2(read);
+    sync.arrive_and_wait();
+    BOOST_CHECK_GE(peakReaders.load(), 2);
+    sync.arrive_and_wait();
     t1.join();
     t2.join();
-    BOOST_CHECK(!failed);
+    BOOST_CHECK_EQUAL(activeReaders.load(), 0);
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_exclusive_guard_blocks_shared_readers)
@@ -287,26 +347,45 @@ BOOST_AUTO_TEST_CASE(engine_tracker_exclusive_guard_blocks_shared_readers)
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
 
-    std::atomic<bool> sharedStarted{false};
-    std::atomic<bool> sharedFinished{false};
+    std::mutex syncMutex;
+    std::condition_variable readerEnteredCv;
+    std::condition_variable readerAcquiredCv;
+    bool readerEntered = false;
+    bool readerHasLock = false;
+
     auto guard = tracker.lockExclusive();
 
     std::thread reader([&]() {
-        sharedStarted = true;
+        {
+            std::lock_guard lock(syncMutex);
+            readerEntered = true;
+        }
+        readerEnteredCv.notify_one();
+
         auto sharedGuard = tracker.lockShared();
-        sharedFinished = true;
+
+        {
+            std::lock_guard lock(syncMutex);
+            readerHasLock = true;
+        }
+        readerAcquiredCv.notify_one();
     });
 
-    while (!sharedStarted)
     {
-        std::this_thread::yield();
+        std::unique_lock lock(syncMutex);
+        BOOST_REQUIRE(readerEnteredCv.wait_for(
+            lock, std::chrono::seconds(2), [&]() { return readerEntered; }));
+        BOOST_CHECK(!readerHasLock);
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    BOOST_CHECK(!sharedFinished);
 
     guard = EngineTracker::ExclusiveAccess{};
+
+    {
+        std::unique_lock lock(syncMutex);
+        BOOST_REQUIRE(readerAcquiredCv.wait_for(
+            lock, std::chrono::seconds(2), [&]() { return readerHasLock; }));
+    }
     reader.join();
-    BOOST_CHECK(sharedFinished);
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_retain_only_through_guard)
