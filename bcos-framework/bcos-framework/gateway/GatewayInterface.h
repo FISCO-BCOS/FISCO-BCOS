@@ -61,6 +61,9 @@ public:
      * @brief: get nodeIDs from gateway
      * @param: _groupID
      * @return {error, groupNodeInfo}: error is nullptr on success
+     * @note coroutine: _groupID is passed by reference and the coroutine frame holds the
+     *       reference (not a copy) across suspensions — the caller must keep it alive until the
+     *       returned task completes (e.g. own it in a task::wait frame); do not pass a temporary.
      */
     virtual task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo(
         const std::string& _groupID) = 0;
@@ -115,11 +118,17 @@ public:
     /**
      * @brief: send message to a random node subscribed to _topic
      * @return {error, responseType, responseData}: error is nullptr on success
+     * @note coroutine: _topic is passed by reference and the coroutine frame holds the reference
+     *       (not a copy) across suspensions — the caller must keep it alive until the returned
+     *       task completes (e.g. own it in a task::wait frame); do not pass a temporary.
      */
     virtual task::Task<std::tuple<Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) = 0;
     /**
      * @brief: broadcast message to all nodes subscribed to _topic
+     * @note coroutine: _topic is passed by reference and the coroutine frame holds the reference
+     *       (not a copy) across suspensions — the caller must keep it alive until the returned
+     *       task completes (e.g. own it in a task::wait frame); do not pass a temporary.
      */
     virtual task::Task<void> sendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) = 0;

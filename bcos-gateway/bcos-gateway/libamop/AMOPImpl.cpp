@@ -31,6 +31,28 @@ using namespace bcos::gateway;
 using namespace bcos::amop;
 using namespace bcos::protocol;
 
+namespace
+{
+// Decode an encoded AMOPMessage (carried inside an AMOPMessageType response) into the error it
+// represents: the AMOPMessage status field is the real error code, and tars status -7/-8 mean
+// the remote RPC service timed out and are mapped to a human-readable timeout message. Shared by
+// the local-client path (trySendTopicMessageToLocalClient) and the remote retry loop of
+// sendMessageByTopic so the status mapping stays in one place.
+bcos::Error::Ptr decodeAMOPErrorResponse(bcos::amop::AMOPMessage::Ptr const& _amopMsg)
+{
+    auto errorMessage = std::string(_amopMsg->data().begin(), _amopMsg->data().end());
+    auto errorCode = _amopMsg->status();
+    // tars error
+    if (_amopMsg->status() == (uint16_t)(-8) || _amopMsg->status() == (uint16_t)(-7))
+    {
+        errorMessage = "Access to the remote RPC service timed out, please make sure it "
+                       "is online";
+        errorCode = -1;
+    }
+    return BCOS_ERROR_PTR(errorCode, errorMessage);
+}
+}  // namespace
+
 AMOPImpl::~AMOPImpl() = default;
 
 TopicManager::Ptr AMOPImpl::topicManager()
@@ -357,20 +379,11 @@ AMOPImpl::trySendTopicMessageToLocalClient(const std::string& _topic, bcos::byte
     {
         // zero copy overhead
         auto amopMsg = m_messageFactory->buildMessage(ref(*response));
-        auto errorMessage = std::string(amopMsg->data().begin(), amopMsg->data().end());
-        auto errorCode = amopMsg->status();
-        // tars error
-        if (amopMsg->status() == (uint16_t)(-8) || amopMsg->status() == (uint16_t)(-7))
-        {
-            errorMessage =
-                "Access to the remote RPC service timed out, please make sure it "
-                "is online";
-            errorCode = -1;
-        }
-        error = BCOS_ERROR_PTR(errorCode, errorMessage);
+        error = decodeAMOPErrorResponse(amopMsg);
 
         AMOP_LOG(INFO) << LOG_DESC("sendMessageByTopic error: receive responseData")
-                       << LOG_KV("status", amopMsg->status()) << LOG_KV("msg", errorMessage);
+                       << LOG_KV("status", amopMsg->status())
+                       << LOG_KV("msg", error->errorMessage());
     }
     AMOP_LOG(INFO) << LOG_DESC("sendMessageByTopic: receive responseData")
                    << LOG_KV("size", response->size()) << LOG_KV("type", type);
@@ -475,21 +488,11 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> AMOPImpl::s
                 }
                 else
                 {
-                    auto errorMessage = std::string(amopMsg->data().begin(), amopMsg->data().end());
-                    auto errorCode = amopMsg->status();
-                    // tars error
-                    if (amopMsg->status() == (uint16_t)(-8) || amopMsg->status() == (uint16_t)(-7))
-                    {
-                        errorMessage =
-                            "Access to the remote RPC service timed out, please make sure it "
-                            "is online";
-                        errorCode = -1;
-                    }
-                    error = BCOS_ERROR_PTR(errorCode, errorMessage);
+                    error = decodeAMOPErrorResponse(amopMsg);
 
                     AMOP_LOG(INFO) << LOG_DESC("sendMessageByTopic error: receive responseData")
                                    << LOG_KV("status", amopMsg->status())
-                                   << LOG_KV("msg", errorMessage);
+                                   << LOG_KV("msg", error->errorMessage());
                 }
             }
             AMOP_LOG(INFO) << LOG_DESC("sendMessageByTopic: receive responseData")
