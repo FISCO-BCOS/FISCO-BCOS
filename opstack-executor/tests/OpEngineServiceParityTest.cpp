@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
+#include "engine/bcos-engine/EngineTracker.h"
 #include "engine/bcos-engine/OpEngineService.h"
 #include "support/GoldenSample.h"
 #include "support/SeedPreState.h"
@@ -21,11 +22,18 @@
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
+
+#include <atomic>
+#include <mutex>
+#include <thread>
+#include <unordered_map>
+#include <vector>
 
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
@@ -112,6 +120,11 @@ constexpr uint64_t kChainId = 0x2105;
 constexpr bcos::protocol::BlockNumber c_headOrderingBlockNumber = 40;
 constexpr bcos::protocol::BlockNumber c_safeOrderingBlockNumber = 41;
 
+constexpr char const* c_opV4UnsupportedForkMessage =
+    "Isthmus+ payloads require engine_newPayloadV4 (JSON-RPC -38005)";
+constexpr char const* c_safeAboveHeadMessage =
+    "Forkchoice safe block number must not exceed head block number";
+
 bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
 {
     return std::make_shared<bcos::crypto::CryptoSuite>(
@@ -176,7 +189,7 @@ void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, 
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
-bcos::protocol::BlockHeader::Ptr productionHeaderOf(
+bcos::protocol::BlockHeader::Ptr legacyProductionHeaderOf(
     bcos::protocol::BlockFactory::Ptr const& blockFactory,
     bcos::engine::NewPayloadRequest const& request)
 {
@@ -184,6 +197,16 @@ bcos::protocol::BlockHeader::Ptr productionHeaderOf(
     const auto transactionsRoot = EngineOpScheduler::computeTxRoot(*payload.rawTransactions);
     return bcos::engine::detail::rebuildOpEthHeader(blockFactory->blockHeaderFactory(), payload,
         transactionsRoot, *request.parentBeaconBlockRoot);
+}
+
+bcos::protocol::BlockHeader::Ptr newProductionHeaderOf(
+    bcos::protocol::BlockFactory::Ptr const& blockFactory,
+    bcos::engine::NewPayloadRequest const& request)
+{
+    auto const& payload = request.executionPayload;
+    const auto transactionsRoot = EngineOpScheduler::computeTxRoot(*payload.rawTransactions);
+    return bcos::engine::split_detail::op::rebuildOpEthHeader(blockFactory->blockHeaderFactory(),
+        payload, transactionsRoot, *request.parentBeaconBlockRoot);
 }
 
 void checkStatusParity(
@@ -194,6 +217,15 @@ void checkStatusParity(
     BOOST_CHECK(legacy.validationError == fresh.validationError);
 }
 
+void checkValidRepeatStatus(bcos::engine::PayloadStatus const& status, bcos::h256 const& blockHash)
+{
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(status.latestValidHash.has_value());
+    BOOST_CHECK_EQUAL(*status.latestValidHash, blockHash);
+    BOOST_CHECK(!status.validationError.has_value());
+}
+
 void checkForkchoiceParity(bcos::engine::ForkchoiceUpdatedResult const& legacy,
     bcos::engine::ForkchoiceUpdatedResult const& fresh)
 {
@@ -202,10 +234,98 @@ void checkForkchoiceParity(bcos::engine::ForkchoiceUpdatedResult const& legacy,
 }
 
 template <typename Exception>
-void checkBothThrow(auto&& legacyAction, auto&& newAction)
+void checkBothExceptionMessages(auto&& legacyAction, auto&& newAction, char const* expectedMessage)
 {
-    BOOST_CHECK_THROW(legacyAction(), Exception);
-    BOOST_CHECK_THROW(newAction(), Exception);
+    BOOST_CHECK_EXCEPTION(legacyAction(), Exception, [&](Exception const& e) {
+        auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+        return comment != nullptr && *comment == expectedMessage;
+    });
+    BOOST_CHECK_EXCEPTION(newAction(), Exception, [&](Exception const& e) {
+        auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+        return comment != nullptr && *comment == expectedMessage;
+    });
+}
+
+void checkBytesEqual(bcos::bytesConstRef left, bcos::bytesConstRef right)
+{
+    BOOST_CHECK_EQUAL(left.size(), right.size());
+    if (left.size() == right.size())
+    {
+        BOOST_CHECK(std::equal(left.begin(), left.end(), right.begin()));
+    }
+}
+
+void checkHeaderFieldsParity(bcos::protocol::BlockHeader::Ptr const& legacy,
+    bcos::protocol::BlockHeader::Ptr const& fresh,
+    bcos::engine::ExecutionPayload const* payloadOracle = nullptr)
+{
+    BOOST_REQUIRE(legacy);
+    BOOST_REQUIRE(fresh);
+    BOOST_CHECK_EQUAL(legacy->stateRoot(), fresh->stateRoot());
+    BOOST_CHECK_EQUAL(legacy->receiptsRoot(), fresh->receiptsRoot());
+    BOOST_CHECK_EQUAL(legacy->gasUsed(), fresh->gasUsed());
+    BOOST_CHECK_EQUAL(legacy->txsRoot(), fresh->txsRoot());
+    checkBytesEqual(legacy->extraData(), fresh->extraData());
+    BOOST_CHECK(legacy->withdrawalsRoot() == fresh->withdrawalsRoot());
+    BOOST_CHECK(std::equal(legacy->logsBloom().begin(), legacy->logsBloom().end(),
+        fresh->logsBloom().begin(), fresh->logsBloom().end()));
+    BOOST_CHECK_EQUAL(bcos::protocol::EthBlockHeader::computeHash(*legacy),
+        bcos::protocol::EthBlockHeader::computeHash(*fresh));
+    if (payloadOracle != nullptr)
+    {
+        bcos::bytesConstRef oracleExtra(
+            payloadOracle->extraData.data(), payloadOracle->extraData.size());
+        checkBytesEqual(legacy->extraData(), oracleExtra);
+        checkBytesEqual(fresh->extraData(), oracleExtra);
+        BOOST_CHECK_EQUAL(legacy->gasUsed(), payloadOracle->gasUsed);
+        BOOST_CHECK_EQUAL(fresh->gasUsed(), payloadOracle->gasUsed);
+        BOOST_CHECK_EQUAL(legacy->stateRoot(), payloadOracle->stateRoot);
+        BOOST_CHECK_EQUAL(fresh->stateRoot(), payloadOracle->stateRoot);
+        BOOST_CHECK_EQUAL(legacy->receiptsRoot(), payloadOracle->receiptsRoot);
+        BOOST_CHECK_EQUAL(fresh->receiptsRoot(), payloadOracle->receiptsRoot);
+    }
+}
+
+bcos::task::Task<bcos::protocol::BlockHeader::Ptr> readPersistedHeader(MLS& storage,
+    bcos::protocol::BlockNumber number, bcos::protocol::BlockFactory::Ptr const& blockFactory)
+{
+    auto view = storage.fork();
+    auto entry = co_await bcos::storage2::readOne(
+        view, StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(number)});
+    if (!entry.has_value())
+    {
+        co_return nullptr;
+    }
+    auto stored = entry->get();
+    bcos::bytes headerBytes(stored.begin(), stored.end());
+    co_return blockFactory->blockHeaderFactory()->createBlockHeader(headerBytes);
+}
+
+void checkPersistenceParity(MLS& legacyStorage, MLS& newStorage, bcos::h256 const& blockHash,
+    bcos::protocol::BlockNumber blockNumber,
+    bcos::protocol::BlockFactory::Ptr const& /*blockFactory*/)
+{
+    auto legacyView = legacyStorage.fork();
+    auto newView = newStorage.fork();
+    auto legacyNum = bcos::task::syncWait(
+        bcos::ledger::getBlockNumber(legacyView, blockHash, bcos::ledger::fromStorage));
+    auto newNum = bcos::task::syncWait(
+        bcos::ledger::getBlockNumber(newView, blockHash, bcos::ledger::fromStorage));
+    BOOST_REQUIRE(legacyNum.has_value());
+    BOOST_REQUIRE(newNum.has_value());
+    BOOST_CHECK_EQUAL(*legacyNum, blockNumber);
+    BOOST_CHECK_EQUAL(*newNum, blockNumber);
+    BOOST_CHECK_EQUAL(*legacyNum, *newNum);
+
+    auto legacyCanonical = bcos::task::syncWait(
+        bcos::ledger::getBlockHash(legacyView, blockNumber, bcos::ledger::fromStorage));
+    auto newCanonical = bcos::task::syncWait(
+        bcos::ledger::getBlockHash(newView, blockNumber, bcos::ledger::fromStorage));
+    BOOST_REQUIRE(legacyCanonical.has_value());
+    BOOST_REQUIRE(newCanonical.has_value());
+    BOOST_CHECK_EQUAL(*legacyCanonical, blockHash);
+    BOOST_CHECK_EQUAL(*newCanonical, blockHash);
+    BOOST_CHECK_EQUAL(*legacyCanonical, *newCanonical);
 }
 
 struct OpServicePair
@@ -306,6 +426,41 @@ bcos::engine::PayloadAttributes makeOpPayloadAttributes()
     return attrs;
 }
 
+bcos::engine::NewPayloadRequest makeSelfConsistentRequest(
+    w6test::GoldenSample const& sample, std::string const& corruptField)
+{
+    auto params = w6test::makeParamsJson(sample);
+    auto& ep = params[0u];
+    if (corruptField == "stateRoot")
+    {
+        auto b = bcos::fromHex(ep["stateRoot"].asString());
+        b[0] ^= 0xff;
+        ep["stateRoot"] = "0x" + bcos::toHex(b);
+    }
+    else if (corruptField == "receiptsRoot")
+    {
+        auto b = bcos::fromHex(ep["receiptsRoot"].asString());
+        b[0] ^= 0xff;
+        ep["receiptsRoot"] = "0x" + bcos::toHex(b);
+    }
+    else if (corruptField == "gasUsed")
+    {
+        ep["gasUsed"] = "0x" + bcos::toHex(bcos::fromHex(ep["gasUsed"].asString()));
+        auto used = bcos::fromHex(ep["gasUsed"].asString());
+        used[used.size() - 1] ^= 0xff;
+        ep["gasUsed"] = "0x" + bcos::toHex(used);
+    }
+    else
+    {
+        throw std::runtime_error("unknown corruptField: " + corruptField);
+    }
+    auto blockFactory = makeBlockFactory();
+    auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
+    auto header = legacyProductionHeaderOf(blockFactory, request);
+    ep["blockHash"] = w6test::hexPrefixedH256(bcos::protocol::EthBlockHeader::computeHash(*header));
+    return bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
+}
+
 void runE2eVectorParity(std::string const& vectorId)
 {
     auto sample = w6test::loadVectorSample(vectorId);
@@ -318,6 +473,11 @@ void runE2eVectorParity(std::string const& vectorId)
 
     auto params = w6test::makeParamsJson(sample);
     auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
+    BOOST_REQUIRE(request.executionRequests.has_value());
+    BOOST_CHECK(request.executionRequests->empty());
+
+    checkHeaderFieldsParity(legacyProductionHeaderOf(pair.blockFactory, request),
+        newProductionHeaderOf(pair.blockFactory, request), &request.executionPayload);
 
     auto legacyStatus = bcos::task::syncWait(pair.legacy.newPayload(request, 4));
     auto newStatus = bcos::task::syncWait(pair.fresh.newPayload(request, 4));
@@ -338,20 +498,41 @@ void runE2eVectorParity(std::string const& vectorId)
     auto legacyRepeat = bcos::task::syncWait(pair.legacy.newPayload(request, 4));
     auto newRepeat = bcos::task::syncWait(pair.fresh.newPayload(request, 4));
     checkStatusParity(legacyRepeat, newRepeat);
+    checkValidRepeatStatus(legacyRepeat, request.executionPayload.blockHash);
+    checkValidRepeatStatus(newRepeat, request.executionPayload.blockHash);
 
-    auto legacyProduced = productionHeaderOf(pair.blockFactory, request);
-    auto legacyView = pair.legacyStorage.fork();
-    auto legacyCanonical = bcos::task::syncWait(bcos::ledger::getBlockHash(
-        legacyView, request.executionPayload.blockNumber, bcos::ledger::fromStorage));
-    auto newView = pair.newStorage.fork();
-    auto newCanonical = bcos::task::syncWait(bcos::ledger::getBlockHash(
-        newView, request.executionPayload.blockNumber, bcos::ledger::fromStorage));
-    BOOST_CHECK(legacyCanonical.has_value());
-    BOOST_CHECK(newCanonical.has_value());
-    BOOST_CHECK_EQUAL(*legacyCanonical, request.executionPayload.blockHash);
-    BOOST_CHECK_EQUAL(*newCanonical, request.executionPayload.blockHash);
-    BOOST_CHECK_EQUAL(legacyProduced->stateRoot(), legacyProduced->stateRoot());
-    BOOST_CHECK_EQUAL(legacyProduced->receiptsRoot(), legacyProduced->receiptsRoot());
+    auto legacyPersisted = bcos::task::syncWait(readPersistedHeader(
+        pair.legacyStorage, request.executionPayload.blockNumber, pair.blockFactory));
+    auto newPersisted = bcos::task::syncWait(readPersistedHeader(
+        pair.newStorage, request.executionPayload.blockNumber, pair.blockFactory));
+    BOOST_REQUIRE(legacyPersisted);
+    BOOST_REQUIRE(newPersisted);
+    checkHeaderFieldsParity(legacyPersisted, newPersisted, &request.executionPayload);
+
+    checkPersistenceParity(pair.legacyStorage, pair.newStorage, request.executionPayload.blockHash,
+        request.executionPayload.blockNumber, pair.blockFactory);
+}
+
+void runInvalidFieldParity(std::string const& vectorId, std::string const& corruptField)
+{
+    auto sample = w6test::loadVectorSample(vectorId);
+    OpE2ePair pair(forkFlagsFor(sample.jovian));
+    opstack_test::seedPreState(pair.legacyStorage, sample.vector["pre"]);
+    opstack_test::seedPreState(pair.newStorage, sample.vector["pre"]);
+    const auto goldenHeader = w6test::decodeGoldenHeader(sample);
+    registerVerifiedBlock(pair.legacyStorage, goldenHeader->parentInfo().blockHash, 0);
+    registerVerifiedBlock(pair.newStorage, goldenHeader->parentInfo().blockHash, 0);
+
+    auto request = makeSelfConsistentRequest(sample, corruptField);
+    auto legacyStatus = bcos::task::syncWait(pair.legacy.newPayload(request, 4));
+    auto newStatus = bcos::task::syncWait(pair.fresh.newPayload(request, 4));
+    checkStatusParity(legacyStatus, newStatus);
+    BOOST_CHECK_EQUAL(static_cast<int>(legacyStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(legacyStatus.latestValidHash.has_value());
+    BOOST_CHECK_EQUAL(*legacyStatus.latestValidHash, request.executionPayload.parentHash);
+    BOOST_REQUIRE(legacyStatus.validationError.has_value());
+    BOOST_REQUIRE(newStatus.validationError.has_value());
 }
 
 }  // namespace op_engine_parity_test
@@ -381,9 +562,10 @@ BOOST_AUTO_TEST_CASE(op_v3_new_payload_throws_same_unsupported_fork)
     request.executionPayload.excessBlobGas = bcos::u256(0);
     request.executionPayload.blobGasUsed = bcos::u256(0);
     request.parentBeaconBlockRoot = bcos::h256{};
-    checkBothThrow<bcos::engine::UnsupportedFork>(
+    checkBothExceptionMessages<bcos::engine::UnsupportedFork>(
         [&] { return bcos::task::syncWait(pair.legacy.newPayload(request, 3)); },
-        [&] { return bcos::task::syncWait(pair.fresh.newPayload(request, 3)); });
+        [&] { return bcos::task::syncWait(pair.fresh.newPayload(request, 3)); },
+        c_opV4UnsupportedForkMessage);
 }
 
 BOOST_AUTO_TEST_CASE(op_missing_gas_limit_returns_same_invalid)
@@ -413,7 +595,7 @@ BOOST_AUTO_TEST_CASE(op_unknown_parent_returns_same_syncing)
     auto params = w6test::makeParamsJson(sample);
     params[0u]["parentHash"] = "0x0000000000000000000000000000000000000000000000000000000000000001";
     auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
-    auto header = productionHeaderOf(pair.blockFactory, request);
+    auto header = legacyProductionHeaderOf(pair.blockFactory, request);
     params[0u]["blockHash"] =
         w6test::hexPrefixedH256(bcos::protocol::EthBlockHeader::computeHash(*header));
     request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
@@ -443,13 +625,29 @@ BOOST_AUTO_TEST_CASE(op_safe_finalized_validation_matches)
         pair.newStorage, forkchoiceState.safeBlockHash, c_safeOrderingBlockNumber);
     registerVerifiedBlock(
         pair.newStorage, forkchoiceState.finalizedBlockHash, c_headOrderingBlockNumber);
-    checkBothThrow<bcos::engine::InvalidForkchoiceState>(
+    checkBothExceptionMessages<bcos::engine::InvalidForkchoiceState>(
         [&] {
             return bcos::task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, nullptr, 3));
         },
         [&] {
             return bcos::task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, nullptr, 3));
-        });
+        },
+        c_safeAboveHeadMessage);
+}
+
+BOOST_AUTO_TEST_CASE(op_invalid_state_root_parity)
+{
+    runInvalidFieldParity("jovian_deposit_only", "stateRoot");
+}
+
+BOOST_AUTO_TEST_CASE(op_invalid_receipts_root_parity)
+{
+    runInvalidFieldParity("jovian_deposit_only", "receiptsRoot");
+}
+
+BOOST_AUTO_TEST_CASE(op_invalid_gas_used_parity)
+{
+    runInvalidFieldParity("jovian_deposit_only", "gasUsed");
 }
 
 BOOST_AUTO_TEST_CASE(op_e2e_isthmus_deposit_only_parity)
@@ -460,6 +658,74 @@ BOOST_AUTO_TEST_CASE(op_e2e_isthmus_deposit_only_parity)
 BOOST_AUTO_TEST_CASE(op_e2e_jovian_transfer_multi_parity)
 {
     runE2eVectorParity("jovian_transfer_multi");
+}
+
+BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
+{
+    bcos::engine::EngineTracker tracker;
+    std::unordered_map<bcos::engine::PayloadID, bcos::engine::OpPayloadArtifacts> artifacts;
+    auto blockFactory = makeBlockFactory();
+
+    struct PublishedSnapshot
+    {
+        std::mutex mutex;
+        bcos::h256 hash;
+    } published;
+
+    std::atomic<bool> stop{false};
+    std::atomic<int> readerSuccesses{0};
+
+    std::jthread writer([&] {
+        for (std::uint64_t stamp = 0; !stop.load(std::memory_order_relaxed); ++stamp)
+        {
+            auto guard = tracker.lockExclusive();
+            bcos::h256 blockHash(stamp);
+            bcos::engine::PayloadID payloadId =
+                "0x" + bcos::toHex(blockHash.asBytes()).substr(0, 16);
+            auto entry = std::make_shared<bcos::engine::CommonPayloadEntry>();
+            entry->executionPayload.blockHash = blockHash;
+            (void)guard.putPayload(payloadId, blockHash, entry);
+            auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+            header->setNumber(static_cast<int64_t>(stamp));
+            artifacts[payloadId] = bcos::engine::OpPayloadArtifacts{.canonicalHeader = header};
+            if (artifacts.size() > 64)
+            {
+                artifacts.erase(artifacts.begin());
+            }
+            {
+                std::lock_guard lock(published.mutex);
+                published.hash = blockHash;
+            }
+        }
+    });
+    std::jthread reader([&] {
+        while (!stop.load(std::memory_order_relaxed))
+        {
+            bcos::h256 hash;
+            {
+                std::lock_guard lock(published.mutex);
+                hash = published.hash;
+            }
+            bcos::protocol::BlockHeader::Ptr builtHeader;
+            {
+                auto shared = tracker.lockShared();
+                if (auto payloadId = shared.payloadIdForHash(hash))
+                {
+                    if (auto artifactIt = artifacts.find(*payloadId); artifactIt != artifacts.end())
+                    {
+                        builtHeader = artifactIt->second.canonicalHeader;
+                    }
+                }
+            }
+            if (builtHeader)
+            {
+                readerSuccesses.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    stop.store(true, std::memory_order_relaxed);
+    BOOST_CHECK_GT(readerSuccesses.load(), 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
