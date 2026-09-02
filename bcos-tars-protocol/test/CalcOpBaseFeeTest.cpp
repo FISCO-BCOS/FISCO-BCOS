@@ -13,6 +13,7 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <stdexcept>
@@ -90,8 +91,8 @@ BOOST_AUTO_TEST_CASE(ExactTargetReturnsParentBaseFee)
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(1'000'000'000));
 
     // Same rule with the Jovian path (the DA footprint cannot push a target match over).
-    auto const jovian = makeParent(
-        bcos::u256(30'000'000), bcos::u256(15'000'000), bcos::u256(1'000'000'000), jovianParams(0));
+    auto const jovian = makeParent(bcos::u256(30'000'000), bcos::u256(15'000'000),
+        bcos::u256(1'000'000'000), jovianParams(0), bcos::u256(15'000'000));
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(jovian, true), bcos::u256(1'000'000'000));
 }
 
@@ -101,13 +102,13 @@ BOOST_AUTO_TEST_CASE(ExactTargetReturnsParentBaseFee)
 BOOST_AUTO_TEST_CASE(ExactTargetStillClampsToJovianMinBaseFee)
 {
     // parent base fee 100 << minBaseFee 1_000, usage exactly at target.
-    auto const belowFloor = makeParent(
-        bcos::u256(30'000'000), bcos::u256(15'000'000), bcos::u256(100), jovianParams(1'000));
+    auto const belowFloor = makeParent(bcos::u256(30'000'000), bcos::u256(15'000'000),
+        bcos::u256(100), jovianParams(1'000), bcos::u256(15'000'000));
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(belowFloor, true), bcos::u256(1'000));
 
     // Steady state: a floor below the parent fee stays a no-op on exact target.
     auto const aboveFloor = makeParent(bcos::u256(30'000'000), bcos::u256(15'000'000),
-        bcos::u256(1'000'000'000), jovianParams(1'000));
+        bcos::u256(1'000'000'000), jovianParams(1'000), bcos::u256(15'000'000));
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(aboveFloor, true), bcos::u256(1'000'000'000));
 }
 
@@ -183,12 +184,12 @@ BOOST_AUTO_TEST_CASE(JovianMinBaseFeeFloorsTheResult)
 {
     // Unfloored decrease would be 50e6 - (50e6 * 5e6 / 15e6 / 8 = 2,083,333) = 47,916,667.
     auto const parent = makeParent(bcos::u256(30'000'000), bcos::u256(10'000'000),
-        bcos::u256(50'000'000), jovianParams(100'000'000));
+        bcos::u256(50'000'000), jovianParams(100'000'000), bcos::u256(10'000'000));
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, true), bcos::u256(100'000'000));
 
     // A decrease that stays above the floor is not touched.
     auto const above = makeParent(bcos::u256(30'000'000), bcos::u256(10'000'000),
-        bcos::u256(1'000'000'000), jovianParams(100'000'000));
+        bcos::u256(1'000'000'000), jovianParams(100'000'000), bcos::u256(10'000'000));
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(above, true), bcos::u256(958'333'334));
 }
 
@@ -259,6 +260,73 @@ BOOST_AUTO_TEST_CASE(ZeroFeeParametersAreRejected)
         makeParent(bcos::u256(1), bcos::u256(1), bcos::u256(1'000'000'000), holoceneParams());
     expectThrowMessage(
         [&] { (void)bcos::engine::calcOpBaseFee(zeroTargetParent, false); }, "zero gas target");
+}
+
+// op-geth dereferences parent.BaseFee and panics on nil; a Holocene+ parent without a
+// base fee is a corrupt header — fail closed instead of silently pricing at 0.
+BOOST_AUTO_TEST_CASE(MissingBaseFeeIsRejected)
+{
+    BlockHeaderImpl header;
+    header.setGasLimit(bcos::u256(30'000'000));
+    header.setGasUsed(bcos::u256(20'000'000));
+    header.setExtraData(holoceneParams());  // baseFee deliberately left unset
+    expectThrowMessage(
+        [&] { (void)bcos::engine::calcOpBaseFee(header, false); }, "missing baseFee");
+}
+
+// op-geth's Jovian meter dereferences header.BlobGasUsed; a Jovian parent without it
+// is corrupt — fail closed rather than under-counting the DA footprint. The same
+// header passes on the Holocene path, which never reads the blob slot.
+BOOST_AUTO_TEST_CASE(JovianMissingBlobGasUsedIsRejected)
+{
+    auto const parent = makeParent(
+        bcos::u256(30'000'000), bcos::u256(20'000'000), bcos::u256(1'000'000'000), jovianParams(0));
+    expectThrowMessage(
+        [&] { (void)bcos::engine::calcOpBaseFee(parent, true); }, "missing blobGasUsed");
+    BOOST_CHECK_NO_THROW((void)bcos::engine::calcOpBaseFee(parent, false));
+}
+
+// op-geth computes the delta multiply with unbounded big.Int; extreme parent headers
+// must fail closed instead of wrapping mod 2^256. Increase-arm multiply: delta 3 with
+// parentBaseFee 2^255 exceeds u256Max/parentBaseFee = 2.
+BOOST_AUTO_TEST_CASE(OverTargetMultiplyOverflowIsRejected)
+{
+    auto const parent = makeParent(bcos::u256(20), bcos::u256(13), bcos::u256{1} << 255,
+        holoceneParams());  // gasTarget = 20/2 = 10, delta = 3
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(parent, false); },
+        "delta computation overflows u256");
+}
+
+// Decrease-arm multiply: same guard on the gasTarget - gasMetered delta.
+BOOST_AUTO_TEST_CASE(UnderTargetMultiplyOverflowIsRejected)
+{
+    auto const parent = makeParent(bcos::u256(20), bcos::u256(7), bcos::u256{1} << 255,
+        holoceneParams());  // gasTarget = 10, delta = 3
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(parent, false); },
+        "delta computation overflows u256");
+}
+
+// The multiply guard cannot see the final add: parentBaseFee = u256Max with delta 1
+// passes the multiply check but parentBaseFee + deltaFee wraps — the increase must
+// fail closed there too.
+BOOST_AUTO_TEST_CASE(IncreaseAddOverflowIsRejected)
+{
+    bcos::u256 const u256Max = ~bcos::u256(0);
+    auto const parent = makeParent(
+        bcos::u256(20), bcos::u256(11), u256Max, holoceneParams());  // gasTarget 10, delta 1
+    expectThrowMessage(
+        [&] { (void)bcos::engine::calcOpBaseFee(parent, false); }, "increase overflows u256");
+}
+
+// Built-in driver gas limit: configured value passes through, 0 falls back to 30M.
+BOOST_AUTO_TEST_CASE(ResolveDriverGasLimit)
+{
+    using bcos::engine::c_defaultDriverGasLimit;
+    using bcos::engine::resolveDriverGasLimit;
+    BOOST_CHECK_EQUAL(c_defaultDriverGasLimit, std::uint64_t{30'000'000});
+    BOOST_CHECK_EQUAL(resolveDriverGasLimit(0), c_defaultDriverGasLimit);
+    BOOST_CHECK_EQUAL(resolveDriverGasLimit(45'000'000), std::uint64_t{45'000'000});
+    BOOST_CHECK_EQUAL(resolveDriverGasLimit(1), std::uint64_t{1});
 }
 
 BOOST_AUTO_TEST_SUITE_END()

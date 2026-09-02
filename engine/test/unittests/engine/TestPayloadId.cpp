@@ -193,7 +193,8 @@ BOOST_AUTO_TEST_CASE(AllOptionalsV4)
     BOOST_CHECK_EQUAL(derivePayloadId(attrs, f.parentHash, txHashes, 0x04), "0x040ae1596f1e71db");
 }
 
-/// nullopt withdrawals ≡ empty list: identical IDs.
+/// nullopt withdrawals ≡ empty list (identical IDs), and the list is really encoded
+/// into the stream: a one-withdrawal list yields a DIFFERENT id from both.
 BOOST_AUTO_TEST_CASE(NulloptWithdrawalsEqualsEmptyList)
 {
     FixtureInputs f;
@@ -202,6 +203,10 @@ BOOST_AUTO_TEST_CASE(NulloptWithdrawalsEqualsEmptyList)
     a2.withdrawals = std::vector<WithdrawalV1>{};
     BOOST_CHECK_EQUAL(
         derivePayloadId(a1, f.parentHash, {}, 0x01), derivePayloadId(a2, f.parentHash, {}, 0x01));
+    auto a3 = makeAttrs(f);
+    a3.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{}};
+    BOOST_CHECK_NE(
+        derivePayloadId(a3, f.parentHash, {}, 0x01), derivePayloadId(a1, f.parentHash, {}, 0x01));
 }
 
 /// noTxPool=false with 0 txs ≡ absent tx block: identical IDs.
@@ -260,25 +265,36 @@ BOOST_AUTO_TEST_CASE(TimestampFloorSemantics)
         derivePayloadId(a3, f.parentHash, {}, 0x01), derivePayloadId(a4, f.parentHash, {}, 0x01));
 }
 
-/// op-geth types.Withdrawal is uint64; over-wide fields are rejected.
+/// op-geth types.Withdrawal is uint64; over-wide fields are rejected. All three
+/// arms of the OR-guard (index / validatorIndex / amount) are exercised.
 BOOST_AUTO_TEST_CASE(WithdrawalFieldsMustFitUint64)
 {
     FixtureInputs f;
-    auto over = makeAttrs(f);
-    WithdrawalV1 wide;
-    wide.index = bcos::u256{1} << 70;
-    wide.validatorIndex = 0;
-    wide.amount = 0;
-    wide.address = bcos::Address{};
-    over.withdrawals = std::vector<WithdrawalV1>{wide};
-    BOOST_CHECK_THROW(derivePayloadId(over, f.parentHash, {}, 0x02), std::invalid_argument);
+
+    auto overIndex = makeAttrs(f);
+    WithdrawalV1 wideIndex;
+    wideIndex.index = bcos::u256{1} << 70;
+    overIndex.withdrawals = std::vector<WithdrawalV1>{wideIndex};
+    BOOST_CHECK_THROW(derivePayloadId(overIndex, f.parentHash, {}, 0x02), std::invalid_argument);
+
+    auto overValidator = makeAttrs(f);
+    WithdrawalV1 wideValidator;
+    wideValidator.validatorIndex = bcos::u256{1} << 70;
+    overValidator.withdrawals = std::vector<WithdrawalV1>{wideValidator};
+    BOOST_CHECK_THROW(
+        derivePayloadId(overValidator, f.parentHash, {}, 0x02), std::invalid_argument);
+
+    auto overAmount = makeAttrs(f);
+    WithdrawalV1 wideAmount;
+    wideAmount.amount = bcos::u256{1} << 70;
+    overAmount.withdrawals = std::vector<WithdrawalV1>{wideAmount};
+    BOOST_CHECK_THROW(derivePayloadId(overAmount, f.parentHash, {}, 0x02), std::invalid_argument);
 
     auto maxOk = makeAttrs(f);
     WithdrawalV1 edge;
     edge.index = bcos::u256(std::numeric_limits<std::uint64_t>::max());
-    edge.validatorIndex = 0;
-    edge.amount = 0;
-    edge.address = bcos::Address{};
+    edge.validatorIndex = bcos::u256(std::numeric_limits<std::uint64_t>::max());
+    edge.amount = bcos::u256(std::numeric_limits<std::uint64_t>::max());
     maxOk.withdrawals = std::vector<WithdrawalV1>{edge};
     BOOST_CHECK_NO_THROW(derivePayloadId(maxOk, f.parentHash, {}, 0x02));
 }

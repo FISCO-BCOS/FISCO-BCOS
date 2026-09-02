@@ -33,6 +33,10 @@ BOOST_AUTO_TEST_CASE(ZeroCapsAreUncapped)
     BOOST_CHECK(caps.txFits(std::numeric_limits<std::uint64_t>::max()));
     DACaps::Budget budget(caps, 0);
     BOOST_CHECK(budget.admits(std::numeric_limits<std::uint64_t>::max()));
+    // Uncapped + forcedBytes>0: forced envelopes preload the budget, but with no cap
+    // nothing is ever rejected (the cap==0 early return covers the forced path too).
+    DACaps::Budget forcedBudget(caps, 100);
+    BOOST_CHECK(forcedBudget.admits(std::numeric_limits<std::uint64_t>::max()));
 }
 
 BOOST_AUTO_TEST_CASE(TxFitsInclusiveCap)
@@ -50,8 +54,8 @@ BOOST_AUTO_TEST_CASE(BudgetForcedBytesAndInclusiveAdmission)
     caps.maxBlockSize.store(100);
     // Forced (undroppable) envelopes preload the budget.
     DACaps::Budget budget(caps, 40);
-    BOOST_CHECK(budget.admits(60));   // exactly at cap -> admitted
-    BOOST_CHECK(!budget.admits(1));   // over the cap -> rejected
+    BOOST_CHECK(budget.admits(60));  // exactly at cap -> admitted
+    BOOST_CHECK(!budget.admits(1));  // over the cap -> rejected
     DACaps::Budget budget2(caps, 100);
     BOOST_CHECK(!budget2.admits(1));  // forced bytes alone at the cap
     // forced > cap: cap < m_used must reject even envelopeSize 0 (wrap-safe first conjunct).

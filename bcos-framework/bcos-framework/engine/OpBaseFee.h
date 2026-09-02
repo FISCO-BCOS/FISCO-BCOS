@@ -60,9 +60,13 @@ inline std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(
 /// in the caller, not this helper. extraData layout (version byte first):
 ///   9 bytes  = Holocene: 0x00 || denominator(u32 BE) || elasticity(u32 BE)
 ///   17 bytes = Jovian:   0x01 || denominator || elasticity || minBaseFee(u64 BE)
-/// Empty, short, wrong-version, or zero denom/elasticity extraData is fail-closed
-/// (no 8/2 default). The caller decides parentIsJovian from the fork schedule; the
-/// minBaseFee floor is only read from exactly-17-byte extraData carrying 0x01.
+/// Fail-closed everywhere (no 8/2 default): empty, short, wrong-version, or zero
+/// denom/elasticity extraData throws; a Holocene+/Jovian parent missing baseFee
+/// (or a Jovian parent missing blobGasUsed) throws — op-geth dereferences those
+/// fields and would panic on nil, so silence is never an option; and the u256
+/// delta multiply is overflow-guarded where op-geth relies on unbounded big.Int.
+/// The caller decides parentIsJovian from the fork schedule; the minBaseFee floor
+/// is only read from exactly-17-byte extraData carrying 0x01.
 inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool parentIsJovian)
 {
     auto const extra = parent.extraData();
@@ -103,14 +107,34 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
         throw std::invalid_argument("invalid OP base-fee parameters: zero gas target");
     }
 
-    // Jovian meters max(gasUsed, blobGasUsed DA footprint).
+    // Jovian meters max(gasUsed, blobGasUsed DA footprint). op-geth dereferences
+    // header.BlobGasUsed on the Jovian path; a Jovian parent without it is corrupt,
+    // so fail closed instead of silently under-counting the DA footprint.
     bcos::u256 gasMetered = parent.gasUsed();
-    if (parentIsJovian && parent.blobGasUsed().has_value() && *parent.blobGasUsed() > gasMetered)
+    if (parentIsJovian)
     {
-        gasMetered = *parent.blobGasUsed();
+        if (!parent.blobGasUsed().has_value())
+        {
+            throw std::invalid_argument("Jovian OP parent header is missing blobGasUsed");
+        }
+        if (*parent.blobGasUsed() > gasMetered)
+        {
+            gasMetered = *parent.blobGasUsed();
+        }
     }
 
-    bcos::u256 const parentBaseFee = parent.baseFee().value_or(bcos::u256(0));
+    // op-geth dereferences parent.BaseFee and panics on nil; a Holocene+ parent
+    // without a base fee is a corrupt header — fail closed rather than pricing the
+    // next block at 0.
+    if (!parent.baseFee().has_value())
+    {
+        throw std::invalid_argument("OP parent header is missing baseFee");
+    }
+    bcos::u256 const parentBaseFee = *parent.baseFee();
+    // op-geth computes with unbounded big.Int; guard the fixed-width u256 multiply
+    // so an extreme (corrupt or adversarial) parent header fails closed instead of
+    // wrapping mod 2^256.
+    bcos::u256 const u256Max = ~bcos::u256(0);
     bcos::u256 result;
     if (gasMetered == gasTarget)
     {
@@ -121,15 +145,31 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
     else if (gasMetered > gasTarget)
     {
         // baseFee increases: max(1, parentBaseFee * delta / gasTarget / denominator)
-        bcos::u256 deltaFee = parentBaseFee * (gasMetered - gasTarget);
+        bcos::u256 const delta = gasMetered - gasTarget;
+        if (parentBaseFee > u256Max / delta) [[unlikely]]
+        {
+            throw std::invalid_argument("OP base-fee delta computation overflows u256");
+        }
+        bcos::u256 deltaFee = parentBaseFee * delta;
         deltaFee /= gasTarget;
         deltaFee /= denominator;
         result = parentBaseFee + (deltaFee > 0 ? deltaFee : bcos::u256(1));
+        // The multiply guard cannot see the final add; deltaFee near the maximum
+        // would wrap exactly here, where big.Int would keep going.
+        if (result < parentBaseFee) [[unlikely]]
+        {
+            throw std::invalid_argument("OP base-fee increase overflows u256");
+        }
     }
     else
     {
         // baseFee decreases: parentBaseFee - parentBaseFee * delta / gasTarget / denominator
-        bcos::u256 deltaFee = parentBaseFee * (gasTarget - gasMetered);
+        bcos::u256 const delta = gasTarget - gasMetered;
+        if (parentBaseFee > u256Max / delta) [[unlikely]]
+        {
+            throw std::invalid_argument("OP base-fee delta computation overflows u256");
+        }
+        bcos::u256 deltaFee = parentBaseFee * delta;
         deltaFee /= gasTarget;
         deltaFee /= denominator;
         result = deltaFee < parentBaseFee ? parentBaseFee - deltaFee : bcos::u256(0);

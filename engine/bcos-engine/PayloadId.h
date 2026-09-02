@@ -26,6 +26,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -51,6 +52,10 @@ inline void encodeWithdrawalsRlp(
     {
         // op-geth types.Withdrawal is uint64; hexutil.Uint64 rejects >2^64-1.
         auto const maxU64 = bcos::u256(std::numeric_limits<std::uint64_t>::max());
+        // ~49B per item (list header + index/validatorIndex/amount ≤ 9B each + 21B
+        // address); one reserve up front avoids per-item reallocs before the single
+        // append into `out` behind the already-written header.
+        items.reserve(withdrawals->size() * 64);
         for (auto const& w : *withdrawals)
         {
             if (w.index > maxU64 || w.validatorIndex > maxU64 || w.amount > maxU64)

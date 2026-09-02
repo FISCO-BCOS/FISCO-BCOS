@@ -65,23 +65,26 @@ struct DACaps
 
     /// Running estimated-DA byte budget for block assembly: construct with the forced
     /// (undroppable) envelopes' estimate, then admits(estimatedDaSize) per sealed tx in
-    /// order. This is a plain helper, not enforced state — the build loop owns the
-    /// decisions.
+    /// order. The block-size cap is snapshotted at construction (one consistent view
+    /// for the whole build; a Budget must be confined to the single build loop that
+    /// created it, and caps pushed by the RPC mid-build take effect from the next
+    /// budget on). This is a plain helper, not enforced state — the build loop owns
+    /// the decisions.
     class Budget
     {
     public:
         explicit Budget(DACaps const& caps, std::uint64_t forcedBytes)
-          : m_caps(caps), m_used(forcedBytes)
+          : m_maxBlockSize(caps.maxBlockSize.load(std::memory_order_relaxed)), m_used(forcedBytes)
         {}
         bool admits(std::uint64_t estimatedDaSize) noexcept
         {
-            auto const cap = m_caps.maxBlockSize.load(std::memory_order_relaxed);
+            auto const cap = m_maxBlockSize;
             if (cap == 0)
             {
                 return true;
             }
-            // Wrap-safe form: `m_used + envelopeSize` could wrap only at ~2^64 bytes, but the
-            // comparison is cheap to write without the addition.
+            // Wrap-safe form: `m_used + estimatedDaSize` could wrap only at ~2^64 bytes,
+            // but the comparison is cheap to write without the addition.
             if (cap < m_used || estimatedDaSize > cap - m_used)
             {
                 return false;
@@ -91,7 +94,7 @@ struct DACaps
         }
 
     private:
-        DACaps const& m_caps;
+        std::uint64_t m_maxBlockSize;
         std::uint64_t m_used;
     };
 };

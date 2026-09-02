@@ -157,6 +157,8 @@ struct ExecutionPayload
     std::optional<bytes> blockAccessList = std::nullopt;
     std::optional<std::uint64_t> slotNumber = std::nullopt;
 
+    /// NOTE: this struct is ~500B (Bloom + vectors) — pass it by const-ref/move at
+    /// every engine_api call site (parts 2-4).
     /// OP Isthmus+ extends the payload with an explicit withdrawals-root field (=
     /// MessagePasser storage root) that cannot be derived from the (always-empty)
     /// `withdrawals` list above — op-geth's NewPayloadV4 requires it on OP chains.
