@@ -14,9 +14,10 @@
  *  limitations under the License.
  *
  * @file OpBaseFee.h
- * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). Types-only in this
- * slice: the in-tree caller is CalcOpBaseFeeTest. EngineServiceImpl still has a
- * file-local decoder; #5538 should include this header and delete that copy.
+ * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee) plus the shared Holocene/
+ * Jovian extraData shape gate. EngineServiceImpl aliases decodeEip1559Params and
+ * validateOpExtraDataShape from this header (the file-local copies were removed by
+ * #5538); calcOpBaseFee and the engine INVALID gates therefore share one rule set.
  */
 
 #pragma once
@@ -33,13 +34,19 @@
 namespace bcos::engine
 {
 
-/// Canyon EIP-1559 parameters (op-geth params/config.go). Mirrors the anonymous-namespace
-/// copies in EngineServiceImpl.cpp (these constants, decodeEip1559Params, and
-/// validateOptimismExtraDataShape) — #5538 consolidates all three copies onto this
-/// header so the engine INVALID gate and the next-base-fee calc share one decoder.
-/// Unused by calcOpBaseFee itself.
+/// Canyon EIP-1559 parameters (op-geth params/config.go).
 inline constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
 inline constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;
+
+/// Holocene/Jovian extraData layout constants (version byte first): 9 bytes = Holocene
+/// 0x00 || denom(u32 BE) || elasticity(u32 BE); 17 bytes = Jovian 0x01 || same ||
+/// minBaseFee(u64 BE). Single home: the engine gate, the shape rule below and the
+/// next-base-fee calc all read from here.
+inline constexpr std::size_t c_holoceneExtraDataBytes = 9;
+inline constexpr std::size_t c_jovianExtraDataBytes = 17;
+inline constexpr bcos::byte c_holoceneExtraDataVersion = 0x00;
+inline constexpr bcos::byte c_jovianExtraDataVersion = 0x01;
+inline constexpr std::size_t c_eip1559ParamsBytes = 8;
 
 /// Decode the 8-byte Holocene eip1559Params / extraData[1:9] pair (u32 BE denom, u32 BE
 /// elasticity).
@@ -53,6 +60,41 @@ inline std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(
     auto denominator = bcos::fromBigEndian<std::uint32_t>(params.first(4));
     auto elasticity = bcos::fromBigEndian<std::uint32_t>(params.subspan(4, 4));
     return {denominator, elasticity};
+}
+
+/// Shared OP extraData shape gate (length/version/non-zero pair), single home for the
+/// rule the engine INVALID gates and calcOpBaseFee both enforce. Returns a
+/// context-free message body; callers prefix their own subject (the engine validators
+/// use "executionPayload.extraData ", calcOpBaseFee "OP parent extraData ") so each
+/// surface keeps its established wording. `allowEmpty` is true for payload validation
+/// (empty extraData is legal pre-Holocene); the base-fee calc only sees Holocene+
+/// parents and rejects it with the size message.
+inline std::optional<std::string> validateOpExtraDataShape(
+    const bcos::bytes& extraData, bool allowEmpty = true)
+{
+    if (extraData.empty())
+    {
+        return allowEmpty ? std::nullopt :
+                            std::optional<std::string>{"must be 9 (Holocene) or 17 (Jovian) bytes"};
+    }
+    if (extraData.size() != c_holoceneExtraDataBytes && extraData.size() != c_jovianExtraDataBytes)
+    {
+        return "must be 9 (Holocene) or 17 (Jovian) bytes, got " + std::to_string(extraData.size());
+    }
+    auto const expectedVersion = extraData.size() == c_jovianExtraDataBytes ?
+                                     c_jovianExtraDataVersion :
+                                     c_holoceneExtraDataVersion;
+    if (extraData[0] != expectedVersion)
+    {
+        return std::string("version byte does not match length");
+    }
+    auto [denominator, elasticity] = decodeEip1559Params(
+        std::span<const bcos::byte>(extraData).subspan(1, c_eip1559ParamsBytes));
+    if (denominator == 0 || elasticity == 0)
+    {
+        return std::string("must encode a non-zero EIP-1559 denominator and elasticity");
+    }
+    return std::nullopt;
 }
 
 /// Next-block baseFee (op-geth CalcBaseFee). Holocene-active and later only:
@@ -69,25 +111,15 @@ inline std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(
 /// is only read from exactly-17-byte extraData carrying 0x01.
 inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool parentIsJovian)
 {
-    auto const extra = parent.extraData();
-    if (extra.size() != 9 && extra.size() != 17)
+    // extraData() is a bytesConstRef; materialize the (<=17-byte) view so the shared
+    // shape rule and the span reads below share one value.
+    bcos::bytes const extra(parent.extraData().begin(), parent.extraData().end());
+    if (auto shapeError = validateOpExtraDataShape(extra, /*allowEmpty=*/false))
     {
-        throw std::invalid_argument(
-            "OP parent extraData must be 9 (Holocene) or 17 (Jovian) bytes");
+        throw std::invalid_argument("OP parent extraData " + *shapeError);
     }
-    auto const expectedVersion =
-        extra.size() == 17 ? static_cast<bcos::byte>(0x01) : static_cast<bcos::byte>(0x00);
-    if (extra[0] != expectedVersion)
-    {
-        throw std::invalid_argument("OP parent extraData version byte does not match length");
-    }
-    auto [denominator32, elasticity32] =
-        decodeEip1559Params(std::span<const bcos::byte>(extra.data(), extra.size()).subspan(1, 8));
-    if (denominator32 == 0 || elasticity32 == 0)
-    {
-        throw std::invalid_argument(
-            "OP parent extraData must encode a non-zero EIP-1559 denominator and elasticity");
-    }
+    auto [denominator32, elasticity32] = decodeEip1559Params(
+        std::span<const bcos::byte>(extra.data(), extra.size()).subspan(1, c_eip1559ParamsBytes));
     uint64_t const denominator = denominator32;
     uint64_t const elasticity = elasticity32;
 

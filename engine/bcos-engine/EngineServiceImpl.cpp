@@ -244,15 +244,15 @@ std::optional<std::string> validateRawTransactionKind(
 
 namespace
 {
-constexpr bcos::byte c_holoceneExtraDataVersion = 0x00;
-constexpr bcos::byte c_jovianExtraDataVersion = 0x01;
-constexpr std::size_t c_holoceneExtraDataBytes = 9;
-constexpr std::size_t c_jovianExtraDataBytes = 17;
-constexpr std::size_t c_eip1559ParamsBytes = 8;
-
 using bcos::engine::c_eip1559DenominatorCanyon;
 using bcos::engine::c_eip1559ElasticityCanyon;
+using bcos::engine::c_eip1559ParamsBytes;
+using bcos::engine::c_holoceneExtraDataBytes;
+using bcos::engine::c_holoceneExtraDataVersion;
+using bcos::engine::c_jovianExtraDataBytes;
+using bcos::engine::c_jovianExtraDataVersion;
 using bcos::engine::decodeEip1559Params;
+using bcos::engine::validateOpExtraDataShape;
 
 /// Shared 8-byte length + zero-pairing rule for eip1559Params, consumed by both attribute
 /// validators (generic and OP). The throwing encoder keeps its own precondition; this
@@ -283,39 +283,6 @@ std::optional<std::string> validateWholeSecondTimestamp(std::uint64_t timestampM
     return std::nullopt;
 }
 
-std::optional<std::string> validateOptimismExtraDataShape(const bcos::bytes& extraData)
-{
-    if (extraData.empty())
-    {
-        return std::nullopt;
-    }
-    if (extraData.size() != c_holoceneExtraDataBytes && extraData.size() != c_jovianExtraDataBytes)
-    {
-        return "executionPayload.extraData must be empty (pre-Holocene), " +
-               std::to_string(c_holoceneExtraDataBytes) + " bytes (Holocene) or " +
-               std::to_string(c_jovianExtraDataBytes) + " bytes (Jovian), got " +
-               std::to_string(extraData.size());
-    }
-    auto const expectedVersion = extraData.size() == c_jovianExtraDataBytes ?
-                                     c_jovianExtraDataVersion :
-                                     c_holoceneExtraDataVersion;
-    if (extraData[0] != expectedVersion)
-    {
-        return "executionPayload.extraData version byte must be " +
-               std::to_string(static_cast<unsigned>(expectedVersion)) + " for a " +
-               std::to_string(extraData.size()) + "-byte extraData, got " +
-               std::to_string(static_cast<unsigned>(extraData[0]));
-    }
-    auto [denominator, elasticity] = decodeEip1559Params(
-        std::span<const bcos::byte>(extraData).subspan(1, c_eip1559ParamsBytes));
-    if (denominator == 0 || elasticity == 0)
-    {
-        return std::string(
-            "executionPayload.extraData must encode a non-zero EIP-1559 denominator and "
-            "elasticity");
-    }
-    return std::nullopt;
-}
 }  // namespace
 
 bcos::bytes bcos::engine::detail::encodeOptimismExtraData(
@@ -541,9 +508,9 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
                 "for the built header");
         }
     }
-    if (auto error = validateOptimismExtraDataShape(executionPayload.extraData))
+    if (auto error = validateOpExtraDataShape(executionPayload.extraData))
     {
-        return error;
+        return "executionPayload.extraData " + *error;
     }
     return std::nullopt;
 }
@@ -709,9 +676,9 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     }
     // gasUsed > gasLimit is rejected after execution via seal comparison, not here.
     // Shape (length/version/nonzero) is the shared helper; jovianActive then picks 9 vs 17.
-    if (auto error = validateOptimismExtraDataShape(payload.extraData))
+    if (auto error = validateOpExtraDataShape(payload.extraData))
     {
-        return error;
+        return "executionPayload.extraData " + *error;
     }
     if (jovianActive)
     {
