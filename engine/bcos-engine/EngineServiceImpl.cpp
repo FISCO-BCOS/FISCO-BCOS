@@ -63,6 +63,45 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
     return tarsTx;
 }
 
+protocol::Transaction::Ptr wrapPreparedTars(bcostars::Transaction tars, bytes const& env)
+{
+    tars.extraTransactionBytes.assign(env.begin(), env.end());
+    return std::make_shared<bcostars::protocol::TransactionImpl>(
+        [tars = std::move(tars)]() mutable { return &tars; });
+}
+
+EngineTransaction preparedOpTransaction(bytes env, crypto::HashType const& txHash)
+{
+    EngineTransaction out{.raw = std::move(env), .decoded = {}};
+    if (auto tarsTx = opEnvelopeToTars(out.raw, txHash))
+    {
+        out.decoded = wrapPreparedTars(std::move(*tarsTx), out.raw);
+    }
+    else
+    {
+        bcostars::Transaction fallback;
+        fallback.type = static_cast<int32_t>(bcos::protocol::TransactionType::Web3Transaction);
+        fallback.extraTransactionHash.assign(txHash.begin(), txHash.end());
+        out.decoded = wrapPreparedTars(std::move(fallback), out.raw);
+    }
+    return out;
+}
+
+EngineTransaction preparedOpTransactionFromSealed(
+    protocol::Transaction::Ptr const& sealedTx, bytes env)
+{
+    EngineTransaction out{.raw = std::move(env), .decoded = {}};
+    auto const txHash = sealedTx->hash();
+    if (auto const* impl = dynamic_cast<bcostars::protocol::TransactionImpl const*>(sealedTx.get()))
+    {
+        auto tars = impl->inner();
+        tars.extraTransactionHash.assign(txHash.begin(), txHash.end());
+        out.decoded = wrapPreparedTars(std::move(tars), out.raw);
+        return out;
+    }
+    return preparedOpTransaction(std::move(out.raw), txHash);
+}
+
 bcos::bytes decodeOpAttributeHex(std::string_view hex)
 {
     try

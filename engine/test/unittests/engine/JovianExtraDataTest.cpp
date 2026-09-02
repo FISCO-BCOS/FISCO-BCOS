@@ -464,4 +464,40 @@ BOOST_AUTO_TEST_CASE(undecodable_attribute_hex_throws_invalid_payload_attributes
     BOOST_CHECK_NO_THROW((void)engine::detail::decodeOpAttributeHex("7e"));
 }
 
+BOOST_AUTO_TEST_CASE(prepared_op_transaction_keeps_envelope_and_fallback_hash)
+{
+    bytes const raw{0x7e, 0x01};
+    auto const hash = crypto::keccak256Hash(ref(raw));
+    auto tx = engine::detail::preparedOpTransaction(raw, hash);
+    BOOST_REQUIRE(tx.decoded);
+    BOOST_CHECK_EQUAL_COLLECTIONS(tx.raw.begin(), tx.raw.end(), raw.begin(), raw.end());
+    auto const stored = tx.decoded->extraTransactionBytes();
+    BOOST_CHECK_EQUAL_COLLECTIONS(stored.begin(), stored.end(), raw.begin(), raw.end());
+    BOOST_CHECK_EQUAL(tx.decoded->hash(), hash);
+}
+
+BOOST_AUTO_TEST_CASE(prepared_op_transaction_from_sealed_does_not_mutate_pool_tx)
+{
+    bytes const preimage{0xaa, 0xbb};
+    bytes const envelope{0x02, 0x01, 0x03};
+    h256 hash;
+    hash[31] = 0x02;
+    bcostars::Transaction inner;
+    inner.type = static_cast<int32_t>(protocol::TransactionType::Web3Transaction);
+    inner.extraTransactionBytes.assign(preimage.begin(), preimage.end());
+    inner.extraTransactionHash.assign(hash.begin(), hash.end());
+    auto sealed = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [tars = std::move(inner)]() mutable { return &tars; });
+
+    auto prepared = engine::detail::preparedOpTransactionFromSealed(sealed, envelope);
+    BOOST_REQUIRE(prepared.decoded);
+    auto const poolBytes = sealed->extraTransactionBytes();
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        poolBytes.begin(), poolBytes.end(), preimage.begin(), preimage.end());
+    auto const preparedBytes = prepared.decoded->extraTransactionBytes();
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        preparedBytes.begin(), preparedBytes.end(), envelope.begin(), envelope.end());
+    BOOST_CHECK_EQUAL(prepared.decoded->hash(), hash);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

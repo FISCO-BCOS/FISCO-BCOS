@@ -149,6 +149,15 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
 /// Decode a CL attribute hex envelope. Undecodable hex is -38003, not -32603.
 bcos::bytes decodeOpAttributeHex(std::string_view hex);
 
+/// Decode `env` once (RLP + ecrecover) and pair it with the envelope. Malformed
+/// input still carries a fallback tars tx so the scheduler can reject it.
+EngineTransaction preparedOpTransaction(bytes env, crypto::HashType const& txHash);
+
+/// Clone a sealed mempool tx and overwrite extraTransactionBytes with the
+/// reassembled envelope. Does not mutate the pool object or re-ecrecover.
+EngineTransaction preparedOpTransactionFromSealed(
+    protocol::Transaction::Ptr const& sealedTx, bytes env);
+
 /// Single carrier after #5537: OP envelopes live in `transactions[i].raw`.
 inline std::vector<bytes> rawEnvelopesOf(ExecutionPayload const& payload)
 {
@@ -677,29 +686,29 @@ private:
         std::unique_lock opLock(x_opExecute);
 
         // Leading L1-attributes deposit, then attrs.transactions, then sealed pool txs.
-        // Synthesize the deposit only when the CL did not supply one. Attribute envelopes
-        // are decoded EXACTLY ONCE here and reused for both the payload-ID hashes and the
-        // forced-envelope list below (the old flow decoded them a second time inside
-        // derivePayloadId).
-        std::vector<bytes> forcedEnvelopes;
+        // Decode each envelope ONCE here; buildOpBlock reuses EngineTransaction.decoded.
+        // Synthesize the deposit only when the CL did not supply one.
+        std::vector<EngineTransaction> forcedTxs;
         std::vector<h256> attrTxHashes;
         if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
         {
             // The seam parameter is Engine-API seconds (payloadAttributes.timestamp is
             // FISCO-internal milliseconds, same convention PayloadId.h divides by 1000).
-            forcedEnvelopes.push_back(m_scheduler.get().synthesizeL1AttributesEnvelope(
-                payloadAttributes.timestamp / 1000));
+            auto raw = m_scheduler.get().synthesizeL1AttributesEnvelope(
+                payloadAttributes.timestamp / 1000);
+            auto const hash = bcos::crypto::keccak256Hash(bcos::ref(raw));
+            forcedTxs.push_back(detail::preparedOpTransaction(std::move(raw), hash));
         }
         if (payloadAttributes.transactions.has_value())
         {
-            forcedEnvelopes.reserve(
-                forcedEnvelopes.size() + payloadAttributes.transactions->size());
+            forcedTxs.reserve(forcedTxs.size() + payloadAttributes.transactions->size());
             attrTxHashes.reserve(payloadAttributes.transactions->size());
             for (auto const& forcedHex : *payloadAttributes.transactions)
             {
                 auto raw = detail::decodeOpAttributeHex(forcedHex);
-                attrTxHashes.emplace_back(bcos::crypto::keccak256Hash(bcos::ref(raw)));
-                forcedEnvelopes.push_back(std::move(raw));
+                auto const hash = bcos::crypto::keccak256Hash(bcos::ref(raw));
+                attrTxHashes.push_back(hash);
+                forcedTxs.push_back(detail::preparedOpTransaction(std::move(raw), hash));
             }
         }
         // Payload ID from CL attributes only (not pool txs or the synthesized deposit).
@@ -716,8 +725,12 @@ private:
             // DA throttle is applied later, when envelope sizes are known.
         }
 
-        // Tag sealed txs by hash so a validation failure can evict that tx and retry.
-        std::vector<std::pair<crypto::HashType, bytes>> sealedEnvelopes;
+        struct PreparedSealedTx
+        {
+            crypto::HashType hash;
+            EngineTransaction tx;
+        };
+        std::vector<PreparedSealedTx> sealedPrepared;
         for (auto& sealedTx : sealedTxs)
         {
             if (sealedTx->type() !=
@@ -730,97 +743,91 @@ private:
                            "wire form");
                 continue;
             }
-            sealedEnvelopes.emplace_back(sealedTx->hash(),
-                bcostars::protocol::reassembleWeb3RawTransaction(
-                    sealedTx->extraTransactionBytes(), sealedTx->signatureData()));
+            auto env = bcostars::protocol::reassembleWeb3RawTransaction(
+                sealedTx->extraTransactionBytes(), sealedTx->signatureData());
+            auto const hash = sealedTx->hash();
+            sealedPrepared.push_back(PreparedSealedTx{
+                .hash = hash,
+                .tx = detail::preparedOpTransactionFromSealed(std::move(sealedTx), std::move(env)),
+            });
         }
         // Drop sealed envelopes over maxTxSize (0 = uncapped). They stay in the pool.
         if (m_daCaps)
         {
-            auto over = [this](
-                            auto const& entry) { return !m_daCaps->txFits(entry.second.size()); };
-            auto it = std::remove_if(sealedEnvelopes.begin(), sealedEnvelopes.end(), over);
-            if (it != sealedEnvelopes.end())
+            auto over = [this](PreparedSealedTx const& entry) {
+                return !m_daCaps->txFits(entry.tx.raw.size());
+            };
+            auto it = std::remove_if(sealedPrepared.begin(), sealedPrepared.end(), over);
+            if (it != sealedPrepared.end())
             {
                 BCOS_LOG(INFO) << LOG_BADGE("EngineService")
                                << LOG_DESC(
                                       "buildOpPayload: DA throttle dropped sealed txs "
                                       "over maxTxSize")
-                               << LOG_KV("dropped", std::distance(it, sealedEnvelopes.end()))
+                               << LOG_KV("dropped", std::distance(it, sealedPrepared.end()))
                                << LOG_KV("maxTxSize",
                                       m_daCaps->maxTxSize.load(std::memory_order_relaxed));
-                sealedEnvelopes.erase(it, sealedEnvelopes.end());
+                sealedPrepared.erase(it, sealedPrepared.end());
             }
         }
 
         auto const parentBeaconBlockRoot =
             payloadAttributes.parentBeaconBlockRoot.value_or(crypto::HashType{});
-        // Assemble a candidate payload; the eviction loop may retry.
-        auto assemblePayload = [&](std::vector<bytes> candidateEnvelopes) {
-            ExecutionPayload candidate{
-                .logsBloom = Bloom{},
-                .parentHash = forkchoiceState.headBlockHash,
-                .stateRoot = h256{},
-                .receiptsRoot = h256{},
-                .prevRandao = payloadAttributes.prevRandao,
-                // Prefer the CL gasLimit; fall back to ledger config.
-                .gasLimit = payloadAttributes.gasLimit.has_value() ?
-                                u256(*payloadAttributes.gasLimit) :
-                                u256(std::get<0>(ledgerConfig.gasLimit())),
-                .gasUsed = 0,
-                .baseFeePerGas = baseFee,
-                .blockHash = h256{},
-                .transactions = detail::transactionsFromEnvelopes(std::move(candidateEnvelopes)),
-                // Holocene extraData: version || denom || elasticity; Jovian appends minBaseFee.
-                .extraData = detail::encodeOptimismExtraData(payloadAttributes),
-                .feeRecipient = payloadAttributes.suggestedFeeRecipient,
-                .timestamp = payloadAttributes.timestamp,
-                .blockNumber = nextBlockNumber,
-                .withdrawals = std::vector<WithdrawalV1>{},
-                .blobGasUsed = u256(0),
-                .excessBlobGas = u256(0),
-                .blockAccessList = std::nullopt,
-                .slotNumber = std::nullopt,
-                .withdrawalsRoot = h256{},  // filled from the executed header below
-            };
-            return candidate;
+        std::uint64_t forcedBytes = 0;
+        for (auto const& tx : forcedTxs)
+        {
+            forcedBytes += tx.raw.size();
+        }
+        auto const forcedN = forcedTxs.size();
+
+        ExecutionPayload payload{
+            .logsBloom = Bloom{},
+            .parentHash = forkchoiceState.headBlockHash,
+            .stateRoot = h256{},
+            .receiptsRoot = h256{},
+            .prevRandao = payloadAttributes.prevRandao,
+            .gasLimit = payloadAttributes.gasLimit.has_value() ?
+                            u256(*payloadAttributes.gasLimit) :
+                            u256(std::get<0>(ledgerConfig.gasLimit())),
+            .gasUsed = 0,
+            .baseFeePerGas = baseFee,
+            .blockHash = h256{},
+            .transactions = std::move(forcedTxs),
+            .extraData = detail::encodeOptimismExtraData(payloadAttributes),
+            .feeRecipient = payloadAttributes.suggestedFeeRecipient,
+            .timestamp = payloadAttributes.timestamp,
+            .blockNumber = nextBlockNumber,
+            .withdrawals = std::vector<WithdrawalV1>{},
+            .blobGasUsed = u256(0),
+            .excessBlobGas = u256(0),
+            .blockAccessList = std::nullopt,
+            .slotNumber = std::nullopt,
+            .withdrawalsRoot = h256{},
         };
 
         // Probe: evict a sealed tx that fails validation and retry. Forced/deposit failures abort.
-        std::set<crypto::HashType> evicted;
-        ExecutionPayload payload;
+        // Forced txs stay in payload.transactions[0, forcedN); each retry only rebuilds the
+        // sealed tail (R83) and reuses already-decoded Ptrs (R77).
+        std::size_t evicted = 0;
         bcos::protocol::BlockHeader::Ptr executedHeader;
         static constexpr std::size_t c_maxEvictionRetries = 16;
-        while (evicted.size() <= c_maxEvictionRetries)
+        while (evicted <= c_maxEvictionRetries)
         {
-            std::vector<bytes> candidateEnvelopes = forcedEnvelopes;
-            // Forced envelopes always count against the DA budget; sealed ones fill the rest.
+            payload.transactions.resize(forcedN);
             std::optional<bcos::engine::DACaps::Budget> budget;
             if (m_daCaps)
             {
-                std::uint64_t forcedBytes = 0;
-                for (auto const& env : forcedEnvelopes)
-                {
-                    forcedBytes += env.size();
-                }
                 budget.emplace(*m_daCaps, forcedBytes);
             }
-            for (auto const& [hash, env] : sealedEnvelopes)
+            for (auto const& sealed : sealedPrepared)
             {
-                if (evicted.count(hash) != 0)
+                if (budget && !budget->admits(sealed.tx.raw.size()))
                 {
-                    continue;
+                    break;  // pool-order prefix stop (seal order, not size order)
                 }
-                if (budget && !budget->admits(env.size()))
-                {
-                    break;  // pool-order prefix stop (seal order, not size order): deterministic
-                            // prefix
-                }
-                candidateEnvelopes.push_back(env);
+                payload.transactions.push_back(sealed.tx);
             }
-            payload = assemblePayload(std::move(candidateEnvelopes));
 
-            // Provisional header (placeholder commitments) -> block -> delegate pre-execution.
             const auto transactionsRoot =
                 SchedulerType::computeTxRoot(detail::rawEnvelopesOf(payload));
             auto provisionalHeader =
@@ -828,8 +835,6 @@ private:
                     transactionsRoot, parentBeaconBlockRoot);
             auto block = buildOpBlock(payload, provisionalHeader);
 
-            // Drop an abandoned build, then pre-execute with verify=false (placeholder
-            // commitments).
             m_delegate->reset([](bcos::Error::Ptr) {});
             bcos::Error::Ptr executeError;
             m_delegate->executeBlock(block, /*verify=*/false,
@@ -844,9 +849,13 @@ private:
             auto const message =
                 executeError ? executeError->errorMessage() : std::string("no executed header");
             auto culprit = executeError ? detail::culpritHashOf(*executeError) : std::nullopt;
-            if (culprit.has_value() && evicted.count(*culprit) == 0 &&
-                std::any_of(sealedEnvelopes.begin(), sealedEnvelopes.end(),
-                    [&culprit](auto const& entry) { return entry.first == *culprit; }))
+            auto sealedIt = culprit.has_value() ?
+                                std::find_if(sealedPrepared.begin(), sealedPrepared.end(),
+                                    [&culprit](PreparedSealedTx const& entry) {
+                                        return entry.hash == *culprit;
+                                    }) :
+                                sealedPrepared.end();
+            if (sealedIt != sealedPrepared.end())
             {
                 // The candidate was built under the CL-supplied gasLimit. A gasLimit below
                 // the chain's own is a CL configuration fault, not a poisoned transaction —
@@ -856,23 +865,31 @@ private:
                 if (payloadAttributes.gasLimit.has_value() &&
                     *payloadAttributes.gasLimit != std::get<0>(ledgerConfig.gasLimit()))
                 {
-                    // candidateEnvelopes was moved into assemblePayload above; the envelope
-                    // set survives in payload.transactions[].raw, so re-probe from there.
-                    auto ledgerGasPayload = assemblePayload(detail::rawEnvelopesOf(payload));
-                    ledgerGasPayload.gasLimit = u256(std::get<0>(ledgerConfig.gasLimit()));
-                    auto ledgerGasHeader = detail::rebuildOpEthHeader(
-                        m_blockFactory->blockHeaderFactory(), ledgerGasPayload,
-                        SchedulerType::computeTxRoot(detail::rawEnvelopesOf(ledgerGasPayload)),
-                        parentBeaconBlockRoot);
-                    auto ledgerGasBlock = buildOpBlock(ledgerGasPayload, ledgerGasHeader);
-                    m_delegate->reset([](bcos::Error::Ptr) {});
+                    auto const savedGasLimit = payload.gasLimit;
+                    payload.gasLimit = u256(std::get<0>(ledgerConfig.gasLimit()));
                     bcos::Error::Ptr ledgerGasError;
                     bcos::protocol::BlockHeader::Ptr ledgerGasExecutedHeader;
-                    m_delegate->executeBlock(ledgerGasBlock, /*verify=*/false,
-                        [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
-                            ledgerGasError = std::move(error);
-                            ledgerGasExecutedHeader = std::move(header);
-                        });
+                    try
+                    {
+                        auto ledgerGasHeader = detail::rebuildOpEthHeader(
+                            m_blockFactory->blockHeaderFactory(), payload,
+                            SchedulerType::computeTxRoot(detail::rawEnvelopesOf(payload)),
+                            parentBeaconBlockRoot);
+                        auto ledgerGasBlock = buildOpBlock(payload, ledgerGasHeader);
+                        m_delegate->reset([](bcos::Error::Ptr) {});
+                        m_delegate->executeBlock(ledgerGasBlock, /*verify=*/false,
+                            [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header,
+                                bool) {
+                                ledgerGasError = std::move(error);
+                                ledgerGasExecutedHeader = std::move(header);
+                            });
+                    }
+                    catch (...)
+                    {
+                        payload.gasLimit = savedGasLimit;
+                        throw;
+                    }
+                    payload.gasLimit = savedGasLimit;
                     if (!ledgerGasError && ledgerGasExecutedHeader)
                     {
                         BOOST_THROW_EXCEPTION(
@@ -882,13 +899,14 @@ private:
                                 "below the chain's own"});
                     }
                 }
-                evicted.insert(*culprit);
-                std::array<crypto::HashType, 1> hashSpan{*culprit};
+                std::array<crypto::HashType, 1> hashSpan{sealedIt->hash};
                 m_memPool.get().remove(std::span<crypto::HashType const>(hashSpan));
                 BCOS_LOG(WARNING)
                     << LOG_BADGE("EngineService")
                     << LOG_DESC("buildOpPayload: evicted poisoned pool transaction, retrying")
-                    << LOG_KV("tx", culprit->hexPrefixed()) << LOG_KV("reason", message);
+                    << LOG_KV("tx", sealedIt->hash.hexPrefixed()) << LOG_KV("reason", message);
+                sealedPrepared.erase(sealedIt);
+                ++evicted;
                 continue;
             }
             BOOST_THROW_EXCEPTION(
@@ -1500,31 +1518,16 @@ private:
         auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
         for (auto const& engineTx : payload.transactions)
         {
+            if (engineTx.decoded)
+            {
+                block->appendTransaction(engineTx.decoded);
+                continue;
+            }
+            // newPayload (and any other raw-only carrier): decode once here.
             auto const& env = engineTx.raw;
             const auto txHash = hashImpl.hash(env);
-            auto tarsTx = detail::opEnvelopeToTars(env, txHash);
-            if (!tarsTx)
-            {
-                // A conversion failure means the envelope is malformed or un-enumerated
-                // (Web3Transaction RLP decode returned an error) -- a consensus-level rejection
-                // of the block, classified INVALID (OpConsensusError -> INVALID), never -32603.
-                // The verdict is issued by the delegate's execute hook: the type-byte gate
-                // (OpScheduler.h:819-824, unsupported type byte -> OpConsensusError), or for a
-                // malformed-but-supported 0x01/0x02/0x04 envelope, opValidate's type whitelist
-                // with the all-zero fallback tars tx failing validate_transaction. Step 2
-                // (validateOpNewPayloadRequest) does NOT decode envelopes, so reaching assembly
-                // does not imply every envelope is canonical and enumerated. Carry the raw
-                // envelope in a minimal tars tx (only the hash and wire bytes populated) so the
-                // delegate's execute hook re-derives it and issues the verdict.
-                bcostars::Transaction fallback;
-                fallback.extraTransactionHash.assign(txHash.begin(), txHash.end());
-                tarsTx = std::move(fallback);
-            }
-            // takeToTarsTransaction stores the preimage; overwrite with the full envelope.
-            tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
-            auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-                [tars = std::move(*tarsTx)]() mutable { return &tars; });
-            block->appendTransaction(std::move(tx));
+            auto prepared = detail::preparedOpTransaction(env, txHash);
+            block->appendTransaction(std::move(prepared.decoded));
         }
         return block;
     }
