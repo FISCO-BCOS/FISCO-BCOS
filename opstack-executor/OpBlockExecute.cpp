@@ -95,6 +95,8 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const auto* firstDep = std::get_if<DepositTx>(&txs[0].tx);
     if (firstDep == nullptr)
         throw OpConsensusError("op block: first tx is not a deposit");
+    // Warn only: op-geth EL accepts a leading non-attributes deposit (CL derivation
+    // is the authority). Rejecting here would diverge.
     if (!isL1AttributesTx(*firstDep))
         BCOS_LOG(WARNING) << LOG_BADGE("OP_BLOCK_EXEC")
                           << "op block: first tx is a deposit but not the L1 attributes tx — "

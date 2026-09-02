@@ -33,9 +33,9 @@ using namespace bcos::engine;
 
 namespace
 {
-// Whole-second milliseconds (1700000000s): every Eth header produced by finalizeEthBlockHeader
-// must satisfy validateHeader's "timestamp is a whole number of seconds" check, so a fixture
-// timestamp with sub-second milliseconds would make every build path throw.
+// Whole-second milliseconds (1700000000s): finalizeEthBlockHeader / EthBlockHeader
+// reject sub-second timestamps. 123000 also passes the whole-second gate but is too
+// early for realistic Eth header fixtures after #5517.
 constexpr std::uint64_t c_timestamp = 1700000000ULL * 1000ULL;
 constexpr bcos::protocol::BlockNumber c_initialBlockNumber = 5;
 constexpr bcos::protocol::BlockNumber c_trackedInitialBlockNumber = 10;

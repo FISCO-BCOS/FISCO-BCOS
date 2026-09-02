@@ -30,7 +30,7 @@ PayloadAttributes makeAttributes(
     std::optional<bytes> eip1559Params, std::optional<std::uint64_t> minBaseFee)
 {
     PayloadAttributes attributes;
-    attributes.timestamp = 1;
+    attributes.timestamp = 1'000;
     attributes.withdrawals = std::vector<WithdrawalV1>{};
     attributes.parentBeaconBlockRoot =
         h256("2222222222222222222222222222222222222222222222222222222222222222");
@@ -66,6 +66,20 @@ ExecutionPayload makePayloadWithTransactions(bytes extraData, std::vector<bytes>
         payload.transactions.push_back(std::move(transaction));
     }
     return payload;
+}
+
+NewPayloadRequest makeOpNewPayloadRequest(bytes extraData)
+{
+    NewPayloadRequest request;
+    request.executionPayload = makeExecutionPayloadV3(std::move(extraData));
+    request.parentBeaconBlockRoot =
+        h256("2222222222222222222222222222222222222222222222222222222222222222");
+    request.executionPayload.withdrawalsRoot =
+        h256("3333333333333333333333333333333333333333333333333333333333333333");
+    request.executionPayload.excessBlobGas = 0;
+    request.executionPayload.blobGasUsed = 0;
+    request.executionRequests = std::vector<bytes>{};
+    return request;
 }
 }  // namespace
 
@@ -117,7 +131,7 @@ BOOST_AUTO_TEST_CASE(holocene_without_min_base_fee_encodes_nine_bytes)
 BOOST_AUTO_TEST_CASE(missing_eip1559_params_keeps_extra_data_empty)
 {
     BOOST_CHECK(engine::detail::encodeOptimismExtraData(makeAttributes(std::nullopt, std::nullopt))
-            .empty());
+                    .empty());
 }
 
 // minBaseFee without eip1559Params leaves the params half of the 17-byte form
@@ -133,10 +147,18 @@ BOOST_AUTO_TEST_CASE(min_base_fee_without_params_is_rejected)
 // by the RPC parse layer, so in-process PayloadAttributes producers are covered too.
 BOOST_AUTO_TEST_CASE(wrong_length_eip1559_params_are_rejected)
 {
-    BOOST_CHECK(
-        engine::detail::validatePayloadAttributes(makeAttributes(bytes(7, 0), 0), 3).has_value());
-    BOOST_CHECK(
-        engine::detail::validatePayloadAttributes(makeAttributes(bytes(9, 0), 0), 3).has_value());
+    // Non-zero fill: all-zero bytes fold into the valid (0,0) pairing at the attribute level,
+    // so a length-gate weakening to a parity-only check would survive all-zero cells (R57).
+    // The unique message is pinned on both cells so the rejection is attributed to the
+    // 8-byte length gate, not to a sibling guard.
+    auto shortError =
+        engine::detail::validatePayloadAttributes(makeAttributes(bytes(7, 0xAA), 0), 3);
+    BOOST_REQUIRE(shortError.has_value());
+    BOOST_CHECK_NE(shortError->find("exactly 8 bytes"), std::string::npos);
+    auto longError =
+        engine::detail::validatePayloadAttributes(makeAttributes(bytes(9, 0xAA), 0), 3);
+    BOOST_REQUIRE(longError.has_value());
+    BOOST_CHECK_NE(longError->find("exactly 8 bytes"), std::string::npos);
 }
 
 // ValidateHolocene1559Params (eip1559.go:89-100): a zero denominator with a non-zero
@@ -145,10 +167,10 @@ BOOST_AUTO_TEST_CASE(mixed_zero_eip1559_params_are_rejected)
 {
     BOOST_CHECK(engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x0000000000000006"), 0), 3)
-            .has_value());
+                    .has_value());
     BOOST_CHECK(engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000000"), 0), 3)
-            .has_value());
+                    .has_value());
     // Both zero and both non-zero stay valid.
     BOOST_CHECK(
         !engine::detail::validatePayloadAttributes(makeAttributes(bytes(8, 0), 0), 3).has_value());
@@ -187,7 +209,7 @@ BOOST_AUTO_TEST_CASE(eip1559_fields_are_rejected_below_version_three)
         // version, so any error below is attributable to the new gate.
         BOOST_REQUIRE(
             !engine::detail::validatePayloadAttributes(attributesForVersion(version), version)
-                .has_value());
+                 .has_value());
 
         auto holocene = attributesForVersion(version);
         holocene.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
@@ -210,10 +232,10 @@ BOOST_AUTO_TEST_CASE(eip1559_fields_are_rejected_below_version_three)
     // V3 is the version op-node actually uses, so both forms stay valid there.
     BOOST_CHECK(!engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000006"), std::nullopt), 3)
-            .has_value());
+                     .has_value());
     BOOST_CHECK(!engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000006"), 7), 3)
-            .has_value());
+                     .has_value());
 }
 
 // encodeOptimismExtraData is an exported detail:: entry point reachable from
@@ -295,6 +317,187 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)
     auto alteredTransaction = built;
     alteredTransaction.transactions[1].raw = bytes{0x02, 0x04};
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(alteredTransaction, built).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(get_payload_v4_rejects_v1_v2_even_in_op_mode)
+{
+    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(engine::ApiVersion::V4, 1));
+    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(engine::ApiVersion::V4, 2));
+    BOOST_CHECK(engine::detail::isGetPayloadVersionCompatible(engine::ApiVersion::V4, 3));
+    BOOST_CHECK(!engine::detail::isGetPayloadVersionCompatible(engine::ApiVersion::V4, 4));
+}
+
+BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_rejects_subsecond_timestamp)
+{
+    PayloadAttributes attrs;
+    attrs.timestamp = 1;
+    attrs.gasLimit = 30'000'000;
+    attrs.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
+    attrs.withdrawals = std::vector<WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot =
+        h256("2222222222222222222222222222222222222222222222222222222222222222");
+    auto error = engine::detail::validateOpPayloadAttributes(attrs, false);
+    BOOST_REQUIRE(error.has_value());
+    BOOST_CHECK_NE(error->find("whole number of seconds"), std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_requires_gas_and_params)
+{
+    PayloadAttributes attrs;
+    // Internal ms; must be a whole second or the %1000 gate fires first.
+    attrs.timestamp = 1'000;
+    attrs.withdrawals = std::vector<WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot =
+        h256("2222222222222222222222222222222222222222222222222222222222222222");
+    auto missingGas = engine::detail::validateOpPayloadAttributes(attrs, false);
+    BOOST_REQUIRE(missingGas.has_value());
+    BOOST_CHECK_NE(missingGas->find("gasLimit"), std::string::npos);
+
+    attrs.gasLimit = 30'000'000;
+    auto missingParams = engine::detail::validateOpPayloadAttributes(attrs, false);
+    BOOST_REQUIRE(missingParams.has_value());
+    BOOST_CHECK_NE(missingParams->find("eip1559Params"), std::string::npos);
+
+    // A present-zero gasLimit is rejected fail-closed: used verbatim it makes the next
+    // block's calcOpBaseFee gasTarget zero (bare internal error) instead of rejecting here.
+    attrs.gasLimit = 0;
+    auto zeroGas = engine::detail::validateOpPayloadAttributes(attrs, false);
+    BOOST_REQUIRE(zeroGas.has_value());
+    BOOST_CHECK_NE(zeroGas->find("must be non-zero"), std::string::npos);
+    attrs.gasLimit = 30'000'000;
+
+    attrs.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
+    BOOST_CHECK(!engine::detail::validateOpPayloadAttributes(attrs, false).has_value());
+    auto missingMin = engine::detail::validateOpPayloadAttributes(attrs, true);
+    BOOST_REQUIRE(missingMin.has_value());
+    BOOST_CHECK_NE(missingMin->find("minBaseFee"), std::string::npos);
+    attrs.minBaseFee = 7;
+    BOOST_CHECK(!engine::detail::validateOpPayloadAttributes(attrs, true).has_value());
+
+    // R83: the three OP-only rejection branches the staged case never reached.
+    // Non-empty withdrawals are rejected on the OP path (generic V1 allows them).
+    attrs.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{}};
+    auto nonEmptyW = engine::detail::validateOpPayloadAttributes(attrs, true);
+    BOOST_REQUIRE(nonEmptyW.has_value());
+    BOOST_CHECK_NE(nonEmptyW->find("withdrawals must be empty"), std::string::npos);
+    attrs.withdrawals = std::vector<WithdrawalV1>{};
+
+    // minBaseFee present before the Jovian fork is rejected.
+    auto preJovianMin = engine::detail::validateOpPayloadAttributes(attrs, false);
+    BOOST_REQUIRE(preJovianMin.has_value());
+    BOOST_CHECK_NE(preJovianMin->find("minBaseFee must be null"), std::string::npos);
+
+    // Wrong-length eip1559Params through the OP validator (shape helper path).
+    attrs.eip1559Params = fromHexWithPrefix("0x000000fa000006");
+    auto opShape = engine::detail::validateOpPayloadAttributes(attrs, true);
+    BOOST_REQUIRE(opShape.has_value());
+    BOOST_CHECK_NE(opShape->find("exactly 8 bytes"), std::string::npos);
+    attrs.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
+}
+
+BOOST_AUTO_TEST_CASE(validate_op_new_payload_accepts_empty_transactions)
+{
+    // Carrier is transactions[].raw; an empty list is not a missing-field error.
+    auto error = engine::detail::validateOpNewPayloadRequest(
+        makeOpNewPayloadRequest(fromHexWithPrefix("0x00000000fa00000006")), false);
+    BOOST_CHECK(!error.has_value());
+}
+
+BOOST_AUTO_TEST_CASE(validate_op_new_payload_rejects_sibling_fields)
+{
+    auto goodExtra = fromHexWithPrefix("0x00000000fa00000006");
+    auto jovianExtra = fromHexWithPrefix("0x01000000fa000000060000000000000000");
+
+    auto missingRoot = makeOpNewPayloadRequest(goodExtra);
+    missingRoot.executionPayload.withdrawalsRoot = std::nullopt;
+    auto rootErr = engine::detail::validateOpNewPayloadRequest(missingRoot, false);
+    BOOST_REQUIRE(rootErr.has_value());
+    BOOST_CHECK_NE(rootErr->find("withdrawalsRoot"), std::string::npos);
+
+    auto subsecond = makeOpNewPayloadRequest(goodExtra);
+    subsecond.executionPayload.timestamp = 1;
+    auto tsErr = engine::detail::validateOpNewPayloadRequest(subsecond, false);
+    BOOST_REQUIRE(tsErr.has_value());
+    BOOST_CHECK_NE(tsErr->find("whole number of seconds"), std::string::npos);
+
+    auto preJovianBlob = makeOpNewPayloadRequest(goodExtra);
+    preJovianBlob.executionPayload.blobGasUsed = 1;
+    auto blobErr = engine::detail::validateOpNewPayloadRequest(preJovianBlob, false);
+    BOOST_REQUIRE(blobErr.has_value());
+    BOOST_CHECK_NE(blobErr->find("blobGasUsed"), std::string::npos);
+
+    auto missingRequests = makeOpNewPayloadRequest(goodExtra);
+    missingRequests.executionRequests = std::nullopt;
+    auto reqErr = engine::detail::validateOpNewPayloadRequest(missingRequests, false);
+    BOOST_REQUIRE(reqErr.has_value());
+    BOOST_CHECK_NE(reqErr->find("executionRequests"), std::string::npos);
+
+    // Shared shape helper: empty extraData is legal pre-Holocene, but OP Isthmus wants 9 bytes.
+    auto emptyExtra = makeOpNewPayloadRequest({});
+    auto emptyErr = engine::detail::validateOpNewPayloadRequest(emptyExtra, false);
+    BOOST_REQUIRE(emptyErr.has_value());
+    BOOST_CHECK_NE(emptyErr->find("exactly 9 bytes"), std::string::npos);
+
+    auto jovianOnIsthmus = makeOpNewPayloadRequest(jovianExtra);
+    auto lenErr = engine::detail::validateOpNewPayloadRequest(jovianOnIsthmus, false);
+    BOOST_REQUIRE(lenErr.has_value());
+    BOOST_CHECK_NE(lenErr->find("exactly 9 bytes"), std::string::npos);
+
+    auto isthmusOnJovian = makeOpNewPayloadRequest(goodExtra);
+    auto jovianLen = engine::detail::validateOpNewPayloadRequest(isthmusOnJovian, true);
+    BOOST_REQUIRE(jovianLen.has_value());
+    BOOST_CHECK_NE(jovianLen->find("exactly 17 bytes"), std::string::npos);
+
+    auto zeroDenom = makeOpNewPayloadRequest(fromHexWithPrefix("0x000000000000000006"));
+    auto denomErr = engine::detail::validateOpNewPayloadRequest(zeroDenom, false);
+    BOOST_REQUIRE(denomErr.has_value());
+    BOOST_CHECK_NE(denomErr->find("non-zero"), std::string::npos);
+
+    BOOST_CHECK(
+        !engine::detail::validateOpNewPayloadRequest(makeOpNewPayloadRequest(jovianExtra), true)
+             .has_value());
+}
+
+BOOST_AUTO_TEST_CASE(undecodable_attribute_hex_throws_invalid_payload_attributes)
+{
+    BOOST_CHECK_THROW(engine::detail::decodeOpAttributeHex("zz"), InvalidPayloadAttributes);
+    BOOST_CHECK_NO_THROW((void)engine::detail::decodeOpAttributeHex("7e"));
+}
+
+BOOST_AUTO_TEST_CASE(prepared_op_transaction_keeps_envelope_and_fallback_hash)
+{
+    bytes const raw{0x7e, 0x01};
+    auto const hash = crypto::keccak256Hash(ref(raw));
+    auto tx = engine::detail::preparedOpTransaction(raw, hash);
+    BOOST_REQUIRE(tx.decoded);
+    BOOST_CHECK_EQUAL_COLLECTIONS(tx.raw.begin(), tx.raw.end(), raw.begin(), raw.end());
+    auto const stored = tx.decoded->extraTransactionBytes();
+    BOOST_CHECK_EQUAL_COLLECTIONS(stored.begin(), stored.end(), raw.begin(), raw.end());
+    BOOST_CHECK_EQUAL(tx.decoded->hash(), hash);
+}
+
+BOOST_AUTO_TEST_CASE(prepared_op_transaction_from_sealed_does_not_mutate_pool_tx)
+{
+    bytes const preimage{0xaa, 0xbb};
+    bytes const envelope{0x02, 0x01, 0x03};
+    h256 hash;
+    hash[31] = 0x02;
+    bcostars::Transaction inner;
+    inner.type = static_cast<int32_t>(protocol::TransactionType::Web3Transaction);
+    inner.extraTransactionBytes.assign(preimage.begin(), preimage.end());
+    inner.extraTransactionHash.assign(hash.begin(), hash.end());
+    auto sealed = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [tars = std::move(inner)]() mutable { return &tars; });
+
+    auto prepared = engine::detail::preparedOpTransactionFromSealed(sealed, envelope);
+    BOOST_REQUIRE(prepared.decoded);
+    auto const poolBytes = sealed->extraTransactionBytes();
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        poolBytes.begin(), poolBytes.end(), preimage.begin(), preimage.end());
+    auto const preparedBytes = prepared.decoded->extraTransactionBytes();
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        preparedBytes.begin(), preparedBytes.end(), envelope.begin(), envelope.end());
+    BOOST_CHECK_EQUAL(prepared.decoded->hash(), hash);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

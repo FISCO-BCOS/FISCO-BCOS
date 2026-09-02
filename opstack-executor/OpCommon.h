@@ -31,11 +31,15 @@ namespace bcos::evm
 /// namespaces (and the code that references it from either) resolve it by outer-scope lookup.
 struct OpConsensusError : std::runtime_error
 {
-    using std::runtime_error::runtime_error;
-    /// Offending tx (when the rejection is per-tx). Downstream pool eviction reads this
-    /// field, never the message text — a string-format contract would silently break the
-    /// moment anyone rewords the message.
     std::optional<bcos::h256> txHash;
+
+    explicit OpConsensusError(std::string const& what_arg) : std::runtime_error(what_arg) {}
+
+    /// Per-tx reject. The hash is a structured member; OpScheduler attaches it to the
+    /// boundary `bcos::Error` as `OpCulpritTxHash`. Never encode it into `what()`.
+    OpConsensusError(std::string what_arg, bcos::h256 hash)
+      : std::runtime_error(std::move(what_arg)), txHash(hash)
+    {}
 };
 }  // namespace bcos::evm
 

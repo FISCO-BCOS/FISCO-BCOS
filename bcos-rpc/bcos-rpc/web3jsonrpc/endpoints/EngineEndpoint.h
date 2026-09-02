@@ -23,6 +23,7 @@
 #include "bcos-rpc/groupmgr/NodeService.h"
 #include "bcos-task/Task.h"
 #include <json/json.h>
+#include <atomic>
 
 namespace bcos::rpc
 {
@@ -58,6 +59,11 @@ private:
 
     /// Build the -38005 answer for a method version this node does not implement.
     void buildUnimplementedVersionError(std::string_view method, Json::Value& response) const;
+
+    /// One-in-flight guard for OP (V4) newPayload executions: a second concurrent request is
+    /// answered with the spec-recognized SYNCING status instead of queueing another full
+    /// block execution + commit (CPU DoS bound; op-node retries).
+    std::atomic<bool> m_opPayloadBusy{false};
 
     NodeService::Ptr m_nodeService;
 };

@@ -179,9 +179,16 @@ bcos::bytes parseHexBytesField(Json::Value const& value, std::string_view field)
     {
         return reject();
     }
+    auto const hex = value.asString();
+    // fromHex left-pads an odd nibble; require the same 0x + even-length contract as
+    // parseRawTransactionElement so extraData / logsBloom / eip1559Params stay verbatim.
+    if (hex.size() < 2 || hex.size() % 2 != 0 || hex[0] != '0' || (hex[1] != 'x' && hex[1] != 'X'))
+    {
+        return reject();
+    }
     try
     {
-        return bcos::fromHex(value.asString());
+        return bcos::fromHex(hex);
     }
     catch (bcos::BadHexCharacter const&)
     {
@@ -575,17 +582,21 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
     // forged value) and report malformed input as std::invalid_argument, which the RPC
     // entry point would surface as -32603 InternalError.
     //
-    // KNOWN GAP: gasLimit is parsed and carried on PayloadAttributes but buildPayload
-    // IGNORES it — the built block's gas limit always comes from this chain's own
-    // SystemConfig (EngineServiceImpl.h, ledgerConfig.gasLimit()). op-geth does the
-    // opposite: the attribute is mandatory on an OP chain (checkOptimismPayloadAttributes,
-    // eth/catalyst/api_optimism.go:41-43, else -38003) and sets header.GasLimit verbatim
-    // (miner/worker.go:362-363), and op-node always sends it from the L1 SystemConfig
-    // (op-node/rollup/derive/attributes.go:207-215). Honouring it changes what block this
-    // node produces, which belongs to the header-fields work rather than to this
-    // method-surface change.
+    // KNOWN GAP (generic path): the generic buildPayload IGNORES payloadAttributes.gasLimit —
+    // the built block's gas limit always comes from this chain's own SystemConfig
+    // (EngineServiceImpl.h, ledgerConfig.gasLimit()). The OP path (buildOpPayload) is the
+    // opposite: it prefers attrs.gasLimit and falls back to ledgerConfig, matching op-geth's
+    // mandatory-gasLimit semantics (checkOptimismPayloadAttributes, eth/catalyst/
+    // api_optimism.go:41-43, else -38003; miner/worker.go:362-363; op-node always sends it
+    // from the L1 SystemConfig, op-node/rollup/derive/attributes.go:207-215). Honouring it on
+    // the generic path changes what block this node produces, which belongs to the
+    // header-fields work rather than to this method-surface change.
     if (pa.isMember("gasLimit") && !pa["gasLimit"].isNull())
     {
+        // Interop note: parseQuantity (safeFromQuantity) is more lenient than op-geth's
+        // hexutil.Uint64 — it accepts a missing 0x prefix and leading zeros. The admitted
+        // set is deliberately wider than op-geth's; values decode identically, so there is
+        // no consensus impact (see parseBigQuantity's rationale above).
         attrs.gasLimit = parseQuantity(pa["gasLimit"], "payloadAttributes.gasLimit");
     }
     if (pa.isMember("eip1559Params") && !pa["eip1559Params"].isNull())
@@ -712,8 +723,6 @@ Json::Value bcos::rpc::serializeExecutionPayload(
     Json::Value transactions(Json::arrayValue);
     for (auto const& transaction : payload.transactions)
     {
-        // Raw EIP-2718 bytes out, exactly as carried — byte-for-byte what newPayload
-        // received or what buildPayload reassembled.
         transactions.append(toHexStringWithPrefix(transaction.raw));
     }
     ep["transactions"] = std::move(transactions);

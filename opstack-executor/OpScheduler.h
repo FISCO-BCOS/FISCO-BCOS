@@ -110,13 +110,13 @@ public:
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
             callback) override
     {
-        // Capturing lambda would hold this/block/cb in the closure, which task::wait destroys at
-        // the end of this full-expression; a coroutine that genuinely suspends would then read a
-        // freed closure (BaselineScheduler-tpp.h uses this parameter form for the same reason).
-        task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
-                       std::function<void(
-                           bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
-                           callback) -> task::Task<void> {
+        // Parameter-form task so a genuine suspend does not read a destroyed capturing
+        // lambda (BaselineScheduler-tpp.h). syncWait: EngineServiceImpl treats execute
+        // as finished when this returns (task::wait is fire-and-forget).
+        task::syncWait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
+                           std::function<void(
+                               bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
+                               callback) -> task::Task<void> {
             std::apply(callback, co_await self->coExecuteBlock(std::move(block), verify));
         }(this, std::move(block), verify, std::move(callback)));
     }
@@ -124,7 +124,7 @@ public:
     void commitBlock(bcos::protocol::BlockHeader::Ptr header,
         std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback) override
     {
-        task::wait(
+        task::syncWait(
             [](decltype(this) self, bcos::protocol::BlockHeader::Ptr header,
                 std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback)
                 -> task::Task<void> {
@@ -435,12 +435,10 @@ private:
 
             // One execute at a time. Also take m_commitMutex so pushView / popFrontStorage
             // cannot race mergeBackStorage (reset() already takes all three). NOTE: these
-            // std::unique_lock objects span the co_awaits below, which is safe ONLY while the
-            // whole task::wait chain runs synchronously to completion on the calling thread
-            // (bcos::task's symmetric transfer: Wait.h starts an AsyncTask and returns at the
-            // first real suspension). If a future awaitable genuinely suspends, the closure
-            // fix above (parameter-form task::wait) is not enough here — the locks must be
-            // narrowed or replaced with a coroutine-aware lock.
+            // std::unique_lock objects span the co_awaits below. executeBlock/commitBlock
+            // now use task::syncWait, so the EngineServiceImpl caller does not proceed
+            // until this task finishes. If a future awaitable resumes on another thread,
+            // these locks must be narrowed or replaced with a coroutine-aware lock.
             std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
             if (!executeLock.owns_lock())
             {
@@ -606,8 +604,13 @@ private:
             auto message =
                 fmt::format("Execute block failed! {}", boost::diagnostic_information(e));
             OP_SCHEDULER_LOG(ERROR) << message;
-            co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
-                nullptr, false};
+            auto error = BCOS_ERROR_PTR(classifyException(std::current_exception()), message);
+            if (auto const* opErr = dynamic_cast<bcos::evm::OpConsensusError const*>(&e);
+                opErr && opErr->txHash.has_value())
+            {
+                *error << bcos::engine::OpCulpritTxHash(*opErr->txHash);
+            }
+            co_return {std::move(error), nullptr, false};
         }
         catch (...)
         {
@@ -794,8 +797,11 @@ private:
             for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
             {
                 auto const& raw = rawTxBytes[i];
+                auto const culprit = transactions[i]->hash();
                 if (raw.empty())  // empty envelope: raw[0] would be out of bounds
-                    throw bcos::evm::OpConsensusError("OpScheduler: empty envelope");
+                {
+                    throw bcos::evm::OpConsensusError("OpScheduler: empty envelope", culprit);
+                }
                 auto const typeByte = raw[0];
                 if (op::classifyTxType(typeByte) == static_cast<uint8_t>(op::kDepositTxType))
                 {
@@ -807,15 +813,18 @@ private:
                     catch (const OpTxValidationFailed& e)
                     {
                         throw bcos::evm::OpConsensusError(
-                            std::string("OpScheduler: malformed deposit: ") + e.what());
+                            std::string("OpScheduler: malformed deposit: ") + e.what(), culprit);
                     }
                 }
                 // Reject blob (0x03) and 0x7d type bytes.
                 else if (typeByte < 0xc0 && typeByte != 0x01 && typeByte != 0x02 &&
                          typeByte != 0x04)
+                {
                     throw bcos::evm::OpConsensusError(
                         fmt::format("OpScheduler: unsupported tx type byte 0x{:02x}",
-                            static_cast<unsigned>(typeByte)));
+                            static_cast<unsigned>(typeByte)),
+                        culprit);
+                }
             }
 
             bcos::ledger::LedgerConfig execLedgerConfig;

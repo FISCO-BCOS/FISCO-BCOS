@@ -82,11 +82,11 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
 
 
 // ---- Jovian L1-attributes block shape ----
-// The L1-attributes deposit's calldata is 176B on the Jovian activation block, 178B with the
-// Jovian selector thereafter.
-inline constexpr std::size_t IsthmusL1AttributesLen = 176;
-inline constexpr std::size_t JovianL1AttributesLen = 178;
-inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6, 0xbe, 0x2b};
+// The L1-attributes deposit's calldata is 176B on the Isthmus form, 178B with the Jovian
+// selector once Jovian is active (FISCO selects Jovian by genesis flag, so the 176B form is
+// the op-geth activation-block shape accepted on read, never produced by this path).
+// Lengths/selectors live in OpTransition.h (shared with the deposit synthesis in
+// OpDepositEncode.h).
 
 /// Shared Jovian L1-attributes shape (selector/length + activation deposits-only).
 /// `lastTxIsDeposit` is the path-specific last-tx probe: processOpBlock uses the DepositTx
@@ -138,8 +138,9 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
 // ---- shared per-receipt helpers (one implementation shared with the per-tx loop) ----
 
 
-/// Stricter-than-spec content check for the L1 attributes deposit (to==OP_L1_BLOCK &&
-/// from==OP_DEPOSITOR); rejects hand-crafted payloads.
+/// Content check for the L1-attributes deposit (to==OP_L1_BLOCK && from==OP_DEPOSITOR).
+/// op-geth's EL does not reject a leading deposit that fails this check — derivation
+/// enforces it on the CL. Callers must warn, not throw, to stay aligned.
 [[nodiscard]] inline bool isL1AttributesTx(const DepositTx& dep) noexcept
 {
     return dep.to.has_value() && *dep.to == OP_L1_BLOCK && dep.from == OP_DEPOSITOR;
@@ -318,7 +319,9 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     // L1-attributes deposit seeds the block's fee/DA context and deposits[0] is read below.
     if (rawTxBytes[0].empty() || rawTxBytes[0][0] != kDepositTypeByte || deposits.empty())
         throw OpConsensusError("op block: no deposit transaction to seed the block");
-    // First deposit is not L1 attributes: warn only. op-geth/op-reth accept this at validation.
+    // First deposit is not L1 attributes: warn only. op-geth EL has no depositor
+    // gate (CalcDAFootprint only requires txs[0].IsDepositTx); op-node derivation
+    // is the authority. Rejecting here would diverge.
     if (!op::isL1AttributesTx(deposits[0]))
         BCOS_LOG(WARNING) << LOG_BADGE("OP_BLOCK_EXEC")
                           << "op block: first tx is a deposit but not the L1 attributes tx — "
