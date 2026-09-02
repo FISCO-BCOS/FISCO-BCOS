@@ -939,27 +939,28 @@ private:
         payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
 
         // Adopt the retained probe instead of a canonical re-execution: the probe already
-        // produced the commitments (stateRoot/receiptsRoot/gasUsed/logsBloom/blobGasUsed)
+        // produced the commitments
+        // (stateRoot/receiptsRoot/gasUsed/logsBloom/withdrawalsRoot/blobGasUsed)
         // that were filled into `payload` above, and the final header is rebuilt from them.
         // adoptProbeAsPending verifies that header against the probe and stashes m_pending.
         auto finalBlock = buildOpBlock(payload, finalHeader);
-        bcos::Error::Ptr canonicalError;
-        bcos::protocol::BlockHeader::Ptr canonicalHeader;
+        bcos::Error::Ptr adoptError;
+        bcos::protocol::BlockHeader::Ptr adoptedHeader;
         m_delegate->adoptProbeAsPending(
             finalBlock, [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
-                canonicalError = std::move(error);
-                canonicalHeader = std::move(header);
+                adoptError = std::move(error);
+                adoptedHeader = std::move(header);
             });
-        if (canonicalError || !canonicalHeader)
+        if (adoptError || !adoptedHeader)
         {
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
                     std::string("OP payload build adopt failed: ") +
-                    (canonicalError ? canonicalError->errorMessage() : "no executed header")});
+                    (adoptError ? adoptError->errorMessage() : "no executed header")});
         }
 
         // payloadId was derived at the top of buildOpPayload from the attributes;
-        // it is in scope here (the canonical pass does not change the attributes).
+        // it is in scope here (the adopt does not change the attributes).
         PayloadEntry entry{
             .version = version,
             .executionPayload = std::move(payload),
@@ -968,7 +969,7 @@ private:
             .shouldOverrideBuilder = false,
             .parentBeaconBlockRoot = parentBeaconBlockRoot,
             .view = nullptr,
-            .header = std::move(canonicalHeader),
+            .header = std::move(adoptedHeader),
             .receipts = {},
         };
         if (version == static_cast<std::uint32_t>(ApiVersion::V3))
