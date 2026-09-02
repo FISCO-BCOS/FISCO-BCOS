@@ -10,6 +10,9 @@
 #include <range/v3/view/indirect.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include "EngineServiceImpl.h"
+#include <bcos-ledger/mpt/Constants.h>
+
 namespace bcos::engine
 {
 
@@ -189,7 +192,13 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, Schedule
     if (version <= 2 && request.parentBeaconBlockRoot.has_value())
     {
         co_return split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-            std::string("parentBeaconBlockRoot is only valid for newPayloadV3"));
+            std::string("parentBeaconBlockRoot is only valid for newPayloadV3 and later"));
+    }
+    if (version >= 3 && !request.parentBeaconBlockRoot.has_value())
+    {
+        co_return split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            std::string("parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and "
+                        "later"));
     }
     if (version >= 3 && !request.expectedBlobVersionedHashes.empty())
     {
@@ -202,15 +211,9 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, Schedule
         if (!request.executionRequests.has_value() || !request.executionRequests->empty())
         {
             co_return split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-                std::string("executionRequests must be present and empty (L2 carries no "
-                            "execution requests)"));
+                std::string("executionRequests must be a present-but-empty list on this "
+                            "chain"));
         }
-    }
-    if (version >= 3 && !request.parentBeaconBlockRoot.has_value())
-    {
-        co_return split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-            std::string("parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and "
-                        "later"));
     }
 
     auto guard = m_tracker.lockExclusive();
@@ -344,6 +347,10 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
         });
     }
 
+    // Match release EngineServiceImpl: stamp OP extraData and derive the Eth header fork
+    // from the on-chain EVM revision, not from the Engine API method version.
+    bytes extraData = detail::encodeOptimismExtraData(payloadAttributes);
+
     ExecutionPayload executionPayload{
         .logsBloom = Bloom{},
         .parentHash = forkchoiceState.headBlockHash,
@@ -355,7 +362,7 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
         .baseFeePerGas = 0,
         .blockHash = h256{},
         .transactions = std::move(engineTransactions),
-        .extraData = {},
+        .extraData = extraData,
         .feeRecipient = payloadAttributes.suggestedFeeRecipient,
         .timestamp = payloadAttributes.timestamp,
         .blockNumber = nextBlockNumber,
@@ -364,25 +371,67 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
         .excessBlobGas = std::nullopt,
         .blockAccessList = std::nullopt,
         .slotNumber = std::nullopt,
-        .rawTransactions = std::nullopt,
         .withdrawalsRoot = std::nullopt,
     };
-
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
-    {
-        executionPayload.withdrawals =
-            payloadAttributes.withdrawals.value_or(std::vector<WithdrawalV1>{});
-    }
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
-    {
-        executionPayload.blobGasUsed = u256(0);
-        executionPayload.excessBlobGas = u256(0);
-        executionPayload.withdrawalsRoot = h256{};
-    }
 
     ledger::LedgerConfig ledgerConfig;
     co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
     auto blockVersion = ledgerConfig.compatibilityVersion();
+
+    auto chainRevision = ledgerConfig.evmcRevisionForBlock(nextBlockNumber);
+    if (!chainRevision.has_value())
+    {
+        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
+            "EngineService: no on-chain EVM revision configured for block " +
+            std::to_string(nextBlockNumber) +
+            "; cannot derive the Eth header fork era (a v2 chain persists evmc_revision "
+            "at genesis)"});
+    }
+    auto forkVersion = detail::ethBlockVersionFor(*chainRevision);
+
+    if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
+        !payloadAttributes.parentBeaconBlockRoot.has_value())
+    {
+        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
+            "EngineService: chain EVM revision requires the V3 payload attributes "
+            "(parentBeaconBlockRoot); forkchoiceUpdated must be called at version >= 3"});
+    }
+    if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI &&
+        !payloadAttributes.withdrawals.has_value())
+    {
+        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
+            "EngineService: chain EVM revision requires the V2 payload attributes "
+            "(withdrawals); forkchoiceUpdated must be called at version >= 2"});
+    }
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+        forkVersion < bcos::protocol::EthBlockVersion::CANCUN)
+    {
+        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
+            "EngineService: forkchoiceUpdatedV3 requires a CANCUN-or-later chain fork; "
+            "chain EVM revision maps to " +
+            std::to_string(static_cast<int>(forkVersion))});
+    }
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        forkVersion < bcos::protocol::EthBlockVersion::SHANGHAI)
+    {
+        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
+            "EngineService: forkchoiceUpdatedV2 requires a SHANGHAI-or-later chain "
+            "fork; chain EVM revision maps to " +
+            std::to_string(static_cast<int>(forkVersion))});
+    }
+
+    if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)
+    {
+        executionPayload.withdrawals =
+            payloadAttributes.withdrawals.value_or(std::vector<WithdrawalV1>{});
+    }
+    if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN)
+    {
+        executionPayload.blobGasUsed = u256(0);
+        executionPayload.excessBlobGas = u256(0);
+        executionPayload.withdrawalsRoot = detail::withdrawalsRootFor(executionPayload);
+    }
+
     executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
 
     if (executionPayload.transactions.empty())
@@ -397,13 +446,15 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
         emptyHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
         emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
         emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
+        emptyHeader->setExtraData(std::move(extraData));
         emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
-        emptyHeader->setReceiptsRoot(h256{});
-        emptyHeader->setTxsRoot(h256{});
+        emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
+        emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
         emptyHeader->setGasUsed(0);
-        emptyHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+        detail::finalizeEthBlockHeader(
+            *emptyHeader, executionPayload, payloadAttributes.parentBeaconBlockRoot, forkVersion);
         executionPayload.stateRoot = emptyHeader->stateRoot();
-        executionPayload.receiptsRoot = h256{};
+        executionPayload.receiptsRoot = bcos::ledger::mpt::emptyRootHash();
         executionPayload.gasUsed = 0;
         executionPayload.blockHash = emptyHeader->hash();
         co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
@@ -421,6 +472,7 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
     blockHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
     blockHeader->setPrevRandao(payloadAttributes.prevRandao);
     blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
+    blockHeader->setExtraData(std::move(extraData));
 
     auto executableTransactions =
         executionPayload.transactions | ::ranges::views::filter([](auto const& transaction) {
@@ -431,7 +483,7 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
     auto receipts = co_await m_scheduler.executeBlock(view, m_executor, *blockHeader,
         executableTransactions | ::ranges::views::indirect, ledgerConfig);
 
-    h256 txRoot;
+    h256 txRoot = bcos::ledger::mpt::emptyRootHash();
     {
         auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
         auto hasher = hashImpl.hasher();
@@ -452,7 +504,7 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
         }
     }
 
-    h256 receiptRoot;
+    h256 receiptRoot = bcos::ledger::mpt::emptyRootHash();
     {
         if (::ranges::any_of(receipts, [](auto& r) { return !r; }))
         {
@@ -494,14 +546,16 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
     blockHeader->setReceiptsRoot(receiptRoot);
     blockHeader->setTxsRoot(txRoot);
     blockHeader->setGasUsed(totalGasUsed);
-    blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+
+    executionPayload.logsBloom = logsBloom;
+    detail::finalizeEthBlockHeader(
+        *blockHeader, executionPayload, payloadAttributes.parentBeaconBlockRoot, forkVersion);
 
     executionPayload.stateRoot = stateRoot;
     executionPayload.receiptsRoot = receiptRoot;
     executionPayload.gasUsed = totalGasUsed;
     executionPayload.blockHash = blockHeader->hash();
     executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
-    executionPayload.logsBloom = logsBloom;
 
     co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
         .header = std::move(blockHeader),

@@ -9,15 +9,19 @@
 #include "engine/bcos-engine/PayloadCache.h"
 
 #include <bcos-concepts/ByteBuffer.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-framework/storage/Serialize.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-mempool/MemPoolImpl.h>
 #include <bcos-task/Wait.h>
+#include <evmc/evmc.h>
 #include <boost/test/unit_test.hpp>
+#include <magic_enum/magic_enum.hpp>
 
 #include <atomic>
 #include <functional>
@@ -315,6 +319,17 @@ ForkchoiceState makeForkchoiceState()
 
 void seedForkchoiceStorage(GateMergeStorage& storageFixture, ForkchoiceState const& forkchoice)
 {
+    auto writeSysConfig = [&](std::string_view key, std::string value) {
+        storage::Entry entry;
+        entry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), 0}));
+        task::syncWait(bcos::storage2::writeOne(storageFixture.backendStorage,
+            bcos::executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
+    };
+    writeSysConfig(magic_enum::enum_name(ledger::SystemConfig::executor_version),
+        std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+    writeSysConfig(
+        ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(EVMC_CANCUN, {}));
+
     auto writeBlock = [&](h256 const& hash) {
         storage::Entry entry;
         entry.set("5");
@@ -479,7 +494,7 @@ BOOST_AUTO_TEST_CASE(commit_merge_failure_leaves_cache_and_artifacts)
     auto forkchoice = makeForkchoiceState();
     seedForkchoiceStorage(storage, forkchoice);
 
-    PayloadAttributes attrs = makeAttrs(123);
+    PayloadAttributes attrs = makeAttrs(1'700'000'000'000ULL);
     auto build = task::syncWait(service.updateForkchoice(forkchoice, &attrs, 3));
     BOOST_REQUIRE(build.payloadId.has_value());
     auto payload = task::syncWait(service.getPayload(*build.payloadId, 3));
@@ -525,7 +540,7 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_merge)
     seedForkchoiceStorage(legacyStorage, forkchoice);
     seedForkchoiceStorage(newStorage, forkchoice);
 
-    PayloadAttributes attrs = makeAttrs(456);
+    PayloadAttributes attrs = makeAttrs(1'700'000'001'000ULL);
     auto legacyBuild = task::syncWait(legacy.updateForkchoice(forkchoice, &attrs, 3));
     auto newBuild = task::syncWait(fresh.updateForkchoice(forkchoice, &attrs, 3));
     BOOST_REQUIRE(legacyBuild.payloadId.has_value());
@@ -598,8 +613,10 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_merge)
                        newProbeStarted.load(std::memory_order_acquire);
             }))
         {
-            probeBlockedDuringMerge = !legacyProbeFinished.load(std::memory_order_acquire) &&
-                                      !newProbeFinished.load(std::memory_order_acquire);
+            // Generic must hold the exclusive tracker guard across gated merge so getPayload
+            // blocks. release EngineServiceImpl may finish getPayload while merge is gated
+            // (its mutex is not held across storage merge), so only require the Generic probe.
+            probeBlockedDuringMerge = !newProbeFinished.load(std::memory_order_acquire);
         }
     }
     else
@@ -632,7 +649,7 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_prewrite)
     auto forkchoice = makeForkchoiceState();
     seedForkchoiceStorage(storage, forkchoice);
 
-    PayloadAttributes attrs = makeAttrs(789);
+    PayloadAttributes attrs = makeAttrs(1'700'000'002'000ULL);
     auto build = task::syncWait(service.updateForkchoice(forkchoice, &attrs, 3));
     BOOST_REQUIRE(build.payloadId.has_value());
     auto payload = task::syncWait(service.getPayload(*build.payloadId, 3));

@@ -6,9 +6,11 @@
 #include "SplitEngineCommon.h"
 
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-framework/engine/PayloadId.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include "engine/bcos-engine/PayloadId.h"
+#include <boost/assert.hpp>
+#include <span>
 
 namespace bcos::engine::split_detail
 {
@@ -24,7 +26,9 @@ bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payl
     case ApiVersion::V3:
         return payloadVersion <= 3;
     case ApiVersion::V4:
-        return payloadVersion <= 4;
+        // Match release EngineServiceImpl: GetPayloadV4 accepts only PayloadV3 builds
+        // (op-geth GetPayloadV4 passes []PayloadVersion{PayloadV3}).
+        return payloadVersion == 3;
     case ApiVersion::V5:
         return payloadVersion == 3;
     }
@@ -70,6 +74,18 @@ std::optional<std::string> validateRawTransactionKind(
     }
     return std::nullopt;
 }
+
+std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(std::span<const bcos::byte> params)
+{
+    BOOST_ASSERT(params.size() >= 8);
+    auto readU32 = [&](std::size_t offset) {
+        return (static_cast<std::uint32_t>(params[offset]) << 24) |
+               (static_cast<std::uint32_t>(params[offset + 1]) << 16) |
+               (static_cast<std::uint32_t>(params[offset + 2]) << 8) |
+               static_cast<std::uint32_t>(params[offset + 3]);
+    };
+    return {readU32(0), readU32(4)};
+}
 }  // namespace
 
 std::optional<std::string> validatePayloadAttributes(
@@ -101,15 +117,47 @@ std::optional<std::string> validatePayloadAttributes(
     }
     if (version <= 2 && payloadAttributes.parentBeaconBlockRoot.has_value())
     {
-        return std::string("parentBeaconBlockRoot is only valid for PayloadAttributesV3 and V4");
+        return std::string("parentBeaconBlockRoot is only valid for PayloadAttributesV3");
     }
     if (version >= 2 && !payloadAttributes.withdrawals.has_value())
     {
-        return std::string("withdrawals are required for PayloadAttributesV2, V3 and V4");
+        return std::string("withdrawals are required for PayloadAttributesV2 and V3");
     }
-    if (version >= 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
+    if (version >= 2 && payloadAttributes.withdrawals.has_value() &&
+        !payloadAttributes.withdrawals->empty())
     {
-        return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3 and V4");
+        return std::string(
+            "non-empty withdrawals are not supported until the withdrawals trie root is "
+            "computed");
+    }
+    if (version == 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
+    {
+        return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3");
+    }
+    if (version <= 2 && payloadAttributes.eip1559Params.has_value())
+    {
+        return std::string("eip1559Params is only valid for PayloadAttributesV3");
+    }
+    if (version <= 2 && payloadAttributes.minBaseFee.has_value())
+    {
+        return std::string("minBaseFee is only valid for PayloadAttributesV3");
+    }
+    if (payloadAttributes.minBaseFee.has_value() && !payloadAttributes.eip1559Params.has_value())
+    {
+        return std::string("minBaseFee requires eip1559Params (Jovian attributes carry both)");
+    }
+    if (payloadAttributes.eip1559Params.has_value())
+    {
+        if (payloadAttributes.eip1559Params->size() != 8)
+        {
+            return std::string("eip1559Params must be exactly 8 bytes");
+        }
+        auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
+        if ((denominator == 0) != (elasticity == 0))
+        {
+            return std::string(
+                "eip1559Params denominator and elasticity must be both zero or both non-zero");
+        }
     }
     return std::nullopt;
 }

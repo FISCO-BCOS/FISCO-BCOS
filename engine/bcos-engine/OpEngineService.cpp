@@ -7,7 +7,7 @@
 
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <limits>
 
@@ -129,9 +129,14 @@ std::optional<std::string> validateOpNewPayloadRequest(
 {
     const auto& payload = request.executionPayload;
 
-    if (!payload.rawTransactions.has_value())
+    // release ExecutionPayload uses a single carrier: transactions[i].raw (no dual
+    // rawTransactions mirror). Empty list is valid (deposit-only / empty blocks).
+    for (std::size_t i = 0; i < payload.transactions.size(); ++i)
     {
-        return std::string("executionPayload.rawTransactions is required on the OP path");
+        if (payload.transactions[i].raw.empty())
+        {
+            return "executionPayload.transactions[" + std::to_string(i) + "] is empty";
+        }
     }
     if (!payload.withdrawals.has_value() || !payload.withdrawals->empty())
     {

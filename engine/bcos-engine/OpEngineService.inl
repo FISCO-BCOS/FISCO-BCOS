@@ -6,9 +6,21 @@
 #pragma once
 
 #include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/view/transform.hpp>
 
 namespace bcos::engine
 {
+
+namespace op_detail
+{
+/// release ExecutionPayload keeps a single carrier: `transactions[i].raw`.
+inline auto rawEnvelopes(ExecutionPayload const& payload)
+{
+    return payload.transactions |
+           ::ranges::views::transform(
+               [](EngineTransaction const& tx) -> bytes const& { return tx.raw; });
+}
+}  // namespace op_detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
     requires executor_v1::TransactionExecutor<ExecutorType,
@@ -266,7 +278,6 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
             .excessBlobGas = u256(0),
             .blockAccessList = std::nullopt,
             .slotNumber = std::nullopt,
-            .rawTransactions = std::move(candidateEnvelopes),
             .withdrawalsRoot = h256{},
         };
         return candidate;
@@ -324,7 +335,7 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
         }
         payload = assemblePayload(std::move(candidateEnvelopes));
 
-        const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
+        const auto transactionsRoot = SchedulerType::computeTxRoot(op_detail::rawEnvelopes(payload));
         auto provisionalHeader = split_detail::op::rebuildOpEthHeader(
             m_blockFactory->blockHeaderFactory(), payload, transactionsRoot, parentBeaconBlockRoot);
         auto block = buildOpBlock(payload, provisionalHeader);
@@ -370,7 +381,8 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
         payload.blobGasUsed = *executedBlobGas;
     }
     auto finalHeader = split_detail::op::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
-        payload, SchedulerType::computeTxRoot(*payload.rawTransactions), parentBeaconBlockRoot);
+        payload, SchedulerType::computeTxRoot(op_detail::rawEnvelopes(payload)),
+        parentBeaconBlockRoot);
     payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
 
     auto finalBlock = buildOpBlock(payload, finalHeader);
@@ -481,7 +493,8 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, E
         co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError);
     }
 
-    const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
+    const auto transactionsRoot =
+        SchedulerType::computeTxRoot(op_detail::rawEnvelopes(payload));
     const auto ethHeader = split_detail::op::rebuildOpEthHeader(
         m_blockFactory->blockHeaderFactory(), payload, transactionsRoot,
         *request.parentBeaconBlockRoot);
@@ -665,9 +678,8 @@ bcos::protocol::Block::Ptr OpEngineService<MemPoolType, GlobalStateStorageType, 
 {
     auto block = m_blockFactory->createBlock();
     block->setBlockHeader(std::move(header));
-    auto const& rawTransactions = *payload.rawTransactions;
     auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-    for (auto const& env : rawTransactions)
+    for (auto const& env : op_detail::rawEnvelopes(payload))
     {
         const auto txHash = hashImpl.hash(env);
         auto tarsTx = split_detail::op::opEnvelopeToTars(env, txHash);
