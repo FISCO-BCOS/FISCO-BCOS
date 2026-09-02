@@ -1320,4 +1320,39 @@ BOOST_AUTO_TEST_CASE(FIB54_ConcurrentBatchMarkTxs)
     BOOST_CHECK_EQUAL(storage.size(), static_cast<std::size_t>(kTotal));
 }
 
+// A storage fault while a proposal is being verified must reject the proposal, not escape.
+//
+// verify() throws, by contract, when the data it needs cannot be read (TxValidator.h). Every
+// other ingress wraps it -- the RPC submit coroutine, batchImportTxs on the broadcast path, the
+// requestMissedTxs response handler -- but the ledger's asyncGetBatchTxsByHashList callback
+// reaches enforceSubmitTransaction through onGetMissedTxsFromLedger and importDownloadedTxs with
+// no try above it, so an exception on this path used to leave the ledger thread with nothing to
+// catch it. Signature checking is off here so that the sender-dependent checks drop out and the
+// first check that touches the ledger is FeeCapVsBaseFee, whose SYSTEM_KEY_TX_GAS_PRICE read the
+// mock makes throw.
+BOOST_AUTO_TEST_CASE(proposalPathRejectsInsteadOfEscapingOnAStorageFault)
+{
+    auto validator = makeAdmissionValidator(ledger, txPoolNonceChecker, web3NonceChecker);
+    auto configNoSig = std::make_shared<TxPoolConfig>(validator, nullptr, nullptr, ledger,
+        txPoolNonceChecker, web3NonceChecker, /*blockLimit*/ 1000, /*poolLimit*/ 1024,
+        /*checkSig*/ false);
+    MemoryStorage storageNoSig(configNoSig, *ioServicePool->getIOService());
+
+    fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
+        .AlwaysDo([](auto const& /*key*/,
+                      std::function<void(Error::Ptr, std::string, protocol::BlockNumber)>) {
+            throw std::runtime_error("storage unavailable");
+        });
+
+    auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+        std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
+    auto key = cryptoSuite->signatureImpl()->generateKeyPair();
+    auto txs = std::make_shared<Transactions>();
+    txs->emplace_back(bcos::test::fakeWeb3Tx(cryptoSuite, "7", key));
+
+    bool accepted = true;
+    BOOST_CHECK_NO_THROW(accepted = storageNoSig.batchVerifyAndSubmitTransaction(nullptr, txs));
+    BOOST_CHECK(!accepted);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -300,11 +300,29 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
     // the transaction has already onChain, reject it
     // check ledger tx
     // check web3 tx
-    if (auto result = task::syncWait(m_config->txValidator()->verify(*_tx,
+    TransactionStatus result = TransactionStatus::None;
+    try
+    {
+        result = task::syncWait(m_config->txValidator()->verify(*_tx,
             txvalidator::AdmissionContext::ProposalVerification,
             m_config->checkTransactionSignature() ? txvalidator::SignaturePolicy::Required :
                                                     txvalidator::SignaturePolicy::Disabled));
-        result != TransactionStatus::None)
+    }
+    catch (...)
+    {
+        // verify() throws, by contract, when the data it needs cannot be read (TxValidator.h):
+        // a storage fault must not be reported as a defect in the transaction. This is the one
+        // ingress with no catch above it -- the ledger's asyncGetBatchTxsByHashList callback
+        // reaches here through onGetMissedTxsFromLedger and importDownloadedTxs -- so an
+        // exception leaving this function would leave the ledger thread. Refusing the proposal
+        // is the fail-closed answer: consensus retries, whereas the alternative ends the process.
+        TXPOOL_LOG(ERROR) << LOG_DESC("enforce to seal: admission could not be decided")
+                          << LOG_KV("importTxHash", txHash)
+                          << LOG_KV("importBatchId", _tx->batchId())
+                          << LOG_KV("reason", boost::current_exception_diagnostic_information());
+        return TransactionStatus::Unknown;
+    }
+    if (result != TransactionStatus::None)
     {
         // Report the verdict admission reached, not a fixed one. This branch used to fire only
         // for NonceCheckFail and let every other status through silently -- a proposal carrying a
