@@ -118,52 +118,97 @@ void bcostars::RpcServiceClient::asyncNotifyGroupInfo(
         prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
     }
 }
-void bcostars::RpcServiceClient::asyncNotifyAMOPMessage(int16_t _type, std::string const& _topic,
-    bcos::bytesConstRef _data,
-    std::function<void(bcos::Error::Ptr&& _error, bcos::bytesPointer _responseData)> _callback)
-
+bcos::task::Task<std::tuple<bcos::Error::Ptr, bcos::bytesPointer>>
+bcostars::RpcServiceClient::notifyAMOPMessage(
+    int16_t _type, std::string const& _topic, bcos::bytesConstRef _data)
 {
-    class Callback : public bcostars::RpcServicePrxCallback
+    struct NotifyAwaitable
     {
-    public:
-        Callback(std::function<void(bcos::Error::Ptr&&, bcos::bytesPointer)> callback)
-          : m_callback(callback)
-        {}
-
-        void callback_asyncNotifyAMOPMessage(
-            const bcostars::Error& ret, const std::vector<tars::Char>& _responseData) override
+        struct CompletionState
         {
-            s_tarsTimeoutCount.store(0);
-            auto responseData =
-                std::make_shared<bcos::bytes>(_responseData.begin(), _responseData.end());
-            m_callback(toBcosError(ret), responseData);
-        }
-        void callback_asyncNotifyAMOPMessage_exception(tars::Int32 ret) override
-        {
-            s_tarsTimeoutCount++;
-            m_callback(toBcosError(ret), nullptr);
-        }
+            std::atomic<bool> completed{false};
+            std::coroutine_handle<> handle;
+            bcos::Error::Ptr error;
+            bcos::bytesPointer data;
+        };
 
-    private:
-        std::function<void(bcos::Error::Ptr&&, bcos::bytesPointer)> m_callback;
-    };
-    auto shouldBlockCall = shouldStopCall();
-    auto ret = checkConnection(
-        c_moduleName, "asyncNotifyAMOPMessage", m_prx,
-        [_callback](bcos::Error::Ptr _error) {
-            if (_callback)
+        class Callback : public bcostars::RpcServicePrxCallback
+        {
+        public:
+            explicit Callback(std::shared_ptr<CompletionState> state) : m_state(std::move(state)) {}
+
+            void callback_asyncNotifyAMOPMessage(
+                const bcostars::Error& ret, const std::vector<tars::Char>& _responseData) override
             {
-                _callback(std::move(_error), nullptr);
+                s_tarsTimeoutCount.store(0);
+                complete(toBcosError(ret),
+                    std::make_shared<bcos::bytes>(_responseData.begin(), _responseData.end()));
             }
-        },
-        shouldBlockCall);
-    if (!ret && shouldBlockCall)
-    {
-        return;
-    }
-    std::vector<tars::Char> request(_data.begin(), _data.end());
-    m_prx->tars_set_timeout(c_amopTimeout)
-        ->async_asyncNotifyAMOPMessage(new Callback(_callback), _type, _topic, request);
+            void callback_asyncNotifyAMOPMessage_exception(tars::Int32 ret) override
+            {
+                s_tarsTimeoutCount++;
+                complete(toBcosError(ret), nullptr);
+            }
+
+        private:
+            void complete(bcos::Error::Ptr error, bcos::bytesPointer data)
+            {
+                if (!m_state->completed.exchange(true))
+                {
+                    m_state->error = std::move(error);
+                    m_state->data = std::move(data);
+                    m_state->handle.resume();
+                }
+            }
+            std::shared_ptr<CompletionState> m_state;
+        };
+
+        RpcServiceClient* m_self;
+        int16_t m_type;
+        std::string m_topic;
+        std::shared_ptr<std::vector<char>> m_buffer;
+        std::shared_ptr<CompletionState> m_state;
+
+        constexpr static bool await_ready() noexcept { return false; }
+
+        // Returns false (no suspension) on a synchronous connection-check failure so the coroutine
+        // is never resumed from inside await_suspend — resuming a coroutine that is still executing
+        // await_suspend is undefined behaviour. Returns true (suspend) once the RPC is in flight.
+        bool await_suspend(std::coroutine_handle<> _handle)
+        {
+            m_state->handle = _handle;
+            auto state = m_state;
+            auto buffer = m_buffer;
+            auto shouldBlockCall = m_self->shouldStopCall();
+            auto ret = checkConnection(m_self->c_moduleName, "asyncNotifyAMOPMessage", m_self->m_prx,
+                [state, buffer](bcos::Error::Ptr _error) {
+                    // connection-check failure: record the error; await_suspend returns false so
+                    // the coroutine continues on this thread and await_resume delivers it
+                    state->error = std::move(_error);
+                    (void)buffer;
+                },
+                shouldBlockCall);
+            if (!ret && shouldBlockCall)
+            {
+                return false;
+            }
+            m_self->m_prx->tars_set_timeout(m_self->c_amopTimeout)
+                ->async_asyncNotifyAMOPMessage(new Callback(state), m_type, m_topic, *buffer);
+            return true;
+        }
+
+        std::tuple<bcos::Error::Ptr, bcos::bytesPointer> await_resume()
+        {
+            return {std::move(m_state->error), std::move(m_state->data)};
+        }
+    };
+
+    // copy the payload into an owned buffer before the RPC — the caller's bytesConstRef is not
+    // guaranteed to outlive the request
+    auto buffer = std::make_shared<std::vector<char>>(_data.begin(), _data.end());
+    NotifyAwaitable awaitable{this, _type, _topic, std::move(buffer),
+        std::make_shared<NotifyAwaitable::CompletionState>()};
+    co_return co_await awaitable;
 }
 void bcostars::RpcServiceClient::asyncNotifySubscribeTopic(
     std::function<void(bcos::Error::Ptr&& _error, std::string)> _callback)

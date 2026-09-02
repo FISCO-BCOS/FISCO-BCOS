@@ -26,7 +26,10 @@
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/Timer.h"
+#include <bcos-task/Task.h>
 #include <boost/asio/io_context.hpp>
+#include <optional>
+#include <tuple>
 namespace bcos
 {
 namespace amop
@@ -50,22 +53,21 @@ public:
         std::vector<std::string> const& _topicList, std::function<void(Error::Ptr&&)> _callback);
 
     /**
-     * @brief: async send message to random node subscribe _topic
+     * @brief: send message to a random node subscribed to _topic
      * @param _topic: topic
      * @param _data: message data
-     * @param _respFunc: callback
-     * @return void
+     * @return {error, responseType, responseData}: error is nullptr on success
      */
-    virtual void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc);
+    virtual task::Task<std::tuple<Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
+        const std::string& _topic, bcos::bytesConstRef _data);
 
     /**
-     * @brief: async send message to all nodes subscribe _topic
+     * @brief: broadcast message to all nodes subscribed to _topic
      * @param _topic: topic
      * @param _data: message data
      * @return void
      */
-    virtual void asyncSendBroadcastMessageByTopic(
+    virtual task::Task<void> sendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data);
 
     virtual void onAMOPMessage(bcos::gateway::NetworkException const& _e,
@@ -114,14 +116,14 @@ protected:
         bcos::gateway::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
 
     /**
-     * @brief: receive amop message
+     * @brief: receive amop request message from the given node and dispatch it to the local
+     *         client subscribed to the topic
      * @param _nodeID: the sender nodeID
-     * @param _id: the message id
      * @param _msg: message
-     * @return void
+     * @return {responseData, responseType}: the response to send back to the sender
      */
-    virtual void onReceiveAMOPMessage(bcos::gateway::P2pID const& _nodeID, AMOPMessage::Ptr _msg,
-        std::function<void(bytesPointer, int16_t)> const& _responseCallback);
+    virtual task::Task<std::tuple<bytesPointer, int16_t>> onReceiveAMOPMessage(
+        bcos::gateway::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
 
     /**
      * @brief: receive broadcast message
@@ -135,13 +137,15 @@ protected:
 
 private:
     bcos::bytes buildAndEncodeMessage(uint32_t _type, bcos::bytesConstRef _data);
-    virtual void onReceiveAMOPMessage(bcos::gateway::P2pID const& _nodeID,
-        std::string const& _topic, bytesConstRef _data,
-        std::function<void(bytesPointer, int16_t)> const& _responseCallback);
-    void onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _callback);
-    bool trySendTopicMessageToLocalClient(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc);
+    virtual task::Task<std::tuple<bytesPointer, int16_t>> onReceiveAMOPMessage(
+        bcos::gateway::P2pID const& _nodeID, std::string const& _topic, bytesConstRef _data);
+    /**
+     * @brief: send the topic message to a local client subscribed to _topic
+     * @return {error, responseType, responseData}, or nullopt when no local client subscribes
+     *         the topic
+     */
+    task::Task<std::optional<std::tuple<Error::Ptr, int16_t, bcos::bytes>>>
+        trySendTopicMessageToLocalClient(const std::string& _topic, bcos::bytesConstRef _data);
 
     std::shared_ptr<TopicManager> m_topicManager;
     std::shared_ptr<AMOPMessageFactory> m_messageFactory;

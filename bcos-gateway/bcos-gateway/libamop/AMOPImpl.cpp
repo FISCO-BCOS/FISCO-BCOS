@@ -230,18 +230,18 @@ void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::P
 }
 
 // receive AMOP request message from the given node
-void AMOPImpl::onReceiveAMOPMessage(P2pID const& _nodeID, AMOPMessage::Ptr _msg,
-    std::function<void(bytesPointer, int16_t)> const& _responseCallback)
+bcos::task::Task<std::tuple<bytesPointer, int16_t>> AMOPImpl::onReceiveAMOPMessage(
+    P2pID const& _nodeID, AMOPMessage::Ptr _msg)
 {
     // AMOPRequest
     auto request = m_requestFactory->buildRequest(_msg->data());
-    // message seq
+    // message topic
     std::string topic = request->topic();
-    onReceiveAMOPMessage(_nodeID, topic, _msg->data(), _responseCallback);
+    co_return co_await onReceiveAMOPMessage(_nodeID, topic, _msg->data());
 }
 
-void AMOPImpl::onReceiveAMOPMessage(P2pID const& _nodeID, std::string const& _topic,
-    bytesConstRef _data, std::function<void(bytesPointer, int16_t)> const& _responseCallback)
+bcos::task::Task<std::tuple<bytesPointer, int16_t>> AMOPImpl::onReceiveAMOPMessage(
+    P2pID const& _nodeID, std::string const& _topic, bytesConstRef _data)
 {
     std::vector<std::string> clients;
     m_topicManager->queryClientsByTopic(_topic, clients);
@@ -261,37 +261,31 @@ void AMOPImpl::onReceiveAMOPMessage(P2pID const& _nodeID, std::string const& _to
         std::string errorMessage = "NotFoundClientByTopicDispatchMsg";
         amopMsg->setData(bytesConstRef((bcos::byte*)errorMessage.c_str(), errorMessage.size()));
         amopMsg->encode(*buffer);
-        m_strand.post([buffer, _responseCallback]() {
-            _responseCallback(buffer, GatewayMessageType::AMOPMessageType);
-        });
         AMOP_LOG(WARNING) << LOG_BADGE("onRecvAMOPMessage")
                           << LOG_DESC("no client subscribe the topic") << LOG_KV("topic", _topic)
                           << LOG_KV("nodeID", printShortP2pID(_nodeID));
-        return;
+        co_return std::make_tuple(buffer, (int16_t)GatewayMessageType::AMOPMessageType);
     }
 
     AMOP_LOG(INFO) << LOG_DESC("onRecvAMOPMessage") << LOG_KV("topic", _topic)
                    << LOG_KV("from", printShortP2pID(_nodeID))
                    << LOG_KV("choosedClient", choosedClient);
-    clientService->asyncNotifyAMOPMessage(bcos::rpc::AMOPNotifyMessageType::Unicast, _topic, _data,
-        [this, _responseCallback](Error::Ptr&& _error, bytesPointer _responseData) {
-            if (!_error || _error->errorCode() == CommonError::SUCCESS)
-            {
-                _responseCallback(_responseData, GatewayMessageType::WSMessageType);
-                return;
-            }
-            auto amopMsg = m_messageFactory->buildMessage();
-            amopMsg->setStatus(_error->errorCode());
-            amopMsg->setType(AMOPMessage::Type::AMOPResponse);
-            auto const& errorMessage = _error->errorMessage();
-            amopMsg->setData(bytesConstRef((bcos::byte*)errorMessage.c_str(), errorMessage.size()));
-            auto buffer = std::make_shared<bcos::bytes>();
-            amopMsg->encode(*buffer);
-            _responseCallback(buffer, GatewayMessageType::AMOPMessageType);
-            AMOP_LOG(WARNING) << LOG_DESC("asyncNotifyAMOPMessage failed")
-                              << LOG_KV("code", _error->errorCode())
-                              << LOG_KV("msg", _error->errorMessage());
-        });
+    auto [error, responseData] = co_await clientService->notifyAMOPMessage(
+        bcos::rpc::AMOPNotifyMessageType::Unicast, _topic, _data);
+    if (!error || error->errorCode() == CommonError::SUCCESS)
+    {
+        co_return std::make_tuple(responseData, (int16_t)GatewayMessageType::WSMessageType);
+    }
+    auto amopMsg = m_messageFactory->buildMessage();
+    amopMsg->setStatus(error->errorCode());
+    amopMsg->setType(AMOPMessage::Type::AMOPResponse);
+    auto const& errorMessage = error->errorMessage();
+    amopMsg->setData(bytesConstRef((bcos::byte*)errorMessage.c_str(), errorMessage.size()));
+    auto buffer = std::make_shared<bcos::bytes>();
+    amopMsg->encode(*buffer);
+    AMOP_LOG(WARNING) << LOG_DESC("notifyAMOPMessage failed")
+                      << LOG_KV("code", error->errorCode()) << LOG_KV("msg", error->errorMessage());
+    co_return std::make_tuple(buffer, (int16_t)GatewayMessageType::AMOPMessageType);
 }
 
 // receive the AMOP broadcast message from given node
@@ -320,25 +314,28 @@ void AMOPImpl::onReceiveAMOPBroadcastMessage(P2pID const& _nodeID, AMOPMessage::
         AMOP_LOG(DEBUG) << LOG_BADGE("onRecvAMOPBroadcastMessage")
                         << LOG_DESC("push message to client") << LOG_KV("topic", topic)
                         << LOG_KV("client", client);
-        clientService->asyncNotifyAMOPMessage(bcos::rpc::AMOPNotifyMessageType::Broadcast, topic,
-            _msg->data(), [client](Error::Ptr&& _error, bytesPointer) {
-                if (_error)
-                {
-                    AMOP_LOG(WARNING)
-                        << LOG_BADGE("onRecvAMOPBroadcastMessage")
-                        << LOG_DESC("asyncNotifyAMOPMessage failed") << LOG_KV("client", client)
-                        << LOG_KV("code", _error->errorCode())
-                        << LOG_KV("msg", _error->errorMessage());
-                }
-            });
+        // one detached coroutine per client: the notifies run concurrently and each only logs
+        // its own failure. The payload is copied into the coroutine frame (task::wait is
+        // fire-and-forget, _msg does not outlive this function).
+        task::wait([](bcos::rpc::RPCInterface::Ptr _clientService, std::string _topic,
+                       bcos::bytes _data, std::string _client) -> task::Task<void> {
+            auto [error, responseData] = co_await _clientService->notifyAMOPMessage(
+                bcos::rpc::AMOPNotifyMessageType::Broadcast, _topic, bcos::ref(_data));
+            if (error)
+            {
+                AMOP_LOG(WARNING) << LOG_BADGE("onRecvAMOPBroadcastMessage")
+                                  << LOG_DESC("notifyAMOPMessage failed")
+                                  << LOG_KV("client", _client) << LOG_KV("code", error->errorCode())
+                                  << LOG_KV("msg", error->errorMessage());
+            }
+        }(clientService, topic, bcos::bytes(_msg->data().begin(), _msg->data().end()), client));
     }
     AMOP_LOG(DEBUG) << LOG_DESC("onReceiveAMOPBroadcastMessage")
                     << LOG_KV("nodeID", printShortP2pID(_nodeID));
 }
 
-bool AMOPImpl::trySendTopicMessageToLocalClient(const std::string& _topic,
-    bcos::bytesConstRef _data,
-    std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc)
+bcos::task::Task<std::optional<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>>>
+AMOPImpl::trySendTopicMessageToLocalClient(const std::string& _topic, bcos::bytesConstRef _data)
 {
     std::vector<std::string> clients;
     m_topicManager->queryClientsByTopic(_topic, clients);
@@ -346,209 +343,20 @@ bool AMOPImpl::trySendTopicMessageToLocalClient(const std::string& _topic,
     {
         AMOP_LOG(INFO) << LOG_DESC("trySendTopicMessageToLocalClient failed for empty client")
                        << LOG_KV("topic", _topic);
-        return false;
+        co_return std::nullopt;
     }
     AMOP_LOG(INFO) << LOG_DESC("trySendTopicMessageToLocalClient") << LOG_KV("topic", _topic)
                    << LOG_KV("clientsSubscribeTopic", clients.size());
-    auto self = shared_from_this();
-    onReceiveAMOPMessage(m_p2pNodeID, _topic, _data,
-        [self, _topic, _respFunc](bytesPointer _response, int16_t _type) {
-            self->onRecvAMOPResponse(_type, _response, _respFunc);
-            AMOP_LOG(INFO) << LOG_DESC("trySendTopicMessageToLocalClient: receive response")
-                           << LOG_KV("topic", _topic);
-        });
-
-    return true;
-}
-
-// asyncSendMessage to the given topic
-void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-    std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc)
-{
-    std::vector<P2pID> nodeIDs;
-    m_topicManager->queryNodeIDsByTopic(_topic, nodeIDs);
-    if (nodeIDs.empty())
-    {
-        if (trySendTopicMessageToLocalClient(_topic, _data, _respFunc))
-        {
-            return;
-        }
-        auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundPeerByTopicSendMsg,
-            "there has no node subscribe this topic, topic: " + _topic);
-        if (_respFunc)
-        {
-            _respFunc(std::move(errorPtr), 0, {});
-        }
-
-        AMOP_LOG(WARNING) << LOG_BADGE("asyncSendMessage")
-                          << LOG_DESC("there has no node subscribe the topic")
-                          << LOG_KV("topic", _topic);
-        return;
-    }
-    AMOP_LOG(INFO) << LOG_DESC("asyncSendMessageByTopic") << LOG_KV("topic", _topic)
-                   << LOG_KV("nodeIDsSize", nodeIDs.size());
-    auto buffer = buildAndEncodeMessage(AMOPMessage::Type::AMOPRequest, _data);
-
-    auto self = shared_from_this();
-    // try to send the message to a random node and retry with the remaining nodes on failure.
-    // The retry loop (a coroutine launched fire-and-forget) replaces the old recursive
-    // RetrySender callback chain. All state is passed as coroutine parameters so it is copied
-    // into the frame and stays alive for the whole (possibly deferred) send.
-    task::wait([](std::shared_ptr<AMOPImpl> _self, bcos::bytes _payload,
-                   std::vector<P2pID> _nodeIDs,
-                   std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _callback)
-                   -> task::Task<void> {
-        auto network = _self->m_network;
-        auto messageFactory = _self->m_messageFactory;
-        // finite response timeout: Options{0, true} waits forever (Session registers no timer
-        // for a zero timeout), so a peer that accepts the request but never answers would suspend
-        // this detached coroutine indefinitely — the remaining candidates would never be tried
-        // and the caller would never see the terminal AMOPSendMsgFailed. Tradeoff: a subscriber
-        // that answers slower than this timeout makes the gateway retry the NEXT subscriber while
-        // the first may still be processing, so one request can be delivered to (and handled by)
-        // two subscribers — delivery is possibly-duplicated, not at-most-once. If deployments
-        // need a different value this should become a gateway config option.
-        constexpr uint32_t c_amopResponseTimeoutMs = 30000;
-        // shuffle the candidate list once, then take-and-erase the front per attempt: the node
-        // attempted is always the one removed, so a dead node is never retried while a live one
-        // is dropped untried (randomChoose+erase(begin()) removed a different node than tried).
-        auto seed = std::chrono::system_clock::now().time_since_epoch().count();
-        std::shuffle(_nodeIDs.begin(), _nodeIDs.end(), std::default_random_engine(seed));
-        // build the message once and re-stamp only the seq per attempt (each attempt is a fresh
-        // request on another session); the payload is moved in once instead of being lvalue-copied
-        // into a rebuilt message every iteration.
-        auto message = std::static_pointer_cast<P2PMessage>(
-            network->messageFactory()->buildMessage());
-        message->setPacketType(GatewayMessageType::AMOPMessageType);
-        message->setPayload(std::move(_payload));
-        while (!_nodeIDs.empty())
-        {
-            auto choosedNodeID = _nodeIDs.front();
-            _nodeIDs.erase(_nodeIDs.begin());
-            AMOP_LOG(INFO) << LOG_DESC("asyncSendMessageByTopic")
-                           << LOG_KV("choosedNodeID", printShortP2pID(choosedNodeID));
-            message->setSeq(network->messageFactory()->newSeq());
-            try
-            {
-                auto resp = co_await network->sendMessageByNodeID(choosedNodeID, *message,
-                    ::ranges::views::single(message->payload()),
-                    Options{c_amopResponseTimeoutMs, true});
-                auto respMessage = std::dynamic_pointer_cast<P2PMessage>(resp);
-                if (!respMessage)
-                {
-                    // self-id sends and sessions expiring before the write co_return a null
-                    // response: treat it as a (retryable) send failure, not a silent success
-                    AMOP_LOG(INFO)
-                        << LOG_DESC("asyncSendMessageByTopic: no response, retry next node")
-                        << LOG_KV("nodeID", printShortP2pID(choosedNodeID));
-                    continue;
-                }
-                auto packetType = respMessage->packetType();
-                auto responseData = respMessage->payload();
-                bcos::Error::Ptr error = nullptr;
-                if (packetType == bcos::gateway::GatewayMessageType::AMOPMessageType)
-                {
-                    // zero copy overhead
-                    auto amopMsg = messageFactory->buildMessage();
-                    if (amopMsg->decode(responseData) < 0)
-                    {
-                        // the peer answered, so the request was DELIVERED and its handler ran —
-                        // retrying the next subscriber would replay the same payload (instant
-                        // at-least-once, worse than the documented 30s-timeout duplicate). Fail
-                        // the caller instead; retry is reserved for sends that never reached a
-                        // peer (null response / send exception).
-                        AMOP_LOG(WARNING)
-                            << LOG_DESC("asyncSendMessageByTopic: decode response failed")
-                            << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
-                            << LOG_KV("size", responseData.size());
-                        error = BCOS_ERROR_PTR(CommonError::AMOPSendMsgFailed,
-                            "unable to decode the AMOP response from the peer");
-                        responseData = bytesConstRef();
-                    }
-                    else
-                    {
-                        auto errorMessage =
-                            std::string(amopMsg->data().begin(), amopMsg->data().end());
-                        auto errorCode = amopMsg->status();
-                        // tars error
-                        if (amopMsg->status() == (uint16_t)(-8) ||
-                            amopMsg->status() == (uint16_t)(-7))
-                        {
-                            errorMessage =
-                                "Access to the remote RPC service timed out, please make sure it "
-                                "is online";
-                            errorCode = -1;
-                        }
-                        error = BCOS_ERROR_PTR(errorCode, errorMessage);
-
-                        AMOP_LOG(INFO)
-                            << LOG_DESC("asyncSendMessageByTopic error: receive responseData")
-                            << LOG_KV("status", amopMsg->status()) << LOG_KV("msg", errorMessage);
-                    }
-                }
-                if (_callback)
-                {
-                    AMOP_LOG(INFO)
-                        << LOG_DESC("asyncSendMessageByTopic: receive responseData")
-                        << LOG_KV("size", responseData.size()) << LOG_KV("type", packetType);
-                    try
-                    {
-                        _callback(std::move(error), packetType, responseData);
-                    }
-                    catch (std::exception const& e)
-                    {
-                        AMOP_LOG(WARNING)
-                            << LOG_DESC("asyncSendMessageByTopic: response callback exception")
-                            << LOG_KV("msg", boost::diagnostic_information(e));
-                    }
-                }
-                co_return;
-            }
-            catch (NetworkException const& e)
-            {
-                AMOP_LOG(DEBUG) << LOG_BADGE("asyncSendMessageByTopic")
-                                << LOG_DESC("send failed, retry next node")
-                                << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
-                                << LOG_KV("code", e.errorCode()) << LOG_KV("msg", e.what());
-            }
-            catch (std::exception const& e)
-            {
-                // a non-network throw must not escape onto the io thread that resumed this
-                // detached coroutine (aborting the process and losing the terminal callback):
-                // log it and fall through to the next candidate
-                AMOP_LOG(WARNING) << LOG_BADGE("asyncSendMessageByTopic")
-                                  << LOG_DESC("unexpected exception, retry next node")
-                                  << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
-                                  << LOG_KV("msg", boost::diagnostic_information(e));
-            }
-        }
-        // all candidate nodes failed
-        auto errorPtr = BCOS_ERROR_PTR(
-            CommonError::AMOPSendMsgFailed, "unable to send message to peer by topic");
-        if (_callback)
-        {
-            try
-            {
-                _callback(std::move(errorPtr), 0, {});
-            }
-            catch (std::exception const& e)
-            {
-                AMOP_LOG(WARNING)
-                    << LOG_DESC("asyncSendMessageByTopic: failure callback exception")
-                    << LOG_KV("msg", boost::diagnostic_information(e));
-            }
-        }
-    }(self, std::move(buffer), nodeIDs, _respFunc));
-}
-
-void AMOPImpl::onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
-    std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _callback)
-{
+    auto [response, type] = co_await onReceiveAMOPMessage(m_p2pNodeID, _topic, _data);
+    AMOP_LOG(INFO) << LOG_DESC("trySendTopicMessageToLocalClient: receive response")
+                   << LOG_KV("topic", _topic);
+    // decode the AMOP response (the former onRecvAMOPResponse): an AMOPMessageType response
+    // carries an encoded AMOPMessage whose status is the real error code
     bcos::Error::Ptr error = nullptr;
-    if (_type == bcos::gateway::GatewayMessageType::AMOPMessageType)
+    if (type == bcos::gateway::GatewayMessageType::AMOPMessageType)
     {
         // zero copy overhead
-        auto amopMsg = m_messageFactory->buildMessage(ref(*_responseData));
+        auto amopMsg = m_messageFactory->buildMessage(ref(*response));
         auto errorMessage = std::string(amopMsg->data().begin(), amopMsg->data().end());
         auto errorCode = amopMsg->status();
         // tars error
@@ -561,20 +369,163 @@ void AMOPImpl::onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
         }
         error = BCOS_ERROR_PTR(errorCode, errorMessage);
 
-        AMOP_LOG(INFO) << LOG_DESC("asyncSendMessageByTopic error: receive responseData")
+        AMOP_LOG(INFO) << LOG_DESC("sendMessageByTopic error: receive responseData")
                        << LOG_KV("status", amopMsg->status()) << LOG_KV("msg", errorMessage);
     }
-    if (_callback)
-    {
-        AMOP_LOG(INFO) << LOG_DESC("asyncSendMessageByTopic: receive responseData")
-                       << LOG_KV("size", _responseData->size()) << LOG_KV("type", _type);
-        _callback(std::move(error), _type, bcos::ref(*_responseData));
-    }
+    AMOP_LOG(INFO) << LOG_DESC("sendMessageByTopic: receive responseData")
+                   << LOG_KV("size", response->size()) << LOG_KV("type", type);
+    co_return std::make_optional(std::make_tuple(std::move(error), type, *response));
 }
 
-void AMOPImpl::asyncSendBroadcastMessageByTopic(
+// send message to the given topic
+bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> AMOPImpl::sendMessageByTopic(
     const std::string& _topic, bcos::bytesConstRef _data)
 {
+    // keep this alive for the whole (possibly deferred) send — callers may launch the coroutine
+    // detached via task::wait
+    auto self = shared_from_this();
+    std::vector<P2pID> nodeIDs;
+    m_topicManager->queryNodeIDsByTopic(_topic, nodeIDs);
+    if (nodeIDs.empty())
+    {
+        // no remote subscriber: try the local clients
+        auto result = co_await trySendTopicMessageToLocalClient(_topic, _data);
+        if (result)
+        {
+            co_return std::move(*result);
+        }
+        AMOP_LOG(WARNING) << LOG_BADGE("asyncSendMessage")
+                          << LOG_DESC("there has no node subscribe the topic")
+                          << LOG_KV("topic", _topic);
+        co_return std::make_tuple(BCOS_ERROR_PTR(CommonError::NotFoundPeerByTopicSendMsg,
+                                      "there has no node subscribe this topic, topic: " + _topic),
+            (int16_t)0, bcos::bytes{});
+    }
+    AMOP_LOG(INFO) << LOG_DESC("sendMessageByTopic") << LOG_KV("topic", _topic)
+                   << LOG_KV("nodeIDsSize", nodeIDs.size());
+    auto buffer = buildAndEncodeMessage(AMOPMessage::Type::AMOPRequest, _data);
+
+    // try to send the message to a random node and retry with the remaining nodes on failure.
+    // All state lives in this coroutine frame so it stays alive for the whole (possibly
+    // deferred) send.
+    auto network = m_network;
+    auto messageFactory = m_messageFactory;
+    // finite response timeout: Options{0, true} waits forever (Session registers no timer
+    // for a zero timeout), so a peer that accepts the request but never answers would suspend
+    // this coroutine indefinitely — the remaining candidates would never be tried
+    // and the caller would never see the terminal AMOPSendMsgFailed. Tradeoff: a subscriber
+    // that answers slower than this timeout makes the gateway retry the NEXT subscriber while
+    // the first may still be processing, so one request can be delivered to (and handled by)
+    // two subscribers — delivery is possibly-duplicated, not at-most-once. If deployments
+    // need a different value this should become a gateway config option.
+    constexpr uint32_t c_amopResponseTimeoutMs = 30000;
+    // shuffle the candidate list once, then take-and-erase the front per attempt: the node
+    // attempted is always the one removed, so a dead node is never retried while a live one
+    // is dropped untried (randomChoose+erase(begin()) removed a different node than tried).
+    auto seed = std::chrono::system_clock::now().time_since_epoch().count();
+    std::shuffle(nodeIDs.begin(), nodeIDs.end(), std::default_random_engine(seed));
+    // build the message once and re-stamp only the seq per attempt (each attempt is a fresh
+    // request on another session); the payload is moved in once instead of being lvalue-copied
+    // into a rebuilt message every iteration.
+    auto message =
+        std::static_pointer_cast<P2PMessage>(network->messageFactory()->buildMessage());
+    message->setPacketType(GatewayMessageType::AMOPMessageType);
+    message->setPayload(std::move(buffer));
+    while (!nodeIDs.empty())
+    {
+        auto choosedNodeID = nodeIDs.front();
+        nodeIDs.erase(nodeIDs.begin());
+        AMOP_LOG(INFO) << LOG_DESC("sendMessageByTopic")
+                       << LOG_KV("choosedNodeID", printShortP2pID(choosedNodeID));
+        message->setSeq(network->messageFactory()->newSeq());
+        try
+        {
+            auto resp = co_await network->sendMessageByNodeID(choosedNodeID, *message,
+                ::ranges::views::single(message->payload()), Options{c_amopResponseTimeoutMs, true});
+            auto respMessage = std::dynamic_pointer_cast<P2PMessage>(resp);
+            if (!respMessage)
+            {
+                // self-id sends and sessions expiring before the write co_return a null
+                // response: treat it as a (retryable) send failure, not a silent success
+                AMOP_LOG(INFO) << LOG_DESC("sendMessageByTopic: no response, retry next node")
+                               << LOG_KV("nodeID", printShortP2pID(choosedNodeID));
+                continue;
+            }
+            auto packetType = respMessage->packetType();
+            auto responseData = respMessage->payload();
+            bcos::Error::Ptr error = nullptr;
+            if (packetType == bcos::gateway::GatewayMessageType::AMOPMessageType)
+            {
+                // zero copy overhead
+                auto amopMsg = messageFactory->buildMessage();
+                if (amopMsg->decode(responseData) < 0)
+                {
+                    // the peer answered, so the request was DELIVERED and its handler ran —
+                    // retrying the next subscriber would replay the same payload (instant
+                    // at-least-once, worse than the documented 30s-timeout duplicate). Fail
+                    // the caller instead; retry is reserved for sends that never reached a
+                    // peer (null response / send exception).
+                    AMOP_LOG(WARNING)
+                        << LOG_DESC("sendMessageByTopic: decode response failed")
+                        << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
+                        << LOG_KV("size", responseData.size());
+                    error = BCOS_ERROR_PTR(CommonError::AMOPSendMsgFailed,
+                        "unable to decode the AMOP response from the peer");
+                    responseData = bytesConstRef();
+                }
+                else
+                {
+                    auto errorMessage = std::string(amopMsg->data().begin(), amopMsg->data().end());
+                    auto errorCode = amopMsg->status();
+                    // tars error
+                    if (amopMsg->status() == (uint16_t)(-8) || amopMsg->status() == (uint16_t)(-7))
+                    {
+                        errorMessage =
+                            "Access to the remote RPC service timed out, please make sure it "
+                            "is online";
+                        errorCode = -1;
+                    }
+                    error = BCOS_ERROR_PTR(errorCode, errorMessage);
+
+                    AMOP_LOG(INFO) << LOG_DESC("sendMessageByTopic error: receive responseData")
+                                   << LOG_KV("status", amopMsg->status())
+                                   << LOG_KV("msg", errorMessage);
+                }
+            }
+            AMOP_LOG(INFO) << LOG_DESC("sendMessageByTopic: receive responseData")
+                           << LOG_KV("size", responseData.size()) << LOG_KV("type", packetType);
+            co_return std::make_tuple(
+                std::move(error), packetType, responseData.toBytes());
+        }
+        catch (NetworkException const& e)
+        {
+            AMOP_LOG(DEBUG) << LOG_BADGE("sendMessageByTopic")
+                            << LOG_DESC("send failed, retry next node")
+                            << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
+                            << LOG_KV("code", e.errorCode()) << LOG_KV("msg", e.what());
+        }
+        catch (std::exception const& e)
+        {
+            // a non-network throw must not escape onto the io thread that resumed this
+            // coroutine: log it and fall through to the next candidate
+            AMOP_LOG(WARNING) << LOG_BADGE("sendMessageByTopic")
+                              << LOG_DESC("unexpected exception, retry next node")
+                              << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
+                              << LOG_KV("msg", boost::diagnostic_information(e));
+        }
+    }
+    // all candidate nodes failed
+    co_return std::make_tuple(
+        BCOS_ERROR_PTR(CommonError::AMOPSendMsgFailed, "unable to send message to peer by topic"),
+        (int16_t)0, bcos::bytes{});
+}
+
+bcos::task::Task<void> AMOPImpl::sendBroadcastMessageByTopic(
+    const std::string& _topic, bcos::bytesConstRef _data)
+{
+    // keep this alive for the whole (possibly deferred) send — callers may launch the coroutine
+    // detached via task::wait
+    auto self = shared_from_this();
     std::vector<std::string> nodeIDs;
     m_topicManager->queryNodeIDsByTopic(_topic, nodeIDs);
     if (nodeIDs.empty())
@@ -582,19 +533,15 @@ void AMOPImpl::asyncSendBroadcastMessageByTopic(
         AMOP_LOG(WARNING) << LOG_BADGE("asyncSendBroadbastMessage")
                           << LOG_DESC("there no node subscribe this topic")
                           << LOG_KV("topic", _topic);
-        return;
+        co_return;
     }
     auto buffer = buildAndEncodeMessage(AMOPMessage::Type::AMOPBroadcast, _data);
-    auto network = m_network;
-    // fire-and-forget through the coroutine fast path: the message is built in the coroutine and
-    // the payload is moved into it (the caller's buffer does not outlive the deferred send); a
-    // failed/unreachable node is logged and skipped by sendMessageByNodeIDs.
-    task::wait([](P2PInterface::Ptr _network, uint16_t _type, std::vector<P2pID> _nodeIDs,
-                   bcos::bytes _payload) -> task::Task<void> {
-        co_await _network->sendMessageByNodeIDs(_type, _nodeIDs, std::move(_payload), Options(0));
-    }(network, GatewayMessageType::AMOPMessageType, nodeIDs, std::move(buffer)));
+    auto dataSize = _data.size();
+    // a failed/unreachable node is logged and skipped by sendMessageByNodeIDs
+    co_await m_network->sendMessageByNodeIDs(
+        GatewayMessageType::AMOPMessageType, nodeIDs, std::move(buffer), Options(0));
     AMOP_LOG(DEBUG) << LOG_BADGE("asyncSendBroadbastMessage") << LOG_DESC("send broadcast message")
-                    << LOG_KV("topic", _topic) << LOG_KV("data size", _data.size());
+                    << LOG_KV("topic", _topic) << LOG_KV("data size", dataSize);
 }
 
 void AMOPImpl::onAMOPMessage(
@@ -649,44 +596,45 @@ void AMOPImpl::dispatcherAMOPMessage(
         onReceiveResponseTopicMessage(fromNodeID, amopMessage);
         break;
     case AMOPMessage::Type::AMOPRequest:
-        onReceiveAMOPMessage(fromNodeID, amopMessage,
-            [this, _session, _message](bytesPointer _responseData, int16_t _type) {
-                auto responseP2PMsg = std::dynamic_pointer_cast<P2PMessage>(
-                    m_network->messageFactory()->buildMessage());
-                AMOP_LOG(DEBUG) << LOG_BADGE("onReceiveAMOPMessage") << LOG_DESC("send response")
-                                << LOG_KV("type", _type) << LOG_KV("data", _responseData->size());
-                responseP2PMsg->setDstP2PNodeID(_message->srcP2PNodeID());
-                responseP2PMsg->setSrcP2PNodeID(_message->dstP2PNodeID());
-                responseP2PMsg->setSeq(_message->seq());
-                responseP2PMsg->setRespPacket();
-                responseP2PMsg->setPayload(*_responseData);
-                responseP2PMsg->setPacketType(_type);
-                // send the AMOP response through the coroutine fast path: the message is passed as
-                // a coroutine parameter so it is copied into the frame and stays alive for the
-                // (possibly deferred) send; its payload rides as a view (zero-copy).
-                auto network = m_network;
-                task::wait([](P2PInterface::Ptr _network,
-                               std::shared_ptr<P2PMessage> _responseP2PMsg) -> task::Task<void> {
-                    try
-                    {
-                        co_await _network->sendMessageByNodeID(_responseP2PMsg->dstP2PNodeID(),
-                            *_responseP2PMsg,
-                            ::ranges::views::single(_responseP2PMsg->payload()), Options{});
-                    }
-                    catch (std::exception const& e)
-                    {
-                        // A synchronous pre-send rejection (rate limit / max size) or an async
-                        // write failure on the AMOP response path is expected during bandwidth
-                        // saturation — log the dst and seq so the response-loss investigation
-                        // keeps the routing dimension.
-                        AMOP_LOG(WARNING) << LOG_BADGE("onReceiveAMOPMessage")
-                                          << LOG_DESC("send response failed")
-                                          << LOG_KV("seq", _responseP2PMsg->seq())
-                                          << LOG_KV("dst", _responseP2PMsg->dstP2PNodeID())
-                                          << LOG_KV("what", boost::diagnostic_information(e));
-                    }
-                }(network, responseP2PMsg));
-            });
+        // dispatch the request to the local client, then send the response back to the peer;
+        // all state is passed as coroutine parameters so it is copied into the frame and stays
+        // alive for the whole (possibly deferred) round trip
+        task::wait([](std::shared_ptr<AMOPImpl> _self, P2pID _fromNodeID,
+                       AMOPMessage::Ptr _amopMessage, std::shared_ptr<P2PMessage> _message)
+                       -> task::Task<void> {
+            auto [responseData, type] =
+                co_await _self->onReceiveAMOPMessage(_fromNodeID, _amopMessage);
+            auto responseP2PMsg = std::dynamic_pointer_cast<P2PMessage>(
+                _self->m_network->messageFactory()->buildMessage());
+            AMOP_LOG(DEBUG) << LOG_BADGE("onReceiveAMOPMessage") << LOG_DESC("send response")
+                            << LOG_KV("type", type) << LOG_KV("data", responseData->size());
+            responseP2PMsg->setDstP2PNodeID(_message->srcP2PNodeID());
+            responseP2PMsg->setSrcP2PNodeID(_message->dstP2PNodeID());
+            responseP2PMsg->setSeq(_message->seq());
+            responseP2PMsg->setRespPacket();
+            responseP2PMsg->setPayload(*responseData);
+            responseP2PMsg->setPacketType(type);
+            try
+            {
+                // the response payload rides as a view (zero-copy): responseP2PMsg lives in this
+                // frame for the duration of the co_await
+                co_await _self->m_network->sendMessageByNodeID(responseP2PMsg->dstP2PNodeID(),
+                    *responseP2PMsg, ::ranges::views::single(responseP2PMsg->payload()),
+                    Options{});
+            }
+            catch (std::exception const& e)
+            {
+                // A synchronous pre-send rejection (rate limit / max size) or an async
+                // write failure on the AMOP response path is expected during bandwidth
+                // saturation — log the dst and seq so the response-loss investigation
+                // keeps the routing dimension.
+                AMOP_LOG(WARNING) << LOG_BADGE("onReceiveAMOPMessage")
+                                  << LOG_DESC("send response failed")
+                                  << LOG_KV("seq", responseP2PMsg->seq())
+                                  << LOG_KV("dst", responseP2PMsg->dstP2PNodeID())
+                                  << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }(shared_from_this(), fromNodeID, amopMessage, _message));
         break;
     case AMOPMessage::Type::AMOPBroadcast:
         onReceiveAMOPBroadcastMessage(fromNodeID, amopMessage);

@@ -54,9 +54,8 @@ public:
     void asyncNotifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo,
         std::function<void(bcos::Error::Ptr&&)> _callback) override;
 
-    void asyncNotifyAMOPMessage(int16_t _type, std::string const& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&& _error, bcos::bytesPointer _responseData)> _callback)
-        override;
+    bcos::task::Task<std::tuple<bcos::Error::Ptr, bcos::bytesPointer>> notifyAMOPMessage(
+        int16_t _type, std::string const& _topic, bcos::bytesConstRef _data) override;
 
     void asyncNotifySubscribeTopic(
         std::function<void(bcos::Error::Ptr&& _error, std::string)> _callback) override;

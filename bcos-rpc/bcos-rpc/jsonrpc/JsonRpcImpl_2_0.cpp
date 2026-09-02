@@ -1229,28 +1229,28 @@ void JsonRpcImpl_2_0::getPeers(RespFunc _respFunc)
 {
     RPC_IMPL_LOG(TRACE) << LOG_DESC("getPeers");
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
-    m_gatewayInterface->asyncGetPeers([m_respFunc = std::move(_respFunc), self](Error::Ptr _error,
-                                          bcos::gateway::GatewayInfo::Ptr _localP2pInfo,
-                                          bcos::gateway::GatewayInfosPtr _peersInfo) {
+    task::wait([](std::weak_ptr<JsonRpcImpl_2_0> self, RespFunc m_respFunc,
+                   bcos::gateway::GatewayInterface::Ptr gateway) -> task::Task<void> {
+        auto [error, localP2pInfo, peersInfo] = co_await gateway->getPeers();
         auto rpc = self.lock();
         if (!rpc)
         {
-            return;
+            co_return;
         }
         Json::Value jResp;
-        if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
+        if (!error || (error->errorCode() == bcos::protocol::CommonError::SUCCESS))
         {
-            rpc->gatewayInfoToJson(jResp, _localP2pInfo, _peersInfo);
+            rpc->gatewayInfoToJson(jResp, localP2pInfo, peersInfo);
         }
         else
         {
             RPC_IMPL_LOG(INFO) << LOG_BADGE("getPeers failed")
-                               << LOG_KV("code", _error ? _error->errorCode() : 0)
-                               << LOG_KV("message", _error ? _error->errorMessage() : "success");
+                               << LOG_KV("code", error ? error->errorCode() : 0)
+                               << LOG_KV("message", error ? error->errorMessage() : "success");
         }
 
-        m_respFunc(_error, jResp);
-    });
+        m_respFunc(error, jResp);
+    }(self, std::move(_respFunc), m_gatewayInterface));
 }
 
 NodeService::Ptr JsonRpcImpl_2_0::getNodeService(
@@ -1431,27 +1431,26 @@ void JsonRpcImpl_2_0::getGroupPeers(Json::Value& _response, std::string_view _gr
 void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFunc)
 {
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
-    m_gatewayInterface->asyncGetPeers(
-        [_respFunc, group = std::string(_groupID), self](Error::Ptr _error,
-            bcos::gateway::GatewayInfo::Ptr _localP2pInfo,
-            bcos::gateway::GatewayInfosPtr _peersInfo) {
-            Json::Value jResp(Json::arrayValue);
-            if (_error)
-            {
-                RPC_IMPL_LOG(INFO)
-                    << LOG_BADGE("getGroupPeers failed") << LOG_KV("code", _error->errorCode())
-                    << LOG_KV("message", _error->errorMessage());
-                _respFunc(_error, jResp);
-                return;
-            }
-            auto rpc = self.lock();
-            if (!rpc)
-            {
-                return;
-            }
-            rpc->getGroupPeers(jResp, std::string_view(group), _localP2pInfo, _peersInfo);
-            _respFunc(_error, jResp);
-        });
+    task::wait([](std::weak_ptr<JsonRpcImpl_2_0> self, RespFunc respFunc, std::string group,
+                   bcos::gateway::GatewayInterface::Ptr gateway) -> task::Task<void> {
+        auto [error, localP2pInfo, peersInfo] = co_await gateway->getPeers();
+        Json::Value jResp(Json::arrayValue);
+        if (error)
+        {
+            RPC_IMPL_LOG(INFO)
+                << LOG_BADGE("getGroupPeers failed") << LOG_KV("code", error->errorCode())
+                << LOG_KV("message", error->errorMessage());
+            respFunc(error, jResp);
+            co_return;
+        }
+        auto rpc = self.lock();
+        if (!rpc)
+        {
+            co_return;
+        }
+        rpc->getGroupPeers(jResp, std::string_view(group), localP2pInfo, peersInfo);
+        respFunc(error, jResp);
+    }(self, std::move(_respFunc), std::string(_groupID), m_gatewayInterface));
 }
 
 void JsonRpcImpl_2_0::newBlockFilter(std::string_view _groupID, RespFunc _respFunc)

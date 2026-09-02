@@ -30,6 +30,7 @@
 #include <bcos-utilities/Error.h>
 #include <memory>
 #include <range/v3/view/any_view.hpp>
+#include <tuple>
 
 namespace bcos
 {
@@ -59,18 +60,15 @@ public:
     /**
      * @brief: get nodeIDs from gateway
      * @param: _groupID
-     * @param _getGroupNodeInfoFunc: get nodeIDs callback
-     * @return void
+     * @return {error, groupNodeInfo}: error is nullptr on success
      */
-    virtual void asyncGetGroupNodeInfo(
-        const std::string& _groupID, GetGroupNodeInfoFunc _getGroupNodeInfoFunc) = 0;
+    virtual task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo(
+        const std::string& _groupID) = 0;
     /**
      * @brief: get connected peers
-     * @param _callback:
-     * @return void
+     * @return {error, localGatewayInfo, peerGatewayInfos}: error is nullptr on success
      */
-    virtual void asyncGetPeers(
-        std::function<void(Error::Ptr, GatewayInfo::Ptr, GatewayInfosPtr)> _callback) = 0;
+    virtual task::Task<std::tuple<Error::Ptr, GatewayInfo::Ptr, GatewayInfosPtr>> getPeers() = 0;
     /**
      * @brief: send message to a single node
      * @param _groupID: groupID
@@ -113,9 +111,17 @@ public:
         bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(Error::Ptr&&)>) = 0;
 
     /// for AMOP
-    virtual void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc) = 0;
-    virtual void asyncSendBroadcastMessageByTopic(
+
+    /**
+     * @brief: send message to a random node subscribed to _topic
+     * @return {error, responseType, responseData}: error is nullptr on success
+     */
+    virtual task::Task<std::tuple<Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
+        const std::string& _topic, bcos::bytesConstRef _data) = 0;
+    /**
+     * @brief: broadcast message to all nodes subscribed to _topic
+     */
+    virtual task::Task<void> sendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) = 0;
 
     virtual void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
