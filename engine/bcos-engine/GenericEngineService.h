@@ -45,7 +45,6 @@ namespace bcos::engine
 
 namespace generic_detail
 {
-bcos::h256 syntheticHash(std::string_view seed);
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 
@@ -58,6 +57,9 @@ PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guar
     ArtifactsMap artifactsRollback = artifacts;
     try
     {
+        // Legacy generic FCU parity: putUnbounded reproduces anchored EngineServiceImpl's
+        // insert-before-contains bug (FIFO order never grows, no eviction). Bounded caching is a
+        // cutover decision and must not be enabled in this side-by-side branch.
         auto putResult = guard.putUnboundedPayload(payloadId, blockHash, std::move(entry));
         artifacts[payloadId] = std::forward<ArtifactNode>(artifactNode);
         for (auto const& evictedId : putResult.evicted)

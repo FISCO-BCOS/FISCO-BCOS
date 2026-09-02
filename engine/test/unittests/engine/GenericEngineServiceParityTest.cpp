@@ -574,7 +574,7 @@ BOOST_AUTO_TEST_CASE(generic_payload_id_and_get_payload_match)
     checkGetPayloadParity(*legacyPayload, *newPayload);
 }
 
-BOOST_AUTO_TEST_CASE(generic_cache_eviction_matches)
+BOOST_AUTO_TEST_CASE(generic_legacy_unbounded_cache_retains_front_second_and_last)
 {
     ServicePair pair;
     auto forkchoiceState = makeForkchoiceState();
@@ -589,7 +589,8 @@ BOOST_AUTO_TEST_CASE(generic_cache_eviction_matches)
     {
         auto attrs = makePayloadAttributesV3();
         // derivePayloadId hashes timestamp/1000; step by whole seconds so each build gets a
-        // distinct payload ID and the FIFO cap evicts the oldest entry.
+        // distinct payload ID. Legacy generic FCU never evicts (insert-before-contains bug), so
+        // front, second, and last entries remain retrievable even after 65 builds.
         attrs.timestamp = (c_timestamp + static_cast<std::uint64_t>(i) * 1000);
         auto legacyResult =
             task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attrs, 3));

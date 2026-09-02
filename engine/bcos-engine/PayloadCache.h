@@ -27,8 +27,12 @@ public:
     };
 
     PutResult put(PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry);
-    /// Insert without FIFO eviction or order tracking. Matches the legacy generic FCU build
-    /// path, which only grows the payload map until newPayload retainOnly clears it.
+    /// Legacy generic FCU parity only: insert without FIFO eviction or order tracking.
+    /// Anchored EngineServiceImpl inserts into m_payloadCache before checking contains(), so
+    /// m_payloadOrder never grows and the FIFO cap never evicts; payload/artifact caches can
+    /// grow without bound until newPayload retainOnly clears them. Do not use as a general
+    /// cache API — production cutover must explicitly choose bounded eviction or document
+    /// retaining this unbounded behavior.
     PutResult putUnbounded(PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry);
     /// Atomically replace the cache with a single retained entry (put then retainOnly on a
     /// staging copy, then one noexcept swap). Used by newPayload commit so no intermediate

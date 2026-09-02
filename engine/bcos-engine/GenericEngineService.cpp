@@ -6,14 +6,11 @@
 #include "GenericEngineService.h"
 
 #include <bcos-framework/engine/RawTransactionDispatch.h>
-#include <bcos-utilities/DataConvertUtility.h>
 
 namespace bcos::engine::generic_detail
 {
 namespace
 {
-constexpr std::size_t c_hashBytes = 32;
-
 std::optional<std::string> validateRawTransactionKind(
     bcos::engine::RawTransactionKind kind, std::size_t index)
 {
@@ -30,19 +27,6 @@ std::optional<std::string> validateRawTransactionKind(
     return std::nullopt;
 }
 }  // namespace
-
-bcos::h256 syntheticHash(std::string_view seed)
-{
-    std::string hex = "0x";
-    hex.reserve((c_hashBytes * 2) + 2);
-    auto payload = seed.substr(seed.rfind('x') + 1);
-    while (hex.size() < ((c_hashBytes * 2) + 2))
-    {
-        hex.append(payload.begin(), payload.end());
-    }
-    hex.resize((c_hashBytes * 2) + 2);
-    return bcos::h256(bcos::fromHex(hex));
-}
 
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version)
