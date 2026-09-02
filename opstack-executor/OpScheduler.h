@@ -721,6 +721,9 @@ private:
                     "adopt input is at height {}",
                     m_lastProbe->executedHeader->number(), number);
                 OP_SCHEDULER_LOG(INFO) << message;
+                // Refusal is terminal for this build's adopt; drop the retained probe so a
+                // stale slot does not outlive the refused build.
+                m_lastProbe.reset();
                 co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
                     nullptr, false};
@@ -738,6 +741,7 @@ private:
                 auto message =
                     std::string{"adoptProbeAsPending: block is already the committed tip"};
                 OP_SCHEDULER_LOG(INFO) << message;
+                m_lastProbe.reset();
                 co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
                     nullptr, false};
@@ -747,6 +751,7 @@ private:
                 auto message = fmt::format(
                     "Discontinuous adopt! expect: {} input: {}", lastExecuted + 1, number);
                 OP_SCHEDULER_LOG(INFO) << message;
+                m_lastProbe.reset();
                 co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
                     nullptr, false};
@@ -759,6 +764,7 @@ private:
                         fmt::format("adoptProbeAsPending: unexpected live pending block at {}",
                             m_pending->executedHeader->number());
                     OP_SCHEDULER_LOG(INFO) << message;
+                    m_lastProbe.reset();
                     co_return {
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                         nullptr, false};
@@ -773,6 +779,7 @@ private:
                 auto message =
                     fmt::format("adoptProbeAsPending: commitment mismatch on field {}", *mismatch);
                 OP_SCHEDULER_LOG(INFO) << message;
+                m_lastProbe.reset();
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr, false};
             }
