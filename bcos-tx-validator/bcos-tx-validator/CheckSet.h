@@ -125,25 +125,36 @@ constexpr bool contains(Check set, Check item) noexcept
     return (set & item) != Check::None;
 }
 
-/// The single evaluation order. The bitmask expresses membership only; this array decides which
-/// code a transaction violating several rules reports -- and EEST fixtures assert specific error
-/// codes, so that has to be deterministic.
+/// The evaluation order, in three stages. The bitmask expresses membership only; the order
+/// decides which code a transaction violating several rules reports -- and EEST fixtures assert
+/// specific error codes, so that has to be deterministic.
 ///
-/// Follows evmone's validate_transaction (bcos-evm/bcos-evm/eth/state/state.cpp, mirrored by
-/// ethereum-executor/EthereumTransition.h), with the FISCO-only items slotted in. evmone
-/// validates the type-specific block BEFORE the shared fee rules -- for a 7702 envelope that is
-/// "to present" and "authorization list non-empty" ahead of the tip/fee-cap comparison -- so a
-/// transaction violating both reports the same first error here as it would at execution.
-/// TypeGate goes first (nothing else is meaningful for an envelope type that is refused
-/// outright), ToFieldFormat and Signature next (without a recovered sender the account-state
-/// checks cannot run), ChainId ahead of the account reads (one config read is cheaper than an
-/// account read), and the two BCOS nonce checks last, pool set before ledger, as the pool-side
-/// validator ran them.
-inline constexpr std::array c_checkOrder{
+/// A check belongs to the stage whose inputs it reads, and verify() fetches a stage's inputs
+/// once, before that stage's first check, never per check:
+///
+///   gate  -- reads the transaction alone. FISCO's own pre-checks: a refused envelope type, a
+///            malformed `to`, a bad signature or a foreign group/chain id is rejected without a
+///            single read, which is what keeps unauthenticated P2P input cheap to refuse.
+///   state -- evmone's validate_transaction (bcos-evm/bcos-evm/eth/state/state.cpp, mirrored by
+///            ethereum-executor/EthereumTransition.h), in ITS order, judged against one chain
+///            view -- a configuration snapshot plus the fee and chain-id keys -- and, only when
+///            the set contains a sender-dependent check, one account read. evmone validates the
+///            type-specific block BEFORE the shared fee rules -- for a 7702 envelope that is "to
+///            present" and "authorization list non-empty" ahead of the tip/fee-cap comparison --
+///            so a transaction violating both reports the same first error here as at execution.
+///   pool  -- the BCOS nonce checkers, pool set before ledger, as the pool-side validator ran
+///            them. Reads the pool, not the chain.
+///
+/// Per (kind, context) this yields exactly the reads the table implies: a BCOS transaction
+/// reads nothing, a Web3 proposal reads the chain view, a Web3 admission reads the chain view
+/// and the account.
+inline constexpr std::array c_gateOrder{
     Check::TypeGate,
     Check::ToFieldFormat,
     Check::Signature,
     Check::BcosGroupChainId,
+};
+inline constexpr std::array c_stateOrder{
     Check::TypeByRevision,
     Check::SetCodeHasTo,
     Check::AuthListNonEmpty,
@@ -157,9 +168,49 @@ inline constexpr std::array c_checkOrder{
     Check::InitCodeSize,
     Check::Balance,
     Check::IntrinsicGas,
+};
+inline constexpr std::array c_poolOrder{
     Check::BcosPoolNonce,
     Check::BcosLedgerNonce,
 };
+
+namespace detail
+{
+template <std::size_t... N>
+constexpr std::array<Check, (N + ...)> concat(std::array<Check, N> const&... stages)
+{
+    std::array<Check, (N + ...)> out{};
+    std::size_t index = 0;
+    auto append = [&](auto const& stage) {
+        for (auto check : stage)
+        {
+            out.at(index) = check;
+            ++index;
+        }
+    };
+    (append(stages), ...);
+    return out;
+}
+
+template <std::size_t N>
+constexpr Check unionOf(std::array<Check, N> const& stage)
+{
+    Check out = Check::None;
+    for (auto check : stage)
+    {
+        out = out | check;
+    }
+    return out;
+}
+}  // namespace detail
+
+/// The single evaluation order: the three stages back to back.
+inline constexpr std::array c_checkOrder = detail::concat(c_gateOrder, c_stateOrder, c_poolOrder);
+
+/// Membership masks of the stages that read something, so verify() can ask "does this set need
+/// the chain view / the pool" as one expression over the table.
+inline constexpr Check c_stateStage = detail::unionOf(c_stateOrder);
+inline constexpr Check c_poolStage = detail::unionOf(c_poolOrder);
 
 /// Checks that cannot run without a recovered sender, and must therefore be skipped when
 /// signature verification is switched off.

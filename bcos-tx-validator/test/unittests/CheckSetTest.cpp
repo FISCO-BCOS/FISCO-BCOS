@@ -184,6 +184,37 @@ BOOST_AUTO_TEST_CASE(checkOrderCoversEveryReachableCheckExactlyOnce)
     BOOST_CHECK((reachable & ~ordered) == Check::None);
 }
 
+// The three stages partition the order: every check sits in exactly one, and back to back they
+// are c_checkOrder. What each stage may read is decided by its position, so the membership
+// facts verify() relies on are pinned here rather than assumed.
+BOOST_AUTO_TEST_CASE(stagesPartitionTheEvaluationOrder)
+{
+    BOOST_CHECK_EQUAL(
+        c_gateOrder.size() + c_stateOrder.size() + c_poolOrder.size(), c_checkOrder.size());
+    Check gate = Check::None;
+    for (auto check : c_gateOrder)
+    {
+        gate = gate | check;
+    }
+    BOOST_CHECK((gate & c_stateStage) == Check::None);
+    BOOST_CHECK((gate & c_poolStage) == Check::None);
+    BOOST_CHECK((c_stateStage & c_poolStage) == Check::None);
+
+    // Every sender-dependent check lives in the state stage: that is what lets verify() read the
+    // account once, before the stage, and only when the set contains one of them.
+    BOOST_CHECK((c_senderDependent & ~c_stateStage) == Check::None);
+    // A BCOS transaction has no state-stage check in any context, so it never reads the chain;
+    // a Web3 proposal has state-stage checks but no sender-dependent one, so it reads the chain
+    // view and not the account.
+    for (auto context : kContexts)
+    {
+        BOOST_CHECK((checkSet(TxKind::Bcos, context) & c_stateStage) == Check::None);
+    }
+    const auto proposal = checkSet(TxKind::Web3DynamicFee, AdmissionContext::ProposalVerification);
+    BOOST_CHECK((proposal & c_stateStage) != Check::None);
+    BOOST_CHECK((proposal & c_senderDependent) == Check::None);
+}
+
 // TypeGate must be first: for a refused envelope type nothing else is meaningful, and the type
 // gate is what turns a blob or deposit arriving over P2P into a rejection.
 BOOST_AUTO_TEST_CASE(typeGateIsEvaluatedFirstAndSignatureBeforeAccountState)

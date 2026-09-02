@@ -82,6 +82,10 @@ struct TxSpec
     bcos::bytes data{};
     u256 value = 1;
     bool withAuthorization = false;
+    /// Zero out r after signing: the envelope stays self-consistent (the hash commits to the
+    /// signature bytes as sent) but recovery is impossible, so the rejection is the signature
+    /// check's own and not normalization's.
+    bool unrecoverableSignature = false;
 };
 
 std::shared_ptr<bcostars::protocol::TransactionImpl> admitTx(TxSpec const& spec = {})
@@ -111,6 +115,10 @@ std::shared_ptr<bcostars::protocol::TransactionImpl> admitTx(TxSpec const& spec 
     web3.signatureR.assign(signature->begin(), signature->begin() + 32);
     web3.signatureS.assign(signature->begin() + 32, signature->begin() + 64);
     web3.signatureV = static_cast<uint64_t>((*signature)[64]);
+    if (spec.unrecoverableSignature)
+    {
+        web3.signatureR.assign(32, 0);
+    }
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [inner = web3.takeToTarsTransaction()]() mutable { return &inner; });
@@ -197,6 +205,8 @@ struct AdmitHarness
     /// Null by default: the mempool-side validator has no pool set, and most cases here are
     /// Web3, which never consult it.
     std::shared_ptr<NonceCheckerInterface> txPoolNonceChecker;
+    /// Nothing is a system transaction unless a case says so.
+    SystemTxPredicate isSystemTx = [](Transaction const&) { return false; };
     AccountState account{};
     bool accountExists = true;
 
@@ -243,9 +253,9 @@ struct AdmitHarness
         auto cryptoSuite =
             std::make_shared<crypto::CryptoSuite>(std::make_shared<crypto::Keccak256>(),
                 std::make_shared<crypto::Secp256k1Crypto>(), nullptr);
-        auto validator = std::make_unique<CodeInjectingValidator>(
-            cryptoSuite, ledger, ledgerConfigState, txPoolNonceChecker, web3NonceChecker,
-            [](Transaction const&) { return false; }, "group0", "chain0");
+        auto validator =
+            std::make_unique<CodeInjectingValidator>(cryptoSuite, ledger, ledgerConfigState,
+                txPoolNonceChecker, web3NonceChecker, isSystemTx, "group0", "chain0");
         validator->code = account.code;
         validator->setScheduler(scheduler);
         if (ledgerNonceChecker)
@@ -604,6 +614,41 @@ BOOST_AUTO_TEST_CASE(taintedTransactionWithABrokenSignatureIsStillRejected)
     // The hash commits to the signature, so normalization catches it first; either way it must
     // not be admitted.
     BOOST_CHECK(harness.run(*tx) != TransactionStatus::None);
+}
+
+// ------------------------------------------------------------ stages
+
+// The gate stage reads nothing. A transaction refused there -- here by an unrecoverable
+// signature, the case a P2P peer can manufacture for free -- costs no account read, which is what
+// keeps unauthenticated input cheap to refuse. Pinned by counting, as the proposal case above
+// is: a status assertion would pass just as well with the reads still happening.
+BOOST_AUTO_TEST_CASE(aRejectionAtTheGateReadsNoAccountState)
+{
+    AdmitHarness harness;
+    auto tx = admitTx({.unrecoverableSignature = true});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::InvalidSignature);
+    BOOST_CHECK_EQUAL(harness.accountStateReads(), 0);
+    BOOST_CHECK_EQUAL(harness.accountNonceReads(), 0);
+}
+
+// The system-transaction mark is a property of the transaction (its `to` is a system contract),
+// not of any check. The pool-side validator set it inside its signature path, which
+// SignaturePolicy::Disabled would switch off along with the signature; it is set before the
+// stages run, so the policy cannot reach it.
+BOOST_AUTO_TEST_CASE(systemTransactionIsMarkedRegardlessOfSignaturePolicy)
+{
+    AdmitHarness harness;
+    harness.isSystemTx = [](Transaction const&) { return true; };
+    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+    tx->mutableInner().type = static_cast<tars::Char>(TransactionType::BCOSTransaction);
+    tx->mutableInner().data.to = "0x0000000000000000000000000000000000001000";
+    tx->mutableInner().data.groupID = "group0";
+    tx->mutableInner().data.chainID = "chain0";
+    BOOST_REQUIRE(!tx->systemTx());
+
+    BOOST_CHECK(harness.run(*tx, AdmissionContext::PoolAdmission, SignaturePolicy::Disabled) ==
+                TransactionStatus::None);
+    BOOST_CHECK(tx->systemTx());
 }
 
 // ------------------------------------------------------------ wiring guard

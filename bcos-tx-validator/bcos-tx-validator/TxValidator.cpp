@@ -32,6 +32,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <cctype>
 #include <stdexcept>
 
@@ -149,80 +150,63 @@ void TxValidator::setScheduler(std::weak_ptr<scheduler::SchedulerInterface> sche
 
 namespace
 {
-/// The inputs a check may read beyond the transaction itself. Each one costs a ledger or
-/// storage round-trip, so admit() fetches one only when a check that actually runs declares it,
-/// and never fetches the same one twice.
-enum class Need : uint8_t
-{
-    None = 0,
-    Config = 1U << 0,       ///< LedgerConfig (block number, gas limit, EVM revision)
-    Revision = 1U << 1,     ///< evmc_revision for the next block; implies Config
-    SenderState = 1U << 2,  ///< balance + nonce + code, one account read
-    SenderNonce = 1U << 3,  ///< nonce alone; source depends on the context, see admit()
-    TxGasPrice = 1U << 4,   ///< SYSTEM_KEY_TX_GAS_PRICE
-    Web3ChainId = 1U << 5,  ///< SYSTEM_KEY_WEB3_CHAIN_ID
-};
-
-constexpr Need operator|(Need lhs, Need rhs) noexcept
-{
-    return static_cast<Need>(static_cast<uint8_t>(lhs) | static_cast<uint8_t>(rhs));
-}
-constexpr Need operator&(Need lhs, Need rhs) noexcept
-{
-    return static_cast<Need>(static_cast<uint8_t>(lhs) & static_cast<uint8_t>(rhs));
-}
-constexpr Need operator~(Need value) noexcept
-{
-    return static_cast<Need>(static_cast<uint8_t>(~static_cast<uint8_t>(value)));
-}
-constexpr bool contains(Need set, Need item) noexcept
-{
-    return (set & item) != Need::None;
-}
-
-/// Everything a check function is allowed to see. The resolved fields below are filled in by
-/// admit() before the check runs, according to the Need mask its registry row declares -- so a
-/// check body contains rules only, never I/O, and stays synchronous and directly testable.
-struct AdmissionInputs
+/// What every stage sees: the normalized transaction, its routing key and the validator's own
+/// configuration. References, not copies: the struct lives on the verify() frame and is only
+/// valid while the validator outlives the coroutine -- the ordinary contract for a
+/// Task-returning member, but worth stating because they are read AFTER resumption.
+struct Envelope
 {
     protocol::Transaction& tx;
     TxKind kind;
-    AdmissionContext context;
-    /// The nonce checkers, as raw pointers. ledgerNonceChecker is a snapshot the verify() frame
-    /// owns; txPoolNonceChecker points at a member of the validator, as do cryptoSuite,
-    /// isSystemTx, groupId and chainId below. So this struct is only valid while the validator
-    /// outlives the coroutine -- the ordinary contract for a Task-returning member, but worth
-    /// stating because these are read AFTER resumption. Either checker may be null: see
-    /// checkBcosPoolNonce and checkBcosLedgerNonce.
-    NonceCheckerInterface* txPoolNonceChecker;
-    LedgerNonceChecker* ledgerNonceChecker;
     crypto::CryptoSuite& cryptoSuite;
-    SystemTxPredicate const& isSystemTx;
     std::string_view groupId;
     std::string_view chainId;
+};
 
-    // --- resolved on demand ---
-    /// const: LedgerConfigState hands out a snapshot nobody may mutate, and a check receiving
-    /// AdmissionInputs const& could otherwise still write through this pointer.
+/// The chain as of one snapshot, read once per verify() before the state stage: every check in
+/// one pass judges against a single block's configuration even if a commit lands mid-pass.
+struct ChainView
+{
+    /// const: LedgerConfigState hands out a snapshot nobody may mutate.
     std::shared_ptr<const ledger::LedgerConfig> config;
     /// nullopt = the chain declares no EVM revision; revision-dependent checks stand down rather
     /// than guess, because admission must never be STRICTER than execution.
     std::optional<evmc_revision> revision;
-    /// nullopt = the account does not exist on chain yet.
-    std::optional<AccountState> senderState;
-    std::optional<u256> senderNonce;
-    /// nullopt = the key is unset in the chain config (distinct from "not resolved": a field is
-    /// only read by a check that declared the matching Need).
+    /// nullopt = the key is unset in the chain config.
     std::optional<std::string> txGasPrice;
     std::optional<std::string> web3ChainId;
+};
+
+/// Inputs of the state stage. `sender` is engaged exactly when the check set contains a
+/// sender-dependent check: verify() reads the account only then, and the four checks in
+/// c_senderDependent are the only readers, so they take it with value(). An absent account on
+/// that path is a programming error in the table, and bad_optional_access says so rather than a
+/// silent pass.
+struct StateInputs
+{
+    protocol::Transaction& tx;
+    TxKind kind;
+    ChainView const& chain;
+    std::optional<AccountState> const& sender;
+};
+
+/// Inputs of the pool stage. Either checker may be null: see checkBcosPoolNonce and
+/// checkBcosLedgerNonce.
+struct PoolInputs
+{
+    protocol::Transaction& tx;
+    NonceCheckerInterface* txPoolNonceChecker;
+    LedgerNonceChecker* ledgerNonceChecker;
 };
 
 // ---------------------------------------------------------------- the checks
 //
 // One function per Check bit. Pure rules: no I/O, no co_await, no access to the validator's
-// members beyond what AdmissionInputs carries. Returns None to pass, any other status to reject.
+// members beyond what its stage's inputs carry. The parameter type IS the stage: a gate check
+// cannot read the chain, a state check cannot reach the pool, and the compiler enforces it.
+// Returns None to pass, any other status to reject.
 
-TransactionStatus checkTypeGate(AdmissionInputs const& in)
+TransactionStatus checkTypeGate(Envelope const& in)
 {
     // An allow-list, not a deny-list. normalize() already refused blob/deposit/reserved
     // envelopes, so Rejected here means the routing key and the gate disagree; and a value that
@@ -243,12 +227,12 @@ TransactionStatus checkTypeGate(AdmissionInputs const& in)
     return TransactionStatus::TxTypeNotSupported;
 }
 
-TransactionStatus checkToFieldFormat(AdmissionInputs const& in)
+TransactionStatus checkToFieldFormat(Envelope const& in)
 {
     return isValidToField(in.tx.to()) ? TransactionStatus::None : TransactionStatus::Malformed;
 }
 
-TransactionStatus checkSignature(AdmissionInputs const& in)
+TransactionStatus checkSignature(Envelope const& in)
 {
     try
     {
@@ -284,14 +268,10 @@ TransactionStatus checkSignature(AdmissionInputs const& in)
                                        "reason", boost::current_exception_diagnostic_information());
         return TransactionStatus::InvalidSignature;
     }
-    if (in.isSystemTx && in.isSystemTx(in.tx))
-    {
-        in.tx.setSystemTx(true);
-    }
     return TransactionStatus::None;
 }
 
-TransactionStatus checkBcosGroupChainId(AdmissionInputs const& in)
+TransactionStatus checkBcosGroupChainId(Envelope const& in)
 {
     if (in.tx.groupId() != in.groupId) [[unlikely]]
     {
@@ -304,34 +284,34 @@ TransactionStatus checkBcosGroupChainId(AdmissionInputs const& in)
     return TransactionStatus::None;
 }
 
-TransactionStatus checkTypeByRevision(AdmissionInputs const& in)
+TransactionStatus checkTypeByRevision(StateInputs const& in)
 {
-    if (in.revision.has_value() && *in.revision < requiredRevision(in.kind))
+    if (in.chain.revision.has_value() && *in.chain.revision < requiredRevision(in.kind))
     {
         return TransactionStatus::TxTypeNotSupported;
     }
     return TransactionStatus::None;
 }
 
-TransactionStatus checkTipNotAboveCap(AdmissionInputs const& in)
+TransactionStatus checkTipNotAboveCap(StateInputs const& in)
 {
     return in.tx.maxPriorityFeePerGas() > in.tx.maxFeePerGas() ?
                TransactionStatus::TipGreaterThanFeeCap :
                TransactionStatus::None;
 }
 
-TransactionStatus checkSetCodeHasTo(AdmissionInputs const& in)
+TransactionStatus checkSetCodeHasTo(StateInputs const& in)
 {
     return in.tx.to().empty() ? TransactionStatus::CreateSetCodeTx : TransactionStatus::None;
 }
 
-TransactionStatus checkAuthListNonEmpty(AdmissionInputs const& in)
+TransactionStatus checkAuthListNonEmpty(StateInputs const& in)
 {
     return in.tx.authorizationList().empty() ? TransactionStatus::EmptyAuthorizationList :
                                                TransactionStatus::None;
 }
 
-TransactionStatus checkMaxGasLimit(AdmissionInputs const& in)
+TransactionStatus checkMaxGasLimit(StateInputs const& in)
 {
     // gasLimit() is int64_t, but the Web3 envelope declares it as uint64: Web3TarsBridge assigns
     // it straight across, so a declared value >= 2^63 lands here negative. Both comparisons below
@@ -345,14 +325,15 @@ TransactionStatus checkMaxGasLimit(AdmissionInputs const& in)
     // Two caps in one item: the EIP-7825 constant from Osaka onwards, and the chain's
     // tx_gas_limit at all times. The optional comparison is deliberate -- a nullopt revision is
     // ordered below every value, so an unconfigured chain does not get the Osaka cap.
-    if (in.revision >= EVMC_OSAKA && in.tx.gasLimit() > protocol::MAX_TX_GAS_LIMIT) [[unlikely]]
+    if (in.chain.revision >= EVMC_OSAKA && in.tx.gasLimit() > protocol::MAX_TX_GAS_LIMIT)
+        [[unlikely]]
     {
         return TransactionStatus::MaxGasLimitExceeded;
     }
     // evmone compares against the block's remaining gas, which does not exist at admission;
     // FISCO has no block gas limit either -- SYSTEM_KEY_TX_GAS_LIMIT is a per-transaction cap.
     // This follows geth's head.GasLimit comparison instead.
-    if (auto [limit, _] = in.config->gasLimit();
+    if (auto [limit, _] = in.chain.config->gasLimit();
         limit > 0 && static_cast<uint64_t>(in.tx.gasLimit()) > limit)
     {
         return TransactionStatus::MaxGasLimitExceeded;
@@ -360,17 +341,17 @@ TransactionStatus checkMaxGasLimit(AdmissionInputs const& in)
     return TransactionStatus::None;
 }
 
-TransactionStatus checkFeeCapVsBaseFee(AdmissionInputs const& in)
+TransactionStatus checkFeeCapVsBaseFee(StateInputs const& in)
 {
-    if (!in.txGasPrice)
+    if (!in.chain.txGasPrice)
     {
         return TransactionStatus::None;  // unset: no baseline to compare against
     }
-    if (*in.txGasPrice == "0" || *in.txGasPrice == "0x0")
+    if (*in.chain.txGasPrice == "0" || *in.chain.txGasPrice == "0x0")
     {
         return TransactionStatus::None;  // free-gas chain
     }
-    if (protocol::effectiveGasPrice(in.tx) < u256(*in.txGasPrice))
+    if (protocol::effectiveGasPrice(in.tx) < u256(*in.chain.txGasPrice))
     {
         // Today this is reported as InsufficientFunds, which tells the user their balance is
         // short when it is not.
@@ -379,7 +360,7 @@ TransactionStatus checkFeeCapVsBaseFee(AdmissionInputs const& in)
     return TransactionStatus::None;
 }
 
-TransactionStatus checkChainId(AdmissionInputs const& in)
+TransactionStatus checkChainId(StateInputs const& in)
 {
     // From the SIGNED envelope. The mirror cannot distinguish "no chainId" (pre-EIP-155) from
     // "chainId 0" -- both serialise to "0" -- and a typed transaction may legitimately carry an
@@ -405,11 +386,11 @@ TransactionStatus checkChainId(AdmissionInputs const& in)
     // The transaction claims a chain. From here the configuration is required: silently
     // accepting an unverifiable claim admits transactions signed for any chain -- which is what
     // EthEndpoint does today when web3_chain_id is unset.
-    if (!in.web3ChainId)
+    if (!in.chain.web3ChainId)
     {
         return TransactionStatus::InvalidChainId;
     }
-    auto const expected = ledger::parseWeb3ChainId(*in.web3ChainId);
+    auto const expected = ledger::parseWeb3ChainId(*in.chain.web3ChainId);
     if (!expected || u256(classified.chainId) != *expected)
     {
         return TransactionStatus::InvalidChainId;
@@ -417,32 +398,34 @@ TransactionStatus checkChainId(AdmissionInputs const& in)
     return TransactionStatus::None;
 }
 
-TransactionStatus checkSenderIsEOA(AdmissionInputs const& in)
+TransactionStatus checkSenderIsEOA(StateInputs const& in)
 {
     // EIP-3607. Delegated code (0xef0100...) still belongs to an EOA.
-    if (in.senderState && !in.senderState->code.empty() && !isDelegatedCode(in.senderState->code))
+    auto const& sender = in.sender.value();
+    if (!sender.code.empty() && !isDelegatedCode(sender.code))
     {
         return TransactionStatus::SenderNoEOA;
     }
     return TransactionStatus::None;
 }
 
-TransactionStatus checkNonceNotMax(AdmissionInputs const& in)
+TransactionStatus checkNonceNotMax(StateInputs const& in)
 {
     // EIP-2681.
-    if (in.senderState && in.senderState->nonce.has_value() &&
-        *in.senderState->nonce >= std::numeric_limits<uint64_t>::max())
+    auto const& nonce = in.sender.value().nonce;
+    if (nonce.has_value() && *nonce >= std::numeric_limits<uint64_t>::max())
     {
         return TransactionStatus::NonceHasMaxValue;
     }
     return TransactionStatus::None;
 }
 
-TransactionStatus checkWeb3NonceWindow(AdmissionInputs const& in)
+TransactionStatus checkWeb3NonceWindow(StateInputs const& in)
 {
     // Lower bound and queue depth are one check: they share a single account-nonce read, and the
     // existing implementation expresses both in one comparison.
-    if (!in.senderNonce.has_value())
+    auto const& senderNonce = in.sender.value().nonce;
+    if (!senderNonce.has_value())
     {
         // Account not on chain yet. The existing Web3NonceChecker also declines to judge in this
         // case (its storage-miss branch falls through without comparing), and matching it keeps
@@ -451,31 +434,31 @@ TransactionStatus checkWeb3NonceWindow(AdmissionInputs const& in)
         return TransactionStatus::None;
     }
     auto const txNonce = u256(in.tx.nonce());
-    if (txNonce < *in.senderNonce)
+    if (txNonce < *senderNonce)
     {
         return TransactionStatus::NonceCheckFail;  // already used
     }
-    if (txNonce > *in.senderNonce + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
+    if (txNonce > *senderNonce + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
     {
         return TransactionStatus::NonceCheckFail;  // too far ahead to queue
     }
     return TransactionStatus::None;
 }
 
-TransactionStatus checkInitCodeSize(AdmissionInputs const& in)
+TransactionStatus checkInitCodeSize(StateInputs const& in)
 {
     // EIP-3860 applies to contract CREATION only. The current implementation keys on transaction
     // type alone, so a 60000-byte call to a deployed contract is wrongly rejected with
     // MaxInitCodeSizeExceeded.
-    if (in.revision.has_value() && *in.revision >= EVMC_SHANGHAI && in.tx.to().empty() &&
-        in.tx.input().size() > MAX_INITCODE_SIZE)
+    if (in.chain.revision.has_value() && *in.chain.revision >= EVMC_SHANGHAI &&
+        in.tx.to().empty() && in.tx.input().size() > MAX_INITCODE_SIZE)
     {
         return TransactionStatus::MaxInitCodeSizeExceeded;
     }
     return TransactionStatus::None;
 }
 
-TransactionStatus checkBalance(AdmissionInputs const& in)
+TransactionStatus checkBalance(StateInputs const& in)
 {
     // What the sender must be able to cover depends on whether this chain charges gas at all:
     //   tx_gas_price unset or "0"  -> gas is free; only `value` has to be covered
@@ -484,9 +467,10 @@ TransactionStatus checkBalance(AdmissionInputs const& in)
     // max_gas_price * gas_limit + value, because on a free-gas FISCO chain the sender is never
     // actually debited the fee cap they declared -- charging it at admission would reject
     // transactions that execute perfectly well.
-    const bool chargesGas = in.txGasPrice && !(*in.txGasPrice == "0" || *in.txGasPrice == "0x0");
+    const bool chargesGas =
+        in.chain.txGasPrice && !(*in.chain.txGasPrice == "0" || *in.chain.txGasPrice == "0x0");
 
-    u256 const balance = in.senderState ? in.senderState->balance : u256{0};
+    u256 const balance = in.sender.value().balance;
 
     // 512-bit, deliberately. bcos::u256 carries boost::multiprecision::unchecked, so
     // gasLimit * gasPrice + value is reduced mod 2^256 with no signal -- with a maxFeePerGas
@@ -505,18 +489,18 @@ TransactionStatus checkBalance(AdmissionInputs const& in)
     return TransactionStatus::None;
 }
 
-TransactionStatus checkIntrinsicGas(AdmissionInputs const& in)
+TransactionStatus checkIntrinsicGas(StateInputs const& in)
 {
     // Same formula the executor uses (TxGasModel.h). A separate copy would drift at the next
     // fork that moves EIP-7623's floor, and the drift shows up as "admitted, then failed with
     // OutOfGasLimit" -- a block carrying a certainly-failing transaction.
-    if (!in.revision.has_value())
+    if (!in.chain.revision.has_value())
     {
         // The intrinsic cost is revision-dependent (EIP-7623's floor, the calldata token price),
         // so without one there is no figure to compare against.
         return TransactionStatus::None;
     }
-    auto const cost = protocol::gas::compute_tx_intrinsic_cost(*in.revision, in.tx);
+    auto const cost = protocol::gas::compute_tx_intrinsic_cost(*in.chain.revision, in.tx);
     if (in.tx.gasLimit() < std::max(cost.intrinsic, cost.min))
     {
         return TransactionStatus::OutOfGasLimit;
@@ -530,7 +514,7 @@ TransactionStatus checkIntrinsicGas(AdmissionInputs const& in)
 // proposal column drops it, the committed window is chain state and every column keeps it. That
 // decision lives in CheckSet.h, so neither function looks at the context.
 
-TransactionStatus checkBcosPoolNonce(AdmissionInputs const& in)
+TransactionStatus checkBcosPoolNonce(PoolInputs const& in)
 {
     if (in.txPoolNonceChecker == nullptr)
     {
@@ -540,7 +524,7 @@ TransactionStatus checkBcosPoolNonce(AdmissionInputs const& in)
     return in.txPoolNonceChecker->checkNonce(in.tx);
 }
 
-TransactionStatus checkBcosLedgerNonce(AdmissionInputs const& in)
+TransactionStatus checkBcosLedgerNonce(PoolInputs const& in)
 {
     if (in.ledgerNonceChecker == nullptr)
     {
@@ -551,78 +535,78 @@ TransactionStatus checkBcosLedgerNonce(AdmissionInputs const& in)
     return in.ledgerNonceChecker->checkNonce(in.tx);
 }
 
-// ---------------------------------------------------------------- the registry
+// ---------------------------------------------------------------- the registries
 
+template <class Inputs>
 struct CheckEntry
 {
     Check bit;
-    Need needs;
-    TransactionStatus (*run)(AdmissionInputs const&);
+    TransactionStatus (*run)(Inputs const&);
 };
 
-/// Adding a check is three edits, and the compiler enforces two of them: write the function
-/// above, add one row here declaring which inputs it reads, and slot the bit into c_checkOrder
-/// (CheckSet.h) where it belongs in the evaluation order. The static_asserts below refuse to
-/// compile if the registry and the order disagree in either direction.
-constexpr std::array<CheckEntry, c_checkOrder.size()> c_checkRegistry{{
-    {Check::TypeGate, Need::None, &checkTypeGate},
-    {Check::ToFieldFormat, Need::None, &checkToFieldFormat},
-    {Check::Signature, Need::None, &checkSignature},
-    {Check::BcosGroupChainId, Need::None, &checkBcosGroupChainId},
-    {Check::TypeByRevision, Need::Revision, &checkTypeByRevision},
-    {Check::SetCodeHasTo, Need::None, &checkSetCodeHasTo},
-    {Check::AuthListNonEmpty, Need::None, &checkAuthListNonEmpty},
-    {Check::TipNotAboveCap, Need::None, &checkTipNotAboveCap},
-    {Check::MaxGasLimit, Need::Revision | Need::Config, &checkMaxGasLimit},
-    {Check::FeeCapVsBaseFee, Need::TxGasPrice, &checkFeeCapVsBaseFee},
-    {Check::ChainId, Need::Web3ChainId, &checkChainId},
-    {Check::SenderIsEOA, Need::SenderState, &checkSenderIsEOA},
-    {Check::NonceNotMax, Need::SenderState, &checkNonceNotMax},
-    {Check::Web3NonceWindow, Need::SenderNonce, &checkWeb3NonceWindow},
-    {Check::InitCodeSize, Need::Revision, &checkInitCodeSize},
-    {Check::Balance, Need::TxGasPrice | Need::SenderState, &checkBalance},
-    {Check::IntrinsicGas, Need::Revision, &checkIntrinsicGas},
-    {Check::BcosPoolNonce, Need::None, &checkBcosPoolNonce},
-    {Check::BcosLedgerNonce, Need::None, &checkBcosLedgerNonce},
+/// One registry per stage, in evaluation order. Adding a check is three edits, and the compiler
+/// enforces all of them: write the function above with its stage's input type, add its row
+/// here, and slot the bit into the matching order array in CheckSet.h at the same position --
+/// the static_asserts below refuse to compile if a registry and its order differ in membership
+/// or in sequence.
+constexpr std::array<CheckEntry<Envelope>, c_gateOrder.size()> c_gateRegistry{{
+    {Check::TypeGate, &checkTypeGate},
+    {Check::ToFieldFormat, &checkToFieldFormat},
+    {Check::Signature, &checkSignature},
+    {Check::BcosGroupChainId, &checkBcosGroupChainId},
 }};
 
-constexpr CheckEntry const* findCheck(Check bit) noexcept
+constexpr std::array<CheckEntry<StateInputs>, c_stateOrder.size()> c_stateRegistry{{
+    {Check::TypeByRevision, &checkTypeByRevision},
+    {Check::SetCodeHasTo, &checkSetCodeHasTo},
+    {Check::AuthListNonEmpty, &checkAuthListNonEmpty},
+    {Check::TipNotAboveCap, &checkTipNotAboveCap},
+    {Check::MaxGasLimit, &checkMaxGasLimit},
+    {Check::FeeCapVsBaseFee, &checkFeeCapVsBaseFee},
+    {Check::ChainId, &checkChainId},
+    {Check::SenderIsEOA, &checkSenderIsEOA},
+    {Check::NonceNotMax, &checkNonceNotMax},
+    {Check::Web3NonceWindow, &checkWeb3NonceWindow},
+    {Check::InitCodeSize, &checkInitCodeSize},
+    {Check::Balance, &checkBalance},
+    {Check::IntrinsicGas, &checkIntrinsicGas},
+}};
+
+constexpr std::array<CheckEntry<PoolInputs>, c_poolOrder.size()> c_poolRegistry{{
+    {Check::BcosPoolNonce, &checkBcosPoolNonce},
+    {Check::BcosLedgerNonce, &checkBcosLedgerNonce},
+}};
+
+template <class Inputs, std::size_t N>
+constexpr bool followsOrder(
+    std::array<CheckEntry<Inputs>, N> const& registry, std::array<Check, N> const& order)
 {
-    for (auto const& entry : c_checkRegistry)
+    return std::ranges::equal(registry, order, {}, &CheckEntry<Inputs>::bit);
+}
+static_assert(followsOrder(c_gateRegistry, c_gateOrder), "c_gateRegistry departs from c_gateOrder");
+static_assert(
+    followsOrder(c_stateRegistry, c_stateOrder), "c_stateRegistry departs from c_stateOrder");
+static_assert(followsOrder(c_poolRegistry, c_poolOrder), "c_poolRegistry departs from c_poolOrder");
+
+/// Run one stage: the checks the set contains, in the registry's order, stopping at the first
+/// rejection.
+template <class Inputs, std::size_t N>
+TransactionStatus runStage(
+    std::array<CheckEntry<Inputs>, N> const& registry, Check checks, Inputs const& inputs)
+{
+    for (auto const& entry : registry)
     {
-        if (entry.bit == bit)
+        if (!contains(checks, entry.bit))
         {
-            return &entry;
+            continue;
+        }
+        if (auto status = entry.run(inputs); status != TransactionStatus::None)
+        {
+            return status;
         }
     }
-    return nullptr;
+    return TransactionStatus::None;
 }
-
-static_assert(
-    [] {
-        for (auto check : c_checkOrder)
-        {
-            if (findCheck(check) == nullptr)
-            {
-                return false;
-            }
-        }
-        return true;
-    }(),
-    "a check listed in c_checkOrder has no implementation in c_checkRegistry");
-
-static_assert(
-    [] {
-        for (auto const& entry : c_checkRegistry)
-        {
-            if (std::ranges::find(c_checkOrder, entry.bit) == c_checkOrder.end())
-            {
-                return false;
-            }
-        }
-        return true;
-    }(),
-    "c_checkRegistry implements a check that c_checkOrder never runs");
 
 }  // namespace
 
@@ -647,6 +631,36 @@ u256 parseBalance(std::string_view raw)
         BOOST_THROW_EXCEPTION(std::runtime_error(
             "admission: account balance is not a parseable u256: '" + std::string(raw) + "'"));
     }
+}
+
+/// The state stage's inputs, read once. Throws (never returns a status) when something cannot
+/// be read: a storage fault must not be reported as a defect in the transaction.
+task::Task<ChainView> readChainView(
+    ledger::LedgerConfigState const& configState, ledger::LedgerInterface& chainLedger)
+{
+    ChainView view;
+    // A snapshot, not a fetch: whoever commits a block republishes the configuration, and this
+    // is a pointer copy.
+    view.config = configState.get();
+    if (!view.config)
+    {
+        // LedgerConfigState never publishes null, so reaching here means the holder was
+        // corrupted. Infrastructure, not a defect in the transaction -- reported as an exception
+        // so it cannot masquerade as a rejected transaction.
+        BOOST_THROW_EXCEPTION(std::runtime_error("admission: ledger config state returned null"));
+    }
+    // Judged against the block it would execute in, which is the next one.
+    view.revision = view.config->evmcRevisionForBlock(view.config->blockNumber() + 1);
+    if (auto entry = co_await ledger::getSystemConfig(chainLedger, ledger::SYSTEM_KEY_TX_GAS_PRICE))
+    {
+        view.txGasPrice = std::get<0>(*entry);
+    }
+    if (auto entry =
+            co_await ledger::getSystemConfig(chainLedger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
+    {
+        view.web3ChainId = std::get<0>(*entry);
+    }
+    co_return view;
 }
 }  // namespace
 
@@ -739,122 +753,60 @@ task::Task<TransactionStatus> TxValidator::verify(
     }
 
     const auto kind = kindOf(tx);
+    // A system transaction is one whose `to` is a system contract: a property of the
+    // transaction, not of any check, so it is marked here regardless of which checks run. The
+    // pool-side validator marked it inside its signature path, which SignaturePolicy::Disabled
+    // would switch off along with the signature.
+    if (m_isSystemTx && m_isSystemTx(tx))
+    {
+        tx.setSystemTx(true);
+    }
     const auto checks = effectiveCheckSet(kind, context, policy);
 
-    // Copied out under the lock and held for the rest of the call: the checks run synchronously
-    // against this handle, and re-reading it mid-pass could have two checks judge the same
-    // transaction against different windows.
-    std::shared_ptr<LedgerNonceChecker> ledgerNonceChecker;
+    // Stage 1: the transaction alone. Nothing has been read, and a rejection here costs nothing
+    // more -- which is what keeps unauthenticated input cheap to refuse.
+    const Envelope envelope{.tx = tx,
+        .kind = kind,
+        .cryptoSuite = *m_cryptoSuite,
+        .groupId = m_groupId,
+        .chainId = m_chainId};
+    if (auto status = runStage(c_gateRegistry, checks, envelope); status != TransactionStatus::None)
     {
-        ReadGuard guard(x_lateBound);
-        ledgerNonceChecker = m_ledgerNonceChecker;
+        co_return status;
     }
 
-    // Every member is named, including the six resolved-on-demand ones. GCC's
-    // -Wmissing-field-initializers (in -Wextra, and -Werror here) fires on a designated
-    // initializer that skips a member with no default member initializer, even when the empty
-    // state is the intended one, so the empties are spelled out.
-    AdmissionInputs inputs{.tx = tx,
-        .kind = kind,
-        .context = context,
-        .txPoolNonceChecker = m_txPoolNonceChecker.get(),
-        .ledgerNonceChecker = ledgerNonceChecker.get(),
-        .cryptoSuite = *m_cryptoSuite,
-        .isSystemTx = m_isSystemTx,
-        .groupId = m_groupId,
-        .chainId = m_chainId,
-        .config = nullptr,
-        .revision = std::nullopt,
-        .senderState = std::nullopt,
-        .senderNonce = std::nullopt,
-        .txGasPrice = std::nullopt,
-        .web3ChainId = std::nullopt};
-
-    // Which inputs have already been fetched for this transaction. Resolution is driven by the
-    // registry rather than by each check, so two checks reading the same key (Balance and
-    // FeeCapVsBaseFee both want tx_gas_price) cost one ledger read, not two.
-    Need resolved = Need::None;
-
-    for (auto check : c_checkOrder)
+    // Stage 2: evmone's sequence against one chain view, fetched once. The account is read only
+    // when the set contains a check that needs it -- which is how the proposal column, whose
+    // sender-dependent checks are off, performs no account read at all.
+    if ((checks & c_stateStage) != Check::None)
     {
-        if (!contains(checks, check))
+        auto const chain = co_await readChainView(*m_ledgerConfigState, *m_ledger);
+        std::optional<AccountState> sender;
+        if ((checks & c_senderDependent) != Check::None)
         {
-            continue;
+            sender = co_await readAccountState(tx.sender());
         }
-        auto const* entry = findCheck(check);
-
-        auto needs = entry->needs;
-        if (contains(needs, Need::Revision))
-        {
-            needs = needs | Need::Config;  // the revision is read off the config
-        }
-        if (contains(needs, Need::SenderNonce) && context != AdmissionContext::ProposalVerification)
-        {
-            // Outside consensus the nonce comes from the full account read, which other checks
-            // in the same pass want anyway; proposal verification would read the nonce alone.
-            //
-            // "would", because as the table stands the condition cannot be false here:
-            // Web3NonceWindow is the only check declaring Need::SenderNonce, and
-            // ProposalVerification strips it. The guard and the ProposalVerification arm below
-            // are kept rather than deleted so that re-enabling that check for consensus does
-            // not silently start pulling a full account read onto the consensus hot path --
-            // which is the cost the routing table drops it to avoid.
-            needs = needs | Need::SenderState;
-        }
-        const auto missing = needs & ~resolved;
-
-        if (contains(missing, Need::Config))
-        {
-            // A snapshot, not a fetch: whoever commits a block republishes the configuration,
-            // and this is a pointer copy. Holding it for the rest of the pass means every check
-            // in one verify() call judges against a single block's configuration, even if a
-            // commit lands mid-pass.
-            inputs.config = m_ledgerConfigState->get();
-            if (!inputs.config)
-            {
-                // LedgerConfigState never publishes null, so reaching here means the holder was
-                // corrupted. Infrastructure, not a defect in the transaction -- reported as an
-                // exception so it cannot masquerade as a rejected transaction.
-                BOOST_THROW_EXCEPTION(
-                    std::runtime_error("admission: ledger config state returned null"));
-            }
-        }
-        if (contains(missing, Need::Revision))
-        {
-            // Judged against the block it would execute in, which is the next one.
-            inputs.revision = inputs.config->evmcRevisionForBlock(inputs.config->blockNumber() + 1);
-        }
-        if (contains(missing, Need::SenderState))
-        {
-            inputs.senderState = co_await readAccountState(tx.sender());
-        }
-        if (contains(missing, Need::SenderNonce))
-        {
-            inputs.senderNonce =
-                context == AdmissionContext::ProposalVerification ?
-                    co_await m_web3NonceChecker->committedNonce(tx.sender()) :
-                    (inputs.senderState ? inputs.senderState->nonce : std::optional<u256>{});
-        }
-        if (contains(missing, Need::TxGasPrice))
-        {
-            auto config =
-                co_await ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
-            inputs.txGasPrice =
-                config ? std::optional{std::get<0>(config.value())} : std::optional<std::string>{};
-        }
-        if (contains(missing, Need::Web3ChainId))
-        {
-            auto config =
-                co_await ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
-            inputs.web3ChainId =
-                config ? std::optional{std::get<0>(config.value())} : std::optional<std::string>{};
-        }
-        resolved = resolved | needs;
-
-        if (auto status = entry->run(inputs); status != TransactionStatus::None)
+        const StateInputs inputs{.tx = tx, .kind = kind, .chain = chain, .sender = sender};
+        if (auto status = runStage(c_stateRegistry, checks, inputs);
+            status != TransactionStatus::None)
         {
             co_return status;
         }
+    }
+
+    // Stage 3: the pool. The ledger nonce checker is copied out under the lock and held for the
+    // stage, so both pool checks judge against one window.
+    if ((checks & c_poolStage) != Check::None)
+    {
+        std::shared_ptr<LedgerNonceChecker> ledgerNonceChecker;
+        {
+            ReadGuard guard(x_lateBound);
+            ledgerNonceChecker = m_ledgerNonceChecker;
+        }
+        const PoolInputs pool{.tx = tx,
+            .txPoolNonceChecker = m_txPoolNonceChecker.get(),
+            .ledgerNonceChecker = ledgerNonceChecker.get()};
+        co_return runStage(c_poolRegistry, checks, pool);
     }
     co_return TransactionStatus::None;
 }
