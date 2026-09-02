@@ -49,7 +49,8 @@ enum class DisconnectReason : uint8_t
     UnexpectedIdentity = 0x09,
     LocalIdentity = 0x0a,
     PingTimeout = 0x0b,
-    Unknown = 0x10,
+    // 0x10 is the spec's "subprotocol-specific reason" sentinel.
+    SubprotocolReason = 0x10,
 };
 
 struct Capability

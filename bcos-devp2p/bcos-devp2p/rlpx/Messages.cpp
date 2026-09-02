@@ -59,8 +59,8 @@ bcos::bytesRef takeListPayload(bcos::bytesRef& _view)
         throw std::runtime_error("rlpx: expected an RLP list");
     }
     bcos::bytesRef payload(_view.data(), header.payloadLength);
-    _view = bcos::bytesRef(
-        _view.data() + header.payloadLength, _view.size() - header.payloadLength);
+    _view =
+        bcos::bytesRef(_view.data() + header.payloadLength, _view.size() - header.payloadLength);
     return payload;
 }
 }  // namespace
@@ -71,17 +71,15 @@ bcos::bytes encodeHello(HelloMessage const& _msg)
     bcos::bytes capsPayload;
     for (auto const& cap : _msg.capabilities)
     {
-        bcos::codec::rlp::encode(
-            capsPayload, cap.name, static_cast<uint64_t>(cap.version));
+        bcos::codec::rlp::encode(capsPayload, cap.name, static_cast<uint64_t>(cap.version));
     }
     bcos::bytes capsList;
-    bcos::codec::rlp::encodeHeader(
-        capsList, {.isList = true, .payloadLength = capsPayload.size()});
+    bcos::codec::rlp::encodeHeader(capsList, {.isList = true, .payloadLength = capsPayload.size()});
     appendEncoded(capsList, capsPayload);
 
     bcos::bytes versionItem = encodeUint(_msg.version);
-    bcos::bytes nameItem = encodeString(bytesConstRef(
-        (const bcos::byte*)_msg.clientId.data(), _msg.clientId.size()));
+    bcos::bytes nameItem =
+        encodeString(bytesConstRef((const bcos::byte*)_msg.clientId.data(), _msg.clientId.size()));
     bcos::bytes portItem = encodeUint(_msg.listenPort);
     bcos::bytes idItem = encodeString(bytesConstRef(_msg.id.data(), _msg.id.size()));
 
@@ -130,6 +128,10 @@ HelloMessage decodeHello(bytesConstRef _data)
         {
             throw std::runtime_error("decodeHello: cap version decode failed");
         }
+        if (capVersion > 0xff)
+        {
+            throw std::runtime_error("decodeHello: capability version out of range");
+        }
         cap.version = static_cast<uint8_t>(capVersion);
         msg.capabilities.push_back(std::move(cap));
     }
@@ -150,10 +152,9 @@ HelloMessage decodeHello(bytesConstRef _data)
 
 bcos::bytes encodeDisconnect(DisconnectMessage const& _msg)
 {
-    // geth wire format: disconnectMsg = [reason] — a one-element RLP list, NOT a
-    // bare integer. (We encode/disconnect with a bare integer before this fix, which
-    // made real geth peers reject the message and made decodeDisconnect fail on
-    // real Disconnect frames.)
+    // geth wire format: disconnectMsg = [reason] — a one-element RLP list.
+    // (Some clients historically sent a bare integer; decodeDisconnect below
+    // accepts both forms, but the wire we emit is always the list form.)
     bcos::bytes out;
     bcos::codec::rlp::encode(out, std::vector<uint64_t>{static_cast<uint64_t>(_msg.reason)});
     return out;
@@ -184,8 +185,7 @@ DisconnectMessage decodeDisconnect(bytesConstRef _data)
         }
     }
     throw std::runtime_error("decodeDisconnect: reason decode failed payload=" +
-                             bcos::toHexStringWithPrefix(
-                                 bcos::bytes(_data.begin(), _data.end())));
+                             bcos::toHexStringWithPrefix(bcos::bytes(_data.begin(), _data.end())));
 }
 
 bcos::bytes encodePing()

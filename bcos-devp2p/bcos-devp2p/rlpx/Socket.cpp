@@ -27,11 +27,75 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 #include <stdexcept>
 
 namespace bcos::devp2p::rlpx
 {
+namespace
+{
+// Send flags: Linux suppresses SIGPIPE per-send with MSG_NOSIGNAL, while Darwin
+// and the BSDs do not define MSG_NOSIGNAL and only offer the SO_NOSIGPIPE socket
+// option. Without either, send() to a closed peer raises SIGPIPE and kills the
+// process.
+#if defined(MSG_NOSIGNAL)
+constexpr int c_sendFlags = MSG_NOSIGNAL;
+#else
+constexpr int c_sendFlags = 0;
+#endif
+
+// Silence SIGPIPE on the platforms that only expose the SO_NOSIGPIPE socket
+// option (Darwin/BSD); a no-op elsewhere.
+void applyNoSigpipe(int _fd)
+{
+#if defined(SO_NOSIGPIPE)
+    int one = 1;
+    ::setsockopt(_fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+#endif
+}
+
+// One poll() bounded by the time remaining until `_deadline`. Retries EINTR
+// against the remaining budget and throws when the poll itself fails or the
+// deadline expires, so the whole read/write is bounded by the caller's total
+// timeout instead of by each individual poll() gap.
+void pollWithRemaining(int _fd, short _events,
+    std::chrono::steady_clock::time_point const& _deadline, int _totalTimeoutMs,
+    std::string const& _what)
+{
+    while (true)
+    {
+        auto const now = std::chrono::steady_clock::now();
+        auto const remaining =
+            std::chrono::duration_cast<std::chrono::milliseconds>(_deadline - now).count();
+        if (remaining <= 0)
+        {
+            throw std::runtime_error(
+                _what + " timed out after " + std::to_string(_totalTimeoutMs) + "ms");
+        }
+        struct pollfd pfd;
+        pfd.fd = _fd;
+        pfd.events = _events;
+        pfd.revents = 0;
+        int const pollRc = ::poll(&pfd, 1, static_cast<int>(remaining));
+        if (pollRc > 0)
+        {
+            return;
+        }
+        if (pollRc < 0)
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+            throw std::runtime_error(_what + " failed: " + std::string(strerror(errno)));
+        }
+        throw std::runtime_error(
+            _what + " timed out after " + std::to_string(_totalTimeoutMs) + "ms");
+    }
+}
+}  // namespace
+
 // Connect timeout for outbound RLPx dials. A bootnode behind a black-hole firewall
 // (packets silently dropped) would otherwise make the blocking connect() hang for
 // the kernel's TCP timeout (tens of seconds to minutes), stalling the whole sync
@@ -50,9 +114,13 @@ Socket::Socket()
     {
         throw std::runtime_error("Socket: socket() failed: " + std::string(strerror(errno)));
     }
+    applyNoSigpipe(m_fd);
 }
 
-Socket::Socket(int _fd) : m_fd(_fd) {}
+Socket::Socket(int _fd) : m_fd(_fd)
+{
+    applyNoSigpipe(m_fd);
+}
 
 Socket::~Socket()
 {
@@ -100,13 +168,14 @@ void Socket::connect(std::string const& _host, uint16_t _port)
     }
 
     int connectRc = ::connect(m_fd, result->ai_addr, result->ai_addrlen);
+    // freeaddrinfo is not required to preserve errno, so snapshot it first.
+    int const connectErrno = errno;
     ::freeaddrinfo(result);
 
-    if (connectRc != 0 && errno != EINPROGRESS)
+    if (connectRc != 0 && connectErrno != EINPROGRESS)
     {
-        throw std::runtime_error(
-            "Socket::connect: connect to " + _host + ":" + portStr + " failed: " +
-            std::string(strerror(errno)));
+        throw std::runtime_error("Socket::connect: connect to " + _host + ":" + portStr +
+                                 " failed: " + std::string(strerror(connectErrno)));
     }
 
     if (connectRc != 0)
@@ -114,25 +183,18 @@ void Socket::connect(std::string const& _host, uint16_t _port)
         // Non-blocking connect in progress (EINPROGRESS): wait for completion with a
         // bounded timeout. A black-holed peer would otherwise block here for the
         // kernel's TCP retry budget.
-        struct pollfd pfd;
-        pfd.fd = m_fd;
-        pfd.events = POLLOUT;
-        pfd.revents = 0;
-        int pollRc = ::poll(&pfd, 1, c_connectTimeoutMs);
-        if (pollRc <= 0)
-        {
-            throw std::runtime_error("Socket::connect: connect to " + _host + ":" + portStr +
-                                     " timed out after " + std::to_string(c_connectTimeoutMs) +
-                                     "ms");
-        }
+        auto const deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(c_connectTimeoutMs);
+        pollWithRemaining(m_fd, POLLOUT, deadline, c_connectTimeoutMs,
+            "Socket::connect: connect to " + _host + ":" + portStr);
         // Distinguish an actual connection error from a spurious wakeup.
         int soError = 0;
         socklen_t soLen = sizeof(soError);
         if (::getsockopt(m_fd, SOL_SOCKET, SO_ERROR, &soError, &soLen) != 0 || soError != 0)
         {
-            throw std::runtime_error("Socket::connect: connect to " + _host + ":" + portStr +
-                                     " failed: " + std::string(strerror(soError != 0 ? soError :
-                                                                                       errno)));
+            throw std::runtime_error(
+                "Socket::connect: connect to " + _host + ":" + portStr +
+                " failed: " + std::string(strerror(soError != 0 ? soError : connectErrno)));
         }
     }
 
@@ -156,30 +218,23 @@ void Socket::close()
 
 void Socket::sendAll(bytesConstRef _data)
 {
+    // Bound the WHOLE write by one deadline (not each poll) so a peer that
+    // dribbles out a byte every so often cannot hold the sync loop forever.
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(c_ioTimeoutMs);
     size_t sent = 0;
     while (sent < _data.size())
     {
-        // Wait for writability with a bounded timeout so a peer that never reads
-        // our output (full send buffer) cannot stall the sync loop forever.
-        struct pollfd pfd;
-        pfd.fd = m_fd;
-        pfd.events = POLLOUT;
-        pfd.revents = 0;
-        int pollRc = ::poll(&pfd, 1, c_ioTimeoutMs);
-        if (pollRc <= 0)
-        {
-            throw std::runtime_error(
-                "Socket::sendAll: write timed out after " + std::to_string(c_ioTimeoutMs) +
-                "ms");
-        }
-        ssize_t n = ::send(m_fd, _data.data() + sent, _data.size() - sent, MSG_NOSIGNAL);
+        pollWithRemaining(m_fd, POLLOUT, deadline, c_ioTimeoutMs, "Socket::sendAll: write");
+        ssize_t n = ::send(m_fd, _data.data() + sent, _data.size() - sent, c_sendFlags);
         if (n < 0)
         {
             if (errno == EINTR)
             {
                 continue;
             }
-            throw std::runtime_error("Socket::sendAll: send failed: " + std::string(strerror(errno)));
+            throw std::runtime_error(
+                "Socket::sendAll: send failed: " + std::string(strerror(errno)));
         }
         sent += static_cast<size_t>(n);
     }
@@ -188,22 +243,14 @@ void Socket::sendAll(bytesConstRef _data)
 bcos::bytes Socket::recvFixed(size_t _size)
 {
     bcos::bytes out(_size);
+    // One deadline for the whole read: a peer that sends one byte per poll gap
+    // must not be able to stall the caller past c_ioTimeoutMs in total.
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(c_ioTimeoutMs);
     size_t received = 0;
     while (received < _size)
     {
-        // Wait for readability with a bounded timeout so a silent peer (accepts
-        // the connection but never sends) cannot block the sync thread forever.
-        struct pollfd pfd;
-        pfd.fd = m_fd;
-        pfd.events = POLLIN;
-        pfd.revents = 0;
-        int pollRc = ::poll(&pfd, 1, c_ioTimeoutMs);
-        if (pollRc <= 0)
-        {
-            throw std::runtime_error(
-                "Socket::recvFixed: read timed out after " + std::to_string(c_ioTimeoutMs) +
-                "ms");
-        }
+        pollWithRemaining(m_fd, POLLIN, deadline, c_ioTimeoutMs, "Socket::recvFixed: read");
         ssize_t n = ::recv(m_fd, out.data() + received, _size - received, 0);
         if (n == 0)
         {
@@ -215,7 +262,8 @@ bcos::bytes Socket::recvFixed(size_t _size)
             {
                 continue;
             }
-            throw std::runtime_error("Socket::recvFixed: recv failed: " + std::string(strerror(errno)));
+            throw std::runtime_error(
+                "Socket::recvFixed: recv failed: " + std::string(strerror(errno)));
         }
         received += static_cast<size_t>(n);
     }
@@ -241,15 +289,13 @@ TcpListener::TcpListener(uint16_t _port)
     {
         ::close(m_fd);
         m_fd = -1;
-        throw std::runtime_error(
-            "TcpListener: bind failed: " + std::string(strerror(errno)));
+        throw std::runtime_error("TcpListener: bind failed: " + std::string(strerror(errno)));
     }
     if (::listen(m_fd, 16) != 0)
     {
         ::close(m_fd);
         m_fd = -1;
-        throw std::runtime_error(
-            "TcpListener: listen failed: " + std::string(strerror(errno)));
+        throw std::runtime_error("TcpListener: listen failed: " + std::string(strerror(errno)));
     }
 }
 
@@ -268,7 +314,8 @@ Socket TcpListener::accept()
     int fd = ::accept(m_fd, (struct sockaddr*)&addr, &addrLen);
     if (fd < 0)
     {
-        throw std::runtime_error("TcpListener::accept: accept failed: " + std::string(strerror(errno)));
+        throw std::runtime_error(
+            "TcpListener::accept: accept failed: " + std::string(strerror(errno)));
     }
     return Socket(fd);
 }

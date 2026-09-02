@@ -19,10 +19,8 @@
  */
 #include "MessageCodec.h"
 
+#include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <cstring>
-#include <iostream>
 #include <stdexcept>
 namespace bcos::devp2p::rlpx
 {
@@ -135,9 +133,9 @@ bcos::bytes rawSnappyDecompressBlock(bytesConstRef _data, size_t& _pos, size_t _
     while (_pos < n)
     {
         uint8_t const tag = _data[_pos++];
-        uint8_t const type = tag & 0x3;       // LOW two bits select the element type
-        uint8_t const dataBits = tag >> 2;    // high six bits carry len/offset info
-        if (type == 0)  // literal
+        uint8_t const type = tag & 0x3;     // LOW two bits select the element type
+        uint8_t const dataBits = tag >> 2;  // high six bits carry len/offset info
+        if (type == 0)                      // literal
         {
             size_t len = dataBits + 1;
             if (dataBits >= 60)
@@ -173,8 +171,8 @@ bcos::bytes rawSnappyDecompressBlock(bytesConstRef _data, size_t& _pos, size_t _
             {
                 len = dataBits + 1;
                 need(2);
-                offset = static_cast<size_t>(_data[_pos]) |
-                         (static_cast<size_t>(_data[_pos + 1]) << 8);
+                offset =
+                    static_cast<size_t>(_data[_pos]) | (static_cast<size_t>(_data[_pos + 1]) << 8);
                 _pos += 2;
             }
             else  // copy-4
@@ -239,14 +237,10 @@ bcos::bytes MessageCodec::encode(Message const& _message) const
     }
     else
     {
-        auto compressed = rawSnappyCompress(
-            bytesConstRef(_message.data.data(), _message.data.size()));
+        auto compressed =
+            rawSnappyCompress(bytesConstRef(_message.data.data(), _message.data.size()));
         frameData.insert(frameData.end(), compressed.begin(), compressed.end());
     }
-    std::cerr << "[codec] send id=" << static_cast<int>(_message.id)
-              << " compress=" << (m_compressionEnabled ? 1 : 0)
-              << " frame=" << bcos::toHexStringWithPrefix(frameData).substr(0, 120)
-              << std::endl;
     return frameData;
 }
 
@@ -256,13 +250,10 @@ Message MessageCodec::decode(bytesConstRef _frameData) const
     {
         throw std::runtime_error("MessageCodec: frame data too short");
     }
-    std::cerr << "[codec] recv full=" << bcos::toHexStringWithPrefix(_frameData).substr(0, 200)
-              << " compress=" << (m_compressionEnabled ? 1 : 0) << std::endl;
     Message message;
     // The message id is RLP-encoded (RLP(0) == 0x80), so decode it properly.
     {
-        bcos::bytesRef view(
-            const_cast<bcos::byte*>(_frameData.data()), _frameData.size());
+        bcos::bytesRef view(const_cast<bcos::byte*>(_frameData.data()), _frameData.size());
         if (auto err = bcos::codec::rlp::decode(view, message.id))
         {
             throw std::runtime_error("MessageCodec: failed to decode message id");
@@ -276,24 +267,6 @@ Message MessageCodec::decode(bytesConstRef _frameData) const
         {
             message.data = rawSnappyDecompress(payload, kMaxFrameSize);
         }
-        // Diagnostics: dump complete BlockHeaders payloads to a file so the
-        // wire format can be analysed offline.
-        if (message.id == 20 && message.data.size() > 10000)
-        {
-            FILE* f = std::fopen("/home/more/tmp/blkheaders.bin", "wb");
-            if (f)
-            {
-                std::fwrite(message.data.data(), 1, message.data.size(), f);
-                std::fclose(f);
-                std::cerr << "[codec] WROTE blkheaders.bin size=" << message.data.size()
-                          << std::endl;
-            }
-        }
-        std::cerr << "[codec] recv id=" << static_cast<int>(message.id)
-                  << " compress=" << (m_compressionEnabled ? 1 : 0)
-                  << " raw=" << bcos::toHexStringWithPrefix(payload).substr(0, 96)
-                  << " data=" << bcos::toHexStringWithPrefix(message.data).substr(0, 96)
-                  << std::endl;
     }
     return message;
 }

@@ -46,6 +46,29 @@ size_t deserializeSize(bytesConstRef _data)
     }
     return (static_cast<size_t>(_data[0]) << 8) | static_cast<size_t>(_data[1]);
 }
+
+// Full wire message shared by auth and ack: pad the RLP body to a full ECIES
+// block, then emit 2-byte size prefix || ECIES(recipientPub, paddedBody). The
+// size prefix doubles as the ECIES MAC-extra-data (EIP-8).
+bcos::bytes buildEnvelope(bcos::bytes const& _bodyRlp, bytesConstRef _recipientPublicKey)
+{
+    bcos::bytes paddedBody = _bodyRlp;
+    paddedBody.resize(EciesCipher::roundUpToBlockSize(paddedBody.size()));
+    size_t bodySize = EciesCipher::estimateEncryptedSize(paddedBody.size());
+
+    auto size = serializeSizeImpl(bodySize);
+    auto body = EciesCipher::encrypt(bytesConstRef(paddedBody.data(), paddedBody.size()),
+        _recipientPublicKey, bytesConstRef(size.data(), size.size()));
+    body.insert(body.begin(), size.begin(), size.end());
+    return body;
+}
+
+// Decrypt a received size-prefixed ECIES body (shared by auth and ack).
+bcos::bytes decryptEnvelope(bytesConstRef _data, bytesConstRef _privateKey)
+{
+    auto size = serializeSizeImpl(_data.size());
+    return EciesCipher::decrypt(_data, _privateKey, bytesConstRef(size.data(), size.size()));
+}
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -59,8 +82,8 @@ AuthMessage::AuthMessage(EccKeyPair const& _initiatorKeyPair, bytesConstRef _rec
 {
     auto const& initiatorPrivateKey = _initiatorKeyPair.privateKey();
     auto const& ephemeralPrivateKey = _ephemeralKeyPair.privateKey();
-    bcos::bytes sharedSecret = EciesCipher::computeSharedSecret(_recipientPublicKey,
-        bytesConstRef(initiatorPrivateKey.data(), initiatorPrivateKey.size()));
+    bcos::bytes sharedSecret = EciesCipher::computeSharedSecret(
+        _recipientPublicKey, bytesConstRef(initiatorPrivateKey.data(), initiatorPrivateKey.size()));
     m_nonce = bcos::crypto::cryptoRandomBytes(sharedSecret.size());
     xorBytes(sharedSecret, bytesConstRef(m_nonce.data(), m_nonce.size()));
     m_signature = signRecoverable(bytesConstRef(sharedSecret.data(), sharedSecret.size()),
@@ -69,7 +92,7 @@ AuthMessage::AuthMessage(EccKeyPair const& _initiatorKeyPair, bytesConstRef _rec
 
 AuthMessage::AuthMessage(bytesConstRef _data, bytesConstRef _recipientPrivateKey)
 {
-    auto plainText = decryptBody(_data, _recipientPrivateKey);
+    auto plainText = decryptEnvelope(_data, _recipientPrivateKey);
     initFromRlp(bytesConstRef(plainText.data(), plainText.size()));
 
     bcos::bytes sharedSecret = EciesCipher::computeSharedSecret(
@@ -80,16 +103,14 @@ AuthMessage::AuthMessage(bytesConstRef _data, bytesConstRef _recipientPrivateKey
         throw std::runtime_error("AuthMessage: invalid nonce size");
     }
     xorBytes(sharedSecret, bytesConstRef(m_nonce.data(), m_nonce.size()));
-    m_ephemeralPublicKey = recoverPublicKey(
-        bytesConstRef(sharedSecret.data(), sharedSecret.size()),
+    m_ephemeralPublicKey = recoverPublicKey(bytesConstRef(sharedSecret.data(), sharedSecret.size()),
         bytesConstRef(m_signature.data(), m_signature.size()));
 }
 
 bcos::bytes AuthMessage::bodyAsRlp() const
 {
     bcos::bytes data;
-    bcos::codec::rlp::encode(data,
-        bytesConstRef(m_signature.data(), m_signature.size()),
+    bcos::codec::rlp::encode(data, bytesConstRef(m_signature.data(), m_signature.size()),
         bytesConstRef(m_initiatorPublicKey.data(), m_initiatorPublicKey.size()),
         bytesConstRef(m_nonce.data(), m_nonce.size()), static_cast<uint64_t>(kVersion));
     return data;
@@ -125,30 +146,11 @@ void AuthMessage::initFromRlp(bytesConstRef _data)
     }
 }
 
-bcos::bytes AuthMessage::serializeSize(size_t _bodySize)
-{
-    return serializeSizeImpl(_bodySize);
-}
-
-bcos::bytes AuthMessage::decryptBody(bytesConstRef _data, bytesConstRef _recipientPrivateKey)
-{
-    auto size = serializeSizeImpl(_data.size());
-    return EciesCipher::decrypt(
-        _data, _recipientPrivateKey, bytesConstRef(size.data(), size.size()));
-}
-
 bcos::bytes AuthMessage::serialize() const
 {
     bcos::bytes bodyRlp = bodyAsRlp();
-    bodyRlp.resize(EciesCipher::roundUpToBlockSize(bodyRlp.size()));
-    size_t bodySize = EciesCipher::estimateEncryptedSize(bodyRlp.size());
-
-    auto size = serializeSizeImpl(bodySize);
-    auto body = EciesCipher::encrypt(bytesConstRef(bodyRlp.data(), bodyRlp.size()),
-        bytesConstRef(m_recipientPublicKey.data(), m_recipientPublicKey.size()),
-        bytesConstRef(size.data(), size.size()));
-    body.insert(body.begin(), size.begin(), size.end());
-    return body;
+    return buildEnvelope(
+        bodyRlp, bytesConstRef(m_recipientPublicKey.data(), m_recipientPublicKey.size()));
 }
 
 // ---------------------------------------------------------------------------
@@ -163,7 +165,7 @@ AuthAckMessage::AuthAckMessage(EccKeyPair const& _ephemeralKeyPair,
 
 AuthAckMessage::AuthAckMessage(bytesConstRef _data, bytesConstRef _initiatorPrivateKey)
 {
-    auto plainText = decryptBody(_data, _initiatorPrivateKey);
+    auto plainText = decryptEnvelope(_data, _initiatorPrivateKey);
     initFromRlp(bytesConstRef(plainText.data(), plainText.size()));
 }
 
@@ -204,30 +206,11 @@ void AuthAckMessage::initFromRlp(bytesConstRef _data)
     }
 }
 
-bcos::bytes AuthAckMessage::serializeSize(size_t _bodySize)
-{
-    return serializeSizeImpl(_bodySize);
-}
-
-bcos::bytes AuthAckMessage::decryptBody(bytesConstRef _data, bytesConstRef _initiatorPrivateKey)
-{
-    auto size = serializeSizeImpl(_data.size());
-    return EciesCipher::decrypt(
-        _data, _initiatorPrivateKey, bytesConstRef(size.data(), size.size()));
-}
-
 bcos::bytes AuthAckMessage::serialize() const
 {
     bcos::bytes bodyRlp = bodyAsRlp();
-    bodyRlp.resize(EciesCipher::roundUpToBlockSize(bodyRlp.size()));
-    size_t bodySize = EciesCipher::estimateEncryptedSize(bodyRlp.size());
-
-    auto size = serializeSizeImpl(bodySize);
-    auto body = EciesCipher::encrypt(bytesConstRef(bodyRlp.data(), bodyRlp.size()),
-        bytesConstRef(m_initiatorPublicKey.data(), m_initiatorPublicKey.size()),
-        bytesConstRef(size.data(), size.size()));
-    body.insert(body.begin(), size.begin(), size.end());
-    return body;
+    return buildEnvelope(
+        bodyRlp, bytesConstRef(m_initiatorPublicKey.data(), m_initiatorPublicKey.size()));
 }
 
 // ---------------------------------------------------------------------------
@@ -250,9 +233,8 @@ AuthKeys Handshake::authInitiator(Socket& _socket)
     }
     EccKeyPair ephemeralKeyPair;
 
-    AuthMessage authMessage(
-        m_keyPair, bytesConstRef(m_recipientPublicKey.data(), m_recipientPublicKey.size()),
-        ephemeralKeyPair);
+    AuthMessage authMessage(m_keyPair,
+        bytesConstRef(m_recipientPublicKey.data(), m_recipientPublicKey.size()), ephemeralKeyPair);
     auto authData = authMessage.serialize();
     _socket.sendAll(bytesConstRef(authData.data(), authData.size()));
 

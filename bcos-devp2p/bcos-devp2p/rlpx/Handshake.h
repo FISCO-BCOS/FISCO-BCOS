@@ -46,8 +46,6 @@ public:
 private:
     bcos::bytes bodyAsRlp() const;
     void initFromRlp(bytesConstRef _data);
-    static bcos::bytes serializeSize(size_t _bodySize);
-    static bcos::bytes decryptBody(bytesConstRef _data, bytesConstRef _recipientPrivateKey);
 
     PublicKey m_initiatorPublicKey;
     bcos::bytes m_recipientPublicKey;
@@ -74,8 +72,6 @@ public:
 private:
     bcos::bytes bodyAsRlp() const;
     void initFromRlp(bytesConstRef _data);
-    static bcos::bytes serializeSize(size_t _bodySize);
-    static bcos::bytes decryptBody(bytesConstRef _data, bytesConstRef _initiatorPrivateKey);
 
     PublicKey m_ephemeralPublicKey;
     bcos::bytes m_initiatorPublicKey;
@@ -101,8 +97,7 @@ struct AuthKeys
 class Handshake
 {
 public:
-    Handshake(EccKeyPair const& _keyPair, bool _isInitiator,
-        bytesConstRef _recipientPublicKey = {})
+    Handshake(EccKeyPair const& _keyPair, bool _isInitiator, bytesConstRef _recipientPublicKey = {})
       : m_keyPair(_keyPair),
         m_isInitiator(_isInitiator),
         m_recipientPublicKey(_recipientPublicKey.begin(), _recipientPublicKey.end())
@@ -114,7 +109,7 @@ private:
     AuthKeys authInitiator(Socket& _socket);
     AuthKeys authRecipient(Socket& _socket);
 
-    EccKeyPair const& m_keyPair;
+    EccKeyPair m_keyPair;
     bool m_isInitiator;
     bcos::bytes m_recipientPublicKey;  // set for the initiator side
 };
