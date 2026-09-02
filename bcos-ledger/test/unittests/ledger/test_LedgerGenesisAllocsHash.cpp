@@ -125,9 +125,11 @@ BOOST_AUTO_TEST_CASE(SecondStartupChangedChainModeAborts)
         auto changed = config;
         changed.m_features.clear();
 
-        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, changed, param),
-            bcos::tool::InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "Genesis Data is inconsistent"); });
+        BOOST_CHECK_EXCEPTION(
+            co_await ledger::buildGenesisBlock(*ledger, changed, param), bcos::tool::InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "Genesis Data is inconsistent");
+            });
     }());
 }
 
@@ -145,8 +147,9 @@ BOOST_AUTO_TEST_CASE(SecondStartupChangedAllocAborts)
         auto changed = config;
         changed.m_allocs[0].code = "6080604053";  // last byte 52 -> 53
 
-        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, changed, param),
-            bcos::tool::InvalidConfig, [](auto const& e) {
+        BOOST_CHECK_EXCEPTION(
+            co_await ledger::buildGenesisBlock(*ledger, changed, param), bcos::tool::InvalidConfig,
+            [](auto const& e) {
                 return errinfoContains(e, "genesis allocs changed since first init");
             });
     }());
@@ -168,7 +171,8 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
             auto config = makeL2Config();
             config.m_allocs[0].address = "430000000000000000000000000000000000c0";
             appendGenesisFeatureFlagsSlot(config);
-            BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, config, param),
+            BOOST_CHECK_EXCEPTION(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
                 bcos::tool::InvalidConfig, [](auto const& e) {
                     return errinfoContains(e, "address must be exactly 40 hex digits");
                 });
@@ -180,7 +184,8 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
             auto config = makeL2Config();
             config.m_allocs[0].address = "4300000000000000000000000000000000000000c0";
             appendGenesisFeatureFlagsSlot(config);
-            BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, config, param),
+            BOOST_CHECK_EXCEPTION(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
                 bcos::tool::InvalidConfig, [](auto const& e) {
                     return errinfoContains(e, "address must be exactly 40 hex digits");
                 });
@@ -192,7 +197,8 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
             auto config = makeL2Config();
             config.m_allocs[0].storage = {{"01", "02"}};
             appendGenesisFeatureFlagsSlot(config);
-            BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, config, param),
+            BOOST_CHECK_EXCEPTION(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
                 bcos::tool::InvalidConfig, [](auto const& e) {
                     return errinfoContains(e, "storage slot value must be exactly 64 hex digits");
                 });
@@ -204,10 +210,11 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
             auto storage = makeStorage();
             auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
             auto config = makeL2Config();
-            config.m_allocs[0].storage = {
-                {"000000000000000000000000000000000000000000000000000000000000000065", "02"}};
+            config.m_allocs[0].storage = {{
+                "000000000000000000000000000000000000000000000000000000000000000065", "02"}};
             appendGenesisFeatureFlagsSlot(config);
-            BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, config, param),
+            BOOST_CHECK_EXCEPTION(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
                 bcos::tool::InvalidConfig, [](auto const& e) {
                     return errinfoContains(e, "storage slot value must be exactly 64 hex digits");
                 });
@@ -220,7 +227,8 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
             auto config = makeL2Config();
             config.m_allocs[0].storage = {{std::string(64, '0'), std::string(63, '0') + "g"}};
             appendGenesisFeatureFlagsSlot(config);
-            BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, config, param),
+            BOOST_CHECK_EXCEPTION(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
                 bcos::tool::InvalidConfig, [](auto const& e) {
                     return errinfoContains(e, "storage slot value is not valid hex");
                 });
@@ -235,7 +243,8 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
             config.m_allocs[0].storage = {{std::string(64, '0'), std::string(63, '0') + "5"},
                 {std::string(64, '0'), std::string(64, '0')}};
             appendGenesisFeatureFlagsSlot(config);
-            BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, config, param),
+            BOOST_CHECK_EXCEPTION(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
                 bcos::tool::InvalidConfig,
                 [](auto const& e) { return errinfoContains(e, "00 is duplicated"); });
         }
@@ -246,7 +255,8 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
             auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
             auto config = makeL2Config();
             config.m_allocs[0].nonce = "abc";
-            BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, config, param),
+            BOOST_CHECK_EXCEPTION(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
                 bcos::tool::InvalidConfig,
                 [](auto const& e) { return errinfoContains(e, "nonce is not a valid uint64"); });
         }
@@ -262,15 +272,16 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
             auto config = makeL2Config();
             auto& flagsValue = config.m_allocs[0].storage.back().second;
             flagsValue.back() = (flagsValue.back() == '0' ? '1' : '0');
-            BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, config, param),
+            BOOST_CHECK_EXCEPTION(
+                co_await ledger::buildGenesisBlock(*ledger, config, param),
                 bcos::tool::InvalidConfig, [](auto const& e) {
                     return errinfoContains(
                         e, "feature_flags slot in the genesis allocs does not match");
                 });
-            auto tableEntry = co_await storage2::readOne(
-                *storage, executor_v1::StateKeyView(std::string(ledger::SYS_TABLES),
-                              std::string(ledger::SYS_DIRECTORY::USER_APPS) +
-                                  "43000000000000000000000000000000000000c0"));
+            auto tableEntry = co_await storage2::readOne(*storage,
+                executor_v1::StateKeyView(std::string(ledger::SYS_TABLES),
+                    std::string(ledger::SYS_DIRECTORY::USER_APPS) +
+                        "43000000000000000000000000000000000000c0"));
             BOOST_CHECK(!tableEntry);
             // The check runs before ANY genesis write, so B0 was never committed
             // either — fixing the config and retrying starts from a clean datadir

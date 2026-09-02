@@ -60,10 +60,11 @@ inline void unhexAllocExact(
     hex = stripHexPrefix(hex);
     if (hex.size() != expectedBytes * 2)
     {
-        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                  "genesis alloc " + std::string(field) + " must be exactly " +
-                                  std::to_string(expectedBytes * 2) + " hex digits, got " +
-                                  std::to_string(hex.size())));
+        BOOST_THROW_EXCEPTION(
+            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                "genesis alloc " + std::string(field) + " must be exactly " +
+                std::to_string(expectedBytes * 2) + " hex digits, got " +
+                std::to_string(hex.size())));
     }
     try
     {
@@ -85,10 +86,10 @@ inline bcos::bytes unhexAllocBytes(std::string_view hex, std::string_view field)
     hex = stripHexPrefix(hex);
     if (hex.size() % 2 != 0)
     {
-        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig()
-                              << bcos::errinfo_comment("genesis alloc " + std::string(field) +
-                                                       " must be even-length hex, got " +
-                                                       std::to_string(hex.size()) + " digits"));
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                  "genesis alloc " + std::string(field) +
+                                  " must be even-length hex, got " + std::to_string(hex.size()) +
+                                  " digits"));
     }
     bcos::bytes out;
     out.reserve(hex.size() / 2);

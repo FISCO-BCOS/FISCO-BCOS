@@ -265,8 +265,8 @@ TrieBuildResult computeRawTrieRootImpl(
         {
             BOOST_THROW_EXCEPTION(
                 MPTInvariantViolation() << bcos::errinfo_comment(
-                    "computeTrieRootFromRawKeys: duplicate key 0x" + hbKeyHex(entries[i].nibbles) +
-                    " — raw trie keys must be unique"));
+                    "computeTrieRootFromRawKeys: duplicate key 0x" +
+                    hbKeyHex(entries[i].nibbles) + " — raw trie keys must be unique"));
         }
     }
 

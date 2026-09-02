@@ -43,8 +43,7 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
   : PBFTInitializer(_nodeArchType, _nodeConfig, _protocolInitializer, _txpool, _ledger, _scheduler,
         _storage, _frontService, _nodeTimeMaintenance, _ioServicePool)
 {
-    m_timer = std::make_shared<Timer>(
-        *_ioServicePool->getIOService(), m_timerSchedulerInterval, "node info report");
+    m_timer = std::make_shared<Timer>(*_ioServicePool->getIOService(), m_timerSchedulerInterval, "node info report");
 
     std::vector<tars::TC_Endpoint> endPoints;
     auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();

@@ -71,13 +71,13 @@
 #include <exception>
 #include <future>
 #include <iterator>
-#include <list>
 #include <memory>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/view/chunk.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/take.hpp>
 #include <utility>
+#include <list>
 
 using namespace bcos;
 using namespace bcos::ledger;
@@ -1876,7 +1876,8 @@ static void verifyL2FeatureFlagsSlot(
         // slot = keccak256(utf8("feature_flags") || be32(101))
         bcos::bytes slotInput;
         slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
-        slotInput.insert(slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
+        slotInput.insert(
+            slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
         bcos::bytes baseSlotBytes(32, 0);
         baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
         slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());

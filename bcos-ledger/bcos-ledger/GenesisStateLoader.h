@@ -50,8 +50,9 @@ namespace bcos::ledger
 /// @param allocs  addresses are 40-hex (with or without 0x); nonce is a DECIMAL string;
 ///                code is hex; storage slots/values are 32-byte hex.
 template <class Storage>
-task::Task<bcos::h256> importEthereumGenesisState(Storage& storage,
-    std::vector<Alloc> const& allocs, crypto::Hash const& hashImpl, Features const& features)
+task::Task<bcos::h256> importEthereumGenesisState(
+    Storage& storage, std::vector<Alloc> const& allocs, crypto::Hash const& hashImpl,
+    Features const& features)
 {
     // Build the full genesis trie FIRST: genesis import is not transactional,
     // and computeGenesisStateTrie validates every alloc hex field (address /

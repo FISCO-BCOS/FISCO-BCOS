@@ -188,7 +188,9 @@ BOOST_AUTO_TEST_CASE(WrongArtifactHashRefusesToBuild)
         genesisConfig.m_ethGenesisHeader->m_hash.data()[31] ^= 0x01;  // corrupt the checksum
         BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
             bcos::tool::InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "[eth_genesis_header].hash mismatch"); });
+            [](auto const& e) {
+                return errinfoContains(e, "[eth_genesis_header].hash mismatch");
+            });
         co_return;
     }());
 }
@@ -210,7 +212,9 @@ BOOST_AUTO_TEST_CASE(TamperedFieldChangesHashAndRefuses)
         genesisConfig.m_ethGenesisHeader->m_gasLimit += 1;
         BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
             bcos::tool::InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "[eth_genesis_header].hash mismatch"); });
+            [](auto const& e) {
+                return errinfoContains(e, "[eth_genesis_header].hash mismatch");
+            });
         co_return;
     }());
 }
@@ -229,7 +233,8 @@ BOOST_AUTO_TEST_CASE(ArtifactStateRootMustMatchDerivedRoot)
         auto genesisConfig = makeEthGenesisConfig();
         genesisConfig.m_ethGenesisHeader->m_stateRoot.data()[0] ^= 0x01;
         BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
-            bcos::tool::InvalidConfig, [](auto const& e) {
+            bcos::tool::InvalidConfig,
+            [](auto const& e) {
                 return errinfoContains(e, "[eth_genesis_header].state_root does not match");
             });
         co_return;
@@ -252,9 +257,11 @@ BOOST_AUTO_TEST_CASE(CorrectedArtifactRetriesOnSameStorage)
         // succeed (a mis-configured artifact must not brick the datadir).
         auto drifted = makeEthGenesisConfig();
         drifted.m_ethGenesisHeader->m_hash.data()[31] ^= 0x01;
-        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, drifted, param),
-            bcos::tool::InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "[eth_genesis_header].hash mismatch"); });
+        BOOST_CHECK_EXCEPTION(
+            co_await ledger::buildGenesisBlock(*ledger, drifted, param), bcos::tool::InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "[eth_genesis_header].hash mismatch");
+            });
 
         auto corrected = makeEthGenesisConfig();
         BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, corrected, param));
@@ -281,8 +288,9 @@ BOOST_AUTO_TEST_CASE(RestartWithSwappedArtifactRefuses)
         // Restart against a different artifact claim: the stored B0 must win.
         auto swapped = makeEthGenesisConfig();
         swapped.m_ethGenesisHeader->m_hash.data()[0] ^= 0x01;
-        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, swapped, param),
-            bcos::tool::InvalidConfig, [](auto const& e) {
+        BOOST_CHECK_EXCEPTION(
+            co_await ledger::buildGenesisBlock(*ledger, swapped, param), bcos::tool::InvalidConfig,
+            [](auto const& e) {
                 return errinfoContains(e, "hash does not match the stored genesis block");
             });
         co_return;

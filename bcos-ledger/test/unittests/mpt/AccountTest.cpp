@@ -137,15 +137,16 @@ BOOST_AUTO_TEST_CASE(MalformedInputThrows)
     // Empty input.
     {
         bcos::bytes const empty;
-        BOOST_CHECK_EXCEPTION(Account::decode(bcos::bytesConstRef(empty.data(), empty.size())),
-            MPTDecodeError, [](auto const& e) { return errinfoContains(e, "bad list header"); });
+        BOOST_CHECK_EXCEPTION(
+            Account::decode(bcos::bytesConstRef(empty.data(), empty.size())), MPTDecodeError,
+            [](auto const& e) { return errinfoContains(e, "bad list header"); });
     }
     // A single byte that decodes as a string item, not a list.
     {
         bcos::bytes const notAList{0x05};
         BOOST_CHECK_EXCEPTION(
-            Account::decode(bcos::bytesConstRef(notAList.data(), notAList.size())), MPTDecodeError,
-            [](auto const& e) { return errinfoContains(e, "expected a list"); });
+            Account::decode(bcos::bytesConstRef(notAList.data(), notAList.size())),
+            MPTDecodeError, [](auto const& e) { return errinfoContains(e, "expected a list"); });
     }
     // A well-formed list but with too few fields (list of one element).
     {
@@ -159,8 +160,8 @@ BOOST_AUTO_TEST_CASE(MalformedInputThrows)
         Account account;
         bcos::bytes rlp = account.encode();
         rlp.push_back(0xff);  // trailing byte beyond the declared list
-        BOOST_CHECK_EXCEPTION(Account::decode(bcos::bytesConstRef(rlp.data(), rlp.size())),
-            MPTDecodeError,
+        BOOST_CHECK_EXCEPTION(
+            Account::decode(bcos::bytesConstRef(rlp.data(), rlp.size())), MPTDecodeError,
             [](auto const& e) { return errinfoContains(e, "payload length does not match"); });
     }
 }

@@ -164,12 +164,8 @@ BOOST_AUTO_TEST_CASE(EachMissingRequiredFieldFailsFast)
     // are OPTIONAL — removing one of those must instead succeed (covered by
     // OptionalFieldsMayBeOmitted below).
     const std::set<std::string> kOptionalKeys = {
-        "base_fee_per_gas",
-        "withdrawals_root",
-        "blob_gas_used",
-        "excess_blob_gas",
-        "parent_beacon_block_root",
-        "requests_hash",
+        "base_fee_per_gas", "withdrawals_root", "blob_gas_used",
+        "excess_blob_gas", "parent_beacon_block_root", "requests_hash",
     };
     for (auto const& [key, value] : kEthHeaderFields)
     {
@@ -180,7 +176,8 @@ BOOST_AUTO_TEST_CASE(EachMissingRequiredFieldFailsFast)
         auto cfg = makeEthNodeConfig();
         BOOST_CHECK_EXCEPTION(
             cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection(key)))),
-            bcos::tool::InvalidConfig, [](auto const& e) {
+            bcos::tool::InvalidConfig,
+            [](auto const& e) {
                 return bcos::test::errinfoContains(e, "is required (all 22 eth genesis header");
             });
     }
@@ -192,12 +189,8 @@ BOOST_AUTO_TEST_CASE(OptionalFieldsMayBeOmitted)
     // fork-gated keys. Each omission must parse cleanly and surface as a
     // nullopt optional, so the ledger's RLP re-encoding leaves the field out.
     const std::set<std::string> kOptionalKeys = {
-        "base_fee_per_gas",
-        "withdrawals_root",
-        "blob_gas_used",
-        "excess_blob_gas",
-        "parent_beacon_block_root",
-        "requests_hash",
+        "base_fee_per_gas", "withdrawals_root", "blob_gas_used",
+        "excess_blob_gas", "parent_beacon_block_root", "requests_hash",
     };
     for (auto const& [key, value] : kEthHeaderFields)
     {
@@ -244,7 +237,8 @@ BOOST_AUTO_TEST_CASE(L2WithoutSectionRejected)
     auto cfg = makeEthNodeConfig();
     BOOST_CHECK_EXCEPTION(
         cfg->loadGenesisConfig(parseEthIni(std::string(kEthBase) + kEthFeatureL2 + kEthAlloc0)),
-        bcos::tool::InvalidConfig, [](auto const& e) {
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
             return bcos::test::errinfoContains(e, "requires an [eth_genesis_header] section");
         });
 }
@@ -254,7 +248,8 @@ BOOST_AUTO_TEST_CASE(SectionWithoutL2FeatureRejected)
     auto cfg = makeEthNodeConfig();
     BOOST_CHECK_EXCEPTION(
         cfg->loadGenesisConfig(parseEthIni(std::string(kEthBase) + ethHeaderSection())),
-        bcos::tool::InvalidConfig, [](auto const& e) {
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
             return bcos::test::errinfoContains(e, "section requires feature_l2_ethereum_compat");
         });
 }
@@ -265,7 +260,8 @@ BOOST_AUTO_TEST_CASE(NonZeroNumberRejected)
     boost::replace_first(section, "number=0x0\n", "number=0x1\n");
     auto cfg = makeEthNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section))),  //
-        bcos::tool::InvalidConfig, [](auto const& e) {
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
             return bcos::test::errinfoContains(e, "[eth_genesis_header].number must be 0x0");
         });
 }
@@ -288,7 +284,8 @@ BOOST_AUTO_TEST_CASE(EmptyExtraDataAccepted)
     boost::replace_first(badQuantity, "gas_limit=0x1c9c380\n", "gas_limit=0x\n");
     auto cfg2 = makeEthNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(badQuantity))),  //
-        bcos::tool::InvalidConfig, [](auto const& e) {
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
             return bcos::test::errinfoContains(e, ".gas_limit is not valid hex");
         });
 }
@@ -301,7 +298,8 @@ BOOST_AUTO_TEST_CASE(BadWidthRejected)
         "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b4");
     auto cfg = makeEthNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section))),  //
-        bcos::tool::InvalidConfig, [](auto const& e) {
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
             return bcos::test::errinfoContains(e, ".state_root must be 64 hex chars");
         });
 
@@ -310,7 +308,8 @@ BOOST_AUTO_TEST_CASE(BadWidthRejected)
     boost::replace_first(shortNonce, "nonce=0x0000000000000000\n", "nonce=0x00000000000000\n");
     auto cfg2 = makeEthNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(shortNonce))),  //
-        bcos::tool::InvalidConfig, [](auto const& e) {
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
             return bcos::test::errinfoContains(e, ".nonce must be 16 hex chars");
         });
 }

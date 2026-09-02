@@ -163,8 +163,9 @@ BOOST_AUTO_TEST_CASE(RestartGuardsOnGenesisPinNotFeatureFlags)
         auto perturbed = genesisConfig;
         perturbed.m_features.push_back(FeatureSet{Features::Flag::feature_op_jovian, 1});
         BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, perturbed, param),
-            bcos::tool::InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "Genesis Data is inconsistent"); });
+            bcos::tool::InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "Genesis Data is inconsistent");
+            });
         co_return;
     }());
 }

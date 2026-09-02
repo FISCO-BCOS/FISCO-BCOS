@@ -242,9 +242,11 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
             co_await importEthereumGenesisState(*storage, badNonceAllocs, *hashImpl, features),
             bcos::tool::InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "nonce is not a valid uint64"); });
-        auto badNonceRow = co_await storage2::readOne(
-            *storage, executor_v1::StateKeyView(
-                          SYS_TABLES, std::string(SYS_DIRECTORY::USER_APPS) + goodAddress));
+        auto badNonceRow = co_await storage2::readOne(*storage, executor_v1::StateKeyView(
+                                                                     SYS_TABLES,
+                                                                     std::string(SYS_DIRECTORY::
+                                                                             USER_APPS) +
+                                                                         goodAddress));
         BOOST_CHECK(!badNonceRow);
     }());
 }
