@@ -4,11 +4,15 @@
  */
 
 #include "engine/bcos-engine/EngineTracker.h"
+#include "engine/bcos-engine/EngineServiceImpl.h"
 #include "engine/bcos-engine/PayloadCache.h"
 #include "engine/bcos-engine/SplitEngineCommon.h"
 
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/engine/PayloadId.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
 #include <boost/test/unit_test.hpp>
 
@@ -57,6 +61,53 @@ void checkExceptionMessage(auto&& action, const char* expectedMessage)
         auto const* comment = boost::get_error_info<errinfo_comment>(e);
         return comment != nullptr && *comment == expectedMessage;
     });
+}
+
+/// Gold-standard copies of EngineServiceImpl private helpers (not callable from tests).
+PayloadStatus legacyMakeStatus(PayloadValidationStatus status,
+    std::optional<h256> latestValidHash = std::nullopt,
+    std::optional<std::string> validationError = std::nullopt)
+{
+    return PayloadStatus{
+        .latestValidHash = latestValidHash,
+        .validationError = std::move(validationError),
+        .status = status,
+    };
+}
+
+std::optional<PayloadID> legacyDerivePayloadId(
+    PayloadAttributes const& payloadAttributes, h256 const& parentHash, std::uint32_t version)
+{
+    std::vector<h256> txHashes;
+    if (payloadAttributes.transactions.has_value())
+    {
+        txHashes.reserve(payloadAttributes.transactions->size());
+        for (auto const& hexTx : *payloadAttributes.transactions)
+        {
+            try
+            {
+                auto raw = bcos::fromHex(hexTx);
+                txHashes.emplace_back(bcos::crypto::keccak256Hash(bcos::ref(raw)));
+            }
+            catch (bcos::BadHexCharacter const&)
+            {
+                return std::nullopt;
+            }
+        }
+    }
+    return bcos::engine::derivePayloadId(
+        payloadAttributes, parentHash, txHashes, static_cast<uint8_t>(version));
+}
+
+PayloadAttributes minimalPayloadAttributes()
+{
+    PayloadAttributes attrs;
+    attrs.timestamp = 1'700'000'000'000;
+    attrs.prevRandao = h256(std::string(64, '2'));
+    attrs.suggestedFeeRecipient = bcos::Address(std::string(40, '3'));
+    attrs.withdrawals = std::vector<WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot = h256(std::string(64, '4'));
+    return attrs;
 }
 
 }  // namespace
@@ -465,6 +516,79 @@ BOOST_AUTO_TEST_CASE(engine_tracker_retain_only_through_guard)
     BOOST_REQUIRE(guard.findPayload(keep));
     BOOST_CHECK(!guard.findPayload(drop));
     BOOST_CHECK(!guard.payloadIdForHash(h256(2)).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(split_payload_version_matrix_matches_legacy)
+{
+    for (std::uint32_t request = 1; request <= 5; ++request)
+    {
+        for (std::uint32_t built = 1; built <= 4; ++built)
+        {
+            BOOST_CHECK_EQUAL(split_detail::isGetPayloadVersionCompatible(
+                                  static_cast<ApiVersion>(request), built),
+                bcos::engine::detail::isGetPayloadVersionCompatible(
+                    static_cast<ApiVersion>(request), built));
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(split_capabilities_match_legacy_generic_capabilities)
+{
+    BOOST_CHECK(
+        split_detail::supportedCapabilities() == bcos::engine::detail::supportedCapabilities());
+}
+
+BOOST_AUTO_TEST_CASE(split_validate_payload_attributes_matches_legacy)
+{
+    for (std::uint32_t version = 1; version <= 4; ++version)
+    {
+        auto attrs = minimalPayloadAttributes();
+        BOOST_CHECK(split_detail::validatePayloadAttributes(attrs, version) ==
+                    bcos::engine::detail::validatePayloadAttributes(attrs, version));
+    }
+
+    PayloadAttributes v1WithWithdrawals = minimalPayloadAttributes();
+    BOOST_CHECK(split_detail::validatePayloadAttributes(v1WithWithdrawals, 1) ==
+                bcos::engine::detail::validatePayloadAttributes(v1WithWithdrawals, 1));
+
+    PayloadAttributes missingBeacon = minimalPayloadAttributes();
+    missingBeacon.parentBeaconBlockRoot = std::nullopt;
+    BOOST_CHECK(split_detail::validatePayloadAttributes(missingBeacon, 3) ==
+                bcos::engine::detail::validatePayloadAttributes(missingBeacon, 3));
+
+    PayloadAttributes badHex = minimalPayloadAttributes();
+    badHex.transactions = std::vector<std::string>{"0xZZ"};
+    BOOST_CHECK(split_detail::validatePayloadAttributes(badHex, 3) ==
+                bcos::engine::detail::validatePayloadAttributes(badHex, 3));
+}
+
+BOOST_AUTO_TEST_CASE(split_derive_payload_id_matches_legacy)
+{
+    const h256 parentHash = h256(std::string(64, '1'));
+    auto attrs = minimalPayloadAttributes();
+    for (std::uint32_t version = 1; version <= 4; ++version)
+    {
+        BOOST_CHECK(split_detail::derivePayloadId(attrs, parentHash, version) ==
+                    legacyDerivePayloadId(attrs, parentHash, version));
+    }
+
+    attrs.transactions = std::vector<std::string>{"0xZZ"};
+    BOOST_CHECK(!split_detail::derivePayloadId(attrs, parentHash, 3).has_value());
+    BOOST_CHECK(!legacyDerivePayloadId(attrs, parentHash, 3).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(split_make_status_matches_legacy)
+{
+    const h256 hash(42);
+    for (auto status : {PayloadValidationStatus::Valid, PayloadValidationStatus::Invalid,
+             PayloadValidationStatus::Syncing, PayloadValidationStatus::InvalidBlockHash})
+    {
+        auto split = split_detail::makeStatus(status, hash, "error");
+        auto legacy = legacyMakeStatus(status, hash, "error");
+        BOOST_CHECK(split.status == legacy.status);
+        BOOST_CHECK(split.latestValidHash == legacy.latestValidHash);
+        BOOST_CHECK(split.validationError == legacy.validationError);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
