@@ -166,8 +166,8 @@ struct ExecutionPayload
     /// - withdrawalsRoot: OP Isthmus+ extends the payload with an explicit withdrawals-root
     ///   field (= MessagePasser storage root) that cannot be derived from the (always-empty)
     ///   `withdrawals` list above — op-geth's NewPayloadV4 requires it on OP chains.
-    std::optional<std::vector<bytes>> rawTransactions;
-    std::optional<h256> withdrawalsRoot;
+    std::optional<std::vector<bytes>> rawTransactions = std::nullopt;
+    std::optional<h256> withdrawalsRoot = std::nullopt;
 };
 
 struct NewPayloadRequest
