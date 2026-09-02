@@ -30,7 +30,6 @@
 #include <boost/test/unit_test.hpp>
 
 #include <atomic>
-#include <mutex>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -729,60 +728,61 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
     std::unordered_map<bcos::engine::PayloadID, bcos::engine::OpPayloadArtifacts> artifacts;
     auto blockFactory = makeBlockFactory();
 
-    struct PublishedSnapshot
-    {
-        std::mutex mutex;
-        bcos::h256 hash;
-        bcos::protocol::BlockNumber number{-1};
-    } published;
+    bcos::h256 const targetHash(0x42);
+    bcos::engine::PayloadID const targetPayloadId = "0xdeadbeef";
+    constexpr bcos::protocol::BlockNumber kTargetNumber = 7;
 
-    std::atomic<bool> stop{false};
-    std::atomic<int> readerSuccesses{0};
+    {
+        auto guard = tracker.lockExclusive();
+        auto entry = std::make_shared<bcos::engine::CommonPayloadEntry>();
+        entry->executionPayload.blockHash = targetHash;
+        auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+        header->setNumber(kTargetNumber);
+        (void)bcos::engine::op_detail::publishBuiltPayload(guard, artifacts, targetPayloadId,
+            targetHash, entry, bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
+    }
+
+    bcos::protocol::BlockHeader::Ptr initialHeader;
+    std::atomic<bool> writerStarted{false};
+    std::atomic<bool> writerFinished{false};
 
     std::jthread writer([&] {
-        for (std::uint64_t stamp = 0; !stop.load(std::memory_order_relaxed); ++stamp)
-        {
-            auto guard = tracker.lockExclusive();
-            bcos::h256 blockHash(stamp);
-            bcos::engine::PayloadID payloadId =
-                "0x" + bcos::toHex(blockHash.asBytes()).substr(0, 16);
-            auto entry = std::make_shared<bcos::engine::CommonPayloadEntry>();
-            entry->executionPayload.blockHash = blockHash;
-            auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
-            header->setNumber(static_cast<int64_t>(stamp));
-            (void)bcos::engine::op_detail::publishBuiltPayload(guard, artifacts, payloadId,
-                blockHash, entry, bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
-            {
-                std::lock_guard lock(published.mutex);
-                published.hash = blockHash;
-                published.number = static_cast<bcos::protocol::BlockNumber>(stamp);
-            }
-        }
+        writerStarted.store(true, std::memory_order_release);
+        auto guard = tracker.lockExclusive();
+        bcos::h256 writerHash(0x99);
+        bcos::engine::PayloadID writerPayloadId = "0xcafebabe";
+        auto entry = std::make_shared<bcos::engine::CommonPayloadEntry>();
+        entry->executionPayload.blockHash = writerHash;
+        auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+        header->setNumber(99);
+        (void)bcos::engine::op_detail::publishBuiltPayload(guard, artifacts, writerPayloadId,
+            writerHash, entry, bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
+        writerFinished.store(true, std::memory_order_release);
     });
-    std::jthread reader([&] {
-        while (!stop.load(std::memory_order_relaxed))
+
+    {
+        auto shared = tracker.lockShared();
+        initialHeader = bcos::engine::op_detail::findBuiltHeader(shared, artifacts, targetHash);
+        BOOST_REQUIRE(initialHeader);
+        BOOST_CHECK_EQUAL(initialHeader->number(), kTargetNumber);
+
+        while (!writerStarted.load(std::memory_order_acquire))
         {
-            bcos::h256 hash;
-            bcos::protocol::BlockNumber expectedNumber{-1};
-            {
-                std::lock_guard lock(published.mutex);
-                hash = published.hash;
-                expectedNumber = published.number;
-            }
-            bcos::protocol::BlockHeader::Ptr builtHeader;
-            {
-                auto shared = tracker.lockShared();
-                builtHeader = bcos::engine::op_detail::findBuiltHeader(shared, artifacts, hash);
-            }
-            if (builtHeader && builtHeader->number() == expectedNumber)
-            {
-                readerSuccesses.fetch_add(1, std::memory_order_relaxed);
-            }
+            std::this_thread::yield();
         }
-    });
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    stop.store(true, std::memory_order_relaxed);
-    BOOST_CHECK_GT(readerSuccesses.load(), 0);
+        BOOST_CHECK(!writerFinished.load(std::memory_order_acquire));
+    }
+
+    writer.join();
+    BOOST_CHECK(writerFinished.load(std::memory_order_acquire));
+
+    {
+        auto shared = tracker.lockShared();
+        auto stableHeader = bcos::engine::op_detail::findBuiltHeader(shared, artifacts, targetHash);
+        BOOST_REQUIRE(stableHeader);
+        BOOST_CHECK_EQUAL(stableHeader->number(), kTargetNumber);
+        BOOST_CHECK_EQUAL(stableHeader.get(), initialHeader.get());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
