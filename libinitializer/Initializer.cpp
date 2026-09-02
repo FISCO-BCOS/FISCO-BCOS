@@ -378,12 +378,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         concreteLedger->setKeyPageSize(0);
     }
 
-    // Engine API (OP-Stack engine endpoints) is wired to the v1 TransactionExecutorImpl.
-    // It must not be built for executor_version >= 2: a v2 chain's state transitions run
-    // through the pure-Ethereum EthereumExecutor, and an Engine API driven through the v1
-    // executor would produce blocks with v1 semantics that diverge from the v2 main chain
-    // (a state-root fork). v2 chains therefore have no Engine API; engine RPC endpoints
-    // respond "engine service not available" (see EngineEndpoint.cpp).
+    // v1 EngineService is only for executor_version < 2. v2 builds a separate
+    // EthereumExecutor EngineService when engineDrivenBlockProduction() is set.
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
     // OP mode (executor_version >= 3) assembles its own EngineService below; the v2
     // single-node driver must not build one that would be discarded and overwritten.
@@ -415,23 +411,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         INITIALIZER_LOG(WARNING) << LOG_DESC(
             "op_engine_rpc serving the v1 EngineService (unsafe_allow_v1_executor=true): "
             "test-harness mode, never drive this endpoint with a production op-node");
-    }
-    // executor_version == 2 (EthereumExecutor): the v2 pipeline assembles the EngineService
-    // only for the built-in single-node driver (below), never for [op_engine_rpc] — an
-    // external op-node would drive endpoints that answer "not available" and stall the node
-    // with no diagnostics. Reject the combination at startup; OP mode (>=3) is the
-    // op-node-facing configuration.
-    if (m_nodeConfig->enableOpEngineRpc() &&
-        m_executorVersion == scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "op_engine_rpc with executor_version == " +
-                std::to_string(scheduler_v1::ETHEREUM_EXECUTOR_VERSION) +
-                " builds no EngineService for the endpoint: the v2 pipeline assembles it only "
-                "for the built-in single-node driver. Use executor_version >= " +
-                std::to_string(scheduler_v1::OPSTACK_EXECUTOR_VERSION) +
-                " (OP mode) to serve an external op-node"));
     }
 
     if (baselineSchedulerConfig.parallel)
@@ -474,11 +453,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
-        // Single-node consensus mode on the v2 EthereumExecutor: build the Engine API service
-        // wired to the ethereum scheduler + EthereumExecutor so blocks are built with
-        // Ethereum-compliant semantics. In this mode the EngineService is the sole block
-        // producer, so the v1-only gate above does not apply.
-        if (!engineApiForV1Only && !opStackMode && m_nodeConfig->enableSingleNodeConsensus())
+        // v2 Engine API: built-in single-node driver or [op_engine_rpc] (build_chain -O /
+        // engine integration). OP mode (>=3) overwrites this below.
+        if (!engineApiForV1Only && !opStackMode && m_nodeConfig->engineDrivenBlockProduction())
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
@@ -508,8 +485,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
-        // Single-node consensus mode on the v2 EthereumExecutor (serial pipeline).
-        if (!engineApiForV1Only && !opStackMode && m_nodeConfig->enableSingleNodeConsensus())
+        // v2 Engine API (serial pipeline): same gate as the parallel branch.
+        if (!engineApiForV1Only && !opStackMode && m_nodeConfig->engineDrivenBlockProduction())
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
