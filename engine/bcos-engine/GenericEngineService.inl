@@ -1,0 +1,542 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ */
+
+#pragma once
+
+#include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/indirect.hpp>
+#include <range/v3/view/transform.hpp>
+
+namespace bcos::engine
+{
+
+template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
+    requires executor_v1::TransactionExecutor<ExecutorType,
+                 typename GlobalStateStorageType::ViewType> &&
+             scheduler_v1::TransactionScheduler<SchedulerType,
+                 typename GlobalStateStorageType::ViewType, ExecutorType,
+                 std::vector<protocol::Transaction::Ptr>>
+task::Task<ForkchoiceUpdatedResult> GenericEngineService<MemPoolType, GlobalStateStorageType,
+    ExecutorType, SchedulerType>::updateForkchoice(const ForkchoiceState& forkchoiceState,
+    const PayloadAttributes* payloadAttributes, std::uint32_t version)
+{
+    if (!isForkchoiceVersionSupported(version))
+    {
+        BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
+                              << bcos::errinfo_comment{"Unsupported Engine API version"});
+    }
+    if (payloadAttributes != nullptr)
+    {
+        if (auto validationError =
+                split_detail::validatePayloadAttributes(*payloadAttributes, version);
+            validationError.has_value())
+        {
+            co_return ForkchoiceUpdatedResult{
+                .payloadStatus = split_detail::makeStatus(
+                    PayloadValidationStatus::Invalid, std::nullopt, validationError),
+                .payloadId = std::nullopt,
+            };
+        }
+    }
+
+    auto view = m_globalStateStorage.fork();
+    auto headBlockNumber = co_await bcos::ledger::getBlockNumber(
+        view, forkchoiceState.headBlockHash, bcos::ledger::fromStorage);
+    auto safeBlockNumber = co_await bcos::ledger::getBlockNumber(
+        view, forkchoiceState.safeBlockHash, bcos::ledger::fromStorage);
+    auto finalizedBlockNumber = co_await bcos::ledger::getBlockNumber(
+        view, forkchoiceState.finalizedBlockHash, bcos::ledger::fromStorage);
+
+    if (!headBlockNumber.has_value() || !safeBlockNumber.has_value() ||
+        !finalizedBlockNumber.has_value())
+    {
+        co_return ForkchoiceUpdatedResult{
+            .payloadStatus =
+                split_detail::makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
+            .payloadId = std::nullopt,
+        };
+    }
+    if (*safeBlockNumber > *headBlockNumber)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidForkchoiceState{} << bcos::errinfo_comment{
+                "Forkchoice safe block number must not exceed head block number"});
+    }
+    if (*finalizedBlockNumber > *headBlockNumber)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidForkchoiceState{} << bcos::errinfo_comment{
+                "Forkchoice finalized block number must not exceed head block number"});
+    }
+    if (*finalizedBlockNumber > *safeBlockNumber)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidForkchoiceState{} << bcos::errinfo_comment{
+                "Forkchoice finalized block number must not exceed safe block number"});
+    }
+
+    auto canonicalHeadHash =
+        co_await bcos::ledger::getBlockHash(view, *headBlockNumber, bcos::ledger::fromStorage);
+    bool const headCanonical =
+        canonicalHeadHash.has_value() && *canonicalHeadHash == forkchoiceState.headBlockHash;
+
+    ResolvedForkchoice resolved{
+        .state = forkchoiceState,
+        .headNumber = *headBlockNumber,
+        .safeNumber = safeBlockNumber,
+        .finalizedNumber = finalizedBlockNumber,
+        .headCanonical = headCanonical,
+        .payloadAttributesPresent = payloadAttributes != nullptr,
+    };
+    if (m_tracker.applyForkchoice(resolved) == ForkchoiceApplyResult::Swallowed)
+    {
+        co_return ForkchoiceUpdatedResult{
+            .payloadStatus = split_detail::makeStatus(
+                PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt),
+            .payloadId = std::nullopt,
+        };
+    }
+
+    ForkchoiceUpdatedResult result{
+        .payloadStatus = split_detail::makeStatus(
+            PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt),
+        .payloadId = std::nullopt,
+    };
+    if (payloadAttributes == nullptr)
+    {
+        co_return result;
+    }
+
+    std::vector<protocol::Transaction::Ptr> sealedTxs;
+    view.newMutable();
+    if (!payloadAttributes->noTxPool.value_or(false))
+    {
+        m_memPool.remove(view);
+        m_memPool.seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
+    }
+
+    auto payloadIdOpt = split_detail::derivePayloadId(
+        *payloadAttributes, forkchoiceState.headBlockHash, version);
+    if (!payloadIdOpt.has_value())
+    {
+        co_return ForkchoiceUpdatedResult{
+            .payloadStatus = split_detail::makeStatus(PayloadValidationStatus::Invalid,
+                std::nullopt, std::string("payloadAttributes.transactions contains undecodable hex")),
+            .payloadId = std::nullopt,
+        };
+    }
+    auto payloadId = *payloadIdOpt;
+    auto nextBlockNumber = *headBlockNumber + 1;
+    auto built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
+        nextBlockNumber, std::move(sealedTxs), view);
+
+    auto commonEntry = std::make_shared<CommonPayloadEntry>();
+    commonEntry->version = version;
+    commonEntry->executionPayload = std::move(built.executionPayload);
+    commonEntry->blockValue = 0;
+    commonEntry->blobsBundle = std::nullopt;
+    commonEntry->shouldOverrideBuilder = false;
+    commonEntry->parentBeaconBlockRoot = payloadAttributes->parentBeaconBlockRoot;
+    if (version == static_cast<std::uint32_t>(ApiVersion::V3))
+    {
+        commonEntry->blobsBundle = BlobsBundleV1{};
+    }
+
+    {
+        auto guard = m_tracker.lockExclusive();
+        auto putResult = guard.putPayload(
+            payloadId, commonEntry->executionPayload.blockHash, std::move(commonEntry));
+        for (auto const& evictedId : putResult.evicted)
+        {
+            m_artifacts.erase(evictedId);
+        }
+        m_artifacts[payloadId] = GenericPayloadArtifacts<ViewType>{
+            .view = std::make_shared<ViewType>(std::move(view)),
+            .header = std::move(built.header),
+            .receipts = std::move(built.receipts),
+        };
+    }
+    result.payloadId = payloadId;
+    co_return result;
+}
+
+template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
+    requires executor_v1::TransactionExecutor<ExecutorType,
+                 typename GlobalStateStorageType::ViewType> &&
+             scheduler_v1::TransactionScheduler<SchedulerType,
+                 typename GlobalStateStorageType::ViewType, ExecutorType,
+                 std::vector<protocol::Transaction::Ptr>>
+task::Task<PayloadStatus> GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+    SchedulerType>::newPayload(const NewPayloadRequest& request, std::uint32_t version)
+{
+    if (!isNewPayloadVersionSupported(version))
+    {
+        BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
+                              << bcos::errinfo_comment{"Unsupported Engine API version"});
+    }
+    if (auto validationError =
+            generic_detail::validateExecutionPayload(request.executionPayload, version);
+        validationError.has_value())
+    {
+        auto status = validationError->find("blockHash") != std::string::npos ?
+                          PayloadValidationStatus::InvalidBlockHash :
+                          PayloadValidationStatus::Invalid;
+        co_return split_detail::makeStatus(status, std::nullopt, validationError);
+    }
+    if (version <= 2 && request.parentBeaconBlockRoot.has_value())
+    {
+        co_return split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            std::string("parentBeaconBlockRoot is only valid for newPayloadV3"));
+    }
+    if (version >= 3 && !request.expectedBlobVersionedHashes.empty())
+    {
+        co_return split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            std::string("expectedBlobVersionedHashes must be empty (L2 forbids blob "
+                        "transactions)"));
+    }
+    if (version >= 4)
+    {
+        if (!request.executionRequests.has_value() || !request.executionRequests->empty())
+        {
+            co_return split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                std::string("executionRequests must be present and empty (L2 carries no "
+                            "execution requests)"));
+        }
+    }
+    if (version >= 3 && !request.parentBeaconBlockRoot.has_value())
+    {
+        co_return split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            std::string("parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and "
+                        "later"));
+    }
+
+    auto guard = m_tracker.lockExclusive();
+    auto const& forkchoiceState = guard.forkchoiceState();
+    auto parentKnown = request.executionPayload.parentHash == forkchoiceState.headBlockHash ||
+                       guard.payloadIdForHash(request.executionPayload.parentHash).has_value();
+    if (!parentKnown)
+    {
+        co_return split_detail::makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+    }
+
+    PayloadID payloadId;
+    if (auto existingId = guard.payloadIdForHash(request.executionPayload.blockHash))
+    {
+        payloadId = *existingId;
+    }
+    else
+    {
+        auto hash = bcos::crypto::keccak256Hash(request.executionPayload.blockHash.ref());
+        payloadId = bcos::toHex(hash.ref().getCroppedData(0, 8), "0x");
+    }
+
+    auto cached = guard.findPayload(payloadId);
+    auto artifactIt = m_artifacts.find(payloadId);
+    if (artifactIt != m_artifacts.end() && artifactIt->second.view)
+    {
+        if (!cached)
+        {
+            BOOST_THROW_EXCEPTION(
+                std::runtime_error{"missing cached payload for locally built commit"});
+        }
+        m_globalStateStorage.pushView(std::move(*artifactIt->second.view));
+        if (m_ledger && artifactIt->second.header)
+        {
+            typename GlobalStateStorageType::MutableStorage prewriteStorage;
+            auto block = m_blockFactory->createBlock();
+            block->setBlockHeader(artifactIt->second.header);
+            auto const& bloom = cached->executionPayload.logsBloom;
+            block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+            for (auto const& tx : cached->executionPayload.transactions)
+            {
+                if (tx.decoded)
+                {
+                    block->appendTransaction(tx.decoded);
+                }
+            }
+            for (auto const& receipt : artifactIt->second.receipts)
+            {
+                block->appendReceipt(receipt);
+            }
+            auto blockTxs = std::make_shared<protocol::ConstTransactions>(
+                cached->executionPayload.transactions |
+                ::ranges::views::filter([](auto const& tx) { return tx.decoded != nullptr; }) |
+                ::ranges::views::transform([](auto const& tx) {
+                    return protocol::Transaction::ConstPtr(tx.decoded);
+                }) |
+                ::ranges::to<std::vector>());
+            co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, prewriteStorage);
+            co_await m_globalStateStorage.mergeBackStorage(prewriteStorage);
+        }
+        else
+        {
+            co_await m_globalStateStorage.mergeBackStorage();
+        }
+    }
+
+    auto entry = std::make_shared<CommonPayloadEntry>();
+    entry->version = version;
+    entry->executionPayload = request.executionPayload;
+    entry->blockValue = 0;
+    entry->blobsBundle = std::nullopt;
+    entry->shouldOverrideBuilder = false;
+    entry->parentBeaconBlockRoot = request.parentBeaconBlockRoot;
+    if (version == static_cast<std::uint32_t>(ApiVersion::V3))
+    {
+        entry->blobsBundle = BlobsBundleV1{};
+    }
+
+    guard.putPayload(payloadId, request.executionPayload.blockHash, std::move(entry));
+    guard.retainOnly(payloadId, request.executionPayload.blockHash);
+    m_artifacts.clear();
+
+    co_return split_detail::makeStatus(
+        PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);
+}
+
+template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
+    requires executor_v1::TransactionExecutor<ExecutorType,
+                 typename GlobalStateStorageType::ViewType> &&
+             scheduler_v1::TransactionScheduler<SchedulerType,
+                 typename GlobalStateStorageType::ViewType, ExecutorType,
+                 std::vector<protocol::Transaction::Ptr>>
+task::Task<typename GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+    SchedulerType>::BuildPayloadResult>
+GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::buildPayload(
+    const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
+    const PayloadID& payloadId, std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
+    std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
+{
+    std::vector<EngineTransaction> engineTransactions;
+    engineTransactions.reserve(
+        payloadAttributes.transactions.value_or(std::vector<std::string>{}).size() + sealedTxs.size());
+    if (payloadAttributes.transactions.has_value())
+    {
+        for (auto const& forcedHex : *payloadAttributes.transactions)
+        {
+            engineTransactions.push_back(EngineTransaction{
+                .raw = fromHex(forcedHex),
+                .decoded = nullptr,
+            });
+        }
+    }
+    for (auto& sealedTx : sealedTxs)
+    {
+        if (sealedTx->type() !=
+            static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+        {
+            BCOS_LOG(WARNING) << LOG_BADGE("GenericEngineService")
+                              << LOG_DESC(
+                                     "buildPayload: excluding transaction without an EIP-2718 "
+                                     "wire form from the OP payload")
+                              << LOG_KV("hash", sealedTx->hash().hex())
+                              << LOG_KV("type", static_cast<int>(sealedTx->type()));
+            continue;
+        }
+        engineTransactions.push_back(EngineTransaction{
+            .raw = bcostars::protocol::reassembleWeb3RawTransaction(
+                sealedTx->extraTransactionBytes(), sealedTx->signatureData()),
+            .decoded = std::move(sealedTx),
+        });
+    }
+
+    ExecutionPayload executionPayload{
+        .logsBloom = Bloom{},
+        .parentHash = forkchoiceState.headBlockHash,
+        .stateRoot = generic_detail::syntheticHash(std::string("state") + payloadId),
+        .receiptsRoot = generic_detail::syntheticHash(std::string("receipts") + payloadId),
+        .prevRandao = payloadAttributes.prevRandao,
+        .gasLimit = 0,
+        .gasUsed = 0,
+        .baseFeePerGas = 0,
+        .blockHash = generic_detail::syntheticHash(payloadId),
+        .transactions = std::move(engineTransactions),
+        .extraData = {},
+        .feeRecipient = payloadAttributes.suggestedFeeRecipient,
+        .timestamp = payloadAttributes.timestamp,
+        .blockNumber = nextBlockNumber,
+        .withdrawals = std::nullopt,
+        .blobGasUsed = std::nullopt,
+        .excessBlobGas = std::nullopt,
+        .blockAccessList = std::nullopt,
+        .slotNumber = std::nullopt,
+        .rawTransactions = std::nullopt,
+        .withdrawalsRoot = std::nullopt,
+    };
+
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
+    {
+        executionPayload.withdrawals =
+            payloadAttributes.withdrawals.value_or(std::vector<WithdrawalV1>{});
+    }
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
+    {
+        executionPayload.blobGasUsed = u256(0);
+        executionPayload.excessBlobGas = u256(0);
+        executionPayload.withdrawalsRoot = h256{};
+    }
+
+    ledger::LedgerConfig ledgerConfig;
+    co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
+    auto blockVersion = ledgerConfig.compatibilityVersion();
+    executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
+
+    if (executionPayload.transactions.empty())
+    {
+        auto emptyHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash};
+        emptyHeader->setParentInfo(parentInfo);
+        emptyHeader->setNumber(nextBlockNumber);
+        emptyHeader->setVersion(blockVersion);
+        emptyHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
+        emptyHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
+        emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
+        emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
+        emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
+        emptyHeader->setReceiptsRoot(h256{});
+        emptyHeader->setTxsRoot(h256{});
+        emptyHeader->setGasUsed(0);
+        emptyHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+        executionPayload.stateRoot = emptyHeader->stateRoot();
+        executionPayload.receiptsRoot = h256{};
+        executionPayload.gasUsed = 0;
+        executionPayload.blockHash = emptyHeader->hash();
+        co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
+            .header = std::move(emptyHeader),
+            .receipts = {}};
+    }
+
+    auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash};
+    blockHeader->setParentInfo(parentInfo);
+    blockHeader->setNumber(nextBlockNumber);
+    blockHeader->setVersion(blockVersion);
+    blockHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
+    blockHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
+    blockHeader->setPrevRandao(payloadAttributes.prevRandao);
+    blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
+
+    auto executableTransactions =
+        executionPayload.transactions | ::ranges::views::filter([](auto const& transaction) {
+            return transaction.decoded != nullptr;
+        }) |
+        ::ranges::views::transform([](auto const& transaction) { return transaction.decoded; }) |
+        ::ranges::to<std::vector>();
+    auto receipts = co_await m_scheduler.executeBlock(view, m_executor, *blockHeader,
+        executableTransactions | ::ranges::views::indirect, ledgerConfig);
+
+    h256 txRoot;
+    {
+        auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
+        auto hasher = hashImpl.hasher();
+        crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(hasher.clone());
+        if (!executionPayload.transactions.empty())
+        {
+            auto txHashes =
+                executionPayload.transactions | ::ranges::views::transform([](auto& tx) {
+                    return tx.decoded ? tx.decoded->hash() :
+                                        bcos::crypto::keccak256Hash(bcos::ref(tx.raw));
+                });
+            std::vector<h256> merkleTrie;
+            merkle.generateMerkle(txHashes, merkleTrie);
+            if (!merkleTrie.empty())
+            {
+                txRoot = merkleTrie.back();
+            }
+        }
+    }
+
+    h256 receiptRoot;
+    {
+        if (::ranges::any_of(receipts, [](auto& r) { return !r; }))
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
+        }
+        auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
+        auto hasher = hashImpl.hasher();
+        crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(hasher.clone());
+        if (!receipts.empty())
+        {
+            auto receiptHashes =
+                receipts | ::ranges::views::transform([](auto& r) { return r->hash(); });
+            std::vector<h256> merkleTrie;
+            merkle.generateMerkle(receiptHashes, merkleTrie);
+            if (!merkleTrie.empty())
+            {
+                receiptRoot = merkleTrie.back();
+            }
+        }
+    }
+
+    u256 totalGasUsed;
+    Bloom logsBloom{};
+    for (auto& receipt : receipts)
+    {
+        if (!receipt)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
+        }
+        totalGasUsed += receipt->gasUsed();
+        if (!receipt->logsBloom().empty())
+        {
+            orBloom(logsBloom, receipt->logsBloom());
+        }
+    }
+
+    h256 stateRoot = co_await calculateStateRoot(view, blockHeader->version());
+    blockHeader->setStateRoot(stateRoot);
+    blockHeader->setReceiptsRoot(receiptRoot);
+    blockHeader->setTxsRoot(txRoot);
+    blockHeader->setGasUsed(totalGasUsed);
+    blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+
+    executionPayload.stateRoot = stateRoot;
+    executionPayload.receiptsRoot = receiptRoot;
+    executionPayload.gasUsed = totalGasUsed;
+    executionPayload.blockHash = blockHeader->hash();
+    executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
+    executionPayload.logsBloom = logsBloom;
+
+    co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
+        .header = std::move(blockHeader),
+        .receipts = std::move(receipts)};
+}
+
+template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
+    requires executor_v1::TransactionExecutor<ExecutorType,
+                 typename GlobalStateStorageType::ViewType> &&
+             scheduler_v1::TransactionScheduler<SchedulerType,
+                 typename GlobalStateStorageType::ViewType, ExecutorType,
+                 std::vector<protocol::Transaction::Ptr>>
+task::Task<h256> GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+    SchedulerType>::calculateStateRoot(ViewType& view, uint32_t blockVersion) const
+{
+    auto range = co_await storage2::range(view);
+    h256 totalHash;
+    while (auto keyValue = co_await range.next())
+    {
+        auto& [key, value] = *keyValue;
+        executor_v1::StateKeyView viewKey(key);
+        auto [tableName, keyName] = viewKey.get();
+
+        storage::Entry entry;
+        if (auto* e = std::get_if<storage::Entry>(std::addressof(value)))
+        {
+            entry = *e;
+        }
+        else
+        {
+            entry.setStatus(storage::Entry::DELETED);
+        }
+        totalHash ^= entry.hash(
+            tableName, keyName, *m_blockFactory->cryptoSuite()->hashImpl(), blockVersion);
+    }
+    co_return totalHash;
+}
+
+}  // namespace bcos::engine
