@@ -260,6 +260,12 @@ bcos::protocol::Transaction::Ptr buildUnsupportedTypeTx()
 {
     bcostars::Transaction tars;
     tars.extraTransactionBytes.push_back(0x03);
+    // The per-tx type gate attaches transactions[i]->hash() as the culprit; a hash-less
+    // carrier makes TransactionImpl::hash() throw EmptyTransactionHash before the gate
+    // (author commit 4f1144ef1 regression) — carry a synthetic hash like every real
+    // envelope carrier does.
+    bcos::bytes hashBytes(32, 0x03);
+    tars.extraTransactionHash.assign(hashBytes.begin(), hashBytes.end());
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [tars = std::move(tars)]() mutable { return &tars; });
     return tx;
