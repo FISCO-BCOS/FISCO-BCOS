@@ -19,6 +19,11 @@
  */
 #include "Socket.h"
 
+// The blocking RLPx socket is built on the POSIX socket API (arpa/inet.h,
+// poll.h, sys/socket.h, ...), which does not exist on Windows. Compile the
+// implementation only off Windows; nothing links the RLPx sync client there.
+#if !defined(_WIN32)
+
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -332,3 +337,5 @@ uint16_t TcpListener::port() const
 }
 
 }  // namespace bcos::devp2p::rlpx
+
+#endif  // !defined(_WIN32)
