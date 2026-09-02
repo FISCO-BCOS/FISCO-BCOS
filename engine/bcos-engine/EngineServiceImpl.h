@@ -938,15 +938,15 @@ private:
             SchedulerType::computeTxRoot(detail::rawEnvelopesOf(payload)), parentBeaconBlockRoot);
         payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
 
-        // Canonical pass with the final commitments (verify=true). A probe does not
-        // stash m_pending; commitBlock requires a verified pending whose header hash
-        // matches this rebuilt header.
+        // Adopt the retained probe instead of a canonical re-execution: the probe already
+        // produced the commitments (stateRoot/receiptsRoot/gasUsed/logsBloom/blobGasUsed)
+        // that were filled into `payload` above, and the final header is rebuilt from them.
+        // adoptProbeAsPending verifies that header against the probe and stashes m_pending.
         auto finalBlock = buildOpBlock(payload, finalHeader);
-        m_delegate->reset([](bcos::Error::Ptr) {});
         bcos::Error::Ptr canonicalError;
         bcos::protocol::BlockHeader::Ptr canonicalHeader;
-        m_delegate->executeBlock(finalBlock, /*verify=*/true,
-            [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
+        m_delegate->adoptProbeAsPending(
+            finalBlock, [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
                 canonicalError = std::move(error);
                 canonicalHeader = std::move(header);
             });
@@ -954,7 +954,7 @@ private:
         {
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
-                    std::string("OP payload build canonical pass failed: ") +
+                    std::string("OP payload build adopt failed: ") +
                     (canonicalError ? canonicalError->errorMessage() : "no executed header")});
         }
 
