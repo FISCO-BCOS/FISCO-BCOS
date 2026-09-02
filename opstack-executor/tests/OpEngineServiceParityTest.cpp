@@ -30,6 +30,8 @@
 #include <boost/test/unit_test.hpp>
 
 #include <atomic>
+#include <exception>
+#include <optional>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -745,35 +747,61 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
     bcos::protocol::BlockHeader::Ptr initialHeader;
     std::atomic<bool> writerStarted{false};
     std::atomic<bool> writerFinished{false};
+    std::exception_ptr writerError;
 
-    std::jthread writer([&] {
-        writerStarted.store(true, std::memory_order_release);
-        auto guard = tracker.lockExclusive();
-        bcos::h256 writerHash(0x99);
-        bcos::engine::PayloadID writerPayloadId = "0xcafebabe";
-        auto entry = std::make_shared<bcos::engine::CommonPayloadEntry>();
-        entry->executionPayload.blockHash = writerHash;
-        auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
-        header->setNumber(99);
-        (void)bcos::engine::op_detail::publishBuiltPayload(guard, artifacts, writerPayloadId,
-            writerHash, entry, bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
-        writerFinished.store(true, std::memory_order_release);
-    });
-
+    // Deterministic lock-ordering protocol: the main thread must hold a live
+    // SharedAccess and verify the fixed target through the production seam
+    // BEFORE the exclusive writer is ever started, so the writer provably
+    // blocks behind the reader instead of racing it. std::optional<jthread>
+    // keeps the writer joinable on every path (including BOOST_REQUIRE aborts,
+    // whose stack unwind destroys the jthread and joins it).
+    std::optional<std::jthread> writer;
     {
         auto shared = tracker.lockShared();
         initialHeader = bcos::engine::op_detail::findBuiltHeader(shared, artifacts, targetHash);
         BOOST_REQUIRE(initialHeader);
         BOOST_CHECK_EQUAL(initialHeader->number(), kTargetNumber);
 
+        // Start the writer only while the shared guard is still held.
+        writer.emplace([&] {
+            try
+            {
+                writerStarted.store(true, std::memory_order_release);
+                auto guard = tracker.lockExclusive();
+                bcos::h256 writerHash(0x99);
+                bcos::engine::PayloadID writerPayloadId = "0xcafebabe";
+                auto entry = std::make_shared<bcos::engine::CommonPayloadEntry>();
+                entry->executionPayload.blockHash = writerHash;
+                auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+                header->setNumber(99);
+                (void)bcos::engine::op_detail::publishBuiltPayload(guard, artifacts,
+                    writerPayloadId, writerHash, entry,
+                    bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
+                writerFinished.store(true, std::memory_order_release);
+            }
+            catch (...)
+            {
+                // Never let an exception escape the thread (would call
+                // std::terminate). Capture and rethrow on the main thread
+                // after the guard is released and the writer is joined.
+                writerError = std::current_exception();
+            }
+        });
+
         while (!writerStarted.load(std::memory_order_acquire))
         {
             std::this_thread::yield();
         }
+        // The writer cannot acquire exclusive access while we hold shared, so
+        // it provably has not finished publishing.
         BOOST_CHECK(!writerFinished.load(std::memory_order_acquire));
     }
 
-    writer.join();
+    writer->join();
+    if (writerError)
+    {
+        std::rethrow_exception(writerError);
+    }
     BOOST_CHECK(writerFinished.load(std::memory_order_acquire));
 
     {
