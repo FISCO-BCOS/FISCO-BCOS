@@ -45,9 +45,6 @@ public:
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB184"), "0.0.0.0", 0)
     {}
     ~FakeASIO_FIB184() noexcept override {}
-    void asyncReadSome(
-        const std::shared_ptr<SocketFace>&, ba::mutable_buffer, ReadWriteHandler) override
-    {}
 };
 
 class FakeSocket_FIB184 : public SocketFace

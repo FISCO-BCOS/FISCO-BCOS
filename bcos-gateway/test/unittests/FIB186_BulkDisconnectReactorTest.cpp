@@ -20,7 +20,7 @@
  * @date 2026-07-14
  *
  * Root cause (from code): every inbound P2P message delivery is
- *   Session::doRead -> Session::onMessage -> asioInterface()->post(...)  (Session.cpp: onMessage)
+ *   Session readLoop -> Session::onMessage -> asioInterface()->post(...)  (Session.cpp: onMessage)
  * and, before the fix, every session teardown notification went to that SAME reactor. So message
  * delivery and teardown shared ONE pool. A bulk-disconnect of a large established session pool
  * floods that reactor with teardown work (each drop drives onDisconnect -> onRemoveNodeIDs ->
@@ -78,9 +78,6 @@ public:
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(2, "FIB186Reactor"), "0.0.0.0", 0)
     {}
     ~FakeASIO_Reactor() noexcept override = default;
-    void asyncReadSome(
-        const std::shared_ptr<SocketFace>&, ba::mutable_buffer, ReadWriteHandler) override
-    {}
 };
 
 // Host subclass with the network marked up, so Session::drop() takes the "hand the teardown
