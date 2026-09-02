@@ -52,6 +52,7 @@ public:
     CompatTEHostFixture()
       : rollbackableStorage(storage), rollbackableTransientStorage(transientStorage)
     {
+        bcos::executor_v1::clearGlobalExecutableCache();
         bcos::executor::GlobalHashImpl::g_hashImpl = hashImpl;
         precompiledManager.emplace(hashImpl);
         blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION));

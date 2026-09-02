@@ -152,6 +152,19 @@ public:
         m_maxCapacity = capacity;
     }
 
+    void clear()
+    {
+        for (auto& bucket : m_buckets)
+        {
+            Lock lock(bucket.mutex, true);
+            bucket.container.clear();
+            if constexpr (withLRU)
+            {
+                bucket.capacity = {};
+            }
+        }
+    }
+
     size_t getBucketIndex(auto const& key)
     {
         if constexpr (!withConcurrent)
