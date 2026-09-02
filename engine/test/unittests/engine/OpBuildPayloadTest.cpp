@@ -920,8 +920,8 @@ BOOST_AUTO_TEST_CASE(op_new_payload_external_wrong_block_hash_is_invalid)
     request.executionPayload.blockHash =
         h256("9999999999999999999999999999999999999999999999999999999999999999");
     auto status = task::syncWait(engineService.newPayload(request, 4));
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
     // Static reject: no delegate interaction at all.
     BOOST_CHECK_EQUAL(delegate->executeBlockCount.load(), 1);
     BOOST_CHECK_EQUAL(delegate->commitBlockCount.load(), 0);

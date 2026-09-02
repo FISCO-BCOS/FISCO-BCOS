@@ -1340,7 +1340,10 @@ private:
         // Compare against keccak(RLP(header)), not BlockHeader::hash() (tars hasher).
         if (bcos::protocol::EthBlockHeader::computeHash(*ethHeader) != payload.blockHash)
         {
-            co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            // op-geth answers INVALID_BLOCK_HASH for this arm (eth/catalyst api.go), and
+            // the generic path in this file does the same — op-node branches on the status
+            // string for fault classification (N3).
+            co_return makeStatus(PayloadValidationStatus::InvalidBlockHash, std::nullopt,
                 std::string("blockHash does not match the reconstructed block header"));
         }
 
