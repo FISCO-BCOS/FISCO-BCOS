@@ -813,9 +813,8 @@ private:
         // Forced txs stay in payload.transactions[0, forcedN); each retry only rebuilds the
         // sealed tail (R83) and reuses already-decoded Ptrs (R77).
         // I11-B: with no sealed pool txs there is nothing to evict; the single probe is then
-        // adopted (see the adopt call below). The guard below only documents that the
-        // eviction branch is unreachable in this case.
-        bool const emptyPool = sealedPrepared.empty();
+        // adopted (see the adopt call below). The eviction branch below is unreachable when
+        // sealedPrepared is empty — no pool guard is needed.
         std::size_t evicted = 0;
         bcos::protocol::BlockHeader::Ptr executedHeader;
         static constexpr std::size_t c_maxEvictionRetries = 16;
@@ -863,7 +862,9 @@ private:
                                         return entry.hash == *culprit;
                                     }) :
                                 sealedPrepared.end();
-            if (!emptyPool && sealedIt != sealedPrepared.end())
+            // Unreachable when sealedPrepared is empty (find_if over an empty range returns
+            // end()); there is then nothing to evict and the probe below is adopted as-is.
+            if (sealedIt != sealedPrepared.end())
             {
                 // The candidate was built under the CL-supplied gasLimit. A gasLimit below
                 // the chain's own is a CL configuration fault, not a poisoned transaction —
