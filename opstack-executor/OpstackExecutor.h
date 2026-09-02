@@ -243,6 +243,10 @@ namespace bcos::executor_v1::opstack
 DERIVE_BCOS_EXCEPTION(OpEvmcRevisionNotConfigured);
 DERIVE_BCOS_EXCEPTION(OpForkRevisionMismatch);
 DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
+/// Block gas pool cannot fit the transaction (evmone GAS_LIMIT_REACHED). Distinct from
+/// OpTxValidationFailed so the engine can treat capacity as skip-for-this-build instead
+/// of pool eviction (op-geth's miner gasPool prefix stop never removes pool txs).
+DERIVE_BCOS_EXCEPTION(OpBlockGasPoolFull);
 
 using bcos::evm::evmstate::SharedErrorSlot;  // Storage2State.h
 
@@ -912,6 +916,14 @@ public:
                     call ? std::optional<uint64_t>{} : std::optional<uint64_t>(m_ctx->chainId),
                     &*m_blockInfo, call);
             }
+            catch (const OpBlockGasPoolFull& e)
+            {
+                // Capacity fault (block gas pool full): skip-for-this-build semantics —
+                // the engine must never evict this tx from the pool (F2).
+                throw bcos::evm::OpConsensusError(
+                    std::string("OpScheduler: block gas pool full: ") + e.what(),
+                    transaction.hash(), /*capacity=*/true);
+            }
             catch (const OpTxValidationFailed& e)
             {
                 throw bcos::evm::OpConsensusError(
@@ -1375,6 +1387,16 @@ private:
                                     blockGasLeft);
         if (auto const* err = std::get_if<std::error_code>(&validated))
         {
+            if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED))
+            {
+                // Block gas pool full: the tx does not fit this block — a capacity fault,
+                // not a poisoned transaction. The engine's gas-aware prefix assembly keeps
+                // this unreachable for sealed txs; if it still fires (forced-tx overflow or
+                // accounting drift), the engine skips the tx for this build and never
+                // removes it from the pool (F2).
+                BOOST_THROW_EXCEPTION(OpBlockGasPoolFull{} << bcos::errinfo_comment(
+                                          err->message()));
+            }
             // DEBUG not WARNING: this path is reachable from unauthenticated eth_call /
             // estimateGas, where any caller can trigger validation failures at will — a
             // WARNING here would be a log-amplification vector.

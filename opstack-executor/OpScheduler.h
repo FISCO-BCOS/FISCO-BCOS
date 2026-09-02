@@ -668,6 +668,10 @@ private:
                 opErr && opErr->txHash.has_value())
             {
                 *error << bcos::engine::OpCulpritTxHash(*opErr->txHash);
+                if (opErr->capacity)
+                {
+                    *error << bcos::engine::OpBlockGasPoolFull{true};
+                }
             }
             co_return {std::move(error), nullptr, false};
         }

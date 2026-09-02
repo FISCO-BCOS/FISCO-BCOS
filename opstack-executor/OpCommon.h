@@ -32,13 +32,18 @@ namespace bcos::evm
 struct OpConsensusError : std::runtime_error
 {
     std::optional<bcos::h256> txHash;
+    /// True when the reject is a block-capacity fault (the block gas pool cannot fit the
+    /// transaction), not a poisoned transaction: the build loop skips the tx for this
+    /// build and must never evict it from the pool. OpScheduler forwards it across the
+    /// boundary `bcos::Error` as `OpBlockGasPoolFull`.
+    bool capacity = false;
 
     explicit OpConsensusError(std::string const& what_arg) : std::runtime_error(what_arg) {}
 
     /// Per-tx reject. The hash is a structured member; OpScheduler attaches it to the
     /// boundary `bcos::Error` as `OpCulpritTxHash`. Never encode it into `what()`.
-    OpConsensusError(std::string what_arg, bcos::h256 hash)
-      : std::runtime_error(std::move(what_arg)), txHash(hash)
+    OpConsensusError(std::string what_arg, bcos::h256 hash, bool _capacity = false)
+      : std::runtime_error(std::move(what_arg)), txHash(hash), capacity(_capacity)
     {}
 };
 }  // namespace bcos::evm

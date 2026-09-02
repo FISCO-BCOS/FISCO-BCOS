@@ -190,6 +190,28 @@ inline std::optional<h256> culpritHashOf(bcos::Error const& error)
     }
     return std::nullopt;
 }
+
+inline bool capacityFaultOf(bcos::Error const& error)
+{
+    if (auto const* capacity = boost::get_error_info<OpBlockGasPoolFull>(error))
+    {
+        return *capacity;
+    }
+    return false;
+}
+
+/// Declared gas limit of an OP engine transaction (0 when undecoded). The gas-aware
+/// prefix assembly budgets declared gas like op-geth's miner (GasPool pre-check), so a
+/// merely full block never reaches the executor as a GAS_LIMIT_REACHED failure.
+inline bcos::u256 declaredGasOf(EngineTransaction const& tx)
+{
+    if (!tx.decoded)
+    {
+        return bcos::u256(0);
+    }
+    auto const gas = tx.decoded->gasLimit();
+    return gas > 0 ? bcos::u256(static_cast<std::uint64_t>(gas)) : bcos::u256(0);
+}
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -772,9 +794,11 @@ private:
         auto const parentBeaconBlockRoot =
             payloadAttributes.parentBeaconBlockRoot.value_or(crypto::HashType{});
         std::uint64_t forcedBytes = 0;
+        bcos::u256 forcedGas = 0;
         for (auto const& tx : forcedTxs)
         {
             forcedBytes += tx.raw.size();
+            forcedGas += detail::declaredGasOf(tx);
         }
         auto const forcedN = forcedTxs.size();
 
@@ -820,12 +844,25 @@ private:
             {
                 budget.emplace(*m_daCaps, forcedBytes);
             }
+            // Gas budget: prefix-stop on declared gas (op-geth miner GasPool pre-check),
+            // so a merely full block never reaches the executor as a GAS_LIMIT_REACHED
+            // validation failure and honest txs are never evicted (F2). Forced/deposit
+            // txs already sit in payload.transactions[0, forcedN) and charge forcedGas
+            // first; like the DA budget this stops in seal order (deterministic prefix).
+            bcos::u256 gasLeft =
+                payload.gasLimit > forcedGas ? payload.gasLimit - forcedGas : bcos::u256(0);
             for (auto const& sealed : sealedPrepared)
             {
                 if (budget && !budget->admits(sealed.tx.raw.size()))
                 {
                     break;  // pool-order prefix stop (seal order, not size order)
                 }
+                auto const txGas = detail::declaredGasOf(sealed.tx);
+                if (txGas > gasLeft)
+                {
+                    break;  // block gas pool full: skip the tail, never evict it
+                }
+                gasLeft -= txGas;
                 payload.transactions.push_back(sealed.tx);
             }
 
@@ -860,6 +897,22 @@ private:
             // end()); there is then nothing to evict and the probe below is adopted as-is.
             if (sealedIt != sealedPrepared.end())
             {
+                if (executeError && detail::capacityFaultOf(*executeError))
+                {
+                    // Block gas pool full — a capacity fault, not a poisoned transaction:
+                    // skip the tx for this build only and never touch the pool (op-geth's
+                    // gasPool prefix stop never evicts; the gas-aware prefix assembly above
+                    // keeps this unreachable for sealed txs — fail-closed remainder, F2).
+                    BCOS_LOG(WARNING)
+                        << LOG_BADGE("EngineService")
+                        << LOG_DESC(
+                               "buildOpPayload: tx does not fit the block "
+                               "gas pool; skipping for this build")
+                        << LOG_KV("tx", sealedIt->hash.hexPrefixed()) << LOG_KV("reason", message);
+                    sealedPrepared.erase(sealedIt);
+                    ++evicted;  // bound total probe passes like the eviction budget
+                    continue;
+                }
                 // The candidate was built under the CL-supplied gasLimit. A gasLimit below
                 // the chain's own is a CL configuration fault, not a poisoned transaction —
                 // evicting on it would let one FCU drain the pool (censorship). Re-probe the
@@ -1263,7 +1316,8 @@ private:
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
                     "OP newPayload threw an unclassified exception outside block execution "
-                    "(validation, comparison or registration phase): " + diagnostic});
+                    "(validation, comparison or registration phase): " +
+                    diagnostic});
         }
     }
 
@@ -1347,9 +1401,10 @@ private:
                         co_return mapDelegateError(*commitError, std::nullopt);
                     }
                     BCOS_LOG(WARNING) << LOG_BADGE("EngineService")
-                                      << LOG_DESC("runOpNewPayloadSteps: cached commit failed "
-                                                  "with a non-consensus delegate error; "
-                                                  "falling through to re-execute the block")
+                                      << LOG_DESC(
+                                             "runOpNewPayloadSteps: cached commit failed "
+                                             "with a non-consensus delegate error; "
+                                             "falling through to re-execute the block")
                                       << LOG_KV("error", commitError->errorMessage());
                 }
                 else
