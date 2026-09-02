@@ -38,6 +38,11 @@ except ImportError:
 RPC_URL = "http://127.0.0.1:8545"
 HEADERS = {"Content-Type": "application/json"}
 TIMEOUT = 30
+# Pace attribute-bearing FCUs: each one triggers a full probe+canonical block build
+# behind the engine's whole-build lock, and empirical CI runs hung on noTxPool=false
+# when they were fired back-to-back. (There is no RPC-side rate limiter to trip.)
+_FCU_ATTRS_MIN_INTERVAL_S = 0.11
+_last_fcu_attrs_at = 0.0
 
 ZERO_HASH = "0x" + "00" * 32
 FEE_RECIPIENT = "0x0000000000000000000000000000000000000001"
@@ -65,8 +70,9 @@ EXPECTED_CAPABILITIES = {
 # The one genuinely unimplemented version: routable, answers -38005, never advertised.
 UNIMPLEMENTED_METHODS = ("engine_forkchoiceUpdatedV4",)
 
-# The gas limit sent in payloadAttributes. See test_negative_cases / the note below: this
-# node currently IGNORES it and takes the gas limit from its own SystemConfig.
+# The gas limit sent in payloadAttributes. The OP build path prefers attrs.gasLimit and
+# falls back to the chain's ledgerConfig gas limit (buildOpPayload); see
+# test_negative_cases for the rejection cells around it.
 ATTRS_GAS_LIMIT = "0x1c9c380"
 
 # ---- Minimal RLP encoder (enough for the deposit fixture) ----
@@ -147,8 +153,23 @@ def _log_info(msg: str) -> None:
     print(f"  {YELLOW}ℹ️  {msg}{NC}")
 
 
+def _pace_attribute_bearing_fcu(method: str, params: List[Any]) -> None:
+    """Wait out EngineEndpoint's 100ms FCU-with-attrs window before sending."""
+    global _last_fcu_attrs_at
+    if not method.startswith("engine_forkchoiceUpdated"):
+        return
+    if len(params) < 2 or params[1] is None:
+        return
+    now = time.monotonic()
+    wait = _FCU_ATTRS_MIN_INTERVAL_S - (now - _last_fcu_attrs_at)
+    if wait > 0:
+        time.sleep(wait)
+    _last_fcu_attrs_at = time.monotonic()
+
+
 def rpc_raw(method: str, params: List[Any], req_id: int = 1) -> Dict[str, Any]:
     """Send a JSON-RPC request, return the full response dict (error included)."""
+    _pace_attribute_bearing_fcu(method, params)
     payload: Dict[str, Any] = {
         "jsonrpc": "2.0",
         "id": req_id,

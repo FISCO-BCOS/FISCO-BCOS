@@ -79,7 +79,8 @@ constexpr std::uint32_t c_newPayloadVersion =
 SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engineService,
     bcos::ledger::LedgerInterface::Ptr _ledger, std::uint64_t _blockIntervalMs,
     bool _produceEmptyBlocks, bcos::crypto::HashType _prevRandao, std::string _feeRecipient,
-    std::uint64_t _fixedTimestamp)
+    std::uint64_t _fixedTimestamp, std::optional<std::uint64_t> _gasLimit,
+    std::optional<bcos::bytes> _eip1559Params, std::optional<std::uint64_t> _minBaseFee)
   : m_engineService(_engineService),
     m_ledger(std::move(_ledger)),
     m_blockIntervalMs(_blockIntervalMs > 0 ? _blockIntervalMs : 1000),
@@ -88,7 +89,10 @@ SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engine
     // Parse the coinbase exactly once here: a malformed fee_recipient must fail the node at
     // startup, not fail on the first block tick.
     m_feeRecipient(toAddress(_feeRecipient)),
-    m_fixedTimestamp(_fixedTimestamp)
+    m_fixedTimestamp(_fixedTimestamp),
+    m_gasLimit(_gasLimit),
+    m_eip1559Params(std::move(_eip1559Params)),
+    m_minBaseFee(_minBaseFee)
 {}
 
 SingleNodeConsensus::~SingleNodeConsensus()
@@ -144,17 +148,25 @@ void SingleNodeConsensus::loop()
                 << LOG_KV("diagnostic",
                     boost::current_exception_diagnostic_information());
         }
-        // Drain the mempool as fast as possible when transactions are available (a tx is
-        // sealed immediately after submission instead of waiting for the next interval
-        // tick — the EEST harness runs one tx per unit, so this removes ~1s/unit of
-        // latency). Only pace the loop when nothing was sealed (empty block or skipped).
-        // stop() notifies the condition variable so shutdown is prompt even with a large
-        // block_interval.
-        if (!sealedTxBlock)
+        // Pace the next tick on the composition of two bounds (nextTickWaitMs): the
+        // whole-second wall-clock floor keeps a fast drain from outrunning the clock —
+        // otherwise chain time drifts ahead and a restart can no longer produce a timestamp
+        // strictly greater than the head (EIP-2) — and the configured [consensus]
+        // block_interval paces every tick that did not seal a tx block: idle ticks honour
+        // the operator's interval, and a tick that threw before produceBlock() could stamp
+        // m_lastTimestamp (e.g. resolveInitialHead() failing at startup while the ledger is
+        // not answering) backs off by the interval instead of spinning hot. The
+        // fixed-timestamp (EEST) arm never consults the wall clock, so its pacing stays
+        // interval-only. stop() notifies the condition variable so shutdown is prompt even
+        // with a large block_interval.
+        auto const waitMs =
+            nextTickWaitMs(m_fixedTimestamp, static_cast<std::uint64_t>(m_lastTimestamp),
+                m_blockIntervalMs, static_cast<std::uint64_t>(utcTime()), sealedTxBlock);
+        if (waitMs > 0)
         {
             std::unique_lock lock(m_cvMutex);
-            m_cv.wait_for(lock, std::chrono::milliseconds(m_blockIntervalMs),
-                [this] { return !m_running.load(); });
+            m_cv.wait_for(
+                lock, std::chrono::milliseconds(waitMs), [this] { return !m_running.load(); });
         }
     }
 }
@@ -176,14 +188,10 @@ void SingleNodeConsensus::resolveInitialHead()
     }
     m_headNumber = headNumber;
     m_headHash = task::syncWait(ledger::getBlockHash(*m_ledger, headNumber));
-
-    // Seed m_lastTimestamp from the head header's timestamp (whole-second milliseconds)
-    // so a restart in the same wall-clock second as the parent cannot reseal
-    // parent.timestamp: EIP-2 requires strictly increasing block timestamps, and
-    // produceBlock only steps +1000ms from m_lastTimestamp. Without the seed, a restart
-    // within the parent block's second makes the first produced block share the parent's
-    // timestamp. A legacy genesis without [eth_genesis_header] has timestamp 0, which
-    // seeds to the same default and changes nothing.
+    // Seed m_lastTimestamp from the head header so a restart cannot propose a timestamp
+    // behind the head (runOpNewPayloadSteps / EIP-2 reject non-increasing timestamps).
+    // A restart in the same wall-clock second as the parent would otherwise reseal
+    // parent.timestamp. Header timestamps are whole-second milliseconds.
     auto headerPromise =
         std::make_shared<CallbackPromise<std::tuple<Error::Ptr, protocol::Block::Ptr>>>();
     m_ledger->asyncGetBlockDataByNumber(headNumber, ledger::HEADER,
@@ -193,15 +201,52 @@ void SingleNodeConsensus::resolveInitialHead()
     auto [headHeaderError, headBlock] = headerPromise->wait(m_running);
     if (!headHeaderError && headBlock && headBlock->blockHeader())
     {
-        m_lastTimestamp =
-            static_cast<std::uint64_t>(headBlock->blockHeader()->timestamp());
+        m_lastTimestamp = static_cast<std::uint64_t>(headBlock->blockHeader()->timestamp());
+        SINGLE_CONSENSUS_LOG(INFO)
+            << LOG_DESC("Seeded last timestamp from head") << LOG_KV("number", m_headNumber)
+            << LOG_KV("timestampMs", m_lastTimestamp);
     }
-
+    else
+    {
+        SINGLE_CONSENSUS_LOG(WARNING)
+            << LOG_DESC("Could not seed last timestamp from head")
+            << LOG_KV("err", headHeaderError ? headHeaderError->errorMessage() : "no header");
+    }
     m_headInitialized = true;
     SINGLE_CONSENSUS_LOG(INFO) << LOG_DESC("Resolved initial head")
                                << LOG_KV("number", m_headNumber)
                                << LOG_KV("hash", m_headHash.hexPrefixed())
                                << LOG_KV("lastTimestampMs", m_lastTimestamp);
+}
+
+std::uint64_t SingleNodeConsensus::nextBlockTimestamp(std::uint64_t fixedTimestamp,
+    std::uint64_t headNumber, std::uint64_t lastTimestamp, std::uint64_t nowMs)
+{
+    // utcTime() returns milliseconds; floor to a whole second and keep monotonicity by
+    // advancing in whole-second steps (EIP-2 + EthBlockHeader whole-second requirement).
+    std::uint64_t const nowWholeSecondMs = nowMs - nowMs % 1000;
+    return fixedTimestamp > 0 ? (fixedTimestamp + headNumber) * 1000 :
+                                std::max(nowWholeSecondMs, lastTimestamp + 1000);
+}
+
+std::uint64_t SingleNodeConsensus::nextTickWaitMs(std::uint64_t fixedTimestamp,
+    std::uint64_t lastTimestamp, std::uint64_t blockIntervalMs, std::uint64_t nowMs,
+    bool sealedTxBlock)
+{
+    auto waitMs = std::uint64_t{0};
+    if (fixedTimestamp == 0)
+    {
+        auto const targetMs = lastTimestamp + 1000;
+        if (nowMs < targetMs)
+        {
+            waitMs = targetMs - nowMs;
+        }
+    }
+    if (!sealedTxBlock)
+    {
+        waitMs = std::max(waitMs, blockIntervalMs);
+    }
+    return waitMs;
 }
 
 bool SingleNodeConsensus::produceBlock()
@@ -216,26 +261,17 @@ bool SingleNodeConsensus::produceBlock()
     // seconds, matching EEST's currentTimestamp unit). fixed_timestamp (seconds) is pinned by
     // the harness so the produced block's timestamp matches the fixture; 0 = wall clock.
     //
-    // Ethereum block timestamps are second-granular: BlockHeader stores milliseconds, so the
-    // value must be a whole-second multiple — the Eth RLP bridge (EthBlockHeader ctor) rejects
-    // sub-second ms, and the produced header is hashed as an Eth header. EIP-2 requires
-    // strictly increasing block timestamps, so both modes round down to a whole second and
-    // then enforce monotonicity in whole-second steps (a fixed timestamp is used verbatim for
-    // the first block so EEST's expected block.timestamp == currentTimestamp holds; later
-    // blocks step +1s).
-    //
+    // Ethereum timestamps are second-granular (BlockHeader stores ms). EthBlockHeader
+    // rejects sub-second ms; EIP-2 requires strictly increasing timestamps. Floor to a
+    // whole second and advance in whole-second steps. The fixed-timestamp (EEST) arm is
+    // (fixed + headNumber) * 1000 so later blocks still step +1s without consulting the
+    // wall clock.
     // utcTime() already returns milliseconds (bcos-utilities/Common.cpp, despite the header
     // comment saying "seconds") — do NOT multiply by 1000, which would make the block
     // timestamp ~1.786e15 -> year 58577 in the EVM (block.timestamp / base fee schedules etc).
     auto const nowMs = static_cast<std::uint64_t>(utcTime());
-    auto const wholeSecondMs = [&]() -> std::uint64_t {
-        if (m_fixedTimestamp > 0)
-        {
-            return m_fixedTimestamp * 1000;
-        }
-        return nowMs / 1000 * 1000;
-    }();
-    std::uint64_t const timestamp = std::max(wholeSecondMs, m_lastTimestamp + 1000);
+    std::uint64_t const timestamp = nextBlockTimestamp(
+        m_fixedTimestamp, static_cast<std::uint64_t>(m_headNumber), m_lastTimestamp, nowMs);
     m_lastTimestamp = timestamp;
     bcos::engine::PayloadAttributes payloadAttributes;
     payloadAttributes.prevRandao = m_prevRandao;
@@ -256,6 +292,25 @@ bool SingleNodeConsensus::produceBlock()
     // zero roots are acceptable on a real chain.
     payloadAttributes.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
     payloadAttributes.parentBeaconBlockRoot = bcos::h256{};
+    // OP mode (FCU V3+, set by Initializer): gasLimit and Holocene eip1559Params are
+    // mandatory on the OP path (validateOpPayloadAttributes). The generic V1 driver keeps
+    // both absent — pre-V3 attributes must not carry them.
+    if (m_gasLimit.has_value())
+    {
+        payloadAttributes.gasLimit = m_gasLimit;
+    }
+    if (m_eip1559Params.has_value())
+    {
+        payloadAttributes.eip1559Params = m_eip1559Params;
+    }
+    // Jovian makes minBaseFee mandatory on OP attributes (validateOpPayloadAttributes); the
+    // OP arm supplies it whenever feature_op_jovian is active (0 = no floor) so the driver's
+    // FCU attributes never stall block production after the fork. Pre-Jovian / generic V1
+    // drivers keep it absent (minBaseFee must be null before Jovian).
+    if (m_minBaseFee.has_value())
+    {
+        payloadAttributes.minBaseFee = m_minBaseFee;
+    }
 
     // forkchoiceUpdated(head, attributes): the EL resolves the head hash from storage, removes
     // stale transactions, seals the in-process mempool (with the nonce-vs-state check) and
@@ -289,11 +344,17 @@ bool SingleNodeConsensus::produceBlock()
         return false;
     }
     auto& executionPayload = payload->executionPayload;
-    bool const sealedTxBlock = !executionPayload.transactions.empty();
+    // OP buildOpPayload stores envelopes only in rawTransactions and leaves
+    // transactions[] empty; the generic path is the reverse. Count whichever
+    // carrier the payload actually filled.
+    auto const payloadTxCount = executionPayload.rawTransactions.has_value() ?
+                                    executionPayload.rawTransactions->size() :
+                                    executionPayload.transactions.size();
+    bool const sealedTxBlock = payloadTxCount > 0;
 
     // produceEmptyBlocks=false: only produce a block that carries at least one transaction
     // (used by EEST fixture runs so the produced block environment matches the fixture).
-    if (executionPayload.transactions.empty() && !m_produceEmptyBlocks)
+    if (payloadTxCount == 0 && !m_produceEmptyBlocks)
     {
         SINGLE_CONSENSUS_LOG(DEBUG) << LOG_DESC("Skip empty block (produceEmptyBlocks=false)");
         return false;
@@ -329,7 +390,7 @@ bool SingleNodeConsensus::produceBlock()
     SINGLE_CONSENSUS_LOG(INFO) << LOG_DESC("Committed block")
                                << LOG_KV("number", request.executionPayload.blockNumber)
                                << LOG_KV("hash", request.executionPayload.blockHash.hexPrefixed())
-                               << LOG_KV("txs", request.executionPayload.transactions.size())
+                               << LOG_KV("txs", payloadTxCount)
                                << LOG_KV("gasUsed", request.executionPayload.gasUsed.str())
                                << LOG_KV("stateRoot",
                                       request.executionPayload.stateRoot.hexPrefixed());

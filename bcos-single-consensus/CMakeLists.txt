@@ -13,5 +13,10 @@ target_link_libraries(single-consensus PUBLIC bcos-framework bcos-task bcos-util
 set_target_properties(single-consensus PROPERTIES UNITY_BUILD "ON")
 
 include(GNUInstallDirs)
+if(TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
 install(TARGETS single-consensus EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY "bcos-single-consensus" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")
