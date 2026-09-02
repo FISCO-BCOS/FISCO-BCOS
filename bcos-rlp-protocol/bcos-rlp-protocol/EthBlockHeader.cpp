@@ -45,13 +45,12 @@ bcos::Error::UniquePtr EthBlockHeader::calculateRLPHash(bcos::protocol::BlockHea
     return nullptr;
 }
 
-// Precondition: the header's timestamp (internal milliseconds, every version) must be a
-// whole number of seconds (ms divisible by 1000). Sub-second timestamps produce an RLP
-// hash that cannot be reproduced from the decoded form. Throws std::invalid_argument on
-// violation.
 bcos::crypto::HashType EthBlockHeader::computeHash(
     const bcos::protocol::BlockHeader& header) noexcept(false)
 {
+    // No validateHeader here (unlike calculateRLPHash): this is the block-identity hash
+    // for FISCO-native/OP headers (EthBlockVersion::NON_ETH) that validateHeader rejects.
+    // The ctor performs the ms->s conversion and throws on a sub-second timestamp.
     EthBlockHeader ethHeader(header);
     bcos::bytes encoded;
     ethHeader.rlpEncode(encoded);
@@ -90,8 +89,21 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     header->setGasLimit(ethHeader.data().gasLimit);
     header->setGasUsed(ethHeader.data().gasUsed);
     header->setNumber(ethHeader.data().number);
-    // rlpDecode already converted the wire's seconds into internal milliseconds.
-    header->setTimestamp(ethHeader.timestampMs());
+    // EthBlockHeaderData stores SECONDS; the internal BlockHeader stores MILLISECONDS.
+    // Bound by int64 before the ×1000 so a hostile wire value cannot trigger signed
+    // overflow on the conversion.
+    if (ethHeader.data().timestamp >
+        std::numeric_limits<int64_t>::max() / 1000)
+    {
+        // Leave the destination in the same defined empty state as the validateHeader
+        // failure path below: the fields above are already written, so without a clear a
+        // caller that checks the error but reuses the header could observe a half-populated
+        // header from rejected hostile input.
+        header->clear();
+        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeader),
+            "EthBlockHeader: timestamp out of representable millisecond range");
+    }
+    header->setTimestamp(ethHeader.data().timestamp * 1000);
     header->setPrevRandao(ethHeader.data().prevRandao);
     header->setNonce(ethHeader.data().nonce);
     header->setExtraData(ethHeader.data().extraData);
@@ -147,79 +159,6 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     bcos::bytes reencoded;
     ethHeader.rlpEncode(reencoded);
     header->setRLPHash(bcos::crypto::keccak256Hash(bcos::ref(reencoded)));
-    return nullptr;
-}
-
-bcos::Error::UniquePtr EthBlockHeader::decodeTarsHeader(
-    bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data)
-{
-    if (header == nullptr)
-    {
-        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeaderType),
-            "EthBlockHeader: header is null");
-    }
-    header->clear();
-
-    EthBlockHeader ethHeader;
-    if (auto err = ethHeader.rlpDecode(_data))
-    {
-        return err;
-    }
-
-    // Like toTarsHeader's field writes but WITHOUT validateHeader — usable for FISCO-native/OP
-    // (NON_ETH) headers that validateHeader rejects. TWO DELIBERATE omissions from toTarsHeader:
-    //   1. ethBlockVersion is pinned to NON_ETH here instead of copying ethHeader.version()
-    //      (which after rlpDecode is derived from the optional-field cascade). Headers decoded
-    //      through this path are FISCO-native/OP, and downstream routing (e.g.
-    //      BlockHeaderImpl::calculateHash) keys off the version — write it explicitly instead
-    //      of relying on header->clear() leaving the tars field at its default 0 happening to
-    //      equal NON_ETH. The timestamp domain does NOT depend on this pin: internal is always
-    //      milliseconds, and rlpDecode/rlpEncode convert unconditionally for every version.
-    //   2. rlpHash is NOT set (toTarsHeader writes it via rlpEncode+keccak256). Callers
-    //      that need the block hash should call computeHash() or calculateRLPHash() explicitly —
-    //      computing it here would force a full re-encode for every decode, even when the caller
-    //      only needs field access.
-    header->setEthBlockVersion(bcos::protocol::EthBlockVersion::NON_ETH);
-    header->setParentInfo(ethHeader.data().parentInfo);
-    header->setCoinbase(ethHeader.data().coinbase);
-    header->setUncleHash(ethHeader.data().uncleHash);
-    header->setStateRoot(ethHeader.data().stateRoot);
-    header->setTxsRoot(ethHeader.data().txsRoot);
-    header->setReceiptsRoot(ethHeader.data().receiptsRoot);
-    header->setDifficulty(ethHeader.data().difficulty);
-    header->setGasLimit(ethHeader.data().gasLimit);
-    header->setGasUsed(ethHeader.data().gasUsed);
-    header->setNumber(ethHeader.data().number);
-    header->setTimestamp(ethHeader.timestampMs());  // already ms (rlpDecode converted)
-    header->setPrevRandao(ethHeader.data().prevRandao);
-    header->setNonce(ethHeader.data().nonce);
-    header->setExtraData(ethHeader.data().extraData);
-    header->setLogsBloom(
-        bcos::bytesConstRef(ethHeader.data().logsBloom.data(), ethHeader.data().logsBloom.size()));
-    if (ethHeader.data().baseFee.has_value())
-    {
-        header->setBaseFee(*ethHeader.data().baseFee);
-    }
-    if (ethHeader.data().withdrawalsHash.has_value())
-    {
-        header->setWithdrawalsRoot(*ethHeader.data().withdrawalsHash);
-    }
-    if (ethHeader.data().blobGasUsed.has_value())
-    {
-        header->setBlobGasUsed(*ethHeader.data().blobGasUsed);
-    }
-    if (ethHeader.data().excessBlobGas.has_value())
-    {
-        header->setExcessBlobGas(*ethHeader.data().excessBlobGas);
-    }
-    if (ethHeader.data().parentBeaconRoot.has_value())
-    {
-        header->setParentBeaconBlockRoot(*ethHeader.data().parentBeaconRoot);
-    }
-    if (ethHeader.data().requestsHash.has_value())
-    {
-        header->setRequestsHash(*ethHeader.data().requestsHash);
-    }
     return nullptr;
 }
 
@@ -304,13 +243,15 @@ bool EthBlockHeader::validateHeader(
     {
         return invalid("EthBlockHeader: invalid timestamp");
     }
-    // Internal timestamps are milliseconds and must be whole seconds so rlpEncode's /1000 is
-    // lossless. Rejecting here keeps the calculateRLPHash path on its Error-return contract
-    // (and BlockHeaderImpl::calculateHash's clear-on-failure promise) for a wire-supplied
-    // sub-second value — rlpEncode's throw then only backstops validate-skipping callers.
+    // Internal timestamps are milliseconds and must be whole seconds so the ms->s
+    // conversion (constructor /1000) is lossless. Rejecting here keeps the calculateRLPHash
+    // path on its Error-return contract (and BlockHeaderImpl::calculateHash's
+    // clear-on-failure promise); the constructor throws the same condition for direct
+    // ctor+rlpEncode callers that skip validateHeader.
     if (_header.timestamp() % 1000 != 0)
     {
-        return invalid("EthBlockHeader: timestamp must be a whole number of seconds");
+        return invalid("EthBlockHeader: timestamp must be a whole number of seconds, got " +
+                       std::to_string(_header.timestamp()) + " ms");
     }
 
     // Fork-gated optional fields: a version N header must carry every field introduced by
@@ -406,6 +347,21 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     // Required fields — converted directly, with defensive defaults for empty fields so
     // constructing from an incomplete header never crashes (validation is the caller's job,
     // e.g. via calculateRLPHash -> validateHeader).
+    // Timestamp domain model: EthBlockHeaderData carries SECONDS (the Ethereum RLP domain);
+    // the internal BlockHeader stores MILLISECONDS. The ms->s conversion happens exactly
+    // here (constructor) and the inverse at the tar boundary (toTarsHeader ×1000).
+    //
+    // A sub-second millisecond value (e.g. 1001 ms) would silently floor to a whole second
+    // and corrupt the RLP hash input. rlpEncode no longer rejects it (only negatives), so
+    // reject it at this sole ms->s conversion point — validateHeader's %1000 gate covers
+    // the calculateRLPHash path, and this covers every direct ctor+rlpEncode caller.
+    if (_header.timestamp() % 1000 != 0)
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
+            "timestamp must be a whole number of seconds, got " +
+            std::to_string(_header.timestamp()) + " ms"));
+    }
+    m_version = _header.ethBlockVersion();
     auto parent = _header.parentInfo();
     m_data.parentInfo.blockNumber = parent.blockNumber;
     m_data.parentInfo.blockHash = parent.blockHash;
@@ -419,8 +375,9 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     m_data.gasLimit = _header.gasLimit();
     m_data.gasUsed = _header.gasUsed();
     m_data.number = _header.number();
-    m_timestampMs = _header.timestamp();
-    m_data.timestamp = _header.timestamp() / 1000;  // internal ms -> wire seconds
+    // EthBlockHeaderData::timestamp is wire seconds (ms /1000); the only conversion point
+    // to/from the internal BlockHeader milliseconds domain is the tar boundary.
+    m_data.timestamp = _header.timestamp() / 1000;
     m_data.prevRandao = _header.prevRandao();
     m_data.nonce = _header.nonce();
 
@@ -460,29 +417,28 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     {
         m_data.requestsHash = _header.requestsHash();
     }
-
-    m_version = _header.ethBlockVersion();
 }
 
 void EthBlockHeader::rlpEncode(bcos::bytes& out) const
 {
-    // Timestamp domain model: internal (m_data mirrors the internal BlockHeader) is always
-    // milliseconds; the RLP surface always carries seconds. The EthBlockHeaderData codec
-    // works in wire seconds, so convert here before delegating — the field ORDER itself
-    // lives in exactly one place (the codec overloads below).
+    // Timestamp domain model: EthBlockHeaderData stores SECONDS (the Ethereum RLP domain);
+    // the RLP surface carries seconds directly — no conversion here. The ms->s conversion
+    // happens only at the EthBlockHeader<->BlockHeader boundary (constructor /1000,
+    // toTarsHeader ×1000).
     //
-    // Integer division is lossy for sub-second precision (1001 ms → 1 s). Every producer
-    // that reaches this bridge carries whole-second milliseconds by construction (the
-    // Engine API boundary, the eth-genesis path and rlpDecode all multiply seconds by
-    // 1000); sub-second input would produce an RLP hash not reproducible from the decoded
-    // form. Throw (not assert — assert is compiled out under NDEBUG).
-    if (m_timestampMs % 1000 != 0)
+    // Defense-in-depth: a negative number/timestamp would wrap into a huge u64 on the
+    // encode below, silently corrupting the RLP. calculateRLPHash guards via validateHeader,
+    // but rlpEncode is public — reject here so a direct caller cannot produce a wrong
+    // encoding. The field order itself is delegated to the EthBlockHeaderData codec (shared
+    // with EthBlockBody).
+    if (m_data.number < 0)
     {
-        BOOST_THROW_EXCEPTION(std::invalid_argument(
-            "timestamp must be a whole number of seconds (ms divisible by 1000)"));
+        BOOST_THROW_EXCEPTION(std::invalid_argument("number must be non-negative"));
     }
-    // m_data.timestamp is already wire seconds (the codec's domain); the internal
-    // millisecond value lives in m_timestampMs. Encode directly — no copy, no conversion.
+    if (m_data.timestamp < 0)
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument("timestamp must be non-negative"));
+    }
     codec::rlp::encode(out, m_data);
 }
 
@@ -491,30 +447,23 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
     // The shared scalar codec now fails closed on over-wide uint payloads (> target width),
     // so a malformed header is rejected here at decode time instead of being accepted and
     // later normalised when hashing the canonical re-encoding. Leading zeros are still
-    // accepted by the codec; the canonical re-encode below is what guards the hash against
-    // them.
+    // accepted by the codec (the shared UnsignedIntegral walker in RLPDecode.h has no
+    // CanonInt check — geth rejects ErrCanonInt); the canonical re-encode below is what
+    // guards the hash against them. FOLLOW-UP: reject leading-zero integers in the shared
+    // decoder (ywy F4; shared codec, outside this PR's file set).
     //
     // The codec's decode only advances a view cursor and never writes the buffer, so
     // take the view directly; the const_cast is confined to this read-only entry point.
     bytesRef out(const_cast<bcos::byte*>(data.data()), data.size());
 
+    // The EthBlockHeaderData codec decodes the full 21-field list and bounds number /
+    // timestamp to int64 (rejecting over-wide wire scalars). m_data.timestamp is the wire
+    // SECONDS value; the ×1000 to internal milliseconds happens at the tar boundary.
     auto error = codec::rlp::decode(out, m_data);
     if (error)
     {
         return error;
     }
-
-    // The wire timestamp is seconds; the internal domain (m_timestampMs) is milliseconds
-    // — convert unconditionally, bounded by int64 first so a hostile wire value cannot
-    // trigger signed overflow on the ×1000.
-    constexpr auto c_maxWireTimestampSeconds =
-        static_cast<uint64_t>(std::numeric_limits<int64_t>::max() / 1000);
-    if (static_cast<uint64_t>(m_data.timestamp) > c_maxWireTimestampSeconds)
-    {
-        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeader),
-            "EthBlockHeader: timestamp out of representable millisecond range");
-    }
-    m_timestampMs = m_data.timestamp * 1000;
 
     // Optional fork fields are decoded positionally, so the set of present optionals is
     // always a contiguous prefix — a later field can only be present if the view was still
@@ -552,9 +501,9 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
 namespace bcos::codec::rlp
 {
 // EthBlockHeaderData codec: the single source of truth for the 21-field canonical header
-// order. Reused by EthBlockHeader::rlpEncode/rlpDecode (which delegate here) and by
-// EthBlock for ommers. The timestamp here is the WIRE domain (seconds); the ms bridge
-// lives in EthBlockHeader::rlpEncode/rlpDecode.
+// order, shared by EthBlockHeader::rlpEncode/rlpDecode (which delegate here) and by
+// EthBlockBody (which embeds a header and an ommers list). The timestamp here is the WIRE
+// domain (seconds); the ms bridge lives at the EthBlockHeader<->BlockHeader boundary.
 size_t length(const protocol::EthBlockHeaderData& _header) noexcept
 {
     return length(_header.parentInfo.blockHash, _header.uncleHash, _header.coinbase,
@@ -589,8 +538,8 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthBlockHeaderData&
         return err;
     }
     // Block number is internal int64; reject wire values above INT64_MAX instead
-    // of narrowing into a negative number (decodeTarsHeader skips validation and
-    // downstream code assumes a non-negative BlockNumber).
+    // of narrowing into a negative number (downstream code assumes a non-negative
+    // BlockNumber).
     if (number > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
     {
         return BCOS_ERROR_UNIQUE_PTR(

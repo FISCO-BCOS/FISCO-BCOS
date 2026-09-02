@@ -26,20 +26,20 @@ namespace bcos
  * @brief : read the specified file
  *
  * @param _file : the file to be read
- * @return std::shared_ptr<bytes> : the file content
+ * @return bytes : the file content
  *         If the file doesn't exist or isn't readable,
  *         returns an empty bytes.
  */
-std::shared_ptr<bytes> readContents(boost::filesystem::path const& _file);
+bytes readContents(boost::filesystem::path const& _file);
 
 /**
  * @brief : read the content of the specified file, and return the content as string
  *
  * @param _file : the file
- * @return std::shared_ptr<std::string> : the content of the specified file
+ * @return std::string : the content of the specified file
  *         If the file doesn't exist or isn't readable,
  *         returns an empty string
  */
-std::shared_ptr<std::string> readContentsToString(boost::filesystem::path const& _file);
+std::string readContentsToString(boost::filesystem::path const& _file);
 
 }  // namespace bcos

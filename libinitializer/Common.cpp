@@ -37,7 +37,7 @@ bytes loadPrivateKey(std::string const& _keyPath, unsigned _hexedPrivateKeySize,
     std::shared_ptr<EC_KEY> ecKey;
     try
     {
-        auto content = readContents(boost::filesystem::path(_keyPath));
+        auto content = std::make_shared<bytes>(readContents(boost::filesystem::path(_keyPath)));
         auto keyContent = content;
         if (_certEncryptionHandler)
         {

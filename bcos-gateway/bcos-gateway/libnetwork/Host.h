@@ -10,6 +10,7 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
+#include "bcos-task/Task.h"
 #include "bcos-utilities/Common.h"
 #include <openssl/x509.h>
 #include <boost/asio/ssl/stream_base.hpp>
@@ -17,6 +18,7 @@
 #include <boost/system/error_code.hpp>
 #include <atomic>
 #include <chrono>
+#include <future>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -45,6 +47,13 @@ class ASIOInterface;
 
 using x509PubHandler = std::function<bool(X509* x509, std::string& pubHex)>;
 
+// Lifetime contract: a started Host must be stopped (stop()) BEFORE its last strong reference
+// is released. The acceptLoop coroutine frame holds a strong Host reference for its whole life
+// and exits only when stop() clears m_run and cancels the acceptor, so a Host that is started
+// but never stopped is never destroyed — it keeps the ASIOInterface, the acceptor and the
+// teardown executor alive with it. ~Host calls stop() defensively, but the destructor can only
+// run once every strong reference — including the accept loop's — is already gone, so it cannot
+// substitute for an explicit stop().
 class Host : public std::enable_shared_from_this<Host>
 {
 public:
@@ -156,10 +165,10 @@ public:
     constexpr static std::size_t DEFAULT_MAX_PENDING_HANDSHAKES = 64;
     // FIB-186: default inbound TLS handshake timeout (ms). Without a timeout a stalled / slow
     // handshake never completes, so its admission slot is never released and (because the
-    // completion handler holds shared_from_this) this Host can never be destroyed. Bounding it lets
-    // a slow-loris peer hold at most this long before its slot is reclaimed. GatewayFactory plumbs
-    // the configured value (p2p.handshake_timeout_ms); this constant is the default when the config
-    // omits it.
+    // serverHandshake coroutine frame holds shared_from_this) this Host can never be destroyed.
+    // Bounding it lets a slow-loris peer hold at most this long before its slot is reclaimed.
+    // GatewayFactory plumbs the configured value (p2p.handshake_timeout_ms); this constant is
+    // the default when the config omits it.
     constexpr static int DEFAULT_HANDSHAKE_TIMEOUT_MS = 10000;
 
     std::size_t maxPendingHandshakes() const { return m_maxPendingHandshakes; }
@@ -174,10 +183,14 @@ public:
 
     // FIB-186: reserve / release an in-flight-handshake slot. tryAcquire returns false (caller must
     // close the socket and re-arm accept) when the global cap is reached. release runs from the
-    // HandshakeSlotGuard bound to the handshake completion handler, i.e. exactly once when the
-    // handshake finishes (success, failure, or abort).
+    // HandshakeSlotGuard riding the serverHandshake coroutine frame, i.e. exactly once when that
+    // frame unwinds (handshake success, failure, or abort).
     bool tryAcquireHandshakeSlot();
     void releaseHandshakeSlot();
+    // FIB-186: reserve a slot AND return the owning RAII guard in one step (nullptr when the cap
+    // is reached). The guard rides the caller's coroutine frame, so acquire and release live in
+    // the same frame — and the "throw between acquire and guard" window cannot leak a slot.
+    std::shared_ptr<void> acquireHandshakeSlotGuard();
 
     // FIB-186: rate-limit accepted new connections (not just their concurrency). The pending-
     // handshake cap above bounds how many handshakes run at once, but on a fast link a churn flood
@@ -214,6 +227,12 @@ public:
     }
     bool tryAcquireConnectionToken();
 
+    // Retry delay after a failed accept-loop iteration (ms): the per-iteration catch in
+    // acceptLoop re-arms a short timer before retrying, so a persistently failing newSocket()
+    // (e.g. fd exhaustion) degrades to a slow retry loop instead of spinning the acceptor's
+    // io_context thread at 100% CPU.
+    constexpr static uint32_t ACCEPT_RETRY_INTERVAL_MS = 200;
+
 protected:
     /// obtain the common name from the subject:
     /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
@@ -244,12 +263,32 @@ protected:
         std::shared_ptr<std::string> endpointPublicKey,
         std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
             callback,
-        NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::steady_timer> timerPtr);
+        NodeIPEndpoint _nodeIPEndpoint);
 
     void erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
     void insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
+private:
+    // Coroutine bodies for the accept/connect paths, launched fire-and-forget (task::wait) from
+    // startAccept()/asyncConnect(). Each frame holds a strong Host reference for its whole
+    // lifetime — structurally replacing the per-operation shared_from_this() captures of the old
+    // completion handlers. acceptLoop additionally keeps the Host alive until Host::stop()
+    // cancels the acceptor, which completes the pending async_accept with operation_aborted and
+    // lets the loop exit.
+    task::Task<void> acceptLoop();
+    // handshakeGuard owns the reserved FIB-186 in-flight-handshake admission slot (acquired in
+    // acceptLoop so the slot/token admission ordering is preserved); it is released exactly when
+    // this coroutine frame unwinds. Held as shared_ptr<void> to keep the concrete guard type an
+    // implementation detail of Host.cpp.
+    task::Task<void> serverHandshake(
+        std::shared_ptr<SocketFace> socket, std::shared_ptr<void> handshakeGuard);
+    task::Task<void> clientConnect(std::shared_ptr<SocketFace> socket,
+        NodeIPEndpoint _nodeIPEndpoint,
+        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+            callback);
+
+protected:
     // FIB-186 (vector D): dedicated single-thread executor for session-teardown notifications, kept
     // separate from the shared IOServicePool so a bulk-disconnect flood cannot starve
     // inbound-message delivery. See postTeardown.
@@ -284,7 +323,26 @@ protected:
     std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandler;
     std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandlerWithoutExtInfo;
 
-    bool m_run = false;
+    // Network run flag. Written by start()/stop() from the caller's thread, read as the accept
+    // loop's condition on the acceptor's io_context thread (Host::acceptLoop) and by
+    // haveNetwork() from every session thread. Must be atomic: the new Host contract makes
+    // observing m_run == false the only mechanism that releases the accept loop's strong Host
+    // reference, so a torn/stale read would re-arm async_accept after the cancel was consumed
+    // and make the Host immortal.
+    std::atomic<bool> m_run{false};
+
+    // Accept-loop exit latch (see Host::stop). The loop's frame holds a strong Host reference,
+    // forming a reference cycle (frame -> Host -> ASIOInterface -> IOServicePool -> io_context ->
+    // pending async_accept -> the frame) whose only cut point is the cancel Host::stop() posts
+    // to the acceptor's io_context — if that cancel is lost (the io_context was already stopped
+    // or drained, or the post threw), nothing else ends the loop and the whole graph leaks
+    // silently. stop() therefore waits on this latch with a bounded timeout and logs loudly on
+    // expiry, turning the silent permanent leak into a bounded wait plus a diagnosable line.
+    // m_acceptLoopStarted gates the wait (a Host whose loop never ran has nothing to wait for);
+    // the promise is satisfied when acceptLoop returns. The frame-destroy rescue path never
+    // satisfies it, which is exactly the case the timeout exists to diagnose.
+    std::atomic<bool> m_acceptLoopStarted{false};
+    std::promise<void> m_acceptLoopExit;
 
     P2PInfo m_p2pInfo;
 

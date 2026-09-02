@@ -49,22 +49,28 @@ std::shared_ptr<bytes> HsmKeyEncryption::encryptContents(const std::shared_ptr<b
     // iv data would be changed after hsm encrypt, so keep it
     auto originIvData = ivData;
 
-    bytesPointer encData = m_symmetricEncrypt->symmetricEncryptWithInternalKey(
+    bytes encData = m_symmetricEncrypt->symmetricEncryptWithInternalKey(
         reinterpret_cast<const unsigned char*>(contents->data()), contents->size(), m_encKeyIndex,
         ivData.data(), SM4_IV_DATA_SIZE);
     // append iv data to end of encData
-    encData->insert(encData->end(), originIvData.begin(), originIvData.end());
-    return encData;
+    encData.insert(encData.end(), originIvData.begin(), originIvData.end());
+    return std::make_shared<bytes>(std::move(encData));
 }
 
 std::shared_ptr<bytes> HsmKeyEncryption::decryptContents(const std::shared_ptr<bytes>& contents)
 {
+    if (contents->size() < SM4_IV_DATA_SIZE)
+    {
+        BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(
+                                  "HsmKeyEncryption: ciphertext too short, size: " +
+                                  std::to_string(contents->size())));
+    }
     size_t cipherDataSize = contents->size() - SM4_IV_DATA_SIZE;
-    bytesPointer decData = m_symmetricEncrypt->symmetricDecryptWithInternalKey(
+    bytes decData = m_symmetricEncrypt->symmetricDecryptWithInternalKey(
         reinterpret_cast<const unsigned char*>(contents->data()), cipherDataSize, m_encKeyIndex,
         reinterpret_cast<const unsigned char*>(contents->data() + cipherDataSize),
         SM4_IV_DATA_SIZE);
-    return decData;
+    return std::make_shared<bytes>(std::move(decData));
 }
 
 

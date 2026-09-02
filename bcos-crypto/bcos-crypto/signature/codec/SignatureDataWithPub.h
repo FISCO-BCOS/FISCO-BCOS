@@ -29,42 +29,38 @@ class SignatureDataWithPub : public SignatureData
 {
 public:
     using Ptr = std::shared_ptr<SignatureDataWithPub>;
-    explicit SignatureDataWithPub(bytesConstRef _data) : m_pub(std::make_shared<bytes>())
-    {
-        decode(_data);
-    }
+    explicit SignatureDataWithPub(bytesConstRef _data) { decode(_data); }
     SignatureDataWithPub(h256 const& _r, h256 const& _s, bytesConstRef _pub)
-      : SignatureData(_r, _s), m_pub(std::make_shared<bytes>(_pub.begin(), _pub.end()))
+      : SignatureData(_r, _s), m_pub(_pub.begin(), _pub.end())
     {}
 
-    SignatureDataWithPub(h256 const& _r, h256 const& _s, bytesPointer _pub)
-      : SignatureData(_r, _s), m_pub(_pub)
+    SignatureDataWithPub(h256 const& _r, h256 const& _s, bytes _pub)
+      : SignatureData(_r, _s), m_pub(std::move(_pub))
     {}
 
     ~SignatureDataWithPub() override {}
 
-    bytesPointer pub() const { return m_pub; }
+    bytes const& pub() const { return m_pub; }
     bytesPointer encode() const override
     {
         auto encodedData = std::make_shared<bytes>();
         encodeCommonFields(encodedData);
-        encodedData->insert(encodedData->end(), m_pub->begin(), m_pub->end());
+        encodedData->insert(encodedData->end(), m_pub.begin(), m_pub.end());
         return encodedData;
     }
 
     void decode(bytesConstRef _signatureData) override
     {
-        m_pub->clear();
+        m_pub.clear();
         decodeCommonFields(_signatureData);
         if (_signatureData.size() > m_signatureLen)
         {
-            m_pub->insert(
-                m_pub->end(), _signatureData.data() + m_signatureLen, _signatureData.end());
+            m_pub.insert(m_pub.end(), _signatureData.data() + m_signatureLen, _signatureData.end());
         }
     }
 
 private:
-    bytesPointer m_pub;
+    bytes m_pub;
 };
 }  // namespace crypto
 }  // namespace bcos

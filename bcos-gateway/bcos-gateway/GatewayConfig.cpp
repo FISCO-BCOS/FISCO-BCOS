@@ -256,7 +256,11 @@ uint32_t GatewayConfig::maxSendDataSize() const
 
 void GatewayConfig::setMaxSendDataSize(uint32_t _maxSendDataSize)
 {
-    m_maxSendDataSize = _maxSendDataSize;
+    // Single enforcement point for the send-batch byte budget (shared with initP2PConfig's
+    // parse path): 0 would make Session::tryPopSomeEncodedMsgs never pop and silently stall
+    // every outbound write on the session, so clamp to a working minimum wherever the value
+    // comes from.
+    m_maxSendDataSize = std::max<uint32_t>(_maxSendDataSize, 1);
 }
 
 uint32_t GatewayConfig::maxMsgCountSendOneTime() const
@@ -625,10 +629,45 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     m_maxReadDataSize = _pt.get<uint32_t>("p2p.session_max_read_data_size", defaultMaxReadDataSize);
 
     constexpr static uint32_t defaultMaxSendDataSize = 1024 * 1024;
-    m_maxSendDataSize = _pt.get<uint32_t>("p2p.session_max_send_data_size", defaultMaxSendDataSize);
+    auto maxSendDataSize =
+        _pt.get<uint32_t>("p2p.session_max_send_data_size", defaultMaxSendDataSize);
 
     constexpr static uint32_t defaultMaxSendMsgCount = 10;
+    // p2p.session_max_send_msg_count is parsed for config-file compatibility only and is
+    // deliberately NOT enforced anywhere (see the comment below). If the operator has explicitly
+    // tuned it, say so at startup — a value that is accepted and echoed back but has no effect
+    // would otherwise be silent and indistinguishable from a working setting.
+    if (_pt.get_optional<uint32_t>("p2p.session_max_send_msg_count"))
+    {
+        GATEWAY_CONFIG_LOG(WARNING) << LOG_DESC(
+            "p2p.session_max_send_msg_count is no longer enforced; the send-batch "
+            "is capped by p2p.session_max_send_data_size only");
+    }
     m_maxSendMsgCount = _pt.get<uint32_t>("p2p.session_max_send_msg_count", defaultMaxSendMsgCount);
+
+    // p2p.session_max_send_data_size bounds the send-batch budget that
+    // Session::tryPopSomeEncodedMsgs enforces on every write loop iteration. Unlike
+    // p2p.max_connections_per_second above, 0 does NOT mean "unlimited" here: with the byte
+    // budget at 0 the batch loop never pops, every write loop exits on its first iteration, and
+    // all outbound traffic on the session stalls silently. Warn here so the operator sees the
+    // config problem, then route through the setter — the single clamp enforcement point shared
+    // with every other writer of this value.
+    //
+    // p2p.session_max_send_msg_count is parsed for config-file compatibility only and is
+    // deliberately NOT enforced anywhere — the base had the message-count condition commented
+    // out and drained the whole queue into a single scatter-gather write, and re-enabling it
+    // capped every async_write at the (default 10) message budget, costing ceil(N/10) post +
+    // async_write round-trips under broadcast fan-out. The byte budget alone is the sole cap;
+    // see the behaviour-change note in the PR description. No clamp here: nothing reads this
+    // value, so "fixing" a 0 would change nothing; an explicitly-configured value is instead
+    // flagged with a deprecation warning above so a tuned-but-ignored setting is visible at
+    // startup.
+    if (maxSendDataSize == 0)
+    {
+        GATEWAY_CONFIG_LOG(WARNING)
+            << LOG_DESC("p2p.session_max_send_data_size must be positive, clamped to 1");
+    }
+    setMaxSendDataSize(maxSendDataSize);
 
     m_smSSL = smSSL;
     m_listenIP = listenIP;
@@ -658,14 +697,14 @@ void GatewayConfig::loadP2pConnectedNodes()
     // load p2p connected nodes
     std::set<NodeIPEndpoint> nodes;
     auto jsonContent = readContentsToString(boost::filesystem::path(nodeFilePath));
-    if (!jsonContent || jsonContent->empty())
+    if (jsonContent.empty())
     {
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment(
                 "initP2PConfig: unable to read nodes json file, path=" + nodeFilePath));
     }
 
-    parseConnectedJson(*jsonContent, nodes);
+    parseConnectedJson(jsonContent, nodes);
     m_connectedNodes = nodes;
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("loadP2pConnectedNodes ok!")
@@ -1301,7 +1340,7 @@ R GatewayConfig::checkFileExist(const std::string& _path)
 {
     auto fileContent = readContentsToString(boost::filesystem::path(_path));
 
-    bool fileExist = fileContent && !fileContent->empty();
+    bool fileExist = !fileContent.empty();
     if constexpr (std::same_as<R, void>)
     {
         BOOST_THROW_EXCEPTION(

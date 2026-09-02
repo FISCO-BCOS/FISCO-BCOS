@@ -12,6 +12,8 @@
 #include <bcos-framework/engine/OpBaseFee.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <stdexcept>
@@ -43,7 +45,7 @@ namespace
 // Build a parent header carrying the OP-Stack 1559 parameters in extraData:
 //   Holocene: version(1) || denominator(u32 BE) || elasticity(u32 BE)          = 9 bytes
 //   Jovian:   ... + minBaseFee(u64 BE)                                          = 17 bytes
-// Passing an empty vector leaves the parameters defaulted (8/2) inside calcOpBaseFee.
+// extraData must be the Holocene (9) or Jovian (17) layout; short/zero params fail closed.
 BlockHeaderImpl makeParent(bcos::u256 gasLimit, bcos::u256 gasUsed, bcos::u256 baseFee,
     bcos::bytes extraData, std::optional<bcos::u256> blobGasUsed = std::nullopt)
 {
@@ -89,8 +91,8 @@ BOOST_AUTO_TEST_CASE(ExactTargetReturnsParentBaseFee)
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(1'000'000'000));
 
     // Same rule with the Jovian path (the DA footprint cannot push a target match over).
-    auto const jovian = makeParent(
-        bcos::u256(30'000'000), bcos::u256(15'000'000), bcos::u256(1'000'000'000), jovianParams(0));
+    auto const jovian = makeParent(bcos::u256(30'000'000), bcos::u256(15'000'000),
+        bcos::u256(1'000'000'000), jovianParams(0), bcos::u256(15'000'000));
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(jovian, true), bcos::u256(1'000'000'000));
 }
 
@@ -100,13 +102,13 @@ BOOST_AUTO_TEST_CASE(ExactTargetReturnsParentBaseFee)
 BOOST_AUTO_TEST_CASE(ExactTargetStillClampsToJovianMinBaseFee)
 {
     // parent base fee 100 << minBaseFee 1_000, usage exactly at target.
-    auto const belowFloor = makeParent(
-        bcos::u256(30'000'000), bcos::u256(15'000'000), bcos::u256(100), jovianParams(1'000));
+    auto const belowFloor = makeParent(bcos::u256(30'000'000), bcos::u256(15'000'000),
+        bcos::u256(100), jovianParams(1'000), bcos::u256(15'000'000));
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(belowFloor, true), bcos::u256(1'000));
 
     // Steady state: a floor below the parent fee stays a no-op on exact target.
     auto const aboveFloor = makeParent(bcos::u256(30'000'000), bcos::u256(15'000'000),
-        bcos::u256(1'000'000'000), jovianParams(1'000));
+        bcos::u256(1'000'000'000), jovianParams(1'000), bcos::u256(15'000'000));
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(aboveFloor, true), bcos::u256(1'000'000'000));
 }
 
@@ -127,14 +129,54 @@ BOOST_AUTO_TEST_CASE(UnderTargetDecreasesByDeltaFee)
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(958'333'334));
 }
 
-// A parent without the 9-byte extraData tail gets the Holocene defaults (8/2) — the
-// RPC can observe foreign/malformed headers and must not read out of bounds.
-BOOST_AUTO_TEST_CASE(ShortExtraDataUsesHoloceneDefaults)
+// R84: the version byte must match the length — 9B with 0x01 and 17B with 0x00 are
+// both rejected (a regression dropping this check would stay green without these cells).
+BOOST_AUTO_TEST_CASE(VersionByteMismatchIsRejected)
+{
+    auto badJovian = holoceneParams();
+    badJovian[0] = 0x01;  // 9 bytes claiming Jovian
+    auto const parent9 = makeParent(bcos::u256(30'000'000), bcos::u256(24'000'000),
+        bcos::u256(2'000'000'000), std::move(badJovian));
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(parent9, false); },
+        "version byte does not match length");
+
+    // 17 bytes carrying version 0x00 (Holocene claim on a Jovian-length tail).
+    bcos::bytes seventeen = holoceneParams();
+    seventeen[0] = 0x00;
+    for (int i = 0; i < 8; ++i)
+    {
+        seventeen.push_back(0x00);  // minBaseFee tail, version byte stays 0x00
+    }
+    auto const parent17 = makeParent(bcos::u256(30'000'000), bcos::u256(24'000'000),
+        bcos::u256(2'000'000'000), std::move(seventeen));
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(parent17, false); },
+        "version byte does not match length");
+}
+
+// Short extraData is fail-closed (no Holocene 8/2 default) so a missing parent
+// tail cannot mint a silent consensus-divergent baseFee.
+BOOST_AUTO_TEST_CASE(ShortExtraDataIsRejected)
 {
     auto const parent =
         makeParent(bcos::u256(30'000'000), bcos::u256(24'000'000), bcos::u256(2'000'000'000), {});
-    // delta = 9M; 2e9 * 9e6 / 15e6 / 8 = 150,000,000.
-    BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(2'150'000'000));
+    expectThrowMessage(
+        [&] { (void)bcos::engine::calcOpBaseFee(parent, false); }, "9 (Holocene) or 17 (Jovian)");
+}
+
+// Holocene/Jovian N-1/N+1 lengths must fail closed (empty-only was not enough).
+BOOST_AUTO_TEST_CASE(ExtraDataLengthBoundariesAreRejected)
+{
+    auto rejectLen = [&](std::size_t n) {
+        bcos::bytes extra(n, bcos::byte{0});
+        auto const parent = makeParent(
+            bcos::u256(30'000'000), bcos::u256(24'000'000), bcos::u256(2'000'000'000), extra);
+        expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(parent, false); },
+            "9 (Holocene) or 17 (Jovian)");
+    };
+    rejectLen(8);
+    rejectLen(10);
+    rejectLen(16);
+    rejectLen(18);
 }
 
 // Jovian minBaseFee floor: a decrease that would land below the floor is clamped up.
@@ -142,12 +184,12 @@ BOOST_AUTO_TEST_CASE(JovianMinBaseFeeFloorsTheResult)
 {
     // Unfloored decrease would be 50e6 - (50e6 * 5e6 / 15e6 / 8 = 2,083,333) = 47,916,667.
     auto const parent = makeParent(bcos::u256(30'000'000), bcos::u256(10'000'000),
-        bcos::u256(50'000'000), jovianParams(100'000'000));
+        bcos::u256(50'000'000), jovianParams(100'000'000), bcos::u256(10'000'000));
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, true), bcos::u256(100'000'000));
 
     // A decrease that stays above the floor is not touched.
     auto const above = makeParent(bcos::u256(30'000'000), bcos::u256(10'000'000),
-        bcos::u256(1'000'000'000), jovianParams(100'000'000));
+        bcos::u256(1'000'000'000), jovianParams(100'000'000), bcos::u256(10'000'000));
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(above, true), bcos::u256(958'333'334));
 }
 
@@ -198,26 +240,93 @@ BOOST_AUTO_TEST_CASE(DecreaseWithUnitDenominatorReachesZero)
     BOOST_CHECK_EQUAL(bcos::engine::calcOpBaseFee(parent, false), bcos::u256(0));
 }
 
-BOOST_AUTO_TEST_CASE(ZeroFeeParametersUseHoloceneDefaults)
+BOOST_AUTO_TEST_CASE(ZeroFeeParametersAreRejected)
 {
     auto zeroDenominator = holoceneParams();
     std::fill(zeroDenominator.begin() + 1, zeroDenominator.begin() + 5, 0);
     auto const denominatorParent = makeParent(bcos::u256(30'000'000), bcos::u256(20'000'000),
         bcos::u256(1'000'000'000), std::move(zeroDenominator));
-    BOOST_CHECK_EQUAL(
-        bcos::engine::calcOpBaseFee(denominatorParent, false), bcos::u256(1'041'666'666));
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(denominatorParent, false); },
+        "non-zero EIP-1559 denominator and elasticity");
 
     auto zeroElasticity = holoceneParams();
     std::fill(zeroElasticity.begin() + 5, zeroElasticity.end(), 0);
     auto const elasticityParent = makeParent(bcos::u256(30'000'000), bcos::u256(20'000'000),
         bcos::u256(1'000'000'000), std::move(zeroElasticity));
-    BOOST_CHECK_EQUAL(
-        bcos::engine::calcOpBaseFee(elasticityParent, false), bcos::u256(1'041'666'666));
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(elasticityParent, false); },
+        "non-zero EIP-1559 denominator and elasticity");
 
     auto const zeroTargetParent =
         makeParent(bcos::u256(1), bcos::u256(1), bcos::u256(1'000'000'000), holoceneParams());
     expectThrowMessage(
         [&] { (void)bcos::engine::calcOpBaseFee(zeroTargetParent, false); }, "zero gas target");
+}
+
+// op-geth dereferences parent.BaseFee and panics on nil; a Holocene+ parent without a
+// base fee is a corrupt header — fail closed instead of silently pricing at 0.
+BOOST_AUTO_TEST_CASE(MissingBaseFeeIsRejected)
+{
+    BlockHeaderImpl header;
+    header.setGasLimit(bcos::u256(30'000'000));
+    header.setGasUsed(bcos::u256(20'000'000));
+    header.setExtraData(holoceneParams());  // baseFee deliberately left unset
+    expectThrowMessage(
+        [&] { (void)bcos::engine::calcOpBaseFee(header, false); }, "missing baseFee");
+}
+
+// op-geth's Jovian meter dereferences header.BlobGasUsed; a Jovian parent without it
+// is corrupt — fail closed rather than under-counting the DA footprint. The same
+// header passes on the Holocene path, which never reads the blob slot.
+BOOST_AUTO_TEST_CASE(JovianMissingBlobGasUsedIsRejected)
+{
+    auto const parent = makeParent(
+        bcos::u256(30'000'000), bcos::u256(20'000'000), bcos::u256(1'000'000'000), jovianParams(0));
+    expectThrowMessage(
+        [&] { (void)bcos::engine::calcOpBaseFee(parent, true); }, "missing blobGasUsed");
+    BOOST_CHECK_NO_THROW((void)bcos::engine::calcOpBaseFee(parent, false));
+}
+
+// op-geth computes the delta multiply with unbounded big.Int; extreme parent headers
+// must fail closed instead of wrapping mod 2^256. Increase-arm multiply: delta 3 with
+// parentBaseFee 2^255 exceeds u256Max/parentBaseFee = 2.
+BOOST_AUTO_TEST_CASE(OverTargetMultiplyOverflowIsRejected)
+{
+    auto const parent = makeParent(bcos::u256(20), bcos::u256(13), bcos::u256{1} << 255,
+        holoceneParams());  // gasTarget = 20/2 = 10, delta = 3
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(parent, false); },
+        "delta computation overflows u256");
+}
+
+// Decrease-arm multiply: same guard on the gasTarget - gasMetered delta.
+BOOST_AUTO_TEST_CASE(UnderTargetMultiplyOverflowIsRejected)
+{
+    auto const parent = makeParent(bcos::u256(20), bcos::u256(7), bcos::u256{1} << 255,
+        holoceneParams());  // gasTarget = 10, delta = 3
+    expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(parent, false); },
+        "delta computation overflows u256");
+}
+
+// The multiply guard cannot see the final add: parentBaseFee = u256Max with delta 1
+// passes the multiply check but parentBaseFee + deltaFee wraps — the increase must
+// fail closed there too.
+BOOST_AUTO_TEST_CASE(IncreaseAddOverflowIsRejected)
+{
+    bcos::u256 const u256Max = ~bcos::u256(0);
+    auto const parent = makeParent(
+        bcos::u256(20), bcos::u256(11), u256Max, holoceneParams());  // gasTarget 10, delta 1
+    expectThrowMessage(
+        [&] { (void)bcos::engine::calcOpBaseFee(parent, false); }, "increase overflows u256");
+}
+
+// Built-in driver gas limit: configured value passes through, 0 falls back to 30M.
+BOOST_AUTO_TEST_CASE(ResolveDriverGasLimit)
+{
+    using bcos::engine::c_defaultDriverGasLimit;
+    using bcos::engine::resolveDriverGasLimit;
+    BOOST_CHECK_EQUAL(c_defaultDriverGasLimit, std::uint64_t{30'000'000});
+    BOOST_CHECK_EQUAL(resolveDriverGasLimit(0), c_defaultDriverGasLimit);
+    BOOST_CHECK_EQUAL(resolveDriverGasLimit(45'000'000), std::uint64_t{45'000'000});
+    BOOST_CHECK_EQUAL(resolveDriverGasLimit(1), std::uint64_t{1});
 }
 
 BOOST_AUTO_TEST_SUITE_END()

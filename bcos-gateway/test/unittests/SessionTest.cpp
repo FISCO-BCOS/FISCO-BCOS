@@ -23,6 +23,7 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
@@ -35,11 +36,18 @@
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <mutex>
+#include <optional>
 #include <queue>
+#include <list>
 #include <range/v3/view/single.hpp>
 #include <thread>
+#include <tuple>
+#include <unordered_set>
+#include <vector>
 
 using namespace bcos;
 using namespace gateway;
@@ -53,14 +61,83 @@ class FakeASIO : public bcos::gateway::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
+    using ReadCompletion =
+        bcos::gateway::detail::AsioCompletion<boost::system::error_code, std::size_t>;
+
     FakeASIO()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"))
-    {};
+    {}
     virtual ~FakeASIO() noexcept override {};
 
-    void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers,
-        ReadWriteHandler handler)
+    // Compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): the read loop
+    // is launched with this policy (startWithPolicy<FakeASIO::ReadPolicy>) so every read parks
+    // its completion here instead of arming the real async_read_some.
+    struct ReadPolicy
+    {
+        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketFace>& /*socket*/,
+            ba::mutable_buffer buffers, ReadCompletion completion)
+        {
+            dynamic_cast<FakeASIO*>(asio)->parkRead(buffers, std::move(completion));
+        }
+    };
+
+    // Read-policy target (see FakeASIO::ReadPolicy): park the read's completion and feed it
+    // buffered packets from the fake's own pool thread. The park is posted onto the pool thread
+    // so EVERY access to m_pendingReads happens on the single pool thread — the first arm
+    // happens on the caller's thread (Session::startWithPolicy -> readLoop), and without the
+    // post it would race the pool thread's delivery in multi-session tests that share this fake
+    // (see deliverIfPossible).
+    void parkRead(ba::mutable_buffer buffers, ReadCompletion completion)
+    {
+        ++m_readsInFlight;
+        m_threadPool->post([this, buffers, completion = std::move(completion)]() mutable {
+            m_pendingReads.push_back(PendingRead{buffers, std::move(completion)});
+            deliverIfPossible();
+        });
+    }
+
+    // Synchronous helper for fakeClassTest (no session involved).
+    template <typename Handler>
+    void readSome(std::shared_ptr<SocketFace> /*socket*/, ba::mutable_buffer buffers,
+        Handler&& handler)
+    {
+        handler(boost::system::error_code(), drainPackets(buffers));
+    }
+
+    // Test teardown: complete every parked read with operation_aborted so the read loops — and
+    // the sessions their frames keep alive — unwind BEFORE the test nulls the socket or
+    // destroys this fake. Poll readsInFlight() until 0 afterwards: the counter is decremented
+    // only after the fired completion has synchronously unwound the whole read loop, so 0 means
+    // the unwind is done and no coroutine touches the session any more.
+    void stopReads()
+    {
+        m_threadPool->post([this] {
+            while (!m_pendingReads.empty())
+            {
+                auto pending = std::move(m_pendingReads.front());
+                m_pendingReads.pop_front();
+                fireRead(std::move(pending.completion), boost::asio::error::operation_aborted, 0);
+            }
+        });
+    }
+    std::size_t readsInFlight() const { return m_readsInFlight.load(); }
+
+    void stop() { m_threadPool.reset(); }
+
+public:  // for testing
+    void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
+
+    void asyncAppendRecvPacket(Packet packet)
+    {
+        m_threadPool->post([this, packet]() {
+            m_recvPackets.push(std::move(packet));
+            deliverIfPossible();
+        });
+    }
+
+protected:
+    std::size_t drainPackets(ba::mutable_buffer buffers)
     {
         std::size_t bytesTransferred = 0;
         auto limit = buffers.size();
@@ -84,35 +161,44 @@ public:
                 bytesTransferred += packet->size();
             }
         }
-
-        handler(boost::system::error_code(), bytesTransferred);
+        return bytesTransferred;
     }
 
-    void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
-        boost::asio::mutable_buffer buffers, ReadWriteHandler handler) override
+    // Everything below runs on the pool thread only: every read arm (including the first, via
+    // parkRead's post) and every delivery are posted onto the single pool thread, so
+    // m_pendingReads is never touched from another thread. Multiple sessions may share this
+    // fake, so parked reads form a FIFO list rather than a single slot.
+    void deliverIfPossible()
     {
-        m_threadPool->post([this, socket, buffers, handler]() {
-            if (m_recvPackets.empty())
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                asyncReadSome(socket, buffers, handler);
-                return;
-            }
-            readSome(socket, buffers, handler);
-        });
+        if (m_pendingReads.empty() || m_recvPackets.empty())
+        {
+            return;
+        }
+        auto pending = std::move(m_pendingReads.front());
+        m_pendingReads.pop_front();
+        fireRead(std::move(pending.completion), boost::system::error_code(),
+            drainPackets(pending.buffers));
     }
-    void stop() { m_threadPool.reset(); }
 
-public:  // for testing
-    void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
-
-    void asyncAppendRecvPacket(Packet packet)
+    // Fire a parked completion. The fire resumes the read loop SYNCHRONOUSLY on this (pool)
+    // thread — on success the loop processes the messages and re-arms a fresh read (parking a
+    // new completion and re-incrementing the counter), on error it unwinds completely — so the
+    // counter is decremented only after the loop has settled.
+    void fireRead(ReadCompletion completion, boost::system::error_code ec, std::size_t bytes)
     {
-        m_threadPool->post([this, packet]() { appendRecvPacket(packet); });
+        completion(ec, bytes);
+        --m_readsInFlight;
     }
 
-protected:
+    struct PendingRead
+    {
+        ba::mutable_buffer buffers;
+        ReadCompletion completion;
+    };
+
     std::queue<Packet> m_recvPackets;
+    std::list<PendingRead> m_pendingReads;
+    std::atomic<std::size_t> m_readsInFlight{0};
     bcos::IOServicePool::Ptr m_threadPool;
 };
 
@@ -250,8 +336,23 @@ public:
 class FakeSocket : public SocketFace
 {
 public:
-    FakeSocket() : SocketFace(), m_workGuard(boost::asio::make_work_guard(m_ioService))
+    FakeSocket()
+      : SocketFace(),
+        m_sslContext(ba::ssl::context::tlsv12),
+        m_workGuard(boost::asio::make_work_guard(m_ioService))
     {
+        // A connected TCP pair backs the SSL stream so drop()/closeSocket() can call
+        // sslref().async_shutdown() safely (mirrors FakeSocket_FIB): the acceptor-side socket
+        // closes when it goes out of scope, so the shutdown completes with an error instead of
+        // dereferencing an unconnected stream.
+        bi::tcp::acceptor acceptor(m_ioService, bi::tcp::endpoint(bi::tcp::v4(), 0));
+        auto endpoint = acceptor.local_endpoint();
+        bi::tcp::socket clientSocket(m_ioService);
+        clientSocket.connect(endpoint);
+        bi::tcp::socket serverSocket(m_ioService);
+        acceptor.accept(serverSocket);
+        m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket>>(
+            std::move(clientSocket), m_sslContext);
         m_worker = std::thread([this]() { m_ioService.run(); });
     };
     ~FakeSocket() override
@@ -263,8 +364,8 @@ public:
             m_worker.join();
         }
     }
-    bool isConnected() const override { return true; }
-    void close() override {}
+    bool isConnected() const override { return m_connected; }
+    void close() override { m_connected = false; }
     boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code ec) override
     {
         return {};
@@ -280,11 +381,15 @@ public:
     ba::io_context& ioService() override { return m_ioService; }
 
 private:
-    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
+    // Declaration order matters: members are destroyed in reverse, so the io_context must
+    // outlive the SSL stream that deregisters from it in its destructor.
     ba::io_context m_ioService;
+    ba::ssl::context m_sslContext;
+    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
     boost::asio::executor_work_guard<ba::io_context::executor_type> m_workGuard;
     std::thread m_worker;
     NodeIPEndpoint m_nodeIPEndpoint;
+    bool m_connected{true};
 };
 
 BOOST_AUTO_TEST_CASE(fakeClassTest)
@@ -332,7 +437,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
         session->setMessageHandler(
             [&recvPacketCnt, &recvBufferSize, &lastReadTime](
                 NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {
-                // doRead() call this function after reading a message
+                // the read loop calls this function after reading a message
                 lastReadTime = utcSteadyTime();
                 if (e.errorCode() != P2PExceptionType::Success)
                 {
@@ -350,7 +455,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
                 recvPacketCnt++;
             });
 
-        session->start();
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         // send packets
         while (auto packet = messageBuilder.nextPacket())
@@ -370,6 +475,61 @@ BOOST_AUTO_TEST_CASE(doReadTest)
 
         BOOST_CHECK_EQUAL(recvPacketCnt, totalPacketNum);
         BOOST_CHECK_EQUAL(recvBufferSize, messageBuilder.sendBufferSize());
+
+        // Teardown: a read is still parked in the fake. Swap in a tolerant message handler
+        // first — failing the parked read drops the session, and the teardown notification
+        // would otherwise reach the strict handler above with a Disconnect error — then let the
+        // fake fail the read and wait for the read loop to unwind completely before nulling
+        // the socket.
+        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
+        session->setSocket(nullptr);
+    }
+
+    fakeSocket->close();
+}
+
+BOOST_AUTO_TEST_CASE(startUsesDefaultReadPolicy)
+{
+    // Coverage for the production read entry point: Session::start() is the only instantiation
+    // of readLoop<ASIOInterface::DefaultReadPolicy> (every other test enters via
+    // startWithPolicy<FakePolicy>). Drive DefaultReadPolicy down its deterministic
+    // unexpected-type branch — an m_type that is neither TCP_ONLY nor SSL completes the read
+    // with a posted operation_not_supported — and assert the read loop drops the session.
+    // (m_type defaults to TCP_ONLY, so "unset" would arm a real async_read_some on the fake's
+    // connected socket pair instead; the invalid type is what makes the branch deterministic.)
+    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeSocket = std::make_shared<FakeSocket>();
+    auto fakeAsio = std::make_shared<FakeASIO>();
+    fakeAsio->setType(2);
+    {
+        auto fakeHost =
+            std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+
+        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        session->setMessageFactory(fakeHost->messageFactory());
+        // Tolerant handler: the read error drops the session, and the drop notifies.
+        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
+
+        session->start();  // virtual production entry — NOT startWithPolicy<>
+
+        size_t retryTimes = 0;
+        while (session->active() && retryTimes < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            retryTimes++;
+        }
+        BOOST_CHECK(!session->active());
+        // drop() captured the socket into a local shared_ptr before clearing m_active, so the
+        // socket can be nulled as soon as the session is inactive (same teardown as doReadTest).
         session->setSocket(nullptr);
     }
 
@@ -394,7 +554,7 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
                 return bcos::Error::buildError(
                     "", P2PExceptionType::OutBWOverflow, "outgoing bandwidth overflow");
             });
-        session->start();
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         P2PMessage message;
         message.setSeq(1);
@@ -404,14 +564,23 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
                 message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{})),
             NetworkException);
 
+        // drain the parked read so the read loop unwinds before the socket is nulled
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
         session->setSocket(nullptr);
     }
     fakeSocket->close();
 }
 
-// A SocketFace backed by a real connected TCP socket so the (non-virtual)
-// ASIOInterface::asyncWrite path actually completes on the wire — the FakeSocket above cannot
-// reach the compression branch because its write path is inert.
+// A SocketFace backed by a real connected TCP socket so the ASIOInterface::awaitableWrite path
+// actually completes on the wire — the FakeSocket above cannot reach the compression branch
+// because its write path is inert.
 class RealLoopbackSocket : public SocketFace
 {
 public:
@@ -509,7 +678,7 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
         auto sessionSocket = std::make_shared<RealLoopbackSocket>(io, std::move(client));
         auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
         session->setMessageFactory(fakeHost->messageFactory());
-        session->start();
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         // V2 wire format + payload well above the 1KB compress threshold -> compression must run
         P2PMessage message;
@@ -529,6 +698,18 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
         // socket while the io thread may still run the session's idle timer (checkNetworkStatus
         // would dereference a null m_socket).
         session->disconnect(DisconnectReason::DisconnectRequested);
+
+        // The session's read is parked in the fake ASIO (not on the real socket), so the
+        // disconnect does not unwind it — fail it explicitly and wait for the read loop to
+        // finish before the fake is destroyed.
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
     }
 
     peerThread.join();
@@ -656,7 +837,7 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
         auto session = std::make_shared<Session>(
             std::make_shared<RealLoopbackSocket>(io, std::move(_client)), *host, 2, true);
         session->setMessageFactory(fakeMessageFactory);
-        session->start();
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
         sessions.push_back(session);
 
         auto p2pSession = std::make_shared<P2PSession>();
@@ -692,6 +873,24 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     task::syncWait(service->broadcastMessageToNeighbors(
         message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{}));
 
+    // Session::write() posts the write-loop launch to the socket's io thread, so the broadcast
+    // returning only means each per-peer payload is QUEUED (the fan-out tasks are fire-and-
+    // forget). Wait (bounded) until both peers have actually received their frame before
+    // disconnecting below — otherwise the disconnect races the posted launch and drop() fails
+    // the queued payload instead of writing it. A genuinely lost frame still fails the size
+    // assertions at the end; the bound only keeps the peer reads from hanging forever first.
+    for (size_t frameRetry = 0; frameRetry < 500; ++frameRetry)
+    {
+        {
+            std::lock_guard<std::mutex> lock(recvMutex);
+            if (!receivedV2.empty() && !receivedV0.empty())
+            {
+                break;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
     // Round-7 review: disconnect the sessions BEFORE joining the peer threads. Each peer thread
     // blocks on a synchronous asio read; if a broadcast regression ever skipped a peer, that
     // thread would block forever and a disconnect placed after join() would never run — surfacing
@@ -701,6 +900,18 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     {
         session->disconnect(DisconnectReason::DisconnectRequested);
     }
+
+    // The sessions' reads are parked in the fake ASIO (not on the real sockets), so the
+    // disconnects do not unwind them — fail them explicitly and wait for the read loops to
+    // finish before the fake is destroyed.
+    fakeAsio->stopReads();
+    size_t drainRetry = 0;
+    while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        drainRetry++;
+    }
+    BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
 
     peerV2.join();
     peerV0.join();
@@ -732,6 +943,226 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     BOOST_CHECK_EQUAL(decodedV2.srcP2PNodeID(), "srcNodeID");
     BOOST_CHECK_EQUAL(decodedV2.dstP2PNodeID(), "dstNodeID");
     BOOST_CHECK_EQUAL(decodedV2.ttl(), 10);
+}
+
+BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
+{
+    // Regression for the per-session write ordering guarantee: the write path must serialize
+    // concurrent producers. N threads call fastSendMessage concurrently and the single-writer
+    // write loop (Session::writeLoop, guarded by the m_writingInFlight single-flight flag) must
+    // put a complete, non-interleaved frame for every message on the wire — if the serialization
+    // were ever broken, frames would be torn or interleaved. Uses a real loopback socket
+    // (RealLoopbackSocket) so the full awaitableWrite -> async_write path runs, then parses the
+    // accumulated byte stream into frames by their length prefix.
+    constexpr size_t threadCount = 8;
+    constexpr size_t msgPerThread = 50;
+    constexpr size_t totalMsgs = threadCount * msgPerThread;
+
+    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeAsio = std::make_shared<FakeASIO>();
+
+    auto io = std::make_shared<ba::io_context>();
+    boost::asio::executor_work_guard<ba::io_context::executor_type> workGuard(io->get_executor());
+    std::thread ioThread([io] { io->run(); });
+
+    ba::ip::tcp::acceptor acceptor(*io, ba::ip::tcp::endpoint(ba::ip::tcp::v4(), 0));
+    auto listenEndpoint = acceptor.local_endpoint();
+
+    std::mutex recvMutex;
+    std::vector<uint8_t> received;
+    std::atomic<bool> peerDone{false};
+    std::thread peerThread([&] {
+        ba::ip::tcp::socket peer(*io);
+        boost::system::error_code ec;
+        acceptor.accept(peer, ec);
+        if (ec)
+        {
+            return;
+        }
+        std::array<uint8_t, 4096> buf;
+        while (!peerDone.load(std::memory_order_relaxed))
+        {
+            std::size_t n = peer.read_some(ba::buffer(buf), ec);
+            if (ec)
+            {
+                break;
+            }
+            if (n > 0)
+            {
+                std::lock_guard<std::mutex> lock(recvMutex);
+                received.insert(received.end(), buf.begin(), buf.begin() + n);
+            }
+        }
+    });
+
+    ba::ip::tcp::socket client(*io);
+    boost::system::error_code connectError;
+    client.connect(listenEndpoint, connectError);
+    BOOST_REQUIRE(!connectError);
+
+    // Each frame is the fixed 14-byte base header plus the 64-byte payload (payload is far below
+    // the compress threshold, so no compression runs even at V2).
+    const size_t frameSize = P2PMessage::MESSAGE_HEADER_LENGTH + 64;
+    const size_t expectedBytes = frameSize * totalMsgs;
+
+    {
+        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+        auto sessionSocket = std::make_shared<RealLoopbackSocket>(io, std::move(client));
+        auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
+        session->setMessageFactory(fakeHost->messageFactory());
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
+
+        std::vector<std::thread> senders;
+        senders.reserve(threadCount);
+        for (size_t t = 0; t < threadCount; ++t)
+        {
+            senders.emplace_back([t, session] {
+                for (size_t i = 0; i < msgPerThread; ++i)
+                {
+                    P2PMessage message;
+                    message.setVersion((uint16_t)bcos::protocol::ProtocolVersion::V2);
+                    message.setSeq(static_cast<uint32_t>(t * msgPerThread + i));
+                    bytes payload(64, static_cast<uint8_t>('a' + t));
+                    try
+                    {
+                        task::syncWait(session->fastSendMessage(message,
+                            ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{}));
+                    }
+                    catch (std::exception const&)
+                    {
+                        // no write failure is expected on a healthy loopback; a torn/aborted write
+                        // would show up as a missing/corrupt frame in the wire assertions below
+                    }
+                }
+            });
+        }
+        for (auto& th : senders)
+        {
+            th.join();
+        }
+
+        // Every syncWait has returned, but the last async_write may still be completing on the io
+        // thread, so poll until the peer has the full byte count.
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+        while (true)
+        {
+            size_t got = 0;
+            {
+                std::lock_guard<std::mutex> lock(recvMutex);
+                got = received.size();
+            }
+            if (got >= expectedBytes)
+            {
+                break;
+            }
+            BOOST_CHECK_MESSAGE(std::chrono::steady_clock::now() < deadline,
+                "peer did not receive all " << expectedBytes << " bytes, got " << got);
+            if (std::chrono::steady_clock::now() >= deadline)
+            {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        peerDone = true;
+        // Unblock the peer thread's read (same teardown shape as fastSendMessageCompression).
+        session->disconnect(DisconnectReason::DisconnectRequested);
+
+        // The session's read is parked in the fake ASIO (not on the real socket), so the
+        // disconnect does not unwind it — fail it explicitly and wait for the read loop to
+        // finish before the fake is destroyed.
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
+    }
+
+    peerThread.join();
+    workGuard.reset();
+    {
+        boost::system::error_code ec;
+        acceptor.close(ec);
+    }
+    io->stop();
+    ioThread.join();
+
+    // Parse the accumulated stream into frames by the 4-byte length prefix. Header layout:
+    // [length:4][version:2][packetType:2][seq:4][ext:2] (P2PMessage::MESSAGE_HEADER_LENGTH = 14);
+    // seq sits at bytes [8..12) in network byte order.
+    std::vector<uint32_t> seqs;
+    std::unordered_set<uint32_t> seenSeqs;
+    {
+        std::lock_guard<std::mutex> lock(recvMutex);
+        BOOST_CHECK_EQUAL(received.size(), expectedBytes);
+        size_t pos = 0;
+        while (pos < received.size())
+        {
+            BOOST_REQUIRE(pos + 4 <= received.size());
+            uint32_t frameLen = (uint32_t(received[pos]) << 24) |
+                                (uint32_t(received[pos + 1]) << 16) |
+                                (uint32_t(received[pos + 2]) << 8) | received[pos + 3];
+            // a torn/interleaved frame would fail this exact-size assertion
+            BOOST_REQUIRE(frameLen == frameSize);
+            BOOST_REQUIRE(pos + frameLen <= received.size());
+            uint32_t seq = (uint32_t(received[pos + 8]) << 24) |
+                           (uint32_t(received[pos + 9]) << 16) |
+                           (uint32_t(received[pos + 10]) << 8) | received[pos + 11];
+            // payload integrity: each thread sent 64 bytes of ('a' + threadIdx)
+            uint8_t expect = static_cast<uint8_t>('a' + seq / msgPerThread);
+            for (size_t k = P2PMessage::MESSAGE_HEADER_LENGTH; k < frameLen; ++k)
+            {
+                BOOST_CHECK_EQUAL(received[pos + k], expect);
+            }
+            seqs.push_back(seq);
+            seenSeqs.insert(seq);
+            pos += frameLen;
+        }
+    }
+
+    BOOST_CHECK_EQUAL(seqs.size(), totalMsgs);
+    BOOST_CHECK_EQUAL(seenSeqs.size(), totalMsgs);
+}
+
+BOOST_AUTO_TEST_CASE(asioCompletionHandshakeSynchronousInvocation)
+{
+    // Arm/cancel handshake regression: an initiate that INVOKES the completion synchronously
+    // (before returning) must not resume the coroutine from inside its own await_suspend
+    // (resuming a not-yet-suspended frame is UB). The completion's operator() claims
+    // Init -> Completed and deliberately does not resume; await_suspend observes Completed on
+    // its failed CAS and resumes inline by returning false — the result is delivered exactly
+    // once.
+    auto task = []() -> task::Task<boost::system::error_code> {
+        auto [ec] = co_await makeAsioAwaitable<boost::system::error_code>(
+            [](auto handler) { handler(boost::system::error_code()); });
+        co_return ec;
+    }();
+    auto ec = task::syncWait(std::move(task));
+    BOOST_CHECK(!ec);
+}
+
+BOOST_AUTO_TEST_CASE(asioCompletionHandshakeSynchronousDrop)
+{
+    // Arm/cancel handshake regression: an initiate that DROPS the completion synchronously
+    // (destroys it without invocation, no exception) must not destroy the still-running frame
+    // from inside its own await_suspend. The destructor records the cancellation instead, and
+    // await_suspend resumes inline with operation_aborted so the awaiting coroutine completes
+    // with an error rather than suspending forever.
+    auto task = []() -> task::Task<boost::system::error_code> {
+        auto [ec] = co_await makeAsioAwaitable<boost::system::error_code>(
+            [](auto handler) {
+                // destroy the armed completion without invoking it: the by-value parameter is
+                // destroyed at scope exit
+                (void)handler;
+            });
+        co_return ec;
+    }();
+    auto ec = task::syncWait(std::move(task));
+    BOOST_CHECK_EQUAL(ec, boost::asio::error::operation_aborted);
 }
 
 BOOST_AUTO_TEST_CASE(SessionRecvBufferTest)

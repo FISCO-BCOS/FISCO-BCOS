@@ -91,6 +91,9 @@ ASIOInterface::ASIOInterface(
 {
     boost::asio::socket_base::reuse_address optionReuseAddress(true);
     m_acceptor.set_option(optionReuseAddress);
+    // The read path needs no runtime seam: awaitableReadSome compiles against the default policy
+    // (DefaultReadPolicy), whose invoke() directly dispatches async_read_some on the socket
+    // (TCP vs SSL by m_type) — see ASIOInterface.h.
 }
 
 ASIOInterface::~ASIOInterface() = default;
@@ -100,19 +103,9 @@ void ASIOInterface::setType(int type)
     m_type = type;
 }
 
-void ASIOInterface::setIOServicePool(IOServicePool::Ptr _ioServicePool)
-{
-    m_ioServicePool = std::move(_ioServicePool);
-}
-
 ba::ssl::context* ASIOInterface::srvContext()
 {
     return m_srvContext.has_value() ? &*m_srvContext : nullptr;
-}
-
-ba::ssl::context* ASIOInterface::clientContext()
-{
-    return m_clientContext.has_value() ? &*m_clientContext : nullptr;
 }
 
 void ASIOInterface::setSrvContext(ba::ssl::context _srvContext)
@@ -131,6 +124,12 @@ boost::asio::steady_timer ASIOInterface::newTimer(uint32_t timeout)
         *(m_ioServicePool->getIOService()), std::chrono::milliseconds(timeout));
 }
 
+boost::asio::steady_timer ASIOInterface::newAcceptorTimer(uint32_t timeout)
+{
+    return boost::asio::steady_timer(
+        m_acceptor.get_executor(), std::chrono::milliseconds(timeout));
+}
+
 std::shared_ptr<SocketFace> ASIOInterface::newSocket(bool _server, NodeIPEndpoint nodeIPEndpoint)
 {
     std::shared_ptr<SocketFace> socket = std::make_shared<Socket>(m_ioServicePool->getIOService(),
@@ -143,78 +142,8 @@ bi::tcp::acceptor* ASIOInterface::acceptor()
     return &m_acceptor;
 }
 
-void ASIOInterface::asyncAccept(
-    const std::shared_ptr<SocketFace>& socket, Handler_Type handler, boost::system::error_code)
-{
-    m_acceptor.async_accept(socket->ref(), std::move(handler));
-}
-
-void ASIOInterface::asyncRead(const std::shared_ptr<SocketFace>& socket,
-    boost::asio::mutable_buffer buffers, ReadWriteHandler handler)
-{
-    switch (m_type)
-    {
-    case TCP_ONLY:
-    {
-        ba::async_read(socket->ref(), buffers, std::move(handler));
-        break;
-    }
-    case SSL:
-    {
-        ba::async_read(socket->sslref(), buffers, std::move(handler));
-        break;
-    }
-    }
-}
-
-void ASIOInterface::asyncReadSome(const std::shared_ptr<SocketFace>& socket,
-    boost::asio::mutable_buffer buffers, ReadWriteHandler handler)
-{
-    switch (m_type)
-    {
-    case TCP_ONLY:
-    {
-        socket->ref().async_read_some(buffers, std::move(handler));
-        break;
-    }
-    case SSL:
-    {
-        socket->sslref().async_read_some(buffers, std::move(handler));
-        break;
-    }
-    }
-}
-
-void ASIOInterface::asyncHandshake(const std::shared_ptr<SocketFace>& socket,
-    ba::ssl::stream_base::handshake_type type, Handler_Type handler)
-{
-    socket->sslref().async_handshake(type, std::move(handler));
-}
-
 void ASIOInterface::setVerifyCallback(
-    const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool)
+    const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/)
 {
     socket->sslref().set_verify_callback(std::move(callback));
-}
-
-void ASIOInterface::asyncResolveConnect(
-    const std::shared_ptr<SocketFace>& socket, Handler_Type handler)
-{
-    auto protocol = socket->nodeIPEndpoint().isIPv6() ? bi::tcp::tcp::v6() : bi::tcp::tcp::v4();
-    m_resolver.async_resolve(protocol, socket->nodeIPEndpoint().address(),
-        to_string(socket->nodeIPEndpoint().port()),
-        [=](const boost::system::error_code& ec, bi::tcp::resolver::results_type results) {
-            if (ec || results.empty())
-            {
-                ASIO_LOG(WARNING) << LOG_DESC("asyncResolve failed")
-                                  << LOG_KV("host", socket->nodeIPEndpoint().address())
-                                  << LOG_KV("port", socket->nodeIPEndpoint().port());
-                return;
-            }
-
-            // results is a iterator, but only use first endpoint.
-            auto it = results.begin();
-            socket->ref().async_connect(it->endpoint(), handler);
-            ASIO_LOG(INFO) << LOG_DESC("asyncResolveConnect") << LOG_KV("endpoint", it->endpoint());
-        });
 }

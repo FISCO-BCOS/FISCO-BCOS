@@ -372,11 +372,14 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
 
 
 def run_v2_block_flow() -> None:
-    """The pre-Karst loop still works end to end: FCU V2 -> getPayloadV2 -> newPayloadV2.
+    """V2 FCU on the CANCUN harness chain is refused as Unsupported fork (-38005).
 
-    Targeting Karst does not make the older method versions incompatible. A stock CL
-    driving the standard V1-V3 surface (and the v1 Engine API harness kept alive by
-    unsafe_allow_v1_executor) must keep building and submitting blocks.
+    The harness chain runs executor_version=2 with evm_revision=cancun (the production
+    [op_engine_rpc] configuration), so buildPayload's chain-derived header fork is CANCUN.
+    A V2 forkchoiceUpdated cannot express the CANCUN attribute shape
+    (parentBeaconBlockRoot), so it is refused with -38005 — the same answer geth gives
+    for a CL/chain fork mismatch. The pre-Karst V2 build loop itself is covered by the
+    engine unit tests on a SHANGHAI fixture.
     """
     _log_test("FCU V2 + getPayloadV2 + newPayloadV2 (pre-Karst surface)")
 
@@ -393,31 +396,7 @@ def run_v2_block_flow() -> None:
         "withdrawals": [],
     }
 
-    fcu = rpc_result("engine_forkchoiceUpdatedV2", [fc_state, payload_attrs])
-    payload_id = fcu.get("payloadId")
-    if fcu["payloadStatus"]["status"] != "VALID" or not payload_id:
-        _log_fail(f"FCU V2 did not build a payload: {fcu}")
-        return
-
-    result = rpc_result("engine_getPayloadV2", [payload_id])
-    # V2 response shape: executionPayload + blockValue only — no blobsBundle (V3+),
-    # no executionRequests (V4+), no withdrawalsRoot on the payload (V4+).
-    if "executionPayload" not in result or "blockValue" not in result:
-        _log_fail(f"getPayloadV2 response is not the V2 shape: {sorted(result.keys())}")
-        return
-    if "blobsBundle" in result or "executionRequests" in result:
-        _log_fail(f"getPayloadV2 leaked V3+/V4+ response fields: {sorted(result.keys())}")
-        return
-    payload = result["executionPayload"]
-    if "withdrawalsRoot" in payload:
-        _log_fail("getPayloadV2 leaked the V4-only withdrawalsRoot field")
-        return
-
-    status = rpc_result("engine_newPayloadV2", [payload])
-    _log_info(f"newPayloadV2 status = {status['status']}")
-    if status["status"] != "VALID":
-        _log_fail(f"newPayloadV2 rejected the V2 payload it just built: {status}")
-        return
+    expect_error_code("engine_forkchoiceUpdatedV2", [fc_state, payload_attrs], -38005)
     _log_pass()
 
 
@@ -433,6 +412,9 @@ def test_eip1559_fields_are_v3_only() -> None:
     before Holocene", op-core/eip1559/eip1559.go:27-28).
 
     Attribute errors surface through the payloadStatus channel, not as a JSON-RPC error.
+    The control is a V3 FCU (the only version the CANCUN harness chain accepts); the
+    V2 + field cases are still rejected by validatePayloadAttributes, which runs before
+    buildPayload's chain-fork gate.
     """
     _log_test("eip1559Params / minBaseFee are rejected below forkchoiceUpdatedV3")
 
@@ -442,6 +424,17 @@ def test_eip1559_fields_are_v3_only() -> None:
         "safeBlockHash": head_hash,
         "finalizedBlockHash": head_hash,
     }
+
+    def v3_attrs(**extra: object) -> dict:
+        attrs = {
+            "timestamp": next_timestamp(),
+            "prevRandao": PREV_RANDAO,
+            "suggestedFeeRecipient": FEE_RECIPIENT,
+            "withdrawals": [],
+            "parentBeaconBlockRoot": ZERO_HASH,
+        }
+        attrs.update(extra)
+        return attrs
 
     def v2_attrs(**extra: object) -> dict:
         attrs = {
@@ -453,11 +446,11 @@ def test_eip1559_fields_are_v3_only() -> None:
         attrs.update(extra)
         return attrs
 
-    # Control: the same attributes without the two fields still build on V2, so a
-    # rejection below is attributable to the new gate and not to an unrelated V2 error.
-    control = rpc_result("engine_forkchoiceUpdatedV2", [fc_state, v2_attrs()])
+    # Control: the same V3 attributes build, so a rejection below is attributable to the
+    # V2-only field gate and not to an unrelated chain-fork error.
+    control = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, v3_attrs()])
     if control["payloadStatus"]["status"] != "VALID" or not control.get("payloadId"):
-        _log_fail(f"control V2 FCU did not build a payload: {control}")
+        _log_fail(f"control V3 FCU did not build a payload: {control}")
         return
 
     for field, value in (

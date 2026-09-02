@@ -17,6 +17,7 @@
 #pragma once
 
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/FixedBytes.h>
 
 namespace bcos::engine
 {
@@ -26,12 +27,23 @@ namespace bcos::engine
 /// engine library) so opstack-executor can throw it without depending on bcos-engine.
 DERIVE_BCOS_EXCEPTION(OpExecutionInternalError);
 
-// Engine API errors for EngineErrorMapper — forward reference: the mapper lands with
-// split C (#5521); until then only InvalidForkchoiceState has a throw site. Do not
-// redeclare Types.h's UnknownPayload / IncompatiblePayloadVersion. -38002 forkchoice,
-// -38005 unsupported fork, -38003 attributes.
+// Engine API exceptions (bcos-framework so RPC can map them without linking bcos-engine).
+DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
 DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
 DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
+DERIVE_BCOS_EXCEPTION(InvalidPayloadAttributes);
+DERIVE_BCOS_EXCEPTION(UnknownPayload);
+DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+
+/// JSON-RPC -38005 Unsupported fork. Isthmus+ requiring payload V4 is one use;
+/// other fork-shape mismatches share this channel (see #5517).
 DERIVE_BCOS_EXCEPTION(UnsupportedFork);
-DERIVE_BCOS_EXCEPTION(UnsupportedOpPayloadAttributes);
+
+/// Structured carrier for the OP build-loop's poisoned-tx eviction: the OpScheduler
+/// catch attaches the offending tx hash to the boundary bcos::Error as a typed
+/// boost::error_info slot, and buildOpPayload reads it back to evict the culprit from
+/// the pool — the same structured-member contract OpConsensusError documents at
+/// opstack-executor/OpCommon.h. Never route this through the message text.
+using OpCulpritTxHash = boost::error_info<struct OpCulpritTxHashTag, bcos::h256>;
+
 }  // namespace bcos::engine

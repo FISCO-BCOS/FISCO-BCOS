@@ -383,9 +383,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // endpoint would silently serve the v1 EngineService built below, and an external
     // op-node — which trusts the EL and never cross-checks state roots — would drive a
     // chain with v1 (non-Ethereum) semantics. Fail fast instead. The only exception is the
-    // explicit test-only escape hatch unsafe_allow_v1_executor, which the v1 Engine API
-    // integration harness (tools/engine_integration_test.sh, driving the v1 EngineService
-    // over this endpoint with a mock CL / Lodestar) sets; production configs must not.
+    // explicit test-only escape hatch unsafe_allow_v1_executor, which the former v1 Engine
+    // API integration harness (tools/engine_integration_test.sh) set. The harness now runs
+    // executor_version=2 + evm_revision=cancun like production, and payload building in
+    // any case requires an on-chain EVM revision (buildPayload fails closed without one),
+    // so the escape hatch can no longer build payloads; production configs must never set
+    // it.
     if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
     {
         if (!m_nodeConfig->opEngineAllowV1Executor())

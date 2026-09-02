@@ -19,11 +19,11 @@
 
 #pragma once
 
+#include "Errors.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <cstdint>
 #include <optional>
@@ -48,12 +48,8 @@ enum class ApiVersion : std::uint8_t
 
 using PayloadID = std::string;
 
-/// Engine API error conditions shared by the service implementation and the RPC
-/// endpoint layer, which maps them to Engine API error codes: UnknownPayload ->
-/// -38001, the two version mismatches -> -38005 Unsupported fork.
-DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
-DERIVE_BCOS_EXCEPTION(UnknownPayload);
-DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+// Exceptions live in Errors.h (included above) so RPC can map them without
+// linking bcos-engine. #5517's comment on -38005 / UnsupportedFork still applies.
 
 struct WithdrawalV1
 {
@@ -139,9 +135,9 @@ struct ExecutionPayload
     u256 gasUsed = 0;
     u256 baseFeePerGas = 0;
     h256 blockHash;
-    /// Transaction envelopes: each `EngineTransaction::raw` carries the EIP-2718
-    /// encoded bytes (including the OP 0x7E deposit envelope). This is the single
-    /// authoritative carrier for both generic and OP engine paths.
+    /// Generic-path transaction carrier: each `EngineTransaction::raw` is the EIP-2718
+    /// envelope. The OP build path consumes only those `raw` envelopes (with
+    /// `decoded == nullptr` where no FISCO decode exists), never the decoded fields.
     std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;
@@ -161,10 +157,14 @@ struct ExecutionPayload
     std::optional<bytes> blockAccessList = std::nullopt;
     std::optional<std::uint64_t> slotNumber = std::nullopt;
 
-    // Required by ExecutionPayloadV4/V5 (OP Stack, Isthmus onwards): storage root of
-    // the L2ToL1MessagePasser predeploy. May carry a placeholder until real-value
-    // header wiring lands.
-    std::optional<h256> withdrawalsRoot;
+    /// NOTE: this struct is ~500B (Bloom + vectors) — pass it by const-ref/move at
+    /// every engine_api call site (parts 2-4).
+    /// OP Isthmus+ extends the payload with an explicit withdrawals-root field (=
+    /// MessagePasser storage root) that cannot be derived from the (always-empty)
+    /// `withdrawals` list above — op-geth's NewPayloadV4 requires it on OP chains.
+    /// The transaction carrier is `transactions[i].raw` above; there is no separate
+    /// OP mirror list (a second carrier for one consensus-critical root would drift).
+    std::optional<h256> withdrawalsRoot = std::nullopt;
 };
 
 struct NewPayloadRequest

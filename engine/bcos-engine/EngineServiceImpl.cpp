@@ -24,6 +24,8 @@
 #include <span>
 #include <stdexcept>
 #include <utility>
+#include <bcos-ledger/mpt/Constants.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 
 namespace
 {
@@ -57,6 +59,11 @@ std::vector<std::string> bcos::engine::detail::supportedCapabilities()
     // newPayloadV4 on Karst) without needing the EL to prune the list for it. Narrowing
     // here would also break the pre-Karst callers this node still serves — the v1 Engine
     // API harness behind unsafe_allow_v1_executor and the V1-V3 integration suites.
+    //
+    // Note: serving a method VERSION is not the same as being able to BUILD with it.
+    // buildPayload requires an on-chain EVM revision (executor_version >= 2); the
+    // unsafe_allow_v1_executor harness (executor_version < 2) can no longer build any
+    // payload, only answer capability/state queries.
     //
     // forkchoiceUpdatedV4 is the one absentee, and genuinely so: the forkchoice version
     // window tops out at V3 (isForkchoiceVersionSupported), so the endpoint answers
@@ -316,6 +323,17 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     {
         return std::string("withdrawals are required for PayloadAttributesV2 and V3");
     }
+    if (version >= 2 && payloadAttributes.withdrawals.has_value() &&
+        !payloadAttributes.withdrawals->empty())
+    {
+        // The withdrawals trie root is not computed yet (finalizeEthBlockHeader commits
+        // the empty-trie root as a placeholder), so a non-empty list would hash a root
+        // that differs from what geth derives (DeriveSha(withdrawals)) and every peer
+        // would reject the block. Reject the pairing until the real root is computed.
+        return std::string(
+            "non-empty withdrawals are not supported until the withdrawals trie root is "
+            "computed");
+    }
     if (version == 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
     {
         return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3");
@@ -433,9 +451,21 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
     // Isthmus: an ExecutionPayloadV4 always carries the L2ToL1MessagePasser storage root.
     // Pre-V4 payloads with the field present are tolerated (mirrors the parse side, which
     // ignores it below V4 the way op-geth's NewPayloadV3 performs no withdrawalsRoot check).
-    if (version >= 4 && !executionPayload.withdrawalsRoot.has_value())
+    // The submitted root must equal the value this node itself commits (withdrawalsRootFor
+    // — currently the empty-trie placeholder): a CL submitting a foreign root under the
+    // blockHash this node minted would otherwise commit a header hash nobody can reproduce.
+    if (version >= 4)
     {
-        return std::string("withdrawalsRoot is required for ExecutionPayloadV4 and later");
+        if (!executionPayload.withdrawalsRoot.has_value())
+        {
+            return std::string("withdrawalsRoot is required for ExecutionPayloadV4 and later");
+        }
+        auto expectedRoot = withdrawalsRootFor(executionPayload);
+        if (*executionPayload.withdrawalsRoot != expectedRoot)
+        {
+            return std::string("withdrawalsRoot does not match the value this node commits "
+                                "for the built header");
+        }
     }
     // extraData is a V1-onwards field, so this applies at every newPayload version.
     // Since this PR makes extraData part of the block hash, an unchecked extraData is
@@ -457,4 +487,97 @@ std::optional<std::string> bcos::engine::detail::compareWithBuiltPayload(
             "submitted blockHash");
     }
     return std::nullopt;
+}
+
+bcos::protocol::EthBlockVersion bcos::engine::detail::ethBlockVersionFor(evmc_revision rev)
+{
+    // Map the chain's EVM revision to the header fork era. PoS/Engine blocks are always
+    // LONDON-shaped or later; revisions below LONDON cannot occur on this path and are
+    // mapped to LONDON (the minimal post-merge shape). OSAKA has no distinct EthBlockVersion
+    // enumerator — its header RLP carries no new fields beyond PRAGUE, so it maps to PRAGUE.
+    switch (rev)
+    {
+    case EVMC_LONDON:
+    case EVMC_PARIS:
+        return bcos::protocol::EthBlockVersion::LONDON;
+    case EVMC_SHANGHAI:
+        return bcos::protocol::EthBlockVersion::SHANGHAI;
+    case EVMC_CANCUN:
+        return bcos::protocol::EthBlockVersion::CANCUN;
+    case EVMC_PRAGUE:
+    case EVMC_OSAKA:
+        return bcos::protocol::EthBlockVersion::PRAGUE;
+    default:
+        // Asymmetric arm: revisions strictly below LONDON (FRONTIER..BERLIN) cannot
+        // appear on a PoS/Engine chain, so the minimal post-merge shape is a defensible
+        // floor. Any revision ABOVE the highest mapped one — a future EVMC bump adding a
+        // revision after OSAKA — must fail loudly instead of hashing under the wrong fork
+        // rules: that would drop withdrawalsRoot, the blob trio and requestsHash from the
+        // RLP with no diagnostic, and every peer recomputing under the chain's real fork
+        // would reject the block.
+        if (rev < EVMC_LONDON)
+        {
+            return bcos::protocol::EthBlockVersion::LONDON;
+        }
+        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
+            "EngineService: unsupported EVM revision " + std::to_string(static_cast<int>(rev)) +
+            " for Eth header fork derivation"});
+    }
+}
+
+void bcos::engine::detail::finalizeEthBlockHeader(bcos::protocol::BlockHeader& header,
+    const ExecutionPayload& payload, std::optional<bcos::h256> parentBeaconBlockRoot,
+    bcos::protocol::EthBlockVersion forkVersion)
+{
+    // Post-merge constants: the empty-ommers hash (keccak256(rlp([]))), difficulty 0 and nonce 0
+    // are fixed on every PoS Ethereum block.
+    static const auto kEmptyOmmersHash = bcos::crypto::HashType(
+        "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
+    header.setUncleHash(kEmptyOmmersHash);
+    header.setDifficulty(bcos::u256(0));
+    header.setNonce(bcos::h64(0));
+
+    // The header itself must carry the 256-byte bloom: calculateRLPHash reads it from the header
+    // (handleNewPayload sets it on the block wrapper separately).
+    header.setLogsBloom(bcos::bytesConstRef(payload.logsBloom.data(), payload.logsBloom.size()));
+
+    // EIP-1559 base fee (LONDON+). FISCO-BCOS does not compute a real base fee yet, so this is
+    // whatever buildPayload placed in the payload (currently 0).
+    header.setBaseFee(payload.baseFeePerGas);
+
+    // SHANGHAI+ : withdrawalsRoot. The withdrawals trie root is not computed yet, so the
+    // empty-trie root is used as a placeholder (same bytes as the served payload — see
+    // withdrawalsRootFor).
+    if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)
+    {
+        header.setWithdrawalsRoot(bcos::engine::detail::withdrawalsRootFor(payload));
+    }
+
+    // CANCUN+ : blob gas fields and parent beacon block root. buildPayload always fills the
+    // blob pair for the V3+ payload shape (and validatePayloadAttributes requires the beacon
+    // root), so require the values instead of defaulting to zero — a missing field must not
+    // silently hash as an explicit zero (absent and present-zero would share one sentinel).
+    if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN)
+    {
+        header.setBlobGasUsed(payload.blobGasUsed.value());
+        header.setExcessBlobGas(payload.excessBlobGas.value());
+        header.setParentBeaconBlockRoot(parentBeaconBlockRoot.value());
+    }
+
+    // PRAGUE : EIP-7685 execution-requests hash. FISCO-BCOS produces no execution
+    // requests, so the canonical empty-requests hash (sha256 of the empty input,
+    // 0xe3b0c442…) is used — the value the RLP hash must carry to validate as PRAGUE.
+    if (forkVersion >= bcos::protocol::EthBlockVersion::PRAGUE)
+    {
+        header.setRequestsHash(bcos::crypto::HashType(
+            "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+    }
+
+    // Mark the header as an Eth header, then compute and inject its RLP hash.
+    header.setEthBlockVersion(forkVersion);
+    if (auto error = bcos::protocol::EthBlockHeader::calculateRLPHash(header))
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{
+            "EngineService: failed to compute Eth RLP hash: " + error->errorMessage()});
+    }
 }

@@ -1103,6 +1103,17 @@ BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
                     std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version))},
                 std::move(entry));
 
+            // LONDON chain, matching the V1 forkchoiceUpdated attribute shape used below
+            // (no withdrawals / parentBeaconBlockRoot): the header-fork derivation keys off
+            // the chain's EVM revision, and without an explicit one the compile-time
+            // default (OSAKA -> PRAGUE) would demand fields a V1 build cannot supply.
+            storage::Entry evmcEntry;
+            evmcEntry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{
+                ledger::encodeEVMCRevisionConfig(EVMC_LONDON, {}), 0}));
+            co_await storage2::writeOne(backendStorage,
+                executor_v1::StateKey{ledger::SYS_CONFIG, ledger::SYSTEM_KEY_EVMC_REVISION},
+                std::move(evmcEntry));
+
             storage::Entry gasLimitEntry;
             gasLimitEntry.set(
                 bcos::storage::serialize::encode(ledger::SystemConfigEntry{"3000000000", 0}));
@@ -1180,7 +1191,9 @@ BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
         bcos::engine::ForkchoiceState fc{genesisHash, genesisHash, genesisHash};
         bcos::engine::PayloadAttributes attrs;
         attrs.prevRandao = cryptoSuite->hashImpl()->hash(std::string("randao"));
-        attrs.timestamp = 12345;
+        // Whole-second milliseconds: the header the build finalizes must satisfy
+        // validateHeader's "timestamp is a whole number of seconds" check.
+        attrs.timestamp = 12345ULL * 1000;
         auto fcResult = co_await engineService.updateForkchoice(fc, &attrs, 1);
         BOOST_REQUIRE(fcResult.payloadId.has_value());
 
@@ -1215,13 +1228,16 @@ BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
 // op_engine_rpc, so this — not the v1 escape hatch the integration script drives — is the
 // configuration external CLs talk to.
 //
-// What it pins is a known defect, deliberately: buildPayload stamps withdrawalsRoot with a
-// zero PLACEHOLDER (EngineServiceImpl.h, TODO(C4 header fields)) instead of the
-// L2ToL1MessagePasser storage root, getPayloadV5 serves that zero, and newPayloadV4 accepts
-// it because validateExecutionPayload can only check presence. Nothing about the executor
-// version changes that — buildPayload has no executor-version branch. When C4 computes the
-// real root this test MUST fail and be rewritten to assert the computed value; until then it
-// keeps the gap visible instead of letting the v2 path look covered.
+// What it pins is a known placeholder, deliberately: buildPayload stamps withdrawalsRoot
+// with the canonical EMPTY-TRIE ROOT (EngineServiceImpl.h, TODO(C4 header fields)) instead
+// of the L2ToL1MessagePasser storage root, and the hashed header commits to the SAME value
+// (a consumer rebuilding the header from the payload's withdrawalsRoot must reproduce
+// blockHash). getPayloadV5 serves that root, and newPayloadV4 rejects any root OTHER than
+// withdrawalsRootFor() (validateExecutionPayload enforces the equality, not just
+// presence); a missing on-chain EVM revision also fails closed with UnsupportedFork.
+// When C4 computes the real root this test MUST fail and be rewritten to assert the
+// computed value; until then it keeps the gap visible instead of letting the v2 path look
+// covered.
 BOOST_AUTO_TEST_CASE(engineServiceKarstServesZeroWithdrawalsRoot)
 {
     task::syncWait([&, this]() -> task::Task<void> {
@@ -1251,6 +1267,17 @@ BOOST_AUTO_TEST_CASE(engineServiceKarstServesZeroWithdrawalsRoot)
                 executor_v1::StateKey{ledger::SYS_CONFIG,
                     std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version))},
                 std::move(entry));
+
+            // The Karst chain these tests model runs CANCUN; without an explicit revision
+            // getLedgerConfig falls back to the compile-time default (OSAKA -> PRAGUE),
+            // which would demand fields the V3 attribute shape still supplies, but an
+            // explicit value keeps the fixture honest.
+            storage::Entry evmcEntry;
+            evmcEntry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{
+                ledger::encodeEVMCRevisionConfig(EVMC_CANCUN, {}), 0}));
+            co_await storage2::writeOne(backendStorage,
+                executor_v1::StateKey{ledger::SYS_CONFIG, ledger::SYSTEM_KEY_EVMC_REVISION},
+                std::move(evmcEntry));
         }
 
         static auto blockFactory =
@@ -1262,7 +1289,9 @@ BOOST_AUTO_TEST_CASE(engineServiceKarstServesZeroWithdrawalsRoot)
         bcos::engine::ForkchoiceState fc{genesisHash, genesisHash, genesisHash};
         bcos::engine::PayloadAttributes attrs;
         attrs.prevRandao = cryptoSuite->hashImpl()->hash(std::string("randao"));
-        attrs.timestamp = 12345;
+        // Whole-second milliseconds: the header the build finalizes must satisfy
+        // validateHeader's "timestamp is a whole number of seconds" check.
+        attrs.timestamp = 12345ULL * 1000;
         attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
         attrs.parentBeaconBlockRoot = bcos::h256{};
         auto fcResult = co_await engineService.updateForkchoice(fc, &attrs, 3);
@@ -1270,9 +1299,11 @@ BOOST_AUTO_TEST_CASE(engineServiceKarstServesZeroWithdrawalsRoot)
 
         auto payload = co_await engineService.getPayload(*fcResult.payloadId, 5);
         BOOST_REQUIRE(payload);
-        // The zero placeholder, served verbatim to the CL by a v2 node.
+        // The empty-trie root placeholder, served verbatim to the CL by a v2 node, agreeing
+        // with the root committed to the hashed header.
         BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
-        BOOST_CHECK_EQUAL(*payload->executionPayload.withdrawalsRoot, bcos::h256{});
+        BOOST_CHECK_EQUAL(
+            *payload->executionPayload.withdrawalsRoot, bcos::ledger::mpt::emptyRootHash());
 
         bcos::engine::NewPayloadRequest request;
         request.executionPayload = payload->executionPayload;

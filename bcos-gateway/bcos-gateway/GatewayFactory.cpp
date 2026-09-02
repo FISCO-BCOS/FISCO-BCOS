@@ -94,7 +94,7 @@ void GatewayFactory::initCert2PubHexHandler()
 {
     auto handler = [this](const std::string& _cert, std::string& _pubHex) -> bool {
         auto certContent = readContentsToString(boost::filesystem::path(_cert));
-        if (!certContent || certContent->empty())
+        if (certContent.empty())
         {
             GATEWAY_FACTORY_LOG(ERROR)
                 << LOG_DESC("initCert2PubHexHandler") << LOG_KV("cert", _cert)
@@ -120,7 +120,7 @@ void GatewayFactory::initCert2PubHexHandler()
             return false;
         }
 
-        BIO_write(bioMem.get(), certContent->data(), certContent->size());
+        BIO_write(bioMem.get(), certContent.data(), certContent.size());
         std::shared_ptr<X509> x509Ptr(
             PEM_read_bio_X509(bioMem.get(), NULL, NULL, NULL), [](X509* p) {
                 if (p != NULL)
@@ -266,15 +266,22 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
    */
     if (_certConfig.nodeKey)
     {
-        std::shared_ptr<bytes> keyContent;
+        bytes keyContent;
         if (!_certConfig.nodeKey->empty())
         {
+            std::shared_ptr<bytes> decrypted;
             try
             {
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
                     keyContent = readContents(boost::filesystem::path(*_certConfig.nodeKey));
                 else
-                    keyContent = m_dataEncrypt->decryptFile(*_certConfig.nodeKey);
+                {
+                    decrypted = m_dataEncrypt->decryptFile(*_certConfig.nodeKey);
+                    if (decrypted)
+                    {
+                        keyContent = std::move(*decrypted);
+                    }
+                }
             }
             catch (std::exception& e)
             {
@@ -285,8 +292,19 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                     InvalidParameter() << errinfo_comment(
                         "buildSSLContext: unable read content of key: " + *_certConfig.nodeKey));
             }
+            // Reject OUTSIDE the try: thrown inside, this InvalidParameter
+            // would be caught above and replaced with the generic "unable
+            // read content" message, hiding the distinction between a missing
+            // file and a KMS/decrypt that returned no content.
+            if (m_dataEncrypt && !decrypted)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidParameter() << errinfo_comment(
+                        "buildSSLContext: decryptFile returned no content for key: " +
+                        *_certConfig.nodeKey));
+            }
         }
-        if (!keyContent || keyContent->empty())
+        if (keyContent.empty())
         {
             GATEWAY_FACTORY_LOG(ERROR)
                 << LOG_DESC("buildSSLContext: unable read content of key: " + *_certConfig.nodeKey);
@@ -295,7 +313,7 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                     "buildSSLContext: unable read content of key: " + *_certConfig.nodeKey));
         }
 
-        boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
+        boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
         sslContext.use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
     }
     // node.crt
@@ -316,7 +334,7 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
     {
         auto caCertContent =
             readContentsToString(boost::filesystem::path(*_certConfig.caCert));  // ca.crt
-        if (!caCertContent || caCertContent->empty())
+        if (caCertContent.empty())
         {
             GATEWAY_FACTORY_LOG(ERROR)
                 << LOG_DESC("buildSSLContext: unable read content of ca: " + *_certConfig.caCert);
@@ -325,7 +343,7 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                     "buildSSLContext: unable read content of ca: " + *_certConfig.caCert));
         }
         sslContext.add_certificate_authority(
-            boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
+            boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
     }
     std::string caPath = _certConfig.multiCaPath;
     if (!caPath.empty())
@@ -373,15 +391,22 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
 
     if (_smCertConfig.nodeKey)
     {
-        std::shared_ptr<bytes> keyContent;
+        bytes keyContent;
         if (!_smCertConfig.nodeKey->empty())
         {
+            std::shared_ptr<bytes> decrypted;
             try
             {
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
                     keyContent = readContents(boost::filesystem::path(*_smCertConfig.nodeKey));
                 else
-                    keyContent = m_dataEncrypt->decryptFile(*_smCertConfig.nodeKey);
+                {
+                    decrypted = m_dataEncrypt->decryptFile(*_smCertConfig.nodeKey);
+                    if (decrypted)
+                    {
+                        keyContent = std::move(*decrypted);
+                    }
+                }
             }
             catch (std::exception& e)
             {
@@ -392,9 +417,25 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                     InvalidParameter() << errinfo_comment(
                         "buildSSLContext: unable read content of key: " + *_smCertConfig.nodeKey));
             }
+            // Reject OUTSIDE the try: see the non-SM buildSSLContext above.
+            if (m_dataEncrypt && !decrypted)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidParameter() << errinfo_comment(
+                        "buildSSLContext: decryptFile returned no content for key: " +
+                        *_smCertConfig.nodeKey));
+            }
+        }
+        if (keyContent.empty())
+        {
+            GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC(
+                "buildSSLContext: unable read content of key: " + *_smCertConfig.nodeKey);
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "buildSSLContext: unable read content of key: " + *_smCertConfig.nodeKey));
         }
         // nodekey
-        boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
+        boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
         sslContext.use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
         /* Check if the server certificate and private-key matches */
@@ -416,16 +457,23 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
     }
     if (_smCertConfig.enNodeKey)
     {
-        std::shared_ptr<bytes> enNodeKeyContent;
+        bytes enNodeKeyContent;
         if (!_smCertConfig.enNodeKey->empty())
         {
+            std::shared_ptr<bytes> decrypted;
             try
             {
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
                     enNodeKeyContent =
                         readContents(boost::filesystem::path(*_smCertConfig.enNodeKey));
                 else
-                    enNodeKeyContent = m_dataEncrypt->decryptFile(*_smCertConfig.enNodeKey);
+                {
+                    decrypted = m_dataEncrypt->decryptFile(*_smCertConfig.enNodeKey);
+                    if (decrypted)
+                    {
+                        enNodeKeyContent = std::move(*decrypted);
+                    }
+                }
             }
             catch (std::exception& e)
             {
@@ -436,8 +484,24 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                                           "buildSSLContext: unable read content of key: " +
                                           *_smCertConfig.enNodeKey));
             }
+            // Reject OUTSIDE the try: see the non-SM buildSSLContext above.
+            if (m_dataEncrypt && !decrypted)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidParameter() << errinfo_comment(
+                        "buildSSLContext: decryptFile returned no content for key: " +
+                        *_smCertConfig.enNodeKey));
+            }
         }
-        std::string enNodeKeyStr((const char*)enNodeKeyContent->data(), enNodeKeyContent->size());
+        if (enNodeKeyContent.empty())
+        {
+            GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC(
+                "buildSSLContext: unable read content of key: " + *_smCertConfig.enNodeKey);
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "buildSSLContext: unable read content of key: " + *_smCertConfig.enNodeKey));
+        }
+        std::string enNodeKeyStr((const char*)enNodeKeyContent.data(), enNodeKeyContent.size());
         if (SSL_CTX_use_enc_PrivateKey(
                 sslContext.native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <= 0)
         {
@@ -454,7 +518,7 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
             boost::filesystem::path(*_smCertConfig.caCert));  // node.key content
 
         sslContext.add_certificate_authority(
-            boost::asio::const_buffer(caContent->data(), caContent->size()));
+            boost::asio::const_buffer(caContent.data(), caContent.size()));
     }
     std::string caPath = _smCertConfig.multiCaPath;
     if (!caPath.empty())
@@ -633,7 +697,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // Session Factory
     auto sessionFactory = std::make_shared<SessionFactory>(selfInfo,
         _config->sessionRecvBufferSize(), _config->allowMaxMsgSize(), _config->maxReadDataSize(),
-        _config->maxSendDataSize(), _config->maxMsgCountSendOneTime(), _config->enableCompress());
+        _config->maxSendDataSize(), _config->enableCompress());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     // Session Callback manager

@@ -100,7 +100,7 @@ NodeInfoTools::initCert2PubHexHandler()
         do
         {
             auto certContent = readContentsToString(boost::filesystem::path(_cert));
-            if (!certContent || certContent->empty())
+            if (certContent.empty())
             {
                 errorMessage = "unable to load cert content, cert: " + _cert;
                 break;
@@ -122,7 +122,7 @@ NodeInfoTools::initCert2PubHexHandler()
                 break;
             }
 
-            BIO_write(bioMem.get(), certContent->data(), certContent->size());
+            BIO_write(bioMem.get(), certContent.data(), certContent.size());
             std::shared_ptr<X509> x509Ptr(
                 PEM_read_bio_X509(bioMem.get(), NULL, NULL, NULL), [](X509* p) {
                     if (p != NULL)

@@ -572,12 +572,13 @@ inline std::ostream& operator<<(std::ostream& _out, std::vector<T> const& _e)
 }
 
 template <class T, class U>
-std::shared_ptr<std::vector<U>> convertMapToVector(std::map<T, U> const& _map)
+std::vector<U> convertMapToVector(std::map<T, U> const& _map)
 {
-    std::shared_ptr<std::vector<U>> convertedVec = std::make_shared<std::vector<U>>();
+    std::vector<U> convertedVec;
+    convertedVec.reserve(_map.size());
     for (auto const& it : _map)
     {
-        convertedVec->push_back(it.second);
+        convertedVec.push_back(it.second);
     }
     return convertedVec;
 }
