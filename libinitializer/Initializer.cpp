@@ -28,6 +28,7 @@
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
+#include "EngineStartupGates.h"
 #include "EthereumBlockHashLookup.h"
 #include "GlobalStateStorageInitializer.h"
 #include "LedgerInitializer.h"
@@ -387,39 +388,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // OP mode assembles the OpScheduler as slot 3, built for engine-driven production
     // (FCU-with-attrs -> getPayload -> newPayload). Without an engine-driven production
     // path the legacy PBFT pipeline would start and drive that scheduler with non-engine
-    // flow — refuse the combination at startup instead of mis-producing blocks.
-    if (opStackMode && !m_nodeConfig->engineDrivenBlockProduction())
+    // flow — refuse the combination at startup instead of mis-producing blocks. Both this
+    // gate and the [op_engine_rpc]-on-v1 gate live in the pure (unit-tested)
+    // checkEngineStartupGates (EngineStartupGates.h); the warning below stays here because
+    // the log channel belongs to the initializer.
+    if (bcos::initializer::checkEngineStartupGates(m_executorVersion,
+            m_nodeConfig->engineDrivenBlockProduction(), m_nodeConfig->enableOpEngineRpc(),
+            m_nodeConfig->opEngineAllowV1Executor()) ==
+        bcos::initializer::V1ExecutorEscape::AllowedWithWarning)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "executor_version >= 3 (OP mode) requires engine-driven block production: set "
-                "[op_engine_rpc] enable=true (external op-node) or [consensus] "
-                "enable_single_node_consensus=true (built-in CL)"));
-    }
-
-    // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
-    // endpoint would silently serve the v1 EngineService built below, and an external
-    // op-node — which trusts the EL and never cross-checks state roots — would drive a
-    // chain with v1 (non-Ethereum) semantics. Fail fast instead. The only exception is the
-    // explicit test-only escape hatch unsafe_allow_v1_executor, which the former v1 Engine
-    // API integration harness (tools/engine_integration_test.sh) set. The harness now runs
-    // executor_version=2 + evm_revision=cancun like production, and payload building in
-    // any case requires an on-chain EVM revision (buildPayload fails closed without one),
-    // so the escape hatch can no longer build payloads; production configs must never set
-    // it.
-    if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
-    {
-        if (!m_nodeConfig->opEngineAllowV1Executor())
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment(
-                    "op_engine_rpc requires executor_version >= " +
-                    std::to_string(scheduler_v1::ETHEREUM_EXECUTOR_VERSION) +
-                    " (the pure-Ethereum executor): on executor_version < 2 the endpoint "
-                    "would serve v1 semantics that diverge from an OP Stack chain. For the "
-                    "v1 Engine API test harness only, set [op_engine_rpc] "
-                    "unsafe_allow_v1_executor=true"));
-        }
         INITIALIZER_LOG(WARNING) << LOG_DESC(
             "op_engine_rpc serving the v1 EngineService (unsafe_allow_v1_executor=true): "
             "test-harness mode, never drive this endpoint with a production op-node");

@@ -797,11 +797,15 @@ private:
             // Split deposits from other typed envelopes.
             std::vector<op::DepositTx> deposits;
             deposits.reserve(rawTxBytes.size());
+            // Pre-execution classification rejects carry the culprit tag (two-arg ctor) so
+            // buildOpPayload's eviction loop can drop the sealed culprit and retry; a
+            // single-arg OpConsensusError here would abort every FCU until the pool drains.
             for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
             {
                 auto const& raw = rawTxBytes[i];
                 if (raw.empty())  // empty envelope: raw[0] would be out of bounds
-                    throw bcos::evm::OpConsensusError("OpScheduler: empty envelope");
+                    throw bcos::evm::OpConsensusError(
+                        "OpScheduler: empty envelope", transactions[i]->hash());
                 auto const typeByte = raw[0];
                 if (op::classifyTxType(typeByte) == static_cast<uint8_t>(op::kDepositTxType))
                 {
@@ -813,7 +817,8 @@ private:
                     catch (const OpTxValidationFailed& e)
                     {
                         throw bcos::evm::OpConsensusError(
-                            std::string("OpScheduler: malformed deposit: ") + e.what());
+                            std::string("OpScheduler: malformed deposit: ") + e.what(),
+                            transactions[i]->hash());
                     }
                 }
                 // Reject blob (0x03) and 0x7d type bytes.
@@ -821,7 +826,8 @@ private:
                          typeByte != 0x04)
                     throw bcos::evm::OpConsensusError(
                         fmt::format("OpScheduler: unsupported tx type byte 0x{:02x}",
-                            static_cast<unsigned>(typeByte)));
+                            static_cast<unsigned>(typeByte)),
+                        transactions[i]->hash());
             }
 
             bcos::ledger::LedgerConfig execLedgerConfig;
