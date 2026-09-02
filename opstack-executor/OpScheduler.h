@@ -714,6 +714,17 @@ private:
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr, false};
             }
+            if (m_lastProbe->executedHeader->number() != number)
+            {
+                auto message = fmt::format(
+                    "adoptProbeAsPending: retained probe is at height {}, "
+                    "adopt input is at height {}",
+                    m_lastProbe->executedHeader->number(), number);
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
+                    nullptr, false};
+            }
 
             // Error-surface parity with coExecuteBlock: refuse discontinuous or
             // already-committed heights at build time instead of letting them fail later at
