@@ -609,6 +609,10 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
     // header-fields work rather than to this method-surface change.
     if (pa.isMember("gasLimit") && !pa["gasLimit"].isNull())
     {
+        // Interop note: parseQuantity (safeFromQuantity) is more lenient than op-geth's
+        // hexutil.Uint64 — it accepts a missing 0x prefix and leading zeros. The admitted
+        // set is deliberately wider than op-geth's; values decode identically, so there is
+        // no consensus impact (see parseBigQuantity's rationale above).
         attrs.gasLimit = parseQuantity(pa["gasLimit"], "payloadAttributes.gasLimit");
     }
     if (pa.isMember("eip1559Params") && !pa["eip1559Params"].isNull())

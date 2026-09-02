@@ -40,7 +40,6 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
-#include <bcos-ledger/mpt/Constants.h>
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/BoostLog.h"
@@ -51,6 +50,7 @@
 #include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/engine/OpBaseFee.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-ledger/mpt/Constants.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <boost/lexical_cast.hpp>
@@ -119,9 +119,8 @@ std::optional<std::string> compareWithBuiltPayload(
 bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
 
 /// Fill Ethereum header fields, mark the header as Eth, and inject its RLP hash.
-void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header,
-    const ExecutionPayload& payload, std::optional<bcos::h256> parentBeaconBlockRoot,
-    bcos::protocol::EthBlockVersion forkVersion);
+void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
+    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion);
 
 // ---- OP-mode helpers ----
 
@@ -209,6 +208,7 @@ public:
         }
     }
 
+
     bcos::task::Task<ForkchoiceUpdatedResult> updateForkchoice(
         const ForkchoiceState& forkchoiceState, const PayloadAttributes* payloadAttributes,
         std::uint32_t version)
@@ -220,15 +220,18 @@ public:
         }
         if (payloadAttributes != nullptr)
         {
-            // OP: refuse FCU V1/V2 attributes with -38005 before any state change.
+            // OP: FCU V1/V2 cannot carry OP attributes (gasLimit/eip1559Params/minBaseFee).
+            // Following op-geth's checkOptimismPayloadAttributes, an attribute fault on the
+            // build path answers the -38003 InvalidPayloadAttributes channel — the permanent
+            // attribute-fault signal — not the fork-era -38005.
             if constexpr (c_opMode)
             {
                 if (version < 3)
                 {
-                    BOOST_THROW_EXCEPTION(
-                        UnsupportedFork{} << bcos::errinfo_comment{
-                            "Isthmus+ payload building requires engine_forkchoiceUpdatedV3 "
-                            "or V4 (JSON-RPC -38005)"});
+                    BOOST_THROW_EXCEPTION(InvalidPayloadAttributes{} << bcos::errinfo_comment{
+                                              "OP payload attributes require "
+                                              "engine_forkchoiceUpdatedV3 or V4; V1/V2 cannot "
+                                              "carry them (JSON-RPC -38003)"});
                 }
             }
             // Validate attributes before updating forkchoice. OP adds gasLimit /
@@ -316,12 +319,16 @@ public:
                 auto const& trackedHeadBlock = *m_trackedHeadBlock;
                 if (*headBlockNumber < trackedHeadBlock.blockNumber)
                 {
-                    // Older head: only rebuild when it is the canonical parent and
-                    // attributes are present (one-level tip rebuild). Anything older
-                    // returns VALID without a payloadId.
+                    // Older head: the generic (non-OP) pipeline admits a one-level tip
+                    // rebuild (canonical parent + attributes) and builds a sibling. OP
+                    // mode does NOT admit it: the OpScheduler delegate refuses a sibling
+                    // of the committed tip (no ReorgUndo in its slice), so admitting the
+                    // request would build-then-fail with a retryable -32603. OP answers
+                    // VALID without a payloadId uniformly for every older head, like the
+                    // "anything older" arm below.
                     bool const rebuildOnParent =
-                        *headBlockNumber == trackedHeadBlock.blockNumber - 1 && headCanonical &&
-                        payloadAttributes != nullptr;
+                        !c_opMode && *headBlockNumber == trackedHeadBlock.blockNumber - 1 &&
+                        headCanonical && payloadAttributes != nullptr;
                     if (!rebuildOnParent)
                     {
                         ForkchoiceUpdatedResult result{
@@ -425,26 +432,7 @@ public:
             {
                 std::unique_lock lock(x_state);
                 m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
-                // Dedupe against the order deque *before* assigning the cache slot.
-                // contains(payloadId) after operator[] / assign is always true and would
-                // never record IDs, so the 64-entry eviction never ran. Rebuilds of an
-                // existing ID also move it to the back so a re-built entry cannot sit in a
-                // stale front slot and get evicted right after being refreshed.
-                auto orderIt = std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId);
-                if (orderIt != m_payloadOrder.end())
-                {
-                    m_payloadOrder.erase(orderIt);
-                }
-                m_payloadOrder.push_back(payloadId);
-                m_payloadCache[payloadId] = std::move(entry);
-                while (m_payloadOrder.size() > c_maxPayloadEntries)
-                {
-                    auto const evictedId = m_payloadOrder.front();
-                    m_payloadOrder.pop_front();
-                    m_payloadCache.erase(evictedId);
-                    std::erase_if(m_blockHashToPayloadId,
-                        [&](auto const& kv) { return kv.second == evictedId; });
-                }
+                publishPayloadEntry(payloadId, std::move(entry));
             }
             result.payloadId = payloadId;
             co_return result;
@@ -485,14 +473,13 @@ private:
     {
         /// Engine API version of the call that last wrote this entry: the forkchoiceUpdated
         /// version for a build, the newPayload version for a commit. getPayload's version
-        /// window (detail::isGetPayloadVersionCompatible) is checked against it. On the
-        /// generic path a newPayloadV4 commit stores version=4, so a post-commit re-query
-        /// through getPayloadV4/V5 fails the window and answers -38005 instead of
-        /// replaying. The OP local-commit path leaves the as-built version (3) untouched —
-        /// a post-commit re-query would replay the payload while the entry lives. That is
-        /// harmless for real CLs: op-node never re-queries a committed payloadId (it
-        /// fetches a build exactly once), and op-geth's build cache is likewise not meant
-        /// to outlive the commit.
+        /// window (detail::isGetPayloadVersionCompatible) is checked against it. Both commit
+        /// paths rewrite the version at commit time (generic: the newPayload version; OP
+        /// local-commit: 4, the only version the OP newPayload gate admits), so a
+        /// post-commit re-query through getPayloadV4/V5 fails the window and answers -38005
+        /// instead of replaying a committed payload. op-node never re-queries a committed
+        /// payloadId (it fetches a build exactly once); the rewrite only closes the
+        /// pre/post-commit sentinel fold for other clients.
         std::uint32_t version = 0;
         ExecutionPayload executionPayload;
         u256 blockValue = 0;
@@ -510,6 +497,33 @@ private:
         bcos::protocol::BlockHeader::Ptr header;
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
     };
+
+    /// Insert or rebuild a payload cache entry: dedupe the order-deque position, append
+    /// the ID, assign the cache slot, and bound both maps at c_maxPayloadEntries by
+    /// front-eviction. Rebuilds of an existing ID move to the back so a refreshed entry
+    /// cannot sit in a stale front slot and get evicted right away. Caller must have set
+    /// m_blockHashToPayloadId already and hold x_state exclusively.
+    /// Private helper: dedupe the order-deque position, append the ID, assign the
+    /// cache slot, and bound both maps at c_maxPayloadEntries by front-eviction.
+    void publishPayloadEntry(const PayloadID& payloadId, PayloadEntry&& entry)
+    {
+        auto orderIt = std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId);
+        if (orderIt != m_payloadOrder.end())
+        {
+            m_payloadOrder.erase(orderIt);
+        }
+        m_payloadOrder.push_back(payloadId);
+        m_payloadCache[payloadId] = std::move(entry);
+        while (m_payloadOrder.size() > c_maxPayloadEntries)
+        {
+            auto const evictedId = m_payloadOrder.front();
+            m_payloadOrder.pop_front();
+            m_payloadCache.erase(evictedId);
+            std::erase_if(
+                m_blockHashToPayloadId, [&](auto const& kv) { return kv.second == evictedId; });
+        }
+    }
+
 
     /// Upper bound is per-instance (OP sets V4 at construction; default V3).
     bool isForkchoiceVersionSupported(std::uint32_t version) const
@@ -592,11 +606,10 @@ private:
                                               std::string("calcOpBaseFee failed: ") + e.what()});
                 }
                 // op-geth rejects attrs.timestamp <= parent at build time (-38003,
-                // checkOptimismPayloadAttributes); this gate throws OpExecutionInternalError,
-                // which op-node reads as a generic retryable -32603 — the typed
-                // InvalidPayloadAttributes (-38003) mapping lands with #5521. Without this gate
-                // we would build a payload whose read-back is rejected at newPayload — a
-                // one-block stall (R54/R72).
+                // checkOptimismPayloadAttributes); this gate throws InvalidPayloadAttributes,
+                // which EngineEndpoint maps to the typed -38003 (a permanent attribute fault
+                // for the CL, not a retryable -32603). Without this gate we would build a
+                // payload whose read-back is rejected at newPayload — a one-block stall.
                 if (payloadAttributes.timestamp <=
                     static_cast<std::uint64_t>(parentHeader->timestamp()))
                 {
@@ -923,23 +936,7 @@ private:
         {
             std::unique_lock stateLock(x_state);
             m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
-            m_payloadCache[payloadId] = std::move(entry);
-            // Dedupe: identical attributes rebuild the same payload ID. Move a rebuilt ID to
-            // the back so it cannot sit in a stale front slot and be evicted right after.
-            auto orderIt = std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId);
-            if (orderIt != m_payloadOrder.end())
-            {
-                m_payloadOrder.erase(orderIt);
-            }
-            m_payloadOrder.push_back(payloadId);
-            while (m_payloadOrder.size() > c_maxPayloadEntries)
-            {
-                auto const evictedId = m_payloadOrder.front();
-                m_payloadOrder.pop_front();
-                m_payloadCache.erase(evictedId);
-                std::erase_if(
-                    m_blockHashToPayloadId, [&](auto const& kv) { return kv.second == evictedId; });
-            }
+            publishPayloadEntry(payloadId, std::move(entry));
         }
         co_return ForkchoiceUpdatedResult{
             .payloadStatus = makeStatus(
@@ -1174,11 +1171,15 @@ private:
                 std::unique_lock lock(x_state);
                 m_payloadCache[payloadId] = std::move(entry);
                 // Keep only the just-committed block; the newPayload parent check accepts
-                // the head hash directly, so dropping older blockHash rows is safe.
+                // the head hash directly, so dropping older blockHash rows is safe. Prune
+                // the order deque to the same set so no ghost IDs linger and skew the
+                // eviction loop.
                 std::erase_if(m_blockHashToPayloadId,
                     [&](auto const& kv) { return kv.first != request.executionPayload.blockHash; });
                 std::erase_if(
                     m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });
+                std::erase_if(
+                    m_payloadOrder, [&](auto const& orderId) { return orderId != payloadId; });
             }
 
             co_return makeStatus(
@@ -1243,6 +1244,7 @@ private:
 
         // Locally built payload: commit the pending block without re-execution.
         bcos::protocol::BlockHeader::Ptr builtHeader;
+        PayloadID builtPayloadId;
         {
             std::shared_lock lock(x_state);
             auto it = m_blockHashToPayloadId.find(payload.blockHash);
@@ -1260,6 +1262,7 @@ private:
                     if (entry->second.executionPayload.blockHash == payload.blockHash)
                     {
                         builtHeader = entry->second.header;
+                        builtPayloadId = payloadId;
                     }
                 }
             }
@@ -1284,6 +1287,17 @@ private:
             if (commitError)
             {
                 co_return mapDelegateError(*commitError, std::nullopt);
+            }
+            {
+                // Align with the generic commit path: rewrite the entry's version so a
+                // post-commit re-query through getPayloadV4/V5 fails the window (-38005)
+                // instead of replaying a committed payload. 4 is the only version the OP
+                // newPayload gate admits.
+                std::unique_lock stateLock(x_state);
+                if (auto entry = m_payloadCache.find(builtPayloadId); entry != m_payloadCache.end())
+                {
+                    entry->second.version = 4;
+                }
             }
             co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
         }
@@ -1633,43 +1647,48 @@ private:
         auto chainRevision = ledgerConfig.evmcRevisionForBlock(nextBlockNumber);
         if (!chainRevision.has_value())
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: no on-chain EVM revision configured for block " +
-                std::to_string(nextBlockNumber) +
-                "; cannot derive the Eth header fork era (a v2 chain persists evmc_revision "
-                "at genesis)"});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: no on-chain EVM revision configured for block " +
+                    std::to_string(nextBlockNumber) +
+                    "; cannot derive the Eth header fork era (a v2 chain persists evmc_revision "
+                    "at genesis)"});
         }
         auto forkVersion = bcos::engine::detail::ethBlockVersionFor(*chainRevision);
 
         if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
             !payloadAttributes.parentBeaconBlockRoot.has_value())
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: chain EVM revision requires the V3 payload attributes "
-                "(parentBeaconBlockRoot); forkchoiceUpdated must be called at version >= 3"});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: chain EVM revision requires the V3 payload attributes "
+                    "(parentBeaconBlockRoot); forkchoiceUpdated must be called at version >= 3"});
         }
         if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI &&
             !payloadAttributes.withdrawals.has_value())
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: chain EVM revision requires the V2 payload attributes "
-                "(withdrawals); forkchoiceUpdated must be called at version >= 2"});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: chain EVM revision requires the V2 payload attributes "
+                    "(withdrawals); forkchoiceUpdated must be called at version >= 2"});
         }
         if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
             forkVersion < bcos::protocol::EthBlockVersion::CANCUN)
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: forkchoiceUpdatedV3 requires a CANCUN-or-later chain fork; "
-                "chain EVM revision maps to " +
-                std::to_string(static_cast<int>(forkVersion))});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: forkchoiceUpdatedV3 requires a CANCUN-or-later chain fork; "
+                    "chain EVM revision maps to " +
+                    std::to_string(static_cast<int>(forkVersion))});
         }
         if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
             forkVersion < bcos::protocol::EthBlockVersion::SHANGHAI)
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: forkchoiceUpdatedV2 requires a SHANGHAI-or-later chain "
-                "fork; chain EVM revision maps to " +
-                std::to_string(static_cast<int>(forkVersion))});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: forkchoiceUpdatedV2 requires a SHANGHAI-or-later chain "
+                    "fork; chain EVM revision maps to " +
+                    std::to_string(static_cast<int>(forkVersion))});
         }
 
         if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)
@@ -1681,8 +1700,8 @@ private:
         {
             executionPayload.blobGasUsed = u256(0);
             executionPayload.excessBlobGas = u256(0);
-            executionPayload.withdrawalsRoot = bcos::engine::detail::withdrawalsRootFor(
-                executionPayload);
+            executionPayload.withdrawalsRoot =
+                bcos::engine::detail::withdrawalsRootFor(executionPayload);
         }
 
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
@@ -1705,9 +1724,8 @@ private:
             emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setGasUsed(0);
-            detail::finalizeEthBlockHeader(
-                *emptyHeader, executionPayload, payloadAttributes.parentBeaconBlockRoot,
-                forkVersion);
+            detail::finalizeEthBlockHeader(*emptyHeader, executionPayload,
+                payloadAttributes.parentBeaconBlockRoot, forkVersion);
             executionPayload.stateRoot = emptyHeader->stateRoot();
             executionPayload.receiptsRoot = bcos::ledger::mpt::emptyRootHash();
             executionPayload.gasUsed = 0;

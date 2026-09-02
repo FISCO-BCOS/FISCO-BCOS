@@ -414,8 +414,8 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     {
         return std::string("withdrawals must be empty on the OP path");
     }
-    // Stricter than op-geth at the same admission position (its EncodeOptimismExtraData
-    // panics on nil minBaseFee post-Jovian; we answer INVALID cleanly) — R93.
+    // Stricter than op-geth at the same admission position: its EncodeOptimismExtraData
+    // panics on nil minBaseFee post-Jovian; we answer INVALID cleanly instead.
     if (jovianActive && !payloadAttributes.minBaseFee.has_value())
     {
         return std::string("minBaseFee is required after the Jovian fork");
@@ -483,8 +483,9 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
         auto expectedRoot = withdrawalsRootFor(executionPayload);
         if (*executionPayload.withdrawalsRoot != expectedRoot)
         {
-            return std::string("withdrawalsRoot does not match the value this node commits "
-                               "for the built header");
+            return std::string(
+                "withdrawalsRoot does not match the value this node commits "
+                "for the built header");
         }
     }
     if (auto error = validateOptimismExtraDataShape(executionPayload.extraData))
@@ -529,9 +530,10 @@ bcos::protocol::EthBlockVersion bcos::engine::detail::ethBlockVersionFor(evmc_re
         {
             return bcos::protocol::EthBlockVersion::LONDON;
         }
-        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-            "EngineService: unsupported EVM revision " + std::to_string(static_cast<int>(rev)) +
-            " for Eth header fork derivation"});
+        BOOST_THROW_EXCEPTION(
+            UnsupportedFork{} << bcos::errinfo_comment{"EngineService: unsupported EVM revision " +
+                                                       std::to_string(static_cast<int>(rev)) +
+                                                       " for Eth header fork derivation"});
     }
 }
 
@@ -715,7 +717,7 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
 
     // OP carries no execution requests: op-geth NewPayloadV4 rejects a nil list, so the
     // field must be present AND empty on the wire (same contract as the generic V4 path;
-    // the RPC layer already requires params[3]) — R62.
+    // the RPC layer already requires params[3]).
     if (!request.executionRequests.has_value())
     {
         return std::string("executionRequests must be present on the OP path");

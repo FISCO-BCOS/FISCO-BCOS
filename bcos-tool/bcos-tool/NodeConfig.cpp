@@ -391,6 +391,19 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
     auto extraData = requireField("extra_data");
     requireHexField(std::string(sectionName), "extra_data", extraData, 0, true);
     header.m_extraData = fromHex(extraData);
+    // OP mode (executor_version >= 3) requires the genesis extraData to be one of the
+    // base-fee shapes calcOpBaseFee accepts — empty (pre-Holocene), 9B Holocene
+    // (0x00 || denom u32 || elasticity u32), or 17B Jovian (0x01 || denom || elasticity
+    // || minBaseFee u64) — so a malformed artifact fails at load, not at block 1.
+    if (m_genesisConfig.m_executorVersion >= 3 && header.m_extraData.size() != 0 &&
+        header.m_extraData.size() != 9 && header.m_extraData.size() != 17)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[eth_genesis_header].extra_data must be empty, 9 bytes (Holocene 0x00 || "
+                "denominator u32 || elasticity u32), or 17 bytes (Jovian 0x01 || denominator "
+                "|| elasticity || minBaseFee u64) in OP mode"));
+    }
     header.m_mixHash = hashField("mix_hash");
     auto nonce = requireField("nonce");
     requireHexField(std::string(sectionName), "nonce", nonce, 16, false);
@@ -2098,6 +2111,18 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
         m_genesisConfig.m_isSerialExecute =
             _genesisConfig.get<bool>("executor.is_serial_execute", false);
         m_genesisConfig.m_executorVersion = _genesisConfig.get<int>("executor.version", 0);
+        if (m_genesisConfig.m_executorVersion >= 3)
+        {
+            // Release-boundary semantics change (R75): before this release executor_version
+            // >= 3 saturated onto the v2 EthereumExecutor; it now selects OP-Stack mode.
+            // Make the redefinition loud for an upgraded deployment instead of silent.
+            NodeConfig_LOG(WARNING)
+                << LOG_DESC(
+                       "executor_version >= 3 selects OP-Stack mode in this release (previously "
+                       "saturated onto the v2 EthereumExecutor); for a pure-Ethereum chain set "
+                       "executor.version=2")
+                << LOG_KV("executor_version", m_genesisConfig.m_executorVersion);
+        }
     }
     catch (std::exception const& e)
     {

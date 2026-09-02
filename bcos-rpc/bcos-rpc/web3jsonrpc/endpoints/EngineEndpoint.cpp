@@ -169,8 +169,8 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
     // and a generic shape message would wrongly point at the CL. Anything else
     // (OpExecutionInternalError and friends) propagates and answers the generic -32603,
     // the correct classification for a genuine internal fault. (The buildOpPayload
-    // timestamp gate keeps its internal-error typing for now — the typed -38003 mapping
-    // there lands with #5521.)
+    // timestamp gate throws InvalidPayloadAttributes and is mapped to -38003 by this
+    // catch.)
 
     engine::ForkchoiceUpdatedResult engineResult;
     try
@@ -192,8 +192,8 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
         // the exception's errinfo_comment so the operator can tell which gate fired — the
         // missing-revision case is a NODE-side misconfiguration and the generic shape
         // message would wrongly point at the CL.
-        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
-            std::string("Unsupported fork: ") + e.what()));
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
     catch (engine::InvalidForkchoiceState const& e)
     {

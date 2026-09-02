@@ -255,7 +255,10 @@ inline constexpr int64_t c_l1InfoDepositGas = 1'000'000;
 /// op-node (L2 CL) and arrives inside payloadAttributes.transactions; this struct only
 /// feeds the built-in single-node CL's fallback synthesis, which runs when the CL did not
 /// supply a deposit. All-zero fields are the documented stand-in for an absent [op_l1]
-/// configuration (see NodeConfig::loadOpL1Config) — never a production L1 value.
+/// configuration (see NodeConfig::loadOpL1Config) — never a production L1 value. This
+/// folding is deliberate: an all-zero struct is indistinguishable from a genuine L1 block
+/// at height 0 with a zero hash, and the built-in-CL stand-in accepts that ambiguity
+/// because real op-node deposits always carry the actual L1 block info.
 struct L1BlockInfo
 {
     uint64_t number = 0;

@@ -38,8 +38,9 @@ except ImportError:
 RPC_URL = "http://127.0.0.1:8545"
 HEADERS = {"Content-Type": "application/json"}
 TIMEOUT = 30
-# EngineEndpoint::c_opFcuBuildMinInterval is 100ms. Pace attribute-bearing FCUs
-# so the mock CL does not trip the CPU-DoS window (CI hung on noTxPool=false).
+# Pace attribute-bearing FCUs: each one triggers a full probe+canonical block build
+# behind the engine's whole-build lock, and empirical CI runs hung on noTxPool=false
+# when they were fired back-to-back. (There is no RPC-side rate limiter to trip.)
 _FCU_ATTRS_MIN_INTERVAL_S = 0.11
 _last_fcu_attrs_at = 0.0
 
@@ -69,8 +70,9 @@ EXPECTED_CAPABILITIES = {
 # The one genuinely unimplemented version: routable, answers -38005, never advertised.
 UNIMPLEMENTED_METHODS = ("engine_forkchoiceUpdatedV4",)
 
-# The gas limit sent in payloadAttributes. See test_negative_cases / the note below: this
-# node currently IGNORES it and takes the gas limit from its own SystemConfig.
+# The gas limit sent in payloadAttributes. The OP build path prefers attrs.gasLimit and
+# falls back to the chain's ledgerConfig gas limit (buildOpPayload); see
+# test_negative_cases for the rejection cells around it.
 ATTRS_GAS_LIMIT = "0x1c9c380"
 
 # ---- Minimal RLP encoder (enough for the deposit fixture) ----

@@ -6,7 +6,6 @@
 
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpTransition.h>
-#include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
@@ -23,7 +22,6 @@
 #include <range/v3/range/concepts.hpp>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <string_view>
 #include <utility>
 #include <vector>

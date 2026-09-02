@@ -87,7 +87,6 @@ public:
     virtual void stop();
     virtual void prune();
 
-
     bcos::tool::NodeConfig::Ptr nodeConfig() { return m_nodeConfig; }
     ProtocolInitializer::Ptr protocolInitializer() { return m_protocolInitializer; }
     PBFTInitializer::Ptr pbftInitializer() { return m_pbftInitializer; }
