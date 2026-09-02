@@ -17,6 +17,7 @@
 #pragma once
 
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/FixedBytes.h>
 
 namespace bcos::engine
 {
@@ -37,5 +38,12 @@ DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 /// JSON-RPC -38005 Unsupported fork. Isthmus+ requiring payload V4 is one use;
 /// other fork-shape mismatches share this channel (see #5517).
 DERIVE_BCOS_EXCEPTION(UnsupportedFork);
+
+/// Structured carrier for the OP build-loop's poisoned-tx eviction: the OpScheduler
+/// catch attaches the offending tx hash to the boundary bcos::Error as a typed
+/// boost::error_info slot, and buildOpPayload reads it back to evict the culprit from
+/// the pool — the same structured-member contract OpConsensusError documents at
+/// opstack-executor/OpCommon.h. Never route this through the message text.
+using OpCulpritTxHash = boost::error_info<struct OpCulpritTxHashTag, bcos::h256>;
 
 }  // namespace bcos::engine
