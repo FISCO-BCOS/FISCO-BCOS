@@ -48,10 +48,12 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/BoostLog.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmone/evmone.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/concept_archetype.hpp>
 #include <boost/container_hash/hash.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -59,7 +61,6 @@
 #include <boost/throw_exception.hpp>
 #include <cassert>
 #include <functional>
-#include <intx/intx.hpp>
 #include <iterator>
 #include <memory>
 #include <optional>

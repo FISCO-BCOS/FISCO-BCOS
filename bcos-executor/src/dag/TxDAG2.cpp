@@ -22,6 +22,7 @@
 
 #include "TxDAG2.h"
 #include "CriticalFields.h"
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::executor;

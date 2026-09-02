@@ -20,43 +20,30 @@
  */
 #include "bcos-codec/scale/Scale.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
-#include "bcos-tars-protocol/tars/Block.h"
 
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
-#include "bcos-framework/protocol/Transaction.h"
-#include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageFactory.h"
 #include "executor/TransactionExecutor.h"
 #include "executor/TransactionExecutorFactory.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
-#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
-#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-framework/executor/NativeExecutionMessage.h"
-#include <unistd.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/algorithm/string.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/log/core/core.hpp>
 #include <boost/test/unit_test.hpp>
 #include <cstdio>
-#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <memory>
-#include <set>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -67,8 +54,7 @@ namespace bcos
 {
 namespace test
 {
-using namespace std;
-
+using std::to_string;
 struct DagExecutorFixture
 {
     DagExecutorFixture()

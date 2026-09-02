@@ -37,43 +37,41 @@ public:
     ~HsmSM4Crypto() override {}
 
     // encrypt decrypt with external key
-    bytesPointer symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
+    bytes symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
         const unsigned char* _key, size_t _keySize) override
     {
         return symmetricEncrypt(_plainData, _plainDataSize, _key, _keySize, _key, 16);
     }
-    bytesPointer symmetricDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+    bytes symmetricDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
         const unsigned char* _key, size_t _keySize) override
     {
         return symmetricDecrypt(_cipherData, _cipherDataSize, _key, _keySize, _key, 16);
     }
-    bytesPointer symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
+    bytes symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
         const unsigned char* _key, size_t _keySize, const unsigned char* _ivData,
         size_t _ivDataSize) override
     {
         return HsmSM4Encrypt(_plainData, _plainDataSize, _key, _keySize, _ivData, _ivDataSize);
     }
-    bytesPointer symmetricDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+    bytes symmetricDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
         const unsigned char* _key, size_t _keySize, const unsigned char* _ivData,
         size_t _ivDataSize) override
     {
         return HsmSM4Decrypt(_cipherData, _cipherDataSize, _key, _keySize, _ivData, _ivDataSize);
     }
 
-    bytesPointer HsmSM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
+    bytes HsmSM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
         const unsigned char* _key, size_t _keySize, const unsigned char* _ivData,
         size_t _ivDataSize);
-    bytesPointer HsmSM4Decrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+    bytes HsmSM4Decrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
         const unsigned char* _key, size_t _keySize, const unsigned char* _ivData,
         size_t _ivDataSize);
 
     // encrypt decrypt with internal key
-    bytesPointer symmetricEncryptWithInternalKey(const unsigned char* _plainData,
-        size_t _plainDataSize, const unsigned int _keyIndex, const unsigned char* _ivData,
-        size_t _ivDataSize);
-    bytesPointer symmetricDecryptWithInternalKey(const unsigned char* _plainData,
-        size_t _plainDataSize, const unsigned int _keyIndex, const unsigned char* _ivData,
-        size_t _ivDataSize);
+    bytes symmetricEncryptWithInternalKey(const unsigned char* _plainData, size_t _plainDataSize,
+        const unsigned int _keyIndex, const unsigned char* _ivData, size_t _ivDataSize);
+    bytes symmetricDecryptWithInternalKey(const unsigned char* _plainData, size_t _plainDataSize,
+        const unsigned int _keyIndex, const unsigned char* _ivData, size_t _ivDataSize);
 
 private:
     std::string m_hsmLibPath;

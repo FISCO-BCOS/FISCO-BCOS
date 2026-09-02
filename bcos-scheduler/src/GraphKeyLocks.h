@@ -6,6 +6,7 @@
 #include <gsl/span>
 #include <string_view>
 #include <variant>
+#include <bcos-utilities/BoostLog.h>
 
 #define KEY_LOCK_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SCHEDULER") << LOG_BADGE("KEY_LOCK")
 // #define KEY_LOCK_LOG(LEVEL) std::cout << LOG_BADGE("KEY_LOCK")

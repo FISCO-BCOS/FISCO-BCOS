@@ -22,11 +22,9 @@
  */
 
 #include "bcos-ledger/Ledger.h"
-#include <bcos-framework/storage/Serialize.h>
 #include "../../mock/MockKeyFactor.h"
 #include "GenesisFeatureFlagsHelper.h"
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
-#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
@@ -35,21 +33,19 @@
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
-#include "bcos-utilities/Bloom.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/Bloom.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
-#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/storage/LegacyStorageMethods.h>
+#include <bcos-framework/storage/Serialize.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/storage/Table.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
@@ -57,7 +53,6 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/lexical_cast.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <magic_enum/magic_enum.hpp>
@@ -376,8 +371,8 @@ public:
             std::promise<bool> prewritePromise;
             m_ledger->asyncPrewriteBlock(
                 m_storage, nullptr, block,
-                [&](std::string, Error::Ptr&&) { prewritePromise.set_value(true); }, true,
-                features);
+                [&](std::string, Error::Ptr&&) { prewritePromise.set_value(true); }, true, features,
+                std::nullopt, true);
             prewritePromise.get_future().get();
             // update nonce logic move to executor
             //            for (size_t j = 0; j < txSize; ++j)
@@ -427,10 +422,12 @@ public:
 
             std::promise<bool> p3;
             m_ledger->asyncPrewriteBlock(
-                m_storage, nullptr, m_fakeBlocks->at(i), [&](std::string, Error::Ptr&& error) {
+                m_storage, nullptr, m_fakeBlocks->at(i),
+                [&](std::string, Error::Ptr&& error) {
                     BOOST_CHECK(!error);
                     p3.set_value(true);
-                });
+                },
+                true, std::nullopt, std::nullopt, true);
             BOOST_CHECK_EQUAL(p3.get_future().get(), true);
         }
     }
@@ -999,8 +996,8 @@ BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)
 
     // one transaction so the block has a tx-hash row for the receipt lookup
     auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
-        "0x1000000000000000000000000000000000000000", bcos::bytes{0x60}, "1", 1000,
-        "chain0", "group0", 0);
+        "0x1000000000000000000000000000000000000000", bcos::bytes{0x60}, "1", 1000, "chain0",
+        "group0", 0);
     block->appendTransaction(tx);
 
     protocol::LogEntry logEntry(bcos::bytes(20, 0x10),
@@ -1014,17 +1011,18 @@ BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)
     bcos::orBloom(expectedBloom, bcos::getLogsBloom(receipt->logEntries()));
 
     std::promise<bool> prewritePromise;
-    m_ledger->asyncPrewriteBlock(m_storage, nullptr, block,
+    m_ledger->asyncPrewriteBlock(
+        m_storage, nullptr, block,
         [&](std::string, Error::Ptr&& error) {
             BOOST_CHECK(!error);
             prewritePromise.set_value(true);
         },
-        true, std::nullopt);
+        true, std::nullopt, std::nullopt, true);
     BOOST_CHECK(prewritePromise.get_future().get());
 
     std::promise<protocol::Block::Ptr> blockPromise;
-    m_ledger->asyncGetBlockDataByNumber(1, bcos::ledger::RECEIPTS,
-        [&](Error::Ptr error, protocol::Block::Ptr result) {
+    m_ledger->asyncGetBlockDataByNumber(
+        1, bcos::ledger::RECEIPTS, [&](Error::Ptr error, protocol::Block::Ptr result) {
             BOOST_CHECK(!error);
             blockPromise.set_value(std::move(result));
         });
@@ -1035,8 +1033,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)
     BOOST_CHECK(!readBloom.empty());
     bcos::bytes readBloomBytes(readBloom.begin(), readBloom.end());
     BOOST_CHECK(readBloomBytes != bcos::bytes(bcos::BloomBytesSize, 0));
-    BOOST_CHECK(readBloomBytes ==
-                bcos::bytes(expectedBloom.begin(), expectedBloom.end()));
+    BOOST_CHECK(readBloomBytes == bcos::bytes(expectedBloom.begin(), expectedBloom.end()));
 }
 
 BOOST_AUTO_TEST_CASE(getTransactionByHash)
@@ -1405,7 +1402,8 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     auto table = tablePromise.get_future().get();
 
     auto oldEntry = table.getRow(SYSTEM_KEY_TX_COUNT_LIMIT);
-    auto [txCountLimit, enableNum] = bcos::storage::serialize::decode<SystemConfigEntry>(oldEntry->get());
+    auto [txCountLimit, enableNum] =
+        bcos::storage::serialize::decode<SystemConfigEntry>(oldEntry->get());
     BOOST_CHECK_EQUAL(txCountLimit, "1000");
     BOOST_CHECK_EQUAL(enableNum, 0);
 
@@ -1484,7 +1482,8 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     auto transactions = std::make_shared<Transactions>();
     transactions->push_back(tx);
     m_ledger->asyncPrewriteBlock(
-        m_storage, blockTxs, block, [](std::string, Error::Ptr&& error) { BOOST_CHECK(!error); });
+        m_storage, blockTxs, block, [](std::string, Error::Ptr&& error) { BOOST_CHECK(!error); },
+        true, std::nullopt, std::nullopt, true);
 
     m_ledger->asyncGetBlockDataByNumber(
         100, TRANSACTIONS, [tx](Error::Ptr error, bcos::protocol::Block::Ptr block) {
@@ -1573,6 +1572,58 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochSealerNum()), 12345);
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochBlockNum()), 1000);
         BOOST_CHECK_EQUAL(ledgerConfig->notifyRotateFlagInfo(), 0);
+    }());
+}
+
+// Finding AO (fail-stop decision): getLedgerConfig must propagate InvalidWeb3ChainIdConfig
+// when the stored web3_chain_id row is malformed. The base already fail-stopped via
+// boost::lexical_cast; this path now throws a typed exception, accepts 0x QUANTITY, and
+// rejects a leading '-' (lexical_cast<u256> wrapped that modulo 2^256). Same scaffolding
+// as the getLedgerConfig case above.
+BOOST_AUTO_TEST_CASE(getLedgerConfigMalformedWeb3ChainIdFailStop)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        initFixture();
+
+        using KeyType = executor_v1::StateKey;
+        Entry value;
+        SystemConfigEntry config;
+
+        config = {"12", 0};
+        value.set(bcos::storage::serialize::encode(config));
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_TX_COUNT_LIMIT}, value);
+
+        config = {"not-a-number", 0};
+        value.set(bcos::storage::serialize::encode(config));
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_WEB3_CHAIN_ID}, value);
+
+        value.set("10086");
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}, value);
+
+        auto block = std::make_shared<bcostars::protocol::BlockImpl>();
+        auto blockHeader = block->blockHeader();
+        blockHeader->setNumber(10086);
+        blockHeader->setVersion(200);
+        blockHeader->setTimestamp(110);
+        auto hashImpl = std::make_shared<Keccak256>();
+        blockHeader->calculateHash(*hashImpl);
+        co_await ledger::prewriteBlock(*m_ledger,
+            std::make_shared<bcos::protocol::ConstTransactions>(), block, false, m_storage);
+        bytes headerBuffer;
+        blockHeader->encode(headerBuffer);
+
+        storage::Entry number2HeaderEntry;
+        number2HeaderEntry.set(std::move(headerBuffer));
+        co_await storage2::writeOne(*m_storage,
+            KeyType{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(blockHeader->number())},
+            std::move(number2HeaderEntry));
+
+        auto ledgerConfig = std::make_shared<LedgerConfig>();
+        BOOST_CHECK_THROW(co_await ledger::getLedgerConfig(*m_ledger, *ledgerConfig),
+            ledger::InvalidWeb3ChainIdConfig);
     }());
 }
 
@@ -1778,6 +1829,25 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
         BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
         BOOST_CHECK_EQUAL(static_cast<int>(*parsed.evmcRevisionForBlock(0)), rev);
     }
+}
+
+BOOST_AUTO_TEST_CASE(web3ChainIdConfigFailStop)
+{
+    // Finding AO (fail-stop decision): a malformed web3_chain_id SYS_CONFIG value must
+    // throw InvalidWeb3ChainIdConfig from the shared config-apply helper — it feeds the
+    // EVM CHAINID opcode, and silently serving 0 would be indistinguishable from unset
+    // while the admission side rejects the same value (silent-divergence hazard).
+    for (std::string_view bad : {"", "abc", "-5", "0x", "0xZZ", "1 2", "12abc"})
+    {
+        BOOST_CHECK_THROW(
+            (void)ledger::parseConfiguredWeb3ChainId(bad), ledger::InvalidWeb3ChainIdConfig);
+    }
+
+    // Legitimate forms keep parsing; the absent-config default "0" stays 0.
+    BOOST_CHECK_EQUAL(ledger::parseConfiguredWeb3ChainId("0"), bcos::u256(0));
+    BOOST_CHECK_EQUAL(ledger::parseConfiguredWeb3ChainId("1"), bcos::u256(1));
+    BOOST_CHECK_EQUAL(ledger::parseConfiguredWeb3ChainId("0x539"), bcos::u256(1337));
+    BOOST_CHECK_EQUAL(ledger::parseConfiguredWeb3ChainId("0x0539"), bcos::u256(1337));
 }
 
 BOOST_AUTO_TEST_CASE(replaceBinary)

@@ -18,7 +18,6 @@
  * @author: octopus
  * @date 2021-09-22
  */
-#include "../fake/WsServiceFake.h"
 #include "../fake/WsSessionFake.h"
 #include <bcos-cpp-sdk/event/EventSub.h>
 #include <bcos-cpp-sdk/event/EventSubResponse.h>
@@ -148,8 +147,6 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
 {
     boost::asio::io_context ioContext;
     auto es = std::make_shared<bcos::cppsdk::event::EventSub>(ioContext);
-    auto messageFactory = std::make_shared<bcos::boostssl::ws::WsMessageFactory>();
-    es->setMessageFactory(messageFactory);
 
     auto task = std::make_shared<bcos::cppsdk::event::EventSubTask>();
     std::string id = "123";
@@ -175,15 +172,17 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
 
     auto ioServicePool = std::make_shared<IOServicePool>(2, "evtSubTest");
     {
-        // task is running
+        // task is running: unsubscribe through a real (not connected) session. The
+        // assertions below only cover the synchronous task removal inside
+        // unsubscribeEvent; the disconnected-session error callback fires on the
+        // io-pool thread and is not asserted here (the block below covers the
+        // response-parsing path via onRecvEventSubMessage).
         auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(ioServicePool);
-        task->setSession(session);
+        task->setSession(session->session());
 
-        std::string resp = "{}";
-        session->setResp(std::make_shared<bcos::bytes>(resp.begin(), resp.end()));
         es->addTask(task);
 
-        // callback error
+        // callback error (session disconnected)
         es->unsubscribeEvent(id);
 
         BOOST_CHECK(!es->getTask(id));
@@ -191,27 +190,34 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
     }
 
     {
-        // task is running
+        // response parsing driven through the public onRecvEventSubMessage (the
+        // receive-path handler for event-sub responses): exercises the
+        // EventSubResponse::fromJson and status dispatch machinery.
         auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(ioServicePool);
 
-        task->setSession(session);
+        // invalid response: fromJson fails, handler returns without side effects
+        std::string invalidJson = "not-a-json";
+        bcos::boostssl::ws::WsMessage invalid;
+        invalid.setPayload(bcos::bytes(invalidJson.begin(), invalidJson.end()));
+        es->onRecvEventSubMessage(std::move(invalid), session->session());
 
-        es->addTask(task);
+        // valid success response: task matched by id and its callback invoked
+        auto respTask = std::make_shared<bcos::cppsdk::event::EventSubTask>();
+        respTask->setId(id);
+        bool called = false;
+        respTask->setCallback(
+            [&called](bcos::Error::Ptr, const std::string&) { called = true; });
+        es->addTask(respTask);
 
         auto resp = std::make_shared<bcos::cppsdk::event::EventSubResponse>();
-        resp->setId(task->id());
+        resp->setId(id);
         resp->setStatus(0);
-
-        session->setError(nullptr);
         auto respJson = resp->generateJson();
-        session->setResp(std::make_shared<bcos::bytes>(respJson.begin(), respJson.end()));
-
-        es->unsubscribeEvent(id);
-
-        BOOST_CHECK(!es->getTask(id));
-        BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
+        bcos::boostssl::ws::WsMessage msg;
+        msg.setPayload(bcos::bytes(respJson.begin(), respJson.end()));
+        es->onRecvEventSubMessage(std::move(msg), session->session());
+        BOOST_CHECK(called);
     }
-
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -21,7 +21,6 @@
 #include "AirNodeInitializer.h"
 #include "libinitializer/Common.h"
 #include "libinitializer/MemPoolInitializer.h"
-#include <bcos-boostssl/websocket/RawWsMessage.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -32,7 +31,7 @@
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <rocksdb/env.h>
+#include <boost/atomic.hpp>
 
 using namespace bcos::node;
 using namespace bcos::initializer;
@@ -58,6 +57,9 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     auto nodeConfig = std::make_shared<NodeConfig>(keyFactory);
     nodeConfig->loadGenesisConfig(_genesisFile);
     nodeConfig->loadConfig(_configFilePath);
+    // Cross-file EL-mode invariants (config.ini ethereum.mode=el must be backed by the
+    // genesis EL declaration) — checkable only after BOTH files are loaded.
+    nodeConfig->validateELModeInvariants();
 
     m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
     m_nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);

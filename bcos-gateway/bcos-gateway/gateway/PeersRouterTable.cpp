@@ -263,37 +263,9 @@ void PeersRouterTable::removeNodeFromGatewayInfo(P2pID const& _p2pID)
     }
 }
 
-// broadcast message to given group
-void PeersRouterTable::asyncBroadcastMsg(
-    uint16_t _type, std::string const& _groupID, uint16_t _moduleID, P2PMessage::Ptr _msg)
-{
-    size_t sendedCount = 0;
-    for (auto const& it : m_gatewayInfos)
-    {
-        // not broadcast message to the gateway-self
-        if (std::string p2pNodeID; it.first != m_uuid && it.second &&
-                                   it.second->randomChooseP2PNode(p2pNodeID, _type, _groupID))
-        {
-            if (c_fileLogLevel <= TRACE) [[unlikely]]
-            {
-                ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
-                                  << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
-                                  << LOG_KV("dst", printShortP2pID(p2pNodeID));
-            }
-            m_p2pInterface->asyncSendMessageByNodeID(p2pNodeID, _msg, {});
-            ++sendedCount;
-        }
-    }
-    ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable")
-                      << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode")
-                      << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
-                      << LOG_KV("payloadSize", _msg->payload().size())
-                      << LOG_KV("peersSize", sendedCount);
-}
-
 bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_t type,
-    std::string_view group, uint16_t moduleID, const P2PMessage& message,
-    ::ranges::any_view<bytesConstRef> payloads)
+    std::string_view group, uint16_t moduleID, const P2PMessageV2& message,
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads)
 {
     std::vector<std::string> selectedPeers;
 

@@ -18,17 +18,8 @@
  * @author: yujiechen
  * @date 2021-10-13
  */
-#include "bcos-tars-protocol/client/GatewayServiceClient.h"
-#include "bcos-tars-protocol/client/LedgerServiceClient.h"
-#include "bcos-tars-protocol/client/PBFTServiceClient.h"
-#include "bcos-tars-protocol/client/RpcServiceClient.h"
-#include "bcos-tars-protocol/client/SchedulerServiceClient.h"
-#include "bcos-tars-protocol/client/TxPoolServiceClient.h"
-#include "bcos-utilities/Exceptions.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-#include <vector>
 
 using namespace bcos;
 using namespace bcos::test;

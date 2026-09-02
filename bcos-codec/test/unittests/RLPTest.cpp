@@ -60,37 +60,44 @@ static std::string staticEncode(T const& in, T2 const& in2, const Args&... args)
 }
 
 template <typename T>
-static T decode(std::string_view hex, int32_t expectedErrorCode = 0)
+static T decode(std::string_view hex, int32_t expectedErrorCode = -1)
 {
     bcos::bytes bytes = fromHex(hex);
     auto bytesRef = bcos::ref(bytes);
     T result{};
     auto&& error = bcos::codec::rlp::decode(bytesRef, result);
-    if (expectedErrorCode == 0)
+    // expectedErrorCode < 0 means "expect success"; note DecodingError::Overflow
+    // is enum value 0, so 0 must mean "expect Overflow" (not success).
+    if (expectedErrorCode < 0)
     {
         BOOST_CHECK(!error);
     }
     else
     {
+        // A regression where decode fails but error is null would be a null deref below — assert
+        // the error exists first so the failure is readable, not a UB crash.
+        BOOST_REQUIRE(error);
         BOOST_CHECK_EQUAL(error->errorCode(), expectedErrorCode);
     }
     return result;
 }
 
 template <typename T, typename T2>
-static std::tuple<T, T2> decode(std::string_view hex, int32_t expectedErrorCode = 0)
+static std::tuple<T, T2> decode(std::string_view hex, int32_t expectedErrorCode = -1)
 {
     bcos::bytes bytes = fromHex(hex);
     auto bytesRef = bcos::ref(bytes);
     T r1{};
     T2 r2{};
     auto&& error = bcos::codec::rlp::decode(bytesRef, r1, r2);
-    if (expectedErrorCode == 0)
+    // expectedErrorCode < 0 means "expect success"; see the single-arg helper.
+    if (expectedErrorCode < 0)
     {
         BOOST_CHECK(!error);
     }
     else
     {
+        BOOST_REQUIRE(error);
         BOOST_CHECK_EQUAL(error->errorCode(), expectedErrorCode);
     }
     return {std::move(r1), std::move(r2)};
@@ -247,7 +254,10 @@ BOOST_AUTO_TEST_CASE(uintDecode)
     decode<uint64_t>("C0", UnexpectedList);
     decode<uint64_t>("8105", NonCanonicalSize);
     decode<uint64_t>("B8020004", NonCanonicalSize);
-    decode<uint64_t>("8AFFFFFFFFFFFFFFFFFF7C", Overflow);
+    // 10-byte payload into uint64: the width gate rejects it (UnexpectedLength). Note the old
+    // "Overflow" expectation was a silent no-op — DecodingError::Overflow == 0, so the helper
+    // treated it as "expect success" and the wide value was silently truncated.
+    decode<uint64_t>("8AFFFFFFFFFFFFFFFFFF7C", UnexpectedLength);
 }
 
 BOOST_AUTO_TEST_CASE(uint256Decode)
@@ -273,8 +283,9 @@ BOOST_AUTO_TEST_CASE(uint256Decode)
     decode<u256>("C0"sv, UnexpectedList);
     decode<u256>("8105"sv, NonCanonicalSize);
     decode<u256>("B8020004"sv, NonCanonicalSize);
+    // 33-byte payload into u256: rejected by the width gate (was silently truncated before).
     decode<u256>(
-        "A101000000000000000000000000000000000000008B000000000000000000000000"sv, Overflow);
+        "A101000000000000000000000000000000000000008B000000000000000000000000"sv, UnexpectedLength);
 }
 
 BOOST_AUTO_TEST_CASE(vectorsDecode)
@@ -387,6 +398,81 @@ BOOST_AUTO_TEST_CASE(decodeRejectsMalformedInputs)
         bcos::h256 value{};
         auto err = decodeErr("a0" + std::string(64, '1'), value);  // 32-byte payload
         BOOST_REQUIRE(!err);
+    }
+}
+
+// C1 (final review batch B): a long-form RLP header (0xb8.. / 0xf8..) whose multi-byte length
+// prefix carries a leading zero byte is non-canonical. op-geth rlp/decode.go readUint() rejects it
+// with ErrCanonSize when lenOfLen>=2; the single-byte-length forms (0xb8/0xf8, lenOfLen==1) are
+// left to the pre-existing `< 56` rule, matching op-geth's readUint `case 1`. Both the long-string
+// and long-list header branches must enforce this (fixing only one is the classic failure mode).
+BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
+{
+    auto decodeErr = [](std::string_view hex, auto& out) {
+        bcos::bytes buffer = fromHex(hex);
+        auto view = bcos::ref(buffer);
+        return bcos::codec::rlp::decode(view, out);
+    };
+    // 60 bytes of 0xaa as a hex payload, and 60 canonical single-byte list items (each 0x01).
+    std::string const payload60(120, 'a');    // "aa" * 60
+    std::string const listItems60(120, '1');  // "01" * 60 -> 60 single-byte RLP items
+
+    // ---- long string ----
+    {  // lenOfLen==2 with a leading zero: 0xb9 00 3c (== length 60 written non-minimally) — REJECT.
+        std::string str;
+        auto err = decodeErr("b9003c" + payload60, str);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+    }
+    {  // canonical 60-byte string, single-byte length 0xb8 3c — MUST STILL DECODE.
+        std::string str;
+        auto err = decodeErr("b83c" + payload60, str);
+        BOOST_CHECK(!err);
+        BOOST_CHECK_EQUAL(str.size(), 60u);
+    }
+    {  // lenOfLen==1 boundary 0xb8 0x00: canonical would be 0x80; here payloadLength 0 < 56, so it
+       // is rejected by the `< 56` rule (NOT the new leading-zero check). Guards against a future
+       // "just tighten lenOfLen>=1 too" edit that would diverge from op-geth's readUint case 1.
+        std::string str;
+        auto err = decodeErr("b800"sv, str);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+    }
+    {  // canonical 2-byte length that is NOT a leading zero (256-byte string, 0xb9 01 00) — the
+       // length prefix's first byte is 0x01, so it must decode, proving we reject only leading
+       // zeros, not all lenOfLen>=2 forms.
+        std::string str;
+        auto err = decodeErr("b90100" + std::string(512, 'c'), str);
+        BOOST_CHECK(!err);
+        BOOST_CHECK_EQUAL(str.size(), 256u);
+    }
+
+    // ---- long list ----
+    {  // lenOfLen==2 with a leading zero: 0xf9 00 3c — REJECT before any element is read.
+        std::vector<uint64_t> items;
+        auto err = decodeErr("f9003c" + listItems60, items);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+    }
+    {  // canonical 60-byte list, single-byte length 0xf8 3c — MUST STILL DECODE (60 items).
+        std::vector<uint64_t> items;
+        auto err = decodeErr("f83c" + listItems60, items);
+        BOOST_CHECK(!err);
+        BOOST_CHECK_EQUAL(items.size(), 60u);
+    }
+    {  // canonical 2-byte length that is NOT a leading zero (256-item list, 0xf9 01 00) — the
+       // length prefix's first byte is 0x01, so it must decode, proving we reject only leading
+       // zeros, not all lenOfLen>=2 list forms (mirrors the long-string case above).
+        std::vector<uint64_t> items;
+        auto err = decodeErr("f90100" + std::string(512, '1'), items);
+        BOOST_CHECK(!err);
+        BOOST_CHECK_EQUAL(items.size(), 256u);
+    }
+    {  // lenOfLen==1 boundary 0xf8 0x00: payloadLength 0 < 56 -> `< 56` rule, not the new check.
+        std::vector<uint64_t> items;
+        auto err = decodeErr("f800"sv, items);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
     }
 }
 

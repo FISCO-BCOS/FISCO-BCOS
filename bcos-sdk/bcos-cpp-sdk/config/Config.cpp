@@ -194,7 +194,7 @@ void Config::loadSslCert(
     auto contextConfig = std::make_shared<ContextConfig>();
     contextConfig->setSslType("ssl");
     contextConfig->setCertConfig(certConfig);
-    _config.setContextConfig(contextConfig);
+    _config.setContextConfig(*contextConfig);
 }
 
 void Config::loadSMSslCert(
@@ -240,5 +240,5 @@ void Config::loadSMSslCert(
     auto ctxConfig = std::make_shared<ContextConfig>();
     ctxConfig->setSslType("sm_ssl");
     ctxConfig->setSmCertConfig(cert);
-    _config.setContextConfig(ctxConfig);
+    _config.setContextConfig(*ctxConfig);
 }

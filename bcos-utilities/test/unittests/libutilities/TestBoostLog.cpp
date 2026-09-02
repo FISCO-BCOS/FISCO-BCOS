@@ -19,10 +19,9 @@
  */
 
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/BoostLogCollector.h"
 #include "bcos-utilities/BoostLog.h"
 #include <boost/test/unit_test.hpp>
-#include <chrono>
-#include <thread>
 using namespace bcos;
 using namespace std;
 

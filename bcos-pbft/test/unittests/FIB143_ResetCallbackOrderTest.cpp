@@ -23,15 +23,14 @@
 #include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTxPool.h"
 #include "bcos-pbft/pbft/engine/Validator.h"
+#include <chrono>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
-#include <chrono>
 #include <thread>
 
 using namespace bcos;

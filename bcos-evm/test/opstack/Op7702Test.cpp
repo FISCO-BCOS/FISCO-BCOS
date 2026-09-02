@@ -7,6 +7,7 @@
 // 签名哈希公式: keccak256(0x05 || rlp([chain_id, address, nonce]))
 
 #include "OpPredeploysSeed.h"
+#include "OpTestReceiptFactory.h"
 #include "StateDiffWriteback.h"
 #include "TestPrinters.h"
 #include <bcos-evm/eth/Eip7702Recover.h>
@@ -22,13 +23,14 @@
 #include <vector>
 
 using namespace bcos::evm::opstack;
+using namespace bcos::evm::opstack::testutil;
 using namespace evmone;
 using namespace evmc::literals;
 using intx::operator""_u256;
 
 namespace
 {
-constexpr auto kSender = 0x00000000000000000000000000000000000000aa_address;
+constexpr auto kSender7702 = 0x00000000000000000000000000000000000000aa_address;
 constexpr auto kDelegate = 0x00000000000000000000000000000000000000cc_address;
 
 // === 金值:eth-account 签出, 私钥 0x59c6995e...86dae88c7a8412f4603b6b78690d ===
@@ -45,8 +47,15 @@ const auto kR_nonce5 = 0xba35713640851563a334d3887bdc0de9f609a846b065e7dae5de7d3
 const auto kS_nonce5 = 0x6223049799a988790d88847a6c3f767fec69cb72544e11a47c37552bcc6717ad_bytes32;
 constexpr int kV_nonce5 = 0;
 
-// 构造带一条 auth 的 set_code tx，执行 opTransition，返回 receipt 并把 diff 落回 ts。
-OpTxReceipt runWithAuth(
+// 构造带一条 auth 的 set_code tx，执行 opTransition，返回 receipt + state diff（方案 A 阶段 2:
+// opTransition 直接产 protocol::TransactionReceipt，state diff 经 out-param 返回）。
+struct RunWithAuthResult
+{
+    bcos::protocol::TransactionReceipt::Ptr receipt;
+    evmone::state::StateDiff diff;
+};
+
+RunWithAuthResult runWithAuth(
     test::TestState& ts, evmc::VM& vm, const state::Authorization& auth, uint64_t chainId = 1)
 {
     test::TestBlockHashes hashes;
@@ -58,8 +67,8 @@ OpTxReceipt runWithAuth(
 
     state::Transaction tx;
     tx.type = state::Transaction::Type::set_code;  // EIP-7702 set-code tx
-    tx.sender = kSender;
-    tx.to = kSender;  // 自调用；重点在 auth 处理
+    tx.sender = kSender7702;
+    tx.to = kSender7702;  // 自调用；重点在 auth 处理
     tx.gas_limit = 200000;
     tx.max_gas_price = 1000;
     tx.max_priority_gas_price = 10;
@@ -79,12 +88,17 @@ OpTxReceipt runWithAuth(
     BOOST_CHECK(std::holds_alternative<OpTxProperties>(v));
     if (!std::holds_alternative<OpTxProperties>(v))
     {
-        // 返回失败 receipt 以免崩溃，由调用方 BOOST_CHECK 捕获
-        static const evmone::state::TransactionReceipt kEmpty{};
-        return OpTxReceipt{kEmpty, {}};
+        // 返回失败 receipt 以免崩溃，由调用方 BOOST_CHECK 捕获（与 base 的静态空 receipt
+        // 守卫同形态）：status=1 使调用方的 BOOST_REQUIRE_EQUAL(r.receipt->status(), 0)
+        // 干净失败而不是解引用 nullptr。
+        auto failed = kOpTestReceiptFactory->createReceipt2(0, "", {}, 1, {}, 0);
+        return RunWithAuthResult{std::move(failed), {}};
     }
     const auto& props = std::get<OpTxProperties>(v);
-    return opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, chainId);
+    evmone::state::StateDiff diff;
+    auto receipt = opTransition(
+        ts, block, hashes, tx, isthmusConfig(), vm, props, chainId, kOpTestReceiptFactory, diff);
+    return RunWithAuthResult{std::move(receipt), std::move(diff)};
 }
 
 [[nodiscard]] bool isDelegationDesignator(const evmc::bytes& code) noexcept
@@ -125,7 +139,7 @@ BOOST_AUTO_TEST_CASE(RecoversAuthorityAndWritesDelegation)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -141,8 +155,8 @@ BOOST_AUTO_TEST_CASE(RecoversAuthorityAndWritesDelegation)
         .s = intx::be::load<intx::uint256>(kS_ok),
         .v = intx::uint256{kV_ok}};
     const auto r = runWithAuth(ts, vm, auth);
-    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
-    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
+    bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     // authority 被写 0xef0100||kDelegate，nonce 从 0 → 1
     BOOST_REQUIRE_MESSAGE(
@@ -164,7 +178,7 @@ BOOST_AUTO_TEST_CASE(BadSignatureRecoverFailsNoDelegation)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -184,8 +198,8 @@ BOOST_AUTO_TEST_CASE(BadSignatureRecoverFailsNoDelegation)
     const auto r = runWithAuth(ts, vm, auth);
     // 坏签名只 skip 该条 authorization，tx 本身必须成功——否则"无委托"断言会把
     // "交易整体失败"误判为"正确跳过坏签名"。
-    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
-    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
+    bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     // 真实 kAuthority 必须没有被委托
     auto it = ts.find(kAuthority);
@@ -205,7 +219,7 @@ BOOST_AUTO_TEST_CASE(NonceMismatchSkips)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -221,7 +235,10 @@ BOOST_AUTO_TEST_CASE(NonceMismatchSkips)
         .s = intx::be::load<intx::uint256>(kS_nonce5),
         .v = intx::uint256{kV_nonce5}};
     const auto r = runWithAuth(ts, vm, auth);
-    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+    // 交易本身必须成功（nonce 不匹配只 skip 该条 authorization）——否则"无委托"断言会把
+    // opValidate 拒绝交易（status=1 空 diff 兜底 receipt）误判为"正确跳过"。
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
+    bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     // kAuthority 不应有委托代码，nonce 不应被 bump
     auto it = ts.find(kAuthority);
@@ -238,7 +255,7 @@ BOOST_AUTO_TEST_CASE(ChainIdMismatchSkips)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -254,7 +271,10 @@ BOOST_AUTO_TEST_CASE(ChainIdMismatchSkips)
         .s = intx::be::load<intx::uint256>(kS_ok),
         .v = intx::uint256{kV_ok}};
     const auto r = runWithAuth(ts, vm, auth, /*chainId=*/1);
-    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+    // 交易本身必须成功（chain_id 不匹配只 skip 该条 authorization）——否则"无委托"断言
+    // 会把 opValidate 拒绝交易误判为"正确跳过"。
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
+    bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     // 必须全量扫描，不能只看 kAuthority：chain_id=999 时签名恢复出的是另一个（垃圾）地址，
     // kAuthority 根本不会进入 state，于是 `if (it != ts.end())` 形式的断言体永不执行——把
@@ -268,7 +288,7 @@ BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -293,7 +313,7 @@ BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization)
 
     state::Transaction tx;
     tx.type = state::Transaction::Type::eip1559;
-    tx.sender = kSender;
+    tx.sender = kSender7702;
     tx.to = kAuthority;
     tx.gas_limit = 100000;
     tx.max_gas_price = 1000;
@@ -312,11 +332,13 @@ BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization)
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto& props = std::get<OpTxProperties>(v);
-    const auto txR = opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1);
+    evmone::state::StateDiff diff;
+    const auto txR = opTransition(
+        ts, block, hashes, tx, isthmusConfig(), vm, props, 1, kOpTestReceiptFactory, diff);
 
     // 委托调用应成功执行 kDelegate 代码；SSTORE 在 authority 上下文中落槽
-    BOOST_CHECK_EQUAL(txR.receipt.status, EVMC_SUCCESS);
-    bcos::evm::applyStateDiffStrict(ts, txR.receipt.state_diff);
+    BOOST_CHECK_EQUAL(txR->status(), 0);
+    bcos::evm::applyStateDiffStrict(ts, diff);
 
     constexpr auto kSlot0 = evmc::bytes32{};
     const auto expectedSlot0 = intx::be::store<evmc::bytes32>(intx::uint256{42});
@@ -339,7 +361,7 @@ BOOST_AUTO_TEST_CASE(ChainIdZeroIsUniversal)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -355,8 +377,8 @@ BOOST_AUTO_TEST_CASE(ChainIdZeroIsUniversal)
         .v = intx::uint256{kV_ok}};
     // 节点在链 999：universal 授权仍须被处理。
     const auto r = runWithAuth(ts, vm, auth, /*chainId=*/999);
-    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
-    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
+    bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     BOOST_CHECK_MESSAGE(anyDelegationDesignator(ts),
         "an authorization with chain_id == 0 must be applied on any chain");
@@ -368,7 +390,7 @@ BOOST_AUTO_TEST_CASE(HighSValueIsRejected)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -383,8 +405,8 @@ BOOST_AUTO_TEST_CASE(HighSValueIsRejected)
         .s = bcos::evm::eth::SECP256K1N_OVER_2 + 1,  // 恰好越过 EIP-2 上界
         .v = intx::uint256{kV_ok}};
     const auto r = runWithAuth(ts, vm, auth);
-    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
-    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
+    bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     expectNoDelegationDesignatorAnywhere(ts);
 }
@@ -394,7 +416,7 @@ BOOST_AUTO_TEST_CASE(InvalidYParityIsRejected)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -409,8 +431,8 @@ BOOST_AUTO_TEST_CASE(InvalidYParityIsRejected)
         .s = intx::be::load<intx::uint256>(kS_ok),
         .v = intx::uint256{2}};  // 非法 parity
     const auto r = runWithAuth(ts, vm, auth);
-    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
-    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
+    bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     expectNoDelegationDesignatorAnywhere(ts);
 }
@@ -430,7 +452,7 @@ BOOST_AUTO_TEST_CASE(NonceMaxIsRejected)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -447,8 +469,8 @@ BOOST_AUTO_TEST_CASE(NonceMaxIsRejected)
         .s = intx::be::load<intx::uint256>(kS_ok),
         .v = intx::uint256{kV_ok}};
     const auto r = runWithAuth(ts, vm, auth);
-    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
-    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
+    bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     // 前置条件：签名确实恢复到我们预置的那个地址，否则本用例退化为空转。
     BOOST_REQUIRE_MESSAGE((ts.find(kNonceMaxRecovered)) != (ts.end()),
@@ -465,7 +487,7 @@ BOOST_AUTO_TEST_CASE(AuthorityWithNonDelegatedCodeIsSkipped)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -483,8 +505,8 @@ BOOST_AUTO_TEST_CASE(AuthorityWithNonDelegatedCodeIsSkipped)
         .s = intx::be::load<intx::uint256>(kS_ok),
         .v = intx::uint256{kV_ok}};
     const auto r = runWithAuth(ts, vm, auth);
-    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
-    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
+    bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     BOOST_REQUIRE_MESSAGE((ts.find(kAuthority)) != (ts.end()), "authority must still exist");
     BOOST_CHECK_MESSAGE((ts.at(kAuthority).code) == (existingCode),

@@ -32,18 +32,14 @@
 // Shared test-asset helper (see bcos-ledger genesis tests): the SystemConfig
 // predeploy alloc must carry the feature_flags Entry slot Ledger verifies.
 #include "../../../../bcos-ledger/test/unittests/ledger/GenesisFeatureFlagsHelper.h"
-#include <bcos-framework/storage2/AnyStorage.h>
-#include <bcos-ledger/mpt/Constants.h>
-#include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
-#include <map>
+#include <boost/algorithm/hex.hpp>
 #include <optional>
 #include <string>
 #include <vector>

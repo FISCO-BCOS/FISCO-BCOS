@@ -22,6 +22,7 @@
 #include "AMOPClient.h"
 
 #include <utility>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::rpc
 {
@@ -31,18 +32,17 @@ public:
     using Ptr = std::shared_ptr<AirAMOPClient>;
     AirAMOPClient(boost::asio::io_context& _ioService,
         std::shared_ptr<boostssl::ws::WsService> _wsService,
-        std::shared_ptr<bcos::boostssl::MessageFaceFactory> _wsMessageFactory,
         std::shared_ptr<bcos::protocol::AMOPRequestFactory> _requestFactory,
         bcos::gateway::GatewayInterface::Ptr _gateway)
-      : AMOPClient(_ioService, std::move(_wsService), std::move(_wsMessageFactory),
-            std::move(_requestFactory), std::move(_gateway), "localGateway")
+      : AMOPClient(_ioService, std::move(_wsService), std::move(_requestFactory),
+            std::move(_gateway), "localGateway")
     {}
 
     // Note: must with empty implementation to in case of start the m_gatewayStatusDetector
     void start() override { m_gatewayActivated.store(true); }
 
     bool onGatewayInactivated(
-        std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<boostssl::ws::WsSession>) override
+        const boostssl::ws::WsMessage&, std::shared_ptr<boostssl::ws::WsSession>) override
     {
         return false;
     }

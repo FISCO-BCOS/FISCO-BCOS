@@ -1,4 +1,14 @@
 #include "BaselineScheduler.h"
+#include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-utilities/ITTAPI.h"
+#include <boost/exception/diagnostic_information.hpp>
+#include <range/v3/iterator/operations.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/all.hpp>
+#include <range/v3/view/transform.hpp>
+#include <chrono>
+#include <type_traits>
 
 bcos::task::Task<std::vector<bcos::protocol::Transaction::ConstPtr>>
 bcos::scheduler_v1::getTransactions(txpool::TxPoolInterface& txpool, protocol::Block& block)

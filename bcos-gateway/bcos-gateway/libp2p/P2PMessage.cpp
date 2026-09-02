@@ -18,14 +18,11 @@
  * @date 2021-05-04
  */
 
-#include <range/v3/view/map.hpp>
-#include <range/v3/view/transform.hpp>
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-utilities/ZstdCompress.h"
-#include <boost/asio/detail/socket_ops.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -224,41 +221,6 @@ bool bcos::gateway::P2PMessage::encodeHeaderImpl(bytes& _buffer) const
     _buffer.insert(_buffer.end(), (byte*)&packetType, (byte*)&packetType + 2);
     _buffer.insert(_buffer.end(), (byte*)&seq, (byte*)&seq + 4);
     _buffer.insert(_buffer.end(), (byte*)&ext, (byte*)&ext + 2);
-    return true;
-}
-
-bool P2PMessage::encode(EncodedMessage& _buffer) const
-{
-    bool isCompressSuccess = false;
-    if (_buffer.compress)
-    {
-        bcos::bytes compressData;
-        if (tryToCompressPayload(compressData))
-        {
-            isCompressSuccess = true;
-            // set compress flag
-            m_ext |= bcos::protocol::MessageExtFieldFlag::COMPRESS;
-            _buffer.payload = std::move(compressData);
-        }
-    }
-
-    // No data compression is performed
-    if (!isCompressSuccess)
-    {
-        _buffer.payload = m_payload;
-    }
-
-    bytes headerBuffer;
-    // encode header
-    if (!encodeHeader(headerBuffer))
-    {
-        return false;
-    }
-
-    *(uint32_t*)headerBuffer.data() = boost::asio::detail::socket_ops::host_to_network_long(
-        headerBuffer.size() + _buffer.payload.size());
-
-    _buffer.header = std::move(headerBuffer);
     return true;
 }
 
@@ -534,6 +496,9 @@ uint16_t bcos::gateway::P2PMessage::ext() const
 }
 void bcos::gateway::P2PMessage::setExt(uint16_t _ext)
 {
+    // Accumulate (OR) semantics: the fast send path no longer touches this setter (the COMPRESS
+    // flag is stamped onto the encoded wire header, not the message), so callers that want to
+    // clear bits must do so explicitly — this matches the pre-PR base behaviour.
     m_ext |= _ext;
 }
 const bcos::gateway::P2PMessageOptions& bcos::gateway::P2PMessage::options() const

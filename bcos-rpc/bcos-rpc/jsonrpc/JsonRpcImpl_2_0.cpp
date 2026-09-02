@@ -19,31 +19,26 @@
  * @date: 2021-07-09
  */
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
-#include "bcos-boostssl/websocket/WsMessage.h"
 #include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
-#include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/validator/CallValidator.h"
-#include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
-#include "bcos-utilities/Base64.h"
 #include "bcos-utilities/BoostLog.h"
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/archive/iterators/base64_from_binary.hpp>
-#include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <chrono>
 #include <exception>
 #include <iterator>
 #include <stdexcept>
@@ -69,27 +64,26 @@ JsonRpcImpl_2_0::JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
     m_forceSender(std::move(forceSender))
 {
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
-        [this](std::shared_ptr<boostssl::MessageFace> msg,
-            std::shared_ptr<boostssl::ws::WsSession> session) {
+        [this](boostssl::ws::WsMessage msg, std::shared_ptr<boostssl::ws::WsSession> session) {
             this->handleRpcRequest(std::move(msg), std::move(session));
         });
 }
 
 void JsonRpcImpl_2_0::handleRpcRequest(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
+    boostssl::ws::WsMessage _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
-    auto buffer = _msg->payload();
+    auto buffer = _msg.payload();
     auto req = std::string_view((const char*)buffer.data(), buffer.size());
 
     auto start = std::chrono::high_resolution_clock::now();
-    auto seq = _msg->seq();
-    auto version = _msg->version();
-    auto ext = _msg->ext();
+    auto seq = _msg.seq();
+    auto version = _msg.version();
+    auto ext = _msg.ext();
 
     auto weakptrSession = std::weak_ptr<boostssl::ws::WsSession>(_session);
-    auto messageFactory = m_wsService->messageFactory();
 
-    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](bcos::bytes resp, boost::beast::http::status) {
+    onRPCRequest(req, [ext, seq, version, weakptrSession, start](
+                          bcos::bytes resp, boost::beast::http::status) {
         auto session = weakptrSession.lock();
 
         auto end = std::chrono::high_resolution_clock::now();
@@ -106,11 +100,11 @@ void JsonRpcImpl_2_0::handleRpcRequest(
         if (session->isConnected())
         {
             // TODO: no need to copy resp
-            auto msg = messageFactory->buildMessage();
-            msg->setPayload(std::move(resp));
-            msg->setVersion(version);
-            msg->setSeq(seq);
-            msg->setExt(ext);
+            bcos::boostssl::ws::WsMessage msg;
+            msg.setPayload(std::move(resp));
+            msg.setVersion(version);
+            msg.setSeq(seq);
+            msg.setExt(ext);
             session->asyncSendMessage(msg);
         }
         else
@@ -1490,8 +1484,8 @@ void JsonRpcImpl_2_0::newFilter(
         auto const nodeService = self->getNodeService(groupID, "", "newFilter");
         auto const latest = co_await ledger::getCurrentBlockNumber(*nodeService->ledger());
         auto params = self->filterSystem().requestFactory()->create();
-        params->fromJson(jParams, latest, nodeService->safeBlockDepth(),
-            nodeService->finalizedBlockDepth());
+        params->fromJson(
+            jParams, latest, nodeService->safeBlockDepth(), nodeService->finalizedBlockDepth());
         jRes = co_await self->filterSystem().newFilter(groupID, std::move(params));
         respFunc(nullptr, jRes);
     }(this, _groupID, std::move(_respFunc)));
@@ -1538,8 +1532,8 @@ void JsonRpcImpl_2_0::getLogs(
         auto const nodeService = self->getNodeService(groupID, "", "getLogs");
         auto const latest = co_await ledger::getCurrentBlockNumber(*nodeService->ledger());
         auto params = self->filterSystem().requestFactory()->create();
-        params->fromJson(jParams, latest, nodeService->safeBlockDepth(),
-            nodeService->finalizedBlockDepth());
+        params->fromJson(
+            jParams, latest, nodeService->safeBlockDepth(), nodeService->finalizedBlockDepth());
         Json::Value jRes = co_await self->filterSystem().getLogs(groupID, std::move(params));
         respFunc(nullptr, jRes);
     }(this, _groupID, jParams, std::move(_respFunc)));

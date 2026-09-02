@@ -1,6 +1,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
 #include <optional>
+#include <boost/algorithm/string.hpp>
 
 using namespace bcos::storage;
 

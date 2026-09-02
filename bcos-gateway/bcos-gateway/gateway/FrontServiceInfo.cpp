@@ -4,7 +4,6 @@
  */
 
 #include "FrontServiceInfo.h"
-#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 
 bcos::gateway::FrontServiceInfo::FrontServiceInfo(std::string _nodeID,
     bcos::front::FrontServiceInterface::Ptr _frontService, bcos::protocol::NodeType _type,

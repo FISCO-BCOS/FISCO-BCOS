@@ -24,6 +24,7 @@
 #include "bcos-codec/scale/Common.h"
 #include <boost/algorithm/string/predicate.hpp>
 #include <string>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::executor;

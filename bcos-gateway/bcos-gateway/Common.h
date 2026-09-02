@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "libnetwork/Common.h"
+#include <bcos-utilities/BoostLog.h>
 
 #define GATEWAY_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Gateway]"
 #define GATEWAY_CONFIG_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Config]"

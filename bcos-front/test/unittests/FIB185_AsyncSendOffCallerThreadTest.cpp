@@ -16,6 +16,7 @@
  */
 
 #include "FakeGateway.h"
+#include <chrono>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-front/FrontServiceFactory.h>
@@ -24,7 +25,6 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
-#include <chrono>
 #include <future>
 #include <thread>
 
@@ -56,7 +56,7 @@ public:
     std::atomic_bool m_p2pCaptured{false};
 
     task::Task<void> broadcastMessage(uint16_t, std::string_view, int, const bcos::crypto::NodeID&,
-        ::ranges::any_view<bytesConstRef>) override
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward>) override
     {
         if (!m_bcastCaptured.exchange(true))
         {
@@ -66,14 +66,16 @@ public:
         co_return;
     }
 
-    void asyncSendMessageByNodeID(const std::string&, int, bcos::crypto::NodeIDPtr,
-        bcos::crypto::NodeIDPtr, bytesConstRef, bcos::gateway::ErrorRespFunc) override
+    task::Task<Error::Ptr> sendMessageByNodeID(const std::string&, int, bcos::crypto::NodeIDPtr,
+        bcos::crypto::NodeIDPtr,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward>) override
     {
         if (!m_p2pCaptured.exchange(true))
         {
             m_p2pRanOn.set_value(std::this_thread::get_id());
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(c_blockMs));
+        co_return nullptr;
     }
 };
 

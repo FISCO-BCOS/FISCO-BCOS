@@ -1,10 +1,8 @@
 #include "GraphKeyLocks.h"
 #include "mock/MockExecutor.h"
-#include <bcos-utilities/Common.h>
+#include <boost/test/unit_test.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/tools/old/interface.hpp>
-#include <boost/test/unit_test.hpp>
-#include <memory>
 
 namespace bcos::test
 {

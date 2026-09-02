@@ -113,7 +113,7 @@ struct FIB163Fixture
     sealer::SealerConfig::Ptr sealerConfig;
 };
 
-inline std::vector<bcos::protocol::TransactionMetaData::Ptr> makeMetaDataBatch(size_t count)
+inline std::vector<bcos::protocol::TransactionMetaData::Ptr> makeMetaDataBatch163(size_t count)
 {
     std::vector<bcos::protocol::TransactionMetaData::Ptr> batch;
     batch.reserve(count);
@@ -133,7 +133,7 @@ inline std::shared_ptr<sealer::SealingManager> makeSealingManagerWithSeed(
 {
     auto mgr = std::make_shared<sealer::SealingManager>(std::move(config));
     mgr->resetSealingInfo(/*start*/ 2, /*end*/ 1'000'000, /*maxTxsPerBlock*/ 1);
-    auto seed = makeMetaDataBatch(4);
+    auto seed = makeMetaDataBatch163(4);
     mgr->testOnlySeedPendingTxs(seed);
     return mgr;
 }

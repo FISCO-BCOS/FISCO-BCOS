@@ -21,9 +21,8 @@
 
 #include "../mock/MockLedger.h"
 #include "bcos-executor/src/executive/LedgerCache.h"
-#include <boost/test/unit_test.hpp>
 
-using namespace std;
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::executor;
 

@@ -19,9 +19,9 @@
 
 #include "RefDataContainer.h"
 #include <boost/algorithm/hex.hpp>
-#include <boost/algorithm/string.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
-#include <boost/thread.hpp>
+#include <boost/thread/locks.hpp>
+#include <boost/thread/shared_mutex.hpp>
 #include <map>
 #include <mutex>
 #include <string>

@@ -153,7 +153,7 @@ inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string no
     transaction.data.to = key->address(_cryptoSuite->hashImpl()).hex();
     transaction.data.input.assign(inputStr.begin(), inputStr.end());
     transaction.data.nonce = std::move(nonce);
-    transaction.type = static_cast<tars::Char>(TransactionType::Web3Transaction);
+    transaction.type = static_cast<tars::Char>(protocol::TransactionType::Web3Transaction);
     // extraTransactionBytes must be a genuine Web3 signing preimage: since FIB-New1, verify()
     // recomputes the canonical txHash from it by RLP splicing, so arbitrary bytes are rejected.
     // Build a minimal legacy (pre-EIP-155) preimage rlp([nonce, gasPrice, gas, to, value, data])

@@ -1,6 +1,3 @@
-#include <range/v3/range_fwd.hpp>
-#include <range/v3/algorithm/find.hpp>
-#include <range/v3/algorithm/result_types.hpp>
 /**
  *  Copyright (C) 2022 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
@@ -24,16 +21,16 @@
 #include "WorkingSealerManagerImpl.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/sealer/VrfCurveType.h"
 #include "fmt/ranges.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
-#include <fmt/compile.h>
 #include <fmt/format.h>
 #include <boost/endian/conversion.hpp>
 #include <algorithm>
 #include <cstdint>
 #include <range/v3/numeric/accumulate.hpp>
+#include <range/v3/range_fwd.hpp>
 #include <range/v3/view/concat.hpp>
 
 using namespace bcos;
@@ -124,8 +121,8 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
         PRECOMPILED_LOG(INFO)
             << LOG_DESC("rotateWorkingSealer: rotate workingSealers into sealers")
             << LOG_KV("rotatedCount", removedWorkingSealerNum)
-            << LOG_KV("rmNodes", fmt::format(FMT_COMPILE("{}"),
-                                     fmt::join(::ranges::views::transform(workingSealersToRemove,
+            << LOG_KV("rmNodes",
+                   fmt::format("{}", fmt::join(::ranges::views::transform(workingSealersToRemove,
                                                    [](const consensus::ConsensusNode& node) {
                                                        return node.nodeID->hex();
                                                    }),
@@ -143,16 +140,15 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
         // select working sealers to be inserted
         auto workingSealersToInsert =
             selectNodesFromList(m_candidateSealer, insertedWorkingSealerNum);
-        PRECOMPILED_LOG(INFO) << LOG_DESC("rotateWorkingSealer: rotate sealers into workingSealers")
-                              << LOG_KV("rotatedCount", insertedWorkingSealerNum)
-                              << LOG_KV("insertNodes",
-                                     fmt::format(FMT_COMPILE("{}"),
-                                         fmt::join(
-                                             ::ranges::views::transform(workingSealersToInsert,
-                                                 [](const consensus::ConsensusNode& node) {
-                                                     return node.nodeID->hex();
-                                                 }),
-                                             ",")));
+        PRECOMPILED_LOG(INFO)
+            << LOG_DESC("rotateWorkingSealer: rotate sealers into workingSealers")
+            << LOG_KV("rotatedCount", insertedWorkingSealerNum)
+            << LOG_KV("insertNodes",
+                   fmt::format("{}", fmt::join(::ranges::views::transform(workingSealersToInsert,
+                                                   [](const consensus::ConsensusNode& node) {
+                                                       return node.nodeID->hex();
+                                                   }),
+                                         ",")));
         // Note: Since m_pendingSealerList will not be used afterward,
         //       after updating the node type, it is not updated
         updateNodeListType(workingSealersToInsert, consensus::Type::consensus_sealer, _executive);
@@ -204,8 +200,8 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
             PRECOMPILED_LOG(WARNING)
                 << LOG_DESC("Permission denied, must be among the working sealer list!")
                 << LOG_KV("origin", origin);
-            BOOST_THROW_EXCEPTION(
-                bcos::protocol::PrecompiledError{} << errinfo_comment("ConsensusPrecompiled call undefined function!"));
+            BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError{} << errinfo_comment(
+                                      "ConsensusPrecompiled call undefined function!"));
         }
     }
     else
@@ -218,8 +214,8 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
             PRECOMPILED_LOG(WARNING)
                 << LOG_DESC("Permission denied, must be among the candidate sealer list!")
                 << LOG_KV("origin", origin);
-            BOOST_THROW_EXCEPTION(
-                bcos::protocol::PrecompiledError{} << errinfo_comment("ConsensusPrecompiled call undefined function!"));
+            BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError{} << errinfo_comment(
+                                      "ConsensusPrecompiled call undefined function!"));
         }
     }
     if ((blockNumberInput &&
@@ -233,7 +229,8 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
             << LOG_KV("vrfCurvType", +static_cast<uint8_t>(m_vrfInfo->vrfCurveType()))
             << LOG_KV("parentHash", parentHash.abridged()) << LOG_KV("blockNumber", blockNumber)
             << LOG_KV("vrfInput", toHex(m_vrfInfo->vrfInput())) << LOG_KV("origin", origin);
-        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Invalid VRFInput, must be the parentHash!"));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment("Invalid VRFInput, must be the parentHash!"));
     }
     // check vrf public key: must be valid
     if (!m_vrfInfo->isValidVRFPublicKey())
@@ -251,7 +248,8 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
         {
             PRECOMPILED_LOG(WARNING) << LOG_DESC("checkVRFInfos: Invalid leader VRF public key")
                                      << LOG_KV("vrf publicKey", vrfPublicKeyHex);
-            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("VRF public key permission check failed!"));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment("VRF public key permission check failed!"));
         }
     }
     // verify vrf proof
@@ -278,7 +276,8 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
     if (auto featureSwitch =
             _executive->storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_RPBFT_SWITCH))
     {
-        auto featureInfo = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(featureSwitch->get());
+        auto featureInfo =
+            bcos::storage::serialize::decode<ledger::SystemConfigEntry>(featureSwitch->get());
         if (std::get<1>(featureInfo) == blockContext.number())
         {
             PRECOMPILED_LOG(DEBUG) << LOG_DESC("shouldRotate: enable feature_rpbft last block")
@@ -290,7 +289,8 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
     if (auto epochEntry = _executive->storage().getRow(
             ledger::SYS_CONFIG, ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM))
     {
-        auto epochInfo = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(epochEntry->get());
+        auto epochInfo =
+            bcos::storage::serialize::decode<ledger::SystemConfigEntry>(epochEntry->get());
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("shouldRotate: get epoch_sealer_num")
                                << LOG_KV("value", std::get<0>(epochInfo))
                                << LOG_KV("enableBlk", std::get<1>(epochInfo));
@@ -318,7 +318,8 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
         return false;
     }
 
-    auto epochBlockNumEntry = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(epochBlockInfo->get());
+    auto epochBlockNumEntry =
+        bcos::storage::serialize::decode<ledger::SystemConfigEntry>(epochBlockInfo->get());
     auto epochBlockNum = boost::lexical_cast<uint32_t>(std::get<0>(epochBlockNumEntry));
     if ((blockContext.number() - std::get<1>(epochBlockNumEntry)) % epochBlockNum == 0)
     {
@@ -568,8 +569,8 @@ void bcos::precompiled::WorkingSealerManagerImpl::rotateWorkingSealerByWeight(
     std::sort(workingSealers.begin(), workingSealers.end());
 
     PRECOMPILED_LOG(INFO) << fmt::format(
-        FMT_COMPILE("rotateWorkingSealer: rotate workingSealers into sealers by "
-                    "weight, rotatedCount: {}, insertNodes: {}"),
+        "rotateWorkingSealer: rotate workingSealers into sealers by "
+        "weight, rotatedCount: {}, insertNodes: {}",
         workingSealers.size(),
         fmt::join(::ranges::views::transform(workingSealers,
                       [](const consensus::ConsensusNode& node) { return node.nodeID->hex(); }),

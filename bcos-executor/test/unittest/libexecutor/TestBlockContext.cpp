@@ -1,12 +1,8 @@
 #include "../../../src/executive/BlockContext.h"
-#include "../../../src/executive/ExecutiveFactory.h"
-#include "../../../src/executive/ExecutiveFlowInterface.h"
 #include "../mock/MockExecutiveFlow.h"
 #include "../mock/MockLedger.h"
-#include "bcos-table/src/StateStorage.h"
-#include <tbb/concurrent_unordered_map.h>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::executor;
 
@@ -14,8 +10,6 @@ namespace bcos
 {
 namespace test
 {
-using namespace std;
-
 BOOST_AUTO_TEST_SUITE(TestBlockContext)
 
 BOOST_AUTO_TEST_CASE(BlockContextTest)

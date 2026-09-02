@@ -42,6 +42,11 @@ public:
         m_frontService = _frontService;
     }
 
+    // when non-null, sendMessageByNodeID returns this error instead of delivering locally (lets
+    // tests exercise gateway-send-failure propagation into the coroutine send result)
+    Error::Ptr m_sendError;
+    void setSendError(Error::Ptr _error) { m_sendError = std::move(_error); }
+
     /**
      * @brief: start/stop service
      */
@@ -63,33 +68,21 @@ public:
     }
 
     /**
-     * @brief: send message to a single node
+     * @brief: (coroutine) send message to a single node
      * @param _groupID: groupID
      * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
      * @param _dstNodeID: the receiver nodeID
-     * @param _payload: message content
+     * @param _payloads: message content (views)
      * @return void
      */
-    void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
+    task::Task<Error::Ptr> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload, bcos::gateway::ErrorRespFunc _errorRespFunc) override;
-
-    /**
-     * @brief: send message to multiple nodes
-     * @param _groupID: groupID
-     * @param _moduleID: moduleID
-     * @param _srcNodeID: the sender nodeID
-     * @param _nodeIDs: the receiver nodeIDs
-     * @param _payload: message content
-     * @return void
-     */
-    void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
-        bytesConstRef _payload) override;
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads) override;
 
     task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
-        const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) override;
+        const bcos::crypto::NodeID& srcNodeID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override;
 
     void asyncNotifyGroupInfo(
         bcos::group::GroupInfo::Ptr, std::function<void(Error::Ptr&&)>) override

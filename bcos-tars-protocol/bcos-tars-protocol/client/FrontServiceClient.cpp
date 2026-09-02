@@ -145,52 +145,104 @@ void bcostars::FrontServiceClient::onReceiveBroadcastMessage(const std::string& 
             std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
             std::vector<char>(_data.begin(), _data.end()));
 }
-void bcostars::FrontServiceClient::asyncSendMessageByNodeID(int _moduleID,
-    bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data, uint32_t _timeout,
-    bcos::front::CallbackFunc _callback)
+bcos::task::Task<bcos::front::SendResult> bcostars::FrontServiceClient::sendMessageByNodeID(
+    int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+    ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> _payloads,
+    uint32_t _timeout)
 {
-    class Callback : public FrontServicePrxCallback
+    struct SendAwaitable
     {
-    public:
-        Callback(bcos::front::CallbackFunc callback, FrontServiceClient* self)
-          : m_callback(callback), m_self(self)
-        {}
-
-        void callback_asyncSendMessageByNodeID(const bcostars::Error& ret,
-            const std::vector<tars::Char>& responseNodeID,
-            const std::vector<tars::Char>& responseData, const std::string& seq) override
+        struct CompletionState
         {
-            if (!m_callback)
-            {
-                return;
-            }
-            auto bcosNodeID = m_self->m_keyFactory->createKey(
-                bcos::bytesConstRef((bcos::byte*)responseNodeID.data(), responseNodeID.size()));
-            m_callback(toBcosError(ret), bcosNodeID,
-                bcos::bytesConstRef((bcos::byte*)responseData.data(), responseData.size()), seq,
-                bcos::front::ResponseFunc());
-        }
+            std::atomic<bool> completed{false};
+            std::coroutine_handle<> handle;
+            bcos::front::SendResult result;
+        };
 
-        void callback_asyncSendMessageByNodeID_exception(tars::Int32 ret) override
+        class Callback : public FrontServicePrxCallback
         {
-            if (!m_callback)
-            {
-                return;
-            }
-            m_callback(
-                toBcosError(ret), nullptr, bcos::bytesConstRef(), "", bcos::front::ResponseFunc());
-        }
+        public:
+            Callback(std::shared_ptr<CompletionState> state, FrontServiceClient* self)
+              : m_state(std::move(state)), m_self(self)
+            {}
 
-    private:
-        bcos::front::CallbackFunc m_callback;
+            void callback_asyncSendMessageByNodeID(const bcostars::Error& ret,
+                const std::vector<tars::Char>& responseNodeID,
+                const std::vector<tars::Char>& responseData, const std::string& seq) override
+            {
+                complete(ret, responseNodeID, responseData, seq);
+            }
+
+            void callback_asyncSendMessageByNodeID_exception(tars::Int32 ret) override
+            {
+                bcos::front::SendResult result;
+                result.error = toBcosError(ret);
+                completeResult(std::move(result));
+            }
+
+        private:
+            void complete(const bcostars::Error& ret,
+                const std::vector<tars::Char>& responseNodeID,
+                const std::vector<tars::Char>& responseData, const std::string& seq)
+            {
+                bcos::front::SendResult result;
+                result.error = toBcosError(ret);
+                if (!responseNodeID.empty())
+                {
+                    result.nodeID = m_self->m_keyFactory->createKey(bcos::bytesConstRef(
+                        (const bcos::byte*)responseNodeID.data(), responseNodeID.size()));
+                }
+                result.payload.assign(responseData.begin(), responseData.end());
+                result.uuid = seq;
+                completeResult(std::move(result));
+            }
+
+            void completeResult(bcos::front::SendResult result)
+            {
+                if (!m_state->completed.exchange(true))
+                {
+                    m_state->result = std::move(result);
+                    m_state->handle.resume();
+                }
+            }
+
+            std::shared_ptr<CompletionState> m_state;
+            FrontServiceClient* m_self;
+        };
+
         FrontServiceClient* m_self;
+        int m_moduleID;
+        bcos::crypto::NodeIDPtr m_nodeID;
+        std::shared_ptr<std::vector<char>> m_buffer;
+        uint32_t m_timeout;
+        std::shared_ptr<CompletionState> m_state;
+
+        constexpr static bool await_ready() noexcept { return false; }
+
+        void await_suspend(std::coroutine_handle<> _handle)
+        {
+            m_state->handle = _handle;
+            auto state = m_state;
+            auto nodeIDData = m_nodeID->data();
+            m_self->m_proxy->tars_set_timeout(m_self->c_frontServiceTimeout)
+                ->async_asyncSendMessageByNodeID(new Callback(state, m_self), m_moduleID,
+                    std::vector<char>(nodeIDData.begin(), nodeIDData.end()), *m_buffer, m_timeout,
+                    (m_timeout > 0));
+        }
+
+        bcos::front::SendResult await_resume() { return std::move(m_state->result); }
     };
 
-    auto nodeIDData = _nodeID->data();
-    m_proxy->tars_set_timeout(c_frontServiceTimeout)
-        ->async_asyncSendMessageByNodeID(new Callback(_callback, this), _moduleID,
-            std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
-            std::vector<char>(_data.begin(), _data.end()), _timeout, (_callback ? true : false));
+    // materialise the joined payload directly as the std::vector<char> the RPC argument needs —
+    // a single pass and one allocation, no second copy in await_suspend
+    auto buffer = std::make_shared<std::vector<char>>();
+    for (auto const& data : _payloads)
+    {
+        buffer->insert(buffer->end(), data.begin(), data.end());
+    }
+    SendAwaitable awaitable{this, _moduleID, std::move(_nodeID), std::move(buffer), _timeout,
+        std::make_shared<SendAwaitable::CompletionState>()};
+    co_return co_await awaitable;
 }
 void bcostars::FrontServiceClient::asyncSendResponse(const std::string& _id, int _moduleID,
     bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data,
@@ -201,22 +253,8 @@ void bcostars::FrontServiceClient::asyncSendResponse(const std::string& _id, int
         ->asyncSendResponse(_id, _moduleID, std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
             std::vector<char>(_data.begin(), _data.end()));
 }
-void bcostars::FrontServiceClient::asyncSendMessageByNodeIDs(
-    int _moduleID, const std::vector<bcos::crypto::NodeIDPtr>& _nodeIDs, bcos::bytesConstRef _data)
-{
-    std::vector<std::vector<char>> tarsNodeIDs;
-    tarsNodeIDs.reserve(_nodeIDs.size());
-    for (auto const& it : _nodeIDs)
-    {
-        auto nodeIDData = it->data();
-        tarsNodeIDs.emplace_back(nodeIDData.begin(), nodeIDData.end());
-    }
-    m_proxy->tars_set_timeout(c_frontServiceTimeout)
-        ->async_asyncSendMessageByNodeIDs(
-            nullptr, _moduleID, tarsNodeIDs, std::vector<char>(_data.begin(), _data.end()));
-}
-bcos::task::Task<void> bcostars::FrontServiceClient::broadcastMessage(
-    uint16_t _type, int _moduleID, ::ranges::any_view<bcos::bytesConstRef> payloads)
+bcos::task::Task<void> bcostars::FrontServiceClient::broadcastMessage(uint16_t _type,
+    int _moduleID, ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads)
 {
     std::vector<char> data;
     for (auto payload : payloads)

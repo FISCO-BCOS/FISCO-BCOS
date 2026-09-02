@@ -9,7 +9,8 @@
 
 bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
-    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage)
+    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces)
 {
     struct Awaitable
     {
@@ -18,6 +19,8 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         decltype(block) m_block;
         bool m_withTransactionsAndReceipts{};
         decltype(storage) m_storage;
+        std::optional<bcos::crypto::HashType> m_blockHashOverride;
+        bool m_writeNonces{true};
         Error::Ptr m_error;
 
         constexpr static bool await_ready() noexcept { return false; }
@@ -32,7 +35,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
                     }
                     handle.resume();
                 },
-                m_withTransactionsAndReceipts, std::nullopt);
+                m_withTransactionsAndReceipts, std::nullopt, m_blockHashOverride, m_writeNonces);
         }
         void await_resume()
         {
@@ -48,6 +51,8 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         .m_block = std::move(block),
         .m_withTransactionsAndReceipts = withTransactionsAndReceipts,
         .m_storage = std::move(storage),
+        .m_blockHashOverride = std::move(blockHashOverride),
+        .m_writeNonces = writeNonces,
         .m_error = {}};
     co_await awaitable;
 }
@@ -481,13 +486,16 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     auto auth = sysConfig.getOrDefault(ledger::SystemConfig::auth_check_status, "0");
     ledgerConfig.setAuthCheckStatus(boost::lexical_cast<uint32_t>(auth.first));
     auto [chainId, _] = sysConfig.getOrDefault(ledger::SystemConfig::web3_chain_id, "0");
-    ledgerConfig.setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
+    // Fail-stop on a malformed value (InvalidWeb3ChainIdConfig), same policy as
+    // evmc_revision below: CHAINID is contract-visible execution semantics and the
+    // admission side already rejects the same value, so silently serving 0 is a
+    // silent-divergence hazard. Absent config arrives as the "0" default and parses fine.
+    ledgerConfig.setChainId(bcos::toEvmC(ledger::parseConfiguredWeb3ChainId(chainId)));
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
     int executorVersion = 0;
-    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version);
-        versionConfig)
+    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
     {
         executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
         ledgerConfig.setExecutorVersion(executorVersion);
@@ -497,10 +505,12 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     // (executor_version=2); v0/v1 schedulers never read evmcRevision()/evmcRevisionForBlock(),
     // so a non-v2 chain is left untouched (no implicit default injection, which would be an
     // unnoticed behavior change if a future v0/v1 path started reading it). For v2, an
-    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock);
-    // the fallback here covers a v2 genesis without one (defensive — NodeConfig::loadExecutorConfig
-    // requires an explicit revision for executor_version=2, so this default only fires on
-    // corrupt/legacy state).
+    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock).
+    // A v2 chain WITHOUT one stays UNCONFIGURED here (no binary-side default injected): the
+    // consumers fail closed — EthereumExecutor throws EvmcRevisionNotConfigured and
+    // EngineService buildPayload throws UnsupportedFork — rather than hash state or block
+    // headers under a fork the chain never configured. The initializer already refuses to
+    // boot such a chain, so this branch only fires on corrupt/legacy state.
     //
     // No per-call logging here: getLedgerConfig sits on the per-block / per-RPC hot path.
     // The effective revision is parsed and logged once at startup (Initializer), which the
@@ -512,10 +522,6 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
             // A corrupt persisted value halts loudly (InvalidEVMCRevisionConfig) instead of
             // silently running a compile-time default that could differ between binaries.
             ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
-        }
-        else
-        {
-            ledgerConfig.setEVMCRevision(ledger::EVMC_REVISION_DEFAULT);
         }
     }
 }

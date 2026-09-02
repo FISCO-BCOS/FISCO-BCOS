@@ -19,7 +19,6 @@
  */
 
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
-#include <json/json.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 #include <string>
@@ -186,6 +185,77 @@ BOOST_AUTO_TEST_CASE(payloadAttributesMalformedQuantitiesMapToInvalidParams)
     expectInvalidParams(malformedEip1559);
 }
 
+BOOST_AUTO_TEST_CASE(payloadAttributesMinBaseFeeAcceptsBareJsonNumber)
+{
+    // op-node v1.19.3 serializes PayloadAttributes.MinBaseFee as a plain *uint64 with
+    // no hexutil wrapper (op-service/eth/types.go:523), so the wire form is a bare JSON
+    // number — every post-Jovian FCU carries e.g. "minBaseFee": 0.
+    auto parseWithMinBaseFee = [](Json::Value minBaseFee) {
+        auto attrs = makeBaseAttributes();
+        attrs["minBaseFee"] = std::move(minBaseFee);
+        return parsePayloadAttributes(
+            makeAttributesParams(std::move(attrs)), engine::ApiVersion::V3);
+    };
+
+    auto zero = parseWithMinBaseFee(Json::Value(0));
+    BOOST_REQUIRE(zero.has_value() && zero->minBaseFee.has_value());
+    BOOST_CHECK_EQUAL(*zero->minBaseFee, 0ULL);
+
+    // Decimal 10 must stay 10. The trap: jsoncpp asString() stringifies 10 to "10",
+    // which the hex reader would parse as 0x10 = 16 — a silently forged value.
+    auto ten = parseWithMinBaseFee(Json::Value(10));
+    BOOST_REQUIRE(ten.has_value() && ten->minBaseFee.has_value());
+    BOOST_CHECK_EQUAL(*ten->minBaseFee, 10ULL);
+
+    auto max = parseWithMinBaseFee(Json::Value(Json::UInt64(UINT64_MAX)));
+    BOOST_REQUIRE(max.has_value() && max->minBaseFee.has_value());
+    BOOST_CHECK_EQUAL(*max->minBaseFee, UINT64_MAX);
+
+    // The hex string form stays accepted: "0xa" is 10.
+    auto hexTen = parseWithMinBaseFee(Json::Value("0xa"));
+    BOOST_REQUIRE(hexTen.has_value() && hexTen->minBaseFee.has_value());
+    BOOST_CHECK_EQUAL(*hexTen->minBaseFee, 10ULL);
+}
+
+BOOST_AUTO_TEST_CASE(payloadAttributesMinBaseFeeRejectsNonIntegerForms)
+{
+    auto expectInvalidParams = [](Json::Value minBaseFee) {
+        auto attrs = makeBaseAttributes();
+        attrs["minBaseFee"] = std::move(minBaseFee);
+        BOOST_CHECK_EXCEPTION(
+            parsePayloadAttributes(makeAttributesParams(std::move(attrs)), engine::ApiVersion::V3),
+            JsonRpcException,
+            [](JsonRpcException const& error) { return error.code() == InvalidParams; });
+    };
+
+    expectInvalidParams(Json::Value(-1));
+    expectInvalidParams(Json::Value(1.5));
+    expectInvalidParams(Json::Value("notahex"));
+    expectInvalidParams(Json::Value(Json::arrayValue));
+    expectInvalidParams(Json::Value(Json::objectValue));
+}
+
+BOOST_AUTO_TEST_CASE(payloadAttributesBareNumberStaysMinBaseFeeOnly)
+{
+    // The bare-number acceptance is scoped to minBaseFee: op-node wraps every other
+    // uint64 attribute (timestamp, gasLimit) in hexutil.Uint64, so a bare number there
+    // is still a malformed request.
+    auto expectInvalidParams = [](Json::Value attrs) {
+        BOOST_CHECK_EXCEPTION(
+            parsePayloadAttributes(makeAttributesParams(std::move(attrs)), engine::ApiVersion::V3),
+            JsonRpcException,
+            [](JsonRpcException const& error) { return error.code() == InvalidParams; });
+    };
+
+    auto bareGasLimit = makeBaseAttributes();
+    bareGasLimit["gasLimit"] = 30000000;
+    expectInvalidParams(bareGasLimit);
+
+    auto bareTimestamp = makeBaseAttributes();
+    bareTimestamp["timestamp"] = 100;
+    expectInvalidParams(bareTimestamp);
+}
+
 BOOST_AUTO_TEST_CASE(payloadAttributesTransactionsMustBeArray)
 {
     auto attrs = makeBaseAttributes();
@@ -263,15 +333,33 @@ BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootRoundTrip)
     auto const withdrawalsRootHex =
         std::string("0x9999999999999999999999999999999999999999999999999999999999999999");
 
+    auto const beaconRootHex =
+        std::string("0x8888888888888888888888888888888888888888888888888888888888888888");
+    auto appendV4Tail = [&](Json::Value& params) {
+        // engine_newPayloadV4 takes all four params (B4): blob hashes, beacon root,
+        // executionRequests.
+        params.append(Json::Value(Json::arrayValue));
+        params.append(beaconRootHex);
+        params.append(Json::Value(Json::arrayValue));
+    };
+
     auto ep = makeBaseExecutionPayload();
     ep["withdrawalsRoot"] = withdrawalsRootHex;
+    // An ExecutionPayloadV4 carries the V2/V3 fields too, all of them required
+    // (op-geth NewPayloadV4 answers -32602 for any nil among them).
+    ep["withdrawals"] = Json::Value(Json::arrayValue);
+    ep["blobGasUsed"] = "0x0";
+    ep["excessBlobGas"] = "0x0";
     Json::Value params(Json::arrayValue);
     params.append(ep);
+    appendV4Tail(params);
 
     // withdrawalsRoot is a V4+ (Isthmus) payload field, so the round trip runs at V4.
     auto request = parseNewPayloadRequest(params, engine::ApiVersion::V4);
     BOOST_REQUIRE(request.executionPayload.withdrawalsRoot.has_value());
     BOOST_CHECK_EQUAL(request.executionPayload.withdrawalsRoot->hexPrefixed(), withdrawalsRootHex);
+    BOOST_REQUIRE(request.executionRequests.has_value());
+    BOOST_CHECK(request.executionRequests->empty());
 
     auto serialized = serializeExecutionPayload(request.executionPayload, engine::ApiVersion::V4);
     BOOST_REQUIRE(serialized.isMember("withdrawalsRoot"));
@@ -280,6 +368,7 @@ BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootRoundTrip)
     // Parse the serialized payload again: the field survives a full round trip.
     Json::Value reparseParams(Json::arrayValue);
     reparseParams.append(serialized);
+    appendV4Tail(reparseParams);
     auto reparsed = parseNewPayloadRequest(reparseParams, engine::ApiVersion::V4);
     BOOST_CHECK(
         reparsed.executionPayload.withdrawalsRoot == request.executionPayload.withdrawalsRoot);

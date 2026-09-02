@@ -55,6 +55,24 @@ BOOST_AUTO_TEST_CASE(GetTxContextGasPriceZeroForSystemCall)
         intx::be::load<intx::uint256>(host.get_tx_context().tx_gas_price), intx::uint256{0});
 }
 
+// OP Ecotone+ L2s serve no blobs: BLOBBASEFEE must push MIN_BLOB_GASPRICE = 1, never 0 or the
+// L1 blob market price. toBlockInfo never sets blob_base_fee (nullopt on both the block-execution
+// and eth_call paths), so the host's value_or(1) is what every BLOBBASEFEE reads.
+BOOST_AUTO_TEST_CASE(BlobBaseFeeDefaultsToOneWhenUnset)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    state::State st{ts};
+    test::TestBlockHashes hashes;
+    state::Transaction tx;
+    auto block = makeBlock();
+    BOOST_CHECK(!block.blob_base_fee.has_value());  // toBlockInfo never sets it
+    OpHost host{EVMC_PRAGUE, vm, st, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
+    const auto ctx = host.get_tx_context();
+    BOOST_CHECK_EQUAL(
+        intx::be::load<intx::uint256>(ctx.blob_base_fee), intx::uint256{1});  // MIN_BLOB_GASPRICE
+}
+
 BOOST_AUTO_TEST_CASE(OverrideTableInterceptsP256)
 {
     BOOST_CHECK(

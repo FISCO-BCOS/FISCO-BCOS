@@ -1,4 +1,3 @@
-#include <range/v3/view/filter.hpp>
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"

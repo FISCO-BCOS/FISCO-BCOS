@@ -45,7 +45,12 @@ HttpServer::~HttpServer()
 // start http server
 void HttpServer::start()
 {
-    if (m_acceptor && m_acceptor->is_open())
+    if (!m_acceptor)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("acceptor is not initialized"));
+    }
+
+    if (m_acceptor->is_open())
     {
         HTTP_SERVER(INFO) << LOG_BADGE("startListen") << LOG_DESC("http server is running");
         return;
@@ -166,9 +171,9 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
     bool useSsl = !disableSsl();
     if (!useSsl)
     {  // non ssl , start http session
-        auto httpStream = m_httpStreamFactory->buildHttpStream(
+        auto httpStream = m_httpStreamFactory.buildHttpStream(
             std::make_shared<boost::beast::tcp_stream>(std::move(socket)));
-        buildHttpSession(httpStream, nullptr)->run();
+        buildHttpSession(httpStream, "")->run();
 
         accept();
         return;
@@ -197,8 +202,8 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
 
             if (auto server = self.lock())
             {
-                auto httpStream = server->httpStreamFactory()->buildHttpStream(ss);
-                server->buildHttpSession(httpStream, nodeId)->run();
+                auto httpStream = server->httpStreamFactory().buildHttpStream(ss);
+                server->buildHttpSession(httpStream, nodeId ? *nodeId : "")->run();
             }
         });
 
@@ -206,8 +211,7 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
 }
 
 
-HttpSession::Ptr HttpServer::buildHttpSession(
-    HttpStream::Ptr _httpStream, std::shared_ptr<std::string> _nodeId)
+HttpSession::Ptr HttpServer::buildHttpSession(HttpStream::Ptr _httpStream, std::string _nodeId)
 {
     auto session = std::make_shared<HttpSession>(m_httpBodySizeLimit, m_corsConfig);
 
@@ -249,14 +253,28 @@ void HttpServer::setHttpReqHandler(HttpReqHandler _httpReqHandler)
     m_httpReqHandler = std::move(_httpReqHandler);
 }
 
-std::shared_ptr<boost::asio::ip::tcp::acceptor> HttpServer::acceptor() const
+boost::asio::ip::tcp::acceptor& HttpServer::acceptor()
 {
-    return m_acceptor;
+    if (!m_acceptor)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("acceptor is not initialized"));
+    }
+    return *m_acceptor;
 }
 
-void HttpServer::setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor)
+void HttpServer::setAcceptor(boost::asio::ip::tcp::acceptor _acceptor)
 {
-    m_acceptor = std::move(_acceptor);
+    if (m_acceptor)
+    {
+        // cancel any pending async_accept and close the old acceptor before it
+        // is replaced or destroyed, so that its completion handlers receive
+        // operation_aborted rather than referencing a destroyed acceptor
+        boost::system::error_code ec;
+        m_acceptor->cancel(ec);
+        m_acceptor->close(ec);
+    }
+
+    m_acceptor.emplace(std::move(_acceptor));
 }
 
 std::shared_ptr<boost::asio::ssl::context> HttpServer::ctx() const
@@ -279,12 +297,12 @@ void HttpServer::setWsUpgradeHandler(WsUpgradeHandler _wsUpgradeHandler)
     m_wsUpgradeHandler = std::move(_wsUpgradeHandler);
 }
 
-HttpStreamFactory::Ptr HttpServer::httpStreamFactory() const
+HttpStreamFactory& HttpServer::httpStreamFactory()
 {
     return m_httpStreamFactory;
 }
 
-void HttpServer::setHttpStreamFactory(HttpStreamFactory::Ptr _httpStreamFactory)
+void HttpServer::setHttpStreamFactory(HttpStreamFactory _httpStreamFactory)
 {
     m_httpStreamFactory = std::move(_httpStreamFactory);
 }
@@ -342,11 +360,9 @@ HttpServer::Ptr HttpServerFactory::buildHttpServer(const std::string& _listenIP,
     // create httpserver and launch a listening port
     auto server =
         std::make_shared<HttpServer>(_listenIP, _listenPort, _httpBodySizeLimit, _corsConfig);
-    auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(*_ioc);
-    auto httpStreamFactory = std::make_shared<HttpStreamFactory>();
     server->setCtx(std::move(_ctx));
-    server->setAcceptor(acceptor);
-    server->setHttpStreamFactory(httpStreamFactory);
+    server->setAcceptor(boost::asio::ip::tcp::acceptor{*_ioc});
+    server->setHttpStreamFactory(HttpStreamFactory{});
 
     HTTP_SERVER(INFO) << LOG_BADGE("buildHttpServer") << LOG_KV("listenIP", _listenIP)
                       << LOG_KV("listenPort", _listenPort)

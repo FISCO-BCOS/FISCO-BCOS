@@ -24,8 +24,8 @@
 #include "bcos-gateway/libp2p/ServiceV2.h"
 #include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::test;

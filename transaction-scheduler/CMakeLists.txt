@@ -5,7 +5,7 @@ add_library(transaction-scheduler bcos-transaction-scheduler/BaselineScheduler.c
 target_include_directories(transaction-scheduler PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-transaction-scheduler>)
-target_link_libraries(transaction-scheduler PUBLIC ledger storage bcos-framework fmt::fmt-header-only)
+target_link_libraries(transaction-scheduler PUBLIC ledger storage bcos-framework fmt::fmt)
 set_target_properties(transaction-scheduler PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)

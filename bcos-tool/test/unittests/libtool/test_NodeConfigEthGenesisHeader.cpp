@@ -16,6 +16,7 @@
  * @file test_NodeConfigEthGenesisHeader.cpp
  * @brief [eth_genesis_header] parsing: 22-field mapping + per-field fail-fast (A3)
  */
+#include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-tool/Exceptions.h>
@@ -24,6 +25,7 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -137,26 +139,93 @@ BOOST_AUTO_TEST_CASE(AllFieldsParsed)
     BOOST_CHECK_EQUAL(header->m_extraData.size(), 17U);  // Jovian format
     BOOST_CHECK_EQUAL(header->m_mixHash, bcos::h256{});
     BOOST_CHECK_EQUAL(header->m_nonce, bcos::h64{});
-    BOOST_CHECK_EQUAL(header->m_baseFeePerGas, bcos::u256(1'000'000'000));
-    BOOST_CHECK_EQUAL(header->m_withdrawalsRoot.hexPrefixed(), std::string(kEthEmptyTrieRoot));
-    BOOST_CHECK_EQUAL(header->m_blobGasUsed, bcos::u256(0));
-    BOOST_CHECK_EQUAL(header->m_excessBlobGas, bcos::u256(0));
-    BOOST_CHECK_EQUAL(header->m_parentBeaconBlockRoot, bcos::h256{});
-    BOOST_CHECK_EQUAL(header->m_requestsHash.hexPrefixed(),
+    BOOST_REQUIRE(header->m_baseFeePerGas.has_value());
+    BOOST_CHECK_EQUAL(*header->m_baseFeePerGas, bcos::u256(1'000'000'000));
+    BOOST_REQUIRE(header->m_withdrawalsRoot.has_value());
+    BOOST_CHECK_EQUAL(header->m_withdrawalsRoot->hexPrefixed(), std::string(kEthEmptyTrieRoot));
+    BOOST_REQUIRE(header->m_blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(*header->m_blobGasUsed, bcos::u256(0));
+    BOOST_REQUIRE(header->m_excessBlobGas.has_value());
+    BOOST_CHECK_EQUAL(*header->m_excessBlobGas, bcos::u256(0));
+    BOOST_REQUIRE(header->m_parentBeaconBlockRoot.has_value());
+    BOOST_CHECK_EQUAL(*header->m_parentBeaconBlockRoot, bcos::h256{});
+    BOOST_REQUIRE(header->m_requestsHash.has_value());
+    BOOST_CHECK_EQUAL(header->m_requestsHash->hexPrefixed(),
         "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     BOOST_CHECK_EQUAL(header->m_hash.hexPrefixed(),
         "0xb153f41d2651441ace825becbfe2f2b6bf89092864a0ae04b7e0d40a5cf64cc1");
 }
 
-BOOST_AUTO_TEST_CASE(EachMissingFieldFailsFast)
+BOOST_AUTO_TEST_CASE(EachMissingRequiredFieldFailsFast)
 {
-    // Remove every one of the 22 keys in turn: parsing must throw
-    // InvalidConfig each time (all fields are required).
+    // Remove every REQUIRED key in turn: parsing must throw InvalidConfig each
+    // time. The fork-gated keys (base_fee_per_gas, withdrawals_root,
+    // blob_gas_used, excess_blob_gas, parent_beacon_block_root, requests_hash)
+    // are OPTIONAL — removing one of those must instead succeed (covered by
+    // OptionalFieldsMayBeOmitted below).
+    const std::set<std::string> kOptionalKeys = {
+        "base_fee_per_gas", "withdrawals_root", "blob_gas_used",
+        "excess_blob_gas", "parent_beacon_block_root", "requests_hash",
+    };
     for (auto const& [key, value] : kEthHeaderFields)
     {
+        if (kOptionalKeys.count(key) > 0)
+        {
+            continue;
+        }
         auto cfg = makeEthNodeConfig();
-        BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection(key)))),
-            bcos::tool::InvalidConfig);
+        BOOST_CHECK_EXCEPTION(
+            cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection(key)))),
+            bcos::tool::InvalidConfig,
+            [](auto const& e) {
+                return bcos::test::errinfoContains(e, "is required (all 22 eth genesis header");
+            });
+    }
+}
+
+BOOST_AUTO_TEST_CASE(OptionalFieldsMayBeOmitted)
+{
+    // A pre-Cancun chain (e.g. Sepolia's London-era genesis) omits the
+    // fork-gated keys. Each omission must parse cleanly and surface as a
+    // nullopt optional, so the ledger's RLP re-encoding leaves the field out.
+    const std::set<std::string> kOptionalKeys = {
+        "base_fee_per_gas", "withdrawals_root", "blob_gas_used",
+        "excess_blob_gas", "parent_beacon_block_root", "requests_hash",
+    };
+    for (auto const& [key, value] : kEthHeaderFields)
+    {
+        if (kOptionalKeys.count(key) == 0)
+        {
+            continue;
+        }
+        auto cfg = makeEthNodeConfig();
+        cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection(key))));
+        auto const& header = cfg->genesisConfig().m_ethGenesisHeader;
+        BOOST_REQUIRE(header.has_value());
+        if (key == "base_fee_per_gas")
+        {
+            BOOST_CHECK(!header->m_baseFeePerGas.has_value());
+        }
+        else if (key == "withdrawals_root")
+        {
+            BOOST_CHECK(!header->m_withdrawalsRoot.has_value());
+        }
+        else if (key == "blob_gas_used")
+        {
+            BOOST_CHECK(!header->m_blobGasUsed.has_value());
+        }
+        else if (key == "excess_blob_gas")
+        {
+            BOOST_CHECK(!header->m_excessBlobGas.has_value());
+        }
+        else if (key == "parent_beacon_block_root")
+        {
+            BOOST_CHECK(!header->m_parentBeaconBlockRoot.has_value());
+        }
+        else if (key == "requests_hash")
+        {
+            BOOST_CHECK(!header->m_requestsHash.has_value());
+        }
     }
 }
 
@@ -166,17 +235,23 @@ BOOST_AUTO_TEST_CASE(L2WithoutSectionRejected)
     // without [eth_genesis_header] would mint a Tars-hashed B0 no
     // op-node/op-reth could match, so it fails fast.
     auto cfg = makeEthNodeConfig();
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         cfg->loadGenesisConfig(parseEthIni(std::string(kEthBase) + kEthFeatureL2 + kEthAlloc0)),
-        bcos::tool::InvalidConfig);
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
+            return bcos::test::errinfoContains(e, "requires an [eth_genesis_header] section");
+        });
 }
 
 BOOST_AUTO_TEST_CASE(SectionWithoutL2FeatureRejected)
 {
     auto cfg = makeEthNodeConfig();
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         cfg->loadGenesisConfig(parseEthIni(std::string(kEthBase) + ethHeaderSection())),
-        bcos::tool::InvalidConfig);
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
+            return bcos::test::errinfoContains(e, "section requires feature_l2_ethereum_compat");
+        });
 }
 
 BOOST_AUTO_TEST_CASE(NonZeroNumberRejected)
@@ -184,8 +259,35 @@ BOOST_AUTO_TEST_CASE(NonZeroNumberRejected)
     auto section = ethHeaderSection();
     boost::replace_first(section, "number=0x0\n", "number=0x1\n");
     auto cfg = makeEthNodeConfig();
-    BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section))),  //
-        bcos::tool::InvalidConfig);
+    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section))),  //
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
+            return bcos::test::errinfoContains(e, "[eth_genesis_header].number must be 0x0");
+        });
+}
+
+BOOST_AUTO_TEST_CASE(EmptyExtraDataAccepted)
+{
+    // Canonical Ethereum geneses carry an empty extraData ("0x"); it decodes to
+    // zero bytes and must not fail the hex check.
+    auto section = ethHeaderSection();
+    boost::replace_first(
+        section, "extra_data=0x00000000fa000000060000000000000000\n", "extra_data=0x\n");
+    auto cfg = makeEthNodeConfig();
+    cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section)));
+    auto const& header = cfg->genesisConfig().m_ethGenesisHeader;
+    BOOST_REQUIRE(header.has_value());
+    BOOST_CHECK(header->m_extraData.empty());
+
+    // ...but a quantity field still requires digits: "0x" is not a number.
+    auto badQuantity = ethHeaderSection();
+    boost::replace_first(badQuantity, "gas_limit=0x1c9c380\n", "gas_limit=0x\n");
+    auto cfg2 = makeEthNodeConfig();
+    BOOST_CHECK_EXCEPTION(cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(badQuantity))),  //
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
+            return bcos::test::errinfoContains(e, ".gas_limit is not valid hex");
+        });
 }
 
 BOOST_AUTO_TEST_CASE(BadWidthRejected)
@@ -195,15 +297,21 @@ BOOST_AUTO_TEST_CASE(BadWidthRejected)
     boost::replace_first(section, std::string(kEthEmptyTrieRoot),
         "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b4");
     auto cfg = makeEthNodeConfig();
-    BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section))),  //
-        bcos::tool::InvalidConfig);
+    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section))),  //
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
+            return bcos::test::errinfoContains(e, ".state_root must be 64 hex chars");
+        });
 
     // 7-byte nonce
     auto shortNonce = ethHeaderSection();
     boost::replace_first(shortNonce, "nonce=0x0000000000000000\n", "nonce=0x00000000000000\n");
     auto cfg2 = makeEthNodeConfig();
-    BOOST_CHECK_THROW(cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(shortNonce))),  //
-        bcos::tool::InvalidConfig);
+    BOOST_CHECK_EXCEPTION(cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(shortNonce))),  //
+        bcos::tool::InvalidConfig,
+        [](auto const& e) {
+            return bcos::test::errinfoContains(e, ".nonce must be 16 hex chars");
+        });
 }
 
 BOOST_AUTO_TEST_CASE(GenesisDataCoversEthHeader)

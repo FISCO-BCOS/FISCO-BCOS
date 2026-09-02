@@ -39,8 +39,11 @@ class WsSession;
 }  // namespace ws
 namespace boostssl
 {
-class MessageFace;
+namespace ws
+{
+class WsMessage;
 }
+}  // namespace boostssl
 
 namespace event
 {
@@ -50,8 +53,8 @@ class EventSub : bcos::Worker, public std::enable_shared_from_this<EventSub>
 public:
     using Ptr = std::shared_ptr<EventSub>;
     using ConstPtr = std::shared_ptr<const EventSub>;
-    EventSub(std::shared_ptr<boostssl::ws::WsService> _wsService,
-        boost::asio::io_context& _ioContext);
+    EventSub(
+        std::shared_ptr<boostssl::ws::WsService> _wsService, boost::asio::io_context& _ioContext);
     virtual ~EventSub() { stop(); }
 
 public:
@@ -61,9 +64,9 @@ public:
     void executeWorker() override;
 
 public:
-    virtual void onRecvSubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
+    virtual void onRecvSubscribeEvent(bcos::boostssl::ws::WsMessage _msg,
         std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
-    virtual void onRecvUnsubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
+    virtual void onRecvUnsubscribeEvent(bcos::boostssl::ws::WsMessage _msg,
         std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
 
 public:
@@ -76,7 +79,7 @@ public:
      * @return bool: if _session is inactive, false will be return
      */
     bool sendResponse(std::shared_ptr<bcos::boostssl::ws::WsSession> _session,
-        std::shared_ptr<bcos::boostssl::MessageFace> _msg, const std::string& _id, int32_t _status);
+        bcos::boostssl::ws::WsMessage _msg, const std::string& _id, int32_t _status);
 
     /**
      * @brief: send event log list to client
@@ -123,22 +126,11 @@ public:
         m_groupManager = _groupManager;
     }
 
-    std::shared_ptr<bcos::boostssl::MessageFaceFactory> messageFactory() const
-    {
-        return m_messageFactory;
-    }
-    void setMessageFactory(std::shared_ptr<bcos::boostssl::MessageFaceFactory> _messageFactory)
-    {
-        m_messageFactory = _messageFactory;
-    }
-
 private:
     // group manager
     bcos::rpc::GroupManager::Ptr m_groupManager;
     // match for event log compare
     std::shared_ptr<EventSubMatcher> m_matcher;
-    // message factory
-    std::shared_ptr<bcos::boostssl::MessageFaceFactory> m_messageFactory;
 
 private:
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
@@ -172,8 +164,8 @@ public:
     using Ptr = std::shared_ptr<EventSubFactory>;
 
 public:
-    EventSub::Ptr buildEventSub(std::shared_ptr<boostssl::ws::WsService> _wsService,
-        boost::asio::io_context& _ioContext)
+    EventSub::Ptr buildEventSub(
+        std::shared_ptr<boostssl::ws::WsService> _wsService, boost::asio::io_context& _ioContext)
     {
         auto es = std::make_shared<EventSub>(_wsService, _ioContext);
         return es;

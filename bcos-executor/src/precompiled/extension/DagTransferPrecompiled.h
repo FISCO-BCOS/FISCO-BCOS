@@ -22,6 +22,7 @@
 #include "../../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-framework/storage/Table.h"
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos
 {

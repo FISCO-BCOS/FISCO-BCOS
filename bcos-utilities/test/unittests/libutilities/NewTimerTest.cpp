@@ -18,9 +18,9 @@
  */
 #include "bcos-utilities/NewTimer.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/test/tools/old/interface.hpp>
-#include <boost/test/unit_test.hpp>
 #include <chrono>
+#include <boost/test/unit_test.hpp>
+#include <boost/test/tools/old/interface.hpp>
 #include <thread>
 
 namespace bcos
@@ -34,7 +34,7 @@ BOOST_AUTO_TEST_CASE(testTimer)
     auto ioContext = std::make_shared<boost::asio::io_context>();
     auto workGuard = boost::asio::make_work_guard(*ioContext);
     std::thread ioThread([&ioContext] { ioContext->run(); });
-    timer::TimerFactory timerFactory(ioContext);
+    timer::TimerFactory timerFactory(*ioContext);
 
     {
         auto timer = timerFactory.createTimer([] {}, 0, 0);

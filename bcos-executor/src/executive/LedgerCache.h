@@ -129,9 +129,15 @@ public:
         if (auto value = task::syncWait(
                 ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID)))
         {
-            auto numChainID = boost::lexical_cast<u256>(std::get<0>(*value));
-            EXECUTOR_LOG(INFO) << LOG_DESC("fetchChainId success") << LOG_KV("chainId", numChainID);
-            return bcos::toEvmC(numChainID);
+            // Same shared parser as every other web3_chain_id reader (executor fallback is
+            // the fourth consumer): raw lexical_cast would throw uncaught
+            // on a "0x"-prefixed config and wrap a negative one modulo 2^256.
+            // Malformed SYS_CONFIG must fail closed (same throw as getLedgerConfig), not
+            // silently become CHAINID=0. A missing row still falls through to return {} below.
+            auto const parsedChainId = ledger::parseConfiguredWeb3ChainId(std::get<0>(*value));
+            EXECUTOR_LOG(INFO) << LOG_DESC("fetchChainId success")
+                               << LOG_KV("chainId", parsedChainId);
+            return bcos::toEvmC(parsedChainId);
         }
 
         return {};

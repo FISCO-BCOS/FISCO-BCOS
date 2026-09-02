@@ -25,6 +25,7 @@
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <range/v3/view/any_view.hpp>
 #include <string>
+#include <bcos-utilities/BoostLog.h>
 
 #define GATEWAYCLIENT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[GATEWAYCLIENT][INITIALIZER]"
 #define GATEWAYCLIENT_BADGE "[GATEWAYCLIENT]"
@@ -40,21 +41,18 @@ public:
 
     void setKeyFactory(bcos::crypto::KeyFactory::Ptr keyFactory);
 
-    void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bcos::bytesConstRef _payload, bcos::gateway::ErrorRespFunc _errorRespFunc) override;
-
     void asyncGetPeers(std::function<void(
             bcos::Error::Ptr, bcos::gateway::GatewayInfo::Ptr, bcos::gateway::GatewayInfosPtr)>
             _callback) override;
 
-    void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
-        bcos::bytesConstRef _payload) override;
+    // (coroutine) send message to a single node by awaiting the gateway-service RPC
+    bcos::task::Task<bcos::Error::Ptr> sendMessageByNodeID(const std::string& _groupID,
+        int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
+        ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> _payloads) override;
 
     bcos::task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID,
-        ::ranges::any_view<bcos::bytesConstRef> payloads) override;
+        ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads) override;
 
     void asyncGetGroupNodeInfo(const std::string& _groupID,
         bcos::gateway::GetGroupNodeInfoFunc _onGetGroupNodeInfo) override;

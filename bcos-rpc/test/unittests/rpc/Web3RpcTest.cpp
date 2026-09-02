@@ -21,25 +21,16 @@
 
 #include "../common/RPCFixture.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <bcos-codec/wrapper/CodecWrapper.h>
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/engine/AnyEngineService.h>
-#include <bcos-framework/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
-#include <bcos-framework/testutils/faker/FakeSealer.h>
+#include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-rpc/jwtAuth/JwtConfig.h>
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
-#include <bcos-rpc/tarsRPC/RPCServer.h>
-#include <bcos-rpc/validator/CallValidator.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -470,6 +461,87 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
     // clang-format on
 }
 
+// Single-node mempool path (NodeService::memPool wired): the chainId gate must FAIL CLOSED
+// when SYSTEM_KEY_WEB3_CHAIN_ID is unconfigured — EIP-155-protected and typed txs are
+// rejected (without a node chainId to compare against, accepting them would disable EIP-155
+// replay protection), while pre-EIP-155 legacy stays exempt (nothing to compare).
+BOOST_AUTO_TEST_CASE(handleMempoolChainIdGateUnconfiguredTest)
+{
+    bcos::txpool::MemPoolImpl memPool;
+    nodeService->setMemPool(memPool);
+    // Fresh fixture: web3_chain_id is NOT set — getSystemConfig returns nullopt.
+    auto submit = [&](std::string const& rawTx) {
+        const std::string request =
+            R"({"jsonrpc":"2.0","id":1132123, "method":"eth_sendRawTransaction","params":[")" +
+            rawTx + R"("]})";
+        return onRPCRequestWrapper(request);
+    };
+    // EIP-155 protected legacy (chainId=1, v=38; etherscan 0x6f55e1...): rejected.
+    {
+        auto response = submit(
+            "0xf902ee83031ae9850256506a88831b40d094d56e4eab23cb81f43168f9f45211eb027b9ac7cc80b90284"
+            "b143044b000000000000000000000000000000000000000000000000000000000000002000000000000000"
+            "00000000000000000000000000000000000000000000000001000000000000000000000000000000000000"
+            "00000000000000000000000000200000000000000000000000000000000000000000000000000000000000"
+            "0000650000000000000000000000004d73adb72bc3dd368966edd0f0b2148401a178e20000000000000000"
+            "0000000000000000000000000000000000000000000000a000000000000000000000000000000000000000"
+            "000000000000000000661d0843000000000000000000000000000000000000000000000000000000000000"
+            "01600000000000000000000000000000000000000000000000000000000000000084704316e50000000000"
+            "00000000000000000000000000000000000000000000000000006e740e551c6ee78d757128b8e476b390f8"
+            "91c54e96538e1bb4469a62105220215a000000000000000000000000000000000000000000000000000000"
+            "0000000014740e551c6ee78d757128b8e476b390f891c54e96538e1bb4469a62105220215a000000000000"
+            "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            "0000000000000000000082ce44cffc92754f8825e1c60cadc5f54a504b769ee616e9f28a9797c2a4b84d11"
+            "542a1aa4a06a6aa60ee062a36c4fb467145b8914959e42323a13068e2475bff41c67af8dd96034675776cb"
+            "78036711c1f320b82085df5ee005ffca77959f29a0a07a226241787f06b57483d509e0befd84e5ac84d960"
+            "e881c7b0853ee1d7c63dff1b00000000000000000000000000000000000000000000000000000000000026"
+            "a04932608e9743aaa76626f082cedb5da11ff8a1ebe6b5a62a372c81393b5912aea012f36de80608ba3b0f"
+            "72f3e8f299379ce2802e64b1cbb55275ad9aaa81190b44");
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == InvalidParams);
+        BOOST_TEST(response["error"]["message"].asString() == "invalid chainId");
+    }
+    // Typed EIP-1559 (chainId=1; etherscan 0x5b2f24...): rejected via the typed-envelope guard.
+    {
+        auto response = submit(
+            "0x02f871018308b3e6808501cd2ec1d7826ac194ba1951df0c0a52af23857c5ab48b4c43a57e7ed1872700"
+            "f2d0ba3db080c001a069be171dfa805790a28f1bfcd131eb2aa8f345f601c4a3659de4ae8d624a7b89a06e"
+            "0f6ed7d035397547aeac0e5130847570f4b607350f71c1391b7cb7f9dd604c");
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == InvalidParams);
+        BOOST_TEST(response["error"]["message"].asString() == "invalid chainId");
+    }
+    // Pre-EIP-155 legacy (v=28; etherscan 0xf6ecaf...): exempt — accepted into the mempool.
+    {
+        auto response = submit(
+            "0xf86c808504a817c800825208945dc98fe6cd853f7f5a44399cfb1c60682d5d62ef887bd0a2ecdb872000"
+            "801ca0e90ef078b60e3a186fae6071c92dbfec1256f423f5a40cd5cba69ca423eb4e44a028e14398b1a105"
+            "9388cbc5eb03cfcb6f9493bdd1efd6a17e54dcabbb2eaace16");
+        validRespCheck(response);
+        BOOST_TEST(response["result"].asString() ==
+                   "0xf6ecaffaf808cdfe1d9ef02ec461f2ab5674f72f9c6f954743e0c2d74608b751");
+    }
+}
+
+// Configured-mismatch: a typed EIP-1559 envelope with chainId=1 must be rejected when
+// web3_chain_id is some other value. Same sendRaw gate as the unconfigured case above.
+BOOST_AUTO_TEST_CASE(handleSendRawTypedChainIdMismatchTest)
+{
+    bcos::txpool::MemPoolImpl memPool;
+    nodeService->setMemPool(memPool);
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, std::to_string(999));
+    const std::string request =
+        R"({"jsonrpc":"2.0","id":1132123, "method":"eth_sendRawTransaction","params":[")"
+        "0x02f871018308b3e6808501cd2ec1d7826ac194ba1951df0c0a52af23857c5ab48b4c43a57e7ed1872700"
+        "f2d0ba3db080c001a069be171dfa805790a28f1bfcd131eb2aa8f345f601c4a3659de4ae8d624a7b89a06e"
+        "0f6ed7d035397547aeac0e5130847570f4b607350f71c1391b7cb7f9dd604c"
+        R"("]})";
+    auto response = onRPCRequestWrapper(request);
+    BOOST_TEST(response.isMember("error"));
+    BOOST_TEST(response["error"]["code"].asInt() == InvalidParams);
+    BOOST_TEST(response["error"]["message"].asString() == "invalid chainId");
+}
+
 BOOST_AUTO_TEST_CASE(handleEIP4844TxTest)
 {
     // L2 (OP Stack, Ecotone onwards) never admits blob transactions:
@@ -548,11 +620,13 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     auto const expectedLargeValue = fromBigQuantity(largeQuantity);
     auto const logsBloom = "0x" + std::string(BloomBytesSize * 2, '0');
 
+    // Karst surface (B4): the wire dialect is newPayloadV4 (payload with withdrawalsRoot,
+    // plus blob hashes / beacon root / executionRequests params) and getPayloadV5.
     std::string newPayloadRequest =
-        R"({"jsonrpc":"2.0","id":8,"method":"engine_newPayloadV2","params":[{"parentHash":"0x1111111111111111111111111111111111111111111111111111111111111111","feeRecipient":"0x2222222222222222222222222222222222222222","stateRoot":"0x3333333333333333333333333333333333333333333333333333333333333333","receiptsRoot":"0x4444444444444444444444444444444444444444444444444444444444444444","logsBloom":")";
+        R"({"jsonrpc":"2.0","id":8,"method":"engine_newPayloadV4","params":[{"parentHash":"0x1111111111111111111111111111111111111111111111111111111111111111","feeRecipient":"0x2222222222222222222222222222222222222222","stateRoot":"0x3333333333333333333333333333333333333333333333333333333333333333","receiptsRoot":"0x4444444444444444444444444444444444444444444444444444444444444444","logsBloom":")";
     newPayloadRequest += logsBloom;
     newPayloadRequest +=
-        R"(","prevRandao":"0x5555555555555555555555555555555555555555555555555555555555555555","blockNumber":"0x1","gasLimit":"0x5208","gasUsed":"0x5208","timestamp":"0x1","extraData":"0x1234","baseFeePerGas":"0x1","blockHash":"0x6666666666666666666666666666666666666666666666666666666666666666","transactions":[")";
+        R"(","prevRandao":"0x5555555555555555555555555555555555555555555555555555555555555555","blockNumber":"0x1","gasLimit":"0x5208","gasUsed":"0x5208","timestamp":"0x1","extraData":"0x1234","baseFeePerGas":"0x1","blockHash":"0x6666666666666666666666666666666666666666666666666666666666666666","withdrawalsRoot":"0x9999999999999999999999999999999999999999999999999999999999999999","transactions":[")";
     newPayloadRequest += encodedTxHex;
     newPayloadRequest +=
         R"("],"withdrawals":[{"index":"0x1","validatorIndex":"0x2","address":"0x7777777777777777777777777777777777777777","amount":")";
@@ -561,25 +635,31 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     newPayloadRequest += largeQuantity;
     newPayloadRequest += R"(","excessBlobGas":")";
     newPayloadRequest += largeQuantity;
-    newPayloadRequest += R"("}]})";
+    newPayloadRequest +=
+        R"("},[],"0x169630f535b4a41330164c6e5c92b1224c0c407f582d407d0ac3d206cd32fd52",[]]})";
 
     auto newPayloadResponse = engineRequest(newPayloadRequest);
     validRespCheck(newPayloadResponse);
     BOOST_TEST(newPayloadResponse["result"]["status"].asString() == "VALID");
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest.has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadVersion.has_value());
-    BOOST_TEST(*testEngineService.m_state->capturedNewPayloadVersion == 2);
+    BOOST_TEST(*testEngineService.m_state->capturedNewPayloadVersion == 4);
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
+                      .withdrawalsRoot.has_value());
+    BOOST_REQUIRE(
+        testEngineService.m_state->capturedNewPayloadRequest->executionRequests.has_value());
+    BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionRequests->empty());
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions
                    .size() == 1);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals
-            .has_value());
+                      .has_value());
     BOOST_TEST(
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front()
             .amount == expectedLargeValue);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed
-            .has_value());
+                      .has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
-            .excessBlobGas.has_value());
+                      .excessBlobGas.has_value());
     BOOST_TEST(
         *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed ==
         expectedLargeValue);
@@ -589,28 +669,46 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
 
     // Raw-bytes carrier: newPayload preserves the wire bytes verbatim (no decoding).
     BOOST_TEST(toHexStringWithPrefix(testEngineService.m_state->capturedNewPayloadRequest
-                       ->executionPayload.transactions.front()
-                       .raw) == encodedTxHex);
+                                         ->executionPayload.transactions.front()
+                                         .raw) == encodedTxHex);
 
     testEngineService.m_state->getPayloadResult->executionPayload =
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload;
     testEngineService.m_state->getPayloadResult->blockValue = expectedLargeValue;
 
     const auto getPayloadRequest =
-        R"({"jsonrpc":"2.0","id":9,"method":"engine_getPayloadV2","params":["payload-id-1"]})";
+        R"({"jsonrpc":"2.0","id":9,"method":"engine_getPayloadV5","params":["payload-id-1"]})";
     auto getPayloadResponse = engineRequest(getPayloadRequest);
     validRespCheck(getPayloadResponse);
     BOOST_REQUIRE(testEngineService.m_state->capturedPayloadId.has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedGetPayloadVersion.has_value());
     BOOST_TEST(*testEngineService.m_state->capturedPayloadId == "payload-id-1");
-    BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 2);
+    BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 5);
     BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"].size() == 1);
     BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"][0].asString() ==
                encodedTxHex);
     BOOST_TEST(
         getPayloadResponse["result"]["executionPayload"]["withdrawals"][0]["amount"].asString() ==
         largeQuantity);
+    BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["withdrawalsRoot"].asString() ==
+               "0x9999999999999999999999999999999999999999999999999999999999999999");
     BOOST_TEST(getPayloadResponse["result"]["blockValue"].asString() == largeQuantity);
+    BOOST_TEST(getPayloadResponse["result"]["executionRequests"].isArray());
+    BOOST_TEST(getPayloadResponse["result"]["executionRequests"].size() == 0U);
+
+    // Adapting to Karst does not retire the older method versions: getPayloadV2 still
+    // reaches the engine service over the same full RPC path, and answers in the V2 shape
+    // (executionPayload + blockValue, no blobsBundle / executionRequests).
+    const auto oldVersionRequest =
+        R"({"jsonrpc":"2.0","id":10,"method":"engine_getPayloadV2","params":["payload-id-1"]})";
+    auto oldVersionResponse = engineRequest(oldVersionRequest);
+    validRespCheck(oldVersionResponse);
+    BOOST_REQUIRE(testEngineService.m_state->capturedGetPayloadVersion.has_value());
+    BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 2);
+    BOOST_TEST(oldVersionResponse["result"].isMember("executionPayload"));
+    BOOST_TEST(oldVersionResponse["result"].isMember("blockValue"));
+    BOOST_TEST(!oldVersionResponse["result"].isMember("blobsBundle"));
+    BOOST_TEST(!oldVersionResponse["result"].isMember("executionRequests"));
 }
 
 BOOST_AUTO_TEST_CASE(logMatcherTest)

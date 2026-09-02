@@ -42,21 +42,28 @@ public:
     void start() override;
     void stop() override;
 
-    void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
-        CallbackFuncWithSession callback, Options options = Options()) override;
-
     void onMessage(NetworkException _error, SessionFace::Ptr session, Message::Ptr message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr) override;
     void sendRespMessageBySession(
         bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
-    void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
     bool isReachable(P2pID const& _nodeID) const override;
+
+    // (coroutine) broadcast to all reachable nodes through the router table
+    task::Task<void> broadcastMessageToAll(P2PMessage::Ptr message,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
+        Options options = Options()) override;
 
     // handlers called when the node is unreachable
     void registerUnreachableHandler(std::function<void(std::string)> _handler) override;
 
     task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
+
+    // (coroutine) forward a received message to its destination through the router table. Unlike
+    // sendMessageByNodeID it does NOT rewrite srcP2PNodeID: the original sender must be preserved
+    // so the final destination can reply to it directly.
+    task::Task<Message::Ptr> forwardMessageByNodeID(P2pID nodeID, P2PMessage& message,
+        ::ranges::any_view<bytesConstRef> payloads, Options options = Options());
 
     std::string getShortP2pID(std::string const& rawP2pID) const override;
     std::string getRawP2pID(std::string const& shortP2pID) const override;
@@ -86,12 +93,6 @@ protected:
     virtual void onEraseSession(P2PSession::Ptr _session);
     bool tryToUpdateSeq(std::string const& _p2pNodeID, uint32_t _seq);
     bool eraseSeq(std::string const& _p2pNodeID);
-
-    virtual void asyncSendMessageByNodeIDWithMsgForward(std::shared_ptr<P2PMessage> _message,
-        CallbackFuncWithSession _callback, Options options = Options());
-
-    virtual void asyncBroadcastMessageWithoutForward(
-        std::shared_ptr<P2PMessage> message, Options options);
 
     void updateP2pInfo(P2PInfo const& p2pInfo);
     void tryToUpdateRawP2pInfo(P2PInfo const& p2pInfo);

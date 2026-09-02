@@ -14,9 +14,9 @@ using intx::operator""_u256;
 
 namespace
 {
-constexpr auto kSender = 0x00000000000000000000000000000000000000aa_address;
+constexpr auto kSenderValidate = 0x00000000000000000000000000000000000000aa_address;
 
-state::BlockInfo blk()
+state::BlockInfo blkValidate()
 {
     state::BlockInfo b;
     b.number = 1;
@@ -29,7 +29,7 @@ state::Transaction baseTx()
 {
     state::Transaction tx;
     tx.type = state::Transaction::Type::eip1559;
-    tx.sender = kSender;
+    tx.sender = kSenderValidate;
     tx.gas_limit = 100000;
     tx.max_gas_price = 1000;
     tx.max_priority_gas_price = 10;
@@ -43,13 +43,14 @@ BOOST_AUTO_TEST_SUITE(OpValidateSuite)
 BOOST_AUTO_TEST_CASE(RejectsBlobTx)
 {
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     auto tx = baseTx();
     tx.type = state::Transaction::Type::blob;
     tx.to = 0x0000000000000000000000000000000000001234_address;
     tx.blob_hashes = {0x0100000000000000000000000000000000000000000000000000000000000001_bytes32};
     tx.max_blob_gas_price = 1;
-    const auto r = opValidate(ts, blk(), tx, {}, isthmusConfig(), OpFeeParams{}, 30000000);
+    const auto r = opValidate(ts, blkValidate(), tx, {}, isthmusConfig(), OpFeeParams{}, 30000000);
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
     BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::not_supported);
 }
@@ -60,22 +61,22 @@ BOOST_AUTO_TEST_CASE(RejectsBlobTx)
 // 判断时 0x7E 会静默穿过全部 revision 门控、被当作 legacy 通过校验。
 //
 // 后果一路错到共识字段：opTransition 会为它买 gas、收 L1 与 operator 费、强制 nonce（deposit
-// 三者都不该有），并产出 OpTxReceipt——其 encodeReceiptForRoot 只编码
-// [status, cumGas, bloom, logs]，缺失 deposit_nonce / deposit_receipt_version，对一笔标记为
-// 0x7E 的交易而言就是错误的 receipts-root 叶子。
+// 三者都不该有），并产出缺失 deposit_nonce / deposit_receipt_version 语义的回执——对一笔
+// 标记为 0x7E 的交易而言就是错误的 receipts-root 叶子（deposit 必须走 runDeposit 专用路径）。
 //
 // 用非零 envelope + 充足余额，确保拒因只可能来自类型判断本身，而不是空 envelope 或余额不足。
 BOOST_AUTO_TEST_CASE(RejectsDepositTxOnTheNonDepositPath)
 {
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     auto tx = baseTx();
     tx.type = kDepositTxType;
     tx.to = 0x0000000000000000000000000000000000001234_address;
 
     const std::vector<uint8_t> env{0x7e, 0x11};
     const auto r = opValidate(
-        ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
+        ts, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
     BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::not_supported);
 }
@@ -89,7 +90,8 @@ BOOST_AUTO_TEST_CASE(RejectsDepositTxOnTheNonDepositPath)
 BOOST_AUTO_TEST_CASE(RejectsEveryOutOfEnumTxType)
 {
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     const std::vector<uint8_t> env{0x11, 0x22};
 
     for (const unsigned t : {0x05u, 0x40u, 0x7eu, 0x7fu, 0xffu})
@@ -97,8 +99,8 @@ BOOST_AUTO_TEST_CASE(RejectsEveryOutOfEnumTxType)
         auto tx = baseTx();
         tx.type = static_cast<state::Transaction::Type>(t);
         tx.to = 0x0000000000000000000000000000000000001234_address;
-        const auto r = opValidate(
-            ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
+        const auto r = opValidate(ts, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(),
+            OpFeeParams{}, 30000000);
         BOOST_REQUIRE_MESSAGE(std::holds_alternative<std::error_code>(r),
             "out-of-enum tx type 0x" << std::hex << t << " must not be accepted");
         BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::not_supported);
@@ -119,8 +121,8 @@ BOOST_AUTO_TEST_CASE(RejectsEveryOutOfEnumTxType)
                 .r = 1_u256,
                 .s = 1_u256,
                 .v = intx::uint256{0}}};
-        const auto r = opValidate(
-            ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
+        const auto r = opValidate(ts, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(),
+            OpFeeParams{}, 30000000);
         BOOST_CHECK_MESSAGE(std::holds_alternative<OpTxProperties>(r),
             "valid tx type " << static_cast<unsigned>(t) << " must not be rejected");
     }
@@ -129,7 +131,7 @@ BOOST_AUTO_TEST_CASE(RejectsEveryOutOfEnumTxType)
 BOOST_AUTO_TEST_CASE(InsufficientForL1CostFails)
 {
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 100000000_u256, .storage = {}, .code = {}};
+    ts[kSenderValidate] = {.nonce = 0, .balance = 100000000_u256, .storage = {}, .code = {}};
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
@@ -137,16 +139,18 @@ BOOST_AUTO_TEST_CASE(InsufficientForL1CostFails)
         .operator_fee_scalar = 0,
         .operator_fee_constant = 0};
     std::vector<uint8_t> env(50, 0x11);
-    const auto r =
-        opValidate(ts, blk(), baseTx(), {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+    const auto r = opValidate(
+        ts, blkValidate(), baseTx(), {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
 }
 
 BOOST_AUTO_TEST_CASE(EmptyEnvelopeFails)
 {
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
-    const auto r = opValidate(ts, blk(), baseTx(), {}, isthmusConfig(), OpFeeParams{}, 30000000);
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    const auto r =
+        opValidate(ts, blkValidate(), baseTx(), {}, isthmusConfig(), OpFeeParams{}, 30000000);
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
     BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::invalid_argument);
 }
@@ -154,10 +158,11 @@ BOOST_AUTO_TEST_CASE(EmptyEnvelopeFails)
 BOOST_AUTO_TEST_CASE(SufficientBalancePasses)
 {
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     const std::vector<uint8_t> env{0x02};
-    const auto r = opValidate(
-        ts, blk(), baseTx(), {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
+    const auto r = opValidate(ts, blkValidate(), baseTx(), {env.data(), env.size()},
+        isthmusConfig(), OpFeeParams{}, 30000000);
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
     BOOST_CHECK_EQUAL(std::get<OpTxProperties>(r).l1_cost, intx::uint256{0});
 }
@@ -171,7 +176,7 @@ BOOST_AUTO_TEST_CASE(BalanceCapDoesNotWrapAt2Pow256)
 {
     test::TestState ts;
     const auto balance = std::numeric_limits<intx::uint256>::max();
-    ts[kSender] = {.nonce = 0, .balance = balance, .storage = {}, .code = {}};
+    ts[kSenderValidate] = {.nonce = 0, .balance = balance, .storage = {}, .code = {}};
 
     auto tx = baseTx();
     tx.value = balance - intx::uint256{static_cast<uint64_t>(tx.gas_limit)} * tx.max_gas_price;
@@ -186,7 +191,7 @@ BOOST_AUTO_TEST_CASE(BalanceCapDoesNotWrapAt2Pow256)
     std::vector<uint8_t> env(50, 0x11);
 
     const auto r =
-        opValidate(ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+        opValidate(ts, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
     BOOST_REQUIRE_MESSAGE(std::holds_alternative<std::error_code>(r),
         "a total past 2^256 must be rejected, not wrapped into a tiny passing cap");
     BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::result_out_of_range);
@@ -217,12 +222,12 @@ BOOST_AUTO_TEST_CASE(BalanceCapCountsEveryTermExactlyOnce)
     intx::uint256 exact{0};
     {
         test::TestState ts;
-        ts[kSender] = {.nonce = 0,
+        ts[kSenderValidate] = {.nonce = 0,
             .balance = 340282366920938463463374607431768211456_u256,
             .storage = {},
             .code = {}};
-        const auto r =
-            opValidate(ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+        const auto r = opValidate(
+            ts, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
         BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
         const auto& p = std::get<OpTxProperties>(r);
         BOOST_REQUIRE_MESSAGE(p.l1_cost > intx::uint256{0}, "l1_cost must be non-zero");
@@ -236,9 +241,9 @@ BOOST_AUTO_TEST_CASE(BalanceCapCountsEveryTermExactlyOnce)
     // 恰好足额 → 必须通过。多算任何一项（例如 l1Cost 计两次）都会在此误拒。
     {
         test::TestState ts;
-        ts[kSender] = {.nonce = 0, .balance = exact, .storage = {}, .code = {}};
-        const auto r =
-            opValidate(ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+        ts[kSenderValidate] = {.nonce = 0, .balance = exact, .storage = {}, .code = {}};
+        const auto r = opValidate(
+            ts, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
         BOOST_CHECK_MESSAGE(std::holds_alternative<OpTxProperties>(r),
             "a balance exactly covering gasLimit*maxGasPrice + value + l1Cost + opCost must pass");
     }
@@ -246,13 +251,50 @@ BOOST_AUTO_TEST_CASE(BalanceCapCountsEveryTermExactlyOnce)
     // 少一个 wei → 必须拒绝。漏算任何一项（例如不加 opCost）都会在此放行。
     {
         test::TestState ts;
-        ts[kSender] = {.nonce = 0, .balance = exact - 1, .storage = {}, .code = {}};
-        const auto r =
-            opValidate(ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+        ts[kSenderValidate] = {.nonce = 0, .balance = exact - 1, .storage = {}, .code = {}};
+        const auto r = opValidate(
+            ts, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
         BOOST_REQUIRE_MESSAGE(std::holds_alternative<std::error_code>(r),
             "one wei short of the cap must be rejected");
         BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::result_out_of_range);
     }
+}
+
+// eth_call must not skip the 512-bit cap or validate_transaction's INSUFFICIENT_FUNDS check.
+// CallSimulationView makes the sender look funded so both comparisons still run (and pass)
+// for a zero-balance simulated sender. The unmasked view must still reject.
+BOOST_AUTO_TEST_CASE(CallSimulationViewLetsZeroBalanceSenderPass)
+{
+    test::TestState ts;  // sender absent → balance 0
+    auto tx = baseTx();
+    tx.to = 0x0000000000000000000000000000000000001234_address;
+    const std::vector<uint8_t> env{0x02};
+
+    const auto unmasked = opValidate(
+        ts, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
+    BOOST_REQUIRE_MESSAGE(std::holds_alternative<std::error_code>(unmasked),
+        "zero-balance sender must fail validate_transaction without a view mask");
+
+    CallSimulationView masked{ts, tx.sender};
+    const auto ok = opValidate(masked, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(),
+        OpFeeParams{}, 30000000);
+    BOOST_CHECK_MESSAGE(std::holds_alternative<OpTxProperties>(ok),
+        "CallSimulationView must let a zero-balance sender pass validate_transaction and the OP "
+        "cap");
+}
+
+// Masking balance must not blank code: a contract sender is still EIP-3607 SENDER_NOT_EOA.
+BOOST_AUTO_TEST_CASE(CallSimulationViewDoesNotBlankSenderCode)
+{
+    test::TestState ts;
+    ts[kSenderValidate] = {.nonce = 0, .balance = 0, .storage = {}, .code = evmc::bytes{0x00}};
+    auto tx = baseTx();
+    tx.to = 0x0000000000000000000000000000000000001234_address;
+    const std::vector<uint8_t> env{0x02};
+    CallSimulationView masked{ts, tx.sender};
+    const auto r = opValidate(masked, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(),
+        OpFeeParams{}, 30000000);
+    BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

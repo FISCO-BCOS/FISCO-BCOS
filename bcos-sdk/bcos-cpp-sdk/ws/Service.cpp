@@ -27,6 +27,7 @@
 #include <bcos-utilities/Common.h>
 #include <boost/thread/thread.hpp>
 #include <algorithm>
+#include <chrono>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -43,7 +44,7 @@ static const int32_t BLOCK_LIMIT_RANGE = 500;
 
 Service::Service(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec,
     bcos::group::GroupInfoFactory::Ptr _groupInfoFactory)
-  : WsService(),
+  : m_wsService(std::make_shared<bcos::boostssl::ws::WsService>()),
     m_groupInfoCodec(std::move(_groupInfoCodec)),
     m_groupInfoFactory(std::move(_groupInfoFactory))
 {
@@ -57,14 +58,77 @@ Service::Service(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec,
 
 void Service::start()
 {
-    bcos::boostssl::ws::WsService::start();
+    wireEventHandlers();
+
+    try
+    {
+        // WsService::start() may stop() internally on total connect failure,
+        // which clears the wired handlers; allow re-wiring on the next start()
+        m_wsService->start();
+    }
+    catch (...)
+    {
+        m_handlersWired = false;
+        throw;
+    }
 
     waitForConnectionEstablish();
 }
 
 void Service::stop()
 {
-    bcos::boostssl::ws::WsService::stop();
+    m_wsService->stop();
+
+    // WsService::stop() clears all registered handlers, re-wire on next start
+    m_handlersWired = false;
+}
+
+void Service::wireEventHandlers()
+{
+    if (m_handlersWired)
+    {
+        return;
+    }
+    m_handlersWired = true;
+
+    // Note: use weak_ptr to avoid circular reference
+    auto self = std::weak_ptr<Service>(shared_from_this());
+    // the WsService adds the session before calling the connect handlers, which
+    // keeps the same order as the previous WsService::onConnect base call
+    m_wsService->registerConnectHandler([self](std::shared_ptr<WsSession> _session) {
+        if (auto service = self.lock())
+        {
+            service->startHandshake(std::move(_session));
+        }
+    });
+    m_wsService->registerDisconnectHandler([self](std::shared_ptr<WsSession> _session) {
+        auto service = self.lock();
+        if (service && _session && !_session->endPoint().empty())
+        {
+            service->clearGroupInfoByEp(_session->endPoint());
+        }
+    });
+}
+
+bool Service::registerMsgHandler(uint16_t _type, bcos::boostssl::ws::MsgHandler _msgHandler)
+{
+    auto self = std::weak_ptr<Service>(shared_from_this());
+    return m_wsService->registerMsgHandler(
+        _type, [self, handler = std::move(_msgHandler)](
+                   WsMessage _msg, std::shared_ptr<WsSession> _session) mutable {
+            auto service = self.lock();
+            if (service && !service->checkHandshakeDone(_session))
+            {
+                // Note: The message is received before the handshake with the node is complete
+                RPC_WS_LOG(WARNING)
+                    << LOG_BADGE("onRecvMessage") << LOG_DESC("recv message before handshake done")
+                    << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""))
+                    << LOG_KV("type", _msg.packetType()) << LOG_KV("seq", _msg.seq());
+                return;
+            }
+
+            handler(std::move(_msg), std::move(_session));
+        });
 }
 
 void Service::waitForConnectionEstablish()
@@ -98,49 +162,11 @@ void Service::waitForConnectionEstablish()
     }
 }
 
-void Service::onConnect(Error::Ptr _error, std::shared_ptr<WsSession> _session)
-{
-    bcos::boostssl::ws::WsService::onConnect(_error, _session);
-
-    startHandshake(_session);
-}
-
-void Service::onDisconnect(Error::Ptr _error, std::shared_ptr<WsSession> _session)
-{
-    bcos::boostssl::ws::WsService::onDisconnect(_error, _session);
-
-    std::string endPoint = _session ? _session->endPoint() : std::string();
-    if (!endPoint.empty())
-    {
-        clearGroupInfoByEp(endPoint);
-    }
-}
-
-void Service::onRecvMessage(std::shared_ptr<MessageFace> _msg, std::shared_ptr<WsSession> _session)
-{
-    auto seq = _msg->seq();
-    if (!checkHandshakeDone(_session))
-    {
-        // Note: The message is received before the handshake with the node is complete
-        RPC_WS_LOG(WARNING) << LOG_BADGE("onRecvMessage")
-                            << LOG_DESC(
-                                   "websocket service unable to handler message before handshake"
-                                   "with the node successfully")
-                            << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""))
-                            << LOG_KV("type", _msg->packetType()) << LOG_KV("seq", seq);
-
-        // _session->drop(bcos::boostssl::ws::WsError::UserDisconnect);
-        return;
-    }
-
-    bcos::boostssl::ws::WsService::onRecvMessage(_msg, _session);
-}
-
 // ---------------------overide end ---------------------------------------------------------------
 
 // ---------------------send message begin---------------------------------------------------------
 void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const std::string& _node,
-    std::shared_ptr<bcos::boostssl::MessageFace> _msg, bcos::boostssl::ws::Options _options,
+    const bcos::boostssl::ws::WsMessage& _msg, bcos::boostssl::ws::Options _options,
     bcos::boostssl::ws::RespCallBack _respFunc)
 {
     std::set<std::string> endPoints;
@@ -157,7 +183,7 @@ void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const st
         {
             auto error = BCOS_ERROR_PTR(WsError::EndPointNotExist,
                 "there has no connection available, maybe all connections disconnected");
-            _respFunc(error, nullptr, nullptr);
+            _respFunc(error, WsMessage(), nullptr);
             return;
         }
     }
@@ -172,7 +198,7 @@ void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const st
                 "disconnected or "
                 "the group does not exist, group: " +
                     _group);
-            _respFunc(error, nullptr, nullptr);
+            _respFunc(error, WsMessage(), nullptr);
             return;
         }
     }
@@ -187,7 +213,7 @@ void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const st
                 "connections "
                 "disconnected or the node does not exist, group: " +
                     _group + " ,node: " + _node);
-            _respFunc(error, nullptr, nullptr);
+            _respFunc(error, WsMessage(), nullptr);
             return;
         }
     }
@@ -198,7 +224,7 @@ void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const st
     std::default_random_engine e(seed);
     std::shuffle(vecEndPoints.begin(), vecEndPoints.end(), e);
 
-    asyncSendMessageByEndPoint(*vecEndPoints.begin(), std::move(_msg), _options, _respFunc);
+    asyncSendMessageByEndPoint(*vecEndPoints.begin(), _msg, _options, _respFunc);
 }
 // ---------------------send message end---------------------------------------------------------
 
@@ -210,12 +236,12 @@ bool Service::checkHandshakeDone(std::shared_ptr<bcos::boostssl::ws::WsSession> 
 
 void Service::startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
-    auto message = messageFactory()->buildMessage();
-    message->setSeq(messageFactory()->newSeq());
-    message->setPacketType(bcos::protocol::MessageType::HANDSHAKE);
+    bcos::boostssl::ws::WsMessage message;
+    message.setSeq(bcos::boostssl::ws::newSeq());
+    message.setPacketType(bcos::protocol::MessageType::HANDSHAKE);
     bcos::rpc::HandshakeRequest request(m_localProtocol);
     auto requestData = request.encode();
-    message->setPayload(std::move(requestData));
+    message.setPayload(std::move(requestData));
 
     RPC_WS_LOG(INFO) << LOG_BADGE("startHandshake")
                      << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""));
@@ -223,7 +249,7 @@ void Service::startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _ses
     auto session = _session;
     auto service = std::dynamic_pointer_cast<Service>(shared_from_this());
     _session->asyncSendMessage(message, Options(m_wsHandshakeTimeout),
-        [message, session, service](auto&& _error, auto&& _msg, auto&& _session) {
+        [session, service](auto&& _error, auto&& _msg, auto&& _session) {
             if (_error && _error->errorCode() != 0)
             {
                 RPC_WS_LOG(WARNING)
@@ -236,7 +262,7 @@ void Service::startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _ses
             }
 
             auto endPoint = session ? session->endPoint() : std::string("");
-            auto response = std::string(_msg->payload().begin(), _msg->payload().end());
+            auto response = std::string(_msg.payload().begin(), _msg.payload().end());
             auto handshakeResponse = std::make_shared<HandshakeResponse>(service->m_groupInfoCodec);
             if (!handshakeResponse->decode(response))
             {

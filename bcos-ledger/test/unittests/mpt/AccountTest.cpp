@@ -23,8 +23,11 @@
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
+
 namespace bcos::ledger::mpt::test
 {
+using bcos::test::errinfoContains;
 
 BOOST_AUTO_TEST_SUITE(AccountSuite)
 
@@ -134,28 +137,32 @@ BOOST_AUTO_TEST_CASE(MalformedInputThrows)
     // Empty input.
     {
         bcos::bytes const empty;
-        BOOST_CHECK_THROW(
-            Account::decode(bcos::bytesConstRef(empty.data(), empty.size())), MPTDecodeError);
+        BOOST_CHECK_EXCEPTION(
+            Account::decode(bcos::bytesConstRef(empty.data(), empty.size())), MPTDecodeError,
+            [](auto const& e) { return errinfoContains(e, "bad list header"); });
     }
     // A single byte that decodes as a string item, not a list.
     {
         bcos::bytes const notAList{0x05};
-        BOOST_CHECK_THROW(
-            Account::decode(bcos::bytesConstRef(notAList.data(), notAList.size())), MPTDecodeError);
+        BOOST_CHECK_EXCEPTION(
+            Account::decode(bcos::bytesConstRef(notAList.data(), notAList.size())),
+            MPTDecodeError, [](auto const& e) { return errinfoContains(e, "expected a list"); });
     }
     // A well-formed list but with too few fields (list of one element).
     {
         bcos::bytes const shortList{0xc1, 0x05};  // list(payload=1) holding integer 5
-        BOOST_CHECK_THROW(Account::decode(bcos::bytesConstRef(shortList.data(), shortList.size())),
-            MPTDecodeError);
+        BOOST_CHECK_EXCEPTION(
+            Account::decode(bcos::bytesConstRef(shortList.data(), shortList.size())),
+            MPTDecodeError, [](auto const& e) { return errinfoContains(e, "bad balance"); });
     }
     // A valid account with trailing junk after the list.
     {
         Account account;
         bcos::bytes rlp = account.encode();
         rlp.push_back(0xff);  // trailing byte beyond the declared list
-        BOOST_CHECK_THROW(
-            Account::decode(bcos::bytesConstRef(rlp.data(), rlp.size())), MPTDecodeError);
+        BOOST_CHECK_EXCEPTION(
+            Account::decode(bcos::bytesConstRef(rlp.data(), rlp.size())), MPTDecodeError,
+            [](auto const& e) { return errinfoContains(e, "payload length does not match"); });
     }
 }
 
@@ -179,7 +186,8 @@ BOOST_AUTO_TEST_CASE(ShortHashFieldRejected)
     rlp.push_back(static_cast<bcos::byte>(payload.size()));
     rlp.insert(rlp.end(), payload.begin(), payload.end());
 
-    BOOST_CHECK_THROW(Account::decode(bcos::bytesConstRef(rlp.data(), rlp.size())), MPTDecodeError);
+    BOOST_CHECK_EXCEPTION(Account::decode(bcos::bytesConstRef(rlp.data(), rlp.size())),
+        MPTDecodeError, [](auto const& e) { return errinfoContains(e, "expected 32"); });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

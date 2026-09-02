@@ -11,6 +11,7 @@
 #include <range/v3/range/access.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::ledger
 {

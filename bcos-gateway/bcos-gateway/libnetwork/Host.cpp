@@ -21,7 +21,7 @@
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
 #include "bcos-utilities/IOServicePool.h"
-#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <algorithm>
@@ -30,6 +30,7 @@
 #include <memory>
 #include <set>
 #include <utility>
+#include <bcos-utilities/BoostLog.h>
 
 
 using namespace bcos;

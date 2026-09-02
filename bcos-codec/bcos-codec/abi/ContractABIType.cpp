@@ -19,7 +19,7 @@
  */
 
 #include "ContractABIType.h"
-#include <bcos-utilities/FixedBytes.h>
+#include <boost/algorithm/string.hpp>
 
 using namespace std;
 using namespace bcos;

@@ -17,9 +17,9 @@
  * @file Transaction.h
  */
 #pragma once
+#include "Authorization.h"
 #include "TransactionSubmitResult.h"
 #include "Web3AccessList.h"
-#include "Authorization.h"
 #include "bcos-utilities/AnyHolder.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/Signature.h>
@@ -29,6 +29,8 @@
 #include <concepts>
 #include <functional>
 #include <iosfwd>
+#include <optional>
+#include <string_view>
 #include <utility>
 
 namespace bcostars::protocol
@@ -91,6 +93,16 @@ public:
     /// EIP-2718 typed tx kind when type()==Web3Transaction (see bcos::rpc::TransactionType). 0 if
     /// unset.
     virtual uint8_t web3TypedTxKind() const { return 0; }
+    /// Chain id from the signed envelope (`extraTransactionBytes`), not the tars `chainID`.
+    /// Typed txs: RLP field 0. Legacy: EIP-155 tail (`nullopt` = pre-EIP-155, v=27/28).
+    /// Default `nullopt` so framework stays free of RLP; Web3 impls override.
+    virtual std::optional<uint64_t> web3ChainIdFromEnvelope() const { return std::nullopt; }
+    /// deposit-only (0x7e) tx metadata (OP Stack). Empty/false when not a deposit.
+    virtual std::string_view sourceHash() const { return {}; }
+    virtual u256 mint() const { return {}; }
+    virtual bool isDepositTx() const { return false; }
+    /// deposit-only RLP field (tars field 15). Distinct from systemTx() (the BCOS m_systemTx flag).
+    virtual bool depositIsSystemTransaction() const { return false; }
     /// Parsed access list when populated at submission (may be empty for non-EIP-2930 Web3 txs).
     virtual Web3AccessList web3AccessList() const;
 
@@ -223,7 +235,7 @@ using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
 using AnyTransaction =
-    AnyHolder<bcos::protocol::Transaction, 224>;  // 多平台TransactinImpl的最大尺寸 (Maximum size of
+    AnyHolder<bcos::protocol::Transaction, 224>;  // (Maximum size of
                                                   // TransactinImpl across platforms)
 
 std::ostream& operator<<(std::ostream& stream, const Transaction& transaction);

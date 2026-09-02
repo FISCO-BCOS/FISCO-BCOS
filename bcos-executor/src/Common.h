@@ -43,6 +43,7 @@
 #include <range/v3/algorithm/copy.hpp>
 #include <range/v3/view/drop.hpp>
 #include <set>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos
 {

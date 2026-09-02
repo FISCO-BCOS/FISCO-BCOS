@@ -1,14 +1,10 @@
 #include "../../../src/CallParameters.h"
 #include "../../../src/executive/BlockContext.h"
-#include "../../../src/executive/ExecutiveFactory.h"
 #include "../../../src/executive/ExecutiveState.h"
-#include "../../../src/executive/TransactionExecutive.h"
 #include "../mock/MockExecutiveFactory.h"
 #include "../mock/MockLedger.h"
-#include "../mock/MockTransactionExecutive.h"
-#include <boost/test/unit_test.hpp>
 
-using namespace std;
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::executor;
 

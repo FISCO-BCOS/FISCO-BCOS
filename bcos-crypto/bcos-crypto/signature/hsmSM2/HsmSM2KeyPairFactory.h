@@ -22,6 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyPairFactory.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPair.h>
 #include <memory>
+#include <bcos-utilities/BoostLog.h>
 namespace bcos
 {
 namespace crypto

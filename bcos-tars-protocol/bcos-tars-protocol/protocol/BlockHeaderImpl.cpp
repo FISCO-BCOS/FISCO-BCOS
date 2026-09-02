@@ -26,12 +26,20 @@
 #include "bcos-rlp-protocol/EthBlockHeader.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
+#include <bcos-codec/rlp/RLPDecode.h>
+#include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <boost/endian/conversion.hpp>
 #include <boost/lexical_cast.hpp>
+#include <cstring>
+#include <limits>
 #include <range/v3/view/any_view.hpp>
 #include <range/v3/view/transform.hpp>
+#include <stdexcept>
+#include <bcos-utilities/BoostLog.h>
 
 DERIVE_BCOS_EXCEPTION(EmptyBlockHeaderHash);
+
 
 void bcostars::protocol::BlockHeaderImpl::decode(bcos::bytesConstRef _data)
 {

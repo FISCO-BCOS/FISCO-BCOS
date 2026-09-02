@@ -38,45 +38,33 @@ using namespace bcos::gateway;
  * @param _callback: callback
  * @return void
  */
-void FakeGateway::asyncSendMessageByNodeID(const std::string& _groupID, int,
-    bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload,
-    bcos::gateway::ErrorRespFunc _errorRespFunc)
+bcos::task::Task<bcos::Error::Ptr> bcos::front::test::FakeGateway::sendMessageByNodeID(
+    const std::string& _groupID, int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID,
+    bcos::crypto::NodeIDPtr _dstNodeID,
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads)
 {
+    bcos::bytes buffer;
+    for (auto const& data : _payloads)
+    {
+        buffer.insert(buffer.end(), data.begin(), data.end());
+    }
+    if (m_sendError)
+    {
+        co_return m_sendError;
+    }
     if (auto frontService = m_frontService.lock())
     {
-        frontService->onReceiveMessage(_groupID, _dstNodeID, _payload, _errorRespFunc);
+        frontService->onReceiveMessage(
+            _groupID, _dstNodeID, bcos::ref(buffer), bcos::gateway::ErrorRespFunc());
     }
 
-    FRONT_LOG(DEBUG) << "[FakeGateway] asyncSendMessageByNodeID" << LOG_KV("groupID", _groupID)
+    FRONT_LOG(DEBUG) << "[FakeGateway] sendMessageByNodeID" << LOG_KV("groupID", _groupID)
                      << LOG_KV("nodeID", _srcNodeID->hex()) << LOG_KV("nodeID", _dstNodeID->hex());
-}
-
-/**
- * @brief: send message to multiple nodes
- * @param _groupID: groupID
- * @param _moduleID: moduleID
- * @param _nodeIDs: the receiver nodeIDs
- * @param _payload: message content
- * @return void
- */
-void FakeGateway::asyncSendMessageByNodeIDs(const std::string& _groupID, int,
-    bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
-    bytesConstRef _payload)
-{
-    if (!_dstNodeIDs.empty())
-    {
-        if (auto frontService = m_frontService.lock())
-        {
-            frontService->onReceiveMessage(
-                _groupID, _srcNodeID, _payload, bcos::gateway::ErrorRespFunc());
-        }
-    }
-
-    FRONT_LOG(DEBUG) << "[FakeGateway] asyncSendMessageByNodeIDs" << LOG_KV("groupID", _groupID);
+    co_return nullptr;
 }
 bcos::task::Task<void> bcos::front::test::FakeGateway::broadcastMessage(uint16_t type,
     std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
-    ::ranges::any_view<bytesConstRef> payloads)
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads)
 {
     auto data = ::ranges::views::join(payloads) | ::ranges::to<bcos::bytes>();
     auto nodeIDPtr = std::shared_ptr<bcos::crypto::NodeID>(

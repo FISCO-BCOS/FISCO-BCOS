@@ -19,9 +19,7 @@
 
 #include "LegacyEntry.h"
 #include "bcos-framework/storage/Entry.h"
-#include <bcos-utilities/AnyHolder.h>
 #include <benchmark/benchmark.h>
-#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>

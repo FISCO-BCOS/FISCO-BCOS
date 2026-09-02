@@ -22,6 +22,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::lightnode
 {
@@ -55,7 +56,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
     }
 
     wsService->registerMsgHandler(bcos::protocol::MessageType::HANDSHAKE,
-        [nodeConfig, nodeID, localLedger](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+        [nodeConfig, nodeID, localLedger](bcos::boostssl::ws::WsMessage msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
             RPC_LOG(INFO) << "LightNode handshake request";
 
@@ -131,7 +132,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             std::string response;
             handshakeResponse.encode(response);
 
-            msg->setPayload(bcos::bytes(response.begin(), response.end()));
+            msg.setPayload(bcos::bytes(response.begin(), response.end()));
             session->asyncSendMessage(msg);
             RPC_LOG(INFO) << LOG_DESC("LightNode handshake success")
                           << LOG_KV("version", session->version())
@@ -139,33 +140,40 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
                           << LOG_KV("handshakeResponse", response);
         });
     wsService->registerMsgHandler(bcos::rpc::AMOPClientMessageType::AMOP_SUBTOPIC,
-        [](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+        [](bcos::boostssl::ws::WsMessage msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
             RPC_LOG(TRACE) << "LightNode amop topic request";
         });
     wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
-        [jsonrpc](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+        [jsonrpc](bcos::boostssl::ws::WsMessage msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) mutable {
-            auto buffer = msg->payload();
+            auto buffer = msg.payload();
             auto req = std::string_view((const char*)buffer.data(), buffer.size());
 
-            jsonrpc->onRPCRequest(req, [m_buffer = buffer, msg = std::move(msg),
+            // capture the scalar fields and a copy of the request payload:
+            // the sender callback runs asynchronously after this handler returns,
+            // the stack message and its payload are destroyed by then
+            jsonrpc->onRPCRequest(req, [reqStr = std::string(req), seq = msg.seq(),
+                                           packetType = msg.packetType(), ext = msg.ext(),
                                            session = std::move(session)](
                                            bcos::bytes resp, boost::beast::http::status) {
                 if (session && session->isConnected())
                 {
-                    msg->setPayload(std::move(resp));
-                    session->asyncSendMessage(msg);
+                    bcos::boostssl::ws::WsMessage respMsg;
+                    respMsg.setSeq(seq);
+                    respMsg.setPacketType(packetType);
+                    respMsg.setExt(ext);
+                    respMsg.setPayload(std::move(resp));
+                    session->asyncSendMessage(respMsg);
                 }
                 else
                 {
                     // remove the callback
                     RPC_LOG(WARNING)
                         << LOG_DESC("Unable to send response for session has been inactive")
-                        << LOG_KV("req",
-                               std::string_view((const char*)m_buffer.data(), m_buffer.size()))
+                        << LOG_KV("req", reqStr)
                         << LOG_KV("resp", std::string_view((const char*)resp.data(), resp.size()))
-                        << LOG_KV("seq", msg->seq())
+                        << LOG_KV("seq", seq)
                         << LOG_KV("endpoint", session ? session->endPoint() : std::string(""));
                 }
             });

@@ -20,12 +20,9 @@
  */
 
 #include "TransactionExecutive.h"
-#include "../precompiled/BFSPrecompiled.h"
 #include "../precompiled/extension/AccountPrecompiled.h"
-#include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../vm/DelegateHostContext.h"
-#include "../vm/EVMHostInterface.h"
 #include "../vm/HostContext.h"
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
@@ -55,9 +52,9 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <exception>
-#include <functional>
 #include <memory>
 #include <string>
+#include <boost/algorithm/string.hpp>
 
 
 using namespace std;

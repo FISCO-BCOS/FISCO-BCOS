@@ -23,6 +23,7 @@
 #include "../protocol/BlockImpl.h"
 #include "../protocol/TransactionImpl.h"
 #include "../protocol/TransactionReceiptImpl.h"
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcostars;
 
@@ -351,7 +352,8 @@ bcostars::LedgerServiceClient::~LedgerServiceClient() {}
 void bcostars::LedgerServiceClient::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr,
     bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr,
     std::function<void(std::string, bcos::Error::Ptr&&)>, bool,
-    std::optional<bcos::ledger::Features>)
+    std::optional<bcos::ledger::Features>,
+    std::optional<bcos::crypto::HashType> /*blockHashOverride*/, bool /*writeNonces*/)
 {
     BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPrewriteBlock");
 }

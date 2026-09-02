@@ -18,11 +18,11 @@
  * @date 2021.03.10
  * @author yujiechen
  */
-#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -87,7 +87,7 @@ bool SM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _
 PublicPtr SM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) const
 {
     auto signatureStruct = std::make_shared<SignatureDataWithPub>(_signData);
-    auto sm2Pub = std::make_shared<KeyImpl>(SM2_PUBLIC_KEY_LEN, signatureStruct->pub());
+    auto sm2Pub = std::make_shared<KeyImpl>(SM2_PUBLIC_KEY_LEN, ref(signatureStruct->pub()));
     if (verify(sm2Pub, _hash, _signData))
     {
         return sm2Pub;
@@ -112,7 +112,7 @@ std::pair<bool, bytes> SM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConst
     try
     {
         auto encodedData = signatureData->encode();
-        auto sm2Pub = std::make_shared<KeyImpl>(SM2_PUBLIC_KEY_LEN, signatureData->pub());
+        auto sm2Pub = std::make_shared<KeyImpl>(SM2_PUBLIC_KEY_LEN, ref(signatureData->pub()));
         if (verify(sm2Pub, in.hash, bytesConstRef(encodedData->data(), encodedData->size())))
         {
             auto address = calculateAddress(_hashImpl, sm2Pub);

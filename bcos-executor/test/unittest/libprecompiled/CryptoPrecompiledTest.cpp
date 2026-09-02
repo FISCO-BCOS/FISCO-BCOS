@@ -26,6 +26,7 @@
 #include "bcos-executor/src/executive/LedgerCache.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -325,7 +326,7 @@ BOOST_AUTO_TEST_CASE(testSM2Verify)
     // verify the signature
     auto signatureStruct = std::make_shared<SignatureDataWithPub>(ref(*signature));
     bytes in = fixture.m_abi->abiIn(fixture.m_sm2VerifyFunction, codec::toString32(hash),
-        *signatureStruct->pub(), codec::toString32(signatureStruct->r()),
+        signatureStruct->pub(), codec::toString32(signatureStruct->r()),
         codec::toString32(signatureStruct->s()));
     auto parameters = std::make_shared<PrecompiledExecResult>();
     parameters->m_input = bytesConstRef(in.data(), in.size());
@@ -339,7 +340,7 @@ BOOST_AUTO_TEST_CASE(testSM2Verify)
 
     // mismatch case
     in = fixture.m_abi->abiIn(fixture.m_sm2VerifyFunction, codec::toString32(mismatchHash),
-        *signatureStruct->pub(), codec::toString32(signatureStruct->r()),
+        signatureStruct->pub(), codec::toString32(signatureStruct->r()),
         codec::toString32(signatureStruct->s()));
     parameters = std::make_shared<PrecompiledExecResult>();
     parameters->m_input = bytesConstRef(in.data(), in.size());

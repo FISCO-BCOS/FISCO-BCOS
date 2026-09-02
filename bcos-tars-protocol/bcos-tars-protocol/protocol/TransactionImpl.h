@@ -33,6 +33,8 @@
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-utilities/Common.h"
 #include <memory>
+#include <optional>
+#include <string_view>
 
 namespace bcostars::protocol
 {
@@ -93,6 +95,11 @@ public:
     uint8_t type() const override;
     bcos::bytesConstRef extraTransactionBytes() const override;
     uint8_t web3TypedTxKind() const override;
+    std::optional<uint64_t> web3ChainIdFromEnvelope() const override;
+    std::string_view sourceHash() const override;
+    bcos::u256 mint() const override;
+    bool isDepositTx() const override;
+    bool depositIsSystemTransaction() const override;
     bcos::protocol::Web3AccessList web3AccessList() const override;
     bcos::protocol::AuthorizationList authorizationList() const override;
     bcos::protocol::VersionedHashes blobVersionedHashes() const override;

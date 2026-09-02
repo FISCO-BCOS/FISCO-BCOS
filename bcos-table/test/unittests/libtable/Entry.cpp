@@ -20,17 +20,11 @@
 // Allow unit tests to inspect private members for buffer-model verification
 
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-framework/storage/Serialize.h>
-#include <bcos-utilities/Error.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
 #include <boost/test/unit_test.hpp>
 #include <array>
-#include <iostream>
 #include <span>
 #include <string>
 #include <vector>

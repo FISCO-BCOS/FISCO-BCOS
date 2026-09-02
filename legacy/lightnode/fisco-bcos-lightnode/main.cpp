@@ -20,6 +20,8 @@
  * @date 2022-07-04
  */
 
+#include "../../bcos-ledger/LedgerImplLightnode.h"
+#include "../../bcos-storage/StorageWrapperImpl.h"
 #include "RPCInitializer.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-utilities/Common.h"
@@ -31,8 +33,6 @@
 #include "libinitializer/CommandHelper.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-ledger/Ledger.h>
-#include "../../bcos-ledger/LedgerImplLightnode.h"
-#include "../../bcos-storage/StorageWrapperImpl.h"
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-task/Task.h>
@@ -45,6 +45,7 @@
 #include <exception>
 #include <memory>
 #include <thread>
+#include <bcos-utilities/BoostLog.h>
 
 DERIVE_BCOS_EXCEPTION(StartLightNodeException);
 
@@ -84,7 +85,8 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
             {
                 auto& ledger = bcos::concepts::getRef(toLedger);
 
-                auto syncedBlock = bcos::task::syncWait(ledger
+                auto syncedBlock = bcos::task::syncWait(
+                    ledger
                         .template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
                             fromLedger, true));
                 auto currentStatus = bcos::task::syncWait(ledger.getStatus());
@@ -102,9 +104,9 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
                         response["blockNumber"] = currentStatus.blockNumber;
                         auto resp = response.toStyledString();
 
-                        auto message = wsService->messageFactory()->buildMessage();
-                        message->setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
-                        message->setPayload(bcos::bytes(resp.begin(), resp.end()));
+                        bcos::boostssl::ws::WsMessage message;
+                        message.setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
+                        message.setPayload(bcos::bytes(resp.begin(), resp.end()));
 
                         for (auto& session : sessions)
                         {
@@ -212,7 +214,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     protocolInitializer.init(nodeConfig);
     protocolInitializer.loadKeyPair(nodeConfig->privateKeyPath());
     auto nodeID = protocolInitializer.keyPair()->publicKey()->hex();
-    auto ioServicePool = std::make_shared<bcos::IOServicePool>(std::thread::hardware_concurrency() + 1, "lightNode");
+    auto ioServicePool =
+        std::make_shared<bcos::IOServicePool>(std::thread::hardware_concurrency() + 1, "lightNode");
 
     auto front = std::make_shared<bcos::front::FrontService>();
     // gateway

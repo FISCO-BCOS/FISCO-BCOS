@@ -37,6 +37,7 @@
 #include <mutex>
 #include <optional>
 #include <variant>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos::storage;
 using namespace bcos::protocol;

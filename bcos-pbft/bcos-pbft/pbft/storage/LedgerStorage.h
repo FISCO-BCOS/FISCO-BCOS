@@ -27,6 +27,9 @@
 #include <bcos-utilities/IOServicePool.h>
 
 #include <utility>
+#include <boost/thread/condition_variable.hpp>
+#include <boost/thread/locks.hpp>
+#include <boost/thread/mutex.hpp>
 
 namespace bcos::consensus
 {

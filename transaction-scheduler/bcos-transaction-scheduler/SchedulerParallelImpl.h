@@ -21,6 +21,8 @@
 #include <range/v3/view/drop.hpp>
 #include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/zip.hpp>
+#include <bcos-utilities/BoostLog.h>
+#include <boost/atomic.hpp>
 
 namespace bcos::scheduler_v1
 {

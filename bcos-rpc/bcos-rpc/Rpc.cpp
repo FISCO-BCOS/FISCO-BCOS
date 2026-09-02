@@ -1,6 +1,3 @@
-#include <range/v3/range_fwd.hpp>
-#include <range/v3/algorithm/find.hpp>
-#include <range/v3/algorithm/result_types.hpp>
 /**
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
@@ -24,7 +21,6 @@
 
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/rpc/HandshakeRequest.h>
 #include <bcos-rpc/Common.h>
@@ -66,8 +62,8 @@ Rpc::Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
 
     // handshake msgHandler
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::HANDSHAKE,
-        [this](std::shared_ptr<boostssl::MessageFace> _msg,
-            std::shared_ptr<boostssl::ws::WsSession> _session) {
+        [this](
+            bcos::boostssl::ws::WsMessage _msg, std::shared_ptr<boostssl::ws::WsSession> _session) {
             onRecvHandshakeRequest(std::move(_msg), std::move(_session));
         });
 }
@@ -140,9 +136,9 @@ void Rpc::asyncNotifyBlockNumber(std::string const& _groupID, std::string const&
             response["nodeName"] = _nodeName;
             response["blockNumber"] = _blockNumber;
             auto resp = response.toStyledString();
-            auto message = m_wsService->messageFactory()->buildMessage();
-            message->setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
-            message->setPayload(bcos::bytes(resp.begin(), resp.end()));
+            bcos::boostssl::ws::WsMessage message;
+            message.setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
+            message.setPayload(bcos::bytes(resp.begin(), resp.end()));
             s->asyncSendMessage(message);
         }
     }
@@ -185,19 +181,19 @@ void Rpc::notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
         Json::Value groupInfoJson;
         groupInfoToJson(groupInfoJson, *_groupInfo);
         auto response = groupInfoJson.toStyledString();
-        auto message = m_wsService->messageFactory()->buildMessage();
-        message->setPacketType(bcos::protocol::MessageType::GROUP_NOTIFY);
-        message->setPayload(bcos::bytes(response.begin(), response.end()));
+        bcos::boostssl::ws::WsMessage message;
+        message.setPacketType(bcos::protocol::MessageType::GROUP_NOTIFY);
+        message.setPayload(bcos::bytes(response.begin(), response.end()));
         session->asyncSendMessage(message);
     }
 }
 
 bool Rpc::negotiatedVersion(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
+    const boostssl::ws::WsMessage& _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
-    auto seq = _msg->seq();
+    auto seq = _msg.seq();
     HandshakeRequest handshakeRequest;
-    auto ret = handshakeRequest.decode(_msg->payload());
+    auto ret = handshakeRequest.decode(_msg.payload());
     if (!ret)
     {
         RPC_LOG(WARNING) << LOG_DESC(
@@ -232,16 +228,19 @@ bool Rpc::negotiatedVersion(
 }
 
 void Rpc::onRecvHandshakeRequest(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
+    boostssl::ws::WsMessage _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
     if (!negotiatedVersion(_msg, _session))
     {
         return;
     }
+    // capture the scalar fields only; the response message is constructed
+    // inside the async callback below, no heap allocation needed here
     auto self = std::weak_ptr<Rpc>(shared_from_this());
 
     // notify the handshakeResponse
-    m_jsonRpcImpl->getGroupInfoList([_msg, _session, self](
+    m_jsonRpcImpl->getGroupInfoList([seq = _msg.seq(), packetType = _msg.packetType(),
+                                        ext = _msg.ext(), _session, self](
                                         bcos::Error::Ptr _error, Json::Value& _groupListResponse) {
         if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
         {
@@ -258,7 +257,8 @@ void Rpc::onRecvHandshakeRequest(
             return;
         }
         rpc->m_jsonRpcImpl->getGroupBlockNumber(
-            [_groupListResponse, _session, _msg](bcos::Error::Ptr, Json::Value& _blockNumber) {
+            [_groupListResponse, _session, seq = std::move(seq), packetType, ext](
+                bcos::Error::Ptr, Json::Value& _blockNumber) {
                 Json::Value handshakeResponse;
                 handshakeResponse["groupInfoList"] = _groupListResponse;
                 handshakeResponse["groupBlockNumber"] = _blockNumber;
@@ -266,8 +266,12 @@ void Rpc::onRecvHandshakeRequest(
                 Json::FastWriter writer;
                 auto response = writer.write(handshakeResponse);
 
-                _msg->setPayload(bcos::bytes(response.begin(), response.end()));
-                _session->asyncSendMessage(_msg);
+                boostssl::ws::WsMessage msg;
+                msg.setSeq(seq);
+                msg.setPacketType(packetType);
+                msg.setExt(ext);
+                msg.setPayload(bcos::bytes(response.begin(), response.end()));
+                _session->asyncSendMessage(msg);
                 RPC_LOG(INFO) << LOG_DESC("onRecvHandshakeRequest success")
                               << LOG_KV("version", _session->version())
                               << LOG_KV("endpoint", _session ? _session->endPoint() : "unknown")

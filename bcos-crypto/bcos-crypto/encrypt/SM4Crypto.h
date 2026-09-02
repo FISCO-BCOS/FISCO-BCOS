@@ -28,9 +28,9 @@ namespace crypto
 const int SM4_MAX_PADDING_LEN = 26;
 const int SM4_KEY_SIZE = 16;
 const int SM4_IV_SIZE = 16;
-bytesPointer SM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
-    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize);
-bytesPointer SM4Decrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+bytes SM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize, const unsigned char* _key,
+    size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize);
+bytes SM4Decrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize);
 class SM4Crypto : public SymmetricEncryption
 {
@@ -38,24 +38,24 @@ public:
     using Ptr = std::shared_ptr<SM4Crypto>;
     SM4Crypto() = default;
     ~SM4Crypto() override {}
-    bytesPointer symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
+    bytes symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
         const unsigned char* _key, size_t _keySize) override
     {
         return symmetricEncrypt(_plainData, _plainDataSize, _key, _keySize, _key, 16);
     }
-    bytesPointer symmetricDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+    bytes symmetricDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
         const unsigned char* _key, size_t _keySize) override
     {
         return symmetricDecrypt(_cipherData, _cipherDataSize, _key, _keySize, _key, 16);
     }
 
-    bytesPointer symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
+    bytes symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
         const unsigned char* _key, size_t _keySize, const unsigned char* _ivData,
         size_t _ivDataSize) override
     {
         return SM4Encrypt(_plainData, _plainDataSize, _key, _keySize, _ivData, _ivDataSize);
     }
-    bytesPointer symmetricDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+    bytes symmetricDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
         const unsigned char* _key, size_t _keySize, const unsigned char* _ivData,
         size_t _ivDataSize) override
     {

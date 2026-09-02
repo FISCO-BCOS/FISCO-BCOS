@@ -21,7 +21,6 @@
 #include <bcos-transaction-executor/RollbackableStorage.h>
 #include <bcos-transaction-scheduler/ReadWriteSetStorage.h>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/view/single.hpp>
 #include <range/v3/view/transform.hpp>
 
 using namespace bcos;

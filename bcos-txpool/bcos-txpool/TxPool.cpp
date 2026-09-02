@@ -24,9 +24,9 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
-#include "txpool/validator/LedgerNonceChecker.h"
 #include "txpool/validator/TxValidator.h"
 #include <bcos-framework/protocol/CommonError.h>
+#include <bcos-tx-validator/LedgerNonceChecker.h>
 #include <bcos-utilities/ITTAPI.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -207,10 +207,21 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
                                   << LOG_KV("selectSize", selectedNode->size())
                                   << LOG_KV("selectedNode", selectedNodeList.str());
             }
+            // fire-and-forget: task::wait is non-blocking (it starts an AsyncTask and returns), so
+            // the coroutine frame must own every buffer the send reads. Copy the payload once and
+            // share it across all destination sends.
+            auto owned = std::make_shared<bcos::bytes>(_data.begin(), _data.end());
             for (const auto& node : (*selectedNode))
             {
-                m_transactionSync->config()->frontService()->asyncSendMessageByNodeID(
-                    protocol::TREE_PUSH_TRANSACTION, node, _data, 0, front::CallbackFunc());
+                task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, int _moduleID,
+                               bcos::crypto::NodeIDPtr _nodeID,
+                               std::shared_ptr<bcos::bytes> _owned) -> task::Task<void> {
+                    auto result = co_await _frontService->sendMessageByNodeID(_moduleID,
+                        std::move(_nodeID),
+                        ::ranges::views::single(bytesConstRef(_owned->data(), _owned->size())), 0);
+                    (void)result;
+                }(m_transactionSync->config()->frontService(), protocol::TREE_PUSH_TRANSACTION,
+                                                                        node, owned));
             }
         }
     }
@@ -633,10 +644,10 @@ void TxPool::init()
     }
     TXPOOL_LOG(INFO) << LOG_DESC("fetch history nonces success");
 
-    // create LedgerNonceChecker and set it into the validator
+    // create txvalidator::LedgerNonceChecker and set it into the validator
     TXPOOL_LOG(INFO) << LOG_DESC("init txs validator")
                      << LOG_KV("checkBlockLimit", m_checkBlockLimit);
-    auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(
+    auto ledgerNonceChecker = std::make_shared<txvalidator::LedgerNonceChecker>(
         nonceList, ledgerConfig->blockNumber(), blockLimit, m_checkBlockLimit);
 
     auto validator = std::dynamic_pointer_cast<TxValidator>(m_config->txValidator());

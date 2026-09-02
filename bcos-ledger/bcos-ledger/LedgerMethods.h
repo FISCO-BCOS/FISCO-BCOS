@@ -24,6 +24,7 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "generated/bcos-tars-protocol/tars/LedgerConfig.h"
+#include <bcos-utilities/BoostLog.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <concepts>
@@ -46,11 +47,14 @@ inline task::AwaitableValue<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*
 
 task::Task<void> prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
-    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage);
+    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
+    bool writeNonces = true);
 
 task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
-    bool withTransactionsAndReceipts, auto& storage)
+    bool withTransactionsAndReceipts, auto& storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt, bool writeNonces = true)
 {
     static_assert(
         !std::convertible_to<std::remove_const_t<decltype(storage)>, storage::StorageInterface&>,
@@ -70,7 +74,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInter
     }
 
     co_await prewriteBlockToStorage(ledger, std::move(transactions), std::move(block),
-        withTransactionsAndReceipts, std::move(legacyStorage));
+        withTransactionsAndReceipts, std::move(legacyStorage), blockHashOverride, writeNonces);
 }
 
 task::Task<void> tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>, LedgerInterface& ledger,
@@ -83,7 +87,8 @@ task::Task<void> tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>, LedgerI
 // bypassing m_blockStorage so the caller can mergeBack everything atomically.
 task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
     LedgerInterface& ledger, bcos::protocol::ConstTransactionsPtr blockTxs,
-    bcos::protocol::Block::ConstPtr block, auto& storage)
+    bcos::protocol::Block::ConstPtr block, auto& storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt, bool writeNonces = true)
 {
     if (!block)
     {
@@ -94,7 +99,8 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
     // existing prewriteBlock path. withTransactionsAndReceipts=false intentionally
     // skips the tx/receipt writes that would otherwise go to m_blockStorage; we
     // route them through the same `storage` below to keep the commit atomic.
-    co_await prewriteBlock(ledger, blockTxs, block, /*withTransactionsAndReceipts=*/false, storage);
+    co_await prewriteBlock(ledger, blockTxs, block, /*withTransactionsAndReceipts=*/false, storage,
+        blockHashOverride, writeNonces);
 
     auto txSize = std::max(block->transactionsSize(), block->transactionsMetaDataSize());
     if (txSize == 0)
@@ -385,13 +391,15 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     auto auth = sysConfig.getOrDefault(ledger::SystemConfig::auth_check_status, "0");
     ledgerConfig.setAuthCheckStatus(boost::lexical_cast<uint32_t>(auth.first));
     auto [chainId, _] = sysConfig.getOrDefault(ledger::SystemConfig::web3_chain_id, "0");
-    ledgerConfig.setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
+    // Fail-stop on a malformed value (InvalidWeb3ChainIdConfig) via the shared helper —
+    // same policy as the LedgerInterface variant and evmc_revision; absent config arrives
+    // as the "0" default and parses fine.
+    ledgerConfig.setChainId(bcos::toEvmC(ledger::parseConfiguredWeb3ChainId(chainId)));
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
     int executorVersion = 0;
-    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version);
-        versionConfig)
+    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
     {
         executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
         ledgerConfig.setExecutorVersion(executorVersion);
@@ -401,10 +409,12 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     // (executor_version=2); v0/v1 schedulers never read evmcRevision()/evmcRevisionForBlock(),
     // so a non-v2 chain is left untouched (no implicit default injection, which would be an
     // unnoticed behavior change if a future v0/v1 path started reading it). For v2, an
-    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock);
-    // the fallback here covers a v2 genesis without one (defensive — NodeConfig::loadExecutorConfig
-    // requires an explicit revision for executor_version=2, so this default only fires on
-    // corrupt/legacy state).
+    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock).
+    // A v2 chain WITHOUT one stays UNCONFIGURED here (no binary-side default injected): the
+    // consumers fail closed — EthereumExecutor throws EvmcRevisionNotConfigured and
+    // EngineService buildPayload throws UnsupportedFork — rather than hash state or block
+    // headers under a fork the chain never configured. The initializer already refuses to
+    // boot such a chain, so this branch only fires on corrupt/legacy state.
     //
     // No per-call logging here: getLedgerConfig sits on the per-block / per-RPC hot path.
     // The effective revision is parsed and logged once at startup (Initializer), which the
@@ -416,10 +426,6 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
             // A corrupt persisted value halts loudly (InvalidEVMCRevisionConfig) instead of
             // silently running a compile-time default that could differ between binaries.
             ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
-        }
-        else
-        {
-            ledgerConfig.setEVMCRevision(ledger::EVMC_REVISION_DEFAULT);
         }
     }
 }
@@ -494,8 +500,7 @@ task::Task<protocol::BlockNumber> tag_invoke(ledger::tag_t<getCurrentBlockNumber
         bcos::protocol::BlockNumber blockNumber = -1;
         try
         {
-            blockNumber =
-                boost::lexical_cast<bcos::protocol::BlockNumber>(blockNumberEntry->get());
+            blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(blockNumberEntry->get());
         }
         catch (boost::bad_lexical_cast& e)
         {

@@ -21,6 +21,7 @@
 #include "Common.h"
 #include "P2PMessageV2.h"
 #include "bcos-utilities/BoostLog.h"
+#include <bcos-task/Wait.h>
 #include <cstring>
 #include <utility>
 
@@ -181,20 +182,51 @@ void ServiceV2::onReceiveRouterTableRequest(
     m_routerTable->encode(*routerTableData);
     auto dstP2PNodeID =
         (!_message->srcP2PNodeID().empty()) ? _message->srcP2PNodeID() : _session->p2pID();
-    asyncSendMessageByP2PNodeID(GatewayMessageType::RouterTableResponse, dstP2PNodeID,
-        bytesConstRef((byte*)routerTableData->data(), routerTableData->size()));
+    auto self = std::static_pointer_cast<ServiceV2>(shared_from_this());
+    // fire-and-forget through the coroutine fast path: the message is built in the frame and the
+    // router table payload is moved into it (the caller's buffer does not outlive the deferred
+    // send); an unreachable peer is an expected, recoverable state.
+    task::wait([](std::shared_ptr<ServiceV2> _self, uint16_t _type, P2pID _nodeID,
+                   bcos::bytes _payload) -> task::Task<void> {
+        P2PMessageV2 message;
+        message.setPacketType(_type);
+        message.setSeq(_self->messageFactory()->newSeq());
+        message.setPayload(std::move(_payload));
+        try
+        {
+            co_await _self->sendMessageByNodeID(_nodeID, message,
+                ::ranges::views::single(message.payload()), Options{0, false});
+        }
+        catch (NetworkException const& e)
+        {
+            SERVICE2_LOG(INFO)
+                << LOG_DESC("onReceiveRouterTableRequest send RouterTableResponse failed")
+                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", e.errorCode())
+                << LOG_KV("msg", e.what());
+        }
+    }(self, GatewayMessageType::RouterTableResponse, dstP2PNodeID, std::move(*routerTableData)));
 }
 
 void ServiceV2::broadcastRouterSeq()
 {
     m_routerTimer->restart();
-    auto message = std::static_pointer_cast<P2PMessage>(m_messageFactory->buildMessage());
-    message->setPacketType(GatewayMessageType::RouterTableSyncSeq);
     auto seq = m_statusSeq.load();
     auto statusSeq = boost::asio::detail::socket_ops::host_to_network_long(seq);
-    message->setPayload({(byte*)&statusSeq, (byte*)&statusSeq + 4});
-    // the router table should only exchange between neighbor
-    asyncBroadcastMessageWithoutForward(message, Options());
+    bytes payload;
+    payload.insert(payload.end(), (byte*)&statusSeq, (byte*)&statusSeq + 4);
+    auto self = std::static_pointer_cast<ServiceV2>(shared_from_this());
+    // value message held by shared_ptr; the 4-byte seq payload is owned by it (zero-copy view
+    // send). The router table should only be exchanged between neighbours and propagated
+    // hop-by-hop, so broadcast to the directly connected sessions only (not all reachable nodes).
+    // All state is passed as coroutine parameters so it is copied into the frame and stays alive.
+    task::wait([](std::shared_ptr<ServiceV2> _self, bcos::bytes _payload) mutable
+                   -> task::Task<void> {
+        auto message = std::make_shared<P2PMessageV2>();
+        message->setPacketType(GatewayMessageType::RouterTableSyncSeq);
+        message->setPayload(std::move(_payload));
+        co_await _self->broadcastMessageToNeighbors(
+            message, ::ranges::views::single(message->payload()), Options{});
+    }(self, std::move(payload)));
 }
 
 void ServiceV2::markRouterSeqChanged()
@@ -246,8 +278,26 @@ void ServiceV2::onReceiveRouterSeq(
     // request router table to peer
     auto dstP2PNodeID =
         (!_message->srcP2PNodeID().empty()) ? _message->srcP2PNodeID() : _session->p2pID();
-    asyncSendMessageByP2PNodeID(
-        GatewayMessageType::RouterTableRequest, dstP2PNodeID, bytesConstRef());
+    auto self = std::static_pointer_cast<ServiceV2>(shared_from_this());
+    // fire-and-forget through the coroutine fast path: the message is built in the frame and the
+    // (empty) payload rides as a view; an unreachable peer is an expected, recoverable state.
+    task::wait([](std::shared_ptr<ServiceV2> _self, uint16_t _type, P2pID _nodeID)
+                   -> task::Task<void> {
+        P2PMessageV2 message;
+        message.setPacketType(_type);
+        message.setSeq(_self->messageFactory()->newSeq());
+        try
+        {
+            co_await _self->sendMessageByNodeID(_nodeID, message,
+                ::ranges::views::single(message.payload()), Options{0, false});
+        }
+        catch (NetworkException const& e)
+        {
+            SERVICE2_LOG(INFO) << LOG_DESC("onReceiveRouterSeq send RouterTableRequest failed")
+                               << LOG_KV("nodeid", printShortP2pID(_nodeID))
+                               << LOG_KV("code", e.errorCode()) << LOG_KV("msg", e.what());
+        }
+    }(self, GatewayMessageType::RouterTableRequest, dstP2PNodeID));
 }
 
 void ServiceV2::onNewSession(P2PSession::Ptr _session)
@@ -311,49 +361,6 @@ bool ServiceV2::eraseSeq(std::string const& _p2pNodeID)
     return true;
 }
 
-void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
-    std::shared_ptr<P2PMessage> _message, CallbackFuncWithSession _callback, Options _options)
-{
-    auto dstNodeID = _message->dstP2PNodeID();
-    // without nextHop: maybe network unreachable or with distance equal to 1
-    auto nextHop = m_routerTable->getNextHop(dstNodeID);
-    if (nextHop.empty())
-    {
-        if (c_fileLogLevel == TRACE) [[unlikely]]
-        {
-            SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeIDWithMsgForward")
-                                << LOG_DESC("sendMessage to dstNode")
-                                << LOG_KV("from", _message->printSrcP2PNodeID())
-                                << LOG_KV("to", _message->printDstP2PNodeID())
-                                << LOG_KV("type", _message->packetType())
-                                << LOG_KV("seq", _message->seq())
-                                << LOG_KV("rsp", _message->isRespPacket());
-        }
-        return Service::asyncSendMessageByNodeID(dstNodeID, _message, _callback, _options);
-    }
-    // with nextHop, send the message to nextHop
-    if (c_fileLogLevel == TRACE) [[unlikely]]
-    {
-        SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeIDWithMsgForward")
-                            << LOG_DESC("forwardMessage to nextHop")
-                            << LOG_KV("from", _message->printSrcP2PNodeID())
-                            << LOG_KV("to", _message->printDstP2PNodeID())
-                            << LOG_KV("nextHop", printShortP2pID(nextHop))
-                            << LOG_KV("type", _message->packetType())
-                            << LOG_KV("seq", _message->seq())
-                            << LOG_KV("rsp", _message->isRespPacket());
-    }
-    return Service::asyncSendMessageByNodeID(nextHop, _message, _callback, _options);
-}
-
-void ServiceV2::asyncSendMessageByNodeID(P2pID _nodeID, std::shared_ptr<P2PMessage> _message,
-    CallbackFuncWithSession _callback, Options _options)
-{
-    _message->setSrcP2PNodeID(m_nodeID);
-    _message->setDstP2PNodeID(_nodeID);
-    asyncSendMessageByNodeIDWithMsgForward(_message, _callback, _options);
-}
-
 void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Message::Ptr _message,
     std::weak_ptr<P2PSession> _p2pSessionWeakPtr)
 {
@@ -407,8 +414,7 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
     p2pMsg->setTTL(ttl);
     if (c_fileLogLevel <= TRACE) [[unlikely]]
     {
-        SERVICE2_LOG(TRACE) << LOG_BADGE("onMessage")
-                            << LOG_DESC("asyncSendMessageByNodeIDWithMsgForward")
+        SERVICE2_LOG(TRACE) << LOG_BADGE("onMessage") << LOG_DESC("forwardMessage")
                             << LOG_KV("seq", p2pMsg->seq())
                             << LOG_KV("from", p2pMsg->printSrcP2PNodeID())
                             << LOG_KV("dst", p2pMsg->printDstP2PNodeID())
@@ -416,33 +422,56 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
                             << LOG_KV("rsp", p2pMsg->isRespPacket()) << LOG_KV("ttl", p2pMsg->ttl())
                             << LOG_KV("payLoadSize", p2pMsg->payload().size());
     }
-    asyncSendMessageByNodeIDWithMsgForward(p2pMsg, nullptr);
+    // forward through the coroutine fast path (zero-copy: the received message is passed as a
+    // coroutine parameter so it is copied into the frame and stays alive, and its payload is sent
+    // as a view). Note: forwarding must NOT rewrite srcP2PNodeID (that is only done when this node
+    // originates the message) — forwardMessageByNodeID only resolves the next hop.
+    auto self = std::static_pointer_cast<ServiceV2>(shared_from_this());
+    task::wait([](std::shared_ptr<ServiceV2> _self,
+                   std::shared_ptr<P2PMessageV2> _p2pMsg) -> task::Task<void> {
+        try
+        {
+            co_await _self->forwardMessageByNodeID(_p2pMsg->dstP2PNodeID(), *_p2pMsg,
+                ::ranges::views::single(_p2pMsg->payload()), Options{});
+        }
+        catch (std::exception const& e)
+        {
+            // A synchronous pre-send rejection (rate limit / max size) or an async write failure
+            // on the relay path is expected during bandwidth saturation — log the next hop so a
+            // "peer not receiving relayed messages" investigation keeps the routing dimension.
+            SERVICE2_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_DESC("forwardMessage failed")
+                                  << LOG_KV("dst", _p2pMsg->dstP2PNodeID())
+                                  << LOG_KV("seq", _p2pMsg->seq())
+                                  << LOG_KV("what", boost::diagnostic_information(e));
+        }
+    }(self, p2pMsg));
 }
 
-void ServiceV2::asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options)
+bcos::task::Task<void> ServiceV2::broadcastMessageToAll(P2PMessage::Ptr message,
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads, Options options)
 {
     auto reachableNodes = m_routerTable->getAllReachableNode();
-    try
+    auto selfV2 = std::static_pointer_cast<ServiceV2>(shared_from_this());
+    // Fan out one independent coroutine per peer (see Service::broadcastMessageToAll).
+    for (auto const& node : reachableNodes)
     {
-        for (auto const& node : reachableNodes)
-        {
-            message->setSrcP2PNodeID(m_nodeID);
-            message->setDstP2PNodeID(node);
-            asyncSendMessageByNodeID(node, message, CallbackFuncWithSession(), options);
-        }
+        task::wait([](std::shared_ptr<ServiceV2> _self, P2pID _node, P2PMessage::Ptr _message,
+                       ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
+                       Options _options) mutable -> task::Task<void> {
+            try
+            {
+                co_await _self->sendMessageByNodeID(
+                    _node, *_message, std::move(_payloads), std::move(_options));
+            }
+            catch (std::exception const& e)
+            {
+                SERVICE2_LOG(WARNING) << LOG_BADGE("broadcastMessageToAll")
+                                      << LOG_KV("node", printShortP2pID(_node))
+                                      << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }(selfV2, node, message, payloads, options));
     }
-    catch (std::exception& e)
-    {
-        SERVICE2_LOG(WARNING) << LOG_BADGE("asyncBroadcastMessage")
-                              << LOG_KV("what", boost::diagnostic_information(e));
-    }
-}
-
-// broadcast message without forward
-void ServiceV2::asyncBroadcastMessageWithoutForward(
-    std::shared_ptr<P2PMessage> message, Options options)
-{
-    Service::asyncBroadcastMessage(std::move(message), options);
+    co_return;
 }
 
 bool ServiceV2::isReachable(P2pID const& _nodeID) const
@@ -460,34 +489,67 @@ void ServiceV2::sendRespMessageBySession(
         Service::sendRespMessageBySession(_payload, _p2pMessage, _p2pSession);
         return;
     }
-    auto respMessage = std::dynamic_pointer_cast<P2PMessageV2>(messageFactory()->buildMessage());
+    auto self = shared_from_this();
     auto requestMsg = std::dynamic_pointer_cast<P2PMessageV2>(_p2pMessage);
-    respMessage->setDstP2PNodeID(requestMsg->srcP2PNodeID());
-    respMessage->setSrcP2PNodeID(m_nodeID);
-    respMessage->setSeq(requestMsg->seq());
-    respMessage->setRespPacket();
-    // TODO: reduce memory copy
-    respMessage->setPayload({_payload.begin(), _payload.end()});
-
-    // Note: send response directly with the original session
-    sendMessageToSession(_p2pSession, respMessage);
-
-    if (c_fileLogLevel <= TRACE) [[unlikely]]
-    {
-        SERVICE2_LOG(TRACE) << LOG_BADGE("sendRespMessageBySession")
-                            << LOG_KV("seq", requestMsg->seq())
-                            << LOG_KV("from", respMessage->printSrcP2PNodeID())
-                            << LOG_KV("dst", respMessage->printDstP2PNodeID())
-                            << LOG_KV("payload size", _payload.size());
-    }
+    auto seq = requestMsg->seq();
+    auto dstP2PNodeID = requestMsg->srcP2PNodeID();
+    auto p2pid = _p2pSession->p2pID();
+    // value message in frame; response payload copied into the frame (borrowed from the receive
+    // callback which does not outlive the deferred send). All state is passed as coroutine
+    // parameters so it is copied into the frame and stays alive.
+    task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession,
+                   bcos::bytes _payload, uint32_t _seq, std::string _dstP2PNodeID,
+                   P2pID _p2pid) -> task::Task<void> {
+        try
+        {
+            P2PMessageV2 respMessage;
+            respMessage.setDstP2PNodeID(_dstP2PNodeID);
+            respMessage.setSrcP2PNodeID(_self->m_nodeID);
+            respMessage.setSeq(_seq);
+            respMessage.setRespPacket();
+            respMessage.setPayload(std::move(_payload));
+            // Note: respond directly via the original session (zero-copy view)
+            co_await _p2pSession->fastSendP2PMessage(
+                respMessage, ::ranges::views::single(respMessage.payload()), Options{});
+            if (c_fileLogLevel <= TRACE) [[unlikely]]
+            {
+                SERVICE2_LOG(TRACE) << LOG_BADGE("sendRespMessageBySession")
+                                    << LOG_KV("seq", _seq)
+                                    << LOG_KV("from", respMessage.printSrcP2PNodeID())
+                                    << LOG_KV("dst", respMessage.printDstP2PNodeID())
+                                    << LOG_KV("payload size", respMessage.payload().size());
+            }
+        }
+        catch (std::exception const& e)
+        {
+            // A synchronous pre-send rejection (rate limit / max size) on the response path is
+            // expected during bandwidth saturation — log the request seq and target so the
+            // response-loss investigation keeps the routing dimension.
+            SERVICE2_LOG(WARNING) << LOG_BADGE("sendRespMessageBySession")
+                                  << LOG_DESC("send response failed") << LOG_KV("seq", _seq)
+                                  << LOG_KV("dst", _dstP2PNodeID)
+                                  << LOG_KV("what", boost::diagnostic_information(e));
+        }
+    }(self, _p2pSession, bcos::bytes(_payload.begin(), _payload.end()), seq, dstP2PNodeID,
+        p2pid));
 }
 
 bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
     P2pID nodeID, P2PMessage& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
+    // this node originates the message: stamp src/dst before routing
     header.setSrcP2PNodeID(m_nodeID);
     header.setDstP2PNodeID(nodeID);
 
+    co_return co_await forwardMessageByNodeID(nodeID, header, std::move(payloads), options);
+}
+
+bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::forwardMessageByNodeID(
+    P2pID nodeID, P2PMessage& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
+{
+    // Forwarding path (a message received from another node being relayed): unlike
+    // sendMessageByNodeID it must NOT rewrite srcP2PNodeID — the original sender is preserved so
+    // the final destination can reply directly to it. Only the next hop is resolved here.
     auto dstNodeID = header.dstP2PNodeID();
     // without nextHop: maybe network unreachable or with distance equal to 1
     auto nextHop = m_routerTable->getNextHop(dstNodeID);
@@ -495,7 +557,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
     {
         if (c_fileLogLevel == TRACE) [[unlikely]]
         {
-            SERVICE2_LOG(TRACE) << LOG_BADGE("sendMessageByNodeID")
+            SERVICE2_LOG(TRACE) << LOG_BADGE("forwardMessageByNodeID")
                                 << LOG_DESC("sendMessage to dstNode")
                                 << LOG_KV("from", header.printSrcP2PNodeID())
                                 << LOG_KV("to", header.printDstP2PNodeID())
@@ -509,7 +571,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
     // with nextHop, send the message to nextHop
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
-        SERVICE2_LOG(TRACE) << LOG_BADGE("sendMessageByNodeID")
+        SERVICE2_LOG(TRACE) << LOG_BADGE("forwardMessageByNodeID")
                             << LOG_DESC("forwardMessage to nextHop")
                             << LOG_KV("from", header.printSrcP2PNodeID())
                             << LOG_KV("to", header.printDstP2PNodeID())

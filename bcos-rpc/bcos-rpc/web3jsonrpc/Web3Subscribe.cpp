@@ -18,10 +18,10 @@
  * @date 2025/08/11
  */
 
+#include "bcos-rpc/web3jsonrpc/Web3Subscribe.h"
 #include "bcos-boostssl/websocket/WsSession.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h"
-#include "bcos-rpc/web3jsonrpc/Web3Subscribe.h"
 #include "bcos-rpc/web3jsonrpc/utils/util.h"
 #include "bcos-task/Wait.h"
 
@@ -156,10 +156,10 @@ void Web3Subscribe::onNewBlock(int64_t blockNumber)
             // modify subscriptionId
             resp["params"]["subscription"] = subscriptionId;
 
-            auto message = session->messageFactory()->buildMessage();
+            bcos::boostssl::ws::WsMessage message(session->rawMessage());
             auto respBytes = toBytesResponse(resp);
-            message->setPayload(std::move(respBytes));
-            session->asyncSendMessage(std::move(message));
+            message.setPayload(std::move(respBytes));
+            session->asyncSendMessage(message);
 
             if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
             {

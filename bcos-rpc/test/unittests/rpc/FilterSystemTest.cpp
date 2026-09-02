@@ -1,11 +1,9 @@
 #include "bcos-rpc/jsonrpc/JsonRpcInterface.h"
 #include "unittests/common/RPCFixture.h"
-#include <bcos-rpc/filter/FilterRequest.h>
 #include <bcos-rpc/filter/FilterSystem.h>
 #include <bcos-utilities/Common.h>
-#include <json/json.h>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::rpc::filter;

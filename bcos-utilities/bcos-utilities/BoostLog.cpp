@@ -23,6 +23,7 @@
  * @brief: add file collector
  */
 #include "GzTools.h"
+#include "BoostLogCollector.h"
 #include "Log.h"
 #include <boost/date_time/time_facet.hpp>
 #include <boost/enable_shared_from_this.hpp>
@@ -40,6 +41,7 @@
 #include <boost/system/detail/error_category.hpp>
 #include <boost/system/detail/error_code.hpp>
 #include <utility>
+#include <list>
 namespace bcos
 {
 std::string const FileLogger = "FileLogger";

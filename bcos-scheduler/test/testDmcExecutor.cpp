@@ -1,9 +1,5 @@
 #include "../src/Executive.h"
-#include "bcos-executor/src/CallParameters.h"
-#include "bcos-executor/src/executive/BlockContext.h"
-#include "bcos-executor/src/executive/ExecutiveState.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/NativeExecutionMessage.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
@@ -11,12 +7,9 @@
 #include "bcos-scheduler/src/GraphKeyLocks.h"
 #include "mock/MockDmcExecutor.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/Block.h>
-#include <bcos-framework/protocol/TransactionFactory.h>
-#include <bcos-framework/protocol/TransactionReceiptFactory.h>
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <string>

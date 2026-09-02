@@ -10,6 +10,7 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <range/v3/range/concepts.hpp>
+#include <bcos-utilities/BoostLog.h>
 
 #define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
 
@@ -32,11 +33,12 @@ inline constexpr struct BuildGenesisBlock
 inline constexpr struct PrewriteBlock
 {
     task::Task<void> operator()(auto& ledger, bcos::protocol::ConstTransactionsPtr transactions,
-        bcos::protocol::Block::ConstPtr block, bool withTransactionsAndReceipts,
-        auto& storage) const
+        bcos::protocol::Block::ConstPtr block, bool withTransactionsAndReceipts, auto& storage,
+        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
+        bool writeNonces = true) const
     {
         co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block),
-            withTransactionsAndReceipts, storage);
+            withTransactionsAndReceipts, storage, blockHashOverride, writeNonces);
     }
 } prewriteBlock{};
 
@@ -52,9 +54,12 @@ inline constexpr struct PrewriteBlock
 inline constexpr struct PrewriteBlockToBuffer
 {
     task::Task<void> operator()(auto& ledger, bcos::protocol::ConstTransactionsPtr transactions,
-        bcos::protocol::Block::ConstPtr block, auto& storage) const
+        bcos::protocol::Block::ConstPtr block, auto& storage,
+        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
+        bool writeNonces = true) const
     {
-        co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block), storage);
+        co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block), storage,
+            blockHashOverride, writeNonces);
     }
 } prewriteBlockToBuffer{};
 

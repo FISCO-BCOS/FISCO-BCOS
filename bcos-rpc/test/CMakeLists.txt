@@ -34,13 +34,14 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 # exception catching binary-wide (testCallRequest/decode_invalid_gas_string starts
 # reporting "unknown type" for a plain std::invalid_argument). The test file carries a
 # linkage-only definition of unhexAddress instead.
-target_link_libraries(${TEST_BINARY_NAME} txpool ledger rpc tool transaction-scheduler storage Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} txpool mempool ledger rpc tool transaction-scheduler storage Boost::unit_test_framework)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/rpc/RpcReadHandlersTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # FullChainFixture.h pulls RocksDB and testutils headers whose names collide with the
 # using-directives other unity-merged TUs carry; compile its user standalone.
 set_source_files_properties(
-    "unittests/rpc/EthGetProofIntegrationTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+    "unittests/rpc/EthGetProofIntegrationTest.cpp" "unittests/rpc/FullChainFixtureInst.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 #add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")

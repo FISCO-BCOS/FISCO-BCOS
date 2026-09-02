@@ -1,17 +1,11 @@
+#include <ostream>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/archive/basic_archive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/iostreams/device/back_inserter.hpp>
-#include <boost/iostreams/stream.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
-#include <ostream>
 #include <random>
 #include <stdexcept>
 

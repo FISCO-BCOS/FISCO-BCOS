@@ -25,10 +25,9 @@
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-utilities/Base64.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FileUtility.h>
-#include <bcos-utilities/Log.h>
+#include <boost/algorithm/string.hpp>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace crypto;
@@ -101,7 +100,7 @@ BcosKmsDataEncryption::BcosKmsDataEncryption(const std::string& dataKey, const b
 
 std::string BcosKmsDataEncryption::encrypt(const std::string& data)
 {
-    bytesPointer encData = nullptr;
+    bytes encData;
     if (m_compatibilityVersion >= static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION))
     {
         random_bytes_engine rbe;
@@ -112,7 +111,7 @@ std::string BcosKmsDataEncryption::encrypt(const std::string& data)
             reinterpret_cast<const unsigned char*>(data.data()), data.size(),
             reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
             ivData.data(), 16);
-        encData->insert(encData->end(), ivData.begin(), ivData.end());
+        encData.insert(encData.end(), ivData.begin(), ivData.end());
     }
     else
     {
@@ -120,14 +119,14 @@ std::string BcosKmsDataEncryption::encrypt(const std::string& data)
             reinterpret_cast<const unsigned char*>(data.data()), data.size(),
             reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size());
     }
-    std::string value((char*)encData->data(), encData->size());
+    std::string value((char*)encData.data(), encData.size());
 
     return value;
 }
 
 std::string BcosKmsDataEncryption::decrypt(const std::string& data)
 {
-    bytesPointer decData = nullptr;
+    bytes decData;
     if (m_compatibilityVersion >= static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION))
     {
         size_t offsetIv = data.size() - 16;
@@ -143,7 +142,7 @@ std::string BcosKmsDataEncryption::decrypt(const std::string& data)
             reinterpret_cast<const unsigned char*>(data.data()), data.size(),
             reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size());
     }
-    std::string value((char*)decData->data(), decData->size());
+    std::string value((char*)decData.data(), decData.size());
 
     return value;
 }

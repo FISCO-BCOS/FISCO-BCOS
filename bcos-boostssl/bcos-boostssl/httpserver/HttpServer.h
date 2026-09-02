@@ -21,6 +21,7 @@
 
 #include <bcos-boostssl/httpserver/HttpSession.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <optional>
 #include <utility>
 namespace bcos::boostssl::http
 {
@@ -44,14 +45,13 @@ public:
     // handle connection
     void onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::socket socket);
 
-    HttpSession::Ptr buildHttpSession(
-        HttpStream::Ptr _stream, std::shared_ptr<std::string> _nodeId);
+    HttpSession::Ptr buildHttpSession(HttpStream::Ptr _httpStream, std::string _nodeId);
 
     HttpReqHandler httpReqHandler() const;
     void setHttpReqHandler(HttpReqHandler _httpReqHandler);
 
-    std::shared_ptr<boost::asio::ip::tcp::acceptor> acceptor() const;
-    void setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor);
+    boost::asio::ip::tcp::acceptor& acceptor();
+    void setAcceptor(boost::asio::ip::tcp::acceptor _acceptor);
 
     std::shared_ptr<boost::asio::ssl::context> ctx() const;
     void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx);
@@ -59,8 +59,8 @@ public:
     WsUpgradeHandler wsUpgradeHandler() const;
     void setWsUpgradeHandler(WsUpgradeHandler _wsUpgradeHandler);
 
-    HttpStreamFactory::Ptr httpStreamFactory() const;
-    void setHttpStreamFactory(HttpStreamFactory::Ptr _httpStreamFactory);
+    HttpStreamFactory& httpStreamFactory();
+    void setHttpStreamFactory(HttpStreamFactory _httpStreamFactory);
 
     bool disableSsl() const;
     void setDisableSsl(bool _disableSsl);
@@ -81,10 +81,10 @@ private:
     HttpReqHandler m_httpReqHandler;
     WsUpgradeHandler m_wsUpgradeHandler;
 
-    std::shared_ptr<boost::asio::ip::tcp::acceptor> m_acceptor;
+    std::optional<boost::asio::ip::tcp::acceptor> m_acceptor;
     std::shared_ptr<boost::asio::ssl::context> m_ctx;
 
-    std::shared_ptr<HttpStreamFactory> m_httpStreamFactory;
+    HttpStreamFactory m_httpStreamFactory;
     bcos::IOServicePool::Ptr m_ioservicePool;
 
     uint32_t m_httpBodySizeLimit;
@@ -93,7 +93,7 @@ private:
 };
 
 // The http server factory
-class HttpServerFactory : public std::enable_shared_from_this<HttpServerFactory>
+class HttpServerFactory
 {
 public:
     using Ptr = std::shared_ptr<HttpServerFactory>;

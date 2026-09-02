@@ -18,7 +18,6 @@
  * @date 2021-09-29
  */
 #include <bcos-boostssl/context/ContextBuilder.h>
-#include <bcos-boostssl/context/NodeInfoTools.h>
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsConfig.h>
@@ -30,6 +29,7 @@
 #include <bcos-boostssl/websocket/WsTools.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <boost/asio/ip/tcp.hpp>
 #include <boost/system/detail/error_code.hpp>
 
 using namespace bcos;
@@ -37,16 +37,6 @@ using namespace bcos::boostssl;
 using namespace bcos::boostssl::context;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::http;
-
-std::shared_ptr<MessageFaceFactory> WsInitializer::messageFactory() const
-{
-    return m_messageFactory;
-}
-
-void WsInitializer::setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
-{
-    m_messageFactory = std::move(_messageFactory);
-}
 
 std::shared_ptr<WsConfig> WsInitializer::config() const
 {
@@ -58,31 +48,9 @@ void WsInitializer::setConfig(std::shared_ptr<WsConfig> _config)
     m_config = std::move(_config);
 }
 
-std::shared_ptr<WsSessionFactory> WsInitializer::sessionFactory()
-{
-    return m_sessionFactory;
-}
-
-void WsInitializer::setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory)
-{
-    m_sessionFactory = std::move(_sessionFactory);
-}
-
 void WsInitializer::initWsService(WsService::Ptr _wsService)
 {
     std::shared_ptr<WsConfig> _config = m_config;
-
-    auto messageFactory = m_messageFactory;
-    if (!messageFactory)
-    {
-        messageFactory = std::make_shared<WsMessageFactory>();
-    }
-
-    auto sessionFactory = m_sessionFactory;
-    if (!sessionFactory)
-    {
-        sessionFactory = std::make_shared<WsSessionFactory>();
-    }
 
     auto wsServiceWeakPtr = std::weak_ptr<WsService>(_wsService);
     if (!m_ioServicePool)
@@ -93,12 +61,9 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
     auto ioServicePool = m_ioServicePool;
     _wsService->setIOServicePool(ioServicePool);
 
-    auto resolver =
-        std::make_shared<boost::asio::ip::tcp::resolver>((*(ioServicePool->getIOService())));
-    auto connector = std::make_shared<WsConnector>(resolver);
+    auto resolver = boost::asio::ip::tcp::resolver(*(ioServicePool->getIOService()));
+    auto connector = std::make_shared<WsConnector>();
     connector->setIOServicePool(ioServicePool);
-
-    auto builder = std::make_shared<WsStreamDelegateBuilder>();
 
     std::shared_ptr<boost::asio::ssl::context> srvCtx = nullptr;
     std::shared_ptr<boost::asio::ssl::context> clientCtx = nullptr;
@@ -106,8 +71,8 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
     {
         auto contextBuilder = std::make_shared<ContextBuilder>();
 
-        srvCtx = contextBuilder->buildSslContext(true, *_config->contextConfig());
-        clientCtx = contextBuilder->buildSslContext(false, *_config->contextConfig());
+        srvCtx = contextBuilder->buildSslContext(true, _config->contextConfig());
+        clientCtx = contextBuilder->buildSslContext(false, _config->contextConfig());
     }
 
     if (_config->asServer())
@@ -139,12 +104,11 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         {
             httpServer->setWsUpgradeHandler(
                 [wsServiceWeakPtr](std::shared_ptr<HttpStream> _httpStream,
-                    HttpRequest&& _httpRequest, std::shared_ptr<std::string> _nodeId) {
+                    HttpRequest&& _httpRequest, std::string _nodeId) {
                     auto service = wsServiceWeakPtr.lock();
                     if (service)
                     {
-                        std::string nodeIdString = _nodeId == nullptr ? "" : *_nodeId;
-                        auto session = service->newSession(_httpStream->wsStream(), nodeIdString);
+                        auto session = service->newSession(_httpStream->wsStream(), _nodeId);
                         session->startAsServer(std::move(_httpRequest));
                     }
                 });
@@ -172,7 +136,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
                     boost::system::error_code err;
 
                     // test if the address domain name
-                    resolver->resolve(peer.address(), boost::lexical_cast<std::string>(0), err);
+                    resolver.resolve(peer.address(), boost::lexical_cast<std::string>(0), err);
                     if (err)
                     {
                         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
@@ -207,12 +171,10 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
     // The threadPoolSize was previously used for tbb::task_arena, now IOServicePool handles it.
 
     connector->setCtx(clientCtx);
-    connector->setBuilder(builder);
 
     _wsService->setConfig(_config);
     _wsService->setConnector(connector);
-    _wsService->setMessageFactory(messageFactory);
-    _wsService->setSessionFactory(sessionFactory);
+    _wsService->setRawMessage(m_rawMessage);
 
     WEBSOCKET_INITIALIZER(INFO)
         << LOG_BADGE("initWsService") << LOG_DESC("initializer for websocket service")

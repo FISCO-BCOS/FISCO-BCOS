@@ -262,7 +262,7 @@ std::size_t EventSub::suspendTasks(std::shared_ptr<WsSession> _session)
 }
 
 void EventSub::onRecvEventSubMessage(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session)
+    boostssl::ws::WsMessage _msg, std::shared_ptr<WsSession> _session)
 {
     /*
     {
@@ -277,7 +277,7 @@ void EventSub::onRecvEventSubMessage(
         }
     }
     */
-    auto strResp = std::string(_msg->payload().begin(), _msg->payload().end());
+    auto strResp = std::string(_msg.payload().begin(), _msg.payload().end());
 
     EVENT_SUB(TRACE) << LOG_BADGE("onRecvEventSubMessage") << LOG_DESC("receive event sub message")
                      << LOG_KV("endpoint", _session->endPoint()) << LOG_KV("response", strResp);
@@ -362,17 +362,17 @@ void EventSub::subscribeEvent(EventSubTask::Ptr _task, Callback _callback)
 
     auto jsonReq = request->generateJson();
 
-    auto message = m_messagefactory->buildMessage();
-    message->setSeq(m_messagefactory->newSeq());
-    message->setPacketType(bcos::cppsdk::event::MessageType::EVENT_SUBSCRIBE);
-    message->setPayload(bcos::bytes(jsonReq.begin(), jsonReq.end()));
+    WsMessage message;
+    message.setSeq(newSeq());
+    message.setPacketType(bcos::cppsdk::event::MessageType::EVENT_SUBSCRIBE);
+    message.setPayload(bcos::bytes(jsonReq.begin(), jsonReq.end()));
 
     EVENT_SUB(INFO) << LOG_BADGE("subscribeEvent") << LOG_DESC("subscribe event")
                     << LOG_KV("id", id) << LOG_KV("group", group) << LOG_KV("request", jsonReq);
 
     m_service->asyncSendMessageByGroupAndNode(_task->group(), "", message, Options(),
-        [id, _task, _callback, this](Error::Ptr _error, std::shared_ptr<boostssl::MessageFace> _msg,
-            std::shared_ptr<WsSession> _session) {
+        [id, _task, _callback, this](
+            Error::Ptr _error, boostssl::ws::WsMessage _msg, std::shared_ptr<WsSession> _session) {
             if (_error && _error->errorCode() != 0)
             {
                 EVENT_SUB(WARNING)
@@ -384,7 +384,7 @@ void EventSub::subscribeEvent(EventSubTask::Ptr _task, Callback _callback)
                 return;
             }
 
-            auto strResp = std::string(_msg->payload().begin(), _msg->payload().end());
+            auto strResp = std::string(_msg.payload().begin(), _msg.payload().end());
             auto resp = std::make_shared<EventSubResponse>();
             if (!resp->fromJson(strResp))
             {
@@ -441,7 +441,7 @@ std::string EventSub::subscribeEvent(
         return "";
     }
 
-    auto taskId = m_messagefactory->newSeq();
+    auto taskId = newSeq();
     auto task = std::make_shared<EventSubTask>();
 
     task->setId(taskId);
@@ -477,14 +477,13 @@ void EventSub::unsubscribeEvent(const std::string& _id)
     request->setGroup(task->group());
     auto strReq = request->generateJson();
 
-    auto message = m_messagefactory->buildMessage();
-    message->setSeq(m_messagefactory->newSeq());
-    message->setPacketType(bcos::cppsdk::event::MessageType::EVENT_UNSUBSCRIBE);
-    message->setPayload(bcos::bytes(strReq.begin(), strReq.end()));
+    WsMessage message;
+    message.setSeq(newSeq());
+    message.setPacketType(bcos::cppsdk::event::MessageType::EVENT_UNSUBSCRIBE);
+    message.setPayload(bcos::bytes(strReq.begin(), strReq.end()));
 
     session->asyncSendMessage(message, Options(),
-        [_id](Error::Ptr _error, std::shared_ptr<boostssl::MessageFace> _msg,
-            std::shared_ptr<WsSession>) {
+        [_id](Error::Ptr _error, boostssl::ws::WsMessage _msg, std::shared_ptr<WsSession>) {
             if (_error && _error->errorCode() != 0)
             {
                 EVENT_SUB(WARNING)
@@ -494,7 +493,7 @@ void EventSub::unsubscribeEvent(const std::string& _id)
                 return;
             }
 
-            auto strResp = std::string(_msg->payload().begin(), _msg->payload().end());
+            auto strResp = std::string(_msg.payload().begin(), _msg.payload().end());
             auto resp = std::make_shared<EventSubResponse>();
             if (!resp->fromJson(strResp))
             {

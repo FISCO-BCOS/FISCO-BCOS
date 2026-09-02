@@ -25,6 +25,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <utility>
 
@@ -74,6 +75,28 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
         {
             return {BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Input data is too short"), Header()};
         }
+        // C1 (final review batch B): a multi-byte length prefix whose leading byte is zero is
+        // non-canonical — op-geth rlp/decode.go readUint() rejects it with ErrCanonSize (the
+        // `default`/size>=2 case). lenOfLen==1 (0xb8 ..) is DELIBERATELY not tightened here: it is
+        // left to the `< 56` check below, exactly as op-geth's readUint `case 1` (which does not
+        // check for a leading zero). Do not "complete" this to lenOfLen>=1 — that would diverge
+        // from op-geth and change 0xb8 0x00's rejection reason.
+        // Note (morebtcg #5429): op-geth actually has TWO decode paths — the Stream path
+        // (decode.go readKind -> readUint, size==1 does not check a leading zero) and the raw path
+        // (raw.go readKind -> readSize, which checks b[0]==0 for EVERY slen including slen==1).
+        // Both reject 0xb8 0x00, but with different reasons (<56 vs leading-zero); since lenOfLen==1
+        // with from[0]==0 is exactly payloadLength==0 < 56, this implementation's `< 56` check
+        // covers both paths with identical observable behavior.
+        if (lenOfLen >= 2 && from[0] == 0)
+        {
+            return {BCOS_ERROR_UNIQUE_PTR(
+                        NonCanonicalSize, "Non-canonical length prefix: leading zero byte"),
+                Header()};
+        }
+        // Migration note (W8): canonicality now enforced for ALL consumers of this shared decoder,
+        // not just the OP path. FISCO's own encoder (RLPEncode.h) always writes a minimal length
+        // prefix (round-trip tested), so only externally-supplied non-canonical bytes are affected;
+        // a legacy chain that historically accepted such bytes would now reject them on replay.
         auto payloadSize =
             fromBigEndian<uint64_t, bcos::bytesConstRef>(from.getCroppedData(0, lenOfLen));
         header.payloadLength = payloadSize;
@@ -101,6 +124,15 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
         if (std::cmp_greater(lenOfLen, from.size()))
         {
             return {BCOS_ERROR_UNIQUE_PTR(DecodingError::InputTooShort, "Input data is too short"),
+                Header()};
+        }
+        // C1 (final review batch B): long-list length prefix, same canonical rule as the
+        // long-string branch above — op-geth rlp/decode.go readUint() `default` case. lenOfLen==1
+        // (0xf8 ..) is left to the `< 56` check below to match op-geth's readUint `case 1`.
+        if (lenOfLen >= 2 && from[0] == 0)
+        {
+            return {BCOS_ERROR_UNIQUE_PTR(DecodingError::NonCanonicalSize,
+                        "Non-canonical length prefix: leading zero byte"),
                 Header()};
         }
         auto payloadSize =
@@ -197,6 +229,14 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, UnsignedIntegral auto& to) 
     if (header.isList)
     {
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedList, "Unexpected list");
+    }
+    // Reject integers wider than the target type instead of silently truncating via fromBigEndian
+    // (op-geth parity). Use digits/8, NOT sizeof(T): boost u256 has sizeof 48 but 32 payload bytes.
+    constexpr auto maxBytes = std::numeric_limits<std::decay_t<decltype(to)>>::digits / 8;
+    if (header.payloadLength > maxBytes)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedLength,
+            "integer wider than target type");
     }
     to = fromBigEndian<std::decay_t<decltype(to)>, bcos::bytesRef>(
         from.getCroppedData(0, header.payloadLength));

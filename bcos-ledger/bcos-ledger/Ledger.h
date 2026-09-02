@@ -33,6 +33,7 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/compute/detail/lru_cache.hpp>
 #include <utility>
+#include <bcos-utilities/BoostLog.h>
 
 #define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
 
@@ -72,10 +73,12 @@ public:
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) override;
+    // No default arguments here — see LedgerInterface::asyncPrewriteBlock.
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts = true,
-        std::optional<bcos::ledger::Features> features = std::nullopt) override;
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override;
 
     bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
         bcos::protocol::Block::ConstPtr block) override;

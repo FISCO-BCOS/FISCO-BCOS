@@ -18,13 +18,92 @@
  */
 #pragma once
 #include <bcos-framework/ledger/GenesisConfig.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Task.h>
+#include <bcos-tool/Exceptions.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <boost/algorithm/hex.hpp>
+#include <boost/throw_exception.hpp>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 
 namespace bcos::ledger
 {
+/// The state-row key of an MPT trie node (table "/mpt/", row key = the 32 raw
+/// digest bytes). Ledger-owned spelling delegating to bcos-storage
+/// KeyPrefixes.h's storage2::mptNodeStateKey (the single source of the key
+/// layout), so installed consumers of the genesis loader headers need no
+/// bcos-storage include path (that directory is a build-tree-only, PRIVATE
+/// include of the ledger target).
+executor_v1::StateKey mptNodeStateKey(bcos::h256 const& hash);
+/// Strip a leading 0x/0X prefix, if present. Genesis alloc hex arrives
+/// 0x-prefixed from NodeConfig (which lowercases first) and possibly 0X-prefixed
+/// or unprefixed from direct GenesisConfig callers.
+inline std::string_view stripHexPrefix(std::string_view hex)
+{
+    return (hex.starts_with("0x") || hex.starts_with("0X")) ? hex.substr(2) : hex;
+}
+
+/// unhex into a fixed-size buffer requires an EXACT digit count:
+/// boost::algorithm::unhex writes past the buffer on over-long input and
+/// silently zero-pads on short input, and bcos::fromHex pads odd/short input —
+/// any of these corrupts the genesis state (or worse) instead of failing
+/// loudly. Shared by the genesis trie hasher and both genesis-state importers
+/// so the state root can never be computed over hex the importer would reject
+/// (and vice versa).
+inline void unhexAllocExact(
+    std::string_view hex, std::string_view field, uint8_t* out, size_t expectedBytes)
+{
+    hex = stripHexPrefix(hex);
+    if (hex.size() != expectedBytes * 2)
+    {
+        BOOST_THROW_EXCEPTION(
+            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                "genesis alloc " + std::string(field) + " must be exactly " +
+                std::to_string(expectedBytes * 2) + " hex digits, got " +
+                std::to_string(hex.size())));
+    }
+    try
+    {
+        boost::algorithm::unhex(hex.begin(), hex.end(), out);
+    }
+    catch (boost::exception const&)
+    {
+        // A correct-length string can still contain non-hex characters; surface
+        // the same named-field InvalidConfig as unhexAllocBytes below.
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                  "genesis alloc " + std::string(field) + " is not valid hex"));
+    }
+}
+
+/// Variable-length counterpart (contract code): even-length valid hex, decoded
+/// to bytes. An empty body decodes to zero bytes ("no code").
+inline bcos::bytes unhexAllocBytes(std::string_view hex, std::string_view field)
+{
+    hex = stripHexPrefix(hex);
+    if (hex.size() % 2 != 0)
+    {
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                  "genesis alloc " + std::string(field) +
+                                  " must be even-length hex, got " + std::to_string(hex.size()) +
+                                  " digits"));
+    }
+    bcos::bytes out;
+    out.reserve(hex.size() / 2);
+    try
+    {
+        boost::algorithm::unhex(hex.begin(), hex.end(), std::back_inserter(out));
+    }
+    catch (boost::exception const&)
+    {
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                  "genesis alloc " + std::string(field) + " is not valid hex"));
+    }
+    return out;
+}
 // Computes the Ethereum genesis state root over genesis.m_allocs, byte-identical
 // to what go-ethereum / op-geth `Genesis.ToBlock()` produces for the same alloc
 // set. This is the value op-node expects at `rollup.json` genesis.l2.hash's

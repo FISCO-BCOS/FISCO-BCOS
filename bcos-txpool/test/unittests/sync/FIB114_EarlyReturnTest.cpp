@@ -20,8 +20,8 @@
  */
 
 #include "test/unittests/txpool/TxPoolFixture.h"
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 namespace bcos::test
 {
 BOOST_FIXTURE_TEST_SUITE(FIB114_EarlyReturn, TxPoolFixture)

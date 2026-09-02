@@ -47,18 +47,18 @@ public:
     class FakeStorage : public storage::StorageInterface
     {
     public:
-        using Value = storage::Entry;  // 必须的类型别名
+        using Value = storage::Entry;  // required type alias
 
         FakeStorage(FakeLedger* ledger) : m_ledger(ledger) {}
 
-        // 修复 asyncGetRow 方法签名
+        // fixed asyncGetRow method signature
         void asyncGetRow(std::string_view table, std::string_view _key,
             std::function<void(Error::UniquePtr, std::optional<storage::Entry>)> _callback) override
         {
             std::string tableStr(table);
             std::string keyStr(_key);
 
-            // 直接使用 FakeLedger 的 fakeStorageEntryMaps
+            // use FakeLedger's fakeStorageEntryMaps directly
             if (m_ledger->fakeStorageEntryMaps.count(tableStr) &&
                 m_ledger->fakeStorageEntryMaps[tableStr].count(keyStr))
             {
@@ -70,16 +70,16 @@ public:
             }
         }
 
-        // 修复 asyncSetRow 方法签名
+        // fixed asyncSetRow method signature
         void asyncSetRow(std::string_view table, std::string_view key, storage::Entry entry,
             std::function<void(Error::UniquePtr)> callback) override
         {
-            // 直接使用 FakeLedger 的 fakeStorageEntryMaps
+            // use FakeLedger's fakeStorageEntryMaps directly
             m_ledger->fakeStorageEntryMaps[std::string(table)][std::string(key)] = std::move(entry);
             callback(nullptr);
         }
 
-        // 修复 asyncGetRows 方法签名
+        // fixed asyncGetRows method signature
         void asyncGetRows(std::string_view table,
             ::ranges::any_view<std::string_view, ::ranges::category::input |
                                                      ::ranges::category::random_access |
@@ -107,7 +107,7 @@ public:
             _callback(nullptr, std::move(results));
         }
 
-        // 添加其他必需的虚函数实现
+        // implement the other required virtual functions
         void asyncGetPrimaryKeys(std::string_view table,
             const std::optional<storage::Condition const>& _condition,
             std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) override
@@ -259,10 +259,15 @@ public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features) override
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
     {
         (void)storage;
         (void)block;
+        (void)writeTxsAndReceipts;
+        (void)features;
+        (void)blockHashOverride;
+        (void)writeNonces;
         callback("", nullptr);
     }
 
@@ -300,7 +305,8 @@ public:
         {
             auto tx = blockTxs ? blockTxs->at(i) : block->transactions()[i].toShared();
             auto txHash = tx->hash();
-            std::shared_ptr<bcos::bytes> txData;
+            auto txData =
+                std::make_shared<bcos::bytes>();  // C3: fix null shared_ptr dereference (P4-3)
             tx->encode(*txData);
             m_txsHashToData[txHash] = txData;
         }

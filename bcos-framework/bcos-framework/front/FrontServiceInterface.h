@@ -25,6 +25,9 @@
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
+#include <atomic>
+#include <coroutine>
+#include <functional>
 #include <range/v3/view/any_view.hpp>
 #include <range/v3/view/single.hpp>
 
@@ -37,9 +40,106 @@ using CallbackFunc = std::function<void(
     Error::Ptr, bcos::crypto::NodeIDPtr, bytesConstRef, const std::string&, ResponseFunc)>;
 
 /**
- * @brief: the interface provided by the front service
+ * @brief: the result of a module-level point-to-point send: the peer's response, or a gateway send
+ *         failure / timeout (error non-null). payload is an owned copy so it outlives the front
+ *         receive-path buffer it was decoded from; respond (optional) lets the caller send a
+ *         follow-up response to the peer over the same request uuid.
  */
-class FrontServiceInterface
+struct SendResult
+{
+    bcos::Error::Ptr error;                     // non-null on gateway send failure or timeout
+    bcos::crypto::NodeIDPtr nodeID;             // the node that sent the response
+    bcos::bytes payload;                        // owned copy of the response body
+    std::string uuid;                           // request uuid (echoed by the peer response)
+    std::function<void(bytesConstRef)> respond; // optional follow-up response to the peer
+};
+
+/**
+ * @brief: internal awaitable that bridges a module-level response callback (fired on response /
+ *         timeout / gateway failure, on the front's io-thread pool) to a co_await. Race-safe:
+ *         whichever of the callback and the suspension wins, the coroutine is resumed exactly once
+ *         and the result is delivered exactly once.
+ *
+ * Publication order: complete() writes State::result BEFORE publishing State::done (release),
+ * and await_ready()/await_suspend() read done with acquire — so a reader that observes done ==
+ * true is guaranteed to see the fully-written result. The idempotency guard stays under the mutex;
+ * the lock itself only serializes complete() vs await_suspend().
+ */
+class SendResponseAwaitable
+{
+public:
+    struct State
+    {
+        std::atomic<bool> done{false};
+        std::coroutine_handle<> handle{nullptr};
+        SendResult result;
+        Mutex mutex;
+    };
+    using StatePtr = std::shared_ptr<State>;
+
+    explicit SendResponseAwaitable(StatePtr state) : m_state(std::move(state)) {}
+
+    // Lock-free fast path: pairs with complete()'s release store — observing done == true implies
+    // result is fully written, so await_resume() may move it without the lock.
+    bool await_ready() const noexcept { return m_state->done.load(std::memory_order_acquire); }
+
+    void await_suspend(std::coroutine_handle<> handle)
+    {
+        // Take a local reference to the state before touching it: the coroutine chain resumed
+        // below may destroy the last State reference (this awaitable's m_state), so the mutex must
+        // stay alive until after the unlock. This mirrors complete()'s "take handle under the
+        // lock, resume outside it" shape.
+        auto state = m_state;
+        {
+            std::lock_guard lock(state->mutex);
+            if (!state->done.load(std::memory_order_acquire))
+            {
+                state->handle = handle;
+                return;
+            }
+        }
+        // the callback already completed before we suspended: resume outside the lock
+        handle.resume();
+    }
+
+    SendResult await_resume() { return std::move(m_state->result); }
+
+    // Called by the response/timeout/gateway-failure callback (on its own thread). Completes the
+    // wait exactly once; if the coroutine has not suspended yet, await_suspend observes done and
+    // resumes itself. result is written BEFORE done is published (release) so the lock-free
+    // await_ready() fast path never races with this write.
+    static void complete(const StatePtr& state, SendResult result)
+    {
+        std::coroutine_handle<> handle;
+        {
+            std::lock_guard lock(state->mutex);
+            if (state->done.load(std::memory_order_relaxed))
+            {
+                return;
+            }
+            state->result = std::move(result);
+            state->done.store(true, std::memory_order_release);
+            handle = state->handle;
+        }
+        if (handle)
+        {
+            handle.resume();
+        }
+    }
+
+private:
+    StatePtr m_state;
+};
+
+/**
+ * @brief: the interface provided by the front service
+ *
+ * enable_shared_from_this lets the owned-payload bridges (asyncBroadcastMessageByOwnedPayload /
+ * asyncSendMessageByNodeIDByOwnedPayload) pass an owning Ptr as the coroutine parameter, so the
+ * front object (FrontService / FrontServiceClient / test fakes, all shared_ptr-owned) stays alive
+ * for the whole detached send instead of holding a raw `this`.
+ */
+class FrontServiceInterface : public std::enable_shared_from_this<FrontServiceInterface>
 {
 public:
     using Ptr = std::shared_ptr<FrontServiceInterface>;
@@ -98,18 +198,6 @@ public:
         ReceiveMsgFunc _receiveMsgCallback) = 0;
 
     /**
-     * @brief: send message to node
-     * @param _moduleID: moduleID
-     * @param _nodeID: the receiver nodeID
-     * @param _data: message
-     * @param _timeout: the timeout value of async function, in milliseconds.
-     * @param _callback: callback
-     * @return void
-     */
-    virtual void asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
-        bytesConstRef _data, uint32_t _timeout, CallbackFunc _callback) = 0;
-
-    /**
      * @brief: send response
      * @param _id: the request id
      * @param _moduleID: moduleID
@@ -121,18 +209,33 @@ public:
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
         ReceiveMsgFunc _receiveMsgCallback) = 0;
 
-    /**
-     * @brief: send messages to multiple nodes
-     * @param _moduleID: moduleID
-     * @param _nodeIDs: the receiver nodeIDs
-     * @param _data: message
-     * @return void
-     */
-    virtual void asyncSendMessageByNodeIDs(int _moduleID,
-        const std::vector<bcos::crypto::NodeIDPtr>& _nodeIDs, bytesConstRef _data) = 0;
-
     virtual task::Task<void> broadcastMessage(
-        uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) = 0;
+        uint16_t type, int moduleID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) = 0;
+
+    /**
+     * @brief: (coroutine, zero-copy) send message to one node and await the module-level response.
+     *         The payload is passed as views that the caller must keep alive for the duration of
+     *         the co_await. co_await resumes when the peer's response arrives, the timeout
+     *         (_timeout > 0) expires, or the gateway-level send fails — the result carries the
+     *         response (error non-null on timeout / gateway failure). With _timeout == 0 the send
+     *         is fire-and-forget: no response is expected and the coroutine returns as soon as the
+     *         gateway send completes. Callers that want the pure async form can wrap the co_await
+     *         in task::wait, passing any captured state as coroutine parameters (the recommended
+     *         pattern across the send path).
+     *
+     * The payloads must be at least forward ranges: implementations may iterate them multiple
+     * times (e.g. a retry loop).
+     *
+     * @param _moduleID: moduleID
+     * @param _nodeID: the receiver nodeID
+     * @param _payloads: message content (views, kept alive by the caller)
+     * @param _timeout: the module-response timeout in milliseconds; 0 = fire-and-forget
+     */
+    virtual task::Task<SendResult> sendMessageByNodeID(int _moduleID,
+        bcos::crypto::NodeIDPtr _nodeID,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
+        uint32_t _timeout) = 0;
 
     /**
      * @brief broadcast an already-encoded message, taking ownership of the payload so the send can
@@ -157,11 +260,11 @@ public:
     virtual void asyncBroadcastMessageByOwnedPayload(
         uint16_t type, int moduleID, bytesPointer payload)
     {
-        task::wait([](FrontServiceInterface* self, uint16_t _type, int _moduleID,
+        task::wait([](FrontServiceInterface::Ptr self, uint16_t _type, int _moduleID,
                        bytesPointer _payload) -> task::Task<void> {
             co_await self->broadcastMessage(
                 _type, _moduleID, ::ranges::views::single(bcos::ref(*_payload)));
-        }(this, type, moduleID, std::move(payload)));
+        }(shared_from_this(), type, moduleID, std::move(payload)));
     }
 
     /**
@@ -172,7 +275,8 @@ public:
      * the gateway send off the caller thread (PBFT under m_mutex must not contend the gateway
      * session lock; sendViewChange / sendRecoverResponse run there). Point-to-point sends encode
      * the wire frame anyway, so this is not zero-copy; owning the payload only keeps it alive
-     * across the deferred encode. The default implementation bridges to asyncSendMessageByNodeID.
+     * across the deferred encode. The default implementation bridges to the coroutine
+     * sendMessageByNodeID (fire-and-forget).
      *
      * @param moduleID: moduleID
      * @param nodeID: the receiver nodeID
@@ -181,7 +285,12 @@ public:
     virtual void asyncSendMessageByNodeIDByOwnedPayload(
         int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload)
     {
-        asyncSendMessageByNodeID(moduleID, std::move(nodeID), bcos::ref(*payload), 0, nullptr);
+        task::wait([](FrontServiceInterface::Ptr self, int _moduleID,
+                       bcos::crypto::NodeIDPtr _nodeID,
+                       bytesPointer _payload) -> task::Task<void> {
+            co_await self->sendMessageByNodeID(_moduleID, std::move(_nodeID),
+                ::ranges::views::single(bcos::ref(*_payload)), 0);
+        }(shared_from_this(), moduleID, std::move(nodeID), std::move(payload)));
     }
 
     /**

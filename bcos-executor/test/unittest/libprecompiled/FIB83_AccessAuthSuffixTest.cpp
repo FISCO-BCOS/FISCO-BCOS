@@ -18,7 +18,6 @@
  * @date 2026-04-07
  */
 
-#include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"

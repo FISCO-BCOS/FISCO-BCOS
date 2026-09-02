@@ -64,6 +64,49 @@ TrieBuildResult computeTrieRoot(std::map<bcos::h256, bcos::bytes> const& entries
 TrieBuildResult computeTrieRootFromSorted(
     std::span<std::pair<bcos::h256, bcos::bytesConstRef> const> sortedEntries);
 
+/// Stateless canonical-MPT root over RAW (non-hashed) byte keys — the Ethereum "non-secure"
+/// tries (the block header's transaction / receipt / withdrawal tries), whose keys are
+/// variable-length byte strings (RLP-encoded indices), not keccak digests.
+///
+/// The build core is shared with the 64-nibble path: any-length keys are split into nibbles the
+/// same way, and — unlike the fixed-length invariant of computeTrieRootFromSorted — a key may
+/// terminate exactly where another continues (a proper-prefix key), which is stored as the
+/// BranchNode's own value. The RLP-encoded-index keys Ethereum actually uses are prefix-free, so
+/// that case never fires there, but trietest.json exercises it, so it is supported here.
+///
+/// The input is NOT required to be sorted (the build sorts by nibble-path order internally —
+/// byte lexicographic == nibble path order — note this is NOT numeric index order for
+/// RLP-encoded indices: rlp(0)=0x80 sorts after rlp(1)=0x01). Uniqueness is ENFORCED
+/// (MPTInvariantViolation on duplicates — two identical keys would both terminate at the same
+/// branch and send hbBuildBranch's nibble indexing out of bounds).
+/// @return {root, newNodes} — root is emptyRootHash() for an empty input.
+TrieBuildResult computeTrieRootFromRawKeys(
+    std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> items);
+
+/// Root-only variant of computeTrieRootFromRawKeys: builds the same canonical trie but returns
+/// just the 32-byte root, skipping the per-node RLP accumulation. The block-header
+/// transaction / receipt / withdrawal tries are never persisted (go-ethereum's DeriveSha uses
+/// a throwaway StackTrie for the same reason), so the full newNodes map would only be
+/// discarded — for a large block this drops every hash-map insertion and node copy, three
+/// times per block. Same sorting / uniqueness contract as computeTrieRootFromRawKeys.
+bcos::h256 computeRawTrieRoot(
+    std::span<std::pair<bcos::bytesConstRef, bcos::bytesConstRef> const> items);
+
+/// Non-secure (variable-length key) build entry: computes a canonical MPT over (key, value) pairs
+/// where @p key is an arbitrary-length byte string (each byte → 2 nibbles via bytesToNibbles),
+/// NOT the 32-byte keccak-hashed secure-trie key `computeTrieRoot` assumes. Used for list tries
+/// whose keys are short RLP encodings (e.g. the OP receipts-root: key = rlp(index), 1–4 bytes).
+///
+/// Contract (differs from computeTrieRoot's 64-nibble assumption): the caller MUST guarantee no
+/// key is a prefix of another (a variable-length key may terminate inside a branch node, which
+/// this build does not support — the 64-nibble case never does). The OP receipts-root keys
+/// rlp(0..N) satisfy this by construction. Keys are also assumed distinct. The input does NOT
+/// need to be pre-sorted: the build sorts defensively by nibble-path order (byte lexicographic
+/// == nibble-path order) — a fix for the OP callers passing index-order entries, which produced
+/// a malformed trie once 2-byte keys (rlp(128..)) appeared alongside rlp(0) (W6 L2
+/// isthmus_big_block_130tx).
+TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::bytes> const> entries);
+
 /// Apply one change-set over a prior trie version and return the complete node delta — the single
 /// stateless entry point every trie producer commits through (spec §5.4, Revision 2026-07-09b:
 /// the stateful put/remove-accumulating HashBuilder class this replaces held no state that

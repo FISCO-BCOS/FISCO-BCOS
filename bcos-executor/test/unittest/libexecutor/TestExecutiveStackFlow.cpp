@@ -20,14 +20,10 @@
 #include "../../../src/executive/BlockContext.h"
 #include "../../../src/executive/ExecutiveFlowInterface.h"
 #include "../../../src/executive/ExecutiveStackFlow.h"
-#include "../../../src/executive/ExecutiveState.h"
 #include "../mock/MockExecutiveFactory.h"
 #include "../mock/MockLedger.h"
 #include <bcos-utilities/IOServicePool.h>
-#include <tbb/concurrent_unordered_map.h>
 #include <boost/test/unit_test.hpp>
-#include <atomic>
-#include <stack>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -36,8 +32,7 @@ namespace bcos
 {
 namespace test
 {
-using namespace std;
-
+using std::make_shared;
 struct ExecutiveStackFlowFixture
 {
     ExecutiveStackFlowFixture()

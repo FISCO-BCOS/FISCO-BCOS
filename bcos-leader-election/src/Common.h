@@ -18,4 +18,5 @@
  * @date 2022-04-26
  */
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/BoostLog.h>
 #define ELECTION_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("Election")

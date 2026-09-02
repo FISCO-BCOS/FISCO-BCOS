@@ -19,6 +19,7 @@
  */
 #pragma once
 #include <cstddef>
+#include <cstdint>
 
 // u256 with 0x prefix
 constexpr size_t TRANSACTION_VALUE_MAX_LENGTH = 256 * 2 + 2;
@@ -26,3 +27,11 @@ constexpr size_t TRANSACTION_VALUE_MAX_LENGTH = 256 * 2 + 2;
 constexpr int MAX_CODE_SIZE = 0x6000;
 // EIP 3860
 constexpr int MAX_INITCODE_SIZE = 2 * MAX_CODE_SIZE;
+namespace bcos::protocol
+{
+// The Web3 nonce window is expressed in blocks; a transaction whose nonce sits further than
+// this many slots ahead of the committed account nonce is refused admission. Lives here rather
+// than in bcos-txpool so the admission layer can read it without depending on a pool.
+constexpr int64_t DEFAULT_BLOCK_LIMIT = 600;
+constexpr uint64_t DEFAULT_WEB3_NONCE_CHECK_LIMIT = DEFAULT_BLOCK_LIMIT * 1000;
+}  // namespace bcos::protocol

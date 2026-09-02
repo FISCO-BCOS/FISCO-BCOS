@@ -29,6 +29,7 @@
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <memory>
+#include <list>
 
 namespace bcos
 {

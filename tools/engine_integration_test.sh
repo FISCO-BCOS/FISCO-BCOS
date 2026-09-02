@@ -2,8 +2,7 @@
 # =============================================================================
 # FISCO-BCOS Engine API Integration Test
 #
-# 整合 Phase 1 (curl smoke) + Phase 2 (Python mock CL) + Phase 3 (Lodestar, 可选)。
-# Phase 3 默认关闭，需设置 RUN_LODESTAR=1 启用（需 Node.js 18+ 和 pnpm）。
+# 整合 Phase 1 (curl smoke) + Phase 2 (Python mock CL)。
 #
 # 用法:
 #   ./tools/engine_integration_test.sh [BUILD_DIR] [RPC_PORT]
@@ -56,10 +55,6 @@ sleep 1
 cleanup() {
     echo ""
     echo "=== Cleaning up ==="
-    if [ -n "${LODESTAR_PID:-}" ]; then
-        kill "${LODESTAR_PID}" 2>/dev/null || true
-        wait "${LODESTAR_PID}" 2>/dev/null || true
-    fi
     # Kill only the node started by this script (via PID file), not every
     # fisco-bcos process on the machine.
     if [ -n "${NODE_PID:-}" ]; then
@@ -182,6 +177,9 @@ mkdir -p "${WORK_DIR}"
 
 # Generate genesis config
 cat > "${WORK_DIR}/config.genesis" << GENESIS_EOF
+[version]
+compatibility_version=3.18.0
+
 [consensus]
 consensus_type=pbft
 block_tx_count_limit=1000
@@ -204,9 +202,8 @@ listen_ip=0.0.0.0
 listen_port=${RPC_PORT}
 jwt_secret_file=${WORK_DIR}/jwt.hex
 clock_skew_secs=300
-; this harness drives the v1 EngineService over the endpoint (no [executor] version=2
-; here); production chains must never set this test-only escape hatch
-unsafe_allow_v1_executor=true
+; The Karst Engine API surface is served by the v2 pure-Ethereum executor (executor_version=2
+; + executor.evm_revision=cancun below), matching the production [op_engine_rpc] configuration.
 
 [p2p]
 listen_ip=0.0.0.0
@@ -226,6 +223,11 @@ multi_ca_path=multiCaPath
 [certificate_whitelist]
 
 [executor]
+; executor_version=2 selects the pure-Ethereum EthereumExecutor; the header-fork derivation
+; in buildPayload keys off the chain's EVM revision, so an explicit evm_revision is required
+; (a missing one would fail closed rather than hash under an assumed fork).
+version=2
+evm_revision=cancun
 is_auth_check=false
 auth_admin_account=0x3443d6866e757893e6862f451f5d1b7976c54594
 is_serial_execute=true
@@ -436,26 +438,45 @@ else
     log_fail "No result: ${RESP}"
 fi
 
-# 3.2 engine_exchangeCapabilities
-log_test "engine_exchangeCapabilities"
-RESP=$(rpc_call "engine_exchangeCapabilities" '[["engine_newPayloadV2"]]')
+# 3.2 engine_exchangeCapabilities — everything implemented, pre-Karst included (B4)
+log_test "engine_exchangeCapabilities (implemented surface)"
+RESP=$(rpc_call "engine_exchangeCapabilities" '[["engine_newPayloadV4"]]')
 if echo "${RESP}" | grep -q '"result"'; then
-    if echo "${RESP}" | grep -q '"engine_exchangeCapabilities"'; then
+    MISSING=""
+    for CAP in engine_exchangeCapabilities \
+        engine_forkchoiceUpdatedV1 engine_forkchoiceUpdatedV2 engine_forkchoiceUpdatedV3 \
+        engine_getPayloadV1 engine_getPayloadV2 engine_getPayloadV3 \
+        engine_getPayloadV4 engine_getPayloadV5 \
+        engine_newPayloadV1 engine_newPayloadV2 engine_newPayloadV3 engine_newPayloadV4; do
+        echo "${RESP}" | grep -q "\"${CAP}\"" || MISSING="${MISSING} ${CAP}"
+    done
+    # forkchoiceUpdatedV4 is not implemented, so must not be advertised.
+    EXTRA=""
+    for CAP in engine_forkchoiceUpdatedV4; do
+        echo "${RESP}" | grep -q "\"${CAP}\"" && EXTRA="${EXTRA} ${CAP}"
+    done
+    if [ -z "${MISSING}" ] && [ -z "${EXTRA}" ]; then
         log_pass
     else
-        log_fail "Missing expected capabilities"
+        log_fail "capabilities missing:${MISSING:- none} unexpected:${EXTRA:- none} — ${RESP}"
     fi
 else
     log_fail "No result: ${RESP}"
 fi
 
-# 3.3 engine_forkchoiceUpdatedV2 (without payloadAttributes)
-log_test "engine_forkchoiceUpdatedV2 (no payload)"
+# Zero beacon root: this mock CL has no beacon chain.
+ZERO_ROOT="0x0000000000000000000000000000000000000000000000000000000000000000"
+# Engine wire timestamps are Unix seconds.
+TS_SECS=$(date +%s)
+TS_HEX=$(printf '0x%x' "${TS_SECS}")
+
+# 3.3 engine_forkchoiceUpdatedV3 (without payloadAttributes)
+log_test "engine_forkchoiceUpdatedV3 (no payload)"
 HEAD_RESP=$(rpc_call "eth_getBlockByNumber" '["latest",false]')
 HEAD_HASH=$(json_val "${HEAD_RESP}" "hash")
 
 if [ -n "${HEAD_HASH}" ]; then
-    RESP=$(rpc_call "engine_forkchoiceUpdatedV2" \
+    RESP=$(rpc_call "engine_forkchoiceUpdatedV3" \
         "[{\"headBlockHash\":\"${HEAD_HASH}\",\"safeBlockHash\":\"${HEAD_HASH}\",\"finalizedBlockHash\":\"${HEAD_HASH}\"},null]")
     if echo "${RESP}" | grep -q '"result"'; then
         STATUS=$(json_fcu_status "${RESP}")
@@ -472,12 +493,12 @@ else
     log_fail "Cannot get head hash"
 fi
 
-# 3.4 engine_forkchoiceUpdatedV2 (with payloadAttributes)
-log_test "engine_forkchoiceUpdatedV2 (with payload)"
+# 3.4 engine_forkchoiceUpdatedV3 (with V3 payloadAttributes: withdrawals + beacon root)
+log_test "engine_forkchoiceUpdatedV3 (with payload)"
 PAYLOAD_ID=""
 if [ -n "${HEAD_HASH}" ]; then
-    RESP=$(rpc_call "engine_forkchoiceUpdatedV2" \
-        "[{\"headBlockHash\":\"${HEAD_HASH}\",\"safeBlockHash\":\"${HEAD_HASH}\",\"finalizedBlockHash\":\"${HEAD_HASH}\"},{\"timestamp\":\"0x100\",\"prevRandao\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"suggestedFeeRecipient\":\"0x0000000000000000000000000000000000000001\",\"withdrawals\":[]}]")
+    RESP=$(rpc_call "engine_forkchoiceUpdatedV3" \
+        "[{\"headBlockHash\":\"${HEAD_HASH}\",\"safeBlockHash\":\"${HEAD_HASH}\",\"finalizedBlockHash\":\"${HEAD_HASH}\"},{\"timestamp\":\"${TS_HEX}\",\"prevRandao\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"suggestedFeeRecipient\":\"0x0000000000000000000000000000000000000001\",\"withdrawals\":[],\"parentBeaconBlockRoot\":\"${ZERO_ROOT}\"}]")
     if echo "${RESP}" | grep -q '"result"'; then
         STATUS=$(json_fcu_status "${RESP}")
         PAYLOAD_ID=$(json_val "${RESP}" "payloadId")
@@ -494,31 +515,67 @@ else
     log_fail "No head hash available"
 fi
 
-# 3.5 engine_getPayloadV2 + engine_newPayloadV2
-log_test "engine_getPayloadV2 + engine_newPayloadV2"
+# 3.5 engine_getPayloadV5 + engine_newPayloadV4
+log_test "engine_getPayloadV5 + engine_newPayloadV4"
 if [ -n "${PAYLOAD_ID:-}" ]; then
     # getPayload
-    GET_RESP=$(rpc_call "engine_getPayloadV2" "[\"${PAYLOAD_ID}\"]")
+    GET_RESP=$(rpc_call "engine_getPayloadV5" "[\"${PAYLOAD_ID}\"]")
     if echo "${GET_RESP}" | grep -q '"blockHash"'; then
-        # Extract payload and feed to newPayload. Use a temp file to avoid
-        # shell quoting issues with the multi-KB JSON.
+        # V5 response shape: executionRequests must be present.
+        if ! echo "${GET_RESP}" | grep -q '"executionRequests"'; then
+            log_fail "getPayloadV5 response missing executionRequests: ${GET_RESP}"
+        fi
+        # Extract payload and feed to newPayloadV4 with the required
+        # [payload, [], beaconRoot, []] parameter shape. Use a temp file to
+        # avoid shell quoting issues with the multi-KB JSON.
         NEW_REQ_FILE="${WORK_DIR}/newPayload_req.json"
         echo "${GET_RESP}" | python3 -c "
 import sys,json
 d=json.load(sys.stdin)['result']
 p=d['executionPayload'] if 'executionPayload' in d else d
-print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV2','params':[p]}))
+root=d.get('parentBeaconBlockRoot','${ZERO_ROOT}')
+print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV4','params':[p,[],root,[]]}))
 " 2>/dev/null > "${NEW_REQ_FILE}"
         NEW_RESP=$(curl -s -X POST "${RPC_URL}" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${JWT_TOKEN}" \
             -d "@${NEW_REQ_FILE}" 2>/dev/null || echo '{}')
         NEW_STATUS=$(json_val "${NEW_RESP}" "status")
-        log_info "newPayload status = ${NEW_STATUS}"
-        if [ "${NEW_STATUS}" = "VALID" ] || [ "${NEW_STATUS}" = "ACCEPTED" ]; then
+        # VALID only: ACCEPTED means the node acknowledged the block without validating or
+        # storing it, the escape M9 removed. Accepting it here would hide its return.
+        log_info "newPayloadV4 status = ${NEW_STATUS}"
+        if [ "${NEW_STATUS}" = "VALID" ]; then
             log_pass
         else
-            log_fail "Unexpected newPayload status: ${NEW_STATUS}"
+            log_fail "newPayloadV4 did not answer VALID: ${NEW_RESP}"
+        fi
+
+        # The Engine boundary speaks Unix seconds; block headers store milliseconds. The
+        # committed block is what proves the conversion happened: a missing conversion is
+        # symmetric on the wire (parse and serialize cancel out) but lands the seconds in
+        # the header as milliseconds, so eth_getBlockByNumber — which divides the header
+        # timestamp by 1000 — reports a 1970 timestamp.
+        log_test "committed block carries the Unix-seconds timestamp we sent"
+        BLOCK_NUM_HEX=$(echo "${GET_RESP}" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)['result']
+p=d['executionPayload'] if 'executionPayload' in d else d
+print(p['blockNumber'])
+" 2>/dev/null || echo "")
+        BLOCK_TS=""
+        if [ -n "${BLOCK_NUM_HEX}" ]; then
+            BLOCK_RESP=$(rpc_call "eth_getBlockByNumber" "[\"${BLOCK_NUM_HEX}\",false]")
+            BLOCK_TS=$(echo "${BLOCK_RESP}" | python3 -c "
+import sys,json
+print(int(json.load(sys.stdin)['result']['timestamp'],16))
+" 2>/dev/null || echo "")
+        fi
+        if [ -n "${BLOCK_TS}" ] && \
+           [ "$((BLOCK_TS > TS_SECS ? BLOCK_TS - TS_SECS : TS_SECS - BLOCK_TS))" -le 1 ]; then
+            log_info "block ${BLOCK_NUM_HEX} timestamp = ${BLOCK_TS} (sent ${TS_SECS})"
+            log_pass
+        else
+            log_fail "block timestamp ${BLOCK_TS:-<none>} is not the ${TS_SECS} seconds we sent"
         fi
     else
         log_fail "getPayload failed: ${GET_RESP}"
@@ -526,6 +583,39 @@ print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV2','params'
 else
     log_info "Skipping (no payloadId from forkchoiceUpdated)"
     log_pass
+fi
+
+# 3.6 pre-Karst surface on a chain whose fork outruns V2: forkchoiceUpdatedV2 is refused
+# with -38005 Unsupported fork. The harness chain runs executor_version=2 with
+# evm_revision=cancun (the production [op_engine_rpc] configuration), so the header-fork
+# derivation keys off CANCUN; a V2 attribute shape cannot express CANCUN
+# (parentBeaconBlockRoot), so the service answers the same Unsupported fork error geth
+# gives for this CL/chain mismatch. The V2 build/fetch/submit loop itself is covered by
+# the engine unit tests on a SHANGHAI fixture.
+log_test "engine_forkchoiceUpdatedV2 answers -38005 (chain fork outruns V2)"
+V2_HEAD=$(json_val "$(rpc_call "eth_getBlockByNumber" '["latest",false]')" "hash")
+V2_TS_SECS=$((TS_SECS + 12))
+V2_TS_HEX=$(printf '0x%x' "${V2_TS_SECS}")
+if [ -n "${V2_HEAD}" ]; then
+    RESP=$(rpc_call "engine_forkchoiceUpdatedV2" \
+        "[{\"headBlockHash\":\"${V2_HEAD}\",\"safeBlockHash\":\"${V2_HEAD}\",\"finalizedBlockHash\":\"${V2_HEAD}\"},{\"timestamp\":\"${V2_TS_HEX}\",\"prevRandao\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"suggestedFeeRecipient\":\"0x0000000000000000000000000000000000000001\",\"withdrawals\":[]}]")
+    if echo "${RESP}" | grep -q '\-38005'; then
+        log_pass
+    else
+        log_fail "expected forkchoiceUpdatedV2 to be refused as -38005 Unsupported fork, got: ${RESP}"
+    fi
+else
+    log_fail "Cannot get head hash"
+fi
+
+# 3.7 the one unimplemented method version answers -38005 (not method-not-found)
+log_test "engine_forkchoiceUpdatedV4 answers -38005 (not implemented)"
+RESP=$(rpc_call "engine_forkchoiceUpdatedV4" \
+    "[{\"headBlockHash\":\"${HEAD_HASH}\",\"safeBlockHash\":\"${HEAD_HASH}\",\"finalizedBlockHash\":\"${HEAD_HASH}\"},null]")
+if echo "${RESP}" | grep -q '\-38005'; then
+    log_pass
+else
+    log_fail "Expected -38005 Unsupported fork, got: ${RESP}"
 fi
 
 # ---- Step 4: Python mock consensus client ----
@@ -546,129 +636,6 @@ if [ -f "${PYTHON_SCRIPT}" ]; then
 else
     log_info "Python script not found at ${PYTHON_SCRIPT}, skipping"
     log_pass
-fi
-
-# ---- Step 5: Lodestar dev mode (optional, controlled by RUN_LODESTAR=1) ----
-if [ "${RUN_LODESTAR:-0}" = "1" ]; then
-    log_section "Step 5: Lodestar dev mode integration"
-
-    # Check prerequisites
-    LODESTAR_SKIP=0
-    if ! command -v node &>/dev/null; then
-        log_info "Node.js not found, skipping Lodestar test"
-        LODESTAR_SKIP=1
-    fi
-
-    # Setup pnpm if needed
-    if [ "${LODESTAR_SKIP}" -eq 0 ]; then
-        export PNPM_HOME="${PNPM_HOME:-${HOME}/.local/share/pnpm}"
-        export PATH="${PATH}:${PNPM_HOME}"
-
-        if ! command -v pnpm &>/dev/null; then
-            log_info "Installing pnpm..."
-            npm install -g pnpm 2>/dev/null || { log_info "Failed to install pnpm, skipping"; LODESTAR_SKIP=1; }
-        fi
-    fi
-
-    # Generate JWT secret
-    JWT_FILE="${WORK_DIR}/jwt.hex"
-    if [ "${LODESTAR_SKIP}" -eq 0 ]; then
-        openssl rand -hex 32 > "${JWT_FILE}" 2>/dev/null || {
-            python3 -c "import secrets; print(secrets.token_hex(32))" > "${JWT_FILE}" 2>/dev/null || true
-        }
-        log_info "JWT secret generated"
-    fi
-
-    # Run Lodestar dev mode with timeout
-    if [ "${LODESTAR_SKIP}" -eq 0 ]; then
-        log_test "Lodestar dev mode (60s timeout)"
-
-        LODESTAR_OUT="${WORK_DIR}/lodestar_out.log"
-        # Install Lodestar into a local project so its transitive snappy
-        # dependency can be pinned via a pnpm-workspace.yaml override.
-        # snappy@7.4.0 ships a broken index.js — it unconditionally imports
-        # @napi-rs/snappy-wasm32-wasi, which is absent from its
-        # optionalDependencies — crashing Node at startup with
-        # ERR_MODULE_NOT_FOUND on every platform. lodestar 1.46.0 pulls
-        # snappy@7.4.0; pin lodestar to 1.45.0 (last release on 7.3.x) AND
-        # override snappy to 7.3.3 (last good release) as defense in depth.
-        # NOTE: pnpm >= 10 no longer reads the "pnpm" field in package.json
-        # (ignored with a warning) — overrides must live in pnpm-workspace.yaml.
-        LODESTAR_DIR="${WORK_DIR}/lodestar"
-        rm -rf "${LODESTAR_DIR}"
-        mkdir -p "${LODESTAR_DIR}"
-        cat > "${LODESTAR_DIR}/package.json" << 'PKG_EOF'
-{
-  "private": true,
-  "dependencies": {
-    "@chainsafe/lodestar": "1.45.0"
-  }
-}
-PKG_EOF
-        cat > "${LODESTAR_DIR}/pnpm-workspace.yaml" << 'WS_EOF'
-packages:
-  - "."
-overrides:
-  snappy: 7.3.3
-WS_EOF
-        if ! (cd "${LODESTAR_DIR}" && pnpm install --reporter=append-only) > "${LODESTAR_OUT}" 2>&1; then
-            log_info "Lodestar install output (last 20 lines):"
-            tail -20 "${LODESTAR_OUT}" 2>/dev/null || true
-            log_fail "Lodestar install failed"
-        else
-            : > "${LODESTAR_OUT}"
-            timeout 60 "${LODESTAR_DIR}/node_modules/.bin/lodestar" dev \
-                --execution.urls "${RPC_URL}" \
-                --execution.engineMock false \
-                --jwtSecret "${JWT_FILE}" \
-                --genesisValidators 4 \
-                --startValidators 0..3 \
-                --reset \
-                --rest \
-                --rest.port 19596 \
-                > "${LODESTAR_OUT}" 2>&1 &
-            LODESTAR_PID=$!
-
-            # Wait for Lodestar to show signs of connecting to EL
-            LODESTAR_OK=0
-            for i in $(seq 1 30); do
-                sleep 2
-                if ! kill -0 "${LODESTAR_PID}" 2>/dev/null; then
-                    break
-                fi
-                if grep -q "Execution client urls" "${LODESTAR_OUT}" 2>/dev/null; then
-                    LODESTAR_OK=1
-                    break
-                fi
-            done
-
-            # Kill Lodestar and check results
-            kill "${LODESTAR_PID}" 2>/dev/null || true
-            wait "${LODESTAR_PID}" 2>/dev/null || true
-
-            if [ "${LODESTAR_OK}" -eq 1 ]; then
-                log_info "Lodestar connected to execution client successfully"
-                # Check for engine API calls in Lodestar output
-                if grep -q "forkchoiceUpdated\|newPayload\|getPayload\|exchangeCapabilities" "${LODESTAR_OUT}" 2>/dev/null; then
-                    log_info "Lodestar made Engine API calls to FISCO-BCOS"
-                fi
-                log_pass
-            else
-                # Check if Lodestar at least started
-                if grep -q "Lodestar network=dev" "${LODESTAR_OUT}" 2>/dev/null; then
-                    log_info "Lodestar started but may not have connected (expected for mismatched genesis)"
-                    log_pass
-                else
-                    log_info "Lodestar output (last 20 lines):"
-                    tail -20 "${LODESTAR_OUT}" 2>/dev/null || true
-                    log_fail "Lodestar failed to start"
-                fi
-            fi
-        fi
-    else
-        log_info "Lodestar test skipped (missing prerequisites)"
-        log_pass
-    fi
 fi
 
 # ---- Summary ----

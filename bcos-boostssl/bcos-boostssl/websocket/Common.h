@@ -19,11 +19,11 @@
  */
 #pragma once
 
-#include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Error.h>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast/websocket.hpp>
+#include <boost/function.hpp>
 
 #define BOOST_SSL_LOG(LEVEL) BCOS_LOG(LEVEL) << "[BOOSTSSL]"
 #define WEBSOCKET_TOOL(LEVEL) BCOS_LOG(LEVEL) << "[WS][TOOL]"
@@ -42,14 +42,17 @@ constexpr uint16_t WS_RAW_MESSAGE_TYPE = 0xffff;
 namespace bcos::boostssl::ws
 {
 class WsSession;
+class WsMessage;
 
-using RespCallBack = std::function<void(
-    bcos::Error::Ptr, std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<WsSession>)>;
+// Note: messages are passed by value through the receive pipeline (move-only type,
+// no per-message allocation for the message object itself; the seq/payload buffers
+// and the asio post closure still allocate). Handlers that need to retain a message
+// beyond the synchronous call should move it into their own storage explicitly.
+using RespCallBack = std::function<void(bcos::Error::Ptr, WsMessage, std::shared_ptr<WsSession>)>;
 
 using WsConnectHandler = std::function<void(bcos::Error::Ptr, std::shared_ptr<WsSession>)>;
 using WsDisconnectHandler = std::function<void(bcos::Error::Ptr, std::shared_ptr<WsSession>)>;
-using WsRecvMessageHandler =
-    std::function<void(std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<WsSession>)>;
+using WsRecvMessageHandler = std::function<void(WsMessage, std::shared_ptr<WsSession>)>;
 using VerifyCallback = boost::function<bool(bool, boost::asio::ssl::verify_context&)>;
 
 struct Options
