@@ -1394,8 +1394,8 @@ private:
                 // this unreachable for sealed txs; if it still fires (forced-tx overflow or
                 // accounting drift), the engine skips the tx for this build and never
                 // removes it from the pool (F2).
-                BOOST_THROW_EXCEPTION(OpBlockGasPoolFull{} << bcos::errinfo_comment(
-                                          err->message()));
+                BOOST_THROW_EXCEPTION(
+                    OpBlockGasPoolFull{} << bcos::errinfo_comment(err->message()));
             }
             // DEBUG not WARNING: this path is reachable from unauthenticated eth_call /
             // estimateGas, where any caller can trigger validation failures at will — a
