@@ -594,11 +594,9 @@ void bcos::engine::detail::finalizeEthBlockHeader(bcos::protocol::BlockHeader& h
     const ExecutionPayload& payload, std::optional<bcos::h256> parentBeaconBlockRoot,
     bcos::protocol::EthBlockVersion forkVersion)
 {
-    static const auto kEmptyOmmersHash = bcos::crypto::HashType(
-        "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
-    header.setUncleHash(kEmptyOmmersHash);
-    header.setDifficulty(bcos::u256(0));
-    header.setNonce(bcos::h64(0));
+    // Post-merge chain constants shared with the OP rebuild path
+    // (c_emptyOmmersHash / c_posNonce / c_opEmptyRequestsHash in this TU).
+    bcos::engine::detail::applyOpHeaderConstants(header);
     header.setLogsBloom(bcos::bytesConstRef(payload.logsBloom.data(), payload.logsBloom.size()));
     header.setBaseFee(payload.baseFeePerGas);
     if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)
@@ -613,8 +611,7 @@ void bcos::engine::detail::finalizeEthBlockHeader(bcos::protocol::BlockHeader& h
     }
     if (forkVersion >= bcos::protocol::EthBlockVersion::PRAGUE)
     {
-        header.setRequestsHash(bcos::crypto::HashType(
-            "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+        header.setRequestsHash(c_opEmptyRequestsHash);
     }
     header.setEthBlockVersion(forkVersion);
     if (auto error = bcos::protocol::EthBlockHeader::calculateRLPHash(header))
