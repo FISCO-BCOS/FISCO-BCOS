@@ -94,6 +94,20 @@ PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guar
         throw;
     }
 }
+
+template <class ArtifactsMap>
+bcos::protocol::BlockHeader::Ptr findBuiltHeader(
+    EngineTracker::SharedAccess& shared, ArtifactsMap const& artifacts, h256 const& blockHash)
+{
+    if (auto payloadId = shared.payloadIdForHash(blockHash))
+    {
+        if (auto artifactIt = artifacts.find(*payloadId); artifactIt != artifacts.end())
+        {
+            return artifactIt->second.canonicalHeader;
+        }
+    }
+    return nullptr;
+}
 }  // namespace op_detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>

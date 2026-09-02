@@ -119,11 +119,16 @@ static_assert(bcos::engine::EngineServiceConcept<NewOpEngine>);
 constexpr uint64_t kChainId = 0x2105;
 constexpr bcos::protocol::BlockNumber c_headOrderingBlockNumber = 40;
 constexpr bcos::protocol::BlockNumber c_safeOrderingBlockNumber = 41;
+constexpr bcos::protocol::BlockNumber c_finalizedOrderingBlockNumber = 42;
 
 constexpr char const* c_opV4UnsupportedForkMessage =
     "Isthmus+ payloads require engine_newPayloadV4 (JSON-RPC -38005)";
 constexpr char const* c_safeAboveHeadMessage =
     "Forkchoice safe block number must not exceed head block number";
+constexpr char const* c_finalizedAboveHeadMessage =
+    "Forkchoice finalized block number must not exceed head block number";
+constexpr char const* c_finalizedAboveSafeMessage =
+    "Forkchoice finalized block number must not exceed safe block number";
 
 bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
 {
@@ -635,6 +640,64 @@ BOOST_AUTO_TEST_CASE(op_safe_finalized_validation_matches)
         c_safeAboveHeadMessage);
 }
 
+BOOST_AUTO_TEST_CASE(op_finalized_above_head_validation_matches)
+{
+    OpServicePair pair;
+    bcos::engine::ForkchoiceState forkchoiceState{
+        bcos::h256("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
+        bcos::h256("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
+        bcos::h256("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")};
+    registerVerifiedBlock(
+        pair.legacyStorage, forkchoiceState.headBlockHash, c_headOrderingBlockNumber);
+    registerVerifiedBlock(
+        pair.legacyStorage, forkchoiceState.safeBlockHash, c_headOrderingBlockNumber);
+    registerVerifiedBlock(
+        pair.legacyStorage, forkchoiceState.finalizedBlockHash, c_safeOrderingBlockNumber);
+    registerVerifiedBlock(
+        pair.newStorage, forkchoiceState.headBlockHash, c_headOrderingBlockNumber);
+    registerVerifiedBlock(
+        pair.newStorage, forkchoiceState.safeBlockHash, c_headOrderingBlockNumber);
+    registerVerifiedBlock(
+        pair.newStorage, forkchoiceState.finalizedBlockHash, c_safeOrderingBlockNumber);
+    checkBothExceptionMessages<bcos::engine::InvalidForkchoiceState>(
+        [&] {
+            return bcos::task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, nullptr, 3));
+        },
+        [&] {
+            return bcos::task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, nullptr, 3));
+        },
+        c_finalizedAboveHeadMessage);
+}
+
+BOOST_AUTO_TEST_CASE(op_finalized_above_safe_validation_matches)
+{
+    OpServicePair pair;
+    bcos::engine::ForkchoiceState forkchoiceState{
+        bcos::h256("1212121212121212121212121212121212121212121212121212121212121212"),
+        bcos::h256("1313131313131313131313131313131313131313131313131313131313131313"),
+        bcos::h256("1414141414141414141414141414141414141414141414141414141414141414")};
+    registerVerifiedBlock(
+        pair.legacyStorage, forkchoiceState.headBlockHash, c_finalizedOrderingBlockNumber);
+    registerVerifiedBlock(
+        pair.legacyStorage, forkchoiceState.safeBlockHash, c_headOrderingBlockNumber);
+    registerVerifiedBlock(
+        pair.legacyStorage, forkchoiceState.finalizedBlockHash, c_safeOrderingBlockNumber);
+    registerVerifiedBlock(
+        pair.newStorage, forkchoiceState.headBlockHash, c_finalizedOrderingBlockNumber);
+    registerVerifiedBlock(
+        pair.newStorage, forkchoiceState.safeBlockHash, c_headOrderingBlockNumber);
+    registerVerifiedBlock(
+        pair.newStorage, forkchoiceState.finalizedBlockHash, c_safeOrderingBlockNumber);
+    checkBothExceptionMessages<bcos::engine::InvalidForkchoiceState>(
+        [&] {
+            return bcos::task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, nullptr, 3));
+        },
+        [&] {
+            return bcos::task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, nullptr, 3));
+        },
+        c_finalizedAboveSafeMessage);
+}
+
 BOOST_AUTO_TEST_CASE(op_invalid_state_root_parity)
 {
     runInvalidFieldParity("jovian_deposit_only", "stateRoot");
@@ -670,6 +733,7 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
     {
         std::mutex mutex;
         bcos::h256 hash;
+        bcos::protocol::BlockNumber number{-1};
     } published;
 
     std::atomic<bool> stop{false};
@@ -684,17 +748,14 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
                 "0x" + bcos::toHex(blockHash.asBytes()).substr(0, 16);
             auto entry = std::make_shared<bcos::engine::CommonPayloadEntry>();
             entry->executionPayload.blockHash = blockHash;
-            (void)guard.putPayload(payloadId, blockHash, entry);
             auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
             header->setNumber(static_cast<int64_t>(stamp));
-            artifacts[payloadId] = bcos::engine::OpPayloadArtifacts{.canonicalHeader = header};
-            if (artifacts.size() > 64)
-            {
-                artifacts.erase(artifacts.begin());
-            }
+            (void)bcos::engine::op_detail::publishBuiltPayload(guard, artifacts, payloadId,
+                blockHash, entry, bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
             {
                 std::lock_guard lock(published.mutex);
                 published.hash = blockHash;
+                published.number = static_cast<bcos::protocol::BlockNumber>(stamp);
             }
         }
     });
@@ -702,22 +763,18 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
         while (!stop.load(std::memory_order_relaxed))
         {
             bcos::h256 hash;
+            bcos::protocol::BlockNumber expectedNumber{-1};
             {
                 std::lock_guard lock(published.mutex);
                 hash = published.hash;
+                expectedNumber = published.number;
             }
             bcos::protocol::BlockHeader::Ptr builtHeader;
             {
                 auto shared = tracker.lockShared();
-                if (auto payloadId = shared.payloadIdForHash(hash))
-                {
-                    if (auto artifactIt = artifacts.find(*payloadId); artifactIt != artifacts.end())
-                    {
-                        builtHeader = artifactIt->second.canonicalHeader;
-                    }
-                }
+                builtHeader = bcos::engine::op_detail::findBuiltHeader(shared, artifacts, hash);
             }
-            if (builtHeader)
+            if (builtHeader && builtHeader->number() == expectedNumber)
             {
                 readerSuccesses.fetch_add(1, std::memory_order_relaxed);
             }

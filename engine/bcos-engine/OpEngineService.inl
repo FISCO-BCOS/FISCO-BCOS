@@ -495,14 +495,7 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, E
         bcos::protocol::BlockHeader::Ptr builtHeader;
         {
             auto shared = m_tracker.lockShared();
-            if (auto payloadId = shared.payloadIdForHash(payload.blockHash))
-            {
-                if (auto artifactIt = m_artifacts.find(*payloadId);
-                    artifactIt != m_artifacts.end())
-                {
-                    builtHeader = artifactIt->second.canonicalHeader;
-                }
-            }
+            builtHeader = op_detail::findBuiltHeader(shared, m_artifacts, payload.blockHash);
         }
         if (builtHeader)
         {
