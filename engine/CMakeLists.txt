@@ -11,6 +11,8 @@ add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-engine>)
+# Web3Transaction / EthBlockHeader live in rlp-protocol; do not link rpc.
+# PRIVATE: dependents that include EngineServiceImpl.h already link rlp-protocol.
 target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger PRIVATE rlp-protocol)
 set_target_properties(engine PROPERTIES UNITY_BUILD "ON")
 

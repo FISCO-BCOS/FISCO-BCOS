@@ -27,6 +27,7 @@
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "libinitializer/MultiVersionScheduler.h"
+#include <bcos-framework/engine/DACaps.h>
 #ifdef TOOLS
 #include "tools/archive-tool/ArchiveService.h"
 #endif
@@ -181,6 +182,8 @@ private:
 #endif
     std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
     std::shared_ptr<EngineServiceInitializer> m_engineServiceInitializer;
+
+    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> m_singleNodeConsensus;
     std::shared_ptr<executor_v1::PrecompiledManager> m_precompiledManager;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
@@ -198,8 +201,14 @@ private:
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_ethereumSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setEthereumSchedulerBlockNumberNotifier;
+    /// OP scheduler (executor_version>=3), MultiVersionScheduler slot 3.
+    std::shared_ptr<scheduler::SchedulerInterface> m_opScheduler;
+    /// Installs the RPC block-number callback on the concrete OpScheduler. OP mode only.
+    std::function<void(std::function<void(protocol::BlockNumber)>)>
+        m_setOpSchedulerBlockNumberNotifier;
     /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,
-    /// 2 = EthereumExecutor). Cached during initNode so initSysContract can decide whether the
+    /// 2 = EthereumExecutor, >= 3 = OpScheduler/OP mode — setVersion saturates onto the
+    /// newest assembled slot). Cached during initNode so initSysContract can decide whether the
     /// FISCO system-contract deployment block applies (it does not for the ethereum executor).
     int m_executorVersion = 0;
 

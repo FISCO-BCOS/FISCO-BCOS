@@ -914,14 +914,9 @@ public:
             }
             catch (const OpTxValidationFailed& e)
             {
-                // The offending tx's hash rides in a structured member (bcos::Error carries a
-                // string only across the delegate boundary): the engine's OP build loop reads
-                // e.txHash to evict the culprit from the pool instead of failing every
-                // subsequent build — never parse the message text.
-                bcos::evm::OpConsensusError err(
-                    std::string("OpScheduler: normal tx validation failed: ") + e.what());
-                err.txHash = transaction.hash();
-                throw err;
+                throw bcos::evm::OpConsensusError(
+                    std::string("OpScheduler: normal tx validation failed: ") + e.what(),
+                    transaction.hash());
             }
             // Only after a successful prepare: a rejected normal tx must not flip the
             // deposit-after-non-deposit warn path for a later deposit in the same block.
@@ -1124,13 +1119,9 @@ public:
         }
         catch (const OpTxValidationFailed& e)
         {
-            // Mirror the ExecuteContext::prepare catch: the offending tx's hash rides in a
-            // structured member so the engine's OP build loop can evict the culprit by hash —
-            // never parse the message text.
-            bcos::evm::OpConsensusError err(
-                std::string("OpScheduler: normal tx validation failed: ") + e.what());
-            err.txHash = transaction.hash();
-            throw err;
+            throw bcos::evm::OpConsensusError(
+                std::string("OpScheduler: normal tx validation failed: ") + e.what(),
+                transaction.hash());
         }
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(stateView, blockHeader, transaction, ledgerConfig, props,

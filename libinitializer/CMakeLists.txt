@@ -43,6 +43,8 @@ target_link_libraries(init PUBLIC
     engine
     ledger
     transaction-scheduler transaction-executor
+    bcosevm::opstack
+    opstack-executor
     ethereum-executor
     scheduler storage executor rpc
     bcos-boostssl
@@ -60,3 +62,8 @@ if(WITH_TIKV)
 endif()
 set_target_properties(init PROPERTIES UNITY_BUILD "ON")
 add_dependencies(init BuildInfo.h)
+
+if(TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

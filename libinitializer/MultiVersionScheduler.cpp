@@ -8,7 +8,7 @@ bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::
 }
 
 bcos::scheduler_v1::MultiVersionScheduler::MultiVersionScheduler(
-    std::array<scheduler::SchedulerInterface::Ptr, 3> schedulers)
+    std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> schedulers)
   : m_schedulers(std::move(schedulers)), m_currentIndex(0)
 {}
 
@@ -36,6 +36,13 @@ void bcos::scheduler_v1::MultiVersionScheduler::call(protocol::Transaction::Ptr 
 {
     auto& scheduler = getScheduler();
     scheduler.call(std::move(transaction), std::move(callback));
+}
+void bcos::scheduler_v1::MultiVersionScheduler::callAtBlock(protocol::Transaction::Ptr transaction,
+    protocol::BlockNumber blockNumber,
+    std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
+{
+    auto& scheduler = getScheduler();
+    scheduler.callAtBlock(std::move(transaction), blockNumber, std::move(callback));
 }
 void bcos::scheduler_v1::MultiVersionScheduler::reset(
     [[maybe_unused]] std::function<void(Error::Ptr)> callback)
@@ -87,12 +94,12 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
                                                  "(must be >= 0)"));
     }
     // Saturate the upper bound: any version >= the last scheduler index selects the
-    // newest executor (the v2 EthereumExecutor). This keeps the version space
-    // open-ended above 2 so a future executor version needs no array/schema change.
-    // The saturation itself is silent by design, but an unknown version above today's
-    // set deserves a log line: on a binary that has no such version, "see an unknown
-    // version, run the newest" means executing blocks under rules the chain did not
-    // explicitly ask for — make the guess visible instead of quiet.
+    // newest executor (the v3 OP scheduler in OP mode, else the refusing stub that answers
+    // UnknownError). This keeps the version space open-ended above the top slot so a future
+    // executor version needs no array/schema change. The saturation itself is silent by design, but
+    // an unknown version above today's set deserves a log line: on a binary that has no such
+    // version, "see an unknown version, run the newest" means executing blocks under rules the
+    // chain did not explicitly ask for — make the guess visible instead of quiet.
     if (static_cast<size_t>(version) >= m_schedulers.size())
     {
         INITIALIZER_LOG(WARNING) << LOG_DESC(

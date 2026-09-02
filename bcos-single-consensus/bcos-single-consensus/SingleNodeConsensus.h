@@ -17,6 +17,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -52,7 +53,9 @@ public:
         bool _produceEmptyBlocks = true,
         bcos::crypto::HashType _prevRandao = bcos::crypto::HashType{},
         std::string _feeRecipient = "0x0000000000000000000000000000000000000000",
-        std::uint64_t _fixedTimestamp = 0);
+        std::uint64_t _fixedTimestamp = 0, std::optional<std::uint64_t> _gasLimit = std::nullopt,
+        std::optional<bcos::bytes> _eip1559Params = std::nullopt,
+        std::optional<std::uint64_t> _minBaseFee = std::nullopt);
 
     ~SingleNodeConsensus();
 
@@ -63,6 +66,22 @@ public:
     void stop();
     bool running() const noexcept { return m_running.load(); }
 
+    /// Next block timestamp (ms) under the driver's two modes. Pure and testable: the wall-clock
+    /// arm floors @p nowMs to a whole second and advances by whole-second steps from
+    /// @p lastTimestamp (EIP-2 strict monotonicity + EthBlockHeader whole-second requirement);
+    /// the fixed-timestamp (EEST) arm derives from @p fixedTimestamp + @p headNumber.
+    static std::uint64_t nextBlockTimestamp(std::uint64_t fixedTimestamp, std::uint64_t headNumber,
+        std::uint64_t lastTimestamp, std::uint64_t nowMs);
+
+    /// Pace one produce-loop tick (ms). Pure and testable: the wall-clock arm waits until the
+    /// clock reaches @p lastTimestamp + 1000 (the whole-second EIP-2 floor bounds a fast drain
+    /// at one block per second); a tick that sealed no tx block additionally honours
+    /// @p blockIntervalMs — idle ticks pace at the configured [consensus] block_interval, and
+    /// a tick that threw before a timestamp was stamped (lastTimestamp still at its startup
+    /// value) backs off by the interval instead of spinning hot.
+    static std::uint64_t nextTickWaitMs(std::uint64_t fixedTimestamp, std::uint64_t lastTimestamp,
+        std::uint64_t blockIntervalMs, std::uint64_t nowMs, bool sealedTxBlock);
+
 private:
     void loop();
     /// Produce one block through the EngineService. Returns true if a block carrying at least
@@ -70,6 +89,7 @@ private:
     /// otherwise (empty block or skipped — the caller sleeps @p m_blockIntervalMs before the
     /// next tick).
     bool produceBlock();
+
     /// Resolve the current committed head (number + hash) from the ledger once at startup.
     void resolveInitialHead();
 
@@ -83,6 +103,14 @@ private:
     /// at startup instead of failing on the first block tick).
     bcos::Address m_feeRecipient;
     std::uint64_t m_fixedTimestamp;
+    /// OP-mode (FCU V3+) attributes: gasLimit and Holocene eip1559Params are mandatory on the
+    /// OP path but rejected pre-V3, so they stay nullopt for the generic V1 driver and are
+    /// populated by the OP-mode constructor call (Initializer). minBaseFee is mandatory only
+    /// after the Jovian fork, so the OP arm supplies it (0 = no floor) exactly when
+    /// feature_op_jovian is active — without it every FCU attributes would be rejected.
+    std::optional<std::uint64_t> m_gasLimit;
+    std::optional<bcos::bytes> m_eip1559Params;
+    std::optional<std::uint64_t> m_minBaseFee;
 
     /// CL-side head tracking. newPayload() persists the ledger block tables — including
     /// SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER — via ledger::prewriteBlockToBuffer
