@@ -21,7 +21,6 @@
 
 #include <atomic>
 #include <functional>
-#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -191,12 +190,12 @@ CommonPayloadEntryPtr makeEntry(PayloadID const& id)
     return entry;
 }
 
-struct GateRelease
+struct CommitCleanup
 {
     std::vector<std::jthread*> threads;
     std::vector<std::shared_ptr<std::atomic<bool>>> gates;
 
-    ~GateRelease()
+    ~CommitCleanup()
     {
         for (auto const& gate : gates)
         {
@@ -215,10 +214,51 @@ struct GateRelease
     }
 };
 
+bool waitUntil(std::chrono::steady_clock::duration timeout, auto&& predicate)
+{
+    auto const deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        if (predicate())
+        {
+            return true;
+        }
+        std::this_thread::yield();
+    }
+    return predicate();
+}
+
 class GatedFakeLedger : public bcos::test::FakeLedger
 {
 public:
     using FakeLedger::FakeLedger;
+
+    std::atomic<bool> prewriteStarted{false};
+    std::shared_ptr<std::atomic<bool>> prewriteGate = std::make_shared<std::atomic<bool>>(false);
+
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+        bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block,
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+    {
+        (void)storage;
+        (void)blockTxs;
+        (void)block;
+        (void)writeTxsAndReceipts;
+        (void)features;
+        (void)blockHashOverride;
+        (void)writeNonces;
+        prewriteStarted.store(true, std::memory_order_release);
+        // prewriteBlockToBuffer suspends until this callback runs; keep it on the
+        // commit thread (spin/yield) so task::syncWait can resume without a
+        // cross-thread handle.resume() deadlock.
+        while (!prewriteGate->load(std::memory_order_acquire))
+        {
+            std::this_thread::yield();
+        }
+        callback("", nullptr);
+    }
 };
 
 template <class ViewType>
@@ -501,67 +541,82 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_merge)
     newRequest.executionPayload = newPayload->executionPayload;
     newRequest.parentBeaconBlockRoot = attrs.parentBeaconBlockRoot;
 
-    std::atomic<bool> legacyProbeDone{false};
-    std::atomic<bool> newProbeDone{false};
+    legacyStorage.mergeGate->store(false, std::memory_order_release);
+    newStorage.mergeGate->store(false, std::memory_order_release);
+
+    std::atomic<bool> legacyProbeStarted{false};
+    std::atomic<bool> newProbeStarted{false};
+    std::atomic<bool> legacyProbeFinished{false};
+    std::atomic<bool> newProbeFinished{false};
     bool mergeStarted = false;
     bool probeBlockedDuringMerge = false;
+
+    std::jthread legacyThread([&](std::stop_token) {
+        try
+        {
+            task::syncWait(legacy.newPayload(legacyRequest, 3));
+        }
+        catch (...)
+        {}
+    });
+    std::jthread newThread([&](std::stop_token) {
+        try
+        {
+            task::syncWait(fresh.newPayload(newRequest, 3));
+        }
+        catch (...)
+        {}
+    });
+
+    mergeStarted = waitUntil(std::chrono::seconds(3), [&] {
+        return legacyStorage.mergeStarted->load(std::memory_order_acquire) &&
+               newStorage.mergeStarted->load(std::memory_order_acquire);
+    });
+
+    std::jthread legacyProbe;
+    std::jthread newProbe;
+    if (mergeStarted)
     {
-        std::jthread legacyThread([&](std::stop_token) {
-            try
-            {
-                task::syncWait(legacy.newPayload(legacyRequest, 3));
-            }
-            catch (...)
-            {}
-        });
-        std::jthread newThread([&](std::stop_token) {
-            try
-            {
-                task::syncWait(fresh.newPayload(newRequest, 3));
-            }
-            catch (...)
-            {}
-        });
-        std::jthread legacyProbe([&](std::stop_token) {
+        legacyProbe = std::jthread([&](std::stop_token) {
+            legacyProbeStarted.store(true, std::memory_order_release);
             task::syncWait(legacy.getPayload(*legacyBuild.payloadId, 3));
-            legacyProbeDone.store(true, std::memory_order_release);
+            legacyProbeFinished.store(true, std::memory_order_release);
         });
-        std::jthread newProbe([&](std::stop_token) {
+        newProbe = std::jthread([&](std::stop_token) {
+            newProbeStarted.store(true, std::memory_order_release);
             task::syncWait(fresh.getPayload(*newBuild.payloadId, 3));
-            newProbeDone.store(true, std::memory_order_release);
+            newProbeFinished.store(true, std::memory_order_release);
         });
-        GateRelease cleanup{
+
+        CommitCleanup cleanup{
             .threads = {&legacyThread, &newThread, &legacyProbe, &newProbe},
             .gates = {legacyStorage.mergeGate, newStorage.mergeGate},
         };
 
-        auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
-        while (std::chrono::steady_clock::now() < deadline)
+        if (waitUntil(std::chrono::seconds(3), [&] {
+                return legacyProbeStarted.load(std::memory_order_acquire) &&
+                       newProbeStarted.load(std::memory_order_acquire);
+            }))
         {
-            if (legacyStorage.mergeStarted->load(std::memory_order_acquire) &&
-                newStorage.mergeStarted->load(std::memory_order_acquire))
-            {
-                mergeStarted = true;
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            probeBlockedDuringMerge = !legacyProbeFinished.load(std::memory_order_acquire) &&
+                                      !newProbeFinished.load(std::memory_order_acquire);
         }
-
-        if (mergeStarted)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            probeBlockedDuringMerge = !legacyProbeDone.load(std::memory_order_acquire) &&
-                                      !newProbeDone.load(std::memory_order_acquire);
-        }
+    }
+    else
+    {
+        CommitCleanup cleanup{
+            .threads = {&legacyThread, &newThread},
+            .gates = {legacyStorage.mergeGate, newStorage.mergeGate},
+        };
     }
 
     BOOST_CHECK(mergeStarted);
     BOOST_CHECK(probeBlockedDuringMerge);
-    BOOST_CHECK(legacyProbeDone.load(std::memory_order_acquire));
-    BOOST_CHECK(newProbeDone.load(std::memory_order_acquire));
+    BOOST_CHECK(legacyProbeFinished.load(std::memory_order_acquire));
+    BOOST_CHECK(newProbeFinished.load(std::memory_order_acquire));
 }
 
-BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_prewrite_path)
+BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_prewrite)
 {
     GateMergeStorage storage;
     MemPoolImpl memPool;
@@ -586,49 +641,56 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_prewrite_path)
     request.executionPayload = payload->executionPayload;
     request.parentBeaconBlockRoot = attrs.parentBeaconBlockRoot;
 
-    std::atomic<bool> probeDone{false};
-    bool pushViewStarted = false;
-    bool probeBlockedDuringCommit = false;
-    storage.pushViewGate->store(false, std::memory_order_release);
+    storage.mergeGate->store(false, std::memory_order_release);
+
+    std::atomic<bool> probeStarted{false};
+    std::atomic<bool> probeFinished{false};
+    bool prewriteStarted = false;
+    bool probeBlockedDuringPrewrite = false;
+
+    std::jthread commitThread([&](std::stop_token) {
+        try
+        {
+            task::syncWait(service.newPayload(request, 3));
+        }
+        catch (...)
+        {}
+    });
+
+    prewriteStarted = waitUntil(std::chrono::seconds(3),
+        [&] { return ledger->prewriteStarted.load(std::memory_order_acquire); });
+
+    std::jthread probeThread;
+    if (prewriteStarted)
     {
-        std::jthread commitThread([&](std::stop_token) {
-            try
-            {
-                task::syncWait(service.newPayload(request, 3));
-            }
-            catch (...)
-            {}
-        });
-        std::jthread probeThread([&](std::stop_token) {
+        probeThread = std::jthread([&](std::stop_token) {
+            probeStarted.store(true, std::memory_order_release);
             task::syncWait(service.getPayload(*build.payloadId, 3));
-            probeDone.store(true, std::memory_order_release);
+            probeFinished.store(true, std::memory_order_release);
         });
-        GateRelease cleanup{
+
+        CommitCleanup cleanup{
             .threads = {&commitThread, &probeThread},
-            .gates = {storage.pushViewGate, storage.mergeGate},
+            .gates = {ledger->prewriteGate, storage.mergeGate},
         };
 
-        auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
-        while (std::chrono::steady_clock::now() < deadline)
+        if (waitUntil(std::chrono::seconds(3),
+                [&] { return probeStarted.load(std::memory_order_acquire); }))
         {
-            if (storage.pushViewStarted->load(std::memory_order_acquire))
-            {
-                pushViewStarted = true;
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-
-        if (pushViewStarted)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            probeBlockedDuringCommit = !probeDone.load(std::memory_order_acquire);
+            probeBlockedDuringPrewrite = !probeFinished.load(std::memory_order_acquire);
         }
     }
+    else
+    {
+        CommitCleanup cleanup{
+            .threads = {&commitThread},
+            .gates = {ledger->prewriteGate, storage.mergeGate},
+        };
+    }
 
-    BOOST_CHECK(pushViewStarted);
-    BOOST_CHECK(probeBlockedDuringCommit);
-    BOOST_CHECK(probeDone.load(std::memory_order_acquire));
+    BOOST_CHECK(prewriteStarted);
+    BOOST_CHECK(probeBlockedDuringPrewrite);
+    BOOST_CHECK(probeFinished.load(std::memory_order_acquire));
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_bounded_put_fifo_evicts_oldest)
