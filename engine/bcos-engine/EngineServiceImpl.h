@@ -619,9 +619,10 @@ private:
     {
         // Ledger config / parent header are storage reads. They are performed BEFORE
         // x_opExecute is taken so the lock is held once and covers the whole
-        // reset -> execute -> commit sequence: releasing the lock across the co_awaits
-        // would let a concurrent buildOpPayload run its own probe+canonical passes and
-        // overwrite the shared delegate's pending block while this build is suspended.
+        // reset -> probe(execute) -> adopt sequence: releasing the lock across the co_awaits
+        // would let a concurrent buildOpPayload run its own probe+adopt passes (adopt stashes
+        // the delegate's m_pending) and overwrite the shared delegate's pending block while
+        // this build is suspended.
         ledger::LedgerConfig ledgerConfig;
         u256 baseFee;
         {
