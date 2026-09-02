@@ -145,8 +145,7 @@ void SingleNodeConsensus::loop()
         {
             SINGLE_CONSENSUS_LOG(ERROR)
                 << LOG_DESC("produceBlock iteration threw (unknown)")
-                << LOG_KV("diagnostic",
-                    boost::current_exception_diagnostic_information());
+                << LOG_KV("diagnostic", boost::current_exception_diagnostic_information());
         }
         // Pace the next tick on the composition of two bounds (nextTickWaitMs): the
         // whole-second wall-clock floor keeps a fast drain from outrunning the clock —
@@ -344,12 +343,8 @@ bool SingleNodeConsensus::produceBlock()
         return false;
     }
     auto& executionPayload = payload->executionPayload;
-    // OP buildOpPayload stores envelopes only in rawTransactions and leaves
-    // transactions[] empty; the generic path is the reverse. Count whichever
-    // carrier the payload actually filled.
-    auto const payloadTxCount = executionPayload.rawTransactions.has_value() ?
-                                    executionPayload.rawTransactions->size() :
-                                    executionPayload.transactions.size();
+    // Single carrier after #5537: OP and generic both store envelopes in transactions[].
+    auto const payloadTxCount = executionPayload.transactions.size();
     bool const sealedTxBlock = payloadTxCount > 0;
 
     // produceEmptyBlocks=false: only produce a block that carries at least one transaction
