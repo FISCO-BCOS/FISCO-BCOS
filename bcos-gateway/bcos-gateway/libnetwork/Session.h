@@ -156,8 +156,7 @@ public:
     // sent and a NetworkException surfaces so coroutine retry loops can stop. The handler receives
     // the actual wire length (payload views included) as _wireLength.
     void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
-            SessionFace&, const Message&, uint32_t _wireLength)>
-            handler) override;
+        SessionFace&, const Message&, uint32_t _wireLength)> handler) override;
 
     void setHostInfo(P2PInfo _hostInfo);
 
@@ -280,8 +279,8 @@ public:
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
-    std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)>
-        m_beforeMessageHandler;
+    std::function<std::optional<bcos::Error>(
+        SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
 
     // Seqs of with-response sends registered through this session. The callback manager above is
     // shared host-wide, so drop() uses this set to fail only THIS session's pending response

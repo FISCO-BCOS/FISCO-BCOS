@@ -258,9 +258,9 @@ void Session::write()
                 // the loop's own catches make this unreachable in practice; if the frame
                 // allocation itself threw, release the flag and settle the queue
                 self->m_writingInFlight.store(false);
-                SESSION_LOG(ERROR)
-                    << LOG_DESC("write loop launch failed")
-                    << LOG_KV("what", boost::current_exception_diagnostic_information());
+                SESSION_LOG(ERROR) << LOG_DESC("write loop launch failed")
+                                   << LOG_KV("what",
+                                          boost::current_exception_diagnostic_information());
                 self->drop(TCPError);
             }
         });

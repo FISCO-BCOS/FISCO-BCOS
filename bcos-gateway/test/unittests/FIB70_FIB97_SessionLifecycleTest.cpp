@@ -24,16 +24,16 @@
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <boost/test/unit_test.hpp>
-#include <atomic>
-#include <list>
-#include <optional>
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <queue>
 #include <thread>
+#include <atomic>
+#include <optional>
 #include <tuple>
+#include <list>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace gateway;
@@ -512,8 +512,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
         // async_write actually executes (and fails against the closed peer)
         std::thread ioThread([&]() { fakeSocket->ioService().run(); });
 
-        auto message =
-            std::static_pointer_cast<P2PMessage>(fakeHost->messageFactory()->buildMessage());
+        auto message = std::static_pointer_cast<P2PMessage>(fakeHost->messageFactory()->buildMessage());
         message->setPacketType(1);
         message->setSeq(seq);
         bcos::bytes payload = {'x'};
@@ -522,8 +521,8 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
                        std::atomic<int64_t>& _errorCode) -> task::Task<void> {
             try
             {
-                co_await _session->fastSendMessage(
-                    *_message, ::ranges::views::single(bcos::ref(_payload)), Options{2000, true});
+                co_await _session->fastSendMessage(*_message,
+                    ::ranges::views::single(bcos::ref(_payload)), Options{2000, true});
                 ++_completions;
             }
             catch (NetworkException const& e)

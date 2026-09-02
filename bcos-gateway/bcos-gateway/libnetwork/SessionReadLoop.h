@@ -73,8 +73,9 @@ task::Task<void> Session::readLoop()
             std::size_t readSize =
                 (writeBuffer.size() > m_maxReadDataSize ? m_maxReadDataSize : writeBuffer.size());
             auto [ec, bytesTransferred] =
-                co_await m_server.get().asioInterface()->template awaitableReadSome<ReadPolicy>(
-                    m_socket, boost::asio::buffer((void*)writeBuffer.data(), readSize));
+                co_await m_server.get().asioInterface()
+                    ->template awaitableReadSome<ReadPolicy>(
+                        m_socket, boost::asio::buffer((void*)writeBuffer.data(), readSize));
 
             if (ec)
             {

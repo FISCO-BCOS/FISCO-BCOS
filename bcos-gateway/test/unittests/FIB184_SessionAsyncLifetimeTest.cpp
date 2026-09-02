@@ -82,7 +82,10 @@ public:
 
     // Read-policy target (see FakeASIO_Lifetime::ReadPolicy): park the read's completion in a
     // manually-fired slot so a test can hold a read "in flight" and complete it deterministically.
-    void parkRead(ReadCompletion completion) { m_readHandler.emplace(std::move(completion)); }
+    void parkRead(ReadCompletion completion)
+    {
+        m_readHandler.emplace(std::move(completion));
+    }
 
     bool hasReadHandler() const { return m_readHandler.has_value(); }
 

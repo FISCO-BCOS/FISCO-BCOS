@@ -103,8 +103,8 @@ public:
                 // invoking it inline — this runs on the initiator's stack inside await_suspend,
                 // and an inline invocation would resume the coroutine from within its own
                 // await_suspend.
-                boost::asio::post(
-                    socket->ioService(), [completion = std::move(completion)]() mutable {
+                boost::asio::post(socket->ioService(),
+                    [completion = std::move(completion)]() mutable {
                         completion(boost::asio::error::operation_not_supported, std::size_t{0});
                     });
                 break;
@@ -117,15 +117,17 @@ public:
         const std::shared_ptr<SocketFace>& socket, boost::asio::mutable_buffer buffers)
     {
         return makeAsioAwaitable<boost::system::error_code, std::size_t>(
-            [this, socket, buffers](
-                auto handler) { ReadPolicy::invoke(this, socket, buffers, std::move(handler)); });
+            [this, socket, buffers](auto handler) {
+                ReadPolicy::invoke(this, socket, buffers, std::move(handler));
+            });
     }
 
     auto awaitableAccept(const std::shared_ptr<SocketFace>& socket)
     {
-        return makeAsioAwaitable<boost::system::error_code>([this, socket](auto handler) {
-            m_acceptor.async_accept(socket->ref(), std::move(handler));
-        });
+        return makeAsioAwaitable<boost::system::error_code>(
+            [this, socket](auto handler) {
+                m_acceptor.async_accept(socket->ref(), std::move(handler));
+            });
     }
 
     auto awaitableResolveConnect(const std::shared_ptr<SocketFace>& socket)
@@ -134,12 +136,13 @@ public:
             [this, socket](auto handler) { resolveConnect(socket, std::move(handler)); });
     }
 
-    static auto awaitableHandshake(
-        const std::shared_ptr<SocketFace>& socket, ba::ssl::stream_base::handshake_type type)
+    static auto awaitableHandshake(const std::shared_ptr<SocketFace>& socket,
+        ba::ssl::stream_base::handshake_type type)
     {
-        return makeAsioAwaitable<boost::system::error_code>([socket, type](auto handler) {
-            socket->sslref().async_handshake(type, std::move(handler));
-        });
+        return makeAsioAwaitable<boost::system::error_code>(
+            [socket, type](auto handler) {
+                socket->sslref().async_handshake(type, std::move(handler));
+            });
     }
 
     auto awaitableWrite(const std::shared_ptr<SocketFace>& socket, auto buffers)

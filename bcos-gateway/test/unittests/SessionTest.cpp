@@ -18,20 +18,20 @@
  * @author: octopus
  * @date 2023-02-23
  */
-#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -39,10 +39,10 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <list>
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <list>
 #include <range/v3/view/single.hpp>
 #include <thread>
 #include <tuple>
@@ -68,7 +68,7 @@ public:
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"))
     {}
-    virtual ~FakeASIO() noexcept override{};
+    virtual ~FakeASIO() noexcept override {};
 
     // Compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): the read loop
     // is launched with this policy (startWithPolicy<FakeASIO::ReadPolicy>) so every read parks
@@ -99,8 +99,8 @@ public:
 
     // Synchronous helper for fakeClassTest (no session involved).
     template <typename Handler>
-    void readSome(
-        std::shared_ptr<SocketFace> /*socket*/, ba::mutable_buffer buffers, Handler&& handler)
+    void readSome(std::shared_ptr<SocketFace> /*socket*/, ba::mutable_buffer buffers,
+        Handler&& handler)
     {
         handler(boost::system::error_code(), drainPackets(buffers));
     }
@@ -511,7 +511,8 @@ BOOST_AUTO_TEST_CASE(startUsesDefaultReadPolicy)
     auto fakeAsio = std::make_shared<FakeASIO>();
     fakeAsio->setType(2);
     {
-        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+        auto fakeHost =
+            std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
         session->setMessageFactory(fakeHost->messageFactory());
@@ -726,8 +727,8 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     // The wire frame must actually be compressed: parse the header
     // [length:4][version:2][packetType:2][seq:4][ext:2] (P2PMessage::MESSAGE_HEADER_LENGTH = 14).
     BOOST_REQUIRE(received.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
-    uint16_t frameExt =
-        (static_cast<uint16_t>(received[12]) << 8) | static_cast<uint16_t>(received[13]);
+    uint16_t frameExt = (static_cast<uint16_t>(received[12]) << 8) |
+                        static_cast<uint16_t>(received[13]);
     BOOST_CHECK(frameExt & bcos::protocol::MessageExtFieldFlag::COMPRESS);
 }
 
@@ -1152,11 +1153,12 @@ BOOST_AUTO_TEST_CASE(asioCompletionHandshakeSynchronousDrop)
     // await_suspend resumes inline with operation_aborted so the awaiting coroutine completes
     // with an error rather than suspending forever.
     auto task = []() -> task::Task<boost::system::error_code> {
-        auto [ec] = co_await makeAsioAwaitable<boost::system::error_code>([](auto handler) {
-            // destroy the armed completion without invoking it: the by-value parameter is
-            // destroyed at scope exit
-            (void)handler;
-        });
+        auto [ec] = co_await makeAsioAwaitable<boost::system::error_code>(
+            [](auto handler) {
+                // destroy the armed completion without invoking it: the by-value parameter is
+                // destroyed at scope exit
+                (void)handler;
+            });
         co_return ec;
     }();
     auto ec = task::syncWait(std::move(task));

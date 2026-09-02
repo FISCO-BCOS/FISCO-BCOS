@@ -34,9 +34,9 @@
 #include "bcos-utilities/IOServicePool.h"
 #include <openssl/evp.h>
 #include <openssl/x509.h>
-#include <boost/exception_ptr.hpp>
 #include <exception>
 #include <optional>
+#include <boost/exception_ptr.hpp>
 
 using namespace bcos::rpc;
 using namespace bcos;
@@ -884,36 +884,35 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         {
             auto gatewayRateLimiterWeakPtr =
                 std::weak_ptr<ratelimiter::GatewayRateLimiter>(gatewayRateLimiter);
-            service->setBeforeMessageHandler(
-                [gatewayRateLimiterWeakPtr](SessionFace& _session, const Message& _msg,
-                    uint32_t _wireLength) -> std::optional<bcos::Error> {
-                    auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
-                    if (!gatewayRateLimiter)
-                    {
-                        return std::nullopt;
-                    }
+            service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](SessionFace& _session,
+                                                 const Message& _msg,
+                                                 uint32_t _wireLength) -> std::optional<bcos::Error> {
+                auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
+                if (!gatewayRateLimiter)
+                {
+                    return std::nullopt;
+                }
 
-                    if (const auto* msgExtAttributes =
-                            std::any_cast<const GatewayMessageExtAttributes*>(_msg.extAttributes()))
-                    {
-                        std::string groupID =
-                            msgExtAttributes ? msgExtAttributes->groupID() : std::string();
-                        uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
-                        std::string endpoint = _session.nodeIPEndpoint().address();
-                        // charge the actual wire bytes (payload views included): a zero-copy
-                        // message does not carry its payload, so message.length() alone would
-                        // under-count
-                        int64_t msgLength = _wireLength;
-                        auto pkgType = _msg.packetType();
+                if (const auto* msgExtAttributes =
+                        std::any_cast<const GatewayMessageExtAttributes*>(_msg.extAttributes()))
+                {
+                    std::string groupID =
+                        msgExtAttributes ? msgExtAttributes->groupID() : std::string();
+                    uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
+                    std::string endpoint = _session.nodeIPEndpoint().address();
+                    // charge the actual wire bytes (payload views included): a zero-copy message
+                    // does not carry its payload, so message.length() alone would under-count
+                    int64_t msgLength = _wireLength;
+                    auto pkgType = _msg.packetType();
 
-                        auto result = gatewayRateLimiter->checkOutGoing(
-                            endpoint, pkgType, groupID, moduleID, msgLength);
-                        return result ? std::make_optional(bcos::Error::buildError(
-                                            "", OutBWOverflow, result.value())) :
-                                        std::nullopt;
-                    }
-                    return {};
-                });
+                    auto result = gatewayRateLimiter->checkOutGoing(
+                        endpoint, pkgType, groupID, moduleID, msgLength);
+                    return result ? std::make_optional(bcos::Error::buildError(
+                                        "", OutBWOverflow, result.value())) :
+                                    std::nullopt;
+                }
+                return {};
+            });
 
             service->setOnMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
                                              Message::Ptr _message) -> std::optional<bcos::Error> {

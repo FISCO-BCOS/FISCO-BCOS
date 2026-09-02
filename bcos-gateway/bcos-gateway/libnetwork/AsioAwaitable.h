@@ -117,9 +117,7 @@ public:
       : m_result(result), m_handle(handle), m_state(state)
     {}
     AsioCompletion(AsioCompletion&& other) noexcept
-      : m_result(other.m_result),
-        m_handle(other.m_handle),
-        m_state(other.m_state),
+      : m_result(other.m_result), m_handle(other.m_handle), m_state(other.m_state),
         m_armed(other.m_armed)
     {
         // the moved-from instance no longer owns the completion duty
