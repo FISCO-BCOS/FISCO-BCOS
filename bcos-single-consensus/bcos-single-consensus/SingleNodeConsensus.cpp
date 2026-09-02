@@ -139,7 +139,10 @@ void SingleNodeConsensus::loop()
         }
         catch (...)
         {
-            SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("produceBlock iteration threw (unknown)");
+            SINGLE_CONSENSUS_LOG(ERROR)
+                << LOG_DESC("produceBlock iteration threw (unknown)")
+                << LOG_KV("diagnostic",
+                    boost::current_exception_diagnostic_information());
         }
         // Drain the mempool as fast as possible when transactions are available (a tx is
         // sealed immediately after submission instead of waiting for the next interval
@@ -173,10 +176,32 @@ void SingleNodeConsensus::resolveInitialHead()
     }
     m_headNumber = headNumber;
     m_headHash = task::syncWait(ledger::getBlockHash(*m_ledger, headNumber));
+
+    // Seed m_lastTimestamp from the head header's timestamp (whole-second milliseconds)
+    // so a restart in the same wall-clock second as the parent cannot reseal
+    // parent.timestamp: EIP-2 requires strictly increasing block timestamps, and
+    // produceBlock only steps +1000ms from m_lastTimestamp. Without the seed, a restart
+    // within the parent block's second makes the first produced block share the parent's
+    // timestamp. A legacy genesis without [eth_genesis_header] has timestamp 0, which
+    // seeds to the same default and changes nothing.
+    auto headerPromise =
+        std::make_shared<CallbackPromise<std::tuple<Error::Ptr, protocol::Block::Ptr>>>();
+    m_ledger->asyncGetBlockDataByNumber(headNumber, ledger::HEADER,
+        [headerPromise](Error::Ptr _error, protocol::Block::Ptr _block) {
+            headerPromise->setValue(std::make_tuple(std::move(_error), std::move(_block)));
+        });
+    auto [headHeaderError, headBlock] = headerPromise->wait(m_running);
+    if (!headHeaderError && headBlock && headBlock->blockHeader())
+    {
+        m_lastTimestamp =
+            static_cast<std::uint64_t>(headBlock->blockHeader()->timestamp());
+    }
+
     m_headInitialized = true;
     SINGLE_CONSENSUS_LOG(INFO) << LOG_DESC("Resolved initial head")
                                << LOG_KV("number", m_headNumber)
-                               << LOG_KV("hash", m_headHash.hexPrefixed());
+                               << LOG_KV("hash", m_headHash.hexPrefixed())
+                               << LOG_KV("lastTimestampMs", m_lastTimestamp);
 }
 
 bool SingleNodeConsensus::produceBlock()
@@ -191,18 +216,26 @@ bool SingleNodeConsensus::produceBlock()
     // seconds, matching EEST's currentTimestamp unit). fixed_timestamp (seconds) is pinned by
     // the harness so the produced block's timestamp matches the fixture; 0 = wall clock.
     //
-    // EIP-2 requires strictly increasing block timestamps, so both modes enforce
-    // monotonicity: a fixed timestamp is bumped by the block number (consecutive blocks,
-    // including empty ones, must never share the same value), and wall-clock mode never goes
-    // backwards relative to the last produced block. utcTime() already returns milliseconds
-    // (bcos-utilities/Common.cpp, despite the header comment saying "seconds") — do NOT
-    // multiply by 1000, which would make the block timestamp ~1.786e15 -> year 58577 in the
-    // EVM (block.timestamp / base fee schedules etc).
+    // Ethereum block timestamps are second-granular: BlockHeader stores milliseconds, so the
+    // value must be a whole-second multiple — the Eth RLP bridge (EthBlockHeader ctor) rejects
+    // sub-second ms, and the produced header is hashed as an Eth header. EIP-2 requires
+    // strictly increasing block timestamps, so both modes round down to a whole second and
+    // then enforce monotonicity in whole-second steps (a fixed timestamp is used verbatim for
+    // the first block so EEST's expected block.timestamp == currentTimestamp holds; later
+    // blocks step +1s).
+    //
+    // utcTime() already returns milliseconds (bcos-utilities/Common.cpp, despite the header
+    // comment saying "seconds") — do NOT multiply by 1000, which would make the block
+    // timestamp ~1.786e15 -> year 58577 in the EVM (block.timestamp / base fee schedules etc).
     auto const nowMs = static_cast<std::uint64_t>(utcTime());
-    std::uint64_t const timestamp =
-        m_fixedTimestamp > 0 ?
-            m_fixedTimestamp * 1000 + static_cast<std::uint64_t>(m_headNumber + 1) :
-            std::max(nowMs, m_lastTimestamp + 1);
+    auto const wholeSecondMs = [&]() -> std::uint64_t {
+        if (m_fixedTimestamp > 0)
+        {
+            return m_fixedTimestamp * 1000;
+        }
+        return nowMs / 1000 * 1000;
+    }();
+    std::uint64_t const timestamp = std::max(wholeSecondMs, m_lastTimestamp + 1000);
     m_lastTimestamp = timestamp;
     bcos::engine::PayloadAttributes payloadAttributes;
     payloadAttributes.prevRandao = m_prevRandao;

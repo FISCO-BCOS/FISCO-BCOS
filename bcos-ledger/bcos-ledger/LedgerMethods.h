@@ -409,10 +409,12 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     // (executor_version=2); v0/v1 schedulers never read evmcRevision()/evmcRevisionForBlock(),
     // so a non-v2 chain is left untouched (no implicit default injection, which would be an
     // unnoticed behavior change if a future v0/v1 path started reading it). For v2, an
-    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock);
-    // the fallback here covers a v2 genesis without one (defensive — NodeConfig::loadExecutorConfig
-    // requires an explicit revision for executor_version=2, so this default only fires on
-    // corrupt/legacy state).
+    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock).
+    // A v2 chain WITHOUT one stays UNCONFIGURED here (no binary-side default injected): the
+    // consumers fail closed — EthereumExecutor throws EvmcRevisionNotConfigured and
+    // EngineService buildPayload throws UnsupportedFork — rather than hash state or block
+    // headers under a fork the chain never configured. The initializer already refuses to
+    // boot such a chain, so this branch only fires on corrupt/legacy state.
     //
     // No per-call logging here: getLedgerConfig sits on the per-block / per-RPC hot path.
     // The effective revision is parsed and logged once at startup (Initializer), which the
@@ -424,10 +426,6 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
             // A corrupt persisted value halts loudly (InvalidEVMCRevisionConfig) instead of
             // silently running a compile-time default that could differ between binaries.
             ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
-        }
-        else
-        {
-            ledgerConfig.setEVMCRevision(ledger::EVMC_REVISION_DEFAULT);
         }
     }
 }

@@ -51,6 +51,9 @@ using PayloadID = std::string;
 /// Engine API error conditions shared by the service implementation and the RPC
 /// endpoint layer, which maps them to Engine API error codes: UnknownPayload ->
 /// -38001, the two version mismatches -> -38005 Unsupported fork.
+/// UnsupportedFork lives in Errors.h (same namespace); a request whose attribute
+/// shape cannot express the chain fork is thrown by EngineService buildPayload and
+/// mapped to -38005 by the endpoint.
 DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
 DERIVE_BCOS_EXCEPTION(UnknownPayload);
 DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
