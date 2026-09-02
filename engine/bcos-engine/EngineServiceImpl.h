@@ -51,6 +51,7 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/exception/get_error_info.hpp>
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
@@ -1256,11 +1257,13 @@ private:
         }
         catch (...)
         {
-            // Unclassified failure: -32603, not INVALID.
+            // Unclassified failure: -32603, not INVALID. Keep the original diagnostic —
+            // it is the only visibility an operator has into what op-node will retry.
+            auto const diagnostic = boost::current_exception_diagnostic_information();
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
                     "OP newPayload threw an unclassified exception outside block execution "
-                    "(validation, comparison or registration phase)"});
+                    "(validation, comparison or registration phase): " + diagnostic});
         }
     }
 
