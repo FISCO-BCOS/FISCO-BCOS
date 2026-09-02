@@ -160,8 +160,7 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
     // TODO: engineService->updateForkchoice() MUST throw JsonRpcException in these cases:
     //   -38002 InvalidForkchoiceState: headBlockHash is VALID but finalizedBlockHash/safeBlockHash
     //   not in chain -38003 InvalidPayloadAttributes: payloadAttributes.timestamp <=
-    //   headBlockHash.timestamp -38005 UnsupportedFork: timestamp out of fork window (V2/V3
-    //   specific) -38006 TooDeepReorg: reorg depth exceeds limitation
+    //   headBlockHash.timestamp -38006 TooDeepReorg: reorg depth exceeds limitation
     engine::ForkchoiceUpdatedResult engineResult;
     try
     {
@@ -179,6 +178,7 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
         // message would wrongly point at the CL.
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
             std::string("Unsupported fork: ") + e.what()));
+
     }
     auto jsonResult = combineForkchoiceUpdatedResult(engineResult, version);
     buildJsonContent(jsonResult, response);
@@ -313,9 +313,19 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     auto newPayloadReq = parseNewPayloadRequest(request, version);
     // TODO: engineService->newPayload() MUST throw JsonRpcException in these cases:
     //   -32602 InvalidParams: wrong version of ExecutionPayload structure (V2)
-    //   -38005 UnsupportedFork: timestamp out of fork window (V2/V3)
-    auto engineResult =
-        co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
+    engine::PayloadStatus engineResult;
+    try
+    {
+        engineResult =
+            co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
+    }
+    // Isthmus+ requires newPayloadV4: the version gate throws UnsupportedFork (-38005) before
+    // the try in the service, and op-node treats -38005 as permanent, not retryable.
+    catch (engine::UnsupportedFork const&)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
+            "Unsupported fork: Isthmus+ payloads require engine_newPayloadV4"));
+    }
     auto result = serializePayloadStatus(engineResult, version);
     buildJsonContent(result, response);
 }

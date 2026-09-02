@@ -584,8 +584,11 @@ private:
                                               std::string("calcOpBaseFee failed: ") + e.what()});
                 }
                 // op-geth rejects attrs.timestamp <= parent at build time (-38003,
-                // checkOptimismPayloadAttributes); without this gate we would build a payload
-                // whose read-back is rejected at newPayload — a one-block stall (R54/R72).
+                // checkOptimismPayloadAttributes); this gate throws OpExecutionInternalError,
+                // which op-node reads as a generic retryable -32603 — the typed
+                // InvalidPayloadAttributes (-38003) mapping lands with #5521. Without this gate
+                // we would build a payload whose read-back is rejected at newPayload — a
+                // one-block stall (R54/R72).
                 if (payloadAttributes.timestamp <=
                     static_cast<std::uint64_t>(parentHeader->timestamp()))
                 {

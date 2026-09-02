@@ -98,6 +98,10 @@ public:
     {
         m_state->capturedNewPayloadRequest = request;
         m_state->capturedNewPayloadVersion = version;
+        if (m_state->throwUnsupportedFork)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
+        }
         co_return m_state->forkchoiceUpdatedResult.payloadStatus;
     }
 
@@ -188,6 +192,29 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV2)
 
     BOOST_REQUIRE(mockService.m_state->capturedForkchoiceVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 2);
+}
+
+// UnsupportedFork from the FCU/newPayload version gates maps to -38005 — the permanent
+// wrong-version signal op-node does not retry — not the retryable generic -32603.
+BOOST_AUTO_TEST_CASE(forkchoiceUpdatedWithAttrsUnsupportedForkMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedFork = true;
+
+    Json::Value params(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    params.append(fc);
+    Json::Value attrs;
+    attrs["timestamp"] = "0x1";
+    attrs["prevRandao"] = "0x4444444444444444444444444444444444444444444444444444444444444444";
+    attrs["suggestedFeeRecipient"] = "0x5555555555555555555555555555555555555555";
+    params.append(attrs);
+
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV2, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
 }
 
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
@@ -432,6 +459,18 @@ Json::Value makeV1ExecutionPayloadJson()
     return ep;
 }
 }  // namespace
+
+BOOST_AUTO_TEST_CASE(newPayloadUnsupportedForkMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedFork = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append(makeV1ExecutionPayloadJson());
+
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV1, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
 
 BOOST_AUTO_TEST_CASE(newPayloadV1)
 {
