@@ -4,7 +4,6 @@
 
 // OP block types and header conversions. Commitment comparison lives in OpCommitments.h.
 
-#include <bcos-framework/engine/OpCulpritTx.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
@@ -36,11 +35,10 @@ struct OpConsensusError : std::runtime_error
 
     explicit OpConsensusError(std::string const& what_arg) : std::runtime_error(what_arg) {}
 
-    /// Per-tx reject. Embeds `[tx=0x<64 hex>]` in `what()` so the hash survives the
-    /// `bcos::Error` delegate boundary that `buildOpPayload` parses.
+    /// Per-tx reject. The hash is a structured member; OpScheduler attaches it to the
+    /// boundary `bcos::Error` as `OpCulpritTxHash`. Never encode it into `what()`.
     OpConsensusError(std::string what_arg, bcos::h256 hash)
-      : std::runtime_error(bcos::engine::appendOpCulpritTag(std::move(what_arg), hash)),
-        txHash(hash)
+      : std::runtime_error(std::move(what_arg)), txHash(hash)
     {}
 };
 }  // namespace bcos::evm

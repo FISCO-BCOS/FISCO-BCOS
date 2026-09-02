@@ -381,7 +381,7 @@ BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_requires_gas_and_params)
     attrs.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
 }
 
-BOOST_AUTO_TEST_CASE(validate_op_new_payload_requires_raw_transactions)
+BOOST_AUTO_TEST_CASE(validate_op_new_payload_accepts_empty_transactions)
 {
     NewPayloadRequest request;
     request.executionPayload = makeExecutionPayloadV3(fromHexWithPrefix("0x00000000fa00000006"));
@@ -391,9 +391,9 @@ BOOST_AUTO_TEST_CASE(validate_op_new_payload_requires_raw_transactions)
         h256("3333333333333333333333333333333333333333333333333333333333333333");
     request.executionPayload.excessBlobGas = 0;
     request.executionPayload.blobGasUsed = 0;
+    // Carrier is transactions[].raw; an empty list is not a missing-field error.
     auto error = engine::detail::validateOpNewPayloadRequest(request, false);
-    BOOST_REQUIRE(error.has_value());
-    BOOST_CHECK_NE(error->find("rawTransactions"), std::string::npos);
+    BOOST_CHECK(!error.has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

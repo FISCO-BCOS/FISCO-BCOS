@@ -26,7 +26,6 @@
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/engine/EngineService.h"
 #include "bcos-framework/engine/Errors.h"
-#include "bcos-framework/engine/OpCulpritTx.h"
 #include "bcos-framework/engine/Types.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -53,6 +52,7 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
+#include <boost/exception/get_error_info.hpp>
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
 #include <array>
@@ -146,6 +146,38 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
 /// Decode an OP envelope to a tars Transaction. Returns nullopt on failure (does not throw).
 std::optional<bcostars::Transaction> opEnvelopeToTars(
     bcos::bytes const& env, bcos::crypto::HashType const& txHash);
+
+/// Single carrier after #5537: OP envelopes live in `transactions[i].raw`.
+inline std::vector<bytes> rawEnvelopesOf(ExecutionPayload const& payload)
+{
+    std::vector<bytes> out;
+    out.reserve(payload.transactions.size());
+    for (auto const& tx : payload.transactions)
+    {
+        out.push_back(tx.raw);
+    }
+    return out;
+}
+
+inline std::vector<EngineTransaction> transactionsFromEnvelopes(std::vector<bytes> envelopes)
+{
+    std::vector<EngineTransaction> out;
+    out.reserve(envelopes.size());
+    for (auto& raw : envelopes)
+    {
+        out.push_back(EngineTransaction{.raw = std::move(raw), .decoded = {}});
+    }
+    return out;
+}
+
+inline std::optional<h256> culpritHashOf(bcos::Error const& error)
+{
+    if (auto const* hash = boost::get_error_info<OpCulpritTxHash>(error))
+    {
+        return *hash;
+    }
+    return std::nullopt;
+}
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -746,7 +778,7 @@ private:
                 .gasUsed = 0,
                 .baseFeePerGas = baseFee,
                 .blockHash = h256{},
-                .transactions = {},
+                .transactions = detail::transactionsFromEnvelopes(std::move(candidateEnvelopes)),
                 // Holocene extraData: version || denom || elasticity; Jovian appends minBaseFee.
                 .extraData = detail::encodeOptimismExtraData(payloadAttributes),
                 .feeRecipient = payloadAttributes.suggestedFeeRecipient,
@@ -757,7 +789,6 @@ private:
                 .excessBlobGas = u256(0),
                 .blockAccessList = std::nullopt,
                 .slotNumber = std::nullopt,
-                .rawTransactions = std::move(candidateEnvelopes),
                 .withdrawalsRoot = h256{},  // filled from the executed header below
             };
             return candidate;
@@ -798,7 +829,8 @@ private:
             payload = assemblePayload(std::move(candidateEnvelopes));
 
             // Provisional header (placeholder commitments) -> block -> delegate pre-execution.
-            const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
+            const auto transactionsRoot =
+                SchedulerType::computeTxRoot(detail::rawEnvelopesOf(payload));
             auto provisionalHeader =
                 detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(), payload,
                     transactionsRoot, parentBeaconBlockRoot);
@@ -819,7 +851,7 @@ private:
             }
             auto const message =
                 executeError ? executeError->errorMessage() : std::string("no executed header");
-            auto culprit = parseOpCulpritHash(message);
+            auto culprit = executeError ? detail::culpritHashOf(*executeError) : std::nullopt;
             if (culprit.has_value() && evicted.count(*culprit) == 0 &&
                 std::any_of(sealedEnvelopes.begin(), sealedEnvelopes.end(),
                     [&culprit](auto const& entry) { return entry.first == *culprit; }))
@@ -833,12 +865,12 @@ private:
                     *payloadAttributes.gasLimit != std::get<0>(ledgerConfig.gasLimit()))
                 {
                     // candidateEnvelopes was moved into assemblePayload above; the envelope
-                    // set survives in payload.rawTransactions, so re-probe from there.
-                    auto ledgerGasPayload = assemblePayload(*payload.rawTransactions);
+                    // set survives in payload.transactions[].raw, so re-probe from there.
+                    auto ledgerGasPayload = assemblePayload(detail::rawEnvelopesOf(payload));
                     ledgerGasPayload.gasLimit = u256(std::get<0>(ledgerConfig.gasLimit()));
                     auto ledgerGasHeader = detail::rebuildOpEthHeader(
                         m_blockFactory->blockHeaderFactory(), ledgerGasPayload,
-                        SchedulerType::computeTxRoot(*ledgerGasPayload.rawTransactions),
+                        SchedulerType::computeTxRoot(detail::rawEnvelopesOf(ledgerGasPayload)),
                         parentBeaconBlockRoot);
                     auto ledgerGasBlock = buildOpBlock(ledgerGasPayload, ledgerGasHeader);
                     m_delegate->reset([](bcos::Error::Ptr) {});
@@ -893,7 +925,7 @@ private:
             payload.blobGasUsed = *executedBlobGas;
         }
         auto finalHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(), payload,
-            SchedulerType::computeTxRoot(*payload.rawTransactions), parentBeaconBlockRoot);
+            SchedulerType::computeTxRoot(detail::rawEnvelopesOf(payload)), parentBeaconBlockRoot);
         payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
 
         // Canonical pass with the final commitments (verify=true). A probe does not
@@ -1232,7 +1264,7 @@ private:
             co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError);
         }
         // transactionsRoot is not in the payload; derive it from the raw envelopes.
-        const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
+        const auto transactionsRoot = SchedulerType::computeTxRoot(detail::rawEnvelopesOf(payload));
         const auto ethHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
             payload, transactionsRoot, *request.parentBeaconBlockRoot);
         // Compare against keccak(RLP(header)), not BlockHeader::hash() (tars hasher).
@@ -1482,10 +1514,10 @@ private:
     {
         auto block = m_blockFactory->createBlock();
         block->setBlockHeader(std::move(header));
-        auto const& rawTransactions = *payload.rawTransactions;
         auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-        for (auto const& env : rawTransactions)
+        for (auto const& engineTx : payload.transactions)
         {
+            auto const& env = engineTx.raw;
             const auto txHash = hashImpl.hash(env);
             auto tarsTx = detail::opEnvelopeToTars(env, txHash);
             if (!tarsTx)
@@ -1632,7 +1664,6 @@ private:
             .excessBlobGas = std::nullopt,
             .blockAccessList = std::nullopt,
             .slotNumber = std::nullopt,
-            .rawTransactions = std::nullopt,
             .withdrawalsRoot = std::nullopt,
         };
 

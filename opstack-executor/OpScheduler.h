@@ -23,7 +23,6 @@
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/engine/Errors.h>
-#include <bcos-framework/engine/OpCulpritTx.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/Features.h>
@@ -606,14 +605,14 @@ private:
         {
             auto message =
                 fmt::format("Execute block failed! {}", boost::diagnostic_information(e));
-            if (auto const* opErr = dynamic_cast<bcos::evm::OpConsensusError const*>(&e);
-                opErr && opErr->txHash.has_value() && !bcos::engine::parseOpCulpritHash(message))
-            {
-                message = bcos::engine::appendOpCulpritTag(std::move(message), *opErr->txHash);
-            }
             OP_SCHEDULER_LOG(ERROR) << message;
-            co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
-                nullptr, false};
+            auto error = BCOS_ERROR_PTR(classifyException(std::current_exception()), message);
+            if (auto const* opErr = dynamic_cast<bcos::evm::OpConsensusError const*>(&e);
+                opErr && opErr->txHash.has_value())
+            {
+                *error << bcos::engine::OpCulpritTxHash(*opErr->txHash);
+            }
+            co_return {std::move(error), nullptr, false};
         }
         catch (...)
         {

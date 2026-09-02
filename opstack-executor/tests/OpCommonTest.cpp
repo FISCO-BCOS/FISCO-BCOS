@@ -127,9 +127,7 @@ BOOST_AUTO_TEST_CASE(PerTxCtorEmbedsCulpritTag)
     OpConsensusError const err("OpScheduler: normal tx validation failed: nonce too low", hash);
     BOOST_REQUIRE(err.txHash.has_value());
     BOOST_CHECK_EQUAL(err.txHash->hex(), hash.hex());
-    auto parsed = bcos::engine::parseOpCulpritHash(err.what());
-    BOOST_REQUIRE(parsed.has_value());
-    BOOST_CHECK_EQUAL(parsed->hex(), hash.hex());
+    BOOST_CHECK_EQUAL(std::string_view(err.what()).find("[tx="), std::string_view::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

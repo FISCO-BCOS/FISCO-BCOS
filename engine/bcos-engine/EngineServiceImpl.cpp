@@ -595,13 +595,8 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     // Static checks before parentKnown. Failures are INVALID with latestValidHash = null.
     const auto& payload = request.executionPayload;
 
-    if (!payload.rawTransactions.has_value())
-    {
-        // The OP path's only transaction carrier (Types.h). Its absence is not a semantic
-        // rejection of a block but a malformed request; with no RPC layer to raise -32602 this
-        // cycle, INVALID with a field-naming validationError is the honest local answer.
-        return std::string("executionPayload.rawTransactions is required on the OP path");
-    }
+    // Transaction carrier is `transactions[i].raw` (#5537 dropped the rawTransactions
+    // mirror). An empty list is a later execution reject, not a missing-field parse error.
     // The ETH header stores timestamp as int64 (ms); reject overflow fail-closed instead of
     // wrapping at rebuildOpEthHeader's cast.
     if (payload.timestamp > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
