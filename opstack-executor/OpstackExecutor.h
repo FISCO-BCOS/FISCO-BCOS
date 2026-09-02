@@ -1387,7 +1387,14 @@ private:
                                     blockGasLeft);
         if (auto const* err = std::get_if<std::error_code>(&validated))
         {
-            if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED))
+            // Block path only: a tx that does not fit the block gas pool is a capacity
+            // fault (F2 skip-not-evict). eth_call/estimateGas (call=true) simulate against
+            // their own throwaway pool — there the pool is a per-call bound, not a block
+            // property, so GAS_LIMIT_REACHED stays an ordinary validation failure
+            // (OpTxValidationFailed, which the call wrapper classifies) and must not
+            // escape as OpBlockGasPoolFull.
+            if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED) &&
+                !call)
             {
                 // Block gas pool full: the tx does not fit this block — a capacity fault,
                 // not a poisoned transaction. The engine's gas-aware prefix assembly keeps
