@@ -91,13 +91,13 @@ struct Payload
 class Session : public SessionFace, public std::enable_shared_from_this<Session>
 {
 public:
-    // Grow ceiling: the recv buffer never grows beyond this (see Session::doRead grow path).
+    // Grow ceiling: the recv buffer never grows beyond this (see the read-loop grow path).
     constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE = 512 * 1024UL;
     // FIB-184: initial recv-buffer size for a freshly created session. Previously every
     // session unconditionally allocated MIN_SESSION_RECV_BUFFER_SIZE (512KB) up front, so a
     // flood of unauthenticated/short-lived sessions caused heap exhaustion. Start small and
-    // rely on the existing grow path (doRead grows up to m_maxRecvBufferSize) to expand only
-    // for sessions that actually carry large messages. Must stay well above the message
+    // rely on the existing grow path (the read loop grows up to m_maxRecvBufferSize) to expand
+    // only for sessions that actually carry large messages. Must stay well above the message
     // header length so the first read can always make forward progress.
     constexpr static const std::size_t INITIAL_SESSION_RECV_BUFFER_SIZE = 16 * 1024UL;
 
@@ -113,6 +113,14 @@ public:
     using Ptr = std::shared_ptr<Session>;
 
     void start() override;
+
+    // Read-policy seam (compile-time): identical lifecycle to start(), but the read loop is
+    // compiled against an explicit ReadPolicy so read-loop test fakes can inject a policy that
+    // parks / controls read completions (see ASIOInterface::awaitableReadSome). Production call
+    // sites use the virtual start() (the default policy) — this template costs nothing there.
+    // Definition lives in SessionReadLoop.h.
+    template <typename ReadPolicy>
+    void startWithPolicy();
     void disconnect(DisconnectReason _reason) override;
 
     task::Task<Message::Ptr> fastSendMessage(const Message& message,
@@ -167,9 +175,6 @@ public:
     uint32_t maxSendDataSize() const;
     void setMaxSendDataSize(uint32_t _maxSendDataSize);
 
-    uint32_t maxSendMsgCountS() const;
-    void setMaxSendMsgCountS(uint32_t _maxSendMsgCountS);
-
     uint32_t allowMaxMsgSize() const;
     void setAllowMaxMsgSize(uint32_t _allowMaxMsgSize);
 
@@ -188,15 +193,11 @@ public:
      *
      * @param encodedMsgs
      * @param _maxSendDataSize
-     * @param _maxSendMsgCount
      * @return bool
      */
-    bool tryPopSomeEncodedMsgs(
-        std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount);
+    bool tryPopSomeEncodedMsgs(std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize);
 
     virtual void checkNetworkStatus();
-
-    void doRead();
 
     // FIB-184 (review): keep the grow ceiling private so it can only be read via
     // maxRecvBufferSize() and never widened from outside. Declared before m_recvBuffer to preserve
@@ -212,8 +213,6 @@ public:
     uint32_t m_maxReadDataSize = 40 * 1024;
     // Maximum amount of data to be sent one time, default: 1M
     uint32_t m_maxSendDataSize = 1024 * 1024;
-    // Maximum number of packets to be sent one time, default: 10
-    uint32_t m_maxSendMsgCount = 10;
     //  Maximum size of message that is allowed to send or receive, default: 32M
     uint32_t m_allowMaxMsgSize = 32 * 1024 * 1024;
     //
@@ -224,6 +223,21 @@ public:
     void drop(DisconnectReason _reason);
 
 private:
+    // Read-loop coroutine, launched fire-and-forget via task::wait from startWithPolicy. Each
+    // frame holds a strong reference to the session for the whole loop, so an in-flight read keeps
+    // the session, its recv buffer and its socket alive — the FIB-184 lifetime invariant, made
+    // structural instead of relying on completion-handler captures. ReadPolicy is the
+    // compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): production
+    // instantiates ASIOInterface::DefaultReadPolicy, test fakes their own. Definition in
+    // SessionReadLoop.h.
+    template <typename ReadPolicy>
+    task::Task<void> readLoop();
+    // Single-writer write loop (see write()): drains m_writeQueue in batches and serializes every
+    // async_write through the single in-flight loop. The frame holds a strong reference to the
+    // session for the whole loop (see the body), keeping the socket and the batch buffers alive
+    // across each co_await.
+    task::Task<void> writeLoop();
+
     // FIB-184: perform the actual SSL/socket teardown (close + graceful async_shutdown). It has a
     // strict threading contract — it must run on the socket's io_context (or, on the shutdown path,
     // with the io_context threads already joined) so it never touches the ssl::stream concurrently
@@ -238,12 +252,13 @@ public:
 
     void onTimeout(const boost::system::error_code& error, uint32_t seq);
 
-    /// Perform a single round of the write operation. This could end up calling
-    /// itself asynchronously.
-    void onWrite(boost::system::error_code ec, std::size_t length);
+    /// Launch the write loop (writeLoop) if no write is currently in flight. Safe to call from
+    /// any thread: the first caller wins the m_writingInFlight CAS and becomes the single writer;
+    /// concurrent callers return immediately and rely on the in-flight writer (or writeLoop's
+    /// single exit) to drain the queue.
     void write();
 
-    /// call by doRead() to deal with message
+    /// called by the read loop to deal with a decoded message
     void onMessage(NetworkException const& e, Message::Ptr message);
 
     std::reference_wrapper<Host> m_server;  ///< The host that owns us. Never null.
@@ -251,11 +266,15 @@ public:
 
     MessageFactory::Ptr m_messageFactory;
     tbb::concurrent_queue<Payload> m_writeQueue;
-    std::mutex m_writingQueueMutex;
+    // Single-flight flag guarding the write path: write() CASes it to true to claim the writer
+    // role (exactly one writeLoop runs at a time); writeLoop's exit guard clears it and re-arms
+    // write() when the queue is non-empty at exit. Replaces the old try_lock-as-flag std::mutex —
+    // it never blocks, so no lock is ever held across a co_await.
+    std::atomic<bool> m_writingInFlight{false};
     // FIB-184 (review): atomic so the active flag is read/written without a data race between the
-    // network worker (set/clear in start/drop) and readers in active()/doRead(). Note active() is
-    // still a composite read (also m_socket / haveNetwork()), so this narrows but does not by
-    // itself make the whole liveness check atomic.
+    // network worker (set/clear in start/drop) and readers in active(). Note active() is still a
+    // composite read (also m_socket / haveNetwork()), so this narrows but does not by itself make
+    // the whole liveness check atomic.
     std::atomic<bool> m_active{false};
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
@@ -297,13 +316,6 @@ public:
     // the session, so the slot is freed exactly once on session teardown.
     std::shared_ptr<void> m_lifetimeGuard;
 
-    struct Writings
-    {
-        std::vector<Payload> payloads;
-        std::vector<boost::asio::const_buffer> buffers;
-    };
-    std::shared_ptr<Writings> m_writings;
-
     std::mutex x_pendingResponseSeqs;
     std::unordered_set<uint32_t> m_pendingResponseSeqs;
 };
@@ -313,13 +325,12 @@ class SessionFactory
 public:
     SessionFactory(P2PInfo _hostInfo, uint32_t _sessionRecvBufferSize,  // NOLINT
         uint32_t _allowMaxMsgSize, uint32_t _maxReadDataSize, uint32_t _maxSendDataSize,
-        uint32_t _maxSendMsgCountS, bool _enableCompress)
+        bool _enableCompress)
       : m_hostInfo(std::move(_hostInfo)),
         m_sessionRecvBufferSize(_sessionRecvBufferSize),
         m_allowMaxMsgSize(_allowMaxMsgSize),
         m_maxReadDataSize(_maxReadDataSize),
         m_maxSendDataSize(_maxSendDataSize),
-        m_maxSendMsgCountS(_maxSendMsgCountS),
         m_enableCompress(_enableCompress)
     {}
     SessionFactory(const SessionFactory&) = delete;
@@ -338,7 +349,6 @@ private:
     uint32_t m_allowMaxMsgSize{0};
     uint32_t m_maxReadDataSize{0};
     uint32_t m_maxSendDataSize{0};
-    uint32_t m_maxSendMsgCountS{0};
     bool m_enableCompress = true;
 };
 

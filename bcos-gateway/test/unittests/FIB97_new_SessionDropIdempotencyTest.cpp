@@ -49,14 +49,6 @@ public:
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB97new"), "0.0.0.0", 0)
     {}
     ~FakeASIO_FIB97new() noexcept override = default;
-
-    // Never issues actual async reads — tests that call drop() don't need reads.
-    void asyncReadSome(const std::shared_ptr<SocketFace>& /*socket*/,
-        boost::asio::mutable_buffer /*buffers*/, ReadWriteHandler /*handler*/) override
-    {}
-
-    void strandPost(Base_Handler /*handler*/) {}
-    void stop() {}
 };
 
 class FakeSocket_FIB97new : public SocketFace
