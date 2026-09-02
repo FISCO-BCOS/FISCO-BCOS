@@ -507,6 +507,8 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     evmone::state::State state{view};
     auto& fromAcc = state.get_or_insert(dep.from);
     const uint64_t preNonce = fromAcc.nonce;
+    // op-geth AddBalance uses holiman/uint256 Add (state_object.go), which wraps
+    // mod 2^256. Rejecting mint overflow here would diverge from that EL.
     if (dep.mint.has_value())
         fromAcc.balance += *dep.mint;
 

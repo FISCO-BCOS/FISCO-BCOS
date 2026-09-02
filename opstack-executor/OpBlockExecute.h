@@ -138,8 +138,9 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
 // ---- shared per-receipt helpers (one implementation shared with the per-tx loop) ----
 
 
-/// Stricter-than-spec content check for the L1 attributes deposit (to==OP_L1_BLOCK &&
-/// from==OP_DEPOSITOR); rejects hand-crafted payloads.
+/// Content check for the L1-attributes deposit (to==OP_L1_BLOCK && from==OP_DEPOSITOR).
+/// op-geth's EL does not reject a leading deposit that fails this check — derivation
+/// enforces it on the CL. Callers must warn, not throw, to stay aligned.
 [[nodiscard]] inline bool isL1AttributesTx(const DepositTx& dep) noexcept
 {
     return dep.to.has_value() && *dep.to == OP_L1_BLOCK && dep.from == OP_DEPOSITOR;
@@ -318,7 +319,9 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     // L1-attributes deposit seeds the block's fee/DA context and deposits[0] is read below.
     if (rawTxBytes[0].empty() || rawTxBytes[0][0] != kDepositTypeByte || deposits.empty())
         throw OpConsensusError("op block: no deposit transaction to seed the block");
-    // First deposit is not L1 attributes: warn only. op-geth/op-reth accept this at validation.
+    // First deposit is not L1 attributes: warn only. op-geth EL has no depositor
+    // gate (CalcDAFootprint only requires txs[0].IsDepositTx); op-node derivation
+    // is the authority. Rejecting here would diverge.
     if (!op::isL1AttributesTx(deposits[0]))
         BCOS_LOG(WARNING) << LOG_BADGE("OP_BLOCK_EXEC")
                           << "op block: first tx is a deposit but not the L1 attributes tx — "
