@@ -1212,6 +1212,32 @@ BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
     BOOST_REQUIRE(called);
 }
 
+// F10 pin: eth_call with a declared gas above the call context's block gas pool must
+// classify as a consensus rejection (base behaviour, "consensus rejection" wire reason) —
+// the F2 capacity type (OpBlockGasPoolFull) must not escape the public call path as an
+// UnknownError.
+BOOST_AUTO_TEST_CASE(CallGasAboveBlockPoolClassifiesAsConsensusRejected)
+{
+    Fixture f;
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
+    auto tx = buildWeb3Tx(/*maxFeePerGas=*/2'000'000'000, /*maxPriorityFeePerGas=*/0);
+    auto* fakeTx = dynamic_cast<FakeCallTx*>(tx.get());
+    BOOST_REQUIRE(fakeTx != nullptr);
+    fakeTx->m_gasLimit = 30'000'001;  // above the call context's 30M block gas pool
+    bool called = false;
+    f.scheduler->call(
+        std::move(tx), [&](bcos::Error::Ptr err, bcos::protocol::TransactionReceipt::Ptr) {
+            called = true;
+            BOOST_REQUIRE(err != nullptr);
+            BOOST_CHECK_EQUAL(
+                err->errorCode(), (int)bcos::scheduler::SchedulerError::OpConsensusRejected);
+            const auto msg = err->errorMessage();
+            BOOST_CHECK_MESSAGE(msg.find("consensus rejection") != std::string::npos,
+                "over-gas call must classify as a consensus rejection, got: " << msg);
+        });
+    BOOST_REQUIRE(called);
+}
+
 /// Scheduler-level call-chain (OpScheduler::call → coCallLatest → buildOpBlockInfo) baseFee
 /// injection cross-check: maxPriorityFeePerGas=0 (EIP-1559, BCOS2Evmone access_list override not
 /// triggered) → effectiveGasPrice == base_fee + min(0, maxFee-base_fee) == base_fee exactly.
