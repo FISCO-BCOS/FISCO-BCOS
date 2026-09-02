@@ -5,7 +5,7 @@
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 #include "engine/bcos-engine/EngineTracker.h"
-#include "engine/bcos-engine/GenericEngineService.h"
+#include "engine/bcos-engine/EthEngineService.h"
 #include "engine/bcos-engine/PayloadCache.h"
 
 #include <bcos-concepts/ByteBuffer.h>
@@ -32,7 +32,7 @@ using namespace bcos;
 using namespace bcos::engine;
 using namespace bcos::txpool;
 
-namespace generic_tx_test
+namespace eth_tx_test
 {
 
 using RealGlobalStateMutableStorage = bcos::storage2::memory_storage::MemoryStorage<
@@ -186,9 +186,9 @@ struct ThrowingArtifactsMap
     void erase(PayloadID const& id) { inner.erase(id); }
 };
 
-CommonPayloadEntryPtr makeEntry(PayloadID const& id)
+BuiltPayloadPtr makeEntry(PayloadID const& id)
 {
-    auto entry = std::make_shared<CommonPayloadEntry>();
+    auto entry = std::make_shared<BuiltPayload>();
     entry->version = 3;
     entry->executionPayload.blockNumber = static_cast<bcos::protocol::BlockNumber>(id.size());
     return entry;
@@ -268,15 +268,15 @@ public:
 template <class ViewType>
 struct ThrowingPayloadArtifactsMap
 {
-    std::unordered_map<PayloadID, GenericPayloadArtifacts<ViewType>> inner;
+    std::unordered_map<PayloadID, EthPayloadArtifacts<ViewType>> inner;
     bool throwOnAssign = false;
 
     struct AssignProxy
     {
-        GenericPayloadArtifacts<ViewType>& slot;
+        EthPayloadArtifacts<ViewType>& slot;
         bool& throwFlag;
-        AssignProxy(GenericPayloadArtifacts<ViewType>& s, bool& f) : slot(s), throwFlag(f) {}
-        AssignProxy& operator=(GenericPayloadArtifacts<ViewType>&& other)
+        AssignProxy(EthPayloadArtifacts<ViewType>& s, bool& f) : slot(s), throwFlag(f) {}
+        AssignProxy& operator=(EthPayloadArtifacts<ViewType>&& other)
         {
             if (throwFlag)
             {
@@ -297,7 +297,7 @@ struct ThrowingPayloadArtifactsMap
 template <class ViewType>
 struct ThrowingClearArtifactStore
 {
-    std::unordered_map<PayloadID, GenericPayloadArtifacts<ViewType>> inner;
+    std::unordered_map<PayloadID, EthPayloadArtifacts<ViewType>> inner;
     bool throwOnClear = false;
 
     void clear()
@@ -354,14 +354,14 @@ PayloadAttributes makeAttrs(std::uint64_t timestamp)
     return attrs;
 }
 
-}  // namespace generic_tx_test
+}  // namespace eth_tx_test
 
-namespace generic_tx_test
+namespace eth_tx_test
 {
 
-BOOST_AUTO_TEST_SUITE(GenericEngineServiceTransactionalTest)
+BOOST_AUTO_TEST_SUITE(EthEngineServiceTransactionalTest)
 
-using namespace generic_tx_test;
+using namespace eth_tx_test;
 
 BOOST_AUTO_TEST_CASE(payload_cache_put_and_retain_only_is_atomic)
 {
@@ -407,7 +407,7 @@ BOOST_AUTO_TEST_CASE(publish_built_payload_rolls_back_cache_and_artifacts_on_thr
     artifacts.throwOnAssign = true;
 
     PayloadID newId = "0xnew";
-    BOOST_CHECK_THROW(generic_detail::publishBuiltPayload(guard, artifacts, newId, h256(2),
+    BOOST_CHECK_THROW(eth_detail::publishBuiltPayload(guard, artifacts, newId, h256(2),
                           makeEntry(newId), ArtifactNode{.value = 7}),
         std::runtime_error);
 
@@ -428,19 +428,19 @@ BOOST_AUTO_TEST_CASE(publish_built_payload_preserves_prior_generic_artifact)
     PayloadID keepId = "0xkeep";
     auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
     header->setTimestamp(424242);
-    GenericPayloadArtifacts<RealGlobalStateStorage::ViewType> staged{
+    EthPayloadArtifacts<RealGlobalStateStorage::ViewType> staged{
         .view = std::make_shared<RealGlobalStateStorage::ViewType>(storage.fork()),
         .header = std::move(header),
         .receipts = {},
     };
-    generic_detail::publishBuiltPayload(
+    eth_detail::publishBuiltPayload(
         guard, artifacts, keepId, h256(1), makeEntry(keepId), std::move(staged));
 
     artifacts.throwOnAssign = true;
     PayloadID failingId = "0xfailing";
     BOOST_CHECK_THROW(
-        generic_detail::publishBuiltPayload(guard, artifacts, failingId, h256(99),
-            makeEntry(failingId), GenericPayloadArtifacts<RealGlobalStateStorage::ViewType>{}),
+        eth_detail::publishBuiltPayload(guard, artifacts, failingId, h256(99), makeEntry(failingId),
+            EthPayloadArtifacts<RealGlobalStateStorage::ViewType>{}),
         std::runtime_error);
 
     BOOST_REQUIRE(guard.findPayload(keepId));
@@ -461,14 +461,14 @@ BOOST_AUTO_TEST_CASE(commit_retained_payload_rolls_back_on_artifacts_clear_throw
                       ->createBlockHeader();
     header->setTimestamp(515151);
     artifacts.inner.emplace(
-        "0xkeep", GenericPayloadArtifacts<RealGlobalStateStorage::ViewType>{
+        "0xkeep", EthPayloadArtifacts<RealGlobalStateStorage::ViewType>{
                       .view = std::make_shared<RealGlobalStateStorage::ViewType>(storage.fork()),
                       .header = std::move(header),
                       .receipts = {},
                   });
 
     artifacts.throwOnClear = true;
-    BOOST_CHECK_THROW(generic_detail::commitRetainedPayload(
+    BOOST_CHECK_THROW(eth_detail::commitRetainedPayload(
                           guard, artifacts, "0xcommit", h256(2), makeEntry("0xcommit")),
         std::runtime_error);
 
@@ -487,8 +487,7 @@ BOOST_AUTO_TEST_CASE(commit_merge_failure_leaves_cache_and_artifacts)
     auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
     auto ledger = std::make_shared<bcos::test::FakeLedger>(blockFactory, 20, 10, 10);
 
-    using Service =
-        GenericEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
+    using Service = EthEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
     Service service(memPool, storage, executor, scheduler, blockFactory, ledger);
 
     auto forkchoice = makeForkchoiceState();
@@ -529,8 +528,7 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_merge)
 
     using LegacyService =
         EngineServiceImpl<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
-    using NewService =
-        GenericEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
+    using NewService = EthEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
 
     LegacyService legacy(
         legacyMemPool, legacyStorage, legacyExecutor, legacyScheduler, blockFactory);
@@ -613,9 +611,10 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_merge)
                        newProbeStarted.load(std::memory_order_acquire);
             }))
         {
-            // Generic must hold the exclusive tracker guard across gated merge so getPayload
-            // blocks. release EngineServiceImpl may finish getPayload while merge is gated
-            // (its mutex is not held across storage merge), so only require the Generic probe.
+            // EthEngineService must hold the exclusive tracker guard across gated merge so
+            // getPayload blocks. release EngineServiceImpl may finish getPayload while merge is
+            // gated (its mutex is not held across storage merge), so only require the
+            // EthEngineService probe.
             probeBlockedDuringMerge = !newProbeFinished.load(std::memory_order_acquire);
         }
     }
@@ -642,8 +641,7 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_prewrite)
     auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
     auto ledger = std::make_shared<GatedFakeLedger>(blockFactory, 20, 10, 10);
 
-    using Service =
-        GenericEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
+    using Service = EthEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
     Service service(memPool, storage, executor, scheduler, blockFactory, ledger);
 
     auto forkchoice = makeForkchoiceState();
@@ -728,4 +726,4 @@ BOOST_AUTO_TEST_CASE(engine_tracker_bounded_put_fifo_evicts_oldest)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-}  // namespace generic_tx_test
+}  // namespace eth_tx_test

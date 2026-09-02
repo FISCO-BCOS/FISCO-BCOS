@@ -5,8 +5,8 @@
 
 #pragma once
 
+#include "EngineServiceCommon.h"
 #include "PayloadCache.h"
-#include "SplitEngineCommon.h"
 
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/Types.h>
@@ -75,13 +75,13 @@ public:
     ExclusiveAccess(const ExclusiveAccess&) = delete;
     ExclusiveAccess& operator=(const ExclusiveAccess&) = delete;
 
-    CommonPayloadEntryPtr findPayload(const PayloadID& id) const;
+    BuiltPayloadPtr findPayload(const PayloadID& id) const;
     std::optional<PayloadID> payloadIdForHash(const h256& blockHash) const;
-    PayloadCache::PutResult putPayload(PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry);
+    PayloadCache::PutResult putPayload(PayloadID id, h256 blockHash, BuiltPayloadPtr entry);
     PayloadCache::PutResult putUnboundedPayload(
-        PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry);
+        PayloadID id, h256 blockHash, BuiltPayloadPtr entry);
     PayloadCache::PutResult putAndRetainPayload(
-        PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry);
+        PayloadID id, h256 blockHash, BuiltPayloadPtr entry);
     void retainOnly(const PayloadID& id, const h256& blockHash);
     PayloadCache snapshotPayloadCache() const;
     void restorePayloadCache(PayloadCache cache) noexcept;
@@ -103,7 +103,7 @@ public:
     SharedAccess(const SharedAccess&) = delete;
     SharedAccess& operator=(const SharedAccess&) = delete;
 
-    CommonPayloadEntryPtr findPayload(const PayloadID& id) const;
+    BuiltPayloadPtr findPayload(const PayloadID& id) const;
     std::optional<PayloadID> payloadIdForHash(const h256& blockHash) const;
     const ForkchoiceState& forkchoiceState() const;
 

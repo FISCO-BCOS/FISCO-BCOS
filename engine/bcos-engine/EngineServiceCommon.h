@@ -15,7 +15,7 @@
 namespace bcos::engine
 {
 
-struct CommonPayloadEntry
+struct BuiltPayload
 {
     std::uint32_t version = 0;
     ExecutionPayload executionPayload;
@@ -25,9 +25,9 @@ struct CommonPayloadEntry
     std::optional<h256> parentBeaconBlockRoot;
 };
 
-using CommonPayloadEntryPtr = std::shared_ptr<const CommonPayloadEntry>;
+using BuiltPayloadPtr = std::shared_ptr<const BuiltPayload>;
 
-namespace split_detail
+namespace engine_common
 {
 std::vector<std::string> supportedCapabilities();
 bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payloadVersion);
@@ -38,6 +38,6 @@ std::optional<PayloadID> derivePayloadId(
 PayloadStatus makeStatus(PayloadValidationStatus status,
     std::optional<h256> latestValidHash = std::nullopt,
     std::optional<std::string> validationError = std::nullopt);
-}  // namespace split_detail
+}  // namespace engine_common
 
 }  // namespace bcos::engine

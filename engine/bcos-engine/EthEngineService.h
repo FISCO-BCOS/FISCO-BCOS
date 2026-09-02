@@ -5,8 +5,8 @@
 
 #pragma once
 
+#include "EngineServiceCommon.h"
 #include "EngineTracker.h"
-#include "SplitEngineCommon.h"
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -43,7 +43,7 @@
 namespace bcos::engine
 {
 
-namespace generic_detail
+namespace eth_detail
 {
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
@@ -51,7 +51,7 @@ std::optional<std::string> validateExecutionPayload(
 template <class ArtifactsMap, class ArtifactNode>
 PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guard,
     ArtifactsMap& artifacts, PayloadID const& payloadId, h256 const& blockHash,
-    CommonPayloadEntryPtr entry, ArtifactNode&& artifactNode)
+    BuiltPayloadPtr entry, ArtifactNode&& artifactNode)
 {
     PayloadCache cacheRollback = guard.snapshotPayloadCache();
     ArtifactsMap artifactsRollback = artifacts;
@@ -78,7 +78,7 @@ PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guar
 
 template <class Guard, class ArtifactsMap>
 void commitRetainedPayload(Guard& guard, ArtifactsMap& artifacts, PayloadID const& payloadId,
-    h256 const& blockHash, CommonPayloadEntryPtr entry)
+    h256 const& blockHash, BuiltPayloadPtr entry)
 {
     PayloadCache cacheRollback = guard.snapshotPayloadCache();
     ArtifactsMap artifactsRollback = artifacts;
@@ -94,10 +94,10 @@ void commitRetainedPayload(Guard& guard, ArtifactsMap& artifacts, PayloadID cons
         throw;
     }
 }
-}  // namespace generic_detail
+}  // namespace eth_detail
 
 template <class ViewType>
-struct GenericPayloadArtifacts
+struct EthPayloadArtifacts
 {
     std::shared_ptr<ViewType> view;
     bcos::protocol::BlockHeader::Ptr header;
@@ -110,12 +110,12 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
              scheduler_v1::TransactionScheduler<SchedulerType,
                  typename GlobalStateStorageType::ViewType, ExecutorType,
                  std::vector<protocol::Transaction::Ptr>>
-class GenericEngineService
+class EthEngineService
 {
 public:
     using ViewType = typename GlobalStateStorageType::ViewType;
 
-    GenericEngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
+    EthEngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         ExecutorType& executor, SchedulerType& scheduler,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
@@ -140,7 +140,7 @@ public:
         std::vector<std::string> remoteCapabilities)
     {
         (void)remoteCapabilities;
-        co_return split_detail::supportedCapabilities();
+        co_return engine_common::supportedCapabilities();
     }
 
     task::Task<ForkchoiceUpdatedResult> updateForkchoice(const ForkchoiceState& forkchoiceState,
@@ -191,7 +191,7 @@ private:
     task::Task<h256> calculateStateRoot(ViewType& view, uint32_t blockVersion) const;
 
     EngineTracker m_tracker;
-    std::unordered_map<PayloadID, GenericPayloadArtifacts<ViewType>> m_artifacts;
+    std::unordered_map<PayloadID, EthPayloadArtifacts<ViewType>> m_artifacts;
     MemPoolType& m_memPool;
     GlobalStateStorageType& m_globalStateStorage;
     ExecutorType& m_executor;
@@ -204,4 +204,4 @@ private:
 
 }  // namespace bcos::engine
 
-#include "GenericEngineService.inl"
+#include "EthEngineService.inl"

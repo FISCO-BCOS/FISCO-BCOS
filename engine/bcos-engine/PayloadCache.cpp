@@ -11,7 +11,7 @@ namespace bcos::engine
 {
 
 PayloadCache::PutResult PayloadCache::putUnbounded(
-    PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry)
+    PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
 {
     auto entries = m_entries;
     auto hashToId = m_hashToId;
@@ -22,7 +22,7 @@ PayloadCache::PutResult PayloadCache::putUnbounded(
     return {};
 }
 
-PayloadCache::PutResult PayloadCache::put(PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry)
+PayloadCache::PutResult PayloadCache::put(PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
 {
     auto entries = m_entries;
     auto hashToId = m_hashToId;
@@ -51,7 +51,7 @@ PayloadCache::PutResult PayloadCache::put(PayloadID id, h256 blockHash, CommonPa
     return result;
 }
 
-CommonPayloadEntryPtr PayloadCache::find(const PayloadID& id) const
+BuiltPayloadPtr PayloadCache::find(const PayloadID& id) const
 {
     auto it = m_entries.find(id);
     if (it == m_entries.end())
@@ -88,7 +88,7 @@ std::optional<bcos::protocol::BlockNumber> PayloadCache::blockNumberForHash(
 }
 
 PayloadCache::PutResult PayloadCache::putAndRetainOnly(
-    PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry)
+    PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
 {
     auto entries = m_entries;
     auto hashToId = m_hashToId;

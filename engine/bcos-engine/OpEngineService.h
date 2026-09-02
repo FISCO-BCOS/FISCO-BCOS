@@ -5,8 +5,8 @@
 
 #pragma once
 
+#include "EngineServiceCommon.h"
 #include "EngineTracker.h"
-#include "SplitEngineCommon.h"
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
@@ -51,7 +51,7 @@ struct OpPayloadArtifacts
     bcos::protocol::BlockHeader::Ptr canonicalHeader;
 };
 
-namespace split_detail::op
+namespace engine_common::op
 {
 std::vector<std::string> supportedOpCapabilities();
 std::optional<std::uint64_t> narrowU256ToU64(const u256& value);
@@ -66,14 +66,14 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     const h256& transactionsRoot, const h256& parentBeaconBlockRoot);
 std::optional<bcostars::Transaction> opEnvelopeToTars(
     bcos::bytes const& env, bcos::crypto::HashType const& txHash);
-}  // namespace split_detail::op
+}  // namespace engine_common::op
 
 namespace op_detail
 {
 template <class ArtifactsMap, class ArtifactNode>
 PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guard,
     ArtifactsMap& artifacts, PayloadID const& payloadId, h256 const& blockHash,
-    CommonPayloadEntryPtr entry, ArtifactNode&& artifactNode)
+    BuiltPayloadPtr entry, ArtifactNode&& artifactNode)
 {
     PayloadCache cacheRollback = guard.snapshotPayloadCache();
     ArtifactsMap artifactsRollback = artifacts;
@@ -150,7 +150,7 @@ public:
         std::vector<std::string> remoteCapabilities)
     {
         (void)remoteCapabilities;
-        co_return split_detail::op::supportedOpCapabilities();
+        co_return engine_common::op::supportedOpCapabilities();
     }
 
     task::Task<ForkchoiceUpdatedResult> updateForkchoice(const ForkchoiceState& forkchoiceState,
@@ -178,7 +178,7 @@ private:
         std::optional<h256> latestValidHash = std::nullopt,
         std::optional<std::string> validationError = std::nullopt)
     {
-        return split_detail::makeStatus(status, latestValidHash, validationError);
+        return engine_common::makeStatus(status, latestValidHash, validationError);
     }
 
     static PayloadStatus mapDelegateError(

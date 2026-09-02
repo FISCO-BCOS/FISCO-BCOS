@@ -4,7 +4,7 @@
  */
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
-#include "engine/bcos-engine/GenericEngineService.h"
+#include "engine/bcos-engine/EthEngineService.h"
 
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
@@ -38,7 +38,7 @@ using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 
-namespace generic_parity_test
+namespace eth_parity_test
 {
 // Whole-second milliseconds: finalizeEthBlockHeader / validateHeader require a whole
 // number of seconds at the Eth RLP boundary.
@@ -123,7 +123,7 @@ struct StubScheduler
 using LegacyService =
     EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
 using NewService =
-    GenericEngineService<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
+    EthEngineService<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
 
 static_assert(EngineServiceConcept<LegacyService>);
 static_assert(EngineServiceConcept<NewService>);
@@ -327,7 +327,7 @@ void checkForkchoiceParity(
         legacyResult.payloadStatus.latestValidHash == newResult.payloadStatus.latestValidHash);
     BOOST_CHECK(
         legacyResult.payloadStatus.validationError == newResult.payloadStatus.validationError);
-    // release EngineServiceImpl issues sequential nextPayloadID(); GenericEngineService uses
+    // release EngineServiceImpl issues sequential nextPayloadID(); EthEngineService uses
     // deterministic derivePayloadId. Presence must match; the ID strings need not.
     BOOST_CHECK_EQUAL(legacyResult.payloadId.has_value(), newResult.payloadId.has_value());
 }
@@ -432,11 +432,11 @@ void checkBothThrow(auto&& legacyAction, auto&& newAction)
     BOOST_CHECK_THROW(newAction(), Exception);
 }
 
-}  // namespace generic_parity_test
+}  // namespace eth_parity_test
 
-BOOST_AUTO_TEST_SUITE(GenericEngineServiceParityTest)
+BOOST_AUTO_TEST_SUITE(EthEngineServiceParityTest)
 
-using namespace generic_parity_test;
+using namespace eth_parity_test;
 
 BOOST_AUTO_TEST_CASE(generic_capabilities_match)
 {
@@ -565,8 +565,8 @@ BOOST_AUTO_TEST_CASE(generic_rebuild_on_parent_matches)
     auto newRebuild =
         task::syncWait(pair.fresh.updateForkchoice(parentForkchoice, &rebuildAttributes, 3));
     // release EngineServiceImpl requires monotonic head (+1); FCU back to the parent after
-    // tip advance does not issue a payloadId. Generic EngineTracker still allows rebuild on
-    // the parent hash (intentional side-by-side divergence until cutover).
+    // tip advance does not issue a payloadId. EthEngineService/EngineTracker still allows rebuild
+    // on the parent hash (intentional side-by-side divergence until cutover).
     BOOST_CHECK(!legacyRebuild.payloadId.has_value());
     BOOST_REQUIRE(newRebuild.payloadId.has_value());
     BOOST_CHECK_EQUAL(static_cast<int>(newRebuild.payloadStatus.status),
@@ -641,7 +641,7 @@ BOOST_AUTO_TEST_CASE(generic_legacy_unbounded_cache_retains_front_second_and_las
     BOOST_CHECK_NE(newIds.front(), newIds.back());
 
     // release EngineServiceImpl bounds the cache at 64 entries — after 65 builds the
-    // front ID is evicted. Generic putUnbounded retains it (documented parity debt).
+    // front ID is evicted. EthEngineService putUnbounded retains it (documented parity debt).
     BOOST_CHECK_THROW(
         task::syncWait(pair.legacy.getPayload(legacyIds.front(), 3)), bcos::engine::UnknownPayload);
     BOOST_CHECK_NO_THROW(task::syncWait(pair.fresh.getPayload(newIds.front(), 3)));

@@ -47,7 +47,7 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
                     "or V4 (JSON-RPC -38005)"});
         }
         if (auto validationError =
-                split_detail::validatePayloadAttributes(*payloadAttributes, version);
+                engine_common::validatePayloadAttributes(*payloadAttributes, version);
             validationError.has_value())
         {
             co_return ForkchoiceUpdatedResult{
@@ -56,7 +56,7 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
                 .payloadId = std::nullopt,
             };
         }
-        if (auto validationError = split_detail::op::validateOpPayloadAttributes(
+        if (auto validationError = engine_common::op::validateOpPayloadAttributes(
                 *payloadAttributes, m_scheduler.isJovianActive());
             validationError.has_value())
         {
@@ -133,7 +133,7 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
     bcos::protocol::BlockNumber nextBlockNumber)
 {
     auto payloadIdOpt =
-        split_detail::derivePayloadId(payloadAttributes, forkchoiceState.headBlockHash, version);
+        engine_common::derivePayloadId(payloadAttributes, forkchoiceState.headBlockHash, version);
     if (!payloadIdOpt.has_value())
     {
         BOOST_THROW_EXCEPTION(
@@ -336,7 +336,7 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
         payload = assemblePayload(std::move(candidateEnvelopes));
 
         const auto transactionsRoot = SchedulerType::computeTxRoot(op_detail::rawEnvelopes(payload));
-        auto provisionalHeader = split_detail::op::rebuildOpEthHeader(
+        auto provisionalHeader = engine_common::op::rebuildOpEthHeader(
             m_blockFactory->blockHeaderFactory(), payload, transactionsRoot, parentBeaconBlockRoot);
         auto block = buildOpBlock(payload, provisionalHeader);
 
@@ -380,7 +380,7 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
     {
         payload.blobGasUsed = *executedBlobGas;
     }
-    auto finalHeader = split_detail::op::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
+    auto finalHeader = engine_common::op::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
         payload, SchedulerType::computeTxRoot(op_detail::rawEnvelopes(payload)),
         parentBeaconBlockRoot);
     payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
@@ -402,7 +402,7 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
                 (canonicalError ? canonicalError->errorMessage() : "no executed header")});
     }
 
-    auto commonEntry = std::make_shared<CommonPayloadEntry>();
+    auto commonEntry = std::make_shared<BuiltPayload>();
     commonEntry->version = version;
     commonEntry->executionPayload = std::move(payload);
     commonEntry->blockValue = 0;
@@ -486,7 +486,7 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, E
 {
     auto const& payload = request.executionPayload;
 
-    if (auto validationError = split_detail::op::validateOpNewPayloadRequest(
+    if (auto validationError = engine_common::op::validateOpNewPayloadRequest(
             request, m_scheduler.isJovianActive());
         validationError.has_value())
     {
@@ -495,7 +495,7 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, E
 
     const auto transactionsRoot =
         SchedulerType::computeTxRoot(op_detail::rawEnvelopes(payload));
-    const auto ethHeader = split_detail::op::rebuildOpEthHeader(
+    const auto ethHeader = engine_common::op::rebuildOpEthHeader(
         m_blockFactory->blockHeaderFactory(), payload, transactionsRoot,
         *request.parentBeaconBlockRoot);
     if (bcos::protocol::EthBlockHeader::computeHash(*ethHeader) != payload.blockHash)
@@ -682,7 +682,7 @@ bcos::protocol::Block::Ptr OpEngineService<MemPoolType, GlobalStateStorageType, 
     for (auto const& env : op_detail::rawEnvelopes(payload))
     {
         const auto txHash = hashImpl.hash(env);
-        auto tarsTx = split_detail::op::opEnvelopeToTars(env, txHash);
+        auto tarsTx = engine_common::op::opEnvelopeToTars(env, txHash);
         if (!tarsTx)
         {
             bcostars::Transaction fallback;

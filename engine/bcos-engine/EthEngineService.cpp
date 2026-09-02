@@ -3,11 +3,11 @@
  *  SPDX-License-Identifier: Apache-2.0
  */
 
-#include "GenericEngineService.h"
+#include "EthEngineService.h"
 
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 
-namespace bcos::engine::generic_detail
+namespace bcos::engine::eth_detail
 {
 namespace
 {
@@ -74,4 +74,4 @@ std::optional<std::string> validateExecutionPayload(
     return std::nullopt;
 }
 
-}  // namespace bcos::engine::generic_detail
+}  // namespace bcos::engine::eth_detail

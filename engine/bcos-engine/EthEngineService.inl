@@ -22,7 +22,7 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
              scheduler_v1::TransactionScheduler<SchedulerType,
                  typename GlobalStateStorageType::ViewType, ExecutorType,
                  std::vector<protocol::Transaction::Ptr>>
-task::Task<ForkchoiceUpdatedResult> GenericEngineService<MemPoolType, GlobalStateStorageType,
+task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateStorageType,
     ExecutorType, SchedulerType>::updateForkchoice(const ForkchoiceState& forkchoiceState,
     const PayloadAttributes* payloadAttributes, std::uint32_t version)
 {
@@ -34,11 +34,11 @@ task::Task<ForkchoiceUpdatedResult> GenericEngineService<MemPoolType, GlobalStat
     if (payloadAttributes != nullptr)
     {
         if (auto validationError =
-                split_detail::validatePayloadAttributes(*payloadAttributes, version);
+                engine_common::validatePayloadAttributes(*payloadAttributes, version);
             validationError.has_value())
         {
             co_return ForkchoiceUpdatedResult{
-                .payloadStatus = split_detail::makeStatus(
+                .payloadStatus = engine_common::makeStatus(
                     PayloadValidationStatus::Invalid, std::nullopt, validationError),
                 .payloadId = std::nullopt,
             };
@@ -57,7 +57,7 @@ task::Task<ForkchoiceUpdatedResult> GenericEngineService<MemPoolType, GlobalStat
         !finalizedBlockNumber.has_value())
     {
         co_return ForkchoiceUpdatedResult{
-            .payloadStatus = split_detail::makeStatus(
+            .payloadStatus = engine_common::makeStatus(
                 PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
             .payloadId = std::nullopt,
         };
@@ -97,14 +97,14 @@ task::Task<ForkchoiceUpdatedResult> GenericEngineService<MemPoolType, GlobalStat
     if (m_tracker.applyForkchoice(resolved) == ForkchoiceApplyResult::Swallowed)
     {
         co_return ForkchoiceUpdatedResult{
-            .payloadStatus = split_detail::makeStatus(
+            .payloadStatus = engine_common::makeStatus(
                 PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt),
             .payloadId = std::nullopt,
         };
     }
 
     ForkchoiceUpdatedResult result{
-        .payloadStatus = split_detail::makeStatus(
+        .payloadStatus = engine_common::makeStatus(
             PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt),
         .payloadId = std::nullopt,
     };
@@ -122,12 +122,12 @@ task::Task<ForkchoiceUpdatedResult> GenericEngineService<MemPoolType, GlobalStat
     }
 
     auto payloadIdOpt =
-        split_detail::derivePayloadId(*payloadAttributes, forkchoiceState.headBlockHash, version);
+        engine_common::derivePayloadId(*payloadAttributes, forkchoiceState.headBlockHash, version);
     if (!payloadIdOpt.has_value())
     {
         co_return ForkchoiceUpdatedResult{
             .payloadStatus =
-                split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                     std::string("payloadAttributes.transactions contains undecodable hex")),
             .payloadId = std::nullopt,
         };
@@ -137,7 +137,7 @@ task::Task<ForkchoiceUpdatedResult> GenericEngineService<MemPoolType, GlobalStat
     auto built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
         nextBlockNumber, std::move(sealedTxs), view);
 
-    auto commonEntry = std::make_shared<CommonPayloadEntry>();
+    auto commonEntry = std::make_shared<BuiltPayload>();
     commonEntry->version = version;
     commonEntry->executionPayload = std::move(built.executionPayload);
     commonEntry->blockValue = 0;
@@ -149,7 +149,7 @@ task::Task<ForkchoiceUpdatedResult> GenericEngineService<MemPoolType, GlobalStat
         commonEntry->blobsBundle = BlobsBundleV1{};
     }
 
-    auto stagedArtifact = GenericPayloadArtifacts<ViewType>{
+    auto stagedArtifact = EthPayloadArtifacts<ViewType>{
         .view = std::make_shared<ViewType>(std::move(view)),
         .header = std::move(built.header),
         .receipts = std::move(built.receipts),
@@ -157,7 +157,7 @@ task::Task<ForkchoiceUpdatedResult> GenericEngineService<MemPoolType, GlobalStat
 
     {
         auto guard = m_tracker.lockExclusive();
-        generic_detail::publishBuiltPayload(guard, m_artifacts, payloadId,
+        eth_detail::publishBuiltPayload(guard, m_artifacts, payloadId,
             commonEntry->executionPayload.blockHash, std::move(commonEntry),
             std::move(stagedArtifact));
     }
@@ -172,7 +172,7 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
                  typename GlobalStateStorageType::ViewType, ExecutorType,
                  std::vector<protocol::Transaction::Ptr>>
 task::Task<PayloadStatus>
-GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::newPayload(
+EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::newPayload(
     const NewPayloadRequest& request, std::uint32_t version)
 {
     if (!isNewPayloadVersionSupported(version))
@@ -181,28 +181,28 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, Schedule
                               << bcos::errinfo_comment{"Unsupported Engine API version"});
     }
     if (auto validationError =
-            generic_detail::validateExecutionPayload(request.executionPayload, version);
+            eth_detail::validateExecutionPayload(request.executionPayload, version);
         validationError.has_value())
     {
         auto status = validationError->find("blockHash") != std::string::npos ?
                           PayloadValidationStatus::InvalidBlockHash :
                           PayloadValidationStatus::Invalid;
-        co_return split_detail::makeStatus(status, std::nullopt, validationError);
+        co_return engine_common::makeStatus(status, std::nullopt, validationError);
     }
     if (version <= 2 && request.parentBeaconBlockRoot.has_value())
     {
-        co_return split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+        co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
             std::string("parentBeaconBlockRoot is only valid for newPayloadV3 and later"));
     }
     if (version >= 3 && !request.parentBeaconBlockRoot.has_value())
     {
-        co_return split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+        co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
             std::string("parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and "
                         "later"));
     }
     if (version >= 3 && !request.expectedBlobVersionedHashes.empty())
     {
-        co_return split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+        co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
             std::string("expectedBlobVersionedHashes must be empty (L2 forbids blob "
                         "transactions)"));
     }
@@ -210,7 +210,7 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, Schedule
     {
         if (!request.executionRequests.has_value() || !request.executionRequests->empty())
         {
-            co_return split_detail::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string("executionRequests must be a present-but-empty list on this "
                             "chain"));
         }
@@ -222,7 +222,7 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, Schedule
                        guard.payloadIdForHash(request.executionPayload.parentHash).has_value();
     if (!parentKnown)
     {
-        co_return split_detail::makeStatus(
+        co_return engine_common::makeStatus(
             PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
     }
 
@@ -280,7 +280,7 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, Schedule
         }
     }
 
-    auto entry = std::make_shared<CommonPayloadEntry>();
+    auto entry = std::make_shared<BuiltPayload>();
     entry->version = version;
     entry->executionPayload = request.executionPayload;
     entry->blockValue = 0;
@@ -292,10 +292,10 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, Schedule
         entry->blobsBundle = BlobsBundleV1{};
     }
 
-    generic_detail::commitRetainedPayload(
+    eth_detail::commitRetainedPayload(
         guard, m_artifacts, payloadId, request.executionPayload.blockHash, std::move(entry));
 
-    co_return split_detail::makeStatus(
+    co_return engine_common::makeStatus(
         PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);
 }
 
@@ -305,9 +305,9 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
              scheduler_v1::TransactionScheduler<SchedulerType,
                  typename GlobalStateStorageType::ViewType, ExecutorType,
                  std::vector<protocol::Transaction::Ptr>>
-task::Task<typename GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+task::Task<typename EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
     SchedulerType>::BuildPayloadResult>
-GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
     SchedulerType>::buildPayload(const ForkchoiceState& forkchoiceState,
     const PayloadAttributes& payloadAttributes, const PayloadID& payloadId, std::uint32_t version,
     bcos::protocol::BlockNumber nextBlockNumber, std::vector<protocol::Transaction::Ptr> sealedTxs,
@@ -332,7 +332,7 @@ GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
         if (sealedTx->type() !=
             static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
         {
-            BCOS_LOG(WARNING) << LOG_BADGE("GenericEngineService")
+            BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService")
                               << LOG_DESC(
                                      "buildPayload: excluding transaction without an EIP-2718 "
                                      "wire form from the OP payload")
@@ -568,7 +568,7 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
              scheduler_v1::TransactionScheduler<SchedulerType,
                  typename GlobalStateStorageType::ViewType, ExecutorType,
                  std::vector<protocol::Transaction::Ptr>>
-task::Task<h256> GenericEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+task::Task<h256> EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
     SchedulerType>::calculateStateRoot(ViewType& view, uint32_t blockVersion) const
 {
     auto range = co_await storage2::range(view);

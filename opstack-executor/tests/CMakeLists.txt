@@ -142,8 +142,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
 endif()
 
-# Side-by-side OpEngineServiceParityTest was written against sync-release (dual
-# rawTransactions carrier + GoldenSample/t8n fixtures + EngineServiceImpl OP path).
-# release-3.18.0 uses a single transactions[i].raw carrier and lacks those fixtures;
-# keep the source in-tree but do not wire the binary until the suite is adapted.
-# add_executable(opstack-executor-engine-tests ...)
+# OpEngineServiceParityTest moved to engine/test/unittests/engine/ (next to Eth parity).
+# It remains excluded from test-bcos-engine until adapted to release-3.18.0's single
+# transactions[i].raw carrier (was written against sync-release dual-carrier + GoldenSample).

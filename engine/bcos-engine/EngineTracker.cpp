@@ -96,7 +96,7 @@ GetPayloadResult EngineTracker::getPayload(const PayloadID& payloadId, std::uint
     {
         BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
     }
-    if (!split_detail::isGetPayloadVersionCompatible(
+    if (!engine_common::isGetPayloadVersionCompatible(
             static_cast<ApiVersion>(version), entry->version))
     {
         BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
@@ -149,7 +149,7 @@ EngineTracker::SharedAccess EngineTracker::lockShared() const
     return SharedAccess{*this};
 }
 
-CommonPayloadEntryPtr EngineTracker::ExclusiveAccess::findPayload(const PayloadID& id) const
+BuiltPayloadPtr EngineTracker::ExclusiveAccess::findPayload(const PayloadID& id) const
 {
     return m_owner->m_payloads.find(id);
 }
@@ -161,13 +161,13 @@ std::optional<PayloadID> EngineTracker::ExclusiveAccess::payloadIdForHash(
 }
 
 PayloadCache::PutResult EngineTracker::ExclusiveAccess::putPayload(
-    PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry)
+    PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
 {
     return m_owner->m_payloads.put(std::move(id), blockHash, std::move(entry));
 }
 
 PayloadCache::PutResult EngineTracker::ExclusiveAccess::putUnboundedPayload(
-    PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry)
+    PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
 {
     return m_owner->m_payloads.putUnbounded(std::move(id), blockHash, std::move(entry));
 }
@@ -178,7 +178,7 @@ void EngineTracker::ExclusiveAccess::retainOnly(const PayloadID& id, const h256&
 }
 
 PayloadCache::PutResult EngineTracker::ExclusiveAccess::putAndRetainPayload(
-    PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry)
+    PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
 {
     return m_owner->m_payloads.putAndRetainOnly(std::move(id), blockHash, std::move(entry));
 }
@@ -198,7 +198,7 @@ const ForkchoiceState& EngineTracker::ExclusiveAccess::forkchoiceState() const
     return m_owner->m_forkchoiceState;
 }
 
-CommonPayloadEntryPtr EngineTracker::SharedAccess::findPayload(const PayloadID& id) const
+BuiltPayloadPtr EngineTracker::SharedAccess::findPayload(const PayloadID& id) const
 {
     return m_owner->m_payloads.find(id);
 }

@@ -3,7 +3,7 @@
  *  SPDX-License-Identifier: Apache-2.0
  */
 
-#include "SplitEngineCommon.h"
+#include "EngineServiceCommon.h"
 
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
@@ -12,7 +12,7 @@
 #include <boost/assert.hpp>
 #include <span>
 
-namespace bcos::engine::split_detail
+namespace bcos::engine::engine_common
 {
 
 bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payloadVersion)
@@ -196,4 +196,4 @@ PayloadStatus makeStatus(PayloadValidationStatus status, std::optional<h256> lat
     };
 }
 
-}  // namespace bcos::engine::split_detail
+}  // namespace bcos::engine::engine_common

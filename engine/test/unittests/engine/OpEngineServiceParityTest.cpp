@@ -212,7 +212,7 @@ bcos::protocol::BlockHeader::Ptr newProductionHeaderOf(
 {
     auto const& payload = request.executionPayload;
     const auto transactionsRoot = EngineOpScheduler::computeTxRoot(*payload.rawTransactions);
-    return bcos::engine::split_detail::op::rebuildOpEthHeader(blockFactory->blockHeaderFactory(),
+    return bcos::engine::engine_common::op::rebuildOpEthHeader(blockFactory->blockHeaderFactory(),
         payload, transactionsRoot, *request.parentBeaconBlockRoot);
 }
 
@@ -739,7 +739,7 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
 
     {
         auto guard = tracker.lockExclusive();
-        auto entry = std::make_shared<bcos::engine::CommonPayloadEntry>();
+        auto entry = std::make_shared<bcos::engine::BuiltPayload>();
         entry->executionPayload.blockHash = targetHash;
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
         header->setNumber(kTargetNumber);
@@ -802,7 +802,7 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
                 auto guard = tracker.lockExclusive();
                 bcos::h256 writerHash(0x99);
                 bcos::engine::PayloadID writerPayloadId = "0xcafebabe";
-                auto entry = std::make_shared<bcos::engine::CommonPayloadEntry>();
+                auto entry = std::make_shared<bcos::engine::BuiltPayload>();
                 entry->executionPayload.blockHash = writerHash;
                 auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
                 header->setNumber(99);

@@ -11,7 +11,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <limits>
 
-namespace bcos::engine::split_detail::op
+namespace bcos::engine::engine_common::op
 {
 namespace
 {
@@ -59,7 +59,7 @@ void applyOpHeaderConstants(bcos::protocol::BlockHeader& header)
 
 std::vector<std::string> supportedOpCapabilities()
 {
-    auto caps = split_detail::supportedCapabilities();
+    auto caps = engine_common::supportedCapabilities();
     caps.push_back("engine_forkchoiceUpdatedV4");
     caps.push_back("engine_getPayloadV4");
     caps.push_back("engine_newPayloadV4");
@@ -267,4 +267,4 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     return header;
 }
 
-}  // namespace bcos::engine::split_detail::op
+}  // namespace bcos::engine::engine_common::op

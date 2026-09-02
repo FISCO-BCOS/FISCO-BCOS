@@ -4,9 +4,9 @@
  */
 
 #include "engine/bcos-engine/EngineTracker.h"
+#include "engine/bcos-engine/EngineServiceCommon.h"
 #include "engine/bcos-engine/EngineServiceImpl.h"
 #include "engine/bcos-engine/PayloadCache.h"
-#include "engine/bcos-engine/SplitEngineCommon.h"
 
 #include "engine/bcos-engine/PayloadId.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -42,9 +42,9 @@ ResolvedForkchoice resolved(
     };
 }
 
-CommonPayloadEntryPtr makePayload(std::uint32_t version, bool withWithdrawalsRoot = false)
+BuiltPayloadPtr makePayload(std::uint32_t version, bool withWithdrawalsRoot = false)
 {
-    auto entry = std::make_shared<CommonPayloadEntry>();
+    auto entry = std::make_shared<BuiltPayload>();
     entry->version = version;
     entry->executionPayload.blockNumber = 1;
     if (withWithdrawalsRoot)
@@ -120,13 +120,13 @@ BOOST_AUTO_TEST_CASE(payload_cache_keeps_hash_index_and_fifo_consistent)
     std::vector<PayloadID> ids;
     for (std::uint64_t i = 0; i < 65; ++i)
     {
-        auto entry = std::make_shared<CommonPayloadEntry>();
+        auto entry = std::make_shared<BuiltPayload>();
         entry->version = 1;
         entry->executionPayload.blockNumber = i;
         auto id = bcos::toHexStringWithPrefix(
             bcos::bytesConstRef(reinterpret_cast<const byte*>(&i), sizeof(i)));
         ids.push_back(id);
-        cache.put(id, h256(i + 1), std::static_pointer_cast<const CommonPayloadEntry>(entry));
+        cache.put(id, h256(i + 1), std::static_pointer_cast<const BuiltPayload>(entry));
     }
 
     BOOST_CHECK(!cache.find(ids.front()));
@@ -139,12 +139,12 @@ BOOST_AUTO_TEST_CASE(payload_cache_keeps_hash_index_and_fifo_consistent)
 BOOST_AUTO_TEST_CASE(payload_cache_deduplicates_repeated_payload_id)
 {
     PayloadCache cache;
-    auto entry = std::make_shared<CommonPayloadEntry>();
+    auto entry = std::make_shared<BuiltPayload>();
     entry->version = 1;
     const PayloadID id = "0x0102030405060708";
     for (int i = 0; i < 70; ++i)
     {
-        cache.put(id, h256(7), std::static_pointer_cast<const CommonPayloadEntry>(entry));
+        cache.put(id, h256(7), std::static_pointer_cast<const BuiltPayload>(entry));
     }
     BOOST_REQUIRE(cache.find(id));
     BOOST_CHECK_EQUAL(*cache.payloadIdForHash(h256(7)), id);
@@ -540,13 +540,13 @@ BOOST_AUTO_TEST_CASE(engine_tracker_retain_only_through_guard)
     BOOST_CHECK(!guard.payloadIdForHash(h256(2)).has_value());
 }
 
-BOOST_AUTO_TEST_CASE(split_payload_version_matrix_matches_legacy)
+BOOST_AUTO_TEST_CASE(engine_common_payload_version_matrix_matches_legacy)
 {
     for (std::uint32_t request = 1; request <= 5; ++request)
     {
         for (std::uint32_t built = 1; built <= 4; ++built)
         {
-            BOOST_CHECK_EQUAL(split_detail::isGetPayloadVersionCompatible(
+            BOOST_CHECK_EQUAL(engine_common::isGetPayloadVersionCompatible(
                                   static_cast<ApiVersion>(request), built),
                 bcos::engine::detail::isGetPayloadVersionCompatible(
                     static_cast<ApiVersion>(request), built));
@@ -554,62 +554,62 @@ BOOST_AUTO_TEST_CASE(split_payload_version_matrix_matches_legacy)
     }
 }
 
-BOOST_AUTO_TEST_CASE(split_capabilities_match_legacy_generic_capabilities)
+BOOST_AUTO_TEST_CASE(engine_common_capabilities_match_legacy_generic_capabilities)
 {
     BOOST_CHECK(
-        split_detail::supportedCapabilities() == bcos::engine::detail::supportedCapabilities());
+        engine_common::supportedCapabilities() == bcos::engine::detail::supportedCapabilities());
 }
 
-BOOST_AUTO_TEST_CASE(split_validate_payload_attributes_matches_legacy)
+BOOST_AUTO_TEST_CASE(engine_common_validate_payload_attributes_matches_legacy)
 {
     for (std::uint32_t version = 1; version <= 4; ++version)
     {
         auto attrs = minimalPayloadAttributes();
-        BOOST_CHECK(split_detail::validatePayloadAttributes(attrs, version) ==
+        BOOST_CHECK(engine_common::validatePayloadAttributes(attrs, version) ==
                     bcos::engine::detail::validatePayloadAttributes(attrs, version));
     }
 
     PayloadAttributes v1WithWithdrawals = minimalPayloadAttributes();
-    BOOST_CHECK(split_detail::validatePayloadAttributes(v1WithWithdrawals, 1) ==
+    BOOST_CHECK(engine_common::validatePayloadAttributes(v1WithWithdrawals, 1) ==
                 bcos::engine::detail::validatePayloadAttributes(v1WithWithdrawals, 1));
 
     PayloadAttributes missingBeacon = minimalPayloadAttributes();
     missingBeacon.parentBeaconBlockRoot = std::nullopt;
-    BOOST_CHECK(split_detail::validatePayloadAttributes(missingBeacon, 3) ==
+    BOOST_CHECK(engine_common::validatePayloadAttributes(missingBeacon, 3) ==
                 bcos::engine::detail::validatePayloadAttributes(missingBeacon, 3));
 
     PayloadAttributes badHex = minimalPayloadAttributes();
     badHex.transactions = std::vector<std::string>{"0xZZ"};
-    BOOST_CHECK(split_detail::validatePayloadAttributes(badHex, 3) ==
+    BOOST_CHECK(engine_common::validatePayloadAttributes(badHex, 3) ==
                 bcos::engine::detail::validatePayloadAttributes(badHex, 3));
 }
 
-BOOST_AUTO_TEST_CASE(split_derive_payload_id_matches_legacy)
+BOOST_AUTO_TEST_CASE(engine_common_derive_payload_id_matches_legacy)
 {
     const h256 parentHash = h256(std::string(64, '1'));
     auto attrs = minimalPayloadAttributes();
     for (std::uint32_t version = 1; version <= 4; ++version)
     {
-        BOOST_CHECK(split_detail::derivePayloadId(attrs, parentHash, version) ==
+        BOOST_CHECK(engine_common::derivePayloadId(attrs, parentHash, version) ==
                     legacyDerivePayloadId(attrs, parentHash, version));
     }
 
     attrs.transactions = std::vector<std::string>{"0xZZ"};
-    BOOST_CHECK(!split_detail::derivePayloadId(attrs, parentHash, 3).has_value());
+    BOOST_CHECK(!engine_common::derivePayloadId(attrs, parentHash, 3).has_value());
     BOOST_CHECK(!legacyDerivePayloadId(attrs, parentHash, 3).has_value());
 }
 
-BOOST_AUTO_TEST_CASE(split_make_status_matches_legacy)
+BOOST_AUTO_TEST_CASE(engine_common_make_status_matches_legacy)
 {
     const h256 hash(42);
     for (auto status : {PayloadValidationStatus::Valid, PayloadValidationStatus::Invalid,
              PayloadValidationStatus::Syncing, PayloadValidationStatus::InvalidBlockHash})
     {
-        auto split = split_detail::makeStatus(status, hash, "error");
+        auto common = engine_common::makeStatus(status, hash, "error");
         auto legacy = legacyMakeStatus(status, hash, "error");
-        BOOST_CHECK(split.status == legacy.status);
-        BOOST_CHECK(split.latestValidHash == legacy.latestValidHash);
-        BOOST_CHECK(split.validationError == legacy.validationError);
+        BOOST_CHECK(common.status == legacy.status);
+        BOOST_CHECK(common.latestValidHash == legacy.latestValidHash);
+        BOOST_CHECK(common.validationError == legacy.validationError);
     }
 }
 
