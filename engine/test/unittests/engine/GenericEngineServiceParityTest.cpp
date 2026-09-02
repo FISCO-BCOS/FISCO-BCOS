@@ -25,6 +25,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
+#include <functional>
 
 using namespace bcos;
 using namespace bcos::engine;
@@ -584,13 +585,15 @@ BOOST_AUTO_TEST_CASE(generic_cache_eviction_matches)
 
     std::vector<PayloadID> legacyIds;
     std::vector<PayloadID> newIds;
-    auto currentHead = forkchoiceState;
     for (int i = 0; i < 65; ++i)
     {
         auto attrs = makePayloadAttributesV3();
-        attrs.timestamp = c_timestamp + static_cast<std::uint64_t>(i);
-        auto legacyResult = task::syncWait(pair.legacy.updateForkchoice(currentHead, &attrs, 3));
-        auto newResult = task::syncWait(pair.fresh.updateForkchoice(currentHead, &attrs, 3));
+        // derivePayloadId hashes timestamp/1000; step by whole seconds so each build gets a
+        // distinct payload ID and the FIFO cap evicts the oldest entry.
+        attrs.timestamp = (c_timestamp + static_cast<std::uint64_t>(i) * 1000);
+        auto legacyResult =
+            task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attrs, 3));
+        auto newResult = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attrs, 3));
         checkForkchoiceParity(legacyResult, newResult);
         BOOST_REQUIRE(legacyResult.payloadId.has_value());
         legacyIds.push_back(*legacyResult.payloadId);
@@ -599,24 +602,51 @@ BOOST_AUTO_TEST_CASE(generic_cache_eviction_matches)
         auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyResult.payloadId, 3));
         auto newPayload = task::syncWait(pair.fresh.getPayload(*newResult.payloadId, 3));
         checkGetPayloadParity(*legacyPayload, *newPayload);
-
-        pair.legacyStorage.setBlockNumber(
-            legacyPayload->executionPayload.blockHash, c_initialBlockNumber + 1 + i);
-        pair.newStorage.setBlockNumber(
-            newPayload->executionPayload.blockHash, c_initialBlockNumber + 1 + i);
-        auto request = makeNewPayloadRequestV3(legacyPayload->executionPayload);
-        task::syncWait(pair.legacy.newPayload(request, 3));
-        task::syncWait(
-            pair.fresh.newPayload(makeNewPayloadRequestV3(newPayload->executionPayload), 3));
-
-        currentHead = ForkchoiceState{legacyPayload->executionPayload.blockHash,
-            legacyPayload->executionPayload.blockHash, legacyPayload->executionPayload.blockHash};
     }
 
-    BOOST_CHECK_THROW(task::syncWait(pair.legacy.getPayload(legacyIds.front(), 3)), UnknownPayload);
-    BOOST_CHECK_THROW(task::syncWait(pair.fresh.getPayload(newIds.front(), 3)), UnknownPayload);
+    BOOST_CHECK_NE(legacyIds.front(), legacyIds.back());
+    BOOST_CHECK_NE(newIds.front(), newIds.back());
+
+    BOOST_CHECK_NO_THROW(task::syncWait(pair.legacy.getPayload(legacyIds.front(), 3)));
+    BOOST_CHECK_NO_THROW(task::syncWait(pair.fresh.getPayload(newIds.front(), 3)));
+    BOOST_CHECK_NO_THROW(task::syncWait(pair.legacy.getPayload(legacyIds[1], 3)));
+    BOOST_CHECK_NO_THROW(task::syncWait(pair.fresh.getPayload(newIds[1], 3)));
+    auto legacySecond = task::syncWait(pair.legacy.getPayload(legacyIds[1], 3));
+    auto newSecond = task::syncWait(pair.fresh.getPayload(newIds[1], 3));
+    checkGetPayloadParity(*legacySecond, *newSecond);
     BOOST_CHECK_NO_THROW(task::syncWait(pair.legacy.getPayload(legacyIds.back(), 3)));
     BOOST_CHECK_NO_THROW(task::syncWait(pair.fresh.getPayload(newIds.back(), 3)));
+    auto legacyLast = task::syncWait(pair.legacy.getPayload(legacyIds.back(), 3));
+    auto newLast = task::syncWait(pair.fresh.getPayload(newIds.back(), 3));
+    checkGetPayloadParity(*legacyLast, *newLast);
+}
+
+BOOST_AUTO_TEST_CASE(generic_repeated_payload_id_does_not_shrink_fifo)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+
+    std::vector<PayloadID> legacyIds;
+    std::vector<PayloadID> newIds;
+    auto attrs = makePayloadAttributesV3();
+    for (int i = 0; i < 65; ++i)
+    {
+        auto legacyResult =
+            task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attrs, 3));
+        auto newResult = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attrs, 3));
+        checkForkchoiceParity(legacyResult, newResult);
+        BOOST_REQUIRE(legacyResult.payloadId.has_value());
+        legacyIds.push_back(*legacyResult.payloadId);
+        newIds.push_back(*newResult.payloadId);
+    }
+    BOOST_CHECK_EQUAL(legacyIds.front(), legacyIds.back());
+    BOOST_CHECK_EQUAL(newIds.front(), newIds.back());
+    BOOST_CHECK_NO_THROW(task::syncWait(pair.legacy.getPayload(legacyIds.front(), 3)));
+    BOOST_CHECK_NO_THROW(task::syncWait(pair.fresh.getPayload(newIds.front(), 3)));
 }
 
 BOOST_AUTO_TEST_CASE(generic_v3_v5_v4_round_trip_matches)
@@ -698,6 +728,229 @@ BOOST_AUTO_TEST_CASE(generic_new_payload_validation_errors_match)
     newBlobRequest.expectedBlobVersionedHashes = request.expectedBlobVersionedHashes;
     checkStatusParity(task::syncWait(pair.legacy.newPayload(request, 3)),
         task::syncWait(pair.fresh.newPayload(newBlobRequest, 3)));
+}
+
+BOOST_AUTO_TEST_CASE(generic_cache_only_parent_known_matches)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+
+    auto attrs = makePayloadAttributesV3();
+    auto legacyBuild = task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attrs, 3));
+    auto newBuild = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attrs, 3));
+    checkForkchoiceParity(legacyBuild, newBuild);
+    auto legacyBuilt = task::syncWait(pair.legacy.getPayload(*legacyBuild.payloadId, 3));
+    auto newBuilt = task::syncWait(pair.fresh.getPayload(*newBuild.payloadId, 3));
+
+    // FCU head stays at the original head; parentKnown resolves via cached block hash only.
+    NewPayloadRequest legacyRequest = makeNewPayloadRequestV3(legacyBuilt->executionPayload);
+    legacyRequest.executionPayload.parentHash = legacyBuilt->executionPayload.blockHash;
+    legacyRequest.executionPayload.blockHash =
+        h256("6666666666666666666666666666666666666666666666666666666666666666");
+    NewPayloadRequest newRequest = makeNewPayloadRequestV3(newBuilt->executionPayload);
+    newRequest.executionPayload.parentHash = newBuilt->executionPayload.blockHash;
+    newRequest.executionPayload.blockHash = legacyRequest.executionPayload.blockHash;
+
+    checkStatusParity(task::syncWait(pair.legacy.newPayload(legacyRequest, 3)),
+        task::syncWait(pair.fresh.newPayload(newRequest, 3)));
+}
+
+BOOST_AUTO_TEST_CASE(generic_unknown_parent_syncing_matches)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+
+    NewPayloadRequest legacyRequest;
+    legacyRequest.executionPayload.parentHash =
+        h256("7777777777777777777777777777777777777777777777777777777777777777");
+    legacyRequest.executionPayload.blockHash =
+        h256("8888888888888888888888888888888888888888888888888888888888888888");
+    legacyRequest.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+    legacyRequest.executionPayload.blobGasUsed = u256(0);
+    legacyRequest.executionPayload.excessBlobGas = u256(0);
+    legacyRequest.executionPayload.withdrawalsRoot = h256{};
+    legacyRequest.parentBeaconBlockRoot =
+        h256("9999999999999999999999999999999999999999999999999999999999999999");
+
+    NewPayloadRequest newRequest = legacyRequest;
+    auto legacyStatus = task::syncWait(pair.legacy.newPayload(legacyRequest, 3));
+    auto newStatus = task::syncWait(pair.fresh.newPayload(newRequest, 3));
+    checkStatusParity(legacyStatus, newStatus);
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(legacyStatus.status), static_cast<int>(PayloadValidationStatus::Syncing));
+}
+
+template <typename Exception>
+void checkBothExceptionMessages(auto&& legacyAction, auto&& newAction, char const* expectedMessage)
+{
+    BOOST_CHECK_EXCEPTION(legacyAction(), Exception, [&](Exception const& e) {
+        auto const* comment = boost::get_error_info<errinfo_comment>(e);
+        return comment != nullptr && *comment == expectedMessage;
+    });
+    BOOST_CHECK_EXCEPTION(newAction(), Exception, [&](Exception const& e) {
+        auto const* comment = boost::get_error_info<errinfo_comment>(e);
+        return comment != nullptr && *comment == expectedMessage;
+    });
+}
+
+BOOST_AUTO_TEST_CASE(generic_exception_messages_match)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    NewPayloadRequest request;
+
+    checkBothExceptionMessages<UnsupportedEngineApiVersion>(
+        [&] { return task::syncWait(pair.legacy.newPayload(request, 5)); },
+        [&] { return task::syncWait(pair.fresh.newPayload(request, 5)); },
+        "Unsupported Engine API version");
+
+    checkBothExceptionMessages<UnknownPayload>(
+        [&] { return task::syncWait(pair.legacy.getPayload("0xdeadbeefdeadbeef", 3)); },
+        [&] { return task::syncWait(pair.fresh.getPayload("0xdeadbeefdeadbeef", 3)); },
+        "Unknown payload");
+}
+
+BOOST_AUTO_TEST_CASE(generic_validation_error_table_matches)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+
+    struct Case
+    {
+        char const* name;
+        std::function<NewPayloadRequest()> makeLegacy;
+        std::function<NewPayloadRequest()> makeNew;
+        std::uint32_t version;
+        char const* errorNeedle;
+    };
+
+    auto attrs = makePayloadAttributesV3();
+    auto legacyBuild = task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attrs, 3));
+    auto newBuild = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attrs, 3));
+    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyBuild.payloadId, 3));
+    auto newPayload = task::syncWait(pair.fresh.getPayload(*newBuild.payloadId, 3));
+
+    std::vector<Case> cases{
+        {"empty_tx",
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.transactions.push_back({.raw = bytes{}, .decoded = nullptr});
+                return r;
+            },
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.transactions.push_back({.raw = bytes{}, .decoded = nullptr});
+                return r;
+            },
+            1, "empty"},
+        {"unsupported_type",
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.transactions.push_back(
+                    {.raw = bytes{0x00, 0x01}, .decoded = nullptr});
+                return r;
+            },
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.transactions.push_back(
+                    {.raw = bytes{0x00, 0x01}, .decoded = nullptr});
+                return r;
+            },
+            1, "unsupported"},
+        {"blob_tx",
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.transactions.push_back(
+                    {.raw = bytes{0x03, 0xaa}, .decoded = nullptr});
+                return r;
+            },
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.transactions.push_back(
+                    {.raw = bytes{0x03, 0xaa}, .decoded = nullptr});
+                return r;
+            },
+            1, "blob"},
+        {"v1_withdrawals",
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+                return r;
+            },
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+                return r;
+            },
+            1, "withdrawals are not part of ExecutionPayloadV1"},
+        {"v2_missing_withdrawals",
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.parentHash = forkchoiceState.headBlockHash;
+                r.executionPayload.blockHash =
+                    h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1");
+                r.executionPayload.blockNumber = c_initialBlockNumber + 1;
+                r.executionPayload.timestamp = c_timestamp;
+                r.executionPayload.prevRandao = makePayloadAttributesV3().prevRandao;
+                r.executionPayload.feeRecipient = makePayloadAttributesV3().suggestedFeeRecipient;
+                r.executionPayload.gasLimit = 1;
+                r.executionPayload.gasUsed = 0;
+                return r;
+            },
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.parentHash = forkchoiceState.headBlockHash;
+                r.executionPayload.blockHash =
+                    h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1");
+                r.executionPayload.blockNumber = c_initialBlockNumber + 1;
+                r.executionPayload.timestamp = c_timestamp;
+                r.executionPayload.prevRandao = makePayloadAttributesV3().prevRandao;
+                r.executionPayload.feeRecipient = makePayloadAttributesV3().suggestedFeeRecipient;
+                r.executionPayload.gasLimit = 1;
+                r.executionPayload.gasUsed = 0;
+                return r;
+            },
+            2, "withdrawals are required"},
+        {"v4_nonempty_execution_requests",
+            [&] {
+                NewPayloadRequest r = makeNewPayloadRequestV3(legacyPayload->executionPayload);
+                // V3 builds inherit non-empty withdrawals from makePayloadAttributesV3; Isthmus
+                // requires an empty list so executionRequests validation is reached.
+                r.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+                r.executionRequests = std::vector<bytes>{bytes{0x01}};
+                return r;
+            },
+            [&] {
+                NewPayloadRequest r = makeNewPayloadRequestV3(newPayload->executionPayload);
+                r.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+                r.executionRequests = std::vector<bytes>{bytes{0x01}};
+                return r;
+            },
+            4, "executionRequests"},
+    };
+
+    for (auto const& c : cases)
+    {
+        auto legacyStatus = task::syncWait(pair.legacy.newPayload(c.makeLegacy(), c.version));
+        auto newStatus = task::syncWait(pair.fresh.newPayload(c.makeNew(), c.version));
+        checkStatusParity(legacyStatus, newStatus);
+        BOOST_REQUIRE(legacyStatus.validationError.has_value());
+        BOOST_REQUIRE(newStatus.validationError.has_value());
+        BOOST_CHECK_NE(legacyStatus.validationError->find(c.errorNeedle), std::string::npos);
+        BOOST_CHECK_NE(newStatus.validationError->find(c.errorNeedle), std::string::npos);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -150,6 +150,28 @@ BOOST_AUTO_TEST_CASE(payload_cache_deduplicates_repeated_payload_id)
     BOOST_CHECK_EQUAL(*cache.payloadIdForHash(h256(7)), id);
 }
 
+BOOST_AUTO_TEST_CASE(payload_cache_put_and_retain_only_clears_intermediate_state)
+{
+    PayloadCache cache;
+    cache.put("0x01", h256(1), makePayload(1));
+    cache.put("0x02", h256(2), makePayload(1));
+    cache.putAndRetainOnly("0x03", h256(3), makePayload(1));
+    BOOST_CHECK(!cache.find("0x01"));
+    BOOST_CHECK(!cache.find("0x02"));
+    BOOST_REQUIRE(cache.find("0x03"));
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_put_and_retain_payload)
+{
+    EngineTracker tracker;
+    auto guard = tracker.lockExclusive();
+    guard.putPayload("0x01", h256(1), makePayload(1));
+    guard.putPayload("0x02", h256(2), makePayload(1));
+    guard.putAndRetainPayload("0x03", h256(3), makePayload(1));
+    BOOST_CHECK(!guard.findPayload("0x01"));
+    BOOST_REQUIRE(guard.findPayload("0x03"));
+}
+
 BOOST_AUTO_TEST_CASE(engine_tracker_preserves_rebuild_on_parent)
 {
     EngineTracker tracker;

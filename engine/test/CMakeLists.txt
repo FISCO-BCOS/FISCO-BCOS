@@ -16,5 +16,7 @@ target_link_libraries(${TEST_BINARY_NAME} PUBLIC engine mempool protocol-tars rl
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties(
     "unittests/engine/GenericEngineServiceParityTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties(
+    "unittests/engine/GenericEngineServiceTransactionalTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")
