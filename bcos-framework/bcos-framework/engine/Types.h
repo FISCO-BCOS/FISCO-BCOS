@@ -19,11 +19,11 @@
 
 #pragma once
 
+#include "Errors.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <cstdint>
 #include <optional>
@@ -48,15 +48,8 @@ enum class ApiVersion : std::uint8_t
 
 using PayloadID = std::string;
 
-/// Engine API error conditions shared by the service implementation and the RPC
-/// endpoint layer, which maps them to Engine API error codes: UnknownPayload ->
-/// -38001, the two version mismatches -> -38005 Unsupported fork.
-/// UnsupportedFork lives in Errors.h (same namespace); a request whose attribute
-/// shape cannot express the chain fork is thrown by EngineService buildPayload and
-/// mapped to -38005 by the endpoint.
-DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
-DERIVE_BCOS_EXCEPTION(UnknownPayload);
-DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+// Exceptions live in Errors.h (included above) so RPC can map them without
+// linking bcos-engine. #5517's comment on -38005 / UnsupportedFork still applies.
 
 struct WithdrawalV1
 {
@@ -142,9 +135,8 @@ struct ExecutionPayload
     u256 gasUsed = 0;
     u256 baseFeePerGas = 0;
     h256 blockHash;
-    /// Transaction envelopes: each `EngineTransaction::raw` carries the EIP-2718
-    /// encoded bytes (including the OP 0x7E deposit envelope). This is the single
-    /// authoritative carrier for both generic and OP engine paths.
+    /// Generic-path transaction carrier: each `EngineTransaction::raw` is the EIP-2718
+    /// envelope. The OP path does not read this field (see `rawTransactions` below).
     std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;
@@ -164,9 +156,17 @@ struct ExecutionPayload
     std::optional<bytes> blockAccessList = std::nullopt;
     std::optional<std::uint64_t> slotNumber = std::nullopt;
 
-    // Required by ExecutionPayloadV4/V5 (OP Stack, Isthmus onwards): storage root of
-    // the L2ToL1MessagePasser predeploy. May carry a placeholder until real-value
-    // header wiring lands.
+    /// OP-mode carrier fields. The generic (non-OP) engine path never reads these.
+    /// - rawTransactions: OP path's only transaction carrier (raw EIP-2718 envelopes,
+    ///   including 0x7E deposits). buildOpPayload / computeTxRoot / buildOpBlock consume
+    ///   it; getPayload serializes it when present. The RPC parse fills this mirror for
+    ///   V4 only (validateOpNewPayloadRequest requires the field).
+    /// - transactions (above): generic-path carrier. OP payload *build* leaves it empty;
+    ///   serializeExecutionPayload falls back to it when rawTransactions is absent.
+    /// - withdrawalsRoot: OP Isthmus+ extends the payload with an explicit withdrawals-root
+    ///   field (= MessagePasser storage root) that cannot be derived from the (always-empty)
+    ///   `withdrawals` list above — op-geth's NewPayloadV4 requires it on OP chains.
+    std::optional<std::vector<bytes>> rawTransactions;
     std::optional<h256> withdrawalsRoot;
 };
 
