@@ -106,15 +106,17 @@ public:
     /// Retained probe (verify=false) execution, adopted by adoptProbeAsPending. The view's
     /// top mutable layer is exactly this block's delta; adopt will pushView it. Un-adopted
     /// retained views are private until pushView (forkCommitted views carry no storage
-    /// layers), so a stale slot is a bounded memory leak, never state corruption — but the
-    /// clears in reset() and at probe start keep it empty across builds.
+    /// layers), so a stale slot is bounded extra retention, never state corruption — but
+    /// the clears in reset(), at probe start, and on adopt keep it empty across builds.
+    /// Single-writer discipline: all accesses hold m_executeMutex (probe write; adopt
+    /// read/write under execute+commit; reset holds all three). Deliberately not under
+    /// m_pendingMutex — the slot outlives m_pending on the probe path.
     struct ProbeSlot
     {
         ViewType view;  // forkCommitted()+newMutable execution view
         bcos::evm::engine::OpExecuteBlockResult result;  // commitments + receipts
         protocol::BlockHeader::Ptr executedHeader;       // commitment-filled header
     };
-    std::optional<ProbeSlot> m_lastProbe;
 
     // ---- SchedulerInterface overrides ----
 
@@ -149,107 +151,6 @@ public:
                            callback) -> task::Task<void> {
             std::apply(callback, co_await self->coAdoptProbe(std::move(block)));
         }(this, std::move(block), std::move(callback)));
-    }
-
-    task::Task<std::tuple<Error::Ptr, protocol::BlockHeader::Ptr, bool>> coAdoptProbe(
-        protocol::Block::Ptr block)
-    {
-        try
-        {
-            auto blockHeader = block->blockHeader();
-            auto const number = blockHeader->number();
-
-            // Same double-lock as coExecuteBlock: pushView must not race mergeBackStorage.
-            std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
-            if (!executeLock.owns_lock())
-            {
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
-                               "Another block is executing!"),
-                    nullptr, false};
-            }
-            std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
-            if (!commitLock.owns_lock())
-            {
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
-                               "Another block is committing!"),
-                    nullptr, false};
-            }
-            if (!m_lastProbe)
-            {
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
-                               "adoptProbeAsPending: no retained probe"),
-                    nullptr, false};
-            }
-
-            // Error-surface parity with coExecuteBlock: refuse discontinuous or
-            // already-committed heights at build time instead of letting them fail later at
-            // commitContinuityCheck, and refuse to clobber any live pending (defensive reuse
-            // of the one-pending-slot discipline; unreachable via buildOpPayload, which resets
-            // before the probe, but the adopt method must not assume its caller).
-            auto const lastExecuted = m_lastExecutedBlockNumber.load();
-            auto const lastCommitted = m_lastCommittedBlockNumber.load();
-            if (number > 0 && number == lastCommitted)
-            {
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
-                               "adoptProbeAsPending: block is already the committed tip"),
-                    nullptr, false};
-            }
-            if (lastExecuted != -1 && number - lastExecuted != 1)
-            {
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
-                               fmt::format("Discontinuous adopt! expect: {} input: {}",
-                                   lastExecuted + 1, number)),
-                    nullptr, false};
-            }
-            {
-                std::lock_guard<std::mutex> lock(m_pendingMutex);
-                if (m_pending)
-                {
-                    co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
-                                   "adoptProbeAsPending: unexpected live pending block at " +
-                                       std::to_string(m_pending->executedHeader->number())),
-                        nullptr, false};
-                }
-            }
-
-            namespace engine = bcos::evm::engine;
-            if (auto mismatch =
-                    engine::mismatchedFieldOf(headerCommitments(*m_lastProbe->executedHeader),
-                        headerCommitments(*blockHeader)))
-            {
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
-                               "adoptProbeAsPending: commitment mismatch on field " + *mismatch),
-                    nullptr, false};
-            }
-
-            auto const announcedBlockHash =
-                bcos::protocol::EthBlockHeader::computeHash(*blockHeader);
-            m_multiLayerStorage->pushView(std::move(m_lastProbe->view));
-            auto executedHeader = m_lastProbe->executedHeader;
-            {
-                std::lock_guard<std::mutex> lock(m_pendingMutex);
-                m_pending = PendingBlock{std::move(block), std::move(m_lastProbe->result),
-                    announcedBlockHash, executedHeader, true};
-            }
-            m_lastExecutedBlockNumber.store(number);
-            m_lastProbe.reset();
-            co_return {nullptr, std::move(executedHeader), false};
-        }
-        catch (std::exception const& e)
-        {
-            auto message = fmt::format("Adopt probe failed! {}", boost::diagnostic_information(e));
-            OP_SCHEDULER_LOG(ERROR) << message;
-            co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
-                nullptr, false};
-        }
-        catch (...)
-        {
-            auto message = std::string{"Adopt probe failed! ("} +
-                           describeException(std::current_exception()) + ")";
-            OP_SCHEDULER_LOG(ERROR) << message;
-            co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
-                nullptr, false};
-        }
     }
 
     void commitBlock(bcos::protocol::BlockHeader::Ptr header,
@@ -773,6 +674,122 @@ private:
         catch (...)
         {
             auto message = std::string{"Execute block failed! ("} +
+                           describeException(std::current_exception()) + ")";
+            OP_SCHEDULER_LOG(ERROR) << message;
+            co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
+                nullptr, false};
+        }
+    }
+
+    task::Task<std::tuple<Error::Ptr, protocol::BlockHeader::Ptr, bool>> coAdoptProbe(
+        protocol::Block::Ptr block)
+    {
+        try
+        {
+            auto blockHeader = block->blockHeader();
+            auto const number = blockHeader->number();
+            OP_SCHEDULER_LOG(INFO) << "Adopt probe: " << number;
+
+            // Same double-lock as coExecuteBlock: pushView must not race mergeBackStorage.
+            std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
+            if (!executeLock.owns_lock())
+            {
+                auto message = std::string{"Another block is executing!"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr, false};
+            }
+            std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
+            if (!commitLock.owns_lock())
+            {
+                auto message = std::string{"Another block is committing!"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr, false};
+            }
+            if (!m_lastProbe)
+            {
+                auto message = std::string{"adoptProbeAsPending: no retained probe"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
+                    nullptr, false};
+            }
+
+            // Error-surface parity with coExecuteBlock: refuse discontinuous or
+            // already-committed heights at build time instead of letting them fail later at
+            // commitContinuityCheck, and refuse to clobber any live pending (defensive reuse
+            // of the one-pending-slot discipline; unreachable via buildOpPayload, which resets
+            // before the probe, but the adopt method must not assume its caller).
+            auto const lastExecuted = m_lastExecutedBlockNumber.load();
+            auto const lastCommitted = m_lastCommittedBlockNumber.load();
+            if (number > 0 && number == lastCommitted)
+            {
+                auto message =
+                    std::string{"adoptProbeAsPending: block is already the committed tip"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
+                    nullptr, false};
+            }
+            if (lastExecuted != -1 && number - lastExecuted != 1)
+            {
+                auto message = fmt::format(
+                    "Discontinuous adopt! expect: {} input: {}", lastExecuted + 1, number);
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
+                    nullptr, false};
+            }
+            {
+                std::lock_guard<std::mutex> lock(m_pendingMutex);
+                if (m_pending)
+                {
+                    auto message =
+                        fmt::format("adoptProbeAsPending: unexpected live pending block at {}",
+                            m_pending->executedHeader->number());
+                    OP_SCHEDULER_LOG(INFO) << message;
+                    co_return {
+                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                        nullptr, false};
+                }
+            }
+
+            namespace engine = bcos::evm::engine;
+            if (auto mismatch =
+                    engine::mismatchedFieldOf(headerCommitments(*m_lastProbe->executedHeader),
+                        headerCommitments(*blockHeader)))
+            {
+                auto message =
+                    fmt::format("adoptProbeAsPending: commitment mismatch on field {}", *mismatch);
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
+                    nullptr, false};
+            }
+
+            auto const announcedBlockHash =
+                bcos::protocol::EthBlockHeader::computeHash(*blockHeader);
+            m_multiLayerStorage->pushView(std::move(m_lastProbe->view));
+            auto executedHeader = m_lastProbe->executedHeader;
+            {
+                std::lock_guard<std::mutex> lock(m_pendingMutex);
+                m_pending = PendingBlock{std::move(block), std::move(m_lastProbe->result),
+                    announcedBlockHash, executedHeader, true};
+            }
+            m_lastExecutedBlockNumber.store(number);
+            m_lastProbe.reset();
+            OP_SCHEDULER_LOG(INFO) << "Adopted probe as pending: " << number;
+            co_return {nullptr, std::move(executedHeader), false};
+        }
+        catch (std::exception& e)
+        {
+            auto message = fmt::format("Adopt probe failed! {}", boost::diagnostic_information(e));
+            OP_SCHEDULER_LOG(ERROR) << message;
+            co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
+                nullptr, false};
+        }
+        catch (...)
+        {
+            auto message = std::string{"Adopt probe failed! ("} +
                            describeException(std::current_exception()) + ")";
             OP_SCHEDULER_LOG(ERROR) << message;
             co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
@@ -1562,6 +1579,7 @@ private:
     std::atomic<int64_t> m_lastCommittedBlockNumber{-1};
     std::mutex m_pendingMutex;
     std::optional<PendingBlock> m_pending;
+    std::optional<ProbeSlot> m_lastProbe;
 };
 
 
