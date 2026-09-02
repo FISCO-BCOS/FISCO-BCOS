@@ -302,8 +302,25 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     // TODO: engineService->newPayload() MUST throw JsonRpcException in these cases:
     //   -32602 InvalidParams: wrong version of ExecutionPayload structure (V2)
     //   -38005 UnsupportedFork: timestamp out of fork window (V2/V3)
-    auto engineResult =
-        co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
+    bcos::engine::PayloadStatus engineResult;
+    try
+    {
+        engineResult =
+            co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
+    }
+    catch (engine::UnsupportedFork const& e)
+    {
+        // handleOpNewPayload gates version != 4 with UnsupportedFork; the RPC must answer
+        // -38005 (op-geth unsupportedForkErr) rather than the generic -32603. Keep the
+        // errinfo_comment so the operator can tell which gate fired.
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
+    }
+    catch (engine::InvalidPayloadAttributes const& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidPayloadAttributes,
+            std::string("Invalid payload attributes: ") + e.what()));
+    }
     auto result = serializePayloadStatus(engineResult, version);
     buildJsonContent(result, response);
 }
