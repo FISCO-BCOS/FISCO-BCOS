@@ -833,7 +833,7 @@ BOOST_AUTO_TEST_CASE(generic_validation_error_table_matches)
         std::function<NewPayloadRequest()> makeLegacy;
         std::function<NewPayloadRequest()> makeNew;
         std::uint32_t version;
-        char const* errorNeedle;
+        char const* expectedError;
     };
 
     auto attrs = makePayloadAttributesV3();
@@ -854,7 +854,7 @@ BOOST_AUTO_TEST_CASE(generic_validation_error_table_matches)
                 r.executionPayload.transactions.push_back({.raw = bytes{}, .decoded = nullptr});
                 return r;
             },
-            1, "empty"},
+            1, "executionPayload.transactions[0] is empty"},
         {"unsupported_type",
             [&] {
                 NewPayloadRequest r;
@@ -868,7 +868,7 @@ BOOST_AUTO_TEST_CASE(generic_validation_error_table_matches)
                     {.raw = bytes{0x00, 0x01}, .decoded = nullptr});
                 return r;
             },
-            1, "unsupported"},
+            1, "unsupported transaction type (transaction index 0)"},
         {"blob_tx",
             [&] {
                 NewPayloadRequest r;
@@ -882,7 +882,7 @@ BOOST_AUTO_TEST_CASE(generic_validation_error_table_matches)
                     {.raw = bytes{0x03, 0xaa}, .decoded = nullptr});
                 return r;
             },
-            1, "blob"},
+            1, "blob transactions are not allowed (transaction index 0)"},
         {"v1_withdrawals",
             [&] {
                 NewPayloadRequest r;
@@ -922,7 +922,7 @@ BOOST_AUTO_TEST_CASE(generic_validation_error_table_matches)
                 r.executionPayload.gasUsed = 0;
                 return r;
             },
-            2, "withdrawals are required"},
+            2, "withdrawals are required for ExecutionPayloadV2 and later"},
         {"v4_nonempty_execution_requests",
             [&] {
                 NewPayloadRequest r = makeNewPayloadRequestV3(legacyPayload->executionPayload);
@@ -938,7 +938,9 @@ BOOST_AUTO_TEST_CASE(generic_validation_error_table_matches)
                 r.executionRequests = std::vector<bytes>{bytes{0x01}};
                 return r;
             },
-            4, "executionRequests"},
+            4,
+            "executionRequests must be present and empty (L2 carries no "
+            "execution requests)"},
     };
 
     for (auto const& c : cases)
@@ -948,9 +950,68 @@ BOOST_AUTO_TEST_CASE(generic_validation_error_table_matches)
         checkStatusParity(legacyStatus, newStatus);
         BOOST_REQUIRE(legacyStatus.validationError.has_value());
         BOOST_REQUIRE(newStatus.validationError.has_value());
-        BOOST_CHECK_NE(legacyStatus.validationError->find(c.errorNeedle), std::string::npos);
-        BOOST_CHECK_NE(newStatus.validationError->find(c.errorNeedle), std::string::npos);
+        BOOST_CHECK_EQUAL(*legacyStatus.validationError, c.expectedError);
+        BOOST_CHECK_EQUAL(*newStatus.validationError, c.expectedError);
     }
+}
+
+BOOST_AUTO_TEST_CASE(generic_multi_error_precedence_matches)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+
+    auto attrs = makePayloadAttributesV3();
+    auto legacyBuild = task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attrs, 3));
+    auto newBuild = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attrs, 3));
+    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyBuild.payloadId, 3));
+    auto newPayload = task::syncWait(pair.fresh.getPayload(*newBuild.payloadId, 3));
+
+    auto makeMultiError = [&](ExecutionPayload const& executionPayload) {
+        NewPayloadRequest request = makeNewPayloadRequestV3(executionPayload);
+        request.executionPayload.transactions.push_back({.raw = bytes{}, .decoded = nullptr});
+        request.expectedBlobVersionedHashes = {
+            h256("3333333333333333333333333333333333333333333333333333333333333333")};
+        request.executionRequests = std::vector<bytes>{bytes{0x01}};
+        request.parentBeaconBlockRoot = std::nullopt;
+        return request;
+    };
+
+    auto legacyStatus =
+        task::syncWait(pair.legacy.newPayload(makeMultiError(legacyPayload->executionPayload), 4));
+    auto newStatus =
+        task::syncWait(pair.fresh.newPayload(makeMultiError(newPayload->executionPayload), 4));
+    checkStatusParity(legacyStatus, newStatus);
+    constexpr char const* c_expectedFirstError = "executionPayload.transactions[0] is empty";
+    BOOST_REQUIRE(legacyStatus.validationError.has_value());
+    BOOST_REQUIRE(newStatus.validationError.has_value());
+    BOOST_CHECK_EQUAL(*legacyStatus.validationError, c_expectedFirstError);
+    BOOST_CHECK_EQUAL(*newStatus.validationError, c_expectedFirstError);
+
+    auto makeRequestLevelMultiError = [&](ExecutionPayload const& executionPayload) {
+        NewPayloadRequest request = makeNewPayloadRequestV3(executionPayload);
+        request.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+        request.expectedBlobVersionedHashes = {
+            h256("4444444444444444444444444444444444444444444444444444444444444444")};
+        request.executionRequests = std::vector<bytes>{bytes{0x01}};
+        request.parentBeaconBlockRoot = std::nullopt;
+        return request;
+    };
+
+    auto legacyRequestError = task::syncWait(
+        pair.legacy.newPayload(makeRequestLevelMultiError(legacyPayload->executionPayload), 4));
+    auto newRequestError = task::syncWait(
+        pair.fresh.newPayload(makeRequestLevelMultiError(newPayload->executionPayload), 4));
+    checkStatusParity(legacyRequestError, newRequestError);
+    constexpr char const* c_expectedRequestError =
+        "expectedBlobVersionedHashes must be empty (L2 forbids blob transactions)";
+    BOOST_REQUIRE(legacyRequestError.validationError.has_value());
+    BOOST_REQUIRE(newRequestError.validationError.has_value());
+    BOOST_CHECK_EQUAL(*legacyRequestError.validationError, c_expectedRequestError);
+    BOOST_CHECK_EQUAL(*newRequestError.validationError, c_expectedRequestError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
