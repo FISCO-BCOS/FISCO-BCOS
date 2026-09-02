@@ -141,3 +141,39 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     target_compile_options(opstack-executor-scheduler-tests PRIVATE
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
 endif()
+
+# Side-by-side OpEngineService parity (legacy EngineServiceImpl vs OpEngineService).
+# Kept off the lightweight / scheduler binaries: needs engine + rpc + transaction-scheduler.
+# E2E vector paths are compile-time macros; vectors themselves are local fixtures (not in git).
+add_executable(opstack-executor-engine-tests
+    TestMain.cpp
+    OpEngineServiceParityTest.cpp
+)
+set_target_properties(opstack-executor-engine-tests PROPERTIES UNITY_BUILD OFF)
+target_include_directories(opstack-executor-engine-tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/bcos-ledger
+    ${CMAKE_SOURCE_DIR}/bcos-rpc
+)
+target_link_libraries(opstack-executor-engine-tests PRIVATE
+    opstack-executor
+    bcosevm::opstack
+    Boost::unit_test_framework
+    codec
+    protocol-tars
+    ledger
+    engine
+    bcos-utilities
+    jsoncpp_static
+    rpc
+    transaction-scheduler
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    target_compile_options(opstack-executor-engine-tests PRIVATE
+        -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
+endif()
+target_compile_definitions(opstack-executor-engine-tests PRIVATE
+    OP_T8N_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/t8n/vectors"
+    OP_T8N_GOLDEN_ENGINE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/t8n/golden/engine")
+add_test(NAME OpstackExecutorEngineTests COMMAND opstack-executor-engine-tests)
