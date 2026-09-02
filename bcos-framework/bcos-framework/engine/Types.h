@@ -136,7 +136,8 @@ struct ExecutionPayload
     u256 baseFeePerGas = 0;
     h256 blockHash;
     /// Generic-path transaction carrier: each `EngineTransaction::raw` is the EIP-2718
-    /// envelope. The OP path does not read this field (see `rawTransactions` below).
+    /// envelope. The OP build path consumes only those `raw` envelopes (with
+    /// `decoded == nullptr` where no FISCO decode exists), never the decoded fields.
     std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;
@@ -156,17 +157,11 @@ struct ExecutionPayload
     std::optional<bytes> blockAccessList = std::nullopt;
     std::optional<std::uint64_t> slotNumber = std::nullopt;
 
-    /// OP-mode carrier fields. The generic (non-OP) engine path never reads these.
-    /// - rawTransactions: OP path's only transaction carrier (raw EIP-2718 envelopes,
-    ///   including 0x7E deposits). buildOpPayload / computeTxRoot / buildOpBlock consume
-    ///   it; getPayload serializes it when present. The RPC parse fills this mirror for
-    ///   V4 only (validateOpNewPayloadRequest requires the field).
-    /// - transactions (above): generic-path carrier. OP payload *build* leaves it empty;
-    ///   serializeExecutionPayload falls back to it when rawTransactions is absent.
-    /// - withdrawalsRoot: OP Isthmus+ extends the payload with an explicit withdrawals-root
-    ///   field (= MessagePasser storage root) that cannot be derived from the (always-empty)
-    ///   `withdrawals` list above — op-geth's NewPayloadV4 requires it on OP chains.
-    std::optional<std::vector<bytes>> rawTransactions = std::nullopt;
+    /// OP Isthmus+ extends the payload with an explicit withdrawals-root field (=
+    /// MessagePasser storage root) that cannot be derived from the (always-empty)
+    /// `withdrawals` list above — op-geth's NewPayloadV4 requires it on OP chains.
+    /// The transaction carrier is `transactions[i].raw` above; there is no separate
+    /// OP mirror list (a second carrier for one consensus-critical root would drift).
     std::optional<h256> withdrawalsRoot = std::nullopt;
 };
 
