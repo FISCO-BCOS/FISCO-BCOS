@@ -62,6 +62,20 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
     }
     return tarsTx;
 }
+
+bcos::bytes decodeOpAttributeHex(std::string_view hex)
+{
+    try
+    {
+        return bcos::fromHex(hex);
+    }
+    catch (bcos::BadHexCharacter const&)
+    {
+        BOOST_THROW_EXCEPTION(InvalidPayloadAttributes{} << bcos::errinfo_comment{
+                                  "buildOpPayload: payloadAttributes.transactions "
+                                  "contains undecodable hex"});
+    }
+}
 }  // namespace bcos::engine::detail
 
 namespace
@@ -658,42 +672,21 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
         return std::string("gasLimit exceeds the maximum block gas limit (2^63-1)");
     }
     // gasUsed > gasLimit is rejected after execution via seal comparison, not here.
-    // extraData: Isthmus 9 bytes (0x00 + denom + elasticity); Jovian 17 bytes (0x01 + same +
-    // minBaseFee). denom and elasticity must be non-zero.
+    // Shape (length/version/nonzero) is the shared helper; jovianActive then picks 9 vs 17.
+    if (auto error = validateOptimismExtraDataShape(payload.extraData))
     {
-        const auto& extra = payload.extraData;
-        if (jovianActive)
+        return error;
+    }
+    if (jovianActive)
+    {
+        if (payload.extraData.size() != c_jovianExtraDataBytes)
         {
-            if (extra.size() != 17)
-            {
-                return std::string("extraData must be exactly 17 bytes on the OP path (Jovian)");
-            }
-            if (extra[0] != 0x01)
-            {
-                return std::string("extraData version byte must be 0x01 on the OP path (Jovian)");
-            }
+            return std::string("extraData must be exactly 17 bytes on the OP path (Jovian)");
         }
-        else
-        {
-            if (extra.size() != 9)
-            {
-                return std::string("extraData must be exactly 9 bytes on the OP path (Isthmus)");
-            }
-            if (extra[0] != 0x00)
-            {
-                return std::string("extraData version byte must be 0x00 on the OP path (Isthmus)");
-            }
-        }
-        auto [denominator, elasticity] = decodeEip1559Params(
-            std::span<const bcos::byte>(extra).subspan(1, c_eip1559ParamsBytes));
-        if (denominator == 0)
-        {
-            return std::string("extraData must encode a non-zero eip-1559 denominator");
-        }
-        if (elasticity == 0)
-        {
-            return std::string("extraData must encode a non-zero eip-1559 elasticity");
-        }
+    }
+    else if (payload.extraData.size() != c_holoceneExtraDataBytes)
+    {
+        return std::string("extraData must be exactly 9 bytes on the OP path (Isthmus)");
     }
     if (!narrowU256ToU64(payload.gasUsed).has_value())
     {

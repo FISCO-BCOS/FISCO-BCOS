@@ -146,6 +146,9 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
 std::optional<bcostars::Transaction> opEnvelopeToTars(
     bcos::bytes const& env, bcos::crypto::HashType const& txHash);
 
+/// Decode a CL attribute hex envelope. Undecodable hex is -38003, not -32603.
+bcos::bytes decodeOpAttributeHex(std::string_view hex);
+
 /// Single carrier after #5537: OP envelopes live in `transactions[i].raw`.
 inline std::vector<bytes> rawEnvelopesOf(ExecutionPayload const& payload)
 {
@@ -694,17 +697,7 @@ private:
             attrTxHashes.reserve(payloadAttributes.transactions->size());
             for (auto const& forcedHex : *payloadAttributes.transactions)
             {
-                bcos::bytes raw;
-                try
-                {
-                    raw = bcos::fromHex(forcedHex);
-                }
-                catch (bcos::BadHexCharacter const&)
-                {
-                    BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                              "buildOpPayload: payloadAttributes.transactions "
-                                              "contains undecodable hex"});
-                }
+                auto raw = detail::decodeOpAttributeHex(forcedHex);
                 attrTxHashes.emplace_back(bcos::crypto::keccak256Hash(bcos::ref(raw)));
                 forcedEnvelopes.push_back(std::move(raw));
             }
@@ -1436,31 +1429,16 @@ private:
             co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
         }
 
-        // Occupied height: allow only a one-level reorg sibling of the current tip.
+        // Occupied height: OpScheduler has no ReorgUndo. Fail-closed like FCU's
+        // !c_opMode one-level rebuild gate — do not admit a tip sibling that the
+        // delegate would reject with a retryable InvalidBlockNumber.
         const auto childNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
         if (auto occupiedHeight = co_await storage2::readOne(
                 view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_HASH, childNumberStr});
             occupiedHeight.has_value())
         {
-            bool siblingOfTip = false;
-            if (payload.blockNumber > 0)
-            {
-                auto currentNumber =
-                    co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
-                auto canonicalParent = co_await bcos::ledger::getBlockHash(
-                    view, payload.blockNumber - 1, bcos::ledger::fromStorage);
-                siblingOfTip = currentNumber == payload.blockNumber &&
-                               canonicalParent.has_value() &&
-                               *canonicalParent == payload.parentHash;
-            }
-            if (!siblingOfTip)
-            {
-                BOOST_THROW_EXCEPTION(
-                    OpExecutionInternalError{} << bcos::errinfo_comment{
-                        "non-tip parent not supported: a different block is already registered "
-                        "at this height (and it is not a one-level reorg sibling of the tip), "
-                        "so the forked view's base state is not the payload's parent"});
-            }
+            co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+                std::string("a different block is already registered at this height"));
         }
 
         // Execute and commit through the OpScheduler delegate.
@@ -1478,7 +1456,8 @@ private:
         // this mutex across co_await.
         std::unique_lock opLock(x_opExecute);
 
-        // executeBlock is sync here; errors come back as SchedulerError via the callback.
+        // OpScheduler::executeBlock/commitBlock use task::syncWait; the callback
+        // has published before these calls return.
         bcos::Error::Ptr executeError;
         bcos::protocol::BlockHeader::Ptr executedHeader;
         m_delegate->executeBlock(block, /*verify=*/true,
@@ -1489,6 +1468,11 @@ private:
         if (executeError)
         {
             co_return mapDelegateError(*executeError, latestValidHash);
+        }
+        if (!executedHeader)
+        {
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "OP newPayload: executeBlock returned no header"});
         }
 
         bcos::Error::Ptr commitError;

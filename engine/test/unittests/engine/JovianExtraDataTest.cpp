@@ -67,6 +67,20 @@ ExecutionPayload makePayloadWithTransactions(bytes extraData, std::vector<bytes>
     }
     return payload;
 }
+
+NewPayloadRequest makeOpNewPayloadRequest(bytes extraData)
+{
+    NewPayloadRequest request;
+    request.executionPayload = makeExecutionPayloadV3(std::move(extraData));
+    request.parentBeaconBlockRoot =
+        h256("2222222222222222222222222222222222222222222222222222222222222222");
+    request.executionPayload.withdrawalsRoot =
+        h256("3333333333333333333333333333333333333333333333333333333333333333");
+    request.executionPayload.excessBlobGas = 0;
+    request.executionPayload.blobGasUsed = 0;
+    request.executionRequests = std::vector<bytes>{};
+    return request;
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(JovianExtraDataTest)
@@ -383,17 +397,71 @@ BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_requires_gas_and_params)
 
 BOOST_AUTO_TEST_CASE(validate_op_new_payload_accepts_empty_transactions)
 {
-    NewPayloadRequest request;
-    request.executionPayload = makeExecutionPayloadV3(fromHexWithPrefix("0x00000000fa00000006"));
-    request.parentBeaconBlockRoot =
-        h256("2222222222222222222222222222222222222222222222222222222222222222");
-    request.executionPayload.withdrawalsRoot =
-        h256("3333333333333333333333333333333333333333333333333333333333333333");
-    request.executionPayload.excessBlobGas = 0;
-    request.executionPayload.blobGasUsed = 0;
     // Carrier is transactions[].raw; an empty list is not a missing-field error.
-    auto error = engine::detail::validateOpNewPayloadRequest(request, false);
+    auto error = engine::detail::validateOpNewPayloadRequest(
+        makeOpNewPayloadRequest(fromHexWithPrefix("0x00000000fa00000006")), false);
     BOOST_CHECK(!error.has_value());
+}
+
+BOOST_AUTO_TEST_CASE(validate_op_new_payload_rejects_sibling_fields)
+{
+    auto goodExtra = fromHexWithPrefix("0x00000000fa00000006");
+    auto jovianExtra = fromHexWithPrefix("0x01000000fa000000060000000000000000");
+
+    auto missingRoot = makeOpNewPayloadRequest(goodExtra);
+    missingRoot.executionPayload.withdrawalsRoot = std::nullopt;
+    auto rootErr = engine::detail::validateOpNewPayloadRequest(missingRoot, false);
+    BOOST_REQUIRE(rootErr.has_value());
+    BOOST_CHECK_NE(rootErr->find("withdrawalsRoot"), std::string::npos);
+
+    auto subsecond = makeOpNewPayloadRequest(goodExtra);
+    subsecond.executionPayload.timestamp = 1;
+    auto tsErr = engine::detail::validateOpNewPayloadRequest(subsecond, false);
+    BOOST_REQUIRE(tsErr.has_value());
+    BOOST_CHECK_NE(tsErr->find("whole number of seconds"), std::string::npos);
+
+    auto preJovianBlob = makeOpNewPayloadRequest(goodExtra);
+    preJovianBlob.executionPayload.blobGasUsed = 1;
+    auto blobErr = engine::detail::validateOpNewPayloadRequest(preJovianBlob, false);
+    BOOST_REQUIRE(blobErr.has_value());
+    BOOST_CHECK_NE(blobErr->find("blobGasUsed"), std::string::npos);
+
+    auto missingRequests = makeOpNewPayloadRequest(goodExtra);
+    missingRequests.executionRequests = std::nullopt;
+    auto reqErr = engine::detail::validateOpNewPayloadRequest(missingRequests, false);
+    BOOST_REQUIRE(reqErr.has_value());
+    BOOST_CHECK_NE(reqErr->find("executionRequests"), std::string::npos);
+
+    // Shared shape helper: empty extraData is legal pre-Holocene, but OP Isthmus wants 9 bytes.
+    auto emptyExtra = makeOpNewPayloadRequest({});
+    auto emptyErr = engine::detail::validateOpNewPayloadRequest(emptyExtra, false);
+    BOOST_REQUIRE(emptyErr.has_value());
+    BOOST_CHECK_NE(emptyErr->find("exactly 9 bytes"), std::string::npos);
+
+    auto jovianOnIsthmus = makeOpNewPayloadRequest(jovianExtra);
+    auto lenErr = engine::detail::validateOpNewPayloadRequest(jovianOnIsthmus, false);
+    BOOST_REQUIRE(lenErr.has_value());
+    BOOST_CHECK_NE(lenErr->find("exactly 9 bytes"), std::string::npos);
+
+    auto isthmusOnJovian = makeOpNewPayloadRequest(goodExtra);
+    auto jovianLen = engine::detail::validateOpNewPayloadRequest(isthmusOnJovian, true);
+    BOOST_REQUIRE(jovianLen.has_value());
+    BOOST_CHECK_NE(jovianLen->find("exactly 17 bytes"), std::string::npos);
+
+    auto zeroDenom = makeOpNewPayloadRequest(fromHexWithPrefix("0x000000000000000006"));
+    auto denomErr = engine::detail::validateOpNewPayloadRequest(zeroDenom, false);
+    BOOST_REQUIRE(denomErr.has_value());
+    BOOST_CHECK_NE(denomErr->find("non-zero"), std::string::npos);
+
+    BOOST_CHECK(
+        !engine::detail::validateOpNewPayloadRequest(makeOpNewPayloadRequest(jovianExtra), true)
+             .has_value());
+}
+
+BOOST_AUTO_TEST_CASE(undecodable_attribute_hex_throws_invalid_payload_attributes)
+{
+    BOOST_CHECK_THROW(engine::detail::decodeOpAttributeHex("zz"), InvalidPayloadAttributes);
+    BOOST_CHECK_NO_THROW((void)engine::detail::decodeOpAttributeHex("7e"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
