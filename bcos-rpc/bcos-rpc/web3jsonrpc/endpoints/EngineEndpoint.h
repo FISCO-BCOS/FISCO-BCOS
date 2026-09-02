@@ -24,7 +24,6 @@
 #include "bcos-task/Task.h"
 #include <json/json.h>
 #include <atomic>
-#include <chrono>
 
 namespace bcos::rpc
 {
@@ -61,12 +60,6 @@ private:
     /// Build the -38005 answer for a method version this node does not implement.
     void buildUnimplementedVersionError(std::string_view method, Json::Value& response) const;
 
-    /// Minimum interval between FCU calls that carry payload attributes:
-    /// payload building runs two full block executions, so an unthrottled flood is a CPU
-    /// DoS even behind the mandatory JWT. A normal CL sends one FCU-with-attrs per block
-    /// (seconds apart); 100ms is generous headroom.
-    static constexpr std::chrono::milliseconds c_opFcuBuildMinInterval{100};
-    std::atomic<std::chrono::steady_clock::time_point> m_lastFcuBuildAt{};
     /// One-in-flight guard for OP (V4) newPayload executions: a second concurrent request is
     /// answered with the spec-recognized SYNCING status instead of queueing another full
     /// block execution + commit (CPU DoS bound; op-node retries).

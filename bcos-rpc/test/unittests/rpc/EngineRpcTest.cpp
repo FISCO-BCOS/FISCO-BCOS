@@ -210,40 +210,6 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 3);
 }
 
-// R21: attribute-bearing FCUs are rate-limited to one per c_opFcuBuildMinInterval.
-// The second call inside the window answers -32000 and must NOT refresh the anchor
-// (a rejected call re-arms nothing), so a third call still inside the original window
-// is also rejected; a call after the window passes.
-BOOST_AUTO_TEST_CASE(forkchoiceUpdatedAttrsRateLimited)
-{
-    Json::Value params(Json::arrayValue);
-    Json::Value fc;
-    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
-    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
-    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
-    params.append(fc);
-    Json::Value attrs;
-    attrs["timestamp"] = "0x1";
-    attrs["prevRandao"] = "0x4444444444444444444444444444444444444444444444444444444444444444";
-    attrs["suggestedFeeRecipient"] = "0x5555555555555555555555555555555555555555";
-    params.append(attrs);
-
-    Json::Value r1;
-    CALL_ENGINE(forkchoiceUpdatedV2, params, r1);
-    BOOST_CHECK(r1["result"].isMember("payloadStatus"));  // admitted
-
-    Json::Value r2;
-    CALL_ENGINE(forkchoiceUpdatedV2, params, r2);
-    BOOST_CHECK(r2["error"].isMember("code"));
-    BOOST_CHECK_EQUAL(r2["error"]["code"].asInt(), -32000);
-
-    // Rejected call must not refresh the window: a third call still inside the
-    // original 100ms window is rejected too.
-    Json::Value r3;
-    CALL_ENGINE(forkchoiceUpdatedV2, params, r3);
-    BOOST_CHECK_EQUAL(r3["error"]["code"].asInt(), -32000);
-}
-
 // The one method version this node really does not implement: forkchoiceUpdatedV4 is
 // refused at the RPC endpoint (-38005) before the engine service; OP mode constructs
 // maxEngineVersion=V4, so isForkchoiceVersionSupported would otherwise admit it.

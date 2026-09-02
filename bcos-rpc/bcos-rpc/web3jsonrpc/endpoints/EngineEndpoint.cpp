@@ -154,54 +154,8 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
         co_return;
     }
 
-    // Rate-limit FCU calls that carry payload attributes BEFORE parsing them (R53): the
-    // window is checked on the O(1) presence of params[1], not after parsePayloadAttributes
-    // hex-decodes an unbounded transactions array. Payload building runs two full block
-    // executions per call, so a flood (even authenticated) is a CPU DoS; a normal CL sends
-    // one FCU-with-attrs per block and the fixed window only trips on abusive bursts.
-    // The pre-parse check is read-only: the window is anchored only after a successful
-    // parse, so malformed attrs (which throw -32602 and never build) do not consume it.
-    const bool hasAttrs = request.isArray() && request.size() >= 2 && !request[1].isNull();
-    const auto now = std::chrono::steady_clock::now();
-    if (hasAttrs)
-    {
-        auto last = m_lastFcuBuildAt.load(std::memory_order_relaxed);
-        if (last.time_since_epoch().count() != 0 && now - last < c_opFcuBuildMinInterval)
-        {
-            Json::Value error;
-            error["code"] = -32000;
-            error["message"] =
-                "forkchoiceUpdated with payloadAttributes is rate-limited (minimum interval "
-                "between attribute-bearing calls)";
-            response["jsonrpc"] = "2.0";
-            response["error"] = std::move(error);
-            co_return;
-        }
-    }
-
     auto forkchoiceState = parseForkchoiceState(request);
     auto payloadAttrs = parsePayloadAttributes(request, version);
-    if (hasAttrs)
-    {
-        // CAS-accept (not exchange) after a successful parse: a rejected call must NOT
-        // refresh the window, or a flood could starve the honest CL forever — only the
-        // winning call sets the window anchor. The rejection carries the generic JSON-RPC
-        // server-error range (-32000), which op-node's error handling treats as a retryable
-        // server failure, instead of the non-spec Web3DefaultError.
-        auto last = m_lastFcuBuildAt.load(std::memory_order_relaxed);
-        if (!m_lastFcuBuildAt.compare_exchange_strong(
-                last, now, std::memory_order_relaxed, std::memory_order_relaxed))
-        {
-            Json::Value error;
-            error["code"] = -32000;
-            error["message"] =
-                "forkchoiceUpdated with payloadAttributes is rate-limited (minimum interval "
-                "between attribute-bearing calls)";
-            response["jsonrpc"] = "2.0";
-            response["error"] = std::move(error);
-            co_return;
-        }
-    }
     // TODO: engineService->updateForkchoice() MUST throw JsonRpcException in these cases:
     //   -38002 InvalidForkchoiceState: headBlockHash is VALID but finalizedBlockHash/safeBlockHash
     //   not in chain -38003 InvalidPayloadAttributes: payloadAttributes.timestamp <=
