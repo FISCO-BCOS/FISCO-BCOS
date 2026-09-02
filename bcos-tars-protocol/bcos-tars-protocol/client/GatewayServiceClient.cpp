@@ -224,7 +224,8 @@ bcostars::GatewayServiceClient::getPeers()
         await_resume()
         {
             return std::make_tuple(
-                std::move(m_state->error), std::move(m_state->localInfo), std::move(m_state->peers));
+                std::move(m_state->error), std::move(m_state->localInfo),
+                std::move(m_state->peers));
         }
     };
 

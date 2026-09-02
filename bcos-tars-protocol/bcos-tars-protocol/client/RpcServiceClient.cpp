@@ -180,7 +180,8 @@ bcostars::RpcServiceClient::notifyAMOPMessage(
             auto state = m_state;
             auto buffer = m_buffer;
             auto shouldBlockCall = m_self->shouldStopCall();
-            auto ret = checkConnection(m_self->c_moduleName, "asyncNotifyAMOPMessage", m_self->m_prx,
+            auto ret = checkConnection(m_self->c_moduleName, "asyncNotifyAMOPMessage",
+                m_self->m_prx,
                 [state, buffer](bcos::Error::Ptr _error) {
                     // connection-check failure: record the error; await_suspend returns false so
                     // the coroutine continues on this thread and await_resume delivers it

@@ -454,7 +454,8 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> AMOPImpl::s
         try
         {
             auto resp = co_await network->sendMessageByNodeID(choosedNodeID, *message,
-                ::ranges::views::single(message->payload()), Options{c_amopResponseTimeoutMs, true});
+                ::ranges::views::single(message->payload()),
+                Options{c_amopResponseTimeoutMs, true});
             auto respMessage = std::dynamic_pointer_cast<P2PMessage>(resp);
             if (!respMessage)
             {
