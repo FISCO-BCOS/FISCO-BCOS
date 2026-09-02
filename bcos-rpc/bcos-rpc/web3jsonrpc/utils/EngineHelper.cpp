@@ -322,6 +322,7 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .baseFeePerGas = parseBigQuantity(ep["baseFeePerGas"], "executionPayload.baseFeePerGas"),
         .blockHash = parseH256Field(ep["blockHash"], "executionPayload.blockHash"),
         .transactions = {},
+        .rawTransactions = std::nullopt,
         .extraData = {},
         .feeRecipient = parseAddressField(ep["feeRecipient"], "executionPayload.feeRecipient"),
         .timestamp = engineSecondsToInternalMillis(
@@ -331,6 +332,8 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .withdrawals = std::nullopt,
         .blobGasUsed = std::nullopt,
         .excessBlobGas = std::nullopt,
+        .blockAccessList = std::nullopt,
+        .slotNumber = std::nullopt,
         .withdrawalsRoot = std::nullopt,
     };
     if (ep.isMember("extraData"))
@@ -355,13 +358,15 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 InvalidParams, "Expected array of hex strings for executionPayload.transactions"));
         }
-        // Raw EIP-2718 bytes, hex-decoded verbatim. No transaction decoding happens
-        // here — getPayload must later return exactly these bytes.
+        // Hex-decode into transactions[].raw — the single authoritative carrier
+        // (finding S11: the derived rawTransactions mirror had zero readers in-tree and
+        // doubled the payload bytes; it stays nullopt until an OP executor seam consumes it).
         payload.transactions.reserve(ep["transactions"].size());
         for (Json::ArrayIndex i = 0; i < ep["transactions"].size(); ++i)
         {
-            payload.transactions.push_back(bcos::engine::EngineTransaction{
-                .raw = parseRawTransactionElement(ep["transactions"][i], "executionPayload", i),
+            auto txData = parseRawTransactionElement(ep["transactions"][i], "executionPayload", i);
+            payload.transactions.push_back(engine::EngineTransaction{
+                .raw = std::move(txData),
                 .decoded = nullptr,
             });
         }
@@ -823,4 +828,7 @@ void bcos::rpc::combineGetPayloadResponse(Json::Value& _result,
     {
         _result["parentBeaconBlockRoot"] = _response->parentBeaconBlockRoot->hexPrefixed();
     }
+    // (Finding S10: the former ==V4 overwrite of executionRequests to [] duplicated the
+    // >=V4 gate above — the gate already renders nullopt as [], so a future non-empty
+    // executionRequests would have been silently dropped here.)
 }

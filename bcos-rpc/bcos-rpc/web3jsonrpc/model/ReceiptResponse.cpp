@@ -5,6 +5,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-crypto/hash/Keccak256.h>
+#include <atomic>
 #include <cstdint>
 
 void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::TransactionReceipt& receipt,
@@ -18,7 +19,29 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     result["status"] = toQuantity(status);
     auto txHashHex = tx.hash().hexPrefixed();
     result["transactionHash"] = txHashHex;
-    auto cumulativeGasUsed = safeCastToU256(receipt.cumulativeGasUsed());
+    // cumulativeGasUsed is decimal on new receipts, hex on old ones. u256() accepts both;
+    // a corrupt value becomes 0x0 + WARN, not -32603.
+    bcos::u256 cumulativeGasUsed{};
+    auto const& cgs = receipt.cumulativeGasUsed();
+    if (!cgs.empty())
+    {
+        try
+        {
+            cumulativeGasUsed = bcos::u256(std::string(cgs));
+        }
+        catch (std::exception const& e)
+        {
+            // Throttle to the first occurrence per process: this sits on
+            // the polled eth_getTransactionReceipt path — a poller hitting a corrupt receipt
+            // would otherwise repeat the warning indefinitely.
+            static std::atomic<bool> warnedOnce{false};
+            if (!warnedOnce.exchange(true))
+            {
+                WEB3_LOG(WARNING) << LOG_DESC("ReceiptResponse: unparseable cumulativeGasUsed")
+                                  << LOG_KV("value", cgs) << LOG_KV("msg", e.what());
+            }
+        }
+    }
     size_t logIndex = receipt.logIndex();
     auto transactionIndex = toQuantity(receipt.transactionIndex());
     result["transactionIndex"] = transactionIndex;
@@ -27,9 +50,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     auto blockNumber = receipt.blockNumber();
     result["blockNumber"] = toQuantity(blockNumber);
     auto from = toHex(tx.sender());
-    // EIP-55 checksum needs keccak256(address) per recipient; RPC read path (not consensus),
-    // so the 3-4 hashes per receipt are acceptable — caching here would need shared-state
-    // synchronization for a marginal win (see review Finding J).
+    // EIP-55 checksum; RPC path only, not consensus.
     toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
     result["from"] = "0x" + std::move(from);
     if (tx.to().empty())
@@ -44,6 +65,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         result["to"] = "0x" + std::move(to);
     }
     result["cumulativeGasUsed"] = toQuantity(cumulativeGasUsed);
+    // effectiveGasPrice is already a quantity at seal time; missing => 0x0.
     result["effectiveGasPrice"] =
         receipt.effectiveGasPrice().empty() ? "0x0" : std::string(receipt.effectiveGasPrice());
     result["gasUsed"] = toQuantity(receipt.gasUsed());
@@ -64,7 +86,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     for (size_t i = 0; i < receiptLog.size(); i++)
     {
         Json::Value log;
-        auto address = std::string(receiptLog[i].address());
+        auto address = toLogAddressHex(receiptLog[i].address());
         toChecksumAddress(address, bcos::crypto::keccak256Hash(bcos::bytesConstRef(address)).hex());
         log["address"] = "0x" + std::move(address);
         log["topics"] = Json::arrayValue;
@@ -76,7 +98,10 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         log["logIndex"] = toQuantity(logIndex + i);
         log["blockNumber"] = toQuantity(blockNumber);
         log["blockHash"] = blockHashHex;
-        log["transactionIndex"] = toQuantity(transactionIndex);
+        // transactionIndex is already the quantity string computed above; re-running it
+        // through toQuantity would hit the Binary overload (string is a contiguous range)
+        // and hex-encode the ASCII bytes ("0x1" -> "0x307831").
+        log["transactionIndex"] = transactionIndex;
         log["transactionHash"] = txHashHex;
         log["removed"] = false;
         result["logs"].append(std::move(log));

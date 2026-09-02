@@ -19,12 +19,14 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-framework/engine/AnyEngineService.h>
+#include <bcos-framework/engine/Types.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
+#include <bcos-rpc/web3jsonrpc/utils/EngineErrorMapper.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <memory>
 #include <boost/test/unit_test.hpp>
+#include <memory>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -70,6 +72,14 @@ public:
         const engine::ForkchoiceState& forkchoiceState, const engine::PayloadAttributes*,
         std::uint32_t version)
     {
+        // Mirror EngineServiceImpl::isForkchoiceVersionSupported (V1–V3). A test that
+        // routes FCU V4 into the engine must not stay green while production rejects it.
+        if (version < static_cast<std::uint32_t>(engine::ApiVersion::V1) ||
+            version > static_cast<std::uint32_t>(engine::ApiVersion::V3))
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{}
+                                  << bcos::errinfo_comment{"Unsupported Engine API version"});
+        }
         m_state->capturedForkchoiceState = forkchoiceState;
         m_state->capturedForkchoiceVersion = static_cast<int>(version);
         co_return m_state->forkchoiceUpdatedResult;
@@ -210,9 +220,7 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 3);
 }
 
-// The one method version this node really does not implement: the service-layer forkchoice
-// window tops out at V3 (isForkchoiceVersionSupported), so V4 answers -38005 without
-// reaching the engine service.
+// FCU V4 is unimplemented: -38005, engine not called.
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
 {
     Json::Value params(Json::arrayValue);
@@ -225,7 +233,7 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
     Json::Value response;
     CALL_ENGINE(forkchoiceUpdatedV4, params, response);
 
-    BOOST_CHECK(response.isMember("error"));
+    BOOST_REQUIRE(response.isMember("error"));
     BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
     BOOST_CHECK(!mockService.m_state->capturedForkchoiceVersion.has_value());
 }
@@ -1009,6 +1017,28 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
         "0x9999999999999999999999999999999999999999999999999999999999999999");
     BOOST_CHECK_EQUAL(result["blockValue"].asString(), largeQuantity);
     BOOST_CHECK_EQUAL(result["executionRequests"].size(), 0);
+}
+
+// UnsupportedEngineApiVersion maps to -38005, not -32603. The FCU window tops out at V3;
+// V4 requests answer -38005 by design (Karst payload building is FCU V3 / getPayload V5 /
+// newPayload V4), so ops configuring Isthmus op-node must not expect V4 support.
+BOOST_AUTO_TEST_CASE(engineErrorMapperOutOfWindowVersion)
+{
+    BOOST_CHECK_EQUAL(bcos::rpc::mapEngineErrorCode(bcos::engine::UnsupportedEngineApiVersion{}),
+        EngineError::UnsupportedFork);
+    BOOST_CHECK_EQUAL(
+        bcos::rpc::mapEngineErrorCode(bcos::engine::UnknownPayload{}), EngineError::UnknownPayload);
+    // Errors.h groups UnknownForkchoiceHeadBlock with InvalidForkchoiceState under -38002;
+    // the mapper must not drop it to -32603 — part-5's forkchoice path throws it.
+    BOOST_CHECK_EQUAL(bcos::rpc::mapEngineErrorCode(bcos::engine::UnknownForkchoiceHeadBlock{}),
+        EngineError::InvalidForkchoiceState);
+    // Remaining mapped families (round-2 finding AX): IncompatiblePayloadVersion shares
+    // -38005 with UnsupportedFork; UnsupportedOpPayloadAttributes carries -38003. Both must
+    // stay pinned so a mapper refactor cannot silently drop them to -32603.
+    BOOST_CHECK_EQUAL(bcos::rpc::mapEngineErrorCode(bcos::engine::IncompatiblePayloadVersion{}),
+        EngineError::UnsupportedFork);
+    BOOST_CHECK_EQUAL(bcos::rpc::mapEngineErrorCode(bcos::engine::UnsupportedOpPayloadAttributes{}),
+        EngineError::InvalidPayloadAttributes);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

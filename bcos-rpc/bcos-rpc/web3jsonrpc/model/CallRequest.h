@@ -58,9 +58,13 @@ struct CallRequest
         _out << "maxFeePerGas: " << _in.maxFeePerGas.value_or("") << ", ";
         return _out;
     }
+    // Throws std::invalid_argument when an explicitly present fee/value quantity is
+    // malformed on the OP envelope path. Decode already rejects those for RPC input;
+    // this fail-closed path covers direct CallRequest construction.
     bcos::protocol::Transaction::Ptr takeToTransaction(
         bcos::protocol::TransactionFactory::Ptr const&,
-        bcos::scheduler::SchedulerInterface::Ptr const&) noexcept;
+        bcos::scheduler::SchedulerInterface::Ptr const&,
+        std::optional<u256> blockBaseFee = std::nullopt);
 };
 [[maybe_unused]] std::tuple<bool, CallRequest> decodeCallRequest(Json::Value const& _root);
 }  // namespace bcos::rpc
