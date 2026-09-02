@@ -9,6 +9,7 @@
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
@@ -868,22 +869,6 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         BOOST_CHECK(storageNoSig.verifyAndSubmitTransaction(tx21, nullptr, false, false) ==
                     TransactionStatus::TxTypeNotSupported);
     }
-
-    auto mockWeb3ChainId321 = [&]() {
-        fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
-            .AlwaysDo(
-                [](auto const& key,
-                    std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
-                    if (key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
-                    {
-                        callback(nullptr, "321", 0);
-                    }
-                    else if (key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
-                    {
-                        callback(nullptr, "0", 0);
-                    }
-                });
-    };
 
     // Matrix: T22 — extraTxBytes starting 0x05 (unsupported typed) is Malformed.
     {
