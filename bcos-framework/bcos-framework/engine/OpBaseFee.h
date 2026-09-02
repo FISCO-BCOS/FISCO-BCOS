@@ -14,9 +14,9 @@
  *  limitations under the License.
  *
  * @file OpBaseFee.h
- * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). Production callers: the
- * EngineService OP path (buildOpPayload / runOpNewPayloadSteps) and the RPC feeHistory
- * consumer. calcOpBaseFee is invoked from EngineServiceImpl.h.
+ * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). Production caller: the
+ * EngineService OP path (buildOpPayload / runOpNewPayloadSteps). calcOpBaseFee is invoked
+ * from EngineServiceImpl.h.
  */
 
 #pragma once
@@ -24,6 +24,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <cstdint>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -32,7 +33,7 @@
 namespace bcos::engine
 {
 
-/// Canyon EIP-1559 parameters (op-geth params/rollup.go). Single source for the
+/// Canyon EIP-1559 parameters (op-geth params/config.go). Single source for the
 /// zero-pair translation in encodeOptimismExtraData and for the built-in single-node
 /// driver's FCU attribute defaults (Initializer) — the two must never drift.
 inline constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
@@ -43,7 +44,7 @@ inline constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;
 inline std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(
     std::span<const bcos::byte> params)
 {
-    if (params.size() < 8)
+    if (params.size() != 8)
     {
         throw std::invalid_argument("eip1559Params must be 8 bytes");
     }
@@ -88,12 +89,8 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
     std::optional<bcos::u256> minBaseFee;
     if (parentIsJovian && extra.size() == 17 && extra[0] == 0x01)
     {
-        uint64_t floor = 0;
-        for (std::size_t i = 0; i < 8; ++i)
-        {
-            floor = (floor << 8) | static_cast<uint64_t>(extra[9 + i]);
-        }
-        minBaseFee = bcos::u256(floor);
+        minBaseFee = bcos::u256(
+            bcos::fromBigEndian<std::uint64_t>(std::span<const bcos::byte>(extra).subspan(9, 8)));
     }
 
     bcos::u256 const gasTarget = parent.gasLimit() / elasticity;
@@ -145,7 +142,7 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
 /// Built-in OP driver gas limit: the chain's configured value (from the ledger's
 /// SystemConfig), falling back to 30M only when nothing is configured (0). A real OP
 /// chain takes its gas limit from the L1 SystemConfig; the built-in CL stands in with
-/// the configured value, not a hard-coded override (R2-F4).
+/// the configured value, not a hard-coded override.
 inline constexpr std::uint64_t c_defaultDriverGasLimit = 30'000'000ull;
 
 inline std::uint64_t resolveDriverGasLimit(std::uint64_t configuredGasLimit)

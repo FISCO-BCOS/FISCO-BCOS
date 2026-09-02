@@ -353,9 +353,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // Resolve the effective executor version BEFORE gating Engine API / wiring the
     // schedulers. The on-chain value overrides the genesis-file value and can move to >= 2
-    // at runtime (executor_version is runtime-settable via SystemConfigPrecompiled, and
-    // MultiVersionScheduler::setVersion saturates any version >= 2 onto the v2
-    // EthereumExecutor), so the gate below must read the ledger rather than the node
+    // at runtime (executor_version is runtime-settable via SystemConfigPrecompiled; the
+    // scheduler routes 2 to the v2 EthereumExecutor and saturates any version >= 3 onto
+    // the OP scheduler), so the gate below must read the ledger rather than the node
     // config — a node whose genesis said v1 but whose ledger says v2 would otherwise build
     // the Engine API on the v1 executor, the state-root divergence the gate exists to
     // prevent. The residual risk of a runtime switch to v2 without genesis config is handled
@@ -384,6 +384,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // OP mode (executor_version >= 3) assembles its own EngineService below; the v2
     // single-node driver must not build one that would be discarded and overwritten.
     const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
+    // OP mode assembles the OpScheduler as slot 3, built for engine-driven production
+    // (FCU-with-attrs -> getPayload -> newPayload). Without an engine-driven production
+    // path the legacy PBFT pipeline would start and drive that scheduler with non-engine
+    // flow — refuse the combination at startup instead of mis-producing blocks.
+    if (opStackMode && !m_nodeConfig->engineDrivenBlockProduction())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "executor_version >= 3 (OP mode) requires engine-driven block production: set "
+                "[op_engine_rpc] enable=true (external op-node) or [consensus] "
+                "enable_single_node_consensus=true (built-in CL)"));
+    }
 
     // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
     // endpoint would silently serve the v1 EngineService built below, and an external

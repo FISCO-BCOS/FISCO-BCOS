@@ -99,8 +99,8 @@ inline bcos::u256 intxToBcosU256(intx::uint256 const& val)
 /// bcos::protocol::OpStackReceiptMeta (the typed view over the tars opStackMeta hex-string
 /// fields). uint256 fields use intxToBcosU256 (full-width); uint64/uint32 scalar fields are
 /// assigned directly. Presence is preserved per-field. effective_gas_price is deliberately NOT
-/// carried here — it lands on the receipt's top-level effectiveGasPrice field (op-geth api.go:1775
-/// emits it at the top level, not inside the OP extension object).
+/// carried here — it lands on the receipt's top-level effectiveGasPrice field (op-geth
+/// internal/ethapi/api.go:1761 emits it at the top level, not inside the OP extension object).
 inline bcos::protocol::OpStackReceiptMeta toOpStackMeta(const OpReceiptMeta& meta)
 {
     bcos::protocol::OpStackReceiptMeta out;
@@ -360,7 +360,8 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
         bcos::bytesConstRef{outputBytes.data(), outputBytes.size()},
         !tx.to.has_value() ? toFiscoContractAddress(tx.sender, tx.nonce) : std::string{});
     out->setOpStackMeta(toOpStackMeta(meta));
-    // op-geth hexutil.Big: "0x" + lowercase hex, no leading zeros (api.go:1775, RPC top-level).
+    // op-geth hexutil.Big: "0x" + lowercase hex, no leading zeros (internal/ethapi/api.go:1761, RPC
+    // top-level).
     out->setEffectiveGasPrice("0x" + intx::to_string(effective_gas_price, 16));
     // out-param written last: an exception in the projection above must not leave a diff to apply.
     outStateDiff = std::move(receipt.state_diff);

@@ -94,13 +94,12 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
                                                  "(must be >= 0)"));
     }
     // Saturate the upper bound: any version >= the last scheduler index selects the
-    // newest executor (the v3 OP scheduler in OP mode, else the v2 EthereumExecutor).
-    // This keeps the version space open-ended above the top slot so a future executor
-    // version needs no array/schema change.
-    // The saturation itself is silent by design, but an unknown version above today's
-    // set deserves a log line: on a binary that has no such version, "see an unknown
-    // version, run the newest" means executing blocks under rules the chain did not
-    // explicitly ask for — make the guess visible instead of quiet.
+    // newest executor (the v3 OP scheduler in OP mode, else the refusing stub that answers
+    // UnknownError). This keeps the version space open-ended above the top slot so a future
+    // executor version needs no array/schema change. The saturation itself is silent by design, but
+    // an unknown version above today's set deserves a log line: on a binary that has no such
+    // version, "see an unknown version, run the newest" means executing blocks under rules the
+    // chain did not explicitly ask for — make the guess visible instead of quiet.
     if (static_cast<size_t>(version) >= m_schedulers.size())
     {
         INITIALIZER_LOG(WARNING) << LOG_DESC(

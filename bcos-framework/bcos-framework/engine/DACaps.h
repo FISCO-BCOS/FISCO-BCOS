@@ -33,6 +33,11 @@ namespace bcos::engine
 /// one instance created by the initializer, handed to both sides (NodeService carries
 /// it for the RPC, the engine service ctor receives it directly).
 ///
+/// Status in this slice: CONSUMER-SIDE ONLY. No miner_setMaxDASize RPC writer exists yet
+/// (the caps stay zero/uncapped until that producer lands), and NodeService does not yet
+/// carry the instance — the handoff described above is the intended wiring, not current
+/// code.
+///
 /// Semantics (both in BYTES of the serialized EIP-2718 envelope, matching the
 /// build-path TODO's documented contract and op-geth's miner shrinking under throttle):
 ///   maxTxSize   — a sealed pool tx whose envelope exceeds this is dropped from the

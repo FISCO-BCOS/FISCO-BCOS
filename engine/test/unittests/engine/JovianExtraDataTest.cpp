@@ -117,7 +117,7 @@ BOOST_AUTO_TEST_CASE(holocene_without_min_base_fee_encodes_nine_bytes)
 BOOST_AUTO_TEST_CASE(missing_eip1559_params_keeps_extra_data_empty)
 {
     BOOST_CHECK(engine::detail::encodeOptimismExtraData(makeAttributes(std::nullopt, std::nullopt))
-            .empty());
+                    .empty());
 }
 
 // minBaseFee without eip1559Params leaves the params half of the 17-byte form
@@ -135,10 +135,16 @@ BOOST_AUTO_TEST_CASE(wrong_length_eip1559_params_are_rejected)
 {
     // Non-zero fill: all-zero bytes fold into the valid (0,0) pairing at the attribute level,
     // so a length-gate weakening to a parity-only check would survive all-zero cells (R57).
-    BOOST_CHECK(engine::detail::validatePayloadAttributes(
-        makeAttributes(bytes(7, 0xAA), 0), 3).has_value());
-    BOOST_CHECK(engine::detail::validatePayloadAttributes(
-        makeAttributes(bytes(9, 0xAA), 0), 3).has_value());
+    // The unique message is pinned on both cells so the rejection is attributed to the
+    // 8-byte length gate, not to a sibling guard.
+    auto shortError =
+        engine::detail::validatePayloadAttributes(makeAttributes(bytes(7, 0xAA), 0), 3);
+    BOOST_REQUIRE(shortError.has_value());
+    BOOST_CHECK_NE(shortError->find("exactly 8 bytes"), std::string::npos);
+    auto longError =
+        engine::detail::validatePayloadAttributes(makeAttributes(bytes(9, 0xAA), 0), 3);
+    BOOST_REQUIRE(longError.has_value());
+    BOOST_CHECK_NE(longError->find("exactly 8 bytes"), std::string::npos);
 }
 
 // ValidateHolocene1559Params (eip1559.go:89-100): a zero denominator with a non-zero
@@ -147,10 +153,10 @@ BOOST_AUTO_TEST_CASE(mixed_zero_eip1559_params_are_rejected)
 {
     BOOST_CHECK(engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x0000000000000006"), 0), 3)
-            .has_value());
+                    .has_value());
     BOOST_CHECK(engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000000"), 0), 3)
-            .has_value());
+                    .has_value());
     // Both zero and both non-zero stay valid.
     BOOST_CHECK(
         !engine::detail::validatePayloadAttributes(makeAttributes(bytes(8, 0), 0), 3).has_value());
@@ -189,7 +195,7 @@ BOOST_AUTO_TEST_CASE(eip1559_fields_are_rejected_below_version_three)
         // version, so any error below is attributable to the new gate.
         BOOST_REQUIRE(
             !engine::detail::validatePayloadAttributes(attributesForVersion(version), version)
-                .has_value());
+                 .has_value());
 
         auto holocene = attributesForVersion(version);
         holocene.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
@@ -212,10 +218,10 @@ BOOST_AUTO_TEST_CASE(eip1559_fields_are_rejected_below_version_three)
     // V3 is the version op-node actually uses, so both forms stay valid there.
     BOOST_CHECK(!engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000006"), std::nullopt), 3)
-            .has_value());
+                     .has_value());
     BOOST_CHECK(!engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000006"), 7), 3)
-            .has_value());
+                     .has_value());
 }
 
 // encodeOptimismExtraData is an exported detail:: entry point reachable from
@@ -337,6 +343,14 @@ BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_requires_gas_and_params)
     auto missingParams = engine::detail::validateOpPayloadAttributes(attrs, false);
     BOOST_REQUIRE(missingParams.has_value());
     BOOST_CHECK_NE(missingParams->find("eip1559Params"), std::string::npos);
+
+    // A present-zero gasLimit is rejected fail-closed: used verbatim it makes the next
+    // block's calcOpBaseFee gasTarget zero (bare internal error) instead of rejecting here.
+    attrs.gasLimit = 0;
+    auto zeroGas = engine::detail::validateOpPayloadAttributes(attrs, false);
+    BOOST_REQUIRE(zeroGas.has_value());
+    BOOST_CHECK_NE(zeroGas->find("must be non-zero"), std::string::npos);
+    attrs.gasLimit = 30'000'000;
 
     attrs.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
     BOOST_CHECK(!engine::detail::validateOpPayloadAttributes(attrs, false).has_value());

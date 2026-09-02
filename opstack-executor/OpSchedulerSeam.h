@@ -5,6 +5,8 @@
 // Engine-facing OP seam. executeBlock exists only for the scheduler concept check.
 
 #include <bcos-evm/opstack/OpForkSchedule.h>
+#include <bcos-evm/opstack/OpTransition.h>
+#include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
@@ -21,6 +23,8 @@
 #include <range/v3/range/concepts.hpp>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -32,8 +36,8 @@ template <class Storage>
 class OpSchedulerSeam
 {
 public:
-    explicit OpSchedulerSeam(bcos::evm::opstack::OpForkFlags forkFlags,
-        bcos::evm::opstack::L1BlockInfo l1BlockInfo = {})
+    explicit OpSchedulerSeam(
+        bcos::evm::opstack::OpForkFlags forkFlags, bcos::evm::opstack::L1BlockInfo l1BlockInfo = {})
       : m_forkFlags(forkFlags), m_l1BlockInfo(std::move(l1BlockInfo))
     {}
 

@@ -120,9 +120,13 @@ std::vector<std::string> bcos::engine::detail::supportedCapabilities()
 
 std::vector<std::string> bcos::engine::detail::supportedOpCapabilities()
 {
-    // OP Engine API is V4-only.
-    // Same advertised set as supportedCapabilities(); do not duplicate V4 entries.
-    // forkchoiceUpdatedV4 stays absent: the RPC endpoint answers -38005 (see above).
+    // Intentional over-advertisement: the full capability list is returned even though OP
+    // mode serves newPayload only at V4 (handleOpNewPayload answers -38005 for any other
+    // version). op-geth advertises its whole caps set regardless of the active fork and a
+    // real op-node picks its dialect (forkchoiceUpdatedV3 / getPayloadV5 / newPayloadV4 on
+    // Karst) from the rollup config, not from caps — so a spec-conformant CL never selects
+    // the unserved versions. forkchoiceUpdatedV4 stays absent for real: the RPC endpoint
+    // answers -38005 (see supportedCapabilities above).
     return supportedCapabilities();
 }
 
@@ -216,7 +220,7 @@ std::optional<std::string> validateEip1559ParamsShape(std::span<const bcos::byte
 }
 
 /// Shared whole-second contract for internal-ms timestamps, consumed by both FCU attribute
-/// validators and validateOpNewPayloadRequest so the message cannot drift (R58).
+/// validators and validateOpNewPayloadRequest so the message cannot drift.
 std::optional<std::string> validateWholeSecondTimestamp(std::uint64_t timestampMs)
 {
     if (timestampMs % 1000 != 0)
@@ -387,13 +391,20 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     {
         return std::string("gasLimit parameter is required (OP rollup)");
     }
+    // Fail closed on a present-zero gasLimit: it would be used verbatim as the block gas
+    // limit, making calcOpBaseFee's gasTarget (parentGasLimit / elasticity) zero and
+    // throwing a bare internal error on the NEXT block instead of a clean rejection here.
+    if (*payloadAttributes.gasLimit == 0)
+    {
+        return std::string("gasLimit must be non-zero when present");
+    }
     if (!payloadAttributes.eip1559Params.has_value())
     {
         return std::string("eip1559Params is required on the OP path (Holocene+)");
     }
     // Shared 8-byte length + zero-pairing rule with the generic validator. Stricter than
     // op-geth's one-directional ValidateHolocene1559Params ({d==0,e!=0} only): rejecting
-    // {d!=0,e==0} prevents division-by-zero in the base-fee math on foreign blocks (R92).
+    // {d!=0,e==0} prevents division-by-zero in the base-fee math on foreign blocks.
     if (auto error = validateEip1559ParamsShape(*payloadAttributes.eip1559Params))
     {
         return error;
@@ -595,7 +606,7 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     {
         return std::string("timestamp exceeds the int64 range of the ETH header field");
     }
-    // Same whole-second contract as both FCU attribute validators (R79): a sub-second
+    // Same whole-second contract as both FCU attribute validators: a sub-second
     // internal-ms timestamp would otherwise throw inside EthBlockHeader::computeHash and
     // surface as -32603 instead of a clean INVALID.
     if (auto error = validateWholeSecondTimestamp(payload.timestamp))

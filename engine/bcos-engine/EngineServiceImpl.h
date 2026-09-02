@@ -480,11 +480,14 @@ private:
     {
         /// Engine API version of the call that last wrote this entry: the forkchoiceUpdated
         /// version for a build, the newPayload version for a commit. getPayload's version
-        /// window (detail::isGetPayloadVersionCompatible) is checked against it, so
-        /// re-querying a payloadId AFTER committing it through newPayloadV4 answers -38005
-        /// rather than replaying the payload. op-node never does that — it fetches a build
-        /// exactly once — and op-geth's build cache is likewise not meant to outlive the
-        /// commit.
+        /// window (detail::isGetPayloadVersionCompatible) is checked against it. On the
+        /// generic path a newPayloadV4 commit stores version=4, so a post-commit re-query
+        /// through getPayloadV4/V5 fails the window and answers -38005 instead of
+        /// replaying. The OP local-commit path leaves the as-built version (3) untouched —
+        /// a post-commit re-query would replay the payload while the entry lives. That is
+        /// harmless for real CLs: op-node never re-queries a committed payloadId (it
+        /// fetches a build exactly once), and op-geth's build cache is likewise not meant
+        /// to outlive the commit.
         std::uint32_t version = 0;
         ExecutionPayload executionPayload;
         u256 blockValue = 0;
@@ -605,7 +608,7 @@ private:
             }
         }
 
-        // Execute and commit through the OpScheduler delegate (R80): same guard as
+        // Execute and commit through the OpScheduler delegate: same guard as
         // runOpNewPayloadSteps so a delegate-less OP engine fails cleanly instead of
         // dereferencing null at the first reset().
         if (!m_delegate)
@@ -1470,7 +1473,7 @@ private:
                 // (Web3Transaction RLP decode returned an error) -- a consensus-level rejection
                 // of the block, classified INVALID (OpConsensusError -> INVALID), never -32603.
                 // The verdict is issued by the delegate's execute hook: the type-byte gate
-                // (OpScheduler.h:813-819, unsupported type byte -> OpConsensusError), or for a
+                // (OpScheduler.h:819-824, unsupported type byte -> OpConsensusError), or for a
                 // malformed-but-supported 0x01/0x02/0x04 envelope, opValidate's type whitelist
                 // with the all-zero fallback tars tx failing validate_transaction. Step 2
                 // (validateOpNewPayloadRequest) does NOT decode envelopes, so reaching assembly

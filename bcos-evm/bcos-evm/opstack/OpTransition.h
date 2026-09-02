@@ -239,10 +239,11 @@ inline constexpr std::size_t IsthmusL1AttributesLen = 176;
 inline constexpr std::size_t JovianL1AttributesLen = 178;
 inline constexpr std::array<uint8_t, 4> IsthmusL1AttributesSelector = {0x09, 0x89, 0x99, 0xbe};
 inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6, 0xbe, 0x2b};
-/// op-geth L1InfoDepositGas (core/types/deposit_tx.go) — the reference L1-attributes
-/// deposit gas limit. The built-in-CL synthesis keeps 1M — enough for the intrinsic gas
-/// + calldata the attributes deposit actually consumes; a normal 30M block pool accepts
-/// it. runDeposit DOES charge deposits against the running block gas pool
+/// Synthesized L1-attributes deposit gas limit. op-geth's core/types/deposit_tx.go
+/// defines no L1InfoDepositGas constant (only DepositTxType = 0x7E); deposit gas sizing
+/// lives on the op-node side. The built-in-CL synthesis keeps 1M — enough for the
+/// intrinsic gas + calldata the attributes deposit actually consumes; a normal 30M block
+/// pool accepts it. runDeposit DOES charge deposits against the running block gas pool
 /// (blockGasLeft) and raises the GAS_LIMIT_REACHED block error when a deposit's
 /// gas_limit exceeds it (op-geth state_transition.go:486 names ErrGasLimitReached as a
 /// block-level deposit error; only SYSTEM txs are exempt, and is_system_tx is rejected
