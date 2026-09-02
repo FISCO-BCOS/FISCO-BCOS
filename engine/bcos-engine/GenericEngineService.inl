@@ -145,19 +145,17 @@ task::Task<ForkchoiceUpdatedResult> GenericEngineService<MemPoolType, GlobalStat
         commonEntry->blobsBundle = BlobsBundleV1{};
     }
 
+    auto stagedArtifact = GenericPayloadArtifacts<ViewType>{
+        .view = std::make_shared<ViewType>(std::move(view)),
+        .header = std::move(built.header),
+        .receipts = std::move(built.receipts),
+    };
+
     {
         auto guard = m_tracker.lockExclusive();
-        auto putResult = guard.putPayload(
-            payloadId, commonEntry->executionPayload.blockHash, std::move(commonEntry));
-        for (auto const& evictedId : putResult.evicted)
-        {
-            m_artifacts.erase(evictedId);
-        }
-        m_artifacts[payloadId] = GenericPayloadArtifacts<ViewType>{
-            .view = std::make_shared<ViewType>(std::move(view)),
-            .header = std::move(built.header),
-            .receipts = std::move(built.receipts),
-        };
+        generic_detail::publishBuiltPayload(guard, m_artifacts, payloadId,
+            commonEntry->executionPayload.blockHash, std::move(commonEntry),
+            std::move(stagedArtifact));
     }
     result.payloadId = payloadId;
     co_return result;
@@ -289,8 +287,8 @@ task::Task<PayloadStatus> GenericEngineService<MemPoolType, GlobalStateStorageTy
         entry->blobsBundle = BlobsBundleV1{};
     }
 
-    guard.putPayload(payloadId, request.executionPayload.blockHash, std::move(entry));
-    guard.retainOnly(payloadId, request.executionPayload.blockHash);
+    guard.putAndRetainPayload(
+        payloadId, request.executionPayload.blockHash, std::move(entry));
     m_artifacts.clear();
 
     co_return split_detail::makeStatus(

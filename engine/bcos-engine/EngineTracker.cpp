@@ -166,9 +166,31 @@ PayloadCache::PutResult EngineTracker::ExclusiveAccess::putPayload(
     return m_owner->m_payloads.put(std::move(id), blockHash, std::move(entry));
 }
 
+PayloadCache::PutResult EngineTracker::ExclusiveAccess::putUnboundedPayload(
+    PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry)
+{
+    return m_owner->m_payloads.putUnbounded(std::move(id), blockHash, std::move(entry));
+}
+
 void EngineTracker::ExclusiveAccess::retainOnly(const PayloadID& id, const h256& blockHash)
 {
     m_owner->m_payloads.retainOnly(id, blockHash);
+}
+
+PayloadCache::PutResult EngineTracker::ExclusiveAccess::putAndRetainPayload(
+    PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry)
+{
+    return m_owner->m_payloads.putAndRetainOnly(std::move(id), blockHash, std::move(entry));
+}
+
+PayloadCache EngineTracker::ExclusiveAccess::snapshotPayloadCache() const
+{
+    return m_owner->m_payloads.duplicate();
+}
+
+void EngineTracker::ExclusiveAccess::restorePayloadCache(PayloadCache cache) noexcept
+{
+    m_owner->m_payloads.publishFrom(std::move(cache));
 }
 
 const ForkchoiceState& EngineTracker::ExclusiveAccess::forkchoiceState() const

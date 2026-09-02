@@ -48,6 +48,31 @@ namespace generic_detail
 bcos::h256 syntheticHash(std::string_view seed);
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
+
+template <class ArtifactsMap, class ArtifactNode>
+PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guard,
+    ArtifactsMap& artifacts, PayloadID const& payloadId, h256 const& blockHash,
+    CommonPayloadEntryPtr entry, ArtifactNode&& artifactNode)
+{
+    PayloadCache cacheRollback = guard.snapshotPayloadCache();
+    ArtifactsMap artifactsRollback = artifacts;
+    try
+    {
+        auto putResult = guard.putUnboundedPayload(payloadId, blockHash, std::move(entry));
+        artifacts[payloadId] = std::forward<ArtifactNode>(artifactNode);
+        for (auto const& evictedId : putResult.evicted)
+        {
+            artifacts.erase(evictedId);
+        }
+        return putResult;
+    }
+    catch (...)
+    {
+        guard.restorePayloadCache(std::move(cacheRollback));
+        artifacts = std::move(artifactsRollback);
+        throw;
+    }
+}
 }  // namespace generic_detail
 
 template <class ViewType>

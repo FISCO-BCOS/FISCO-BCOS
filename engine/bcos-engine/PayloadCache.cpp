@@ -10,6 +10,18 @@
 namespace bcos::engine
 {
 
+PayloadCache::PutResult PayloadCache::putUnbounded(
+    PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry)
+{
+    auto entries = m_entries;
+    auto hashToId = m_hashToId;
+    hashToId[blockHash] = id;
+    entries.insert_or_assign(id, std::move(entry));
+    m_entries.swap(entries);
+    m_hashToId.swap(hashToId);
+    return {};
+}
+
 PayloadCache::PutResult PayloadCache::put(PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry)
 {
     auto entries = m_entries;
@@ -73,6 +85,65 @@ std::optional<bcos::protocol::BlockNumber> PayloadCache::blockNumberForHash(
         return std::nullopt;
     }
     return entry->executionPayload.blockNumber;
+}
+
+PayloadCache::PutResult PayloadCache::putAndRetainOnly(
+    PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry)
+{
+    auto entries = m_entries;
+    auto hashToId = m_hashToId;
+    auto order = m_order;
+    PutResult putResult;
+
+    const bool isNew = !entries.contains(id);
+    hashToId[blockHash] = id;
+    entries.insert_or_assign(id, std::move(entry));
+    if (isNew)
+    {
+        order.push_back(id);
+    }
+    while (order.size() > c_maxEntries)
+    {
+        auto evicted = std::move(order.front());
+        order.pop_front();
+        entries.erase(evicted);
+        std::erase_if(hashToId, [&](const auto& item) { return item.second == evicted; });
+        putResult.evicted.push_back(std::move(evicted));
+    }
+
+    const auto entryIt = entries.find(id);
+    if (entryIt == entries.end())
+    {
+        return putResult;
+    }
+    const auto retainedEntry = entryIt->second;
+    entries.clear();
+    hashToId.clear();
+    order.clear();
+    entries.emplace(id, retainedEntry);
+    hashToId.emplace(blockHash, id);
+    order.push_back(id);
+
+    m_entries.swap(entries);
+    m_hashToId.swap(hashToId);
+    m_order.swap(order);
+    return putResult;
+}
+
+PayloadCache PayloadCache::duplicate() const
+{
+    PayloadCache copy;
+    copy.m_entries = m_entries;
+    copy.m_hashToId = m_hashToId;
+    copy.m_order = m_order;
+    return copy;
+}
+
+void PayloadCache::publishFrom(PayloadCache staged) noexcept
+{
+    m_entries.swap(staged.m_entries);
+    m_hashToId.swap(staged.m_hashToId);
+    m_order.swap(staged.m_order);
 }
 
 void PayloadCache::retainOnly(const PayloadID& id, const h256& blockHash)

@@ -78,7 +78,13 @@ public:
     CommonPayloadEntryPtr findPayload(const PayloadID& id) const;
     std::optional<PayloadID> payloadIdForHash(const h256& blockHash) const;
     PayloadCache::PutResult putPayload(PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry);
+    PayloadCache::PutResult putUnboundedPayload(
+        PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry);
+    PayloadCache::PutResult putAndRetainPayload(
+        PayloadID id, h256 blockHash, CommonPayloadEntryPtr entry);
     void retainOnly(const PayloadID& id, const h256& blockHash);
+    PayloadCache snapshotPayloadCache() const;
+    void restorePayloadCache(PayloadCache cache) noexcept;
     const ForkchoiceState& forkchoiceState() const;
 
 private:
