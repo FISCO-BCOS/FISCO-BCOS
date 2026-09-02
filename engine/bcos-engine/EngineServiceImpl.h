@@ -360,25 +360,17 @@ public:
                 auto const& trackedHeadBlock = *m_trackedHeadBlock;
                 if (*headBlockNumber < trackedHeadBlock.blockNumber)
                 {
-                    // Older head: the generic (non-OP) pipeline admits a one-level tip
-                    // rebuild (canonical parent + attributes) and builds a sibling. OP
-                    // mode does NOT admit it: the OpScheduler delegate refuses a sibling
-                    // of the committed tip (no ReorgUndo in its slice), so admitting the
-                    // request would build-then-fail with a retryable -32603. OP answers
-                    // VALID without a payloadId uniformly for every older head, like the
-                    // "anything older" arm below.
-                    bool const rebuildOnParent =
-                        !c_opMode && *headBlockNumber == trackedHeadBlock.blockNumber - 1 &&
-                        headCanonical && payloadAttributes != nullptr;
-                    if (!rebuildOnParent)
-                    {
-                        ForkchoiceUpdatedResult result{
-                            .payloadStatus = makeStatus(PayloadValidationStatus::Valid,
-                                forkchoiceState.headBlockHash, std::nullopt),
-                            .payloadId = std::nullopt,
-                        };
-                        co_return result;
-                    }
+                    // Older head: answer VALID without a payloadId, uniformly. A one-level
+                    // tip rebuild (canonical parent + attributes) would need to fork from
+                    // the parent's committed state and unwind the merged tip, which neither
+                    // the generic pipeline nor the OpScheduler delegate provides — building
+                    // here would execute the sibling over the tip's already-merged state.
+                    ForkchoiceUpdatedResult result{
+                        .payloadStatus = makeStatus(PayloadValidationStatus::Valid,
+                            forkchoiceState.headBlockHash, std::nullopt),
+                        .payloadId = std::nullopt,
+                    };
+                    co_return result;
                 }
                 else if (*headBlockNumber == trackedHeadBlock.blockNumber)
                 {
