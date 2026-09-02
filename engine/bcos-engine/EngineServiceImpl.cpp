@@ -19,6 +19,7 @@
 #include "EngineServiceImpl.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <evmc/evmc.h>
 #include <boost/assert.hpp>
 #include <boost/throw_exception.hpp>
 #include <limits>
@@ -334,6 +335,15 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     {
         return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3 and V4");
     }
+    if (version >= 2 && payloadAttributes.withdrawals.has_value() &&
+        !payloadAttributes.withdrawals->empty())
+    {
+        // finalizeEthBlockHeader commits the empty-trie root as a placeholder; a non-empty
+        // list would hash a root that differs from geth's DeriveSha(withdrawals).
+        return std::string(
+            "non-empty withdrawals are not supported until the withdrawals trie root is "
+            "computed");
+    }
     if (version <= 2 && payloadAttributes.eip1559Params.has_value())
     {
         return std::string("eip1559Params is only valid for PayloadAttributesV3 and V4");
@@ -453,9 +463,18 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
     // Isthmus: an ExecutionPayloadV4 always carries the L2ToL1MessagePasser storage root.
     // Pre-V4 payloads with the field present are tolerated (mirrors the parse side, which
     // ignores it below V4 the way op-geth's NewPayloadV3 performs no withdrawalsRoot check).
-    if (version >= 4 && !executionPayload.withdrawalsRoot.has_value())
+    if (version >= 4)
     {
-        return std::string("withdrawalsRoot is required for ExecutionPayloadV4 and later");
+        if (!executionPayload.withdrawalsRoot.has_value())
+        {
+            return std::string("withdrawalsRoot is required for ExecutionPayloadV4 and later");
+        }
+        auto expectedRoot = withdrawalsRootFor(executionPayload);
+        if (*executionPayload.withdrawalsRoot != expectedRoot)
+        {
+            return std::string("withdrawalsRoot does not match the value this node commits "
+                               "for the built header");
+        }
     }
     if (auto error = validateOptimismExtraDataShape(executionPayload.extraData))
     {
@@ -474,6 +493,69 @@ std::optional<std::string> bcos::engine::detail::compareWithBuiltPayload(
             "submitted blockHash");
     }
     return std::nullopt;
+}
+
+bcos::protocol::EthBlockVersion bcos::engine::detail::ethBlockVersionFor(evmc_revision rev)
+{
+    // Map the chain's EVM revision to the header fork era. PoS/Engine blocks are always
+    // LONDON-shaped or later; revisions below LONDON cannot occur on this path and are
+    // mapped to LONDON (the minimal post-merge shape). OSAKA has no distinct EthBlockVersion
+    // enumerator — its header RLP carries no new fields beyond PRAGUE, so it maps to PRAGUE.
+    switch (rev)
+    {
+    case EVMC_LONDON:
+    case EVMC_PARIS:
+        return bcos::protocol::EthBlockVersion::LONDON;
+    case EVMC_SHANGHAI:
+        return bcos::protocol::EthBlockVersion::SHANGHAI;
+    case EVMC_CANCUN:
+        return bcos::protocol::EthBlockVersion::CANCUN;
+    case EVMC_PRAGUE:
+    case EVMC_OSAKA:
+        return bcos::protocol::EthBlockVersion::PRAGUE;
+    default:
+        if (rev < EVMC_LONDON)
+        {
+            return bcos::protocol::EthBlockVersion::LONDON;
+        }
+        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
+            "EngineService: unsupported EVM revision " + std::to_string(static_cast<int>(rev)) +
+            " for Eth header fork derivation"});
+    }
+}
+
+void bcos::engine::detail::finalizeEthBlockHeader(bcos::protocol::BlockHeader& header,
+    const ExecutionPayload& payload, std::optional<bcos::h256> parentBeaconBlockRoot,
+    bcos::protocol::EthBlockVersion forkVersion)
+{
+    static const auto kEmptyOmmersHash = bcos::crypto::HashType(
+        "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
+    header.setUncleHash(kEmptyOmmersHash);
+    header.setDifficulty(bcos::u256(0));
+    header.setNonce(bcos::h64(0));
+    header.setLogsBloom(bcos::bytesConstRef(payload.logsBloom.data(), payload.logsBloom.size()));
+    header.setBaseFee(payload.baseFeePerGas);
+    if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)
+    {
+        header.setWithdrawalsRoot(bcos::engine::detail::withdrawalsRootFor(payload));
+    }
+    if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN)
+    {
+        header.setBlobGasUsed(payload.blobGasUsed.value());
+        header.setExcessBlobGas(payload.excessBlobGas.value());
+        header.setParentBeaconBlockRoot(parentBeaconBlockRoot.value());
+    }
+    if (forkVersion >= bcos::protocol::EthBlockVersion::PRAGUE)
+    {
+        header.setRequestsHash(bcos::crypto::HashType(
+            "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+    }
+    header.setEthBlockVersion(forkVersion);
+    if (auto error = bcos::protocol::EthBlockHeader::calculateRLPHash(header))
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{
+            "EngineService: failed to compute Eth RLP hash: " + error->errorMessage()});
+    }
 }
 
 // OP newPayload helpers (non-template; used only when c_opMode).

@@ -332,7 +332,7 @@ void encryptPerf(SymmetricEncryption::Ptr _encryptor, std::string const& _inputD
     std::cout << "----------- " << _encryptorName << " perf test start -----------" << std::endl;
     std::string key = "abcdefgwerelkewrwerw";
     // encrypt
-    bytesPointer encryptedData;
+    bytes encryptedData;
     auto startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
@@ -347,20 +347,20 @@ void encryptPerf(SymmetricEncryption::Ptr _encryptor, std::string const& _inputD
     std::cout << std::endl;
     // decrypt
     startT = utcTime();
-    bytesPointer decryptedData;
+    bytes decryptedData;
     for (size_t i = 0; i < _count; i++)
     {
-        decryptedData = _encryptor->symmetricDecrypt((const unsigned char*)encryptedData->data(),
-            encryptedData->size(), (const unsigned char*)key.c_str(), key.size());
+        decryptedData = _encryptor->symmetricDecrypt((const unsigned char*)encryptedData.data(),
+            encryptedData.size(), (const unsigned char*)key.c_str(), key.size());
     }
-    std::cout << "CiperData size:" << (double)encryptedData->size() / 1000.0
+    std::cout << "CiperData size:" << (double)encryptedData.size() / 1000.0
               << " KB, loops: " << _count << ", timeCost:" << utcTime() - startT << " ms"
               << std::endl;
     std::cout << "TPS of " << _encryptorName << " decrypt:"
               << (getTPS(utcTime(), startT, _count) * (double)_inputData.size()) / 1000.0 << "KB/s"
               << std::endl;
     bytes plainBytes(_inputData.begin(), _inputData.end());
-    assert(plainBytes == *decryptedData);
+    assert(plainBytes == decryptedData);
 
     std::cout << "----------- " << _encryptorName << " perf test end -----------" << std::endl;
     std::cout << std::endl;

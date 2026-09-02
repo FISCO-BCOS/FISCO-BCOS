@@ -143,7 +143,10 @@ void SingleNodeConsensus::loop()
         }
         catch (...)
         {
-            SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("produceBlock iteration threw (unknown)");
+            SINGLE_CONSENSUS_LOG(ERROR)
+                << LOG_DESC("produceBlock iteration threw (unknown)")
+                << LOG_KV("diagnostic",
+                    boost::current_exception_diagnostic_information());
         }
         // Wall-clock arm: the block timestamp advances in whole-second steps
         // (max(nowWholeSecondMs, m_lastTimestamp + 1000)), so a fast drain must NOT outrun
@@ -191,17 +194,18 @@ void SingleNodeConsensus::resolveInitialHead()
     }
     m_headNumber = headNumber;
     m_headHash = task::syncWait(ledger::getBlockHash(*m_ledger, headNumber));
-    // Seed the wall-clock timestamp from the stored head so a restart cannot propose a
-    // timestamp behind the head block (which runOpNewPayloadSteps rejects with
-    // "timestamp must be strictly greater than the parent's"). Header timestamps are ms.
-    auto headPromise2 =
+    // Seed m_lastTimestamp from the head header so a restart cannot propose a timestamp
+    // behind the head (runOpNewPayloadSteps / EIP-2 reject non-increasing timestamps).
+    // A restart in the same wall-clock second as the parent would otherwise reseal
+    // parent.timestamp. Header timestamps are whole-second milliseconds.
+    auto headerPromise =
         std::make_shared<CallbackPromise<std::tuple<Error::Ptr, protocol::Block::Ptr>>>();
-    m_ledger->asyncGetBlockDataByNumber(headNumber, bcos::ledger::HEADER,
-        [headPromise2](Error::Ptr _error, protocol::Block::Ptr _block) {
-            headPromise2->setValue(std::make_tuple(std::move(_error), std::move(_block)));
+    m_ledger->asyncGetBlockDataByNumber(headNumber, ledger::HEADER,
+        [headerPromise](Error::Ptr _error, protocol::Block::Ptr _block) {
+            headerPromise->setValue(std::make_tuple(std::move(_error), std::move(_block)));
         });
-    auto [headErr, headBlock] = headPromise2->wait(m_running);
-    if (!headErr && headBlock && headBlock->blockHeader())
+    auto [headHeaderError, headBlock] = headerPromise->wait(m_running);
+    if (!headHeaderError && headBlock && headBlock->blockHeader())
     {
         m_lastTimestamp = static_cast<std::uint64_t>(headBlock->blockHeader()->timestamp());
         SINGLE_CONSENSUS_LOG(INFO)
@@ -212,12 +216,13 @@ void SingleNodeConsensus::resolveInitialHead()
     {
         SINGLE_CONSENSUS_LOG(WARNING)
             << LOG_DESC("Could not seed last timestamp from head")
-            << LOG_KV("err", headErr ? headErr->errorMessage() : "no header");
+            << LOG_KV("err", headHeaderError ? headHeaderError->errorMessage() : "no header");
     }
     m_headInitialized = true;
     SINGLE_CONSENSUS_LOG(INFO) << LOG_DESC("Resolved initial head")
                                << LOG_KV("number", m_headNumber)
-                               << LOG_KV("hash", m_headHash.hexPrefixed());
+                               << LOG_KV("hash", m_headHash.hexPrefixed())
+                               << LOG_KV("lastTimestampMs", m_lastTimestamp);
 }
 
 std::uint64_t SingleNodeConsensus::nextBlockTimestamp(std::uint64_t fixedTimestamp,
@@ -242,12 +247,11 @@ bool SingleNodeConsensus::produceBlock()
     // seconds, matching EEST's currentTimestamp unit). fixed_timestamp (seconds) is pinned by
     // the harness so the produced block's timestamp matches the fixture; 0 = wall clock.
     //
-    // EIP-2 requires strictly increasing block timestamps, so both modes enforce
-    // monotonicity, and EthBlockHeader::computeHash requires whole-second internal ms
-    // (rlpEncode divides by 1000; a sub-second value throws std::invalid_argument and used
-    // to stall the driver at block one — both historical arms produced sub-second values:
-    // fixed stamped +n ms, wall clock stamped raw utcTime() ms). Floor to whole seconds and
-    // keep monotonicity by advancing in whole-second steps.
+    // Ethereum timestamps are second-granular (BlockHeader stores ms). EthBlockHeader
+    // rejects sub-second ms; EIP-2 requires strictly increasing timestamps. Floor to a
+    // whole second and advance in whole-second steps. The fixed-timestamp (EEST) arm is
+    // (fixed + headNumber) * 1000 so later blocks still step +1s without consulting the
+    // wall clock.
     // utcTime() already returns milliseconds (bcos-utilities/Common.cpp, despite the header
     // comment saying "seconds") — do NOT multiply by 1000, which would make the block
     // timestamp ~1.786e15 -> year 58577 in the EVM (block.timestamp / base fee schedules etc).

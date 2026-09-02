@@ -155,7 +155,7 @@ bool HsmSM2Crypto::verify(
 PublicPtr HsmSM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) const
 {
     auto signatureStruct = std::make_shared<SignatureDataWithPub>(_signData);
-    auto hsmSM2Pub = std::make_shared<KeyImpl>(HSM_SM2_PUBLIC_KEY_LEN, signatureStruct->pub());
+    auto hsmSM2Pub = std::make_shared<KeyImpl>(HSM_SM2_PUBLIC_KEY_LEN, ref(signatureStruct->pub()));
     if (verify(hsmSM2Pub, _hash, _signData))
     {
         return hsmSM2Pub;
@@ -181,7 +181,8 @@ std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesCo
     try
     {
         auto encodedData = signatureData->encode();
-        auto hsmSM2Pub = std::make_shared<KeyImpl>(HSM_SM2_PUBLIC_KEY_LEN, signatureData->pub());
+        auto hsmSM2Pub =
+            std::make_shared<KeyImpl>(HSM_SM2_PUBLIC_KEY_LEN, ref(signatureData->pub()));
         if (verify(hsmSM2Pub, in.hash, bytesConstRef(encodedData->data(), encodedData->size())))
         {
             auto address = calculateAddress(_hashImpl, hsmSM2Pub);

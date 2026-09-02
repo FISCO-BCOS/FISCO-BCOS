@@ -19,6 +19,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-framework/engine/AnyEngineService.h>
+#include <bcos-framework/engine/Errors.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-task/Wait.h>
@@ -55,6 +56,7 @@ public:
         std::optional<engine::NewPayloadRequest> capturedNewPayloadRequest;
         std::optional<std::uint32_t> capturedNewPayloadVersion;
         bool throwUnknownPayload = false;
+        bool throwUnsupportedFork = false;
     };
     std::shared_ptr<State> m_state = std::make_shared<State>();
 
@@ -72,6 +74,10 @@ public:
     {
         m_state->capturedForkchoiceState = forkchoiceState;
         m_state->capturedForkchoiceVersion = static_cast<int>(version);
+        if (m_state->throwUnsupportedFork)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
+        }
         co_return m_state->forkchoiceUpdatedResult;
     }
 
@@ -228,6 +234,32 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
     BOOST_CHECK(response.isMember("error"));
     BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
     BOOST_CHECK(!mockService.m_state->capturedForkchoiceVersion.has_value());
+}
+
+// A service-layer UnsupportedFork (e.g. the chain-fork vs attribute-shape gate in
+// buildPayload) must surface as -38005, not as a generic -32603 InternalError.
+BOOST_AUTO_TEST_CASE(forkchoiceUpdatedUnsupportedForkMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedFork = true;
+
+    Json::Value params(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    params.append(fc);
+    Json::Value attrs;
+    attrs["timestamp"] = "0x1";
+    attrs["prevRandao"] = "0x4444444444444444444444444444444444444444444444444444444444444444";
+    attrs["suggestedFeeRecipient"] = "0x5555555555555555555555555555555555555555";
+    params.append(attrs);
+
+    Json::Value response;
+    // The service's typed UnsupportedFork surfaces as Engine error -38005, not -32603.
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV2, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+    BOOST_REQUIRE(mockService.m_state->capturedForkchoiceVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 2);
 }
 
 BOOST_AUTO_TEST_CASE(getPayloadV1)

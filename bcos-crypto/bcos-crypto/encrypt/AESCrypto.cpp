@@ -26,7 +26,7 @@
 using namespace bcos;
 using namespace bcos::crypto;
 
-bytesPointer bcos::crypto::AESEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
+bytes bcos::crypto::AESEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize)
 {
     CInputBuffer plainText{(const char*)_plainData, _plainDataSize};
@@ -37,21 +37,21 @@ bytesPointer bcos::crypto::AESEncrypt(const unsigned char* _plainData, size_t _p
     FixedBytes<AES_IV_DATA_SIZE> FixedIVData(_ivData, _ivDataSize);
     CInputBuffer ivData{(const char*)FixedIVData.data(), AES_IV_DATA_SIZE};
 
-    auto encryptedData = std::make_shared<bytes>();
+    bytes encryptedData;
     size_t ciperDataSize = _plainDataSize + AES_MAX_PADDING_SIZE;
-    encryptedData->resize(ciperDataSize);
-    COutputBuffer encryptResult{(char*)(encryptedData->data()), ciperDataSize};
+    encryptedData.resize(ciperDataSize);
+    COutputBuffer encryptResult{(char*)(encryptedData.data()), ciperDataSize};
 
     if (wedpr_aes256_encrypt(&plainText, &key, &ivData, &encryptResult) == WEDPR_ERROR)
     {
         BOOST_THROW_EXCEPTION(EncryptException() << errinfo_comment("AES encrypt exception"));
     }
-    encryptedData->resize(encryptResult.len);
+    encryptedData.resize(encryptResult.len);
 
     return encryptedData;
 }
 
-bytesPointer bcos::crypto::AESDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+bytes bcos::crypto::AESDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize)
 {
     CInputBuffer ciper{(const char*)_cipherData, _cipherDataSize};
@@ -62,16 +62,16 @@ bytesPointer bcos::crypto::AESDecrypt(const unsigned char* _cipherData, size_t _
     FixedBytes<AES_IV_DATA_SIZE> fixedIVData(_ivData, _ivDataSize);
     CInputBuffer iv{(const char*)fixedIVData.data(), AES_IV_DATA_SIZE};
 
-    auto decodedData = std::make_shared<bytes>();
+    bytes decodedData;
     auto plainDataSize = _cipherDataSize;
-    decodedData->resize(plainDataSize);
-    COutputBuffer decodedResult{(char*)decodedData->data(), plainDataSize};
+    decodedData.resize(plainDataSize);
+    COutputBuffer decodedResult{(char*)decodedData.data(), plainDataSize};
 
     if (wedpr_aes256_decrypt(&ciper, &key, &iv, &decodedResult) == WEDPR_ERROR)
     {
         BOOST_THROW_EXCEPTION(DecryptException() << errinfo_comment("AES decrypt exception"));
     }
-    decodedData->resize(decodedResult.len);
+    decodedData.resize(decodedResult.len);
 
     return decodedData;
 }

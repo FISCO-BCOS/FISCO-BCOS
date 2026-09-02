@@ -415,6 +415,81 @@ BOOST_AUTO_TEST_CASE(testED25519SignAndVerify)
     BOOST_CHECK(recoverKey->data() == keyPair->publicKey()->data());
 }
 
+BOOST_AUTO_TEST_CASE(testSignatureDataWithPubCodec)
+{
+    h256 r("1111111111111111111111111111111111111111111111111111111111111111");
+    h256 s("2222222222222222222222222222222222222222222222222222222222222222");
+
+    // construct with empty pub: encode() yields only r||s (64 bytes), decode back keeps pub empty
+    {
+        bytes emptyPub;
+        SignatureDataWithPub sigWithEmptyPub(r, s, emptyPub);
+        BOOST_CHECK(sigWithEmptyPub.pub().empty());
+        auto encoded = sigWithEmptyPub.encode();
+        BOOST_CHECK_EQUAL(encoded->size(), 64);
+
+        SignatureDataWithPub decoded(bytesConstRef(encoded->data(), encoded->size()));
+        BOOST_CHECK(decoded.pub().empty());
+        BOOST_CHECK(decoded.r() == r);
+        BOOST_CHECK(decoded.s() == s);
+    }
+
+    // construct with a non-empty pub: encode() yields r||s||pub, decode round-trips
+    {
+        bytes pub = fromHex(
+            "0102030405060708091011121314151617181920212223242526272829303132"
+            "414243444546474849505152535455565758596061626364656667686970");
+        SignatureDataWithPub sigWithPub(r, s, pub);
+        BOOST_CHECK(sigWithPub.pub() == pub);
+        auto encoded = sigWithPub.encode();
+        BOOST_CHECK_EQUAL(encoded->size(), 64 + pub.size());
+
+        SignatureDataWithPub decoded(bytesConstRef(encoded->data(), encoded->size()));
+        BOOST_CHECK(decoded.pub() == pub);
+        BOOST_CHECK(decoded.r() == r);
+        BOOST_CHECK(decoded.s() == s);
+    }
+
+    // decode an exactly 64-byte buffer (no pub appended)
+    {
+        bytes rBytes = r.asBytes();
+        bytes sBytes = s.asBytes();
+        bytes data = rBytes;
+        data.insert(data.end(), sBytes.begin(), sBytes.end());
+        BOOST_CHECK_EQUAL(data.size(), 64);
+        SignatureDataWithPub decoded(bytesConstRef(data.data(), data.size()));
+        BOOST_CHECK(decoded.pub().empty());
+        BOOST_CHECK(decoded.r() == r);
+        BOOST_CHECK(decoded.s() == s);
+    }
+
+    // decode a short buffer (< 64 bytes) must throw InvalidSignatureData
+    {
+        bytes shortData(63, 0);
+        BOOST_CHECK_THROW(
+            SignatureDataWithPub decoded(bytesConstRef(shortData.data(), shortData.size())),
+            InvalidSignatureData);
+    }
+
+    // decode an overlong buffer: everything after the 64 bytes becomes the pub
+    {
+        bytes pub = fromHex("deadbeefcafebabe0011223344556677");
+        bytes rBytes = r.asBytes();
+        bytes sBytes = s.asBytes();
+        bytes data = rBytes;
+        data.insert(data.end(), sBytes.begin(), sBytes.end());
+        data.insert(data.end(), pub.begin(), pub.end());
+        SignatureDataWithPub decoded(bytesConstRef(data.data(), data.size()));
+        BOOST_CHECK(decoded.pub() == pub);
+        BOOST_CHECK(decoded.r() == r);
+        BOOST_CHECK(decoded.s() == s);
+
+        // round-trip: re-encoding must reproduce the original buffer
+        auto reEncoded = decoded.encode();
+        BOOST_CHECK(*reEncoded == data);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

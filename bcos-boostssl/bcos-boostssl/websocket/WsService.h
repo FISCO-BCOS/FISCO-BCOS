@@ -144,6 +144,11 @@ private:
     EndPointsPtr m_reconnectedPeers;
     mutable bcos::SharedMutex x_peers;
 
+    // io service pool owns the io_context borrowed by m_timerFactory / timers.
+    // Declared before them so it is destroyed after (reverse declaration order),
+    // keeping the io_context alive as long as the timers may still use it.
+    IOServicePool::Ptr m_ioservicePool;
+
     // ws connector
     std::shared_ptr<WsConnector> m_connector;
     std::shared_ptr<timer::Timer> m_statTimer;
@@ -168,8 +173,6 @@ private:
     // disconnected handlers, the handers will be called when ws session
     // disconnected
     std::vector<DisconnectHandler> m_disconnectHandlers;
-
-    IOServicePool::Ptr m_ioservicePool;
 };
 
 }  // namespace bcos::boostssl::ws

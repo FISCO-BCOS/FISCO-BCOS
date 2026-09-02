@@ -48,7 +48,8 @@ enum class ApiVersion : std::uint8_t
 
 using PayloadID = std::string;
 
-// Exceptions moved to Errors.h — included above.
+// Exceptions live in Errors.h (included above) so RPC can map them without
+// linking bcos-engine. #5517's comment on -38005 / UnsupportedFork still applies.
 
 struct WithdrawalV1
 {
