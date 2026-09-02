@@ -1326,28 +1326,53 @@ private:
                 co_return makeStatus(
                     PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
             }
-            bcos::Error::Ptr commitError;
-            std::unique_lock opLock(x_opExecute);
-            m_delegate->commitBlock(
-                builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
-                    commitError = std::move(error);
-                });
-            if (commitError)
+            bool committed = false;
             {
-                co_return mapDelegateError(*commitError, std::nullopt);
-            }
-            {
-                // Align with the generic commit path: rewrite the entry's version so a
-                // post-commit re-query through getPayloadV4/V5 fails the window (-38005)
-                // instead of replaying a committed payload. 4 is the only version the OP
-                // newPayload gate admits.
-                std::unique_lock stateLock(x_state);
-                if (auto entry = m_payloadCache.find(builtPayloadId); entry != m_payloadCache.end())
+                bcos::Error::Ptr commitError;
+                std::unique_lock opLock(x_opExecute);
+                m_delegate->commitBlock(
+                    builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
+                        commitError = std::move(error);
+                    });
+                if (commitError)
                 {
-                    entry->second.version = 4;
+                    // A consensus rejection is the delegate's final verdict (INVALID). Any
+                    // other commit error — e.g. UnknownError after a later buildOpPayload
+                    // reset() dropped this entry's pending slot — must not answer a permanent
+                    // -32603 for a block the node can still execute: release x_opExecute and
+                    // fall through to the full execute-and-commit path below.
+                    if (static_cast<bcos::scheduler::SchedulerError>(commitError->errorCode()) ==
+                        bcos::scheduler::SchedulerError::OpConsensusRejected)
+                    {
+                        co_return mapDelegateError(*commitError, std::nullopt);
+                    }
+                    BCOS_LOG(WARNING) << LOG_BADGE("EngineService")
+                                      << LOG_DESC("runOpNewPayloadSteps: cached commit failed "
+                                                  "with a non-consensus delegate error; "
+                                                  "falling through to re-execute the block")
+                                      << LOG_KV("error", commitError->errorMessage());
+                }
+                else
+                {
+                    // Align with the generic commit path: rewrite the entry's version so a
+                    // post-commit re-query through getPayloadV4/V5 fails the window (-38005)
+                    // instead of replaying a committed payload. 4 is the only version the OP
+                    // newPayload gate admits.
+                    std::unique_lock stateLock(x_state);
+                    if (auto entry = m_payloadCache.find(builtPayloadId);
+                        entry != m_payloadCache.end())
+                    {
+                        entry->second.version = 4;
+                    }
+                    committed = true;
                 }
             }
-            co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
+            if (committed)
+            {
+                co_return makeStatus(
+                    PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
+            }
+            // Non-consensus commit error: fall through to the full execute-and-commit path.
         }
 
         // parentKnown from SYS_HASH_2_NUMBER (not the in-memory cache).
