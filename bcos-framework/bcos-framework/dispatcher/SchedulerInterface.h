@@ -71,6 +71,18 @@ public:
         call(std::move(tx), std::move(callback));
     }
 
+    // OP build path: adopt a verify=false probe execution as the verified pending block
+    // WITHOUT re-executing it. Only OpScheduler overrides this (the engine's buildOpPayload
+    // is the sole caller); every other scheduler keeps the default re-execution, which is
+    // correct because none of them is ever called this way. Defaulted (not pure) so existing
+    // implementations and fakes stay source-compatible — same pattern as callAtBlock above.
+    virtual void adoptProbeAsPending(bcos::protocol::Block::Ptr block,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
+            callback)
+    {
+        executeBlock(std::move(block), true, std::move(callback));
+    }
+
     // clear all status
     virtual void reset(std::function<void(Error::Ptr)> callback) = 0;
     virtual void getCode(
@@ -86,7 +98,7 @@ public:
     virtual void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(Error::Ptr)> callback) = 0;
 
-    virtual void stop() {};
-    virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) {};
+    virtual void stop(){};
+    virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig){};
 };
 }  // namespace bcos::scheduler
