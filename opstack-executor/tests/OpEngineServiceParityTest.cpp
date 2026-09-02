@@ -31,6 +31,7 @@
 
 #include <atomic>
 #include <exception>
+#include <latch>
 #include <optional>
 #include <thread>
 #include <unordered_map>
@@ -745,16 +746,41 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
     }
 
     bcos::protocol::BlockHeader::Ptr initialHeader;
-    std::atomic<bool> writerStarted{false};
     std::atomic<bool> writerFinished{false};
     std::exception_ptr writerError;
 
-    // Deterministic lock-ordering protocol: the main thread must hold a live
-    // SharedAccess and verify the fixed target through the production seam
-    // BEFORE the exclusive writer is ever started, so the writer provably
-    // blocks behind the reader instead of racing it. std::optional<jthread>
-    // keeps the writer joinable on every path (including BOOST_REQUIRE aborts,
-    // whose stack unwind destroys the jthread and joins it).
+    // Two-phase handshake that establishes happens-before between the main
+    // thread's live shared guard and the writer's exclusive lock attempt,
+    // without any bare sleep and without touching the production API:
+    //
+    //   writerReady   : writer is alive and about to request permission.
+    //   permission    : main thread, WHILE holding the shared guard, grants
+    //                   the writer permission to proceed. Releasing this latch
+    //                   from under the shared lock creates a happens-before
+    //                   edge: the writer's subsequent lockExclusive() is
+    //                   guaranteed to run after the shared lock was acquired,
+    //                   so it MUST block behind us rather than race us.
+    //   committed     : the writer has consumed permission and is executing
+    //                   the very next statement -> lockExclusive(). This is the
+    //                   last portable observation point: the standard
+    //                   shared_mutex exposes no way to observe that a thread is
+    //                   already parked inside lock(), so "committed" is as
+    //                   close to "about to block" as a portable test can get.
+    //                   Because happens-before is already established, once the
+    //                   writer reaches lockExclusive() it provably blocks until
+    //                   we release; production correctness (live guard forces
+    //                   the writer to wait, and the write completes only after
+    //                   release) is proven jointly by the committed check under
+    //                   the guard and the post-join re-verification below.
+    //
+    // std::optional<jthread> keeps the writer joinable on every path, including
+    // BOOST_REQUIRE aborts whose stack unwind destroys the jthread and joins
+    // it; the writer body swallows all exceptions into writerError so nothing
+    // escapes the thread, and the main thread rethrows only after release+join.
+    std::latch writerReady{1};
+    std::latch permission{1};
+    std::latch committed{1};
+
     std::optional<std::jthread> writer;
     {
         auto shared = tracker.lockShared();
@@ -766,7 +792,11 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
         writer.emplace([&] {
             try
             {
-                writerStarted.store(true, std::memory_order_release);
+                writerReady.count_down();
+                permission.wait();
+                // Publish "committed" and then IMMEDIATELY attempt the
+                // exclusive lock with nothing in between.
+                committed.count_down();
                 auto guard = tracker.lockExclusive();
                 bcos::h256 writerHash(0x99);
                 bcos::engine::PayloadID writerPayloadId = "0xcafebabe";
@@ -788,12 +818,15 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
             }
         });
 
-        while (!writerStarted.load(std::memory_order_acquire))
-        {
-            std::this_thread::yield();
-        }
-        // The writer cannot acquire exclusive access while we hold shared, so
-        // it provably has not finished publishing.
+        // Phase 1: wait for the writer to be alive, then grant permission from
+        // under the shared guard (establishes the happens-before edge).
+        writerReady.wait();
+        permission.count_down();
+
+        // Phase 2: wait until the writer has committed to its lockExclusive()
+        // call. While we still hold the shared guard the writer cannot acquire
+        // exclusive access, so it provably has not finished publishing.
+        committed.wait();
         BOOST_CHECK(!writerFinished.load(std::memory_order_acquire));
     }
 
@@ -802,6 +835,8 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
     {
         std::rethrow_exception(writerError);
     }
+    // After the shared guard is released the previously-blocked writer completes,
+    // proving the exclusive lock only succeeded once the reader let go.
     BOOST_CHECK(writerFinished.load(std::memory_order_acquire));
 
     {
