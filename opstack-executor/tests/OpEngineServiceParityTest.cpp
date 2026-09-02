@@ -452,10 +452,12 @@ bcos::engine::NewPayloadRequest makeSelfConsistentRequest(
     }
     else if (corruptField == "gasUsed")
     {
-        ep["gasUsed"] = "0x" + bcos::toHex(bcos::fromHex(ep["gasUsed"].asString()));
         auto used = bcos::fromHex(ep["gasUsed"].asString());
-        used[used.size() - 1] ^= 0xff;
-        ep["gasUsed"] = "0x" + bcos::toHex(used);
+        if (!used.empty())
+        {
+            used[used.size() - 1] ^= 0xff;
+            ep["gasUsed"] = "0x" + bcos::toHex(used);
+        }
     }
     else
     {
