@@ -66,6 +66,10 @@ constexpr bcos::protocol::BlockNumber c_opParentBlockNumber = 5;
 // "CL gasLimit differs from the chain's" re-probe is not triggered (cases pin eviction,
 // not the gasLimit re-probe).
 constexpr std::uint64_t c_opChainGasLimit = 30'000'000ULL;
+// Non-zero fabricated gasUsed for the probe's executed header — the commitment-copy source
+// buildOpPayload fills into payload.gasUsed. A 0 fabrication would make the gasUsed copy
+// assertion in checkPayloadCopiesProbeCommitments a 0==0 tautology.
+constexpr std::uint64_t c_probeGasUsed = 21'000ULL * 2;
 
 // Placeholder commitments the CountingOpDelegate fabricates in the probe's executed header
 // (fix-round G pins that buildOpPayload copies exactly these into the returned payload).
@@ -385,7 +389,9 @@ private:
         // the payload before rebuilding the final header from them.
         header->setStateRoot(c_probeStateRoot);
         header->setReceiptsRoot(c_probeReceiptsRoot);
-        header->setGasUsed(bcos::u256(0));
+        // Non-zero: buildOpPayload copies this into payload.gasUsed, and the commitment-copy
+        // assertion compares the returned payload against it — a 0 would make that a tautology.
+        header->setGasUsed(bcos::u256(c_probeGasUsed));
         // buildOpPayload copies this into payload.withdrawalsRoot; validateOpNewPayloadRequest
         // (newPayload V4) requires the value to equal withdrawalsRootFor() — the empty-trie root.
         header->setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
@@ -495,6 +501,10 @@ void checkPayloadCopiesProbeCommitments(bcos::engine::GetPayloadResult const& pa
         payload->executionPayload.stateRoot == delegate.lastProbeExecutedHeader->stateRoot());
     BOOST_CHECK(
         payload->executionPayload.receiptsRoot == delegate.lastProbeExecutedHeader->receiptsRoot());
+    // gasUsed is node-derived (non-zero on the fabricated probe), so the copy assertion bites:
+    // a buildOpPayload that failed to fill payload.gasUsed from the probe header would leave
+    // it 0 and fail both checks below.
+    BOOST_CHECK(payload->executionPayload.gasUsed == bcos::u256(c_probeGasUsed));
     BOOST_CHECK(payload->executionPayload.gasUsed ==
                 bcos::u256(delegate.lastProbeExecutedHeader->gasUsed()));
 }
