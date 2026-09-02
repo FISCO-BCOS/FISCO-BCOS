@@ -50,9 +50,9 @@ DEFAULT_FIELDS = {
     "gas_limit": "0x1c9c380",
     "gas_used": "0x0",
     "timestamp": "0x689d5c00",
-    # Jovian 17-byte extraData: version(1) || denominator u32 BE ||
-    # elasticity u32 BE || minBaseFee u64 BE.
-    "extra_data": "0x00000000fa000000060000000000000000",
+    # Jovian 17-byte extraData: version 0x01 || denominator u32 BE ||
+    # elasticity u32 BE || minBaseFee u64 BE. calcOpBaseFee rejects 17B/0x00.
+    "extra_data": "0x01000000fa000000060000000000000000",
     "mix_hash": "0x" + "00" * 32,
     "nonce": "0x0000000000000000",
     "base_fee_per_gas": "0x3b9aca00",

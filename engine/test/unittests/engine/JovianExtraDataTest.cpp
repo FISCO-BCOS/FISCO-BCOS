@@ -56,10 +56,10 @@ ExecutionPayload makeExecutionPayloadV3(bytes extraData)
     return payload;
 }
 
-ExecutionPayload makePayloadWithTransactions(bytes extraData, std::vector<bytes> rawTransactions)
+ExecutionPayload makePayloadWithTransactions(bytes extraData, std::vector<bytes> envelopes)
 {
     auto payload = makeExecutionPayloadV3(std::move(extraData));
-    for (auto& raw : rawTransactions)
+    for (auto& raw : envelopes)
     {
         EngineTransaction transaction;
         transaction.raw = std::move(raw);

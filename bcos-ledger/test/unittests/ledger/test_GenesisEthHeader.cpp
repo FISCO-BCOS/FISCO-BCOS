@@ -46,7 +46,7 @@ namespace
 // was computed OFFLINE by that script (independent python rlp + keccak256);
 // the test asserts the C++ RLP encoder reproduces it bit-for-bit.
 constexpr std::string_view c_expectedGenesisHash =
-    "b153f41d2651441ace825becbfe2f2b6bf89092864a0ae04b7e0d40a5cf64cc1";
+    "8634eabcf9e6df6b91b63cecab2d7af50a0a4fb8e0cc0aaca07cd8d0da32c069";
 constexpr std::string_view c_emptyTrieRoot =
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
 
@@ -67,7 +67,7 @@ ledger::EthGenesisHeader makeArtifactHeader()
     header.m_gasUsed = 0;
     header.m_timestamp = 0x689d5c00;
     // Jovian 17-byte extraData: version || denominator || elasticity || minBaseFee
-    header.m_extraData = fromHex(std::string("00000000fa000000060000000000000000"));
+    header.m_extraData = fromHex(std::string("01000000fa000000060000000000000000"));
     header.m_mixHash = h256{};
     header.m_nonce = h64{};
     header.m_baseFeePerGas = 1'000'000'000;
@@ -187,9 +187,7 @@ BOOST_AUTO_TEST_CASE(WrongArtifactHashRefusesToBuild)
         genesisConfig.m_ethGenesisHeader->m_hash.data()[31] ^= 0x01;  // corrupt the checksum
         BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
             bcos::tool::InvalidConfig,
-            [](auto const& e) {
-                return errinfoContains(e, "[eth_genesis_header].hash mismatch");
-            });
+            [](auto const& e) { return errinfoContains(e, "[eth_genesis_header].hash mismatch"); });
         co_return;
     }());
 }
@@ -211,9 +209,7 @@ BOOST_AUTO_TEST_CASE(TamperedFieldChangesHashAndRefuses)
         genesisConfig.m_ethGenesisHeader->m_gasLimit += 1;
         BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
             bcos::tool::InvalidConfig,
-            [](auto const& e) {
-                return errinfoContains(e, "[eth_genesis_header].hash mismatch");
-            });
+            [](auto const& e) { return errinfoContains(e, "[eth_genesis_header].hash mismatch"); });
         co_return;
     }());
 }
@@ -232,8 +228,7 @@ BOOST_AUTO_TEST_CASE(ArtifactStateRootMustMatchDerivedRoot)
         auto genesisConfig = makeEthGenesisConfig();
         genesisConfig.m_ethGenesisHeader->m_stateRoot.data()[0] ^= 0x01;
         BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
-            bcos::tool::InvalidConfig,
-            [](auto const& e) {
+            bcos::tool::InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "[eth_genesis_header].state_root does not match");
             });
         co_return;
@@ -256,11 +251,9 @@ BOOST_AUTO_TEST_CASE(CorrectedArtifactRetriesOnSameStorage)
         // succeed (a mis-configured artifact must not brick the datadir).
         auto drifted = makeEthGenesisConfig();
         drifted.m_ethGenesisHeader->m_hash.data()[31] ^= 0x01;
-        BOOST_CHECK_EXCEPTION(
-            co_await ledger::buildGenesisBlock(*ledger, drifted, param), bcos::tool::InvalidConfig,
-            [](auto const& e) {
-                return errinfoContains(e, "[eth_genesis_header].hash mismatch");
-            });
+        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, drifted, param),
+            bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "[eth_genesis_header].hash mismatch"); });
 
         auto corrected = makeEthGenesisConfig();
         BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, corrected, param));
@@ -287,9 +280,8 @@ BOOST_AUTO_TEST_CASE(RestartWithSwappedArtifactRefuses)
         // Restart against a different artifact claim: the stored B0 must win.
         auto swapped = makeEthGenesisConfig();
         swapped.m_ethGenesisHeader->m_hash.data()[0] ^= 0x01;
-        BOOST_CHECK_EXCEPTION(
-            co_await ledger::buildGenesisBlock(*ledger, swapped, param), bcos::tool::InvalidConfig,
-            [](auto const& e) {
+        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, swapped, param),
+            bcos::tool::InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "hash does not match the stored genesis block");
             });
         co_return;
