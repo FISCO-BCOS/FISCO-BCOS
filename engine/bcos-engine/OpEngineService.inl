@@ -492,40 +492,39 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, E
     }
 
     {
-        std::optional<PayloadID> payloadId;
+        bcos::protocol::BlockHeader::Ptr builtHeader;
         {
             auto shared = m_tracker.lockShared();
-            payloadId = shared.payloadIdForHash(payload.blockHash);
-        }
-        if (payloadId.has_value())
-        {
-            bcos::protocol::BlockHeader::Ptr builtHeader;
-            if (auto artifactIt = m_artifacts.find(*payloadId); artifactIt != m_artifacts.end())
+            if (auto payloadId = shared.payloadIdForHash(payload.blockHash))
             {
-                builtHeader = artifactIt->second.canonicalHeader;
+                if (auto artifactIt = m_artifacts.find(*payloadId);
+                    artifactIt != m_artifacts.end())
+                {
+                    builtHeader = artifactIt->second.canonicalHeader;
+                }
             }
-            if (builtHeader)
+        }
+        if (builtHeader)
+        {
+            auto knownView = m_globalStateStorage.fork();
+            if (auto known = co_await bcos::ledger::getBlockNumber(
+                    knownView, payload.blockHash, bcos::ledger::fromStorage);
+                known.has_value())
             {
-                auto knownView = m_globalStateStorage.fork();
-                if (auto known = co_await bcos::ledger::getBlockNumber(
-                        knownView, payload.blockHash, bcos::ledger::fromStorage);
-                    known.has_value())
-                {
-                    co_return makeStatus(
-                        PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
-                }
-                bcos::Error::Ptr commitError;
-                m_delegate->commitBlock(
-                    builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
-                        commitError = std::move(error);
-                    });
-                if (commitError)
-                {
-                    co_return mapDelegateError(*commitError, std::nullopt);
-                }
                 co_return makeStatus(
                     PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
             }
+            bcos::Error::Ptr commitError;
+            m_delegate->commitBlock(
+                builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
+                    commitError = std::move(error);
+                });
+            if (commitError)
+            {
+                co_return mapDelegateError(*commitError, std::nullopt);
+            }
+            co_return makeStatus(
+                PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
         }
     }
 
