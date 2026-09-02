@@ -168,6 +168,19 @@ struct OpGlobalStateFixture
             std::move(entry)));
     }
 
+    /// Register a canonical hash at a height the way the ledger does (SYS_NUMBER_2_HASH
+    /// stores the raw 32-byte hash). The canonical-parent and occupied-height arms of
+    /// runOpNewPayloadSteps read this row.
+    void setNumberToHash(bcos::protocol::BlockNumber number, const h256& blockHash)
+    {
+        storage::Entry entry;
+        entry.set(bcos::concepts::bytebuffer::toView(blockHash.asBytes()));
+        task::syncWait(storage2::writeOne(backendStorage,
+            bcos::executor_v1::StateKey{
+                ledger::SYS_NUMBER_2_HASH, boost::lexical_cast<std::string>(number)},
+            std::move(entry)));
+    }
+
     void setNonce(std::string_view sender, std::string nonce)
     {
         evmc_address addr{};
@@ -298,6 +311,10 @@ public:
     std::atomic<std::uint64_t> executeBlockCount{0};
     std::atomic<std::uint64_t> adoptProbeAsPendingCount{0};
     std::atomic<std::uint64_t> commitBlockCount{0};
+    std::atomic<std::uint64_t> commitErrorCount{0};
+    /// When set, the next commitBlock answers a non-consensus UnknownError (the F4
+    /// dropped-pending delegate behaviour); the engine must fall through to re-execute.
+    bool failNextCommit = false;
     /// The verify flag of every executeBlock call, in call order (single-threaded tests).
     std::vector<bool> verifyFlags;
     std::optional<h256> poisonTxHash;
@@ -356,6 +373,14 @@ public:
     void commitBlock(bcos::protocol::BlockHeader::Ptr, CommitCallback callback) override
     {
         ++commitBlockCount;
+        if (failNextCommit)
+        {
+            failNextCommit = false;
+            ++commitErrorCount;
+            auto error = BCOS_ERROR_PTR(-1, "Unexpected empty results!");
+            callback(std::move(error), nullptr);
+            return;
+        }
         callback(nullptr, nullptr);
     }
 
@@ -850,6 +875,184 @@ BOOST_AUTO_TEST_CASE(op_build_capacity_fault_skips_tx_without_evicting)
     BOOST_REQUIRE(result2.payloadId.has_value());
     auto payload2 = task::syncWait(engineService.getPayload(*result2.payloadId, 5));
     BOOST_CHECK_EQUAL(rawTransactionCount(payload2), 3);  // deposit + capacityTx + goodTx
+}
+
+// F3: runOpNewPayloadSteps external-block arms. A locally built payload that was never
+// committed, submitted as an external newPayload, must answer each arm correctly: a
+// corrupted blockHash is INVALID before any delegate work, an unknown parent is SYNCING,
+// an already-known block is VALID, and an occupied height is INVALID.
+// Each arm needs the parent's SYS_NUMBER_2_HASH row (canonicality) plus the stored
+// parent header (timestamp/baseFee cross-checks), which the fixture now writes.
+void registerOpParentRows(
+    OpGlobalStateFixture& fixture, const h256& parentHash, bcos::protocol::BlockNumber parentNumber)
+{
+    fixture.setBlockNumber(parentHash, parentNumber);
+    fixture.setNumberToHash(parentNumber, parentHash);
+    fixture.writeStoredHeader(
+        parentNumber, makeOpParentHeader(parentNumber, c_opBaseTimestamp - 3000));
+}
+
+bcos::engine::NewPayloadRequest makeOpNewPayloadRequestFrom(
+    bcos::engine::GetPayloadResult const& payload)
+{
+    bcos::engine::NewPayloadRequest request;
+    request.executionPayload = payload->executionPayload;
+    request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    request.executionRequests = std::vector<bcos::bytes>{};
+    return request;
+}
+
+BOOST_AUTO_TEST_CASE(op_new_payload_external_wrong_block_hash_is_invalid)
+{
+    bcos::txpool::MemPoolImpl memPool;
+    OpGlobalStateFixture fixture;
+    auto forkchoiceState = makeOpForkchoiceState('0');
+    registerOpParentRows(fixture, forkchoiceState.headBlockHash, c_opParentBlockNumber);
+    auto delegate = std::make_shared<CountingOpDelegate>();
+    auto engineService = makeOpEngineServiceImpl(memPool, fixture.storage, delegate);
+
+    auto attributes = makeOpBuildPayloadAttributes(c_opBaseTimestamp);
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+
+    auto request = makeOpNewPayloadRequestFrom(payload);
+    request.executionPayload.blockHash =
+        h256("9999999999999999999999999999999999999999999999999999999999999999");
+    auto status = task::syncWait(engineService.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Invalid));
+    // Static reject: no delegate interaction at all.
+    BOOST_CHECK_EQUAL(delegate->executeBlockCount.load(), 1);
+    BOOST_CHECK_EQUAL(delegate->commitBlockCount.load(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(op_new_payload_external_unknown_parent_is_syncing)
+{
+    bcos::txpool::MemPoolImpl memPool;
+    OpGlobalStateFixture fixture;
+    auto forkchoiceState = makeOpForkchoiceState('0');
+    registerOpParentRows(fixture, forkchoiceState.headBlockHash, c_opParentBlockNumber);
+    auto delegate = std::make_shared<CountingOpDelegate>();
+    auto engineService = makeOpEngineServiceImpl(memPool, fixture.storage, delegate);
+
+    auto attributes = makeOpBuildPayloadAttributes(c_opBaseTimestamp);
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+
+    // Reparent onto an unknown block and re-derive the blockHash from the payload fields
+    // (same helpers the engine uses) so the static hash arm passes and the parent lookup
+    // decides the verdict.
+    auto request = makeOpNewPayloadRequestFrom(payload);
+    request.executionPayload.parentHash =
+        h256("8888888888888888888888888888888888888888888888888888888888888888");
+    auto const txRoot = OpSeamStubScheduler::computeTxRoot(
+        bcos::engine::detail::rawEnvelopesOf(request.executionPayload));
+    auto header =
+        bcos::engine::detail::rebuildOpEthHeader(opTestBlockFactory()->blockHeaderFactory(),
+            request.executionPayload, txRoot, *request.parentBeaconBlockRoot);
+    request.executionPayload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
+
+    auto status = task::syncWait(engineService.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK_EQUAL(delegate->commitBlockCount.load(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(op_new_payload_external_already_known_is_valid)
+{
+    bcos::txpool::MemPoolImpl memPool;
+    OpGlobalStateFixture fixture;
+    auto forkchoiceState = makeOpForkchoiceState('0');
+    registerOpParentRows(fixture, forkchoiceState.headBlockHash, c_opParentBlockNumber);
+    auto delegate = std::make_shared<CountingOpDelegate>();
+    auto engineService = makeOpEngineServiceImpl(memPool, fixture.storage, delegate);
+
+    auto attributes = makeOpBuildPayloadAttributes(c_opBaseTimestamp);
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+
+    // The block is already in the ledger: VALID without touching the delegate.
+    fixture.setBlockNumber(
+        payload->executionPayload.blockHash, payload->executionPayload.blockNumber);
+    fixture.setNumberToHash(
+        payload->executionPayload.blockNumber, payload->executionPayload.blockHash);
+    auto request = makeOpNewPayloadRequestFrom(payload);
+    auto status = task::syncWait(engineService.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+    BOOST_CHECK_EQUAL(delegate->executeBlockCount.load(), 1);
+    BOOST_CHECK_EQUAL(delegate->commitBlockCount.load(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(op_new_payload_external_occupied_height_is_invalid)
+{
+    bcos::txpool::MemPoolImpl memPool;
+    OpGlobalStateFixture fixture;
+    auto forkchoiceState = makeOpForkchoiceState('0');
+    registerOpParentRows(fixture, forkchoiceState.headBlockHash, c_opParentBlockNumber);
+    auto delegate = std::make_shared<CountingOpDelegate>();
+    auto engineService = makeOpEngineServiceImpl(memPool, fixture.storage, delegate);
+
+    auto attributes = makeOpBuildPayloadAttributes(c_opBaseTimestamp);
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+
+    // Externalize the built payload (the cached copy must not satisfy the request): mutate
+    // a field that leaves the static checks intact and re-derive the blockHash with the
+    // same helpers the engine uses, so the cache misses and the occupied-height arm runs.
+    auto request = makeOpNewPayloadRequestFrom(payload);
+    request.executionPayload.prevRandao =
+        h256("7777777777777777777777777777777777777777777777777777777777777777");
+    auto const extTxRoot = OpSeamStubScheduler::computeTxRoot(
+        bcos::engine::detail::rawEnvelopesOf(request.executionPayload));
+    auto extHeader =
+        bcos::engine::detail::rebuildOpEthHeader(opTestBlockFactory()->blockHeaderFactory(),
+            request.executionPayload, extTxRoot, *request.parentBeaconBlockRoot);
+    request.executionPayload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*extHeader);
+    // A different block already occupies the payload's height: fail closed (no ReorgUndo).
+    fixture.setNumberToHash(payload->executionPayload.blockNumber,
+        h256("6666666666666666666666666666666666666666666666666666666666666666"));
+    auto status = task::syncWait(engineService.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_CHECK(status.latestValidHash.has_value());
+    BOOST_CHECK(*status.latestValidHash == payload->executionPayload.parentHash);
+    BOOST_CHECK_EQUAL(delegate->commitBlockCount.load(), 0);
+}
+
+// F3/F4: the cached-commit arm must fall through to the full execute-and-commit path when
+// the delegate answers a NON-consensus commit error (the dropped-pending UnknownError the
+// real OpScheduler produces after a superseding build's reset()). Before the F4 fix this
+// answered a permanent -32603; now the block the node can execute ends VALID.
+BOOST_AUTO_TEST_CASE(op_cached_commit_nonconsensus_error_falls_through_to_execute)
+{
+    bcos::txpool::MemPoolImpl memPool;
+    OpGlobalStateFixture fixture;
+    auto forkchoiceState = makeOpForkchoiceState('0');
+    registerOpParentRows(fixture, forkchoiceState.headBlockHash, c_opParentBlockNumber);
+    auto delegate = std::make_shared<CountingOpDelegate>();
+    auto engineService = makeOpEngineServiceImpl(memPool, fixture.storage, delegate);
+
+    auto attributes = makeOpBuildPayloadAttributes(c_opBaseTimestamp);
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+
+    // The cached-commit arm now fails like a dropped pending slot would.
+    delegate->failNextCommit = true;
+    auto request = makeOpNewPayloadRequestFrom(payload);
+    auto status = task::syncWait(engineService.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+    // One probe from the FCU build + one full re-execution from the fall-through.
+    BOOST_CHECK_EQUAL(delegate->executeBlockCount.load(), 2);
+    // One failed cached commit + one successful commit of the re-executed block.
+    BOOST_CHECK_EQUAL(delegate->commitBlockCount.load(), 2);
+    BOOST_CHECK_EQUAL(delegate->commitErrorCount.load(), 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
