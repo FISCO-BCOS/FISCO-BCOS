@@ -148,31 +148,25 @@ void SingleNodeConsensus::loop()
                 << LOG_KV("diagnostic",
                     boost::current_exception_diagnostic_information());
         }
-        // Wall-clock arm: the block timestamp advances in whole-second steps
-        // (max(nowWholeSecondMs, m_lastTimestamp + 1000)), so a fast drain must NOT outrun
-        // the wall clock — otherwise chain time drifts ahead and a restart can no longer
-        // produce a timestamp strictly greater than the head (EIP-2). Wait until the wall
-        // clock reaches m_lastTimestamp + 1000 even when a tx block was just sealed.
-        // The fixed-timestamp (EEST) arm never consults the wall clock, so it still drains
-        // as fast as possible (its monotonicity comes from m_headNumber, not time).
-        // stop() notifies the condition variable so shutdown is prompt even with a large
-        // block_interval.
-        if (m_fixedTimestamp == 0)
-        {
-            auto const nowMs = static_cast<std::uint64_t>(utcTime());
-            auto const targetMs = m_lastTimestamp + 1000;
-            if (nowMs < targetMs)
-            {
-                std::unique_lock lock(m_cvMutex);
-                m_cv.wait_for(lock, std::chrono::milliseconds(targetMs - nowMs),
-                    [this] { return !m_running.load(); });
-            }
-        }
-        else if (!sealedTxBlock)
+        // Pace the next tick on the composition of two bounds (nextTickWaitMs): the
+        // whole-second wall-clock floor keeps a fast drain from outrunning the clock —
+        // otherwise chain time drifts ahead and a restart can no longer produce a timestamp
+        // strictly greater than the head (EIP-2) — and the configured [consensus]
+        // block_interval paces every tick that did not seal a tx block: idle ticks honour
+        // the operator's interval, and a tick that threw before produceBlock() could stamp
+        // m_lastTimestamp (e.g. resolveInitialHead() failing at startup while the ledger is
+        // not answering) backs off by the interval instead of spinning hot. The
+        // fixed-timestamp (EEST) arm never consults the wall clock, so its pacing stays
+        // interval-only. stop() notifies the condition variable so shutdown is prompt even
+        // with a large block_interval.
+        auto const waitMs =
+            nextTickWaitMs(m_fixedTimestamp, static_cast<std::uint64_t>(m_lastTimestamp),
+                m_blockIntervalMs, static_cast<std::uint64_t>(utcTime()), sealedTxBlock);
+        if (waitMs > 0)
         {
             std::unique_lock lock(m_cvMutex);
-            m_cv.wait_for(lock, std::chrono::milliseconds(m_blockIntervalMs),
-                [this] { return !m_running.load(); });
+            m_cv.wait_for(
+                lock, std::chrono::milliseconds(waitMs), [this] { return !m_running.load(); });
         }
     }
 }
@@ -233,6 +227,26 @@ std::uint64_t SingleNodeConsensus::nextBlockTimestamp(std::uint64_t fixedTimesta
     std::uint64_t const nowWholeSecondMs = nowMs - nowMs % 1000;
     return fixedTimestamp > 0 ? (fixedTimestamp + headNumber) * 1000 :
                                 std::max(nowWholeSecondMs, lastTimestamp + 1000);
+}
+
+std::uint64_t SingleNodeConsensus::nextTickWaitMs(std::uint64_t fixedTimestamp,
+    std::uint64_t lastTimestamp, std::uint64_t blockIntervalMs, std::uint64_t nowMs,
+    bool sealedTxBlock)
+{
+    auto waitMs = std::uint64_t{0};
+    if (fixedTimestamp == 0)
+    {
+        auto const targetMs = lastTimestamp + 1000;
+        if (nowMs < targetMs)
+        {
+            waitMs = targetMs - nowMs;
+        }
+    }
+    if (!sealedTxBlock)
+    {
+        waitMs = std::max(waitMs, blockIntervalMs);
+    }
+    return waitMs;
 }
 
 bool SingleNodeConsensus::produceBlock()

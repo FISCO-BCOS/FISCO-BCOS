@@ -73,6 +73,15 @@ public:
     static std::uint64_t nextBlockTimestamp(std::uint64_t fixedTimestamp, std::uint64_t headNumber,
         std::uint64_t lastTimestamp, std::uint64_t nowMs);
 
+    /// Pace one produce-loop tick (ms). Pure and testable: the wall-clock arm waits until the
+    /// clock reaches @p lastTimestamp + 1000 (the whole-second EIP-2 floor bounds a fast drain
+    /// at one block per second); a tick that sealed no tx block additionally honours
+    /// @p blockIntervalMs — idle ticks pace at the configured [consensus] block_interval, and
+    /// a tick that threw before a timestamp was stamped (lastTimestamp still at its startup
+    /// value) backs off by the interval instead of spinning hot.
+    static std::uint64_t nextTickWaitMs(std::uint64_t fixedTimestamp, std::uint64_t lastTimestamp,
+        std::uint64_t blockIntervalMs, std::uint64_t nowMs, bool sealedTxBlock);
+
 private:
     void loop();
     /// Produce one block through the EngineService. Returns true if a block carrying at least
