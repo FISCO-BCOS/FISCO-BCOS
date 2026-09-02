@@ -12,6 +12,7 @@
 #include <bcos-framework/engine/OpBaseFee.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <optional>
 #include <stdexcept>
@@ -159,6 +160,22 @@ BOOST_AUTO_TEST_CASE(ShortExtraDataIsRejected)
         makeParent(bcos::u256(30'000'000), bcos::u256(24'000'000), bcos::u256(2'000'000'000), {});
     expectThrowMessage(
         [&] { (void)bcos::engine::calcOpBaseFee(parent, false); }, "9 (Holocene) or 17 (Jovian)");
+}
+
+// Holocene/Jovian N-1/N+1 lengths must fail closed (empty-only was not enough).
+BOOST_AUTO_TEST_CASE(ExtraDataLengthBoundariesAreRejected)
+{
+    auto rejectLen = [&](std::size_t n) {
+        bcos::bytes extra(n, bcos::byte{0});
+        auto const parent = makeParent(
+            bcos::u256(30'000'000), bcos::u256(24'000'000), bcos::u256(2'000'000'000), extra);
+        expectThrowMessage([&] { (void)bcos::engine::calcOpBaseFee(parent, false); },
+            "9 (Holocene) or 17 (Jovian)");
+    };
+    rejectLen(8);
+    rejectLen(10);
+    rejectLen(16);
+    rejectLen(18);
 }
 
 // Jovian minBaseFee floor: a decrease that would land below the floor is clamped up.

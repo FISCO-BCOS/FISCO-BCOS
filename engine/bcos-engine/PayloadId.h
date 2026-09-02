@@ -27,8 +27,10 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -47,8 +49,15 @@ inline void encodeWithdrawalsRlp(
     bcos::bytes items;
     if (withdrawals.has_value())
     {
+        // op-geth types.Withdrawal is uint64; hexutil.Uint64 rejects >2^64-1.
+        auto const maxU64 = bcos::u256(std::numeric_limits<std::uint64_t>::max());
         for (auto const& w : *withdrawals)
         {
+            if (w.index > maxU64 || w.validatorIndex > maxU64 || w.amount > maxU64)
+            {
+                throw std::invalid_argument(
+                    "OP withdrawal index/validatorIndex/amount must fit in uint64");
+            }
             codec::rlp::encode(items, w.index, w.validatorIndex, w.address, w.amount);
         }
     }
@@ -70,13 +79,10 @@ inline void encodeWithdrawalsRlp(
 /// version (V1=0x1 .. V4=0x4), exactly like `copy(out[:], hasher.Sum(nil)[:8]);
 /// out[0] = byte(args.Version)`.
 ///
-/// Known divergence (documented, not a bug): op-geth also hashes an optional
-/// `SlotNum` (u64 BE) between parentBeaconBlockRoot and the tx block
-/// (flashblocks/Amsterdam extension). FISCO's PayloadAttributes has no
-/// slotNumber field and op-node never sends one, so the field is never
-/// written — byte-identical to op-geth with SlotNum == nil, which is the
-/// only configuration this chain produces. If slotNumber is ever added to
-/// PayloadAttributes it must be hashed here in the same position.
+/// Upstream geth Amsterdam hashes an optional SlotNum (u64 BE) between
+/// parentBeaconBlockRoot and the tx block. op-geth d401af16 Id() has no such
+/// field. PayloadAttributes has no slotNumber either, so the stream matches
+/// current op-geth. If slotNumber is added later it must be hashed here.
 ///
 /// @param attrs    the payload attributes. attrs.timestamp is FISCO-internal
 ///                 milliseconds (EngineHelper converts Engine-API seconds to
@@ -150,6 +156,12 @@ inline std::string derivePayloadId(PayloadAttributes const& attrs, h256 const& p
     }
     if (attrs.eip1559Params.has_value())
     {
+        // Present empty would hash identically to absent; 7/9-byte tails would
+        // diverge from op-geth's fixed Bytes8. Require the Holocene 8-byte pair.
+        if (attrs.eip1559Params->size() != 8)
+        {
+            throw std::invalid_argument("eip1559Params must be 8 bytes");
+        }
         updateBytes(attrs.eip1559Params->data(), attrs.eip1559Params->size());
     }
     if (attrs.minBaseFee.has_value())

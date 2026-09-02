@@ -15,7 +15,8 @@
  *
  * @file TestPayloadId.cpp
  * @brief derivePayloadId test vectors, byte-aligned with op-geth
- *        BuildPayloadArgs.Id() (miner/payload_building.go).
+ *        BuildPayloadArgs.Id() (miner/payload_building.go at
+ *        d401af16f2dd94b010a72eaef10e07ac10b31931).
  *
  * All expected values below were verified with three independent
  * implementations of the op-geth algorithm: Python hashlib.sha256, a
@@ -25,6 +26,8 @@
 
 #include "bcos-engine/PayloadId.h"
 #include <boost/test/unit_test.hpp>
+#include <limits>
+#include <stdexcept>
 #include <string>
 
 using namespace bcos::engine;
@@ -128,7 +131,7 @@ BOOST_AUTO_TEST_CASE(BeaconRootOnlyV2)
 /// long-form list-header boundary: f8 42 header, exercising codec::rlp::encodeHeader's
 /// >=56 long-form arm on the withdrawals list itself.
 /// Byte stream: 11x32 || 000000006553f100 || 22x32 || 33x20 ||
-///              f8 42 e0 01 02 94 77x20 88 0de0b6b3a7640000 e0 03 04 94 88x20 88 de0b6b3a7640000
+///              f8 42 e0 01 02 94 77x20 88 0de0b6b3a7640000 e0 03 04 94 88x20 88 0de0b6b3a7640000
 BOOST_AUTO_TEST_CASE(TwoWithdrawalsV2)
 {
     FixtureInputs f;
@@ -257,24 +260,44 @@ BOOST_AUTO_TEST_CASE(TimestampFloorSemantics)
         derivePayloadId(a3, f.parentHash, {}, 0x01), derivePayloadId(a4, f.parentHash, {}, 0x01));
 }
 
-/// u256 RLP edge: >64-bit values encode as minimal BE without truncation.
-BOOST_AUTO_TEST_CASE(U256RlpEdgeCases)
+/// op-geth types.Withdrawal is uint64; over-wide fields are rejected.
+BOOST_AUTO_TEST_CASE(WithdrawalFieldsMustFitUint64)
 {
-    // 2^70 index -> RLP int of 9 bytes (0x89 + 9 bytes).
     FixtureInputs f;
-    auto attrs = makeAttrs(f);
-    WithdrawalV1 w;
-    w.index = bcos::u256{1} << 70;
-    w.validatorIndex = 0;
-    w.amount = 0;
-    w.address = bcos::Address{};
-    attrs.withdrawals = std::vector<WithdrawalV1>{w};
-    // Pin the full ID, not just inequality: 0x02fcd01f27c51b12 is the measured reference
-    // vector over the >64-bit withdrawal index (the 9-byte RLP int hashes differently from
-    // any 64-bit truncation). A mutation that narrows the index to 64 bits changes the hash
-    // and fails this pin.
-    auto id = derivePayloadId(attrs, f.parentHash, {}, 0x02);
-    BOOST_CHECK_EQUAL(id, "0x02fcd01f27c51b12");
+    auto over = makeAttrs(f);
+    WithdrawalV1 wide;
+    wide.index = bcos::u256{1} << 70;
+    wide.validatorIndex = 0;
+    wide.amount = 0;
+    wide.address = bcos::Address{};
+    over.withdrawals = std::vector<WithdrawalV1>{wide};
+    BOOST_CHECK_THROW(derivePayloadId(over, f.parentHash, {}, 0x02), std::invalid_argument);
+
+    auto maxOk = makeAttrs(f);
+    WithdrawalV1 edge;
+    edge.index = bcos::u256(std::numeric_limits<std::uint64_t>::max());
+    edge.validatorIndex = 0;
+    edge.amount = 0;
+    edge.address = bcos::Address{};
+    maxOk.withdrawals = std::vector<WithdrawalV1>{edge};
+    BOOST_CHECK_NO_THROW(derivePayloadId(maxOk, f.parentHash, {}, 0x02));
+}
+
+/// Present eip1559Params must be the Holocene 8-byte pair (empty/7/9 rejected).
+BOOST_AUTO_TEST_CASE(Eip1559ParamsMustBeEightBytes)
+{
+    FixtureInputs f;
+    auto empty = makeAttrs(f);
+    empty.eip1559Params = bcos::bytes{};
+    BOOST_CHECK_THROW(derivePayloadId(empty, f.parentHash, {}, 0x04), std::invalid_argument);
+
+    auto seven = makeAttrs(f);
+    seven.eip1559Params = bcos::bytes{0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10};
+    BOOST_CHECK_THROW(derivePayloadId(seven, f.parentHash, {}, 0x04), std::invalid_argument);
+
+    auto nine = makeAttrs(f);
+    nine.eip1559Params = bcos::bytes{0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12};
+    BOOST_CHECK_THROW(derivePayloadId(nine, f.parentHash, {}, 0x04), std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

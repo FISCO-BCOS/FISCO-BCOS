@@ -34,7 +34,8 @@ DERIVE_BCOS_EXCEPTION(InvalidPayloadAttributes);
 DERIVE_BCOS_EXCEPTION(UnknownPayload);
 DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 
-/// JSON-RPC -38005: Isthmus+ payloads require V4.
+/// JSON-RPC -38005 Unsupported fork. Isthmus+ requiring payload V4 is one use;
+/// other fork-shape mismatches share this channel (see #5517).
 DERIVE_BCOS_EXCEPTION(UnsupportedFork);
 
 }  // namespace bcos::engine

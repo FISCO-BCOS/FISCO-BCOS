@@ -85,14 +85,14 @@ constexpr auto kAllocsEthHeader =
     "00"
     "000000000000000000000000000000000000\n"
     "difficulty=0x0\nnumber=0x0\ngas_limit=0x1c9c380\ngas_used=0x0\n"
-    "timestamp=0x689d5c00\nextra_data=0x00000000fa000000060000000000000000\n"
+    "timestamp=0x689d5c00\nextra_data=0x01000000fa000000060000000000000000\n"
     "mix_hash=0x0000000000000000000000000000000000000000000000000000000000000000\n"
     "nonce=0x0000000000000000\nbase_fee_per_gas=0x3b9aca00\n"
     "withdrawals_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421\n"
     "blob_gas_used=0x0\nexcess_blob_gas=0x0\n"
     "parent_beacon_block_root=0x0000000000000000000000000000000000000000000000000000000000000000\n"
     "requests_hash=0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n"
-    "hash=0xb153f41d2651441ace825becbfe2f2b6bf89092864a0ae04b7e0d40a5cf64cc1\n";
+    "hash=0x8634eabcf9e6df6b91b63cecab2d7af50a0a4fb8e0cc0aaca07cd8d0da32c069\n";
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(NodeConfigAllocsTest)
@@ -118,8 +118,7 @@ BOOST_AUTO_TEST_CASE(FeatureL2RejectsEmptyAllocs)
 {
     auto cfg = makeNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(std::string(kBase) + kFeatureL2)),
-        bcos::tool::InvalidConfig,
-        [](auto const& e) {
+        bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, "requires a non-empty [alloc.*] section");
         });
 }
@@ -128,11 +127,9 @@ BOOST_AUTO_TEST_CASE(AllocsWithoutFeatureRejected)
 {
     // allocs present but feature_l2_ethereum_compat not enabled -> reject
     auto cfg = makeNodeConfig();
-    BOOST_CHECK_EXCEPTION(
-        cfg->loadGenesisConfig(parseIni(std::string(kBase) + kAlloc0)), bcos::tool::InvalidConfig,
-        [](auto const& e) {
-            return bcos::test::errinfoContains(e, "[alloc.*] section requires");
-        });
+    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(std::string(kBase) + kAlloc0)),
+        bcos::tool::InvalidConfig,
+        [](auto const& e) { return bcos::test::errinfoContains(e, "[alloc.*] section requires"); });
 }
 
 BOOST_AUTO_TEST_CASE(AllocStorageSlotsParsed)
@@ -174,9 +171,7 @@ BOOST_AUTO_TEST_CASE(NonHexAddressRejected)
                       "balance=0\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig,
-        [](auto const& e) {
-            return bcos::test::errinfoContains(e, ".address is not valid hex");
-        });
+        [](auto const& e) { return bcos::test::errinfoContains(e, ".address is not valid hex"); });
 }
 
 BOOST_AUTO_TEST_CASE(BadBalanceNamesSection)
@@ -185,8 +180,8 @@ BOOST_AUTO_TEST_CASE(BadBalanceNamesSection)
                       "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=garbage\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
-    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig,
-        [](auto const& e) {
+    BOOST_CHECK_EXCEPTION(
+        cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, ".balance must be decimal digits");
         });
 }
@@ -201,9 +196,7 @@ BOOST_AUTO_TEST_CASE(DuplicateAddressRejected)
                       "balance=0\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig,
-        [](auto const& e) {
-            return bcos::test::errinfoContains(e, "address duplicate");
-        });
+        [](auto const& e) { return bcos::test::errinfoContains(e, "address duplicate"); });
 }
 
 BOOST_AUTO_TEST_CASE(BadStorageKeyRejected)
@@ -214,8 +207,8 @@ BOOST_AUTO_TEST_CASE(BadStorageKeyRejected)
                       "balance=0\nnonce=0\ncode=0x6080604052\n"
                       "[alloc.0.storage]\n0x01=0x01\n";
     auto cfg = makeNodeConfig();
-    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig,
-        [](auto const& e) {
+    BOOST_CHECK_EXCEPTION(
+        cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, ".storage].key must be 64 hex chars");
         });
 }
@@ -230,8 +223,8 @@ BOOST_AUTO_TEST_CASE(BadStorageValueRejected)
                       "[alloc.0.storage]\n"
                       "0x0000000000000000000000000000000000000000000000000000000000000000=0x01\n";
     auto cfg = makeNodeConfig();
-    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig,
-        [](auto const& e) {
+    BOOST_CHECK_EXCEPTION(
+        cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, ".storage].value must be 64 hex chars");
         });
 }
@@ -246,8 +239,6 @@ BOOST_AUTO_TEST_CASE(NonceOverflowRejected)
                       "balance=0\nnonce=18446744073709551616\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig,
-        [](auto const& e) {
-            return bcos::test::errinfoContains(e, ".nonce must fit in uint64");
-        });
+        [](auto const& e) { return bcos::test::errinfoContains(e, ".nonce must fit in uint64"); });
 }
 BOOST_AUTO_TEST_SUITE_END()

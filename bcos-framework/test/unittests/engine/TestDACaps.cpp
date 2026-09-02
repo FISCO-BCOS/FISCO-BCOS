@@ -54,6 +54,10 @@ BOOST_AUTO_TEST_CASE(BudgetForcedBytesAndInclusiveAdmission)
     BOOST_CHECK(!budget.admits(1));   // over the cap -> rejected
     DACaps::Budget budget2(caps, 100);
     BOOST_CHECK(!budget2.admits(1));  // forced bytes alone at the cap
+    // forced > cap: cap < m_used must reject even envelopeSize 0 (wrap-safe first conjunct).
+    DACaps::Budget over(caps, 101);
+    BOOST_CHECK(!over.admits(1));
+    BOOST_CHECK(!over.admits(0));
 }
 
 BOOST_AUTO_TEST_CASE(BudgetAdmissionIsWrapSafe)

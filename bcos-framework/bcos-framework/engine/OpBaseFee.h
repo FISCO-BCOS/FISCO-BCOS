@@ -14,9 +14,9 @@
  *  limitations under the License.
  *
  * @file OpBaseFee.h
- * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). Production caller: the
- * EngineService OP path (buildOpPayload / runOpNewPayloadSteps). calcOpBaseFee is invoked
- * from EngineServiceImpl.h.
+ * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee). Types-only in this
+ * slice: the in-tree caller is CalcOpBaseFeeTest. EngineServiceImpl still has a
+ * file-local decoder; #5538 should include this header and delete that copy.
  */
 
 #pragma once
@@ -33,9 +33,9 @@
 namespace bcos::engine
 {
 
-/// Canyon EIP-1559 parameters (op-geth params/config.go). Single source for the
-/// zero-pair translation in encodeOptimismExtraData and for the built-in single-node
-/// driver's FCU attribute defaults (Initializer) — the two must never drift.
+/// Canyon EIP-1559 parameters (op-geth params/config.go). Intended single source
+/// for encodeOptimismExtraData's zero-pair translation and the built-in driver's
+/// FCU defaults (#5538 / #5540). Unused by calcOpBaseFee itself.
 inline constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
 inline constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;
 
@@ -53,12 +53,14 @@ inline std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(
     return {denominator, elasticity};
 }
 
-/// Next-block baseFee (op-geth CalcBaseFee). extraData layout (version byte first):
+/// Next-block baseFee (op-geth CalcBaseFee). Holocene-active and later only:
+/// a pre-Holocene parent has empty extraData and must use the prior 1559 constants
+/// in the caller, not this helper. extraData layout (version byte first):
 ///   9 bytes  = Holocene: 0x00 || denominator(u32 BE) || elasticity(u32 BE)
 ///   17 bytes = Jovian:   0x01 || denominator || elasticity || minBaseFee(u64 BE)
-/// Short, wrong-version, or zero denom/elasticity extraData is fail-closed (no 8/2 default).
-/// The caller decides parentIsJovian from the fork schedule; the minBaseFee floor is only
-/// read from exactly-17-byte extraData carrying version byte 0x01.
+/// Empty, short, wrong-version, or zero denom/elasticity extraData is fail-closed
+/// (no 8/2 default). The caller decides parentIsJovian from the fork schedule; the
+/// minBaseFee floor is only read from exactly-17-byte extraData carrying 0x01.
 inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool parentIsJovian)
 {
     auto const extra = parent.extraData();
