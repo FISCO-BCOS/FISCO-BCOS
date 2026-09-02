@@ -33,9 +33,11 @@
 namespace bcos::engine
 {
 
-/// Canyon EIP-1559 parameters (op-geth params/config.go). Intended single source
-/// for encodeOptimismExtraData's zero-pair translation and the built-in driver's
-/// FCU defaults (#5538 / #5540). Unused by calcOpBaseFee itself.
+/// Canyon EIP-1559 parameters (op-geth params/config.go). Mirrors the anonymous-namespace
+/// copies in EngineServiceImpl.cpp (these constants, decodeEip1559Params, and
+/// validateOptimismExtraDataShape) — #5538 consolidates all three copies onto this
+/// header so the engine INVALID gate and the next-base-fee calc share one decoder.
+/// Unused by calcOpBaseFee itself.
 inline constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
 inline constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;
 

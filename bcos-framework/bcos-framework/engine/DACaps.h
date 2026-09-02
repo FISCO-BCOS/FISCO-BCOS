@@ -38,12 +38,15 @@ namespace bcos::engine
 /// carry the instance — the handoff described above is the intended wiring, not current
 /// code.
 ///
-/// Semantics (both in BYTES of the serialized EIP-2718 envelope, matching the
-/// build-path TODO's documented contract and op-geth's miner shrinking under throttle):
-///   maxTxSize   — a sealed pool tx whose envelope exceeds this is dropped from the
-///                 build (op-geth rejects oversized txs from blocks the same way);
+/// Semantics (both in ESTIMATED DA bytes — the Fjord FastLZ size estimate of the
+/// serialized EIP-2718 envelope, matching op-geth's DA throttling: its txpool DA filter
+/// and the LazyTransaction DABytes carrier both use RollupCostData().EstimatedDASize(),
+/// never the raw envelope length. This tree's equivalent is estimatedDaSize() in
+/// bcos-evm/opstack/RollupCost.h — feed that, not raw size):
+///   maxTxSize   — a sealed pool tx whose estimated DA size exceeds this is dropped
+///                 from the build (op-geth's txpool excludes such txs the same way);
 ///   maxBlockSize — block assembly stops appending sealed envelopes once the
-///                  cumulative serialized size (forced envelopes included in the
+///                  cumulative estimated DA size (forced envelopes included in the
 ///                  accounting, never dropped — the leading deposit is consensus-
 ///                  required) crosses the cap.
 /// Zero means UNSET = uncapped (the atomics' zero init), so a node without throttling
@@ -53,23 +56,24 @@ struct DACaps
     std::atomic<std::uint64_t> maxTxSize{0};
     std::atomic<std::uint64_t> maxBlockSize{0};
 
-    /// Envelope-size gate for sealed pool txs (0 = everything passes).
-    bool txFits(std::uint64_t envelopeSize) const noexcept
+    /// Estimated-DA-size gate for sealed pool txs (0 = everything passes).
+    bool txFits(std::uint64_t estimatedDaSize) const noexcept
     {
         auto const cap = maxTxSize.load(std::memory_order_relaxed);
-        return cap == 0 || envelopeSize <= cap;
+        return cap == 0 || estimatedDaSize <= cap;
     }
 
-    /// Running byte budget for block assembly: construct with the forced (undroppable)
-    /// envelope total, then admits(sealedEnvelopeSize) per sealed tx in order. This is a
-    /// plain helper, not enforced state — the build loop owns the decisions.
+    /// Running estimated-DA byte budget for block assembly: construct with the forced
+    /// (undroppable) envelopes' estimate, then admits(estimatedDaSize) per sealed tx in
+    /// order. This is a plain helper, not enforced state — the build loop owns the
+    /// decisions.
     class Budget
     {
     public:
         explicit Budget(DACaps const& caps, std::uint64_t forcedBytes)
           : m_caps(caps), m_used(forcedBytes)
         {}
-        bool admits(std::uint64_t envelopeSize) noexcept
+        bool admits(std::uint64_t estimatedDaSize) noexcept
         {
             auto const cap = m_caps.maxBlockSize.load(std::memory_order_relaxed);
             if (cap == 0)
@@ -78,11 +82,11 @@ struct DACaps
             }
             // Wrap-safe form: `m_used + envelopeSize` could wrap only at ~2^64 bytes, but the
             // comparison is cheap to write without the addition.
-            if (cap < m_used || envelopeSize > cap - m_used)
+            if (cap < m_used || estimatedDaSize > cap - m_used)
             {
                 return false;
             }
-            m_used += envelopeSize;
+            m_used += estimatedDaSize;
             return true;
         }
 
