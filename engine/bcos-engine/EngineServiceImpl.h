@@ -672,6 +672,12 @@ private:
         // Execute and commit through the OpScheduler delegate: same guard as
         // runOpNewPayloadSteps so a delegate-less OP engine fails cleanly instead of
         // dereferencing null at the first reset().
+        // Wiring contract: with c_opMode active the runtime m_delegate MUST be an OpScheduler —
+        // the only SchedulerInterface overriding adoptProbeAsPending (this path adopts the
+        // retained probe below). Any other delegate silently falls back to the interface's
+        // defaulted verify=true re-execution: correct, but it loses the single-execution
+        // optimization. No RTTI dispatch is possible (OpScheduler is templated), so this is a
+        // documented convention, not an enforced invariant.
         if (!m_delegate)
         {
             BOOST_THROW_EXCEPTION(
