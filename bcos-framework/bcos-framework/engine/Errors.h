@@ -30,6 +30,7 @@ DERIVE_BCOS_EXCEPTION(OpExecutionInternalError);
 DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
 DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
 DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
+DERIVE_BCOS_EXCEPTION(InvalidPayloadAttributes);
 DERIVE_BCOS_EXCEPTION(UnknownPayload);
 DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 

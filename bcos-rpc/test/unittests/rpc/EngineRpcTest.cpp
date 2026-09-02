@@ -56,7 +56,9 @@ public:
         std::optional<engine::NewPayloadRequest> capturedNewPayloadRequest;
         std::optional<std::uint32_t> capturedNewPayloadVersion;
         bool throwUnknownPayload = false;
+        bool throwInvalidPayloadAttributes = false;
         bool throwUnsupportedFork = false;
+        bool throwInvalidForkchoiceState = false;
     };
     std::shared_ptr<State> m_state = std::make_shared<State>();
 
@@ -74,9 +76,17 @@ public:
     {
         m_state->capturedForkchoiceState = forkchoiceState;
         m_state->capturedForkchoiceVersion = static_cast<int>(version);
+        if (m_state->throwInvalidPayloadAttributes)
+        {
+            BOOST_THROW_EXCEPTION(engine::InvalidPayloadAttributes{});
+        }
         if (m_state->throwUnsupportedFork)
         {
             BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
+        }
+        if (m_state->throwInvalidForkchoiceState)
+        {
+            BOOST_THROW_EXCEPTION(engine::InvalidForkchoiceState{});
         }
         co_return m_state->forkchoiceUpdatedResult;
     }
@@ -216,6 +226,51 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedWithAttrsUnsupportedForkMapsTo38005)
     BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV2, params, response), JsonRpcException,
         [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
 }
+
+// Typed engine failures must map onto the spec error codes at the endpoint (R78):
+// InvalidPayloadAttributes -> -38003, UnsupportedFork -> -38005,
+// InvalidForkchoiceState -> -38002. Without the mapping every engine exception falls
+// into the dispatcher's catch(...) and answers the generic retryable -32603, which a
+// real op-node misclassifies as a transient server failure.
+BOOST_AUTO_TEST_CASE(forkchoiceUpdatedTypedFailuresMapToSpecErrorCodes)
+{
+    Json::Value params(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    params.append(fc);
+    Json::Value attrs;
+    attrs["timestamp"] = "0x1";
+    attrs["prevRandao"] = "0x4444444444444444444444444444444444444444444444444444444444444444";
+    attrs["suggestedFeeRecipient"] = "0x5555555555555555555555555555555555555555";
+    params.append(attrs);
+
+    // CALL_ENGINE drives the endpoint directly (no dispatcher), so the mapped
+    // JsonRpcException surfaces here exactly as Web3JsonRpcImpl::handleRequest would see
+    // it: the dispatcher's catch(JsonRpcException) formats it into response["error"] with
+    // the same code.
+    auto expectCode = [&](Json::Value params, int code) {
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
+            [code](JsonRpcException const& e) { return e.code() == code; });
+    };
+
+    mockService.m_state->throwInvalidPayloadAttributes = true;
+    expectCode(params, EngineError::InvalidPayloadAttributes);
+
+    mockService.m_state->throwInvalidPayloadAttributes = false;
+    mockService.m_state->throwUnsupportedFork = true;
+    expectCode(params, EngineError::UnsupportedFork);
+
+    mockService.m_state->throwUnsupportedFork = false;
+    mockService.m_state->throwInvalidForkchoiceState = true;
+    // The state-only shape (no attributes) exercises the same catch ladder.
+    Json::Value stateOnly(Json::arrayValue);
+    stateOnly.append(fc);
+    expectCode(stateOnly, EngineError::InvalidForkchoiceState);
+}
+
 
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
 {
@@ -603,6 +658,22 @@ BOOST_AUTO_TEST_CASE(newPayloadV4)
     BOOST_CHECK(capturedReq.expectedBlobVersionedHashes.empty());
     BOOST_REQUIRE(capturedReq.executionRequests.has_value());
     BOOST_CHECK(capturedReq.executionRequests->empty());
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV4TypedVersionGateMapsToSpecErrorCode)
+{
+    // A fully shaped V4 request so parseNewPayloadRequest passes and the typed engine
+    // failure (not a -32602 shape error) is what reaches the endpoint's catch ladder.
+    Json::Value params(Json::arrayValue);
+    params.append(makeV4ExecutionPayloadJson());
+    params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes (empty)
+    params.append(c_beaconRootHex);                // parentBeaconBlockRoot
+    params.append(Json::Value(Json::arrayValue));  // executionRequests (empty)
+
+    mockService.m_state->throwUnsupportedFork = true;
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadV4MissingParams)

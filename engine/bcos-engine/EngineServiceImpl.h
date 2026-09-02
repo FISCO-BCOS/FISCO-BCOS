@@ -232,11 +232,20 @@ public:
                 }
             }
             // Validate attributes before updating forkchoice. OP adds gasLimit /
-            // eip1559Params / withdrawals / minBaseFee.
+            // eip1559Params / withdrawals / minBaseFee. On the OP path an attribute fault
+            // answers the spec -38003 channel (op-geth checkOptimismPayloadAttributes):
+            // the typed InvalidPayloadAttributes exception propagates and the RPC endpoint
+            // maps it (EngineEndpoint.cpp). The generic path keeps the pre-existing
+            // payloadStatus=INVALID answer.
             if (auto validationError =
                     detail::validatePayloadAttributes(*payloadAttributes, version);
                 validationError.has_value())
             {
+                if constexpr (c_opMode)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidPayloadAttributes{} << bcos::errinfo_comment{*validationError});
+                }
                 ForkchoiceUpdatedResult result{
                     .payloadStatus =
                         makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError),
@@ -250,12 +259,8 @@ public:
                         *payloadAttributes, m_scheduler.get().isJovianActive());
                     validationError.has_value())
                 {
-                    ForkchoiceUpdatedResult result{
-                        .payloadStatus = makeStatus(
-                            PayloadValidationStatus::Invalid, std::nullopt, validationError),
-                        .payloadId = std::nullopt,
-                    };
-                    co_return result;
+                    BOOST_THROW_EXCEPTION(
+                        InvalidPayloadAttributes{} << bcos::errinfo_comment{*validationError});
                 }
             }
         }
@@ -595,7 +600,9 @@ private:
                 if (payloadAttributes.timestamp <=
                     static_cast<std::uint64_t>(parentHeader->timestamp()))
                 {
-                    BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                    // op-geth answers -38003 for this at build time, so it is an attribute
+                    // fault, not an internal error.
+                    BOOST_THROW_EXCEPTION(InvalidPayloadAttributes{} << bcos::errinfo_comment{
                                               "buildOpPayload: payloadAttributes.timestamp must be "
                                               "strictly greater than the parent header timestamp"});
                 }
