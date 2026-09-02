@@ -12,9 +12,9 @@ target_include_directories(engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-engine>)
 # Web3Transaction / EthBlockHeader live in rlp-protocol; do not link rpc.
-# PRIVATE: dependents that include EngineServiceImpl.h already link rlp-protocol.
+# PUBLIC: EngineServiceImpl.h includes bcos-rlp-protocol/EthBlockHeader.h.
 # codec is PUBLIC: PayloadId.h uses codec::rlp.
-target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec PRIVATE rlp-protocol)
+target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec rlp-protocol)
 set_target_properties(engine PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)

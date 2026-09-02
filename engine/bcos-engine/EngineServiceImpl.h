@@ -19,7 +19,6 @@
 
 #pragma once
 
-#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-engine/PayloadId.h"
@@ -102,8 +101,8 @@ std::optional<std::string> validateExecutionPayload(
 /// Encodes the OP-Stack block-header extraData from the CL-supplied payload attributes.
 bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 
-/// The withdrawals trie root this node commits: empty-trie root while the list is empty
-/// (geth DeriveSha([])). Isthmus's real L2ToL1MessagePasser storage root is a follow-up.
+/// Generic path: empty-trie root (geth DeriveSha([])). OP copies
+/// executedHeader->withdrawalsRoot() in buildOpPayload.
 inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
 {
     return bcos::ledger::mpt::emptyRootHash();
@@ -262,7 +261,7 @@ public:
                 {
                     BOOST_THROW_EXCEPTION(InvalidPayloadAttributes{} << bcos::errinfo_comment{
                                               "OP payload attributes require "
-                                              "engine_forkchoiceUpdatedV3 or V4; V1/V2 cannot "
+                                              "engine_forkchoiceUpdatedV3; V1/V2 cannot "
                                               "carry them (JSON-RPC -38003)"});
                 }
             }
