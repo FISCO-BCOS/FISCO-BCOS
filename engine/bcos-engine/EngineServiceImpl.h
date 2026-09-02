@@ -264,9 +264,8 @@ public:
         if (payloadAttributes != nullptr)
         {
             // OP: FCU V1/V2 cannot carry OP attributes (gasLimit/eip1559Params/minBaseFee).
-            // Following op-geth's checkOptimismPayloadAttributes, an attribute fault on the
-            // build path answers the -38003 InvalidPayloadAttributes channel — the permanent
-            // attribute-fault signal — not the fork-era -38005.
+            // An attribute fault on the build path answers the -38003 InvalidPayloadAttributes
+            // channel — the permanent attribute-fault signal — not the fork-era -38005.
             if constexpr (c_opMode)
             {
                 if (version < 3)
@@ -279,10 +278,9 @@ public:
             }
             // Validate attributes before updating forkchoice. OP adds gasLimit /
             // eip1559Params / withdrawals / minBaseFee. On the OP path an attribute fault
-            // answers the spec -38003 channel (op-geth checkOptimismPayloadAttributes):
-            // the typed InvalidPayloadAttributes exception propagates and the RPC endpoint
-            // maps it (EngineEndpoint.cpp). The generic path keeps the pre-existing
-            // payloadStatus=INVALID answer.
+            // answers the spec -38003 channel: the typed InvalidPayloadAttributes exception
+            // propagates and the RPC endpoint maps it (EngineEndpoint.cpp). The generic path
+            // keeps the pre-existing payloadStatus=INVALID answer.
             if (auto validationError =
                     detail::validatePayloadAttributes(*payloadAttributes, version);
                 validationError.has_value())
@@ -648,16 +646,16 @@ private:
                     BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
                                               std::string("calcOpBaseFee failed: ") + e.what()});
                 }
-                // op-geth rejects attrs.timestamp <= parent at build time (-38003,
-                // checkOptimismPayloadAttributes); this gate throws InvalidPayloadAttributes,
-                // which EngineEndpoint maps to the typed -38003 (a permanent attribute fault
-                // for the CL, not a retryable -32603). Without this gate we would build a
-                // payload whose read-back is rejected at newPayload — a one-block stall.
+                // FISCO's own guard: attrs.timestamp <= parent is an attribute fault, so this
+                // gate throws InvalidPayloadAttributes, which EngineEndpoint maps to the spec
+                // -38003 channel (a permanent attribute fault for the CL, not a retryable
+                // -32603). Without this gate we would build a payload whose read-back is
+                // rejected at newPayload — a one-block stall.
                 if (payloadAttributes.timestamp <=
                     static_cast<std::uint64_t>(parentHeader->timestamp()))
                 {
-                    // op-geth answers -38003 for this at build time, so it is an attribute
-                    // fault, not an internal error.
+                    // A timestamp fault is an attribute fault (spec -38003), not an internal
+                    // error.
                     BOOST_THROW_EXCEPTION(InvalidPayloadAttributes{} << bcos::errinfo_comment{
                                               "buildOpPayload: payloadAttributes.timestamp must be "
                                               "strictly greater than the parent header timestamp"});
