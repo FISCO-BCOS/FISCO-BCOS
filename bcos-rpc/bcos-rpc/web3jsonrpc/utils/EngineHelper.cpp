@@ -338,7 +338,6 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .withdrawals = std::nullopt,
         .blobGasUsed = std::nullopt,
         .excessBlobGas = std::nullopt,
-        .rawTransactions = std::nullopt,
         .withdrawalsRoot = std::nullopt,
     };
     if (ep.isMember("extraData"))
@@ -372,21 +371,6 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
                 .raw = parseRawTransactionElement(ep["transactions"][i], "executionPayload", i),
                 .decoded = nullptr,
             });
-        }
-    }
-    // OP carrier mirror: validateOpNewPayloadRequest requires rawTransactions to be present
-    // on the OP path, and its content is the same raw envelopes as transactions[].raw. Fill
-    // it only for V4 (the OP carrier is read exclusively on the OP path; generic V1-V3
-    // never consume it, so copying N envelopes per submission would be pure waste). V4
-    // gets present-but-empty for a block with no transactions so an external op-node's
-    // newPayloadV4 is never rejected for a missing field at the RPC boundary.
-    if (version >= engine::ApiVersion::V4)
-    {
-        payload.rawTransactions = std::vector<bcos::bytes>{};
-        payload.rawTransactions->reserve(payload.transactions.size());
-        for (auto const& tx : payload.transactions)
-        {
-            payload.rawTransactions->push_back(tx.raw);
         }
     }
     if (ep.isMember("withdrawals") && !ep["withdrawals"].isNull())
@@ -737,20 +721,9 @@ Json::Value bcos::rpc::serializeExecutionPayload(
     ep["blockHash"] = payload.blockHash.hexPrefixed();
 
     Json::Value transactions(Json::arrayValue);
-    if (payload.rawTransactions.has_value())
+    for (auto const& transaction : payload.transactions)
     {
-        // OP path: envelopes live only in rawTransactions.
-        for (auto const& raw : *payload.rawTransactions)
-        {
-            transactions.append(toHexStringWithPrefix(raw));
-        }
-    }
-    else
-    {
-        for (auto const& transaction : payload.transactions)
-        {
-            transactions.append(toHexStringWithPrefix(transaction.raw));
-        }
+        transactions.append(toHexStringWithPrefix(transaction.raw));
     }
     ep["transactions"] = std::move(transactions);
 

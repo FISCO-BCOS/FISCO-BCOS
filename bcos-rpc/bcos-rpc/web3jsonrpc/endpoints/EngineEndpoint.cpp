@@ -319,7 +319,7 @@ task::Task<void> EngineEndpoint::handleNewPayload(
 
     // V4 (OP) execution runs a full block execution + commit per call. Bound it to one
     // in-flight execution BEFORE parsing: a busy-rejected flood must not pay the full
-    // rawTransactions hex decode; the concurrent request gets the spec-recognized SYNCING
+    // transaction hex decode; the concurrent request gets the spec-recognized SYNCING
     // status (op-node retries) instead of queueing unbounded execution work behind a flood.
     const bool opExecution = version == engine::ApiVersion::V4;
     if (opExecution && m_opPayloadBusy.exchange(true, std::memory_order_acq_rel))
