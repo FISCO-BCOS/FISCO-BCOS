@@ -1524,7 +1524,12 @@ private:
                 block->appendTransaction(engineTx.decoded);
                 continue;
             }
-            // newPayload (and any other raw-only carrier): decode once here.
+            // Raw-only carriers (newPayload, and any other carrier built without a decode)
+            // decode here. The buildOpPayload probe and adopt passes never reach this fallback:
+            // their forced and sealed envelopes are decoded ONCE into the carriers before the
+            // probe loop, and the probe, ledger-gas re-probe, and adopt buildOpBlock passes all
+            // reuse those already-decoded .decoded forms — OP decode-once is structural here
+            // (R77), not a decode cache.
             auto const& env = engineTx.raw;
             const auto txHash = hashImpl.hash(env);
             auto prepared = detail::preparedOpTransaction(env, txHash);
