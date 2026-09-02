@@ -301,7 +301,13 @@ public:
     /// The verify flag of every executeBlock call, in call order (single-threaded tests).
     std::vector<bool> verifyFlags;
     std::optional<h256> poisonTxHash;
+    /// When set, the delegate answers a typed block-capacity fault (OpCulpritTxHash +
+    /// OpBlockGasPoolFull) for the envelope instead of executing it — the F2 skip path.
+    std::optional<h256> capacityTxHash;
     bcos::protocol::BlockHeader::Ptr lastAdoptedHeader;
+    /// Number of transactions the last probe block carried (diagnostic for the sealed
+    /// tail / prefix assertions).
+    std::size_t lastProbeTxCount = 0;
     /// The executed header fabricated by the last successful probe. buildOpPayload copies its
     /// commitments (stateRoot/receiptsRoot/gasUsed/logsBloom/withdrawalsRoot/blobGasUsed)
     /// into the payload; fix-round G asserts the getPayload result equals these values.
@@ -312,13 +318,22 @@ public:
     {
         ++executeBlockCount;
         verifyFlags.push_back(verify);
-        if (poisonTxHash.has_value())
+        lastProbeTxCount = block->transactions().size();
+        if (poisonTxHash.has_value() || capacityTxHash.has_value())
         {
             for (const auto& holder : block->transactions())
             {
                 const auto& tx = *holder;
                 auto const envelopeHash = keccak256Hash(tx.extraTransactionBytes());
-                if (envelopeHash == *poisonTxHash)
+                if (capacityTxHash.has_value() && envelopeHash == *capacityTxHash)
+                {
+                    auto error = BCOS_ERROR_PTR(-1, "block gas pool full");
+                    *error << bcos::engine::OpCulpritTxHash(envelopeHash)
+                           << bcos::engine::OpBlockGasPoolFull{true};
+                    callback(std::move(error), nullptr, false);
+                    return;
+                }
+                if (poisonTxHash.has_value() && envelopeHash == *poisonTxHash)
                 {
                     auto error = BCOS_ERROR_PTR(-1, "poisoned transaction");
                     *error << bcos::engine::OpCulpritTxHash(envelopeHash);
@@ -445,15 +460,17 @@ public:
     void markClean() { setTainted(false); }
 };
 
-protocol::Transaction::Ptr makeOpWeb3Tx(std::string_view senderBytes, std::uint64_t nonce)
+protocol::Transaction::Ptr makeOpWeb3Tx(std::string_view senderBytes, std::uint64_t nonce,
+    std::uint64_t gas = 21000,
+    bcos::Address to = bcos::Address("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"))
 {
     bcos::bytes body;
     bcos::codec::rlp::encode(body, static_cast<std::uint64_t>(1));  // chainId
     bcos::codec::rlp::encode(body, nonce);
-    bcos::codec::rlp::encode(body, static_cast<std::uint64_t>(1));      // maxPriorityFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<std::uint64_t>(1));      // maxFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<std::uint64_t>(21000));  // gasLimit
-    bcos::codec::rlp::encode(body, Address("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"));
+    bcos::codec::rlp::encode(body, static_cast<std::uint64_t>(1));  // maxPriorityFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<std::uint64_t>(1));  // maxFeePerGas
+    bcos::codec::rlp::encode(body, gas);                            // gasLimit
+    bcos::codec::rlp::encode(body, to);
     bcos::codec::rlp::encode(body, static_cast<std::uint64_t>(0));  // value
     bcos::codec::rlp::encode(body, bcos::bytes{});                  // data
     body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);               // empty accessList
@@ -471,6 +488,9 @@ protocol::Transaction::Ptr makeOpWeb3Tx(std::string_view senderBytes, std::uint6
     signature[63] = 0x34;  // s != 0
     signature[64] = 0x01;  // yParity
     tx->mutableInner().signature.assign(signature.begin(), signature.end());
+    // Declared gas lives in the decoded TransactionData member: the sealed-tail gas
+    // prefix (declaredGasOf) and the executor read tx.gasLimit() from here.
+    tx->mutableInner().data.gasLimit = static_cast<tars::Int64>(gas);
     tx->setNonce("0x" + std::to_string(nonce));
     bcos::bytes sender{senderBytes.begin(), senderBytes.end()};
     tx->forceSender(sender);
@@ -728,6 +748,108 @@ BOOST_AUTO_TEST_CASE(op_two_consecutive_builds_execute_once)
     checkPayloadCopiesProbeCommitments(payload2, *delegate, c_opParentBlockNumber + 2);
     BOOST_CHECK_EQUAL(delegate->executeBlockCount.load(), 2);
     BOOST_CHECK_EQUAL(delegate->adoptProbeAsPendingCount.load(), 2);
+}
+
+// F2 core: the sealed tail is assembled under a declared-gas budget (op-geth miner
+// GasPool pre-check). A pool of three 1M-gas txs under a 3M CL gasLimit yields exactly
+// deposit + 2 sealed txs — the third is skipped (prefix stop), never evicted: a second
+// build under the full chain gasLimit still sees all three pool txs.
+BOOST_AUTO_TEST_CASE(op_build_gas_prefix_stop_skips_tail_without_evicting)
+{
+    bcos::txpool::MemPoolImpl memPool;
+    OpGlobalStateFixture fixture;
+    auto forkchoiceState = makeOpForkchoiceState('e');
+    fixture.setBlockNumber(forkchoiceState.headBlockHash, c_opParentBlockNumber);
+    fixture.setBlockNumber(forkchoiceState.safeBlockHash, c_opParentBlockNumber);
+    fixture.setBlockNumber(forkchoiceState.finalizedBlockHash, c_opParentBlockNumber);
+    fixture.writeStoredHeader(
+        c_opParentBlockNumber, makeOpParentHeader(c_opParentBlockNumber, c_opBaseTimestamp - 3000));
+
+    auto constexpr c_txGas = 1'000'000ULL;  // declared gas of each sealed tx
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        std::string sender(20, static_cast<char>('a' + i));
+        // Distinct `to` per tx: the pool keys transactions by envelope hash, and identical
+        // envelopes (the fake signature is fixed) would dedup to a single pool entry.
+        bcos::Address to("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
+        to[19] = static_cast<bcos::byte>('a' + i);
+        auto tx = makeOpWeb3Tx(sender, 0, c_txGas, to);
+        memPool.add(std::vector<protocol::Transaction::Ptr>{tx});
+        fixture.setNonce(sender, "0");
+    }
+    auto delegate = std::make_shared<CountingOpDelegate>();
+    auto engineService = makeOpEngineServiceImpl(memPool, fixture.storage, delegate);
+
+    auto attributes = makeOpBuildPayloadAttributes(c_opBaseTimestamp);
+    attributes.gasLimit = 2 * c_txGas;  // DBG-discriminator
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    BOOST_CHECK_EQUAL(delegate->executeBlockCount.load(), 1);  // single probe, no retries
+    BOOST_CHECK_EQUAL(delegate->adoptProbeAsPendingCount.load(), 1);
+
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+    BOOST_CHECK_EQUAL(rawTransactionCount(payload), 3);  // deposit + 2 sealed prefix
+    checkPayloadCopiesProbeCommitments(payload, *delegate, c_opParentBlockNumber + 1);
+
+    // Second build under the full chain gasLimit: all three sealed txs are still in the
+    // pool (the prefix stop never evicted the tail).
+    auto attributes2 = makeOpBuildPayloadAttributes(c_opBaseTimestamp + 1000);
+    auto result2 = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes2, 3));
+    BOOST_REQUIRE(result2.payloadId.has_value());
+    auto payload2 = task::syncWait(engineService.getPayload(*result2.payloadId, 5));
+    BOOST_CHECK_EQUAL(rawTransactionCount(payload2), 4);  // deposit + all 3 sealed
+}
+
+// F2 defense: a residual capacity fault (typed OpBlockGasPoolFull + culprit) skips the tx
+// for this build only — no pool eviction. The second probe (without the tx) succeeds and
+// a later build still sees the tx in the pool.
+BOOST_AUTO_TEST_CASE(op_build_capacity_fault_skips_tx_without_evicting)
+{
+    bcos::txpool::MemPoolImpl memPool;
+    OpGlobalStateFixture fixture;
+    auto forkchoiceState = makeOpForkchoiceState('f');
+    fixture.setBlockNumber(forkchoiceState.headBlockHash, c_opParentBlockNumber);
+    fixture.setBlockNumber(forkchoiceState.safeBlockHash, c_opParentBlockNumber);
+    fixture.setBlockNumber(forkchoiceState.finalizedBlockHash, c_opParentBlockNumber);
+    fixture.writeStoredHeader(
+        c_opParentBlockNumber, makeOpParentHeader(c_opParentBlockNumber, c_opBaseTimestamp - 3000));
+
+    auto constexpr c_txGas = 1'000'000ULL;
+    std::string senderA(20, 'a');
+    std::string senderB(20, 'b');
+    bcos::Address toA("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
+    toA[19] = static_cast<bcos::byte>('a');
+    bcos::Address toB("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
+    toB[19] = static_cast<bcos::byte>('b');
+    auto capacityTx = makeOpWeb3Tx(senderA, 0, c_txGas, toA);
+    auto goodTx = makeOpWeb3Tx(senderB, 0, c_txGas, toB);
+    memPool.add(std::vector<protocol::Transaction::Ptr>{capacityTx, goodTx});
+    fixture.setNonce(senderA, "0");
+    fixture.setNonce(senderB, "0");
+
+    auto delegate = std::make_shared<CountingOpDelegate>();
+    delegate->capacityTxHash = capacityTx->hash();
+    auto engineService = makeOpEngineServiceImpl(memPool, fixture.storage, delegate);
+
+    auto attributes = makeOpBuildPayloadAttributes(c_opBaseTimestamp);
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    // Probe 1 fails with the capacity fault (skip), probe 2 succeeds without the tx.
+    BOOST_CHECK_EQUAL(delegate->executeBlockCount.load(), 2);
+    BOOST_CHECK_EQUAL(delegate->adoptProbeAsPendingCount.load(), 1);
+
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+    BOOST_CHECK_EQUAL(rawTransactionCount(payload), 2);  // deposit + goodTx
+    checkPayloadCopiesProbeCommitments(payload, *delegate, c_opParentBlockNumber + 1);
+
+    // The capacity tx was never removed from the pool: a later build with the fault
+    // cleared includes it again.
+    delegate->capacityTxHash.reset();
+    auto attributes2 = makeOpBuildPayloadAttributes(c_opBaseTimestamp + 1000);
+    auto result2 = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes2, 3));
+    BOOST_REQUIRE(result2.payloadId.has_value());
+    auto payload2 = task::syncWait(engineService.getPayload(*result2.payloadId, 5));
+    BOOST_CHECK_EQUAL(rawTransactionCount(payload2), 3);  // deposit + capacityTx + goodTx
 }
 
 BOOST_AUTO_TEST_SUITE_END()
