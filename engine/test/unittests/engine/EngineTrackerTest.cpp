@@ -314,78 +314,143 @@ BOOST_AUTO_TEST_CASE(engine_tracker_shared_guard_allows_concurrent_readers)
 
     std::atomic<int> activeReaders{0};
     std::atomic<int> peakReaders{0};
+    std::atomic<bool> readerDataOk{true};
     std::barrier sync(3);
 
     auto read = [&]() {
+        bool localOk = true;
         auto guard = tracker.lockShared();
-        BOOST_REQUIRE(guard.findPayload(id));
-        BOOST_CHECK_EQUAL(guard.forkchoiceState().headBlockHash, h256(10));
-
-        int current = ++activeReaders;
-        int observed = peakReaders.load();
-        while (observed < current && !peakReaders.compare_exchange_weak(observed, current))
+        if (!guard.findPayload(id) || guard.forkchoiceState().headBlockHash != h256(10))
         {
+            localOk = false;
+        }
+        else
+        {
+            int current = ++activeReaders;
+            int observed = peakReaders.load();
+            while (observed < current && !peakReaders.compare_exchange_weak(observed, current))
+            {
+            }
         }
 
         sync.arrive_and_wait();
         sync.arrive_and_wait();
-        --activeReaders;
+
+        if (localOk)
+        {
+            --activeReaders;
+        }
+        else
+        {
+            readerDataOk = false;
+        }
     };
 
-    std::thread t1(read);
-    std::thread t2(read);
+    std::jthread t1(read);
+    std::jthread t2(read);
     sync.arrive_and_wait();
+    sync.arrive_and_wait();
+    t1 = std::jthread{};
+    t2 = std::jthread{};
+
+    BOOST_CHECK(readerDataOk.load());
     BOOST_CHECK_GE(peakReaders.load(), 2);
-    sync.arrive_and_wait();
-    t1.join();
-    t2.join();
     BOOST_CHECK_EQUAL(activeReaders.load(), 0);
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_exclusive_guard_blocks_shared_readers)
 {
+    // Observability boundary: std::shared_mutex exposes no API to observe a thread
+    // blocked inside lock_shared(). This test establishes happens-before with explicit
+    // permission to attempt lockShared():
+    //   permissionGranted -> permissionConsumed (worker consumed the permit and proceeds
+    //   to lockShared()) -> lockAcquired only after exclusive release.
+    // permissionConsumed + acquired==false while exclusive is held excludes "thread never
+    // ran"; acquired==true after release excludes "no blocking occurred".
+
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
 
     std::mutex syncMutex;
-    std::condition_variable readerEnteredCv;
-    std::condition_variable readerAcquiredCv;
-    bool readerEntered = false;
-    bool readerHasLock = false;
+    std::condition_variable workerReadyCv;
+    std::condition_variable permissionCv;
+    std::condition_variable acquiredCv;
+
+    bool workerReady = false;
+    bool permissionGranted = false;
+    bool permissionConsumed = false;
+    bool lockAcquired = false;
+
+    struct Outcome
+    {
+        bool workerReadySeen = false;
+        bool permissionConsumedWhileExclusive = false;
+        bool notAcquiredWhileExclusive = false;
+        bool acquiredAfterRelease = false;
+    } outcome;
+    constexpr auto kTimeout = std::chrono::seconds(2);
 
     auto guard = tracker.lockExclusive();
 
-    std::thread reader([&]() {
+    std::jthread worker([&](std::stop_token) {
         {
             std::lock_guard lock(syncMutex);
-            readerEntered = true;
+            workerReady = true;
         }
-        readerEnteredCv.notify_one();
+        workerReadyCv.notify_one();
 
-        auto sharedGuard = tracker.lockShared();
+        {
+            std::unique_lock lock(syncMutex);
+            permissionCv.wait(lock, [&]() { return permissionGranted; });
+            permissionConsumed = true;
+        }
+        permissionCv.notify_one();
+
+        (void)tracker.lockShared();
 
         {
             std::lock_guard lock(syncMutex);
-            readerHasLock = true;
+            lockAcquired = true;
         }
-        readerAcquiredCv.notify_one();
+        acquiredCv.notify_one();
     });
 
     {
         std::unique_lock lock(syncMutex);
-        BOOST_REQUIRE(readerEnteredCv.wait_for(
-            lock, std::chrono::seconds(2), [&]() { return readerEntered; }));
-        BOOST_CHECK(!readerHasLock);
+        if (workerReadyCv.wait_for(lock, kTimeout, [&]() { return workerReady; }))
+        {
+            outcome.workerReadySeen = true;
+            permissionGranted = true;
+            permissionCv.notify_one();
+            if (permissionCv.wait_for(lock, kTimeout, [&]() { return permissionConsumed; }))
+            {
+                outcome.permissionConsumedWhileExclusive = true;
+                outcome.notAcquiredWhileExclusive = !lockAcquired;
+            }
+        }
     }
 
+    {
+        std::lock_guard lock(syncMutex);
+        permissionGranted = true;
+    }
+    permissionCv.notify_all();
     guard = EngineTracker::ExclusiveAccess{};
 
     {
         std::unique_lock lock(syncMutex);
-        BOOST_REQUIRE(readerAcquiredCv.wait_for(
-            lock, std::chrono::seconds(2), [&]() { return readerHasLock; }));
+        if (acquiredCv.wait_for(lock, kTimeout, [&]() { return lockAcquired; }))
+        {
+            outcome.acquiredAfterRelease = lockAcquired;
+        }
     }
-    reader.join();
+
+    worker = std::jthread{};
+
+    BOOST_CHECK(outcome.workerReadySeen);
+    BOOST_CHECK(outcome.permissionConsumedWhileExclusive);
+    BOOST_CHECK(outcome.notAcquiredWhileExclusive);
+    BOOST_CHECK(outcome.acquiredAfterRelease);
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_retain_only_through_guard)
