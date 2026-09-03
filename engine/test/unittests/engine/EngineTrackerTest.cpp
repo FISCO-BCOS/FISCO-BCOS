@@ -172,14 +172,16 @@ BOOST_AUTO_TEST_CASE(engine_tracker_put_and_retain_payload)
     BOOST_REQUIRE(guard.findPayload("0x03"));
 }
 
-BOOST_AUTO_TEST_CASE(engine_tracker_preserves_rebuild_on_parent)
+BOOST_AUTO_TEST_CASE(engine_tracker_swallows_parent_even_with_attributes)
 {
+    // Matrix: S2 — release EngineServiceImpl never rebuilds on parent; older head is swallowed.
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
     auto outcome = tracker.applyForkchoice(resolved(h256(9), 9, true, true));
-    BOOST_CHECK(outcome == ForkchoiceApplyResult::Applied);
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
     BOOST_REQUIRE(tracker.trackedHead().has_value());
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 9);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_swallows_old_head_without_attributes)
@@ -562,6 +564,7 @@ BOOST_AUTO_TEST_CASE(engine_common_capabilities_match_legacy_generic_capabilitie
 
 BOOST_AUTO_TEST_CASE(engine_common_validate_payload_attributes_matches_legacy)
 {
+    // Matrix: S3
     for (std::uint32_t version = 1; version <= 4; ++version)
     {
         auto attrs = minimalPayloadAttributes();
@@ -582,6 +585,42 @@ BOOST_AUTO_TEST_CASE(engine_common_validate_payload_attributes_matches_legacy)
     badHex.transactions = std::vector<std::string>{"0xZZ"};
     BOOST_CHECK(engine_common::validatePayloadAttributes(badHex, 3) ==
                 bcos::engine::detail::validatePayloadAttributes(badHex, 3));
+
+    PayloadAttributes nonEmptyWithdrawals = minimalPayloadAttributes();
+    nonEmptyWithdrawals.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 2, .amount = 3, .address = bcos::Address{}}};
+    BOOST_CHECK(engine_common::validatePayloadAttributes(nonEmptyWithdrawals, 3) ==
+                bcos::engine::detail::validatePayloadAttributes(nonEmptyWithdrawals, 3));
+
+    PayloadAttributes missingWithdrawals = minimalPayloadAttributes();
+    missingWithdrawals.withdrawals = std::nullopt;
+    BOOST_CHECK(engine_common::validatePayloadAttributes(missingWithdrawals, 2) ==
+                bcos::engine::detail::validatePayloadAttributes(missingWithdrawals, 2));
+
+    PayloadAttributes eip1559OnV2 = minimalPayloadAttributes();
+    eip1559OnV2.eip1559Params = bcos::bytes(8, 0);
+    BOOST_CHECK(engine_common::validatePayloadAttributes(eip1559OnV2, 2) ==
+                bcos::engine::detail::validatePayloadAttributes(eip1559OnV2, 2));
+
+    PayloadAttributes minBaseFeeAlone = minimalPayloadAttributes();
+    minBaseFeeAlone.minBaseFee = 0;
+    BOOST_CHECK(engine_common::validatePayloadAttributes(minBaseFeeAlone, 3) ==
+                bcos::engine::detail::validatePayloadAttributes(minBaseFeeAlone, 3));
+
+    PayloadAttributes badEip1559Len = minimalPayloadAttributes();
+    badEip1559Len.eip1559Params = bcos::bytes(7, 1);
+    BOOST_CHECK(engine_common::validatePayloadAttributes(badEip1559Len, 3) ==
+                bcos::engine::detail::validatePayloadAttributes(badEip1559Len, 3));
+
+    PayloadAttributes mixedZeroEip1559 = minimalPayloadAttributes();
+    mixedZeroEip1559.eip1559Params = bcos::fromHex("000000fa00000000");
+    BOOST_CHECK(engine_common::validatePayloadAttributes(mixedZeroEip1559, 3) ==
+                bcos::engine::detail::validatePayloadAttributes(mixedZeroEip1559, 3));
+
+    PayloadAttributes blobForced = minimalPayloadAttributes();
+    blobForced.transactions = std::vector<std::string>{"0x03aabb"};
+    BOOST_CHECK(engine_common::validatePayloadAttributes(blobForced, 3) ==
+                bcos::engine::detail::validatePayloadAttributes(blobForced, 3));
 }
 
 BOOST_AUTO_TEST_CASE(engine_common_derive_payload_id_matches_legacy)

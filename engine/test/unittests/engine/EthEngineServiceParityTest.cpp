@@ -11,6 +11,7 @@
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/engine/EngineService.h>
+#include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -24,13 +25,21 @@
 #include <bcos-mempool/MemPoolImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <evmc/evmc.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <magic_enum/magic_enum.hpp>
 
 #include <algorithm>
+#include <atomic>
+#include <exception>
 #include <functional>
+#include <latch>
+#include <optional>
+#include <thread>
+#include <unordered_map>
+#include <vector>
 
 using namespace bcos;
 using namespace bcos::engine;
@@ -266,8 +275,10 @@ struct ServicePair
     LegacyService legacy;
     NewService fresh;
 
-    ServicePair()
-      : legacy(legacyMemPool, legacyStorage.storage, legacyExecutor, legacyScheduler,
+    explicit ServicePair(evmc_revision rev = EVMC_CANCUN, bool writeEvmcRevision = true)
+      : legacyStorage(rev, writeEvmcRevision),
+        newStorage(rev, writeEvmcRevision),
+        legacy(legacyMemPool, legacyStorage.storage, legacyExecutor, legacyScheduler,
             bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite())),
         fresh(newMemPool, newStorage.storage, newExecutor, newScheduler,
             bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite()))
@@ -327,8 +338,9 @@ void checkForkchoiceParity(
         legacyResult.payloadStatus.latestValidHash == newResult.payloadStatus.latestValidHash);
     BOOST_CHECK(
         legacyResult.payloadStatus.validationError == newResult.payloadStatus.validationError);
-    // release EngineServiceImpl issues sequential nextPayloadID(); EthEngineService uses
-    // deterministic derivePayloadId. Presence must match; the ID strings need not.
+    // Payload ID policy (option B): EthEngineService uses deterministic derivePayloadId
+    // (op-geth-aligned). release EngineServiceImpl still uses nextPayloadID(). Parity
+    // requires matching presence only — ID strings are not part of the cutover contract.
     BOOST_CHECK_EQUAL(legacyResult.payloadId.has_value(), newResult.payloadId.has_value());
 }
 
@@ -564,18 +576,12 @@ BOOST_AUTO_TEST_CASE(generic_rebuild_on_parent_matches)
         task::syncWait(pair.legacy.updateForkchoice(parentForkchoice, &rebuildAttributes, 3));
     auto newRebuild =
         task::syncWait(pair.fresh.updateForkchoice(parentForkchoice, &rebuildAttributes, 3));
-    // release EngineServiceImpl requires monotonic head (+1); FCU back to the parent after
-    // tip advance does not issue a payloadId. EthEngineService/EngineTracker still allows rebuild
-    // on the parent hash (intentional side-by-side divergence until cutover).
+    // Matrix: S2 — both swallow older head (VALID, no payloadId); no rebuild-on-parent.
+    checkForkchoiceParity(legacyRebuild, newRebuild);
     BOOST_CHECK(!legacyRebuild.payloadId.has_value());
-    BOOST_REQUIRE(newRebuild.payloadId.has_value());
-    BOOST_CHECK_EQUAL(static_cast<int>(newRebuild.payloadStatus.status),
+    BOOST_CHECK(!newRebuild.payloadId.has_value());
+    BOOST_CHECK_EQUAL(static_cast<int>(legacyRebuild.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Valid));
-
-    auto newRebuilt = task::syncWait(pair.fresh.getPayload(*newRebuild.payloadId, 3));
-    BOOST_REQUIRE(newRebuilt);
-    BOOST_CHECK_EQUAL(newRebuilt->executionPayload.parentHash, parentForkchoice.headBlockHash);
-    BOOST_CHECK_EQUAL(newRebuilt->executionPayload.timestamp, rebuildAttributes.timestamp);
 }
 
 BOOST_AUTO_TEST_CASE(generic_payload_id_and_get_payload_match)
@@ -606,8 +612,9 @@ BOOST_AUTO_TEST_CASE(generic_payload_id_and_get_payload_match)
     checkGetPayloadParity(*legacyPayload, *newPayload);
 }
 
-BOOST_AUTO_TEST_CASE(generic_legacy_unbounded_cache_retains_front_second_and_last)
+BOOST_AUTO_TEST_CASE(generic_bounded_cache_evicts_front_after_sixty_five_builds)
 {
+    // Matrix: S2 — both sides use a 64-entry FIFO; distinct attrs → distinct IDs → front evicted.
     ServicePair pair;
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
@@ -621,14 +628,14 @@ BOOST_AUTO_TEST_CASE(generic_legacy_unbounded_cache_retains_front_second_and_las
     {
         auto attrs = makePayloadAttributesV3();
         // derivePayloadId hashes timestamp/1000; step by whole seconds so each build gets a
-        // distinct payload ID. Legacy generic FCU never evicts (insert-before-contains bug), so
-        // front, second, and last entries remain retrievable even after 65 builds.
+        // distinct payload ID. release nextPayloadID() also yields a distinct ID each call.
         attrs.timestamp = (c_timestamp + static_cast<std::uint64_t>(i) * 1000);
         auto legacyResult =
             task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attrs, 3));
         auto newResult = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attrs, 3));
         checkForkchoiceParity(legacyResult, newResult);
         BOOST_REQUIRE(legacyResult.payloadId.has_value());
+        BOOST_REQUIRE(newResult.payloadId.has_value());
         legacyIds.push_back(*legacyResult.payloadId);
         newIds.push_back(*newResult.payloadId);
 
@@ -640,12 +647,10 @@ BOOST_AUTO_TEST_CASE(generic_legacy_unbounded_cache_retains_front_second_and_las
     BOOST_CHECK_NE(legacyIds.front(), legacyIds.back());
     BOOST_CHECK_NE(newIds.front(), newIds.back());
 
-    // release EngineServiceImpl bounds the cache at 64 entries — after 65 builds the
-    // front ID is evicted. EthEngineService putUnbounded retains it (documented parity debt).
     BOOST_CHECK_THROW(
         task::syncWait(pair.legacy.getPayload(legacyIds.front(), 3)), bcos::engine::UnknownPayload);
-    BOOST_CHECK_NO_THROW(task::syncWait(pair.fresh.getPayload(newIds.front(), 3)));
-    // Second entry is still within the release 64-window (indices 1..64 retained).
+    BOOST_CHECK_THROW(
+        task::syncWait(pair.fresh.getPayload(newIds.front(), 3)), bcos::engine::UnknownPayload);
     BOOST_CHECK_NO_THROW(task::syncWait(pair.legacy.getPayload(legacyIds[1], 3)));
     BOOST_CHECK_NO_THROW(task::syncWait(pair.fresh.getPayload(newIds[1], 3)));
     auto legacySecond = task::syncWait(pair.legacy.getPayload(legacyIds[1], 3));
@@ -658,8 +663,11 @@ BOOST_AUTO_TEST_CASE(generic_legacy_unbounded_cache_retains_front_second_and_las
     checkGetPayloadParity(*legacyLast, *newLast);
 }
 
-BOOST_AUTO_TEST_CASE(generic_repeated_payload_id_does_not_shrink_fifo)
+BOOST_AUTO_TEST_CASE(eth_derive_payload_id_stable_under_identical_attrs)
 {
+    // Option B: Eth contract is derivePayloadId — identical attrs → identical id and cache
+    // overwrite (no FIFO growth). Legacy nextPayloadID characterization kept alongside for
+    // cutover awareness; it is not a defect on the Eth path.
     ServicePair pair;
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
@@ -680,15 +688,23 @@ BOOST_AUTO_TEST_CASE(generic_repeated_payload_id_does_not_shrink_fifo)
         BOOST_REQUIRE(newResult.payloadId.has_value());
         legacyIds.push_back(*legacyResult.payloadId);
         newIds.push_back(*newResult.payloadId);
+        if (i > 0)
+        {
+            BOOST_CHECK_EQUAL(newIds[i], newIds.front());
+        }
     }
-    // release legacy: sequential nextPayloadID → 65 distinct entries; front evicted at 64.
+
+    // Legacy characterization (sequential ids + FIFO eviction) — pre-cutover only.
     BOOST_CHECK_NE(legacyIds.front(), legacyIds.back());
     BOOST_CHECK_THROW(
         task::syncWait(pair.legacy.getPayload(legacyIds.front(), 3)), bcos::engine::UnknownPayload);
     BOOST_CHECK_NO_THROW(task::syncWait(pair.legacy.getPayload(legacyIds.back(), 3)));
-    // Generic: derivePayloadId is stable for identical attrs; putUnbounded does not shrink.
+
+    // Eth contract under option B.
     BOOST_CHECK_EQUAL(newIds.front(), newIds.back());
-    BOOST_CHECK_NO_THROW(task::syncWait(pair.fresh.getPayload(newIds.front(), 3)));
+    auto ethPayload = task::syncWait(pair.fresh.getPayload(newIds.front(), 3));
+    BOOST_REQUIRE(ethPayload);
+    BOOST_CHECK_EQUAL(ethPayload->executionPayload.timestamp, attrs.timestamp);
 }
 
 BOOST_AUTO_TEST_CASE(generic_v3_v5_v4_round_trip_matches)
@@ -1052,6 +1068,399 @@ BOOST_AUTO_TEST_CASE(generic_multi_error_precedence_matches)
     BOOST_REQUIRE(newRequestError.validationError.has_value());
     BOOST_CHECK_EQUAL(*legacyRequestError.validationError, c_expectedRequestError);
     BOOST_CHECK_EQUAL(*newRequestError.validationError, c_expectedRequestError);
+}
+
+// Matrix: S1 — mirror high-risk EngineServiceTest behaviors as dual-run parity.
+
+BOOST_AUTO_TEST_CASE(mirror_v2_rejected_on_cancun_chain)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makePayloadAttributesV2();
+    auto expectV3Attrs = [](UnsupportedFork const& e) {
+        return std::string(e.what()).find("requires the V3 payload attributes") !=
+               std::string::npos;
+    };
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &payloadAttributes, 2)),
+        UnsupportedFork, expectV3Attrs);
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &payloadAttributes, 2)),
+        UnsupportedFork, expectV3Attrs);
+}
+
+BOOST_AUTO_TEST_CASE(mirror_v3_rejected_on_shanghai_chain)
+{
+    ServicePair pair(EVMC_SHANGHAI);
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto expectCancun = [](UnsupportedFork const& e) {
+        return std::string(e.what()).find("requires a CANCUN-or-later chain fork") !=
+               std::string::npos;
+    };
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &payloadAttributes, 3)),
+        UnsupportedFork, expectCancun);
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &payloadAttributes, 3)),
+        UnsupportedFork, expectCancun);
+}
+
+BOOST_AUTO_TEST_CASE(mirror_rejected_when_evm_revision_missing)
+{
+    ServicePair pair(EVMC_CANCUN, /*writeEvmcRevision=*/false);
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto expectMissing = [](UnsupportedFork const& e) {
+        return std::string(e.what()).find("no on-chain EVM revision") != std::string::npos;
+    };
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &payloadAttributes, 3)),
+        UnsupportedFork, expectMissing);
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &payloadAttributes, 3)),
+        UnsupportedFork, expectMissing);
+}
+
+BOOST_AUTO_TEST_CASE(mirror_rejects_non_empty_withdrawals)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makePayloadAttributesV3();
+    payloadAttributes.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 2, .amount = 3, .address = Address{}}};
+    auto legacyResult =
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    auto newResult =
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    checkForkchoiceParity(legacyResult, newResult);
+    BOOST_CHECK_EQUAL(static_cast<int>(legacyResult.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(legacyResult.payloadStatus.validationError.has_value());
+    BOOST_CHECK_NE(legacyResult.payloadStatus.validationError->find("non-empty withdrawals"),
+        std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(mirror_forced_transactions_enter_payload_first)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("abababababababababab", 20);
+    auto legacyTx = makeWeb3Tx(sender, 0);
+    auto newTx = makeWeb3Tx(sender, 0);
+    pair.legacyMemPool.add(std::vector{legacyTx});
+    pair.newMemPool.add(std::vector{newTx});
+    pair.legacyStorage.setNonce(sender, "0");
+    pair.newStorage.setNonce(sender, "0");
+
+    auto attributes = makePayloadAttributesV3();
+    attributes.transactions = std::vector<std::string>{"0x7e0102030405", "0x02f8aabb"};
+    auto legacyResult =
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attributes, 3));
+    auto newResult = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attributes, 3));
+    checkForkchoiceParity(legacyResult, newResult);
+    BOOST_REQUIRE(legacyResult.payloadId.has_value());
+    BOOST_REQUIRE(newResult.payloadId.has_value());
+
+    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyResult.payloadId, 3));
+    auto newPayload = task::syncWait(pair.fresh.getPayload(*newResult.payloadId, 3));
+    checkGetPayloadParity(*legacyPayload, *newPayload);
+    BOOST_REQUIRE_EQUAL(legacyPayload->executionPayload.transactions.size(), 3);
+    BOOST_CHECK(legacyPayload->executionPayload.transactions[0].raw ==
+                (bytes{0x7e, 0x01, 0x02, 0x03, 0x04, 0x05}));
+    BOOST_CHECK(
+        legacyPayload->executionPayload.transactions[1].raw == (bytes{0x02, 0xf8, 0xaa, 0xbb}));
+    BOOST_CHECK(legacyPayload->executionPayload.transactions[2].decoded == legacyTx);
+    BOOST_CHECK(newPayload->executionPayload.transactions[2].decoded == newTx);
+}
+
+BOOST_AUTO_TEST_CASE(mirror_no_tx_pool_excludes_mempool)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("cdcdcdcdcdcdcdcdcdcd", 20);
+    auto legacyTx = makeWeb3Tx(sender, 0);
+    auto newTx = makeWeb3Tx(sender, 0);
+    pair.legacyMemPool.add(std::vector{legacyTx});
+    pair.newMemPool.add(std::vector{newTx});
+    pair.legacyStorage.setNonce(sender, "0");
+    pair.newStorage.setNonce(sender, "0");
+
+    auto attributes = makePayloadAttributesV3();
+    attributes.noTxPool = true;
+    attributes.transactions = std::vector<std::string>{"0x7e010203"};
+    auto legacyResult =
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attributes, 3));
+    auto newResult = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attributes, 3));
+    checkForkchoiceParity(legacyResult, newResult);
+    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyResult.payloadId, 3));
+    auto newPayload = task::syncWait(pair.fresh.getPayload(*newResult.payloadId, 3));
+    checkGetPayloadParity(*legacyPayload, *newPayload);
+    BOOST_REQUIRE_EQUAL(legacyPayload->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(legacyPayload->executionPayload.transactions.front().raw ==
+                (bytes{0x7e, 0x01, 0x02, 0x03}));
+
+    auto emptyAttributes = makePayloadAttributesV3();
+    emptyAttributes.noTxPool = true;
+    auto legacyEmpty =
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &emptyAttributes, 3));
+    auto newEmpty =
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &emptyAttributes, 3));
+    checkForkchoiceParity(legacyEmpty, newEmpty);
+    auto legacyEmptyPayload = task::syncWait(pair.legacy.getPayload(*legacyEmpty.payloadId, 3));
+    auto newEmptyPayload = task::syncWait(pair.fresh.getPayload(*newEmpty.payloadId, 3));
+    checkGetPayloadParity(*legacyEmptyPayload, *newEmptyPayload);
+    BOOST_CHECK(legacyEmptyPayload->executionPayload.transactions.empty());
+}
+
+BOOST_AUTO_TEST_CASE(mirror_jovian_extra_data_on_payload)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    payloadAttributes.eip1559Params = bytes(8, 0);
+    payloadAttributes.minBaseFee = 0;
+
+    auto legacyResult =
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    auto newResult =
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    checkForkchoiceParity(legacyResult, newResult);
+    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyResult.payloadId, 3));
+    auto newPayload = task::syncWait(pair.fresh.getPayload(*newResult.payloadId, 3));
+    checkGetPayloadParity(*legacyPayload, *newPayload);
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(legacyPayload->executionPayload.extraData),
+        "0x01000000fa000000060000000000000000");
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(newPayload->executionPayload.extraData),
+        "0x01000000fa000000060000000000000000");
+
+    auto holoceneAttributes = makeKarstPayloadAttributes();
+    holoceneAttributes.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
+    auto legacyHolocene =
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &holoceneAttributes, 3));
+    auto newHolocene =
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &holoceneAttributes, 3));
+    checkForkchoiceParity(legacyHolocene, newHolocene);
+    auto legacyHolocenePayload =
+        task::syncWait(pair.legacy.getPayload(*legacyHolocene.payloadId, 3));
+    auto newHolocenePayload = task::syncWait(pair.fresh.getPayload(*newHolocene.payloadId, 3));
+    checkGetPayloadParity(*legacyHolocenePayload, *newHolocenePayload);
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(legacyHolocenePayload->executionPayload.extraData),
+        "0x00000000fa00000006");
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(newHolocenePayload->executionPayload.extraData),
+        "0x00000000fa00000006");
+}
+
+// Matrix: S4 — version × fork matrix for FCU / getPayload / newPayload gates.
+
+BOOST_AUTO_TEST_CASE(matrix_version_fork_fcu_and_get_payload)
+{
+    struct Row
+    {
+        evmc_revision rev;
+        std::uint32_t fcuVersion;
+        bool useV3Attrs;
+        bool expectUnsupportedFork;
+        char const* messageNeedle;  // substring of UnsupportedFork what(), or nullptr
+    };
+
+    // CANCUN + V2 attrs → needs V3 attributes; SHANGHAI + V3 → needs CANCUN chain.
+    constexpr Row rows[] = {
+        {EVMC_CANCUN, 2, false, true, "requires the V3 payload attributes"},
+        {EVMC_CANCUN, 3, true, false, nullptr},
+        {EVMC_SHANGHAI, 2, false, false, nullptr},
+        {EVMC_SHANGHAI, 3, true, true, "requires a CANCUN-or-later chain fork"},
+    };
+
+    for (auto const& row : rows)
+    {
+        ServicePair pair(row.rev);
+        auto forkchoiceState = makeForkchoiceState();
+        setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+            c_initialBlockNumber, c_initialBlockNumber);
+        setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+            c_initialBlockNumber, c_initialBlockNumber);
+        auto attrs = row.useV3Attrs ? makePayloadAttributesV3() : makePayloadAttributesV2();
+
+        if (row.expectUnsupportedFork)
+        {
+            auto expect = [needle = row.messageNeedle](UnsupportedFork const& e) {
+                return std::string(e.what()).find(needle) != std::string::npos;
+            };
+            BOOST_CHECK_EXCEPTION(task::syncWait(pair.legacy.updateForkchoice(
+                                      forkchoiceState, &attrs, row.fcuVersion)),
+                UnsupportedFork, expect);
+            BOOST_CHECK_EXCEPTION(task::syncWait(pair.fresh.updateForkchoice(
+                                      forkchoiceState, &attrs, row.fcuVersion)),
+                UnsupportedFork, expect);
+            continue;
+        }
+
+        auto legacyResult =
+            task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attrs, row.fcuVersion));
+        auto newResult =
+            task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attrs, row.fcuVersion));
+        checkForkchoiceParity(legacyResult, newResult);
+        BOOST_REQUIRE(legacyResult.payloadId.has_value());
+        BOOST_REQUIRE(newResult.payloadId.has_value());
+
+        // getPayload version window: V2 build answers V1–V2; V3 build answers V1–V5 per
+        // engine_common / detail compatibility matrix (already unit-tested in S3).
+        auto const getVersion = row.fcuVersion;
+        auto legacyPayload =
+            task::syncWait(pair.legacy.getPayload(*legacyResult.payloadId, getVersion));
+        auto newPayload = task::syncWait(pair.fresh.getPayload(*newResult.payloadId, getVersion));
+        checkGetPayloadParity(*legacyPayload, *newPayload);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(matrix_new_payload_v4_empty_lists_match)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto attrs = makeKarstPayloadAttributes();
+    auto legacyBuild = task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attrs, 3));
+    auto newBuild = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attrs, 3));
+    checkForkchoiceParity(legacyBuild, newBuild);
+
+    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyBuild.payloadId, 5));
+    auto newPayload = task::syncWait(pair.fresh.getPayload(*newBuild.payloadId, 5));
+    checkGetPayloadParity(*legacyPayload, *newPayload);
+
+    NewPayloadRequest legacyRequest;
+    legacyRequest.executionPayload = legacyPayload->executionPayload;
+    legacyRequest.parentBeaconBlockRoot = legacyPayload->parentBeaconBlockRoot;
+    legacyRequest.executionRequests = std::vector<bytes>{};
+    NewPayloadRequest newRequest;
+    newRequest.executionPayload = newPayload->executionPayload;
+    newRequest.parentBeaconBlockRoot = newPayload->parentBeaconBlockRoot;
+    newRequest.executionRequests = std::vector<bytes>{};
+
+    checkStatusParity(task::syncWait(pair.legacy.newPayload(legacyRequest, 4)),
+        task::syncWait(pair.fresh.newPayload(newRequest, 4)));
+}
+
+// Matrix: S7 — Eth publish under shared guard blocks exclusive writer (same handshake as OP).
+
+BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
+{
+    EngineTracker tracker;
+    std::unordered_map<PayloadID, EthPayloadArtifacts<RealGlobalStateStorage::ViewType>> artifacts;
+    auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+
+    h256 const targetHash(0x42);
+    PayloadID const targetPayloadId = "0xdeadbeef";
+    constexpr protocol::BlockNumber kTargetNumber = 7;
+
+    {
+        auto guard = tracker.lockExclusive();
+        auto entry = std::make_shared<BuiltPayload>();
+        entry->executionPayload.blockHash = targetHash;
+        auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+        header->setNumber(kTargetNumber);
+        EthPayloadArtifacts<RealGlobalStateStorage::ViewType> node{
+            .view = nullptr, .header = header, .receipts = {}};
+        (void)eth_detail::publishBuiltPayload(
+            guard, artifacts, targetPayloadId, targetHash, entry, std::move(node));
+    }
+
+    protocol::BlockHeader::Ptr initialHeader;
+    std::atomic<bool> writerFinished{false};
+    std::exception_ptr writerError;
+    std::latch writerReady{1};
+    std::latch permission{1};
+    std::latch committed{1};
+
+    std::optional<std::jthread> writer;
+    {
+        auto shared = tracker.lockShared();
+        auto id = shared.payloadIdForHash(targetHash);
+        BOOST_REQUIRE(id.has_value());
+        auto it = artifacts.find(*id);
+        BOOST_REQUIRE(it != artifacts.end());
+        initialHeader = it->second.header;
+        BOOST_REQUIRE(initialHeader);
+        BOOST_CHECK_EQUAL(initialHeader->number(), kTargetNumber);
+
+        writer.emplace([&] {
+            try
+            {
+                writerReady.count_down();
+                permission.wait();
+                committed.count_down();
+                auto guard = tracker.lockExclusive();
+                h256 writerHash(0x99);
+                PayloadID writerPayloadId = "0xcafebabe";
+                auto entry = std::make_shared<BuiltPayload>();
+                entry->executionPayload.blockHash = writerHash;
+                auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+                header->setNumber(99);
+                EthPayloadArtifacts<RealGlobalStateStorage::ViewType> node{
+                    .view = nullptr, .header = header, .receipts = {}};
+                (void)eth_detail::publishBuiltPayload(
+                    guard, artifacts, writerPayloadId, writerHash, entry, std::move(node));
+                writerFinished.store(true, std::memory_order_release);
+            }
+            catch (...)
+            {
+                writerError = std::current_exception();
+            }
+        });
+
+        writerReady.wait();
+        permission.count_down();
+        committed.wait();
+        BOOST_CHECK(!writerFinished.load(std::memory_order_acquire));
+    }
+
+    writer->join();
+    if (writerError)
+    {
+        std::rethrow_exception(writerError);
+    }
+    BOOST_CHECK(writerFinished.load(std::memory_order_acquire));
+
+    {
+        auto shared = tracker.lockShared();
+        auto id = shared.payloadIdForHash(targetHash);
+        BOOST_REQUIRE(id.has_value());
+        auto it = artifacts.find(*id);
+        BOOST_REQUIRE(it != artifacts.end());
+        BOOST_CHECK_EQUAL(it->second.header->number(), kTargetNumber);
+        BOOST_CHECK_EQUAL(it->second.header.get(), initialHeader.get());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

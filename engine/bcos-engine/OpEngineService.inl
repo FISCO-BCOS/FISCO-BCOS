@@ -132,6 +132,8 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
     const PayloadAttributes& payloadAttributes, std::uint32_t version,
     bcos::protocol::BlockNumber nextBlockNumber)
 {
+    // Same policy as EthEngineService (option B): deterministic derivePayloadId, not a
+    // process-local sequence counter.
     auto payloadIdOpt =
         engine_common::derivePayloadId(payloadAttributes, forkchoiceState.headBlockHash, version);
     if (!payloadIdOpt.has_value())
@@ -154,8 +156,7 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
     std::vector<bytes> forcedEnvelopes;
     if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
     {
-        forcedEnvelopes.push_back(
-            m_scheduler.synthesizeL1AttributesEnvelope(m_scheduler.isJovianActive()));
+        forcedEnvelopes.push_back(m_scheduler.synthesizeL1AttributesEnvelope());
     }
     if (payloadAttributes.transactions.has_value())
     {

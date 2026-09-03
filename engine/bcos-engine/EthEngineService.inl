@@ -121,6 +121,9 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         m_memPool.seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
     }
 
+    // Payload ID: deterministic derive from attributes + parent (op-geth-aligned). Do not
+    // switch back to a process-local sequence counter — that was release EngineServiceImpl
+    // only and is not the EthEngineService cutover contract (option B).
     auto payloadIdOpt =
         engine_common::derivePayloadId(*payloadAttributes, forkchoiceState.headBlockHash, version);
     if (!payloadIdOpt.has_value())

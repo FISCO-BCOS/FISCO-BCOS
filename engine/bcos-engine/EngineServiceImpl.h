@@ -32,7 +32,6 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include <bcos-ledger/mpt/Constants.h>
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/BoostLog.h"
@@ -40,6 +39,7 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <bcos-ledger/mpt/Constants.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <cstdint>
 #include <deque>
@@ -146,9 +146,8 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
 // excessBlobGas and @p parentBeaconBlockRoot must be engaged (this function uses .value()
 // on them and would throw std::bad_optional_access otherwise). buildPayload guarantees the
 // precondition under the same forkVersion-derived gate; a direct caller must too.
-void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header,
-    const ExecutionPayload& payload, std::optional<bcos::h256> parentBeaconBlockRoot,
-    bcos::protocol::EthBlockVersion forkVersion);
+void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
+    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion);
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -660,8 +659,8 @@ private:
                     if (auto mismatch = detail::compareWithBuiltPayload(
                             request.executionPayload, builtIt->second.executionPayload))
                     {
-                        co_return makeStatus(PayloadValidationStatus::InvalidBlockHash,
-                            std::nullopt, mismatch);
+                        co_return makeStatus(
+                            PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
                     }
                 }
             }
@@ -712,7 +711,8 @@ private:
                     }
                     blockTxs = std::make_shared<protocol::ConstTransactions>(
                         it->second.executionPayload.transactions |
-                        ::ranges::views::filter([](auto const& tx) { return tx.decoded != nullptr; }) |
+                        ::ranges::views::filter(
+                            [](auto const& tx) { return tx.decoded != nullptr; }) |
                         ::ranges::views::transform([](auto const& tx) {
                             return protocol::Transaction::ConstPtr(tx.decoded);
                         }) |
@@ -744,9 +744,8 @@ private:
             // executed (unbounded memory over time). Keep only the just-committed block; the
             // newPayload() parent check accepts the head hash directly, so dropping older
             // blockHash rows is safe.
-            std::erase_if(m_blockHashToPayloadId, [&](auto const& kv) {
-                return kv.first != request.executionPayload.blockHash;
-            });
+            std::erase_if(m_blockHashToPayloadId,
+                [&](auto const& kv) { return kv.first != request.executionPayload.blockHash; });
             std::erase_if(m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });
         }
 
@@ -877,11 +876,12 @@ private:
         auto chainRevision = ledgerConfig.evmcRevisionForBlock(nextBlockNumber);
         if (!chainRevision.has_value())
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: no on-chain EVM revision configured for block " +
-                std::to_string(nextBlockNumber) +
-                "; cannot derive the Eth header fork era (a v2 chain persists evmc_revision "
-                "at genesis)"});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: no on-chain EVM revision configured for block " +
+                    std::to_string(nextBlockNumber) +
+                    "; cannot derive the Eth header fork era (a v2 chain persists evmc_revision "
+                    "at genesis)"});
         }
         auto forkVersion = bcos::engine::detail::ethBlockVersionFor(*chainRevision);
 
@@ -895,16 +895,18 @@ private:
         if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
             !payloadAttributes.parentBeaconBlockRoot.has_value())
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: chain EVM revision requires the V3 payload attributes "
-                "(parentBeaconBlockRoot); forkchoiceUpdated must be called at version >= 3"});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: chain EVM revision requires the V3 payload attributes "
+                    "(parentBeaconBlockRoot); forkchoiceUpdated must be called at version >= 3"});
         }
         if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI &&
             !payloadAttributes.withdrawals.has_value())
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: chain EVM revision requires the V2 payload attributes "
-                "(withdrawals); forkchoiceUpdated must be called at version >= 2"});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: chain EVM revision requires the V2 payload attributes "
+                    "(withdrawals); forkchoiceUpdated must be called at version >= 2"});
         }
         // The reverse direction: a method version NEWER than the chain fork cannot be
         // served either. The served ExecutionPayload shape is contracted by the method the
@@ -916,18 +918,20 @@ private:
         if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
             forkVersion < bcos::protocol::EthBlockVersion::CANCUN)
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: forkchoiceUpdatedV3 requires a CANCUN-or-later chain fork; "
-                "chain EVM revision maps to " +
-                std::to_string(static_cast<int>(forkVersion))});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: forkchoiceUpdatedV3 requires a CANCUN-or-later chain fork; "
+                    "chain EVM revision maps to " +
+                    std::to_string(static_cast<int>(forkVersion))});
         }
         if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
             forkVersion < bcos::protocol::EthBlockVersion::SHANGHAI)
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: forkchoiceUpdatedV2 requires a SHANGHAI-or-later chain "
-                "fork; chain EVM revision maps to " +
-                std::to_string(static_cast<int>(forkVersion))});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: forkchoiceUpdatedV2 requires a SHANGHAI-or-later chain "
+                    "fork; chain EVM revision maps to " +
+                    std::to_string(static_cast<int>(forkVersion))});
         }
 
         // The payload SHAPE also follows the chain fork, not the request's method version
@@ -958,22 +962,24 @@ private:
             // [op_engine_rpc] guard in libinitializer/Initializer.cpp REQUIRES
             // executor_version >= 2 (it throws for executor_version < 2 unless the
             // test-only escape hatch unsafe_allow_v1_executor is set); it does not keep
-            // this code off a production endpoint. EngineServiceInitializer::build
-            // instantiates this same template for the v2 EthereumExecutor, so the
+            // this code off a production endpoint. Production now wires EthEngineService
+            // via EngineServiceInitializer; this EngineServiceImpl path remains for
+            // parity tests. The v2 EthereumExecutor build still stamps the same
+            // placeholder withdrawalsRoot in EthEngineService, so the
             // intended production configuration — executor_version >= 2 with
             // [op_engine_rpc] enabled — serves exactly this placeholder: FCU V3 stamps it
-            // here, getPayloadV5 serializes it, and newPayloadV4 accepts it on presence
-            // alone. Until C4 computes and verifies the real L2ToL1MessagePasser storage
-            // root, no L1 withdrawal proof may be taken against a root produced by this
-            // node. The v2 instantiation serving the empty-trie root is pinned by
+            // here (legacy) / in EthEngineService (production), getPayloadV5 serializes it, and
+            // newPayloadV4 accepts it on presence alone. Until C4 computes and verifies the real
+            // L2ToL1MessagePasser storage root, no L1 withdrawal proof may be taken against a root
+            // produced by this node. The v2 instantiation serving the empty-trie root is pinned by
             // TestEthereumExecutorScheduler/engineServiceKarstServesZeroWithdrawalsRoot,
             // which has to be updated when the real value lands.
             //
             // The served payload value and the hashed header value must agree (both go
             // through withdrawalsRootFor): a consumer rebuilding the header from the
             // payload's withdrawalsRoot field must reproduce blockHash.
-            executionPayload.withdrawalsRoot = bcos::engine::detail::withdrawalsRootFor(
-                executionPayload);
+            executionPayload.withdrawalsRoot =
+                bcos::engine::detail::withdrawalsRootFor(executionPayload);
         }
 
         // Fill gasLimit from ledger config. baseFeePerGas is carried in the payload (currently
@@ -1006,9 +1012,8 @@ private:
             emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setGasUsed(0);
-            detail::finalizeEthBlockHeader(
-                *emptyHeader, executionPayload, payloadAttributes.parentBeaconBlockRoot,
-                forkVersion);
+            detail::finalizeEthBlockHeader(*emptyHeader, executionPayload,
+                payloadAttributes.parentBeaconBlockRoot, forkVersion);
             executionPayload.stateRoot = emptyHeader->stateRoot();
             executionPayload.receiptsRoot = bcos::ledger::mpt::emptyRootHash();
             executionPayload.gasUsed = 0;

@@ -142,6 +142,4 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
 endif()
 
-# OpEngineServiceParityTest moved to engine/test/unittests/engine/ (next to Eth parity).
-# It remains excluded from test-bcos-engine until adapted to release-3.18.0's single
-# transactions[i].raw carrier (was written against sync-release dual-carrier + GoldenSample).
+# OpEngineServiceParityTest lives in engine/test (S5). GoldenSample/t8n e2e remains deferred.

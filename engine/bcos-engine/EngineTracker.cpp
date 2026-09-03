@@ -48,13 +48,9 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
         auto const& trackedHeadBlock = *m_trackedHead;
         if (headBlockNumber < trackedHeadBlock.blockNumber)
         {
-            bool const rebuildOnParent = headBlockNumber == trackedHeadBlock.blockNumber - 1 &&
-                                         resolved.headCanonical &&
-                                         resolved.payloadAttributesPresent;
-            if (!rebuildOnParent)
-            {
-                return ForkchoiceApplyResult::Swallowed;
-            }
+            // Match release EngineServiceImpl: any older head is swallowed (VALID without
+            // payloadId). Rebuild-on-parent is intentionally not supported on this branch.
+            return ForkchoiceApplyResult::Swallowed;
         }
         else if (headBlockNumber == trackedHeadBlock.blockNumber)
         {
