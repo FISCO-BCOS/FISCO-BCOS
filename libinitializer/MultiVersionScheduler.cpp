@@ -8,8 +8,11 @@ bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::
 }
 
 bcos::scheduler_v1::MultiVersionScheduler::MultiVersionScheduler(
-    std::array<scheduler::SchedulerInterface::Ptr, 3> schedulers)
-  : m_schedulers(std::move(schedulers)), m_currentIndex(0)
+    std::array<scheduler::SchedulerInterface::Ptr, 3> schedulers,
+    ledger::LedgerConfigState::Ptr ledgerConfigState)
+  : m_schedulers(std::move(schedulers)),
+    m_currentIndex(0),
+    m_ledgerConfigState(std::move(ledgerConfigState))
 {}
 
 void bcos::scheduler_v1::MultiVersionScheduler::executeBlock(bcos::protocol::Block::Ptr block,
@@ -23,7 +26,19 @@ void bcos::scheduler_v1::MultiVersionScheduler::commitBlock(protocol::BlockHeade
     std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr)> callback)
 {
     auto& scheduler = getScheduler();
-    scheduler.commitBlock(std::move(header), std::move(callback));
+    // Every scheduler refetches the configuration as its last commit step and hands it back
+    // through this callback. Published before the caller learns the commit succeeded, so nothing
+    // sealed on top of this block is admitted against the previous one. The holder is captured
+    // by value: this callback outlives the call, and the dispatcher is not needed for it.
+    scheduler.commitBlock(
+        std::move(header), [holder = m_ledgerConfigState, callback = std::move(callback)](
+                               Error::Ptr error, ledger::LedgerConfig::Ptr ledgerConfig) {
+            if (!error)
+            {
+                holder->set(ledgerConfig);
+            }
+            callback(std::move(error), std::move(ledgerConfig));
+        });
 }
 void bcos::scheduler_v1::MultiVersionScheduler::status(
     [[maybe_unused]] std::function<void(Error::Ptr, bcos::protocol::Session::ConstPtr)> callback)

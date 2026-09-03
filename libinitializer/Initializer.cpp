@@ -305,7 +305,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // One holder per process, written by whoever commits a block and read by transaction
     // admission. Created here because it outlives both and neither should own the other.
-    m_ledgerConfigState = std::make_shared<bcos::ledger::LedgerConfigState>();
+    //
+    // Published once now, from the ledger as it stands at boot, rather than left empty until the
+    // first commit: an empty holder has no chain id and admission fails closed on that, so a
+    // restarted node would refuse every EIP-155 transaction until a block committed -- which on
+    // a quiet chain is never, since nothing gets admitted to fill one. A malformed persisted
+    // value (web3_chain_id, evmc_revision) throws here and refuses to start, the same fail-stop
+    // the per-block refetch applies.
+    m_ledgerConfigState = std::make_shared<bcos::ledger::LedgerConfigState>(
+        task::syncWait(ledger::getLedgerConfig(*m_ledger)));
 
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,
@@ -510,11 +518,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                // switch to a leader during startup
+    // The dispatcher republishes the configuration after every commit, for every executor
+    // version; the holder was published once at boot when it was created.
     m_scheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager, m_ioServicePool),
-                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder()}));
+                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder()}),
+        m_ledgerConfigState);
 
     // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
     INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
@@ -784,8 +795,6 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     auto schedulerFactory =
         dynamic_cast<scheduler::SchedulerManager&>(m_scheduler->scheduler(0)).getFactory();
     // notify blockNumber
-    // The scheduler is the publisher: it refetches the configuration on every commit.
-    schedulerFactory->setLedgerConfigState(m_ledgerConfigState);
     schedulerFactory->setBlockNumberReceiver(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
             INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;

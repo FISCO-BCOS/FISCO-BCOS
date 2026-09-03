@@ -50,24 +50,40 @@ namespace
 /// TxPoolConfig needs one. The configuration published here is deliberately permissive -- these
 /// tests are about the storage's own behaviour (dedup, pool limit, nonce reservation), not about
 /// which checks fire; the checks themselves are pinned in AdmitTest.
-bcos::ledger::LedgerConfigState::Ptr makePermissiveConfigState()
+///
+/// The snapshot is the only chain configuration admission reads, chain id and base fee included,
+/// so a case that needs another chain id publishes a new configuration into the holder instead of
+/// stubbing the ledger. nullopt leaves the chain id unset: the holder before its first publish.
+bcos::ledger::LedgerConfig::Ptr makePermissiveLedgerConfig(
+    std::optional<uint64_t> web3ChainId = 321)
 {
     auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
     ledgerConfig->setBlockNumber(100);
     ledgerConfig->setGasLimit({3000000000ULL, 0});
-    return std::make_shared<bcos::ledger::LedgerConfigState>(ledgerConfig);
+    ledgerConfig->setGasPrice({"0", 0});  // free gas
+    if (web3ChainId)
+    {
+        ledgerConfig->setChainId(evmc::bytes32{*web3ChainId});
+    }
+    return ledgerConfig;
+}
+
+bcos::ledger::LedgerConfigState::Ptr makePermissiveConfigState()
+{
+    return std::make_shared<bcos::ledger::LedgerConfigState>(makePermissiveLedgerConfig());
 }
 
 std::shared_ptr<bcos::txvalidator::TxValidator> makeAdmissionValidator(
     std::shared_ptr<bcos::ledger::LedgerInterface> ledger,
     bcos::txvalidator::NonceCheckerInterface::Ptr txPoolNonceChecker,
     bcos::txvalidator::Web3NonceChecker::Ptr web3NonceChecker, std::string groupId = "group_test",
-    std::string chainId = "chain_test")
+    std::string chainId = "chain_test",
+    bcos::ledger::LedgerConfigState::Ptr configState = makePermissiveConfigState())
 {
     auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
         std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
     return std::make_shared<bcos::txvalidator::TxValidator>(std::move(cryptoSuite),
-        std::move(ledger), makePermissiveConfigState(), std::move(txPoolNonceChecker),
+        std::move(ledger), std::move(configState), std::move(txPoolNonceChecker),
         std::move(web3NonceChecker), &isSystemTransaction, std::move(groupId), std::move(chainId));
 }
 }  // namespace
@@ -574,34 +590,16 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     fakeit::When(Method(mockWeb3NonceChecker, committedNonce))
         .AlwaysDo([](auto) -> task::Task<std::optional<u256>> { co_return std::nullopt; });
 
+    // Shared by both storages, so a section that republishes the chain id reaches both.
+    auto configState = makePermissiveConfigState();
     auto makeConfig = [&](bool checkSig) {
-        auto validator =
-            makeAdmissionValidator(ledger, txPoolNonceChecker, web3NonceChecker, groupId, chainId);
+        auto validator = makeAdmissionValidator(
+            ledger, txPoolNonceChecker, web3NonceChecker, groupId, chainId, configState);
         auto config = std::make_shared<TxPoolConfig>(validator, nullptr, nullptr, ledger,
             txPoolNonceChecker, web3NonceChecker, /*blockLimit*/ 1000,
             /*poolLimit*/ 1024, checkSig);
         return config;
     };
-    // Admission reads chain configuration for every transaction, so the mock ledger has to be
-    // able to answer before the first submit rather than part-way through the case.
-    fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
-        .AlwaysDo(
-            [](auto const& key,
-                std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
-                if (key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
-                {
-                    callback(nullptr, "321", 0);
-                }
-                else if (key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
-                {
-                    callback(nullptr, "0", 0);
-                }
-                else
-                {
-                    callback(nullptr, "", 0);
-                }
-            });
-
     // Admission resolves the sender's account nonce through the ledger; an unknown account is
     // reported absent, which is what these transactions are.
     fakeit::When(Method(mockLedger, getStorageState))
@@ -668,24 +666,6 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
             return 0;
         });
         fakeit::When(Method(mockLedger, getStateStorage)).AlwaysReturn(nullptr);
-        // Finding N7: T19-style full stubs so the exempt tx walks the whole post-gate path
-        // and the assertion pins the healthy outcome instead of "any non-chainId status".
-        fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
-            .AlwaysDo(
-                [](auto const& key,
-                    std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
-                    if (key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
-                    {
-                        callback(nullptr, "0", 0);
-                    }
-                    else
-                    {
-                        // Same values as the case's earlier webhook ("321"): this stub must
-                        // not change outcomes for the later protected-chain sections in
-                        // this test case (fakeit stubs persist for the whole case).
-                        callback(nullptr, "321", 0);
-                    }
-                });
         auto ledgerNonceChecker = std::make_shared<txvalidator::LedgerNonceChecker>(
             nullptr, /*blockNumber*/ 0, /*blockLimit*/ 1000, /*checkBlockLimit*/ false);
         txValidator->setLedgerNonceChecker(ledgerNonceChecker);
@@ -745,28 +725,11 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         BOOST_CHECK(result == TransactionStatus::Malformed);
     }
 
-    auto mockMissingWeb3ChainId = [&]() {
-        fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
-            .AlwaysDo(
-                [](auto const& key,
-                    std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
-                    if (key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
-                    {
-                        callback(BCOS_ERROR_PTR(
-                                     ledger::LedgerError::EmptyEntry, "missing web3_chain_id"),
-                            "", 0);
-                    }
-                    else if (key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
-                    {
-                        callback(nullptr, "0", 0);
-                    }
-                });
-    };
-
     // Matrix: T05 — missing web3_chain_id rejects Protected EIP-155, exempts Unprotected.
     {
         storageNoSig.clear();
-        mockMissingWeb3ChainId();
+        // The holder before its first publish: no chain id.
+        configState->set(makePermissiveLedgerConfig(std::nullopt));
         fakeit::When(Method(mockLedger, getStateStorage)).AlwaysReturn(nullptr);
         auto ledgerNonceChecker = std::make_shared<txvalidator::LedgerNonceChecker>(
             nullptr, /*blockNumber*/ 0, /*blockLimit*/ 1000, /*checkBlockLimit*/ false);
@@ -800,7 +763,9 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
                     TransactionStatus::None);
     }
 
-    // Matrix: T19 — hex QUANTITY web3_chain_id ("0x539" == 1337) admits a matching envelope.
+    // Matrix: T19 — a published chain id of 1337 admits a matching envelope. (The hex-QUANTITY
+    // spelling "0x539" this section used to feed the ledger is now parsed once by getLedgerConfig,
+    // LedgerMethods.cpp:493, before it reaches the snapshot.)
     {
         storageNoSig.clear();
         const std::string senderHex = "0x1234567890123456789012345678901234567890";
@@ -813,19 +778,7 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
             setLegacySigningPreimage(*tx19Impl, 1337);
             tx19Impl->mutableInner().data.chainID = "";
         }
-        fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
-            .AlwaysDo(
-                [](auto const& key,
-                    std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
-                    if (key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
-                    {
-                        callback(nullptr, "0x539", 0);
-                    }
-                    else if (key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
-                    {
-                        callback(nullptr, "0", 0);
-                    }
-                });
+        configState->set(makePermissiveLedgerConfig(1337));
         fakeit::When(Method(mockLedger, getStateStorage)).AlwaysReturn(nullptr);
         auto ledgerNonceChecker = std::make_shared<txvalidator::LedgerNonceChecker>(
             nullptr, /*blockNumber*/ 0, /*blockLimit*/ 1000, /*checkBlockLimit*/ false);
@@ -1320,17 +1273,19 @@ BOOST_AUTO_TEST_CASE(FIB54_ConcurrentBatchMarkTxs)
     BOOST_CHECK_EQUAL(storage.size(), static_cast<std::size_t>(kTotal));
 }
 
-// A storage fault while a proposal is being verified must reject the proposal, not escape.
+// Proposal verification reads nothing from the ledger. Its check set drops every sender-dependent
+// check, and the chain configuration comes from the LedgerConfigState snapshot, so what is left --
+// the gate, the state stage's protocol invariants, the in-memory nonce checkers -- never touches
+// storage. Pinned from the outside: every ledger read the validator could make throws, and the
+// proposal is accepted anyway. A check that later adds a read to this path throws into
+// enforceSubmitTransaction's catch, the proposal is refused, and this assertion flips.
 //
-// verify() throws, by contract, when the data it needs cannot be read (TxValidator.h). Every
-// other ingress wraps it -- the RPC submit coroutine, batchImportTxs on the broadcast path, the
-// requestMissedTxs response handler -- but the ledger's asyncGetBatchTxsByHashList callback
-// reaches enforceSubmitTransaction through onGetMissedTxsFromLedger and importDownloadedTxs with
-// no try above it, so an exception on this path used to leave the ledger thread with nothing to
-// catch it. Signature checking is off here so that the sender-dependent checks drop out and the
-// first check that touches the ledger is FeeCapVsBaseFee, whose SYSTEM_KEY_TX_GAS_PRICE read the
-// mock makes throw.
-BOOST_AUTO_TEST_CASE(proposalPathRejectsInsteadOfEscapingOnAStorageFault)
+// That catch is what this case used to exercise, when the base-fee read on this path could throw
+// (verify() throws, by contract, when the data it needs cannot be read -- TxValidator.h). Nothing
+// on the path can throw now, and the catch stays as the guard that contract calls for: the
+// ledger's asyncGetBatchTxsByHashList callback reaches enforceSubmitTransaction through
+// onGetMissedTxsFromLedger and importDownloadedTxs with no try above it.
+BOOST_AUTO_TEST_CASE(proposalVerificationReadsNothingFromTheLedger)
 {
     auto validator = makeAdmissionValidator(ledger, txPoolNonceChecker, web3NonceChecker);
     auto configNoSig = std::make_shared<TxPoolConfig>(validator, nullptr, nullptr, ledger,
@@ -1343,6 +1298,14 @@ BOOST_AUTO_TEST_CASE(proposalPathRejectsInsteadOfEscapingOnAStorageFault)
                       std::function<void(Error::Ptr, std::string, protocol::BlockNumber)>) {
             throw std::runtime_error("storage unavailable");
         });
+    fakeit::When(Method(mockLedger, getStorageState))
+        .AlwaysDo([](std::string_view,
+                      protocol::BlockNumber) -> task::Task<std::optional<ledger::StorageState>> {
+            throw std::runtime_error("storage unavailable");
+        });
+    fakeit::When(Method(mockLedger, asyncGetBlockNumber)).AlwaysDo([](auto) -> long long {
+        throw std::runtime_error("storage unavailable");
+    });
 
     auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
         std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
@@ -1350,9 +1313,9 @@ BOOST_AUTO_TEST_CASE(proposalPathRejectsInsteadOfEscapingOnAStorageFault)
     auto txs = std::make_shared<Transactions>();
     txs->emplace_back(bcos::test::fakeWeb3Tx(cryptoSuite, "7", key));
 
-    bool accepted = true;
+    bool accepted = false;
     BOOST_CHECK_NO_THROW(accepted = storageNoSig.batchVerifyAndSubmitTransaction(nullptr, txs));
-    BOOST_CHECK(!accepted);
+    BOOST_CHECK(accepted);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

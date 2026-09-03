@@ -20,6 +20,7 @@
  */
 #pragma once
 #include <bcos-framework/consensus/ConsensusNode.h>
+#include <bcos-framework/ledger/LedgerConfigState.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-framework/testutils/faker/FakeBlockHeader.h>
@@ -122,10 +123,13 @@ public:
         m_txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, 20, 10, 10);
         m_ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_COUNT_LIMIT, "1000");
-        // A real chain always publishes these; admission reads both, and a ledger that cannot
-        // answer makes it throw rather than guess.
-        m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "20200");
-        m_ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0");
+        // What Initializer does at boot: publish the ledger's configuration into the holder the
+        // validator reads. Admission takes the chain id and the base fee from this snapshot, not
+        // from SYS_CONFIG, and an unpublished holder refuses every EIP-155 transaction.
+        auto ledgerConfig = std::make_shared<ledger::LedgerConfig>(*m_ledger->ledgerConfig());
+        ledgerConfig->setChainId(evmc::bytes32{20200});
+        ledgerConfig->setGasPrice({"0", 0});
+        m_ledgerConfigState = std::make_shared<ledger::LedgerConfigState>(std::move(ledgerConfig));
 
         m_frontService = std::make_shared<FakeFrontService>(m_nodeId);
         if (enableTree)
@@ -139,6 +143,7 @@ public:
         auto txPoolFactory = std::make_shared<TxPoolFactory>(m_nodeId, _cryptoSuite,
             m_txResultFactory, m_blockFactory, m_frontService, m_ledger, m_groupId, m_chainId,
             m_blockLimit, bcos::txpool::DEFAULT_POOL_LIMIT, true);
+        txPoolFactory->setLedgerConfigState(m_ledgerConfigState);
         m_txpool = txPoolFactory->createTxPool(*ioServicePool->getIOService(), ioServicePool);
 
         m_sync = std::dynamic_pointer_cast<TransactionSync>(m_txpool->transactionSync());
@@ -196,6 +201,7 @@ public:
                 auto txPoolFactoryTemp = std::make_shared<TxPoolFactory>(nodeId, _cryptoSuite,
                     m_txResultFactory, m_blockFactory, frontService, m_ledger, m_groupId, m_chainId,
                     m_blockLimit, bcos::txpool::DEFAULT_POOL_LIMIT, true);
+                txPoolFactoryTemp->setLedgerConfigState(m_ledgerConfigState);
                 txpool =
                     txPoolFactoryTemp->createTxPool(*ioServicePool->getIOService(), ioServicePool);
             }
@@ -342,6 +348,7 @@ public:
     int64_t m_blockLimit;
 
     FakeLedger::Ptr m_ledger;
+    ledger::LedgerConfigState::Ptr m_ledgerConfigState;
     FakeFrontService::Ptr m_frontService;
     FakeGateWay::Ptr m_fakeGateWay;
     // ioServicePool MUST be declared before m_txpool and m_sync to ensure it
