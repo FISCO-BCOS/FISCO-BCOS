@@ -196,7 +196,7 @@ BuiltPayloadPtr makeEntry(PayloadID const& id)
 
 struct CommitCleanup
 {
-    std::vector<std::jthread*> threads;
+    std::vector<std::thread*> threads;
     std::vector<std::shared_ptr<std::atomic<bool>>> gates;
 
     ~CommitCleanup()
@@ -562,7 +562,7 @@ BOOST_AUTO_TEST_CASE(commit_releases_exclusive_guard_during_merge)
     bool mergeStarted = false;
     bool probesFinishedDuringMerge = false;
 
-    std::jthread legacyThread([&](std::stop_token) {
+    std::thread legacyThread([&] {
         try
         {
             task::syncWait(legacy.newPayload(legacyRequest, 3));
@@ -570,7 +570,7 @@ BOOST_AUTO_TEST_CASE(commit_releases_exclusive_guard_during_merge)
         catch (...)
         {}
     });
-    std::jthread newThread([&](std::stop_token) {
+    std::thread newThread([&] {
         try
         {
             task::syncWait(fresh.newPayload(newRequest, 3));
@@ -584,15 +584,15 @@ BOOST_AUTO_TEST_CASE(commit_releases_exclusive_guard_during_merge)
                newStorage.mergeStarted->load(std::memory_order_acquire);
     });
 
-    std::jthread legacyProbe;
-    std::jthread newProbe;
+    std::thread legacyProbe;
+    std::thread newProbe;
     if (mergeStarted)
     {
-        legacyProbe = std::jthread([&](std::stop_token) {
+        legacyProbe = std::thread([&] {
             task::syncWait(legacy.getPayload(*legacyBuild.payloadId, 3));
             legacyProbeFinished.store(true, std::memory_order_release);
         });
-        newProbe = std::jthread([&](std::stop_token) {
+        newProbe = std::thread([&] {
             task::syncWait(fresh.getPayload(*newBuild.payloadId, 3));
             newProbeFinished.store(true, std::memory_order_release);
         });
@@ -650,7 +650,7 @@ BOOST_AUTO_TEST_CASE(commit_releases_exclusive_guard_during_prewrite)
     bool prewriteStarted = false;
     bool probeFinishedDuringPrewrite = false;
 
-    std::jthread commitThread([&](std::stop_token) {
+    std::thread commitThread([&] {
         try
         {
             task::syncWait(service.newPayload(request, 3));
@@ -662,10 +662,10 @@ BOOST_AUTO_TEST_CASE(commit_releases_exclusive_guard_during_prewrite)
     prewriteStarted = waitUntil(std::chrono::seconds(3),
         [&] { return ledger->prewriteStarted.load(std::memory_order_acquire); });
 
-    std::jthread probeThread;
+    std::thread probeThread;
     if (prewriteStarted)
     {
-        probeThread = std::jthread([&](std::stop_token) {
+        probeThread = std::thread([&] {
             task::syncWait(service.getPayload(*build.payloadId, 3));
             probeFinished.store(true, std::memory_order_release);
         });

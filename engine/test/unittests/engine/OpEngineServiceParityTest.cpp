@@ -432,7 +432,7 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
     std::latch permission{1};
     std::latch committed{1};
 
-    std::optional<std::jthread> writer;
+    std::optional<std::thread> writer;
     {
         auto shared = tracker.lockShared();
         initialHeader = bcos::engine::op_detail::findBuiltHeader(shared, artifacts, targetHash);

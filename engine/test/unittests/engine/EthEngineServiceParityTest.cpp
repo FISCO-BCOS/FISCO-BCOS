@@ -765,9 +765,10 @@ BOOST_AUTO_TEST_CASE(generic_new_payload_validation_errors_match)
 
     NewPayloadRequest missingBeacon;
     missingBeacon.executionPayload = legacyPayload->executionPayload;
+    NewPayloadRequest missingBeaconNew;
+    missingBeaconNew.executionPayload = newPayload->executionPayload;
     checkStatusParity(task::syncWait(pair.legacy.newPayload(missingBeacon, 3)),
-        task::syncWait(pair.fresh.newPayload(
-            NewPayloadRequest{.executionPayload = newPayload->executionPayload}, 3)));
+        task::syncWait(pair.fresh.newPayload(missingBeaconNew, 3)));
 
     auto blobAttributes = makePayloadAttributesV3();
     blobAttributes.transactions = std::vector<std::string>{"0x03aabb"};
@@ -869,7 +870,6 @@ void checkBothExceptionMessages(auto&& legacyAction, auto&& newAction, char cons
 BOOST_AUTO_TEST_CASE(generic_exception_messages_match)
 {
     ServicePair pair;
-    auto forkchoiceState = makeForkchoiceState();
     NewPayloadRequest request;
 
     checkBothExceptionMessages<UnsupportedEngineApiVersion>(
@@ -1521,7 +1521,7 @@ BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
     std::latch permission{1};
     std::latch committed{1};
 
-    std::optional<std::jthread> writer;
+    std::optional<std::thread> writer;
     {
         auto shared = tracker.lockShared();
         auto id = shared.payloadIdForHash(targetHash);

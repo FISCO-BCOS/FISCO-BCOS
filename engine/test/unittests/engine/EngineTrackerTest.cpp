@@ -508,12 +508,12 @@ BOOST_AUTO_TEST_CASE(engine_tracker_shared_guard_allows_concurrent_readers)
         }
     };
 
-    std::jthread t1(read);
-    std::jthread t2(read);
+    std::thread t1(read);
+    std::thread t2(read);
     sync.arrive_and_wait();
     sync.arrive_and_wait();
-    t1 = std::jthread{};
-    t2 = std::jthread{};
+    t1.join();
+    t2.join();
 
     BOOST_CHECK(readerDataOk.load());
     BOOST_CHECK_GE(peakReaders.load(), 2);
@@ -554,7 +554,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_exclusive_guard_blocks_shared_readers)
 
     auto guard = tracker.lockExclusive();
 
-    std::jthread worker([&](std::stop_token) {
+    std::thread worker([&] {
         {
             std::lock_guard lock(syncMutex);
             workerReady = true;
@@ -607,7 +607,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_exclusive_guard_blocks_shared_readers)
         }
     }
 
-    worker = std::jthread{};
+    worker.join();
 
     BOOST_CHECK(outcome.workerReadySeen);
     BOOST_CHECK(outcome.permissionConsumedWhileExclusive);
