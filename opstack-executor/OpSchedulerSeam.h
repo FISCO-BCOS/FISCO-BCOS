@@ -73,9 +73,10 @@ public:
     [[nodiscard]] bool isJovianActive() const noexcept { return m_forkFlags.jovianActive; }
 
     /// Synthesize the L1-attributes deposit envelope from the configured L1 info.
-    /// Refuses the unset sentinel (number/time/hash all zero) so a missing CL snapshot
-    /// cannot mint a plausible all-zero L1-attributes deposit.
-    [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(uint64_t l2BlockTime) const
+    /// Refuses the unset snapshot sentinel (number/time/hash all zero) and an unset
+    /// SystemConfig (zero baseFeeScalar or batcherHash) so a missing CL snapshot cannot
+    /// mint a plausible L1-attributes deposit.
+    [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope() const
     {
         if (bcos::evm::opstack::isUnsetL1BlockInfo(m_l1BlockInfo))
         {
@@ -83,8 +84,14 @@ public:
                 "OpSchedulerSeam: refuse to synthesize L1-attributes from an unset "
                 "L1BlockInfo (number, time, and blockHash are all zero)");
         }
+        if (bcos::evm::opstack::isUnsetSystemConfig(m_l1BlockInfo))
+        {
+            throw std::invalid_argument(
+                "OpSchedulerSeam: refuse to synthesize L1-attributes with an unset "
+                "SystemConfig (baseFeeScalar and batcherHash must be non-zero)");
+        }
         return bcos::evm::opstack::synthesizeL1AttributesDeposit(
-            m_l1BlockInfo, m_forkFlags.jovianActive, l2BlockTime);
+            m_l1BlockInfo, m_forkFlags.jovianActive);
     }
 
     OpSchedulerSeam(const OpSchedulerSeam&) = delete;

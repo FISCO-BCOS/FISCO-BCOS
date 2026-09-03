@@ -70,6 +70,27 @@ using ViewType = typename MLS::ViewType;
 constexpr std::array<uint8_t, 4> kIsthmusSelector{0x09, 0x89, 0x99, 0xbe};
 constexpr std::array<uint8_t, 4> kJovianSelector{0x3d, 0xb6, 0xbe, 0x2b};
 
+/// Fully populated L1 info (snapshot + SystemConfig) for the offset pins.
+bcos::evm::opstack::L1BlockInfo filledL1Info()
+{
+    bcos::evm::opstack::L1BlockInfo l1Info;
+    l1Info.sequenceNumber = 0x1122334455667788ull;
+    l1Info.time = 0x2233445566778899ull;
+    l1Info.number = 0x33445566778899aaull;
+    l1Info.baseFee = intx::uint256{0x445566778899aabbull};
+    l1Info.blobBaseFee = intx::uint256{0x5566778899aabbccull};
+    l1Info.baseFeeScalar = 0xa1b2c3d4u;
+    l1Info.blobBaseFeeScalar = 0x11223344u;
+    l1Info.operatorFeeScalar = 0x55667788u;
+    l1Info.operatorFeeConstant = 0x99aabbccddeeff00ull;
+    for (size_t i = 0; i < sizeof(l1Info.blockHash.bytes); ++i)
+    {
+        l1Info.blockHash.bytes[i] = static_cast<uint8_t>(0x60 + i);
+        l1Info.batcherHash.bytes[i] = static_cast<uint8_t>(0x90 + i);
+    }
+    return l1Info;
+}
+
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpSchedulerSeamSmokeSuite)
@@ -130,15 +151,24 @@ BOOST_AUTO_TEST_CASE(SynthesizeRefusesUnsetL1BlockInfo)
 {
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
         bcos::evm::opstack::OpForkFlags{.jovianActive = false}, {});
-    BOOST_CHECK_THROW((void)scheduler.synthesizeL1AttributesEnvelope(1000), std::invalid_argument);
+    BOOST_CHECK_THROW((void)scheduler.synthesizeL1AttributesEnvelope(), std::invalid_argument);
+}
+
+BOOST_AUTO_TEST_CASE(SynthesizeRefusesZeroSystemConfig)
+{
+    auto l1Info = filledL1Info();
+    l1Info.baseFeeScalar = 0;
+    std::fill(l1Info.batcherHash.bytes, l1Info.batcherHash.bytes + 32, 0);
+    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
+        bcos::evm::opstack::OpForkFlags{.jovianActive = false}, l1Info);
+    BOOST_CHECK_THROW((void)scheduler.synthesizeL1AttributesEnvelope(), std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
 {
     // All-zero L1 is a test-only fixture: call the encoder, not the production seam.
-    constexpr uint64_t kL2Time = 0x123456789abcdef0ull;
-    const auto env = bcos::evm::opstack::synthesizeL1AttributesDeposit(
-        bcos::evm::opstack::L1BlockInfo{}, false, kL2Time);
+    const auto env =
+        bcos::evm::opstack::synthesizeL1AttributesDeposit(bcos::evm::opstack::L1BlockInfo{}, false);
     BOOST_REQUIRE_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
     auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
         bcos::bytesConstRef(env.data(), env.size()));
@@ -169,22 +199,15 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
 
 BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
 {
-    bcos::evm::opstack::L1BlockInfo l1Info;
-    l1Info.sequenceNumber = 0x1122334455667788ull;
-    l1Info.time = 0x2233445566778899ull;
-    l1Info.number = 0x33445566778899aaull;
-    l1Info.baseFee = intx::uint256{0x445566778899aabbull};
-    l1Info.blobBaseFee = intx::uint256{0x5566778899aabbccull};
+    auto const l1Info = filledL1Info();
     std::array<uint8_t, 32> hashBytes{};
-    for (size_t i = 0; i < hashBytes.size(); ++i)
-    {
-        hashBytes[i] = static_cast<uint8_t>(0x60 + i);
-    }
-    std::copy(hashBytes.begin(), hashBytes.end(), l1Info.blockHash.bytes);
+    std::array<uint8_t, 32> batcherBytes{};
+    std::copy_n(l1Info.blockHash.bytes, 32, hashBytes.begin());
+    std::copy_n(l1Info.batcherHash.bytes, 32, batcherBytes.begin());
 
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
         bcos::evm::opstack::OpForkFlags{.jovianActive = true}, l1Info);
-    const auto env = scheduler.synthesizeL1AttributesEnvelope(1000);
+    const auto env = scheduler.synthesizeL1AttributesEnvelope();
     auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
         bcos::bytesConstRef(env.data(), env.size()));
     BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::JovianL1AttributesLen);
@@ -202,9 +225,18 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
         BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
             calldata.begin() + static_cast<ptrdiff_t>(offset + be.size()), be.begin(), be.end());
     };
+    auto checkU32 = [&](size_t offset, uint32_t value) {
+        std::array<uint8_t, 4> be{static_cast<uint8_t>(value >> 24),
+            static_cast<uint8_t>(value >> 16), static_cast<uint8_t>(value >> 8),
+            static_cast<uint8_t>(value)};
+        BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
+            calldata.begin() + static_cast<ptrdiff_t>(offset + 4), be.begin(), be.end());
+    };
     // Selector [0:4].
     BOOST_CHECK_EQUAL_COLLECTIONS(
         calldata.begin(), calldata.begin() + 4, kJovianSelector.begin(), kJovianSelector.end());
+    checkU32(4, l1Info.baseFeeScalar);
+    checkU32(8, l1Info.blobBaseFeeScalar);
     checkBE(12, l1Info.sequenceNumber);  // seq
     checkBE(20, l1Info.time);            // l1 time
     checkBE(28, l1Info.number);          // l1 number
@@ -212,26 +244,23 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
     checkBE256(68, l1Info.blobBaseFee);  // l1 blobBaseFee
     BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + 100, calldata.begin() + 132, hashBytes.begin(),
         hashBytes.end());  // l1 blockHash
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        calldata.begin() + 132, calldata.begin() + 164, batcherBytes.begin(), batcherBytes.end());
+    checkU32(164, l1Info.operatorFeeScalar);
+    checkBE(168, l1Info.operatorFeeConstant);
 }
 
 BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
 {
-    bcos::evm::opstack::L1BlockInfo l1Info;
-    l1Info.sequenceNumber = 0x1122334455667788ull;
-    l1Info.time = 0x2233445566778899ull;
-    l1Info.number = 0x33445566778899aaull;
-    l1Info.baseFee = intx::uint256{0x445566778899aabbull};
-    l1Info.blobBaseFee = intx::uint256{0x5566778899aabbccull};
+    auto const l1Info = filledL1Info();
     std::array<uint8_t, 32> hashBytes{};
-    for (size_t i = 0; i < hashBytes.size(); ++i)
-    {
-        hashBytes[i] = static_cast<uint8_t>(0x60 + i);
-    }
-    std::copy(hashBytes.begin(), hashBytes.end(), l1Info.blockHash.bytes);
+    std::array<uint8_t, 32> batcherBytes{};
+    std::copy_n(l1Info.blockHash.bytes, 32, hashBytes.begin());
+    std::copy_n(l1Info.batcherHash.bytes, 32, batcherBytes.begin());
 
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
         bcos::evm::opstack::OpForkFlags{.jovianActive = false}, l1Info);
-    const auto env = scheduler.synthesizeL1AttributesEnvelope(1000);
+    const auto env = scheduler.synthesizeL1AttributesEnvelope();
     auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
         bcos::bytesConstRef(env.data(), env.size()));
     BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::IsthmusL1AttributesLen);
@@ -249,8 +278,17 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
         BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
             calldata.begin() + static_cast<ptrdiff_t>(offset + be.size()), be.begin(), be.end());
     };
+    auto checkU32 = [&](size_t offset, uint32_t value) {
+        std::array<uint8_t, 4> be{static_cast<uint8_t>(value >> 24),
+            static_cast<uint8_t>(value >> 16), static_cast<uint8_t>(value >> 8),
+            static_cast<uint8_t>(value)};
+        BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
+            calldata.begin() + static_cast<ptrdiff_t>(offset + 4), be.begin(), be.end());
+    };
     BOOST_CHECK_EQUAL_COLLECTIONS(
         calldata.begin(), calldata.begin() + 4, kIsthmusSelector.begin(), kIsthmusSelector.end());
+    checkU32(4, l1Info.baseFeeScalar);
+    checkU32(8, l1Info.blobBaseFeeScalar);
     checkBE(12, l1Info.sequenceNumber);
     checkBE(20, l1Info.time);
     checkBE(28, l1Info.number);
@@ -258,12 +296,18 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
     checkBE256(68, l1Info.blobBaseFee);
     BOOST_CHECK_EQUAL_COLLECTIONS(
         calldata.begin() + 100, calldata.begin() + 132, hashBytes.begin(), hashBytes.end());
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        calldata.begin() + 132, calldata.begin() + 164, batcherBytes.begin(), batcherBytes.end());
+    checkU32(164, l1Info.operatorFeeScalar);
+    checkBE(168, l1Info.operatorFeeConstant);
 }
 
-BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayoutAndUniqueness)
+BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayout)
 {
+    // The sourceHash is domain-1(l1Hash, seq) — L2 time is deliberately not bound, so the
+    // builder takes no L2-time argument a caller could vary.
     bcos::evm::opstack::L1BlockInfo const unset{};
-    const auto env = bcos::evm::opstack::synthesizeL1AttributesDeposit(unset, true, 1000);
+    const auto env = bcos::evm::opstack::synthesizeL1AttributesDeposit(unset, true);
     BOOST_REQUIRE_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
     auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
         bcos::bytesConstRef(env.data(), env.size()));
@@ -273,9 +317,6 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayoutAndUniqueness)
     // [176:178] DA-footprint scalar is zero.
     BOOST_CHECK_EQUAL(dep.data[176], 0);
     BOOST_CHECK_EQUAL(dep.data[177], 0);
-
-    const auto envLater = bcos::evm::opstack::synthesizeL1AttributesDeposit(unset, true, 1001);
-    BOOST_CHECK(env == envLater);  // sourceHash is domain-1(l1Hash, seq), not L2 time
 }
 
 // Note: the empty-block rejection test lives in PreBlockOpStepsTest (RejectsEmptyBlock).

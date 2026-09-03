@@ -240,7 +240,8 @@ inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6
 inline constexpr int64_t c_l1InfoDepositGas = 1'000'000;
 
 /// L1 block fields for synthesizing the L1-attributes deposit.
-/// All-zero number/time/blockHash is the unset sentinel — production synthesize must refuse it.
+/// All-zero number/time/blockHash is the unset snapshot sentinel.
+/// All-zero baseFeeScalar or batcherHash means SystemConfig was not supplied.
 struct L1BlockInfo
 {
     uint64_t number = 0;
@@ -249,11 +250,21 @@ struct L1BlockInfo
     evmc::bytes32 blockHash{};
     uint64_t sequenceNumber = 0;
     intx::uint256 blobBaseFee{0};
+    uint32_t baseFeeScalar = 0;
+    uint32_t blobBaseFeeScalar = 0;
+    evmc::bytes32 batcherHash{};
+    uint32_t operatorFeeScalar = 0;
+    uint64_t operatorFeeConstant = 0;
 };
 
 [[nodiscard]] inline bool isUnsetL1BlockInfo(L1BlockInfo const& info) noexcept
 {
     return info.number == 0 && info.time == 0 && evmc::is_zero(info.blockHash);
+}
+
+[[nodiscard]] inline bool isUnsetSystemConfig(L1BlockInfo const& info) noexcept
+{
+    return info.baseFeeScalar == 0 || evmc::is_zero(info.batcherHash);
 }
 
 /// Deposit gas_limit exceeds remaining block gas (op-geth ErrGasLimitReached). Distinct
