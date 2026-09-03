@@ -238,7 +238,8 @@ inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6
 /// Gas limit used when synthesizing the L1-attributes deposit.
 inline constexpr int64_t c_l1InfoDepositGas = 1'000'000;
 
-/// L1 block fields for synthesizing the L1-attributes deposit (built-in CL fallback).
+/// L1 block fields for synthesizing the L1-attributes deposit.
+/// All-zero number/time/blockHash is the unset sentinel — production synthesize must refuse it.
 struct L1BlockInfo
 {
     uint64_t number = 0;
@@ -248,6 +249,11 @@ struct L1BlockInfo
     uint64_t sequenceNumber = 0;
     intx::uint256 blobBaseFee{0};
 };
+
+[[nodiscard]] inline bool isUnsetL1BlockInfo(L1BlockInfo const& info) noexcept
+{
+    return info.number == 0 && info.time == 0 && evmc::is_zero(info.blockHash);
+}
 
 /// Execute one 0x7E deposit: skip buyGas; add balance when mint has a value; still deduct
 /// intrinsic + the EIP-7623 floor; both failure paths retain the mint and force-increment the

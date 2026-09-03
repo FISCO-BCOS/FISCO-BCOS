@@ -167,8 +167,9 @@ bcos::Address parseAddressField(Json::Value const& value, std::string_view field
     return bcos::rpc::parseAddress(value.asString());
 }
 
-/// Variable-length hex bytes (extraData, logsBloom, eip1559Params). Same isString() gate,
-/// plus fromHex's BadHexCharacter mapped to InvalidParams instead of InternalError.
+/// Variable-length hex bytes (extraData, logsBloom, eip1559Params, executionRequests).
+/// Same isString() gate, plus fromHex's BadHexCharacter mapped to InvalidParams
+/// instead of InternalError.
 bcos::bytes parseHexBytesField(Json::Value const& value, std::string_view field)
 {
     auto reject = [&]() -> bcos::bytes {
@@ -443,22 +444,10 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         // is a payload-validity question and is judged by the engine service, not here.
         std::vector<bytes> executionRequests;
         executionRequests.reserve(params[3].size());
-        for (auto const& item : params[3])
+        for (Json::ArrayIndex i = 0; i < params[3].size(); ++i)
         {
-            if (!item.isString())
-            {
-                BOOST_THROW_EXCEPTION(JsonRpcException(
-                    InvalidParams, "executionRequests entries must be hex strings"));
-            }
-            try
-            {
-                executionRequests.push_back(fromHex(item.asString()));
-            }
-            catch (bcos::BadHexCharacter const&)
-            {
-                BOOST_THROW_EXCEPTION(JsonRpcException(
-                    InvalidParams, "executionRequests entries must be hex strings"));
-            }
+            executionRequests.push_back(
+                parseHexBytesField(params[3][i], "executionRequests[" + std::to_string(i) + "]"));
         }
         request.executionRequests = std::move(executionRequests);
     }

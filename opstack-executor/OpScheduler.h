@@ -624,6 +624,7 @@ private:
                         outcome.announcedBlockHash, executedHeader, true};
                 }
                 m_lastExecutedBlockNumber.store(number);
+                m_lastProbe.reset();
             }
             else
             {
@@ -639,15 +640,7 @@ private:
                 fmt::format("Execute block failed! {}", boost::diagnostic_information(e));
             OP_SCHEDULER_LOG(ERROR) << message;
             auto error = BCOS_ERROR_PTR(classifyException(std::current_exception()), message);
-            if (auto const* opErr = dynamic_cast<bcos::evm::OpConsensusError const*>(&e);
-                opErr && opErr->txHash.has_value())
-            {
-                *error << bcos::engine::OpCulpritTxHash(*opErr->txHash);
-                if (opErr->capacity)
-                {
-                    *error << bcos::engine::OpBlockGasPoolFull{true};
-                }
-            }
+            attachOpRejectInfo(*error, std::current_exception());
             co_return {std::move(error), nullptr, false};
         }
         catch (...)
@@ -655,8 +648,10 @@ private:
             auto message = std::string{"Execute block failed! ("} +
                            describeException(std::current_exception()) + ")";
             OP_SCHEDULER_LOG(ERROR) << message;
-            co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
-                nullptr, false};
+            auto error =
+                BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message);
+            attachOpRejectInfo(*error, std::current_exception());
+            co_return {std::move(error), nullptr, false};
         }
     }
 
@@ -1276,6 +1271,34 @@ private:
         ledgerConfig->setBlockNumber(header->number());
         ledgerConfig->setTimestamp(header->timestamp());
         co_return ledgerConfig;
+    }
+
+    /// Recover culprit / capacity tags via exception_ptr. A cross-TU typed
+    /// `catch (std::exception)` can miss OpConsensusError (RTTI / static-lib boundary);
+    /// rethrow from exception_ptr still sees the complete object.
+    static void attachOpRejectInfo(Error& error, std::exception_ptr eptr)
+    {
+        if (!eptr)
+        {
+            return;
+        }
+        try
+        {
+            std::rethrow_exception(std::move(eptr));
+        }
+        catch (const bcos::evm::OpConsensusError& opErr)
+        {
+            if (opErr.txHash.has_value())
+            {
+                error << bcos::engine::OpCulpritTxHash(*opErr.txHash);
+            }
+            if (opErr.capacity)
+            {
+                error << bcos::engine::OpBlockGasPoolFull{true};
+            }
+        }
+        catch (...)
+        {}
     }
 
 public:

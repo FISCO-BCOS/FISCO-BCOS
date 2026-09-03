@@ -20,6 +20,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-evm/adapter/StateRootCompute.h>
+#include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/ledger/FeaturesStorage.h>  // writeToStorage (seedL2CompatFeature)
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Transaction.h>
@@ -40,6 +41,7 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
+#include <boost/exception/get_error_info.hpp>
 #include <boost/test/unit_test.hpp>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <evmc/evmc.hpp>
@@ -1228,8 +1230,40 @@ BOOST_AUTO_TEST_CASE(CallGasAboveBlockPoolClassifiesAsConsensusRejected)
             const auto msg = err->errorMessage();
             BOOST_CHECK_MESSAGE(msg.find("consensus rejection") != std::string::npos,
                 "over-gas call must classify as a consensus rejection, got: " << msg);
+            BOOST_CHECK_MESSAGE(
+                boost::get_error_info<bcos::engine::OpBlockGasPoolFull>(*err) == nullptr,
+                "eth_call must not tag OpBlockGasPoolFull / capacity");
         });
     BOOST_REQUIRE(called);
+}
+
+/// executeBlock: a normal tx that does not fit the remaining pool is a capacity fault
+/// (OpBlockGasPoolFull + no-evict), not the eth_call classification above.
+BOOST_AUTO_TEST_CASE(ExecuteBlockGasPoolFullTagsCapacity)
+{
+    Fixture f;
+    auto dep = makeDeposit();
+    dep.gas_limit = 25'000;
+    auto const depEnv = encodeDepositEnvelope(dep);
+    auto const eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    bcos::bytes const eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
+
+    auto header = makeHeader();
+    // 30k admits the 25k deposit; leftover after deposit used-gas is < eip1559's 21k.
+    header->setGasLimit(bcos::u256(30'000));
+
+    auto out = invokeExecute(f, assembleBlock(f, header, {depEnv, eipEnvBytes}), /*verify=*/false);
+    BOOST_REQUIRE(out.err != nullptr);
+    BOOST_CHECK_EQUAL(
+        out.err->errorCode(), (int)bcos::scheduler::SchedulerError::OpConsensusRejected);
+    BOOST_CHECK_MESSAGE(out.err->errorMessage().find("block gas pool full") != std::string::npos ||
+                            out.err->errorMessage().find("gas limit reached") != std::string::npos,
+        "block-path pool full must name the capacity fault, got: " << out.err->errorMessage());
+    auto const* capacity = boost::get_error_info<bcos::engine::OpBlockGasPoolFull>(*out.err);
+    BOOST_REQUIRE_MESSAGE(capacity != nullptr && *capacity,
+        "executeBlock pool-full must tag OpBlockGasPoolFull=true (no-evict)");
+    BOOST_CHECK(boost::get_error_info<bcos::engine::OpCulpritTxHash>(*out.err) != nullptr);
+    BOOST_CHECK(out.header == nullptr);
 }
 
 /// Scheduler-level call-chain (OpScheduler::call → coCallLatest → buildOpBlockInfo) baseFee
@@ -2366,6 +2400,33 @@ BOOST_AUTO_TEST_CASE(adoptRejectsWithoutRetainedProbe)
                     std::string::npos);
     }
     BOOST_CHECK(executedHeader == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(verifyTrueClearsRetainedProbe)
+{
+    Fixture f;
+    auto depEnv = encodeDepositEnvelope(makeDeposit());
+    auto probe = executeOpBlock(f, makeHeader(), {depEnv}, /*verify=*/false);
+    BOOST_REQUIRE_MESSAGE(
+        probe.err == nullptr, "probe: " << (probe.err ? probe.err->errorMessage() : ""));
+    auto verified = executeOpBlock(f, makeHeader(), {depEnv}, /*verify=*/true);
+    BOOST_REQUIRE_MESSAGE(verified.err == nullptr,
+        "verify=true: " << (verified.err ? verified.err->errorMessage() : ""));
+
+    auto block = f.blockFactory->createBlock();
+    block->setBlockHeader(makeHeader());
+    bcos::Error::Ptr err;
+    bool called = false;
+    f.scheduler->adoptProbeAsPending(
+        block, [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr, bool) {
+            called = true;
+            err = std::move(e);
+        });
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::UnknownError);
+    BOOST_CHECK(
+        err->errorMessage().find("adoptProbeAsPending: no retained probe") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(adoptRejectsCommitmentMismatch)

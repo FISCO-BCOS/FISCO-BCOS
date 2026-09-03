@@ -33,7 +33,7 @@ class OpSchedulerSeam
 {
 public:
     explicit OpSchedulerSeam(
-        bcos::evm::opstack::OpForkFlags forkFlags, bcos::evm::opstack::L1BlockInfo l1BlockInfo = {})
+        bcos::evm::opstack::OpForkFlags forkFlags, bcos::evm::opstack::L1BlockInfo l1BlockInfo)
       : m_forkFlags(forkFlags), m_l1BlockInfo(std::move(l1BlockInfo))
     {}
 
@@ -73,8 +73,16 @@ public:
     [[nodiscard]] bool isJovianActive() const noexcept { return m_forkFlags.jovianActive; }
 
     /// Synthesize the L1-attributes deposit envelope from the configured L1 info.
+    /// Refuses the unset sentinel (number/time/hash all zero) so a missing CL snapshot
+    /// cannot mint a plausible all-zero L1-attributes deposit.
     [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(uint64_t l2BlockTime) const
     {
+        if (bcos::evm::opstack::isUnsetL1BlockInfo(m_l1BlockInfo))
+        {
+            throw std::invalid_argument(
+                "OpSchedulerSeam: refuse to synthesize L1-attributes from an unset "
+                "L1BlockInfo (number, time, and blockHash are all zero)");
+        }
         return bcos::evm::opstack::synthesizeL1AttributesDeposit(
             m_l1BlockInfo, m_forkFlags.jovianActive, l2BlockTime);
     }

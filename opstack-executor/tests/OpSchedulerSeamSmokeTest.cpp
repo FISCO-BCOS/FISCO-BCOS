@@ -10,14 +10,18 @@
 //      (The block-pre shape checks live in PreBlockOpStepsTest; the seam itself no longer
 //      executes blocks — see the note at the end of this file.)
 #include "OpSchedulerSeamTestHelpers.h"
-#include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-evm/opstack/OpPredeploys.h>
+#include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <opstack-executor/OpSchedulerSeam.h>
+#include <opstack-executor/OpstackExecutor.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <array>
+#include <span>
 #include <stdexcept>
 #include <vector>
 
@@ -78,15 +82,15 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
     auto view = multiLayerStorage.fork();
     view.newMutable();
 
-    // The ctor takes only fork flags (feature-driven fork selection; this is a pure seam shim —
-    // no receipt factory / chain id / VM).
+    // L1BlockInfo is required (no silent default). Construction with the unset sentinel is
+    // allowed; synthesizeL1AttributesEnvelope is what refuses it.
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
-        bcos::evm::opstack::OpForkFlags{.jovianActive = false});
+        bcos::evm::opstack::OpForkFlags{.jovianActive = false}, {});
 
     // Fork predicate: feature-driven (feature_op_jovian), constant across blocks — no timestamps.
     BOOST_CHECK(!scheduler.isJovianActive());
     bcos::evm::engine::OpSchedulerSeam<ViewType> jovianScheduler(
-        bcos::evm::opstack::OpForkFlags{.jovianActive = true});
+        bcos::evm::opstack::OpForkFlags{.jovianActive = true}, {});
     BOOST_CHECK(jovianScheduler.isJovianActive());
 
     // computeTxRoot over the empty range: the standard empty-trie root (0x56e81f...), which
@@ -122,36 +126,33 @@ BOOST_AUTO_TEST_CASE(SynthesizeL1AttributesIsDepositEnvelope)
     BOOST_CHECK_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
 }
 
-BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
+BOOST_AUTO_TEST_CASE(SynthesizeRefusesUnsetL1BlockInfo)
 {
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
-        bcos::evm::opstack::OpForkFlags{.jovianActive = false});
+        bcos::evm::opstack::OpForkFlags{.jovianActive = false}, {});
+    BOOST_CHECK_THROW((void)scheduler.synthesizeL1AttributesEnvelope(1000), std::invalid_argument);
+}
+
+BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
+{
+    // All-zero L1 is a test-only fixture: call the encoder, not the production seam.
     constexpr uint64_t kL2Time = 0x123456789abcdef0ull;
-    const auto env = scheduler.synthesizeL1AttributesEnvelope(kL2Time);
+    const auto env = bcos::evm::opstack::synthesizeL1AttributesDeposit(
+        bcos::evm::opstack::L1BlockInfo{}, false, kL2Time);
     BOOST_REQUIRE_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
+    auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
+        bcos::bytesConstRef(env.data(), env.size()));
 
-    bcos::bytesRef cursor(const_cast<bcos::byte*>(env.data() + 1), env.size() - 1);
-    std::vector<bcos::bytes> fields;
-    BOOST_REQUIRE(bcos::codec::rlp::decode(cursor, fields) == nullptr);
-    BOOST_REQUIRE_EQUAL(fields.size(), 8);
-
-    BOOST_CHECK_EQUAL(fields[0].size(), 32);  // sourceHash
-    const std::array<uint8_t, 20> kDepositor{0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0xde,
-        0xad, 0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0x00, 0x01};
-    const std::array<uint8_t, 20> kL1Block{0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x15};
+    BOOST_CHECK(dep.from == bcos::evm::opstack::OP_DEPOSITOR);
+    BOOST_REQUIRE(dep.to.has_value());
+    BOOST_CHECK(*dep.to == bcos::evm::opstack::OP_L1_BLOCK);
+    BOOST_CHECK(!dep.mint.has_value());
+    BOOST_CHECK(dep.value == intx::uint256{0});
+    BOOST_CHECK_EQUAL(dep.gas_limit, bcos::evm::opstack::c_l1InfoDepositGas);
+    BOOST_CHECK(!dep.is_system_tx);
+    BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::IsthmusL1AttributesLen);
     BOOST_CHECK_EQUAL_COLLECTIONS(
-        fields[1].begin(), fields[1].end(), kDepositor.begin(), kDepositor.end());
-    BOOST_CHECK_EQUAL_COLLECTIONS(
-        fields[2].begin(), fields[2].end(), kL1Block.begin(), kL1Block.end());
-    // mint / value / isSystemTx encode as empty RLP items.
-    BOOST_CHECK(fields[3].empty());
-    BOOST_CHECK(fields[4].empty());
-    BOOST_CHECK_EQUAL(fields[5], (bcos::bytes{0x0f, 0x42, 0x40}));  // gas 1'000'000, payload only
-    BOOST_CHECK(fields[6].empty());
-    BOOST_REQUIRE_EQUAL(fields[7].size(), bcos::evm::opstack::IsthmusL1AttributesLen);
-    BOOST_CHECK_EQUAL_COLLECTIONS(
-        fields[7].begin(), fields[7].begin() + 4, kIsthmusSelector.begin(), kIsthmusSelector.end());
+        dep.data.begin(), dep.data.begin() + 4, kIsthmusSelector.begin(), kIsthmusSelector.end());
 
     // sourceHash = keccak(bytes32(1) || keccak(l1Hash || bytes32(seq))).
     std::array<uint8_t, 64> innerInput{};
@@ -162,8 +163,8 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
     std::copy(inner.begin(), inner.end(), domainInput.begin() + 32);
     const auto expectedHash =
         bcos::crypto::keccak256Hash(bcos::bytesConstRef(domainInput.data(), domainInput.size()));
-    BOOST_CHECK_EQUAL_COLLECTIONS(
-        fields[0].begin(), fields[0].end(), expectedHash.begin(), expectedHash.end());
+    BOOST_CHECK_EQUAL_COLLECTIONS(dep.source_hash.bytes, dep.source_hash.bytes + 32,
+        expectedHash.begin(), expectedHash.end());
 }
 
 BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
@@ -184,11 +185,10 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
         bcos::evm::opstack::OpForkFlags{.jovianActive = true}, l1Info);
     const auto env = scheduler.synthesizeL1AttributesEnvelope(1000);
-    bcos::bytesRef cursor(const_cast<bcos::byte*>(env.data() + 1), env.size() - 1);
-    std::vector<bcos::bytes> fields;
-    BOOST_REQUIRE(bcos::codec::rlp::decode(cursor, fields) == nullptr);
-    BOOST_REQUIRE_EQUAL(fields[7].size(), bcos::evm::opstack::JovianL1AttributesLen);
-    auto const& calldata = fields[7];
+    auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
+        bcos::bytesConstRef(env.data(), env.size()));
+    BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::JovianL1AttributesLen);
+    auto const& calldata = dep.data;
 
     auto checkBE = [&](size_t offset, uint64_t value) {
         std::array<uint8_t, 8> be{};
@@ -232,11 +232,10 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
         bcos::evm::opstack::OpForkFlags{.jovianActive = false}, l1Info);
     const auto env = scheduler.synthesizeL1AttributesEnvelope(1000);
-    bcos::bytesRef cursor(const_cast<bcos::byte*>(env.data() + 1), env.size() - 1);
-    std::vector<bcos::bytes> fields;
-    BOOST_REQUIRE(bcos::codec::rlp::decode(cursor, fields) == nullptr);
-    BOOST_REQUIRE_EQUAL(fields[7].size(), bcos::evm::opstack::IsthmusL1AttributesLen);
-    auto const& calldata = fields[7];
+    auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
+        bcos::bytesConstRef(env.data(), env.size()));
+    BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::IsthmusL1AttributesLen);
+    auto const& calldata = dep.data;
 
     auto checkBE = [&](size_t offset, uint64_t value) {
         std::array<uint8_t, 8> be{};
@@ -263,22 +262,19 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
 
 BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayoutAndUniqueness)
 {
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
-        bcos::evm::opstack::OpForkFlags{.jovianActive = true});
-    const auto env = scheduler.synthesizeL1AttributesEnvelope(1000);
+    bcos::evm::opstack::L1BlockInfo const unset{};
+    const auto env = bcos::evm::opstack::synthesizeL1AttributesDeposit(unset, true, 1000);
     BOOST_REQUIRE_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
-    bcos::bytesRef cursor(const_cast<bcos::byte*>(env.data() + 1), env.size() - 1);
-    std::vector<bcos::bytes> fields;
-    BOOST_REQUIRE(bcos::codec::rlp::decode(cursor, fields) == nullptr);
-    BOOST_REQUIRE_EQUAL(fields.size(), 8);
-    BOOST_REQUIRE_EQUAL(fields[7].size(), bcos::evm::opstack::JovianL1AttributesLen);
+    auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
+        bcos::bytesConstRef(env.data(), env.size()));
+    BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::JovianL1AttributesLen);
     BOOST_CHECK_EQUAL_COLLECTIONS(
-        fields[7].begin(), fields[7].begin() + 4, kJovianSelector.begin(), kJovianSelector.end());
+        dep.data.begin(), dep.data.begin() + 4, kJovianSelector.begin(), kJovianSelector.end());
     // [176:178] DA-footprint scalar is zero.
-    BOOST_CHECK_EQUAL(fields[7][176], 0);
-    BOOST_CHECK_EQUAL(fields[7][177], 0);
+    BOOST_CHECK_EQUAL(dep.data[176], 0);
+    BOOST_CHECK_EQUAL(dep.data[177], 0);
 
-    const auto envLater = scheduler.synthesizeL1AttributesEnvelope(1001);
+    const auto envLater = bcos::evm::opstack::synthesizeL1AttributesDeposit(unset, true, 1001);
     BOOST_CHECK(env == envLater);  // sourceHash is domain-1(l1Hash, seq), not L2 time
 }
 

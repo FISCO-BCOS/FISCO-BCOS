@@ -108,6 +108,10 @@ public:
     {
         m_state->capturedNewPayloadRequest = request;
         m_state->capturedNewPayloadVersion = version;
+        if (m_state->throwInvalidPayloadAttributes)
+        {
+            BOOST_THROW_EXCEPTION(engine::InvalidPayloadAttributes{});
+        }
         if (m_state->throwUnsupportedFork)
         {
             BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
@@ -660,6 +664,22 @@ BOOST_AUTO_TEST_CASE(newPayloadV4TypedVersionGateMapsToSpecErrorCode)
     Json::Value response;
     BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
         [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV4InvalidPayloadAttributesMapsTo38003)
+{
+    Json::Value params(Json::arrayValue);
+    params.append(makeV4ExecutionPayloadJson());
+    params.append(Json::Value(Json::arrayValue));
+    params.append(c_beaconRootHex);
+    params.append(Json::Value(Json::arrayValue));
+
+    mockService.m_state->throwInvalidPayloadAttributes = true;
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return e.code() == EngineError::InvalidPayloadAttributes;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadV4MissingParams)

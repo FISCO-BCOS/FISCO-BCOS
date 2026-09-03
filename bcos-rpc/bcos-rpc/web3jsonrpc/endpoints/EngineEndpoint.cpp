@@ -35,6 +35,11 @@ struct OpPayloadBusyReset
 {
     std::atomic<bool>& flag;
     bool owned;
+    OpPayloadBusyReset(std::atomic<bool>& busy, bool owns) : flag(busy), owned(owns) {}
+    OpPayloadBusyReset(OpPayloadBusyReset const&) = delete;
+    OpPayloadBusyReset& operator=(OpPayloadBusyReset const&) = delete;
+    OpPayloadBusyReset(OpPayloadBusyReset&&) = delete;
+    OpPayloadBusyReset& operator=(OpPayloadBusyReset&&) = delete;
     ~OpPayloadBusyReset()
     {
         if (owned)
