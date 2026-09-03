@@ -72,12 +72,7 @@ public:
     /// Jovian is active (blobGasUsed is DA footprint; Isthmus keeps it 0).
     [[nodiscard]] bool isJovianActive() const noexcept { return m_forkFlags.jovianActive; }
 
-    /// L1-attributes deposit envelope for the block's forced-transaction set, synthesized
-    /// from the configured L1 info (op-geth l1AttributesDeposited semantics). In production
-    /// the op-node (L2 CL) supplies this deposit inside payloadAttributes.transactions, so
-    /// this member only serves the built-in single-node CL's fallback. An all-zero
-    /// L1BlockInfo (no [op_l1] config) is the documented stand-in, never a production L1
-    /// value — see L1BlockInfo.
+    /// Synthesize the L1-attributes deposit envelope from the configured L1 info.
     [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(uint64_t l2BlockTime) const
     {
         return bcos::evm::opstack::synthesizeL1AttributesDeposit(

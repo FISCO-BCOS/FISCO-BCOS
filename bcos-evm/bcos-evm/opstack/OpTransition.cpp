@@ -98,9 +98,8 @@ inline bcos::u256 intxToBcosU256(intx::uint256 const& val)
 /// Convert the execution layer's opstack::OpReceiptMeta into the framework layer's
 /// bcos::protocol::OpStackReceiptMeta (the typed view over the tars opStackMeta hex-string
 /// fields). uint256 fields use intxToBcosU256 (full-width); uint64/uint32 scalar fields are
-/// assigned directly. Presence is preserved per-field. effective_gas_price is deliberately NOT
-/// carried here — it lands on the receipt's top-level effectiveGasPrice field (op-geth
-/// internal/ethapi/api.go:1761 emits it at the top level, not inside the OP extension object).
+/// assigned directly. Presence is preserved per-field. effective_gas_price is
+/// written on the receipt top-level field, not in this OP extension object.
 inline bcos::protocol::OpStackReceiptMeta toOpStackMeta(const OpReceiptMeta& meta)
 {
     bcos::protocol::OpStackReceiptMeta out;
@@ -360,8 +359,7 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
         bcos::bytesConstRef{outputBytes.data(), outputBytes.size()},
         !tx.to.has_value() ? toFiscoContractAddress(tx.sender, tx.nonce) : std::string{});
     out->setOpStackMeta(toOpStackMeta(meta));
-    // op-geth hexutil.Big: "0x" + lowercase hex, no leading zeros (internal/ethapi/api.go:1761, RPC
-    // top-level).
+    // "0x" + lowercase hex, no leading zeros.
     out->setEffectiveGasPrice("0x" + intx::to_string(effective_gas_price, 16));
     // out-param written last: an exception in the projection above must not leave a diff to apply.
     outStateDiff = std::move(receipt.state_diff);
@@ -507,8 +505,7 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     evmone::state::State state{view};
     auto& fromAcc = state.get_or_insert(dep.from);
     const uint64_t preNonce = fromAcc.nonce;
-    // op-geth AddBalance uses holiman/uint256 Add (state_object.go), which wraps
-    // mod 2^256. Rejecting mint overflow here would diverge from that EL.
+    // Mint wraps mod 2^256, matching op-geth AddBalance.
     if (dep.mint.has_value())
         fromAcc.balance += *dep.mint;
 
@@ -524,13 +521,7 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     tx.max_priority_gas_price = 0;
     tx.nonce = preNonce;
 
-    // Deposit skips the fee cap validation; validate is used to compute intrinsic gas / the
-    // EIP-7623 floor AND to enforce the block gas pool (GAS_LIMIT_REACHED is one of the two
-    // block-level deposit errors op-geth names in state_transition.go:486, the other being
-    // ErrSystemTxNotSupported, handled at the top of runDeposit). A deposit whose gas_limit
-    // exceeds the running block gas pool is a block error, not a processing-level failure —
-    // op-geth charges every transaction (including deposits) against gp.SubGas; only SYSTEM
-    // transactions are exempt, and dep.is_system_tx is already rejected above.
+    // Skip fee-cap checks; still charge intrinsic gas and the block gas pool.
     evmone::state::BlockInfo validateBlock = block;
     validateBlock.base_fee = 0;
     const DepositValidationView maskedView{view, dep.from};

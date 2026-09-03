@@ -685,8 +685,7 @@ BOOST_AUTO_TEST_CASE(FailedCreateDepositStillBumpsNonceAndDeploysNothing)
     BOOST_CHECK_EQUAL(ts.count(evmone::state::compute_create_address(kFrom, 5)), 0u);
 }
 
-// R127: op-geth AddBalance uses uint256.Int.Add (wraps mod 2^256). A failed-deposit
-// reject on overflow would diverge from that EL.
+// Mint wraps mod 2^256 (op-geth AddBalance).
 BOOST_AUTO_TEST_CASE(MintAdditionWrapsLikeOpGethUint256Add)
 {
     auto vm = evmc::VM{evmc_create_evmone()};

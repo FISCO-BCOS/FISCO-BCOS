@@ -180,8 +180,7 @@ bcos::bytes parseHexBytesField(Json::Value const& value, std::string_view field)
         return reject();
     }
     auto const hex = value.asString();
-    // fromHex left-pads an odd nibble; require the same 0x + even-length contract as
-    // parseRawTransactionElement so extraData / logsBloom / eip1559Params stay verbatim.
+    // fromHex left-pads odd nibbles; require 0x and even length.
     if (hex.size() < 2 || hex.size() % 2 != 0 || hex[0] != '0' || (hex[1] != 'x' && hex[1] != 'X'))
     {
         return reject();
@@ -577,26 +576,9 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
         }
         attrs.noTxPool = pa["noTxPool"].asBool();
     }
-    // The three fields below go through the strict readers rather than a bare
-    // fromQuantity / fromHex: those stringify a JSON number before parsing it as hex (a
-    // forged value) and report malformed input as std::invalid_argument, which the RPC
-    // entry point would surface as -32603 InternalError.
-    //
-    // KNOWN GAP (generic path): the generic buildPayload IGNORES payloadAttributes.gasLimit —
-    // the built block's gas limit always comes from this chain's own SystemConfig
-    // (EngineServiceImpl.h, ledgerConfig.gasLimit()). The OP path (buildOpPayload) is the
-    // opposite: it prefers attrs.gasLimit and falls back to ledgerConfig, matching op-geth's
-    // mandatory-gasLimit semantics (checkOptimismPayloadAttributes, eth/catalyst/
-    // api_optimism.go:41-43, else -38003; miner/worker.go:362-363; op-node always sends it
-    // from the L1 SystemConfig, op-node/rollup/derive/attributes.go:207-215). Honouring it on
-    // the generic path changes what block this node produces, which belongs to the
-    // header-fields work rather than to this method-surface change.
+    // Strict readers: a bare fromQuantity/fromHex can turn a JSON number into -32603.
     if (pa.isMember("gasLimit") && !pa["gasLimit"].isNull())
     {
-        // Interop note: parseQuantity (safeFromQuantity) is more lenient than op-geth's
-        // hexutil.Uint64 — it accepts a missing 0x prefix and leading zeros. The admitted
-        // set is deliberately wider than op-geth's; values decode identically, so there is
-        // no consensus impact (see parseBigQuantity's rationale above).
         attrs.gasLimit = parseQuantity(pa["gasLimit"], "payloadAttributes.gasLimit");
     }
     if (pa.isMember("eip1559Params") && !pa["eip1559Params"].isNull())

@@ -71,18 +71,8 @@ public:
         call(std::move(tx), std::move(callback));
     }
 
-    // OP build path: adopt a verify=false probe execution as the verified pending block
-    // WITHOUT re-executing it. Only OpScheduler overrides this (the engine's buildOpPayload
-    // is the sole caller); every other scheduler keeps the default re-execution, which is
-    // correct because none of them is ever called this way. Defaulted (not pure) so existing
-    // implementations and fakes stay source-compatible — same pattern as callAtBlock above.
-    // Wiring contract with the engine: while the engine's OP build path
-    // (EngineServiceImpl::c_opMode) is active, the runtime m_delegate MUST be an OpScheduler —
-    // the only implementation overriding this method. Any other scheduler silently falls back
-    // to the defaulted verify=true re-execution: correct, but the build pays a second
-    // execution and loses the single-execution optimization. No RTTI dispatch is possible
-    // (OpScheduler is templated over its storage type), so this is a documented convention,
-    // not an enforced invariant.
+    // Adopt a verify=false probe as the pending block without re-executing.
+    // Default re-runs executeBlock(verify=true); OpScheduler overrides this.
     virtual void adoptProbeAsPending(bcos::protocol::Block::Ptr block,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
             callback)

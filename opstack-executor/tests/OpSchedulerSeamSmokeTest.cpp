@@ -62,9 +62,7 @@ using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, Backend
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ViewType = typename MLS::ViewType;
 
-// Independent golden selectors (not the production constants). Two temporary
-// std::array instances in BOOST_CHECK_EQUAL_COLLECTIONS would dangle both
-// iterators, so these live as named constants.
+// Named selectors so BOOST_CHECK_EQUAL_COLLECTIONS does not dangle temporaries.
 constexpr std::array<uint8_t, 4> kIsthmusSelector{0x09, 0x89, 0x99, 0xbe};
 constexpr std::array<uint8_t, 4> kJovianSelector{0x3d, 0xb6, 0xbe, 0x2b};
 
@@ -124,11 +122,6 @@ BOOST_AUTO_TEST_CASE(SynthesizeL1AttributesIsDepositEnvelope)
     BOOST_CHECK_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
 }
 
-// Production-synthesis layout anchor: the seam's synthesizeL1AttributesEnvelope must produce
-// a 0x7e envelope whose rlp fields carry the op-geth L1-attributes deposit shape — from ==
-// OP_DEPOSITOR, to == OP_L1_BLOCK, gas == c_l1InfoDepositGas, data == Isthmus 176B with the
-// Isthmus selector, and sourceHash == keccak256(bytes32(1) || keccak256(l1Hash || bytes32(seq))).
-// The fixture helper (testutil) is NOT the anchor: this decodes the seam's own output.
 BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
 {
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
@@ -143,20 +136,15 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
     BOOST_REQUIRE_EQUAL(fields.size(), 8);
 
     BOOST_CHECK_EQUAL(fields[0].size(), 32);  // sourceHash
-    // Independent golden bytes (not the production constants): a corrupted
-    // OP_DEPOSITOR / OP_L1_BLOCK / selector constant must fail this anchor.
-    // OP_DEPOSITOR = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001
     const std::array<uint8_t, 20> kDepositor{0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0xde,
         0xad, 0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0x00, 0x01};
-    // OP_L1_BLOCK = 0x4200000000000000000000000000000000000015
     const std::array<uint8_t, 20> kL1Block{0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x15};
     BOOST_CHECK_EQUAL_COLLECTIONS(
         fields[1].begin(), fields[1].end(), kDepositor.begin(), kDepositor.end());
     BOOST_CHECK_EQUAL_COLLECTIONS(
         fields[2].begin(), fields[2].end(), kL1Block.begin(), kL1Block.end());
-    // mint absent / value 0 / isSystemTx false all RLP-encode as the empty string and
-    // decode back to an empty byte vector.
+    // mint / value / isSystemTx encode as empty RLP items.
     BOOST_CHECK(fields[3].empty());
     BOOST_CHECK(fields[4].empty());
     BOOST_CHECK_EQUAL(fields[5], (bcos::bytes{0x0f, 0x42, 0x40}));  // gas 1'000'000, payload only
@@ -165,8 +153,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
     BOOST_CHECK_EQUAL_COLLECTIONS(
         fields[7].begin(), fields[7].begin() + 4, kIsthmusSelector.begin(), kIsthmusSelector.end());
 
-    // sourceHash = keccak(bytes32(1) || keccak(l1Hash[32] || bytes32(seq))) for zero L1 info.
-    // l2Time is not part of the spec preimage.
+    // sourceHash = keccak(bytes32(1) || keccak(l1Hash || bytes32(seq))).
     std::array<uint8_t, 64> innerInput{};
     const auto inner =
         bcos::crypto::keccak256Hash(bcos::bytesConstRef(innerInput.data(), innerInput.size()));
@@ -179,8 +166,6 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
         fields[0].begin(), fields[0].end(), expectedHash.begin(), expectedHash.end());
 }
 
-// Non-zero L1 info with pairwise-distinct fields: every packed calldata offset must carry
-// exactly its own field, so a mis-offset synthesis (e.g. seq written at [20:28]) fails.
 BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
 {
     bcos::evm::opstack::L1BlockInfo l1Info;
@@ -217,7 +202,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
         BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
             calldata.begin() + static_cast<ptrdiff_t>(offset + be.size()), be.begin(), be.end());
     };
-    // Selector [0:4] — independent golden bytes (Jovian).
+    // Selector [0:4].
     BOOST_CHECK_EQUAL_COLLECTIONS(
         calldata.begin(), calldata.begin() + 4, kJovianSelector.begin(), kJovianSelector.end());
     checkBE(12, l1Info.sequenceNumber);  // seq
@@ -229,9 +214,6 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
         hashBytes.end());  // l1 blockHash
 }
 
-// Same non-zero L1 grid on the Isthmus (176B) form. The Jovian case above does not
-// cover [12:176] when jovianActive is false; an all-zero default L1BlockInfo would
-// hide a swapped seq/time/number store.
 BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
 {
     bcos::evm::opstack::L1BlockInfo l1Info;
@@ -279,8 +261,6 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
         calldata.begin() + 100, calldata.begin() + 132, hashBytes.begin(), hashBytes.end());
 }
 
-// Jovian: the synthesized deposit carries the Jovian selector and 178B data (with the
-// zero DA-footprint scalar). sourceHash does not bind L2 time.
 BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayoutAndUniqueness)
 {
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
@@ -294,7 +274,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayoutAndUniqueness)
     BOOST_REQUIRE_EQUAL(fields[7].size(), bcos::evm::opstack::JovianL1AttributesLen);
     BOOST_CHECK_EQUAL_COLLECTIONS(
         fields[7].begin(), fields[7].begin() + 4, kJovianSelector.begin(), kJovianSelector.end());
-    // [176:178] DA-footprint scalar is zero for the stand-in.
+    // [176:178] DA-footprint scalar is zero.
     BOOST_CHECK_EQUAL(fields[7][176], 0);
     BOOST_CHECK_EQUAL(fields[7][177], 0);
 

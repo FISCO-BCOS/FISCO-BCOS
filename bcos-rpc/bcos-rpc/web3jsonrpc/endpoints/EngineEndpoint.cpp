@@ -30,9 +30,7 @@ using namespace bcos::rpc;
 
 namespace
 {
-/// RAII release for the one-in-flight OP newPayload guard. The destructor must also run on
-/// exception unwind from the co_await below — a failed execution must not latch the flag
-/// shut and permanently answer SYNCING.
+/// Clears the OP newPayload in-flight flag, including on exception unwind.
 struct OpPayloadBusyReset
 {
     std::atomic<bool>& flag;
@@ -99,20 +97,7 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
 void EngineEndpoint::buildUnimplementedVersionError(
     std::string_view method, Json::Value& response) const
 {
-    // -38005 Unsupported fork for a method version this node does not implement at all
-    // (currently only forkchoiceUpdatedV4). isForkchoiceVersionSupported admits V4 when
-    // the instance was built with maxEngineVersion=V4 (OP mode); the RPC endpoint is the
-    // piece that refuses V4, because no engine mode implements a V4 forkchoiceUpdated
-    // request. This is NOT a declaration that older versions are incompatible: every
-    // version that IS implemented stays served, so a pre-Karst CL — the v1 Engine API
-    // harness kept alive by unsafe_allow_v1_executor, or a stock Lodestar driving V1-V3
-    // — keeps working.
-    //
-    // Built inline instead of through buildJsonError(request, ...) because a handler only
-    // ever receives the params array, never the request envelope: the JSON-RPC id is
-    // stamped onto the handler's response by the dispatcher
-    // (Web3JsonRpcImpl::handleRequest, `result["id"] = _request["id"]`), the same way it
-    // is for buildEngineNotAvailableError above and for every successful response.
+    // -38005: this method version is not implemented. The dispatcher stamps JSON-RPC id.
     Json::Value error(Json::objectValue);
     error["code"] = EngineError::UnsupportedFork;
     error["message"] = std::string(method) + " is not yet supported";
@@ -157,20 +142,7 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
 
     auto forkchoiceState = parseForkchoiceState(request);
     auto payloadAttrs = parsePayloadAttributes(request, version);
-    // Typed engine failures map onto the spec error codes here (the engine library cannot
-    // depend on the RPC layer's JsonRpcException). The mapped set:
-    //   -38003 InvalidPayloadAttributes — attribute faults (op-geth's
-    //   checkOptimismPayloadAttributes channel);
-    //   -38002 InvalidForkchoiceState — head known but finalizedBlockHash/safeBlockHash
-    //   not in chain;
-    //   -38005 UnsupportedFork — CL/chain fork-era mismatch.
-    // The exception's errinfo_comment is preserved via what() so the operator can tell
-    // which gate fired — e.g. the missing-revision case is a NODE-side misconfiguration,
-    // and a generic shape message would wrongly point at the CL. Anything else
-    // (OpExecutionInternalError and friends) propagates and answers the generic -32603,
-    // the correct classification for a genuine internal fault. (The buildOpPayload
-    // timestamp gate throws InvalidPayloadAttributes and is mapped to -38003 by this
-    // catch.)
+    // Map typed engine failures to spec codes; other exceptions stay -32603.
 
     engine::ForkchoiceUpdatedResult engineResult;
     try
@@ -185,13 +157,6 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
     }
     catch (engine::UnsupportedFork const& e)
     {
-        // The request's attribute shape cannot express the chain's fork era, or the chain
-        // lacks an on-chain EVM revision entirely. geth answers -38005 Unsupported fork
-        // for the same CL/chain mismatch; the service layer throws UnsupportedFork so this
-        // stays a diagnosable fork error instead of a generic -32603 InternalError. Keep
-        // the exception's errinfo_comment so the operator can tell which gate fired — the
-        // missing-revision case is a NODE-side misconfiguration and the generic shape
-        // message would wrongly point at the CL.
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
@@ -221,12 +186,6 @@ task::Task<void> EngineEndpoint::getPayloadV3(const Json::Value& request, Json::
 
 task::Task<void> EngineEndpoint::getPayloadV4(const Json::Value& request, Json::Value& response)
 {
-    // Isthmus getPayload — a pre-Karst version, and served like every other one. The whole
-    // stack below already handles V4: isGetPayloadVersionSupported spans V1-V5,
-    // isGetPayloadVersionCompatible has its own V4 window, handleGetPayload fills
-    // executionRequests for V4+, and combineGetPayloadResponse renders the V4 shape.
-    // Refusing it here while serving newPayloadV4 would be the same fork-narrowing this
-    // node no longer does.
     co_await handleGetPayload(engine::ApiVersion::V4, request, response);
 }
 
@@ -264,15 +223,7 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     }
     catch (engine::IncompatiblePayloadVersion const&)
     {
-        // The build behind this payloadId is outside the requested method's version
-        // window: either a version mismatch between the forkchoiceUpdated that built it
-        // and the getPayload asking for it, or a re-query AFTER the payload was committed
-        // through newPayload (a commit rewrites the cache entry with the newPayload
-        // version — PayloadEntry::version, EngineServiceImpl.h — so it no longer matches
-        // getPayloadV5's V3-build window). The mapping is -38005 to match op-geth, whose
-        // getPayload helper answers engine.UnsupportedFork when the payloadId's encoded
-        // build version is outside the method's allowed set (eth/catalyst/api.go:531-533,
-        // GetPayloadV5 allowing only PayloadV3).
+        // Payload was built under a different method version.
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
             "Unsupported fork: payload was built by a different method version"));
     }
@@ -317,10 +268,7 @@ task::Task<void> EngineEndpoint::handleNewPayload(
         co_return;
     }
 
-    // V4 (OP) execution runs a full block execution + commit per call. Bound it to one
-    // in-flight execution BEFORE parsing: a busy-rejected flood must not pay the full
-    // transaction hex decode; the concurrent request gets the spec-recognized SYNCING
-    // status (op-node retries) instead of queueing unbounded execution work behind a flood.
+    // One in-flight V4 newPayload; a second concurrent call answers SYNCING.
     const bool opExecution = version == engine::ApiVersion::V4;
     if (opExecution && m_opPayloadBusy.exchange(true, std::memory_order_acq_rel))
     {
@@ -331,17 +279,12 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     OpPayloadBusyReset busyReset{m_opPayloadBusy, opExecution};
 
     auto newPayloadReq = parseNewPayloadRequest(request, version);
-    // TODO: engineService->newPayload() MUST throw JsonRpcException in these cases:
-    //   -32602 InvalidParams: wrong version of ExecutionPayload structure (V2)
     engine::PayloadStatus engineResult;
     try
     {
         engineResult =
             co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
     }
-    // handleOpNewPayload gates version != 4 with UnsupportedFork; the RPC must answer
-    // -38005 (op-geth unsupportedForkErr) rather than the generic -32603. Keep the
-    // errinfo_comment so the operator can tell which gate fired.
     catch (engine::UnsupportedFork const& e)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(

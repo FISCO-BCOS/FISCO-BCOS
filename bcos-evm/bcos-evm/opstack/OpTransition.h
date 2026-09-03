@@ -230,35 +230,15 @@ struct DepositTx
 /// OP 0x7E deposit transaction/receipt type (EIP-2718 typed envelope prefix).
 constexpr auto kDepositTxType = static_cast<evmone::state::Transaction::Type>(0x7e);
 
-// ---- L1-attributes deposit calldata layout (shared by synthesis and validation) ----
-// 176B with the Isthmus selector (0x098999be), 178B with the Jovian selector (0x3db6be2b).
-// Selectors mirror op-geth core/types (setL1BlockValues dispatch); the
-// pre-Isthmus Ecotone form (164B, 0x440a5e20) predates this chain's Isthmus baseline and
-// is never synthesized.
+// L1-attributes calldata: Isthmus 176B (0x098999be), Jovian 178B (0x3db6be2b).
 inline constexpr std::size_t IsthmusL1AttributesLen = 176;
 inline constexpr std::size_t JovianL1AttributesLen = 178;
 inline constexpr std::array<uint8_t, 4> IsthmusL1AttributesSelector = {0x09, 0x89, 0x99, 0xbe};
 inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6, 0xbe, 0x2b};
-/// Synthesized L1-attributes deposit gas limit. op-geth's core/types/deposit_tx.go
-/// defines no L1InfoDepositGas constant (only DepositTxType = 0x7E); deposit gas sizing
-/// lives on the op-node side. The built-in-CL synthesis keeps 1M — enough for the
-/// intrinsic gas + calldata the attributes deposit actually consumes; a normal 30M block
-/// pool accepts it. runDeposit DOES charge deposits against the running block gas pool
-/// (blockGasLeft) and raises the GAS_LIMIT_REACHED block error when a deposit's
-/// gas_limit exceeds it (op-geth state_transition.go:486 names ErrGasLimitReached as a
-/// block-level deposit error; only SYSTEM txs are exempt, and is_system_tx is rejected
-/// at the top of runDeposit).
+/// Gas limit used when synthesizing the L1-attributes deposit.
 inline constexpr int64_t c_l1InfoDepositGas = 1'000'000;
 
-/// L1 block information used to synthesize the L1-attributes deposit (mirrors op-geth
-/// core/types/rollup_cost.go L1BlockInfo). In production the deposit is derived by the
-/// op-node (L2 CL) and arrives inside payloadAttributes.transactions; this struct only
-/// feeds the built-in single-node CL's fallback synthesis, which runs when the CL did not
-/// supply a deposit. All-zero fields are the documented stand-in for an absent [op_l1]
-/// configuration (see NodeConfig::loadOpL1Config) — never a production L1 value. This
-/// folding is deliberate: an all-zero struct is indistinguishable from a genuine L1 block
-/// at height 0 with a zero hash, and the built-in-CL stand-in accepts that ambiguity
-/// because real op-node deposits always carry the actual L1 block info.
+/// L1 block fields for synthesizing the L1-attributes deposit (built-in CL fallback).
 struct L1BlockInfo
 {
     uint64_t number = 0;

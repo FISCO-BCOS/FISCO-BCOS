@@ -259,8 +259,7 @@ BOOST_AUTO_TEST_CASE(JovianRejectsBadSelector)
 
 BOOST_AUTO_TEST_CASE(AcceptsFirstDepositThatIsNotL1Attributes)
 {
-    // R128: op-geth EL only requires txs[0].IsDepositTx (rollup_cost.go CalcDAFootprint).
-    // A user deposit in slot 0 is a CL derivation miss; rejecting it here would diverge.
+    // First tx must be a deposit; it does not have to be the L1-attributes deposit.
     Fixture f;
     auto dep = depositWithData(l1AttributesData(op::IsthmusL1AttributesLen));
     dep.from = evmc::address{};

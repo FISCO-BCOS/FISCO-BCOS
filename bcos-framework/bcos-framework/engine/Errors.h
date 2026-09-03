@@ -46,11 +46,7 @@ DERIVE_BCOS_EXCEPTION(UnsupportedFork);
 /// opstack-executor/OpCommon.h. Never route this through the message text.
 using OpCulpritTxHash = boost::error_info<struct OpCulpritTxHashTag, bcos::h256>;
 
-/// Structured carrier marking an OP per-tx reject as a block-capacity fault (the block
-/// gas pool cannot fit the transaction) rather than a poisoned transaction: the build
-/// loop skips the tx for this build and must never remove it from the pool. Mirrors
-/// OpCulpritTxHash's error_info contract (attached by OpScheduler, read back by
-/// buildOpPayload). Never route this through the message text.
+/// True when the reject is a block-gas-pool capacity fault (skip this build, do not evict).
 using OpBlockGasPoolFull = boost::error_info<struct OpBlockGasPoolFullTag, bool>;
 
 }  // namespace bcos::engine

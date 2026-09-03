@@ -103,14 +103,7 @@ public:
         bcos::crypto::HashType announcedBlockHash;
     };
 
-    /// Retained probe (verify=false) execution, adopted by adoptProbeAsPending. The view's
-    /// top mutable layer is exactly this block's delta; adopt will pushView it. Un-adopted
-    /// retained views are private until pushView (forkCommitted views carry no storage
-    /// layers), so a stale slot is bounded extra retention, never state corruption — but
-    /// the clears in reset(), at probe start, and on adopt keep it empty across builds.
-    /// Single-writer discipline: all accesses hold m_executeMutex (probe write; adopt
-    /// read/write under execute+commit; reset holds all three). Deliberately not under
-    /// m_pendingMutex — the slot outlives m_pending on the probe path.
+    /// verify=false probe retained for adoptProbeAsPending.
     struct ProbeSlot
     {
         ViewType view;  // forkCommitted()+newMutable execution view
@@ -136,11 +129,7 @@ public:
         }(this, std::move(block), verify, std::move(callback)));
     }
 
-    /// Adopt the retained probe (verify=false) as the verified pending block WITHOUT
-    /// re-executing. Only the OP build path calls this. The commitment check is deterministic
-    /// for a build (the final header was rebuilt from the probe's commitments) but is kept to
-    /// preserve the verify=true invariant and surface future regressions. Holds both delegate
-    /// locks across pushView — identical pairing to coExecuteBlock's pushView.
+    /// Adopt the retained verify=false probe as the pending block without re-executing.
     void adoptProbeAsPending(bcos::protocol::Block::Ptr block,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
             callback) override
@@ -186,9 +175,7 @@ public:
             // lastCommitted is set. Restore the watermark to the committed tip.
             m_lastExecutedBlockNumber.store(m_lastCommittedBlockNumber.load());
         }
-        // Unconditional clear: the probe path leaves m_pending EMPTY with a retained slot,
-        // so a clear inside `if (m_pending)` would never fire and a stale probe would leak
-        // across aborted builds.
+        // Always drop a leftover probe; verify=false does not populate m_pending.
         m_lastProbe.reset();
         callback(nullptr);
     }
@@ -598,17 +585,7 @@ private:
 
             auto ledgerConfig = co_await loadLedgerConfig(view, number);
 
-            // Persist trie nodes whenever the L2-compat feature is on, regardless of verify:
-            // the OP build path's probe (verify=false) is adopted via adoptProbeAsPending, so
-            // its retained view must already carry this block's persisted MPT nodes and the
-            // incremental root. Safe on the probe path: buildAndCollect only runs after a
-            // successful full-block execution (a poisoned tx throws in the per-tx loop before
-            // finalize), so eviction-failed probes never persist; un-adopted retained views
-            // (ledgerGas re-probe, aborted builds) are private until pushView and their
-            // persisted nodes are dropped with the view, never merged.
-            // Behavior note: on an L2-compat chain missing parent trie nodes, a probe now
-            // fails at buildAndCollect (MPTInvariantViolation) where it previously succeeded
-            // and the canonical pass failed — same net outcome (build aborts), earlier surface.
+            // Persist trie nodes on L2-compat even for verify=false; adopt reuses this view.
             bool const persistTrieNodes =
                 ledgerConfig->features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
             auto outcome =
@@ -650,9 +627,7 @@ private:
             }
             else
             {
-                // Retain the probe for adoptProbeAsPending: adopt pushes this view and stashes
-                // the result, so no second (canonical) execution is needed. Overwrites any
-                // stale slot from an earlier failed probe.
+                // Keep the probe so adoptProbeAsPending can push this view.
                 m_lastProbe = ProbeSlot{std::move(view), std::move(outcome.result), executedHeader};
             }
 
@@ -725,19 +700,12 @@ private:
                     "adopt input is at height {}",
                     m_lastProbe->executedHeader->number(), number);
                 OP_SCHEDULER_LOG(INFO) << message;
-                // Refusal is terminal for this build's adopt; drop the retained probe so a
-                // stale slot does not outlive the refused build.
                 m_lastProbe.reset();
                 co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
                     nullptr, false};
             }
 
-            // Error-surface parity with coExecuteBlock: refuse discontinuous or
-            // already-committed heights at build time instead of letting them fail later at
-            // commitContinuityCheck, and refuse to clobber any live pending (defensive reuse
-            // of the one-pending-slot discipline; unreachable via buildOpPayload, which resets
-            // before the probe, but the adopt method must not assume its caller).
             auto const lastExecuted = m_lastExecutedBlockNumber.load();
             auto const lastCommitted = m_lastCommittedBlockNumber.load();
             if (number > 0 && number == lastCommitted)

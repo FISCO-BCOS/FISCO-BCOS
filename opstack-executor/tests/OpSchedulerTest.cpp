@@ -260,10 +260,7 @@ bcos::protocol::Transaction::Ptr buildUnsupportedTypeTx()
 {
     bcostars::Transaction tars;
     tars.extraTransactionBytes.push_back(0x03);
-    // The per-tx type gate attaches transactions[i]->hash() as the culprit; a hash-less
-    // carrier makes TransactionImpl::hash() throw EmptyTransactionHash before the gate
-    // (author commit 4f1144ef1 regression) — carry a synthetic hash like every real
-    // envelope carrier does.
+    // hash() must be populated; an empty hash throws before the type gate.
     bcos::bytes hashBytes(32, 0x03);
     tars.extraTransactionHash.assign(hashBytes.begin(), hashBytes.end());
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
@@ -1212,10 +1209,7 @@ BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
     BOOST_REQUIRE(called);
 }
 
-// F10 pin: eth_call with a declared gas above the call context's block gas pool must
-// classify as a consensus rejection (base behaviour, "consensus rejection" wire reason) —
-// the F2 capacity type (OpBlockGasPoolFull) must not escape the public call path as an
-// UnknownError.
+// eth_call over the block gas pool is a consensus rejection, not OpBlockGasPoolFull.
 BOOST_AUTO_TEST_CASE(CallGasAboveBlockPoolClassifiesAsConsensusRejected)
 {
     Fixture f;
@@ -2233,15 +2227,11 @@ BOOST_AUTO_TEST_CASE(ExecutedHeaderMirrorsAnnouncedEthMetadataFields)
     BOOST_CHECK(*executed.parentBeaconBlockRoot() == *announced->parentBeaconBlockRoot());
 }
 
-// ── adoptProbeAsPending (the OP build path: ONE verify=false probe → adopt, no re-execution) ──
+// adoptProbeAsPending: probe (verify=false) then adopt, no second execution.
 
 namespace
 {
-/// Drive one block through the engine's OP build slice: a local probe back-fills the announced
-/// header's commitments (production: buildOpPayload rebuilds the final header from the probe
-/// result), then executeBlock(verify=false) runs the scheduler's retained probe,
-/// adoptProbeAsPending pushViews the probe's view WITHOUT re-execution, and commitBlock lands
-/// it. Returns the executed (commitment-filled) header and the local probe's full-rebuild root.
+/// Probe, adopt, and commit one block. Returns the executed header and the probe state root.
 std::pair<bcos::protocol::BlockHeader::Ptr, bcos::h256> probeAdoptCommit(Fixture& f,
     std::shared_ptr<bcostars::protocol::BlockHeaderImpl> header,
     std::vector<bcos::bytes> const& rawTxBytes)
@@ -2253,7 +2243,6 @@ std::pair<bcos::protocol::BlockHeader::Ptr, bcos::h256> probeAdoptCommit(Fixture
     fillAnnouncedHeader(header, result);
     auto block = assembleBlock(f, header, rawTxBytes);
 
-    // The scheduler's own probe (verify=false): retains m_lastProbe.
     auto probeCb = invokeExecute(f, block, /*verify=*/false);
     BOOST_REQUIRE_MESSAGE(probeCb.err == nullptr,
         "probe executeBlock " << header->number()
@@ -2273,9 +2262,6 @@ std::pair<bcos::protocol::BlockHeader::Ptr, bcos::h256> probeAdoptCommit(Fixture
         "adoptProbeAsPending " << header->number()
                                << " failed: " << (adoptCb.err ? adoptCb.err->errorMessage() : ""));
     BOOST_REQUIRE(adoptCb.header != nullptr);
-    // The adopted header's stateRoot (the scheduler probe's incremental buildAndCollect root)
-    // must equal the local probe's full-rebuild root — the ①a contract pinned by
-    // IncrementalMPTRootMatchesFullRebuild, re-checked here because adopt relies on it.
     BOOST_REQUIRE_MESSAGE(adoptCb.header->stateRoot() == result.stateRoot,
         "adopted header stateRoot " << adoptCb.header->stateRoot().hex()
                                     << " must equal the probe's full-rebuild root "
@@ -2295,10 +2281,7 @@ std::pair<bcos::protocol::BlockHeader::Ptr, bcos::h256> probeAdoptCommit(Fixture
     return {std::move(adoptCb.header), result.stateRoot};
 }
 
-/// The committed state must carry the block's root trie-node row after an adopt-driven commit.
-/// This is the direct pin on "the probe's retained view already carries the block's persisted
-/// MPT nodes": under the regression (persistTrieNodes re-coupled to verify) the probe runs a
-/// root-only full rebuild, never flushes nodes, and the row is missing.
+/// After adopt+commit, the block's root trie node must be in committed storage.
 void requireCommittedRootNodeRow(Fixture& f, bcos::h256 const& stateRoot, int number)
 {
     auto view = f.multiLayerStorage.fork();
@@ -2312,17 +2295,7 @@ void requireCommittedRootNodeRow(Fixture& f, bcos::h256 const& stateRoot, int nu
 }
 }  // namespace
 
-/// Task 6b core regression: the adopt path must preserve L2-compat trie persistence across
-/// CONSECUTIVE blocks. The engine executes ONE verify=false probe whose retained view must
-/// already carry the block's persisted MPT nodes + incremental root (OpScheduler decouples
-/// persistTrieNodes from verify). If it were re-coupled (persistTrieNodes = verify && flag),
-/// the probe never flushes nodes; the adopt pushes a node-less view; block 2's probe then
-/// finds no persisted nodes under block 1's root and aborts with an MPTInvariantViolation-
-/// flavored storage fault, and the chain silently loses historical-call service. Pins, per
-/// block: probe → adopt → commit all succeed; the block's root node row is in COMMITTED
-/// storage; block 2's root is block 1's state updated by block 2's writes (equal to the
-/// full-rebuild root); and a historical call at block 1 is served through block 1's persisted
-/// trie answering the PRE-block-2 value.
+// Consecutive adopt+commit blocks keep trie nodes so a historical call at block 1 still works.
 BOOST_AUTO_TEST_CASE(adoptPreservesTriePersistenceForNextBlock)
 {
     const bcos::Address kContract{"0x3000000000000000000000000000000000000000"};
@@ -2339,20 +2312,15 @@ BOOST_AUTO_TEST_CASE(adoptPreservesTriePersistenceForNextBlock)
     auto depEnv = encodeDepositEnvelope(makeDeposit());
     auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
-    // Block 2 flips the contract's slot 0 INSIDE the block delta, so block 2's root and trie
-    // nodes differ from block 1's (a no-op block would make the block-2 checks vacuous).
     bcos::bytes setterEnv = makeSetterDepositEnvelope(kContract, kV2);
 
-    // Block 1: probe → adopt → commit, all succeeding.
+    // Block 1.
     auto [block1Header, block1Root] =
         probeAdoptCommit(f, makeHeaderAt(1, bcos::u256(1'000'000'000)), {depEnv, eipEnvBytes});
     BOOST_CHECK_EQUAL(block1Header->number(), 1);
     BOOST_CHECK_MESSAGE(block1Root != bcos::h256{}, "block 1 must have a non-zero state root");
     requireCommittedRootNodeRow(f, block1Root, 1);
 
-    // Block 2 chains on block 1: same probe → adopt → commit flow. The adopted view carries
-    // block 2's own persisted nodes; block 2's root is block 1's state updated by the setter
-    // write (probeAdoptCommit asserts it equals the full-rebuild root over that state).
     auto [block2Header, block2Root] =
         probeAdoptCommit(f, makeHeaderAt(2, bcos::u256(2'000'000'000)), {depEnv, setterEnv});
     BOOST_CHECK_EQUAL(block2Header->number(), 2);
@@ -2360,10 +2328,6 @@ BOOST_AUTO_TEST_CASE(adoptPreservesTriePersistenceForNextBlock)
         "block 2 must advance the state root (the setter deposit changed slot 0)");
     requireCommittedRootNodeRow(f, block2Root, 2);
 
-    // End-to-end behavioral pin: block 1 is now a HISTORICAL height. Its call must be served
-    // through block 1's persisted trie (the M5 gate) and answer the PRE-block-2 value kV1 —
-    // missing node rows would refuse the call ("no persisted MPT nodes"), and a latest-state
-    // pass-through would answer kV2.
     auto [err, receipt] =
         callAt(f, buildWeb3Tx(bcos::u256(30'000'000'000ULL), bcos::u256(0), kContract), 1);
     BOOST_REQUIRE_MESSAGE(err == nullptr,
@@ -2377,9 +2341,6 @@ BOOST_AUTO_TEST_CASE(adoptPreservesTriePersistenceForNextBlock)
     BOOST_CHECK_MESSAGE(outBytes == v1Bytes, "block-1 call must read slot=V1");
 }
 
-/// Lifecycle guard: adoptProbeAsPending without a retained probe (no prior verify=false
-/// executeBlock — e.g. a double adopt, or an adopt after an aborted build's reset) must refuse
-/// loudly with "no retained probe", never fabricate a pending block.
 BOOST_AUTO_TEST_CASE(adoptRejectsWithoutRetainedProbe)
 {
     Fixture f;
@@ -2407,10 +2368,6 @@ BOOST_AUTO_TEST_CASE(adoptRejectsWithoutRetainedProbe)
     BOOST_CHECK(executedHeader == nullptr);
 }
 
-/// Deterministic commitment check: adopt must reject a block whose announced header commitments
-/// differ from the retained probe's executed header ("commitment mismatch on field stateRoot"),
-/// never stash a divergent pending. The adopt-side mirror of
-/// VerifyRejectsMismatchedAnnouncedCommitments.
 BOOST_AUTO_TEST_CASE(adoptRejectsCommitmentMismatch)
 {
     Fixture f;
@@ -2421,10 +2378,6 @@ BOOST_AUTO_TEST_CASE(adoptRejectsCommitmentMismatch)
 
     std::vector<bcos::bytes> const rawTxBytes{encodeDepositEnvelope(makeDeposit())};
 
-    // Local probe back-fills the announced header's true commitments, then exactly ONE field is
-    // corrupted. The scheduler probe (verify=false) performs no commitment comparison — it
-    // retains its executed header with the TRUE commitments — so the divergence only surfaces
-    // at adopt. (Mutate before assembly: bcostars setBlockHeader deep-copies the tars inner.)
     auto header = makeHeaderAt(1, bcos::u256(1'000'000'000));
     {
         auto view = f.multiLayerStorage.forkCommitted();

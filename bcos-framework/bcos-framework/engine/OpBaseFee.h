@@ -14,10 +14,7 @@
  *  limitations under the License.
  *
  * @file OpBaseFee.h
- * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee) plus the shared Holocene/
- * Jovian extraData shape gate. EngineServiceImpl aliases decodeEip1559Params and
- * validateOpExtraDataShape from this header (the file-local copies were removed by
- * #5538); calcOpBaseFee and the engine INVALID gates therefore share one rule set.
+ * @brief OP-Stack next-block baseFee (op-geth CalcBaseFee) and extraData shape checks.
  */
 
 #pragma once
@@ -38,10 +35,8 @@ namespace bcos::engine
 inline constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
 inline constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;
 
-/// Holocene/Jovian extraData layout constants (version byte first): 9 bytes = Holocene
-/// 0x00 || denom(u32 BE) || elasticity(u32 BE); 17 bytes = Jovian 0x01 || same ||
-/// minBaseFee(u64 BE). Single home: the engine gate, the shape rule below and the
-/// next-base-fee calc all read from here.
+/// Holocene extraData is 9 bytes (0x00 || denom || elasticity);
+/// Jovian extraData is 17 bytes (0x01 || same || minBaseFee).
 inline constexpr std::size_t c_holoceneExtraDataBytes = 9;
 inline constexpr std::size_t c_jovianExtraDataBytes = 17;
 inline constexpr bcos::byte c_holoceneExtraDataVersion = 0x00;
@@ -62,13 +57,8 @@ inline std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(
     return {denominator, elasticity};
 }
 
-/// Shared OP extraData shape gate (length/version/non-zero pair), single home for the
-/// rule the engine INVALID gates and calcOpBaseFee both enforce. Returns a
-/// context-free message body; callers prefix their own subject (the engine validators
-/// use "executionPayload.extraData ", calcOpBaseFee "OP parent extraData ") so each
-/// surface keeps its established wording. `allowEmpty` is true for payload validation
-/// (empty extraData is legal pre-Holocene); the base-fee calc only sees Holocene+
-/// parents and rejects it with the size message.
+/// Check extraData length, version byte, and non-zero EIP-1559 pair.
+/// Empty extraData is allowed when `allowEmpty` is true (pre-Holocene payloads).
 inline std::optional<std::string> validateOpExtraDataShape(
     const bcos::bytes& extraData, bool allowEmpty = true)
 {
@@ -111,8 +101,6 @@ inline std::optional<std::string> validateOpExtraDataShape(
 /// is only read from exactly-17-byte extraData carrying 0x01.
 inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool parentIsJovian)
 {
-    // extraData() is a bytesConstRef; materialize the (<=17-byte) view so the shared
-    // shape rule and the span reads below share one value.
     bcos::bytes const extra(parent.extraData().begin(), parent.extraData().end());
     if (auto shapeError = validateOpExtraDataShape(extra, /*allowEmpty=*/false))
     {

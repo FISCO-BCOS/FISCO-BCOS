@@ -243,9 +243,7 @@ namespace bcos::executor_v1::opstack
 DERIVE_BCOS_EXCEPTION(OpEvmcRevisionNotConfigured);
 DERIVE_BCOS_EXCEPTION(OpForkRevisionMismatch);
 DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
-/// Block gas pool cannot fit the transaction (evmone GAS_LIMIT_REACHED). Distinct from
-/// OpTxValidationFailed so the engine can treat capacity as skip-for-this-build instead
-/// of pool eviction (op-geth's miner gasPool prefix stop never removes pool txs).
+/// Block gas pool cannot fit the transaction (skip this build, do not evict).
 DERIVE_BCOS_EXCEPTION(OpBlockGasPoolFull);
 
 using bcos::evm::evmstate::SharedErrorSlot;  // Storage2State.h
@@ -918,8 +916,6 @@ public:
             }
             catch (const OpBlockGasPoolFull& e)
             {
-                // Capacity fault (block gas pool full): skip-for-this-build semantics —
-                // the engine must never evict this tx from the pool (F2).
                 throw bcos::evm::OpConsensusError(
                     std::string("OpScheduler: block gas pool full: ") + e.what(),
                     transaction.hash(), /*capacity=*/true);
@@ -1387,19 +1383,10 @@ private:
                                     blockGasLeft);
         if (auto const* err = std::get_if<std::error_code>(&validated))
         {
-            // Block path only: a tx that does not fit the block gas pool is a capacity
-            // fault (F2 skip-not-evict). eth_call/estimateGas (call=true) simulate against
-            // their own throwaway pool — there the pool is a per-call bound, not a block
-            // property, so GAS_LIMIT_REACHED stays an ordinary validation failure
-            // (OpTxValidationFailed, which the call wrapper classifies) and must not
-            // escape as OpBlockGasPoolFull.
+            // On the block path, a full gas pool is a capacity fault, not a poisoned tx.
+            // eth_call / estimateGas keep GAS_LIMIT_REACHED as ordinary validation.
             if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED) && !call)
             {
-                // Block gas pool full: the tx does not fit this block — a capacity fault,
-                // not a poisoned transaction. The engine's gas-aware prefix assembly keeps
-                // this unreachable for sealed txs; if it still fires (forced-tx overflow or
-                // accounting drift), the engine skips the tx for this build and never
-                // removes it from the pool (F2).
                 BOOST_THROW_EXCEPTION(
                     OpBlockGasPoolFull{} << bcos::errinfo_comment(err->message()));
             }

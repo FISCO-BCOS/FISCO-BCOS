@@ -204,8 +204,7 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV2)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 2);
 }
 
-// UnsupportedFork from the FCU/newPayload version gates maps to -38005 — the permanent
-// wrong-version signal op-node does not retry — not the retryable generic -32603.
+// UnsupportedFork maps to -38005, not -32603.
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedWithAttrsUnsupportedForkMapsTo38005)
 {
     mockService.m_state->throwUnsupportedFork = true;
@@ -227,11 +226,7 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedWithAttrsUnsupportedForkMapsTo38005)
         [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
 }
 
-// Typed engine failures must map onto the spec error codes at the endpoint (R78):
-// InvalidPayloadAttributes -> -38003, UnsupportedFork -> -38005,
-// InvalidForkchoiceState -> -38002. Without the mapping every engine exception falls
-// into the dispatcher's catch(...) and answers the generic retryable -32603, which a
-// real op-node misclassifies as a transient server failure.
+// InvalidPayloadAttributes -> -38003, UnsupportedFork -> -38005, InvalidForkchoiceState -> -38002.
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedTypedFailuresMapToSpecErrorCodes)
 {
     Json::Value params(Json::arrayValue);
@@ -246,10 +241,6 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedTypedFailuresMapToSpecErrorCodes)
     attrs["suggestedFeeRecipient"] = "0x5555555555555555555555555555555555555555";
     params.append(attrs);
 
-    // CALL_ENGINE drives the endpoint directly (no dispatcher), so the mapped
-    // JsonRpcException surfaces here exactly as Web3JsonRpcImpl::handleRequest would see
-    // it: the dispatcher's catch(JsonRpcException) formats it into response["error"] with
-    // the same code.
     auto expectCode = [&](Json::Value params, int code) {
         Json::Value response;
         BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
@@ -298,9 +289,6 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 3);
 }
 
-// The one method version this node really does not implement: forkchoiceUpdatedV4 is
-// refused at the RPC endpoint (-38005) before the engine service; OP mode constructs
-// maxEngineVersion=V4, so isForkchoiceVersionSupported would otherwise admit it.
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
 {
     Json::Value params(Json::arrayValue);
@@ -662,8 +650,6 @@ BOOST_AUTO_TEST_CASE(newPayloadV4)
 
 BOOST_AUTO_TEST_CASE(newPayloadV4TypedVersionGateMapsToSpecErrorCode)
 {
-    // A fully shaped V4 request so parseNewPayloadRequest passes and the typed engine
-    // failure (not a -32602 shape error) is what reaches the endpoint's catch ladder.
     Json::Value params(Json::arrayValue);
     params.append(makeV4ExecutionPayloadJson());
     params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes (empty)
