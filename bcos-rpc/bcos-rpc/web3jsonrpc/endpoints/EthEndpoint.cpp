@@ -20,9 +20,11 @@
 
 #include "EthEndpoint.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
@@ -335,14 +337,17 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     }
     auto const ledger = m_nodeService->ledger();
 
-    // System-contract addresses (0x1000 range, etc.) are stored under the "/sys/" prefix by
-    // EVMAccount; user accounts under "/apps/". Picking the right prefix here keeps
-    // eth_getStorageAt consistent with both the genesis alloc import and the v2 executor
-    // (which both go through EVMAccount) — same logic as Ledger::getStorageAt.
-    auto const tablePrefix =
-        precompiled::contains(bcos::precompiled::c_systemTxsAddress, std::string_view{addressStr}) ?
-            ledger::SYS_DIRECTORY::SYS_APPS :
-            ledger::SYS_DIRECTORY::USER_APPS;
+    // Same routing policy as Ledger::getStorageAt, via the shared helper: below
+    // executor_version 2 the c_systemTxsAddress members live under /sys/; at v2 every
+    // address is an ordinary /apps/ account, matching the v2 executor's writes.
+    int executorVersion = 0;
+    if (auto const config = co_await ledger::getSystemConfig(*ledger,
+            std::string_view{magic_enum::enum_name(ledger::SystemConfig::executor_version)});
+        config.has_value())
+    {
+        executorVersion = std::stoi(std::get<0>(*config));
+    }
+    auto const tablePrefix = ledger::account::accountTablePrefix(addressStr, executorVersion);
     auto const contractTableName = getContractTableName(tablePrefix, addressStr);
 
     // The empty-slot value: a 32-byte zero, matching the flat read's padded rendering.

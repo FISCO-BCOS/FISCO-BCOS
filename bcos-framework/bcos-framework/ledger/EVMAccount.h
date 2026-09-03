@@ -1,6 +1,7 @@
 #pragma once
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -21,6 +22,24 @@ struct FromTableName
 {
     explicit FromTableName() = default;
 };
+
+/// Route an account address to its storage table prefix — the single home for the
+/// /sys/ vs /apps/ policy so the v2 executor's writes and the ledger/RPC reads cannot
+/// drift apart. systemAsUser (executor_version >= ETHEREUM_EXECUTOR_VERSION) treats the
+/// c_systemTxsAddress members as ordinary user accounts under /apps/ — in Ethereum they
+/// are; the genesis MPT builder and the OP Storage2State already do the same.
+inline std::string_view accountTablePrefix(std::string_view address, bool systemAsUser)
+{
+    return (!systemAsUser &&
+               precompiled::contains(bcos::precompiled::c_systemTxsAddress, address)) ?
+               ledger::SYS_DIRECTORY::SYS_APPS :
+               ledger::SYS_DIRECTORY::USER_APPS;
+}
+
+inline std::string_view accountTablePrefix(std::string_view address, int executorVersion)
+{
+    return accountTablePrefix(address, executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION);
+}
 
 template <class Storage>
 class EVMAccount
@@ -284,7 +303,7 @@ public:
         std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
         boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), table.data());
         auto const view = std::string_view(table.data(), table.size());
-        if (!treatSystemAsUser && precompiled::contains(bcos::precompiled::c_systemTxsAddress, view))
+        if (accountTablePrefix(view, treatSystemAsUser) == ledger::SYS_DIRECTORY::SYS_APPS)
         {
             m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + table.size());
             m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
@@ -318,7 +337,7 @@ public:
         bool treatSystemAsUser = false)
       : m_storage(storage)
     {
-        if (!treatSystemAsUser && precompiled::contains(bcos::precompiled::c_systemTxsAddress, address))
+        if (accountTablePrefix(address, treatSystemAsUser) == ledger::SYS_DIRECTORY::SYS_APPS)
         {
             m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + address.size());
             m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);

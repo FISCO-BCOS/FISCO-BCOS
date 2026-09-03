@@ -5,7 +5,6 @@
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 
-#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -19,7 +18,10 @@
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/Ledger.h>
+#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-rlp-protocol/EthReceipt.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
@@ -178,8 +180,7 @@ struct RealGlobalStateStorageFixture
         // buildPayload FAILS CLOSED when the revision is absent (it never falls back to
         // the compile-time default), so the missing-revision test passes writeEvmcRevision
         // = false to reach that branch.
-        writeSysConfig(
-            magic_enum::enum_name(ledger::SystemConfig::executor_version),
+        writeSysConfig(magic_enum::enum_name(ledger::SystemConfig::executor_version),
             std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
         if (writeEvmcRevision)
         {
@@ -208,8 +209,7 @@ private:
     void writeSysConfig(std::string_view key, std::string value)
     {
         storage::Entry entry;
-        entry.set(bcos::storage::serialize::encode(
-            ledger::SystemConfigEntry{std::move(value), 0}));
+        entry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), 0}));
         task::syncWait(storage2::writeOne(backendStorage,
             bcos::executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
     }
@@ -266,6 +266,11 @@ struct StubScheduler
 
 struct BloomScheduler
 {
+    // The engine finalizes the returned receipts in place (transactionIndex / logIndex /
+    // cumulativeGasUsed), so keeping them here lets the test pin the header roots against
+    // the exact receipt objects the roots were computed from.
+    std::vector<protocol::TransactionReceipt::Ptr> lastReceipts;
+
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
         const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
@@ -283,7 +288,23 @@ struct BloomScheduler
         receipt2->setLogsBloom({bloom2.data(), bloom2.size()});
         receipt2->calculateHash(hasher);
 
-        co_return std::vector<protocol::TransactionReceipt::Ptr>{receipt1, receipt2};
+        lastReceipts = {receipt1, receipt2};
+        co_return lastReceipts;
+    }
+};
+
+// Returns more receipts than there are transactions: receipt i pairs with transaction i
+// for the receipts trie, so the excess is unpairable and the engine must throw.
+struct OverReceiptScheduler
+{
+    template <class Storage, class Executor>
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
+        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
+    {
+        co_return std::vector<protocol::TransactionReceipt::Ptr>{
+            std::make_shared<bcostars::protocol::TransactionReceiptImpl>(),
+            std::make_shared<bcostars::protocol::TransactionReceiptImpl>(),
+            std::make_shared<bcostars::protocol::TransactionReceiptImpl>()};
     }
 };
 
@@ -553,7 +574,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejected_when_evm_revision_missing)
 {
     MemPoolImpl memPool;
     // executor_version=2 but NO SYSTEM_KEY_EVMC_REVISION row.
-    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_CANCUN, /*writeEvmcRevision=*/false);
+    RealGlobalStateStorageFixture globalStateStorageFixture(
+        EVMC_CANCUN, /*writeEvmcRevision=*/false);
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
         c_initialBlockNumber, c_initialBlockNumber);
@@ -583,13 +605,13 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_empty_withdrawals)
     auto payloadAttributes = makePayloadAttributesV3();
     payloadAttributes.withdrawals = std::vector<WithdrawalV1>{
         WithdrawalV1{.index = 1, .validatorIndex = 2, .amount = 3, .address = Address{}}};
-    auto result = task::syncWait(
-        engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
     BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Invalid));
     BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
-    BOOST_CHECK_NE(result.payloadStatus.validationError->find("non-empty withdrawals"),
-        std::string::npos);
+    BOOST_CHECK_NE(
+        result.payloadStatus.validationError->find("non-empty withdrawals"), std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
@@ -909,9 +931,8 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_rejects_a_v3_committed_entry_without_withdra
     BOOST_CHECK_EQUAL(
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
 
-    BOOST_CHECK_EXCEPTION(
-        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion,
-        [](const IncompatiblePayloadVersion& e) {
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.getPayload(*result.payloadId, 5)),
+        IncompatiblePayloadVersion, [](const IncompatiblePayloadVersion& e) {
             // Pin the REWRITE-path message (the entry was rewritten by the V3 commit and
             // lost its withdrawalsRoot), not just the exception type — a swapped gate that
             // keeps IncompatiblePayloadVersion must still fail (T4).
@@ -1288,6 +1309,61 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     {
         BOOST_CHECK_EQUAL(static_cast<int>(payload->executionPayload.logsBloom[i]), 0);
     }
+
+    // Pin the v2 receipts root against an independently recomputed trie. (txsRoot is
+    // committed to the header only — the Engine API payload carries no field for it.)
+    // The engine finalized the stub's receipts in place: indices stamped, gas accumulated.
+    BOOST_REQUIRE_EQUAL(bloomScheduler.lastReceipts.size(), 2u);
+    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[0]->transactionIndex(), 0u);
+    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[1]->transactionIndex(), 1u);
+    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[0]->cumulativeGasUsed(), "0");
+    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[1]->cumulativeGasUsed(), "0");
+
+    std::vector<bcos::bytes> receiptRlps;
+    for (auto const& receipt : bloomScheduler.lastReceipts)
+    {
+        protocol::EthReceiptData eth;
+        BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, tx->web3TypedTxKind(), eth) == nullptr);
+        protocol::EthReceipt ethReceipt(std::move(eth));
+        bcos::bytes encoded;
+        BOOST_REQUIRE(ethReceipt.rlpEncode(encoded) == nullptr);
+        receiptRlps.push_back(std::move(encoded));
+    }
+    std::vector<bcos::bytesConstRef> receiptRefs;
+    for (auto const& rlp : receiptRlps)
+    {
+        receiptRefs.emplace_back(bcos::ref(rlp));
+    }
+    BOOST_CHECK_EQUAL(
+        payload->executionPayload.receiptsRoot, ledger::mpt::calculateReceiptsRoot(receiptRefs));
+}
+
+// Receipt i commits the EIP-2718 type of transaction i: a scheduler that returns MORE
+// receipts than executed transactions is unpairable, and the engine must throw instead of
+// reading past the transaction list.
+BOOST_AUTO_TEST_CASE(build_payload_rejects_more_receipts_than_transactions)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("bebebebebebebebebebe", 20);
+    auto tx = makeWeb3Tx(sender, 0);
+    auto tx2 = makeWeb3Tx(sender, 1);
+    memPool.add(std::vector{tx, tx2});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto payloadAttributes = makePayloadAttributesV2();
+
+    OverReceiptScheduler overReceiptScheduler;
+    auto engineService =
+        EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, OverReceiptScheduler>(
+            memPool, globalStateStorageFixture.storage, sharedStubExecutor(), overReceiptScheduler,
+            testBlockFactory());
+
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2)),
+        std::runtime_error);
 }
 
 // ---- B4: Karst method surface (forkchoiceUpdatedV3 -> getPayloadV5 -> newPayloadV4) ----
@@ -1500,18 +1576,16 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
     auto result =
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
     BOOST_REQUIRE(result.payloadId.has_value());
-    BOOST_CHECK_EXCEPTION(
-        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion,
-        [](const IncompatiblePayloadVersion& e) {
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.getPayload(*result.payloadId, 5)),
+        IncompatiblePayloadVersion, [](const IncompatiblePayloadVersion& e) {
             return std::string(e.what()).find("incompatible with requested method version") !=
                    std::string::npos;
         });
     // getPayloadV4 has the same window: op-geth's GetPayloadV4 also admits only
     // PayloadV3 builds, and the V4 response shape needs the same three fields a V2 build
     // does not have.
-    BOOST_CHECK_EXCEPTION(
-        task::syncWait(engineService.getPayload(*result.payloadId, 4)), IncompatiblePayloadVersion,
-        [](const IncompatiblePayloadVersion& e) {
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.getPayload(*result.payloadId, 4)),
+        IncompatiblePayloadVersion, [](const IncompatiblePayloadVersion& e) {
             return std::string(e.what()).find("incompatible with requested method version") !=
                    std::string::npos;
         });
@@ -1619,8 +1693,7 @@ static bcos::protocol::BlockHeader::Ptr makeValidCancunHeader(
     bcos::protocol::BlockFactory::Ptr blockFactory, bcos::crypto::HashType parentHash)
 {
     auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
-    header->setParentInfo(bcos::protocol::ParentInfo{
-        .blockNumber = 9, .blockHash = parentHash});
+    header->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 9, .blockHash = parentHash});
     header->setNumber(10);
     // Internal BlockHeader timestamps are milliseconds: the whole-second value × 1000.
     header->setTimestamp(1700000000 * 1000LL);
@@ -1684,8 +1757,8 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderFillsEthFieldsAndHash)
     payload.blobGasUsed = bcos::u256(0);
     payload.excessBlobGas = bcos::u256(0);
 
-    auto beaconRoot = bcos::h256(
-        "3333333333333333333333333333333333333333333333333333333333333333");
+    auto beaconRoot =
+        bcos::h256("3333333333333333333333333333333333333333333333333333333333333333");
     bcos::engine::detail::finalizeEthBlockHeader(
         *header, payload, beaconRoot, bcos::protocol::EthBlockVersion::CANCUN);
 
@@ -1750,8 +1823,8 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderVersionGatesFields)
     // V3/CANCUN: everything present.
     {
         auto header = makeValidCancunHeader(blockFactory, parentHash);
-        auto beaconRoot = bcos::h256(
-            "3333333333333333333333333333333333333333333333333333333333333333");
+        auto beaconRoot =
+            bcos::h256("3333333333333333333333333333333333333333333333333333333333333333");
         payload.blobGasUsed = bcos::u256(0);
         payload.excessBlobGas = bcos::u256(0);
         bcos::engine::detail::finalizeEthBlockHeader(
@@ -1767,12 +1840,12 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderVersionGatesFields)
     // (regression: PRAGUE previously produced a header that failed validateHeader).
     {
         auto header = makeValidCancunHeader(blockFactory, parentHash);
-        auto beaconRoot = bcos::h256(
-            "3333333333333333333333333333333333333333333333333333333333333333");
+        auto beaconRoot =
+            bcos::h256("3333333333333333333333333333333333333333333333333333333333333333");
         payload.blobGasUsed = bcos::u256(0);
         payload.excessBlobGas = bcos::u256(0);
-        BOOST_CHECK_NO_THROW(bcos::engine::detail::finalizeEthBlockHeader(*header, payload,
-            beaconRoot, bcos::protocol::EthBlockVersion::PRAGUE));
+        BOOST_CHECK_NO_THROW(bcos::engine::detail::finalizeEthBlockHeader(
+            *header, payload, beaconRoot, bcos::protocol::EthBlockVersion::PRAGUE));
         BOOST_CHECK(header->ethBlockVersion() == bcos::protocol::EthBlockVersion::PRAGUE);
         BOOST_REQUIRE(header->requestsHash().has_value());
         BOOST_CHECK_EQUAL(header->requestsHash()->hex(),
@@ -1829,8 +1902,8 @@ BOOST_AUTO_TEST_CASE(buildPayloadEmptyBlockInjectsRlpHash)
     header->setStateRoot(executionPayload.stateRoot);
     header->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
     header->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
-    header->setLogsBloom(bcos::bytesConstRef(
-        executionPayload.logsBloom.data(), executionPayload.logsBloom.size()));
+    header->setLogsBloom(
+        bcos::bytesConstRef(executionPayload.logsBloom.data(), executionPayload.logsBloom.size()));
     header->setBaseFee(executionPayload.baseFeePerGas);
     header->setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
     header->setBlobGasUsed(executionPayload.blobGasUsed.value_or(bcos::u256(0)));
@@ -1842,8 +1915,7 @@ BOOST_AUTO_TEST_CASE(buildPayloadEmptyBlockInjectsRlpHash)
     bcos::protocol::EthBlockHeader ethHeader(*header);
     bcos::bytes rlp;
     ethHeader.rlpEncode(rlp);
-    BOOST_CHECK_EQUAL(
-        blockHash.hex(), bcos::crypto::keccak256Hash(bcos::ref(rlp)).hex());
+    BOOST_CHECK_EQUAL(blockHash.hex(), bcos::crypto::keccak256Hash(bcos::ref(rlp)).hex());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

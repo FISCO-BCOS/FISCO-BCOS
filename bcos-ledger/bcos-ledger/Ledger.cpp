@@ -71,13 +71,13 @@
 #include <exception>
 #include <future>
 #include <iterator>
+#include <list>
 #include <memory>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/view/chunk.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/take.hpp>
 #include <utility>
-#include <list>
 
 using namespace bcos;
 using namespace bcos::ledger;
@@ -142,19 +142,22 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 {
     // TODO)): blockNumber is not used nowadays
     std::ignore = _blockNumber;
-    // System-contract addresses (0x1000 range, etc.) are stored under the
-    // "/sys/" prefix by EVMAccount; user accounts under "/apps/". Picking the
-    // right prefix here keeps eth_getBalance / eth_getStorageAt /
-    // eth_getTransactionCount consistent with both the genesis alloc import and
-    // the v2 executor (which both go through EVMAccount). Without this, reads
-    // for system-range accounts hit the wrong table and return empty (e.g.
-    // EEST static VMTests that call 0x1000 saw balance=0 / storage=0).
-    auto const tablePrefix =
-        precompiled::contains(bcos::precompiled::c_systemTxsAddress, _address) ?
-            SYS_DIRECTORY::SYS_APPS :
-            SYS_DIRECTORY::USER_APPS;
-    auto const contractTableName = getContractTableName(tablePrefix, _address);
+    // Route through the shared policy (ledger::account::accountTablePrefix): below
+    // executor_version 2 the c_systemTxsAddress members live under /sys/; at v2 every
+    // address is an ordinary /apps/ account, matching the v2 executor's writes
+    // (EthereumState) and the genesis alloc import. Without this, reads for
+    // system-range accounts hit the wrong table and return empty (e.g. EEST static
+    // VMTests that call 0x1000 saw balance=0 / storage=0).
+    int executorVersion = 0;
     auto const stateStorage = getStateStorage();
+    if (auto const config = co_await getSystemConfig(
+            *stateStorage, std::string_view{magic_enum::enum_name(SystemConfig::executor_version)});
+        config.has_value())
+    {
+        executorVersion = std::stoi(std::get<0>(*config));
+    }
+    auto const tablePrefix = account::accountTablePrefix(_address, executorVersion);
+    auto const contractTableName = getContractTableName(tablePrefix, _address);
     co_return co_await bcos::storage2::readOne(
         *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
 }
@@ -1876,8 +1879,7 @@ static void verifyL2FeatureFlagsSlot(
         // slot = keccak256(utf8("feature_flags") || be32(101))
         bcos::bytes slotInput;
         slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
-        slotInput.insert(
-            slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
+        slotInput.insert(slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
         bcos::bytes baseSlotBytes(32, 0);
         baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
         slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());

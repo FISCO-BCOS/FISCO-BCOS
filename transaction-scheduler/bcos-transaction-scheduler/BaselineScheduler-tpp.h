@@ -44,6 +44,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-ledger/mpt/EthTrieRoots.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
@@ -168,18 +169,10 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
         },
         [&]() { receiptRoot = calculateReceiptRoot(receipts, block, hashImpl); },
         [&]() {
-            size_t logIndex = 0;
             block.clearReceipts();
-            for (auto&& [index, receipt] : ::ranges::views::enumerate(receipts))
+            totalGasUsed += ledger::mpt::finalizeReceipts(receipts);
+            for (auto&& receipt : receipts)
             {
-                receipt->setTransactionIndex(index);
-                receipt->setLogIndex(logIndex);
-                auto logBloom = getLogsBloom(receipt->logEntries());
-                receipt->setLogsBloom({logBloom.data(), logBloom.size()});
-                logIndex += receipt->logEntries().size();
-                totalGasUsed += receipt->gasUsed();
-                receipt->setCumulativeGasUsed(totalGasUsed.str());
-
                 block.appendReceipt(receipt);
             }
         },

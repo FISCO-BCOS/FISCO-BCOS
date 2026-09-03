@@ -33,12 +33,12 @@
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <boost/throw_exception.hpp>
-#include <memory>
-#include <stdexcept>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <boost/throw_exception.hpp>
 #include <iterator>
+#include <memory>
 #include <range/v3/algorithm/move.hpp>
+#include <stdexcept>
 
 namespace bcos::rpc
 {
@@ -182,16 +182,11 @@ std::shared_ptr<bcostars::protocol::TransactionImpl> decodeWeb3RawTransaction(
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
 
-    // Canonical tx hash (keccak of the full signed encoding), stored for the ledger /
-    // receipt paths exactly as eth_sendRawTransaction does.
-    auto txHash = web3Tx.txHash();
-    tx->mutableInner().extraTransactionHash.assign(txHash.begin(), txHash.end());
-
     // Restore the sender from the signature so the executor can validate the nonce /
     // balance without a separate recovery pass.
     auto senderHex = web3Tx.sender();
-    bcos::bytes senderBytes = bcos::fromHex(
-        senderHex.rfind("0x", 0) == 0 ? senderHex.substr(2) : senderHex);
+    bcos::bytes senderBytes =
+        bcos::fromHex(senderHex.rfind("0x", 0) == 0 ? senderHex.substr(2) : senderHex);
     tx->forceSender(senderBytes);
     tx->calculateHash(hashImpl);
     return tx;

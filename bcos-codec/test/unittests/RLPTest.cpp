@@ -194,6 +194,30 @@ BOOST_AUTO_TEST_CASE(uint256Encode)
         "9c0100020003000400050006000700080009000a0b4b000c000d000e01");
 }
 
+BOOST_AUTO_TEST_CASE(uint256EncodeAfterShrinkReuse)
+{
+    // Regression: boost's cpp_int copies only the significant limbs on assignment, so a u256
+    // object that previously held a wider value keeps STALE high limbs after a narrower value
+    // is assigned. length() must scan only the valid limbs (backend().size()), otherwise the
+    // RLP header overstates the payload length and the encoded bytes no longer round-trip.
+    u256 v("0x0100020003000400050006000700080009000A0B4B000C000D000E01");
+    v = u256(0x14u);
+    BOOST_CHECK_EQUAL(bcos::codec::rlp::length(v), 1u);
+    bcos::bytes encoded;
+    bcos::codec::rlp::encode(encoded, v);
+    BOOST_CHECK_EQUAL(encoded.size(), bcos::codec::rlp::length(v));
+
+    // A list containing the shrunken value must decode back to the same value.
+    bcos::bytes listEncoded;
+    bcos::codec::rlp::encode(listEncoded, std::vector<u256>{v});
+    bcos::bytesRef input(listEncoded.data(), listEncoded.size());
+    std::vector<u256> decoded;
+    auto err = bcos::codec::rlp::decode(input, decoded);
+    BOOST_CHECK(err == nullptr);
+    BOOST_REQUIRE_EQUAL(decoded.size(), 1u);
+    BOOST_CHECK_EQUAL(decoded.front(), u256(0x14u));
+}
+
 BOOST_AUTO_TEST_CASE(vectorsEncode)
 {
     BOOST_CHECK_EQUAL(staticEncode(std::vector<uint64_t>{}), "c0");

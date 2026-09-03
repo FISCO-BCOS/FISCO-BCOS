@@ -21,6 +21,7 @@
 #pragma once
 
 #include "HashBuilder.h"
+#include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
 #include <range/v3/range.hpp>
@@ -74,6 +75,34 @@ bcos::Bloom calculateLogsBloom(Blooms&& blooms)
         bcos::orBloom(result, bloom);
     }
     return result;
+}
+
+/// Finalize executed receipts for commit: stamp transactionIndex / logIndex, fill a logsBloom
+/// the producer left empty (BaselineScheduler's own receipt phase always leaves it empty; an
+/// already-filled bloom is kept), and accumulate cumulativeGasUsed. Shared by
+/// BaselineScheduler::finishExecute and the engine's buildPayload so the two cannot drift —
+/// cumulativeGasUsed and the bloom feed the receipts trie, a consensus field.
+/// @return The block's totalGasUsed (the last receipt's cumulativeGasUsed).
+template <::ranges::input_range Receipts>
+bcos::u256 finalizeReceipts(Receipts& receipts)
+{
+    bcos::u256 totalGasUsed;
+    size_t transactionIndex = 0;
+    size_t logIndex = 0;
+    for (auto const& receipt : receipts)
+    {
+        receipt->setTransactionIndex(transactionIndex++);
+        receipt->setLogIndex(logIndex);
+        if (receipt->logsBloom().empty())
+        {
+            auto logBloom = bcos::getLogsBloom(receipt->logEntries());
+            receipt->setLogsBloom({logBloom.data(), logBloom.size()});
+        }
+        logIndex += receipt->logEntries().size();
+        totalGasUsed += receipt->gasUsed();
+        receipt->setCumulativeGasUsed(totalGasUsed.str());
+    }
+    return totalGasUsed;
 }
 
 }  // namespace bcos::ledger::mpt
