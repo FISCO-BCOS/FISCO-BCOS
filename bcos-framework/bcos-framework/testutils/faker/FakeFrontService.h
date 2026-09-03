@@ -261,13 +261,18 @@ public:
             _id, _moduleId, std::move(_nodeID), _responseData, _receiveCallback);
     }
 
-    void asyncGetGroupNodeInfo(
-        const std::string& _groupID, GetGroupNodeInfoFunc _getGroupNodeInfoFunc) override
-    {}
-    void asyncGetPeers(
-        std::function<void(Error::Ptr, gateway::GatewayInfo::Ptr, gateway::GatewayInfosPtr)>
-            _callback) override
-    {}
+    task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo(
+        const std::string& /*_groupID*/) override
+    {
+        co_return std::make_tuple(
+            Error::Ptr(nullptr), bcos::gateway::GroupNodeInfo::Ptr(nullptr));
+    }
+    task::Task<std::tuple<Error::Ptr, gateway::GatewayInfo::Ptr, gateway::GatewayInfosPtr>>
+    getPeers() override
+    {
+        co_return std::make_tuple(Error::Ptr(nullptr), gateway::GatewayInfo::Ptr(nullptr),
+            gateway::GatewayInfosPtr(nullptr));
+    }
     task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override
@@ -277,12 +282,16 @@ public:
     void asyncNotifyGroupInfo(
         bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(Error::Ptr&&)> function) override
     {}
-    void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc) override
-    {}
-    void asyncSendBroadcastMessageByTopic(
-        const std::string& _topic, bcos::bytesConstRef _data) override
-    {}
+    task::Task<std::tuple<Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
+        const std::string& /*_topic*/, bcos::bytesConstRef /*_data*/) override
+    {
+        co_return std::make_tuple(Error::Ptr(nullptr), int16_t(0), bcos::bytes{});
+    }
+    task::Task<void> sendBroadcastMessageByTopic(
+        const std::string& /*_topic*/, bcos::bytesConstRef /*_data*/) override
+    {
+        co_return;
+    }
     void asyncSubscribeTopic(const std::string& _clientID, const std::string& _topicInfo,
         std::function<void(Error::Ptr&&)> _callback) override
     {}

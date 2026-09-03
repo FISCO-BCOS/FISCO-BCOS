@@ -27,6 +27,7 @@
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <memory>
@@ -331,15 +332,11 @@ BOOST_AUTO_TEST_CASE(testAMOPMock)
     fakeit::Mock<bcos::amop::AMOPImpl> mockAMOP;
 
     // Setup mock behaviors for AMOP operations using lambda pattern from testBaselineScheduler
-    fakeit::When(Method(mockAMOP, asyncSendMessageByTopic))
-        .AlwaysDo([](const std::string& /*topic*/, bcos::bytesConstRef /*data*/,
-                      const std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesConstRef)>&
-                          callback) {
+    fakeit::When(Method(mockAMOP, sendMessageByTopic))
+        .AlwaysDo([](const std::string& /*topic*/, bcos::bytesConstRef /*data*/)
+                      -> bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> {
             // Simulate successful message send
-            if (callback)
-            {
-                callback(nullptr, 0, bcos::bytesConstRef{});
-            }
+            co_return std::make_tuple(bcos::Error::Ptr(nullptr), int16_t(0), bcos::bytes{});
         });
 
     fakeit::When(Method(mockAMOP, asyncSubscribeTopic))
@@ -359,16 +356,12 @@ BOOST_AUTO_TEST_CASE(testAMOPMock)
     std::string testClientID = "testClient";
     bcos::bytes testData = {0x1, 0x2, 0x3};
 
-    // Test message sending with callback
-    bool callbackInvoked = false;
-    amopRef.asyncSendMessageByTopic(testTopic,
-        bcos::bytesConstRef(testData.data(), testData.size()),
-        [&callbackInvoked](
-            const bcos::Error::Ptr& /*error*/, int16_t code, bcos::bytesConstRef /*response*/) {
-            callbackInvoked = true;
-            BOOST_CHECK_EQUAL(code, 0);
-        });
-    BOOST_CHECK(callbackInvoked);
+    // Test message sending
+    auto [sendError, sendCode, sendResponse] = bcos::task::syncWait(amopRef.sendMessageByTopic(
+        testTopic, bcos::bytesConstRef(testData.data(), testData.size())));
+    BOOST_CHECK(!sendError);
+    BOOST_CHECK_EQUAL(sendCode, 0);
+    BOOST_CHECK(sendResponse.empty());
 
     // Test topic subscription
     bool subscriptionCallbackInvoked = false;
@@ -379,7 +372,7 @@ BOOST_AUTO_TEST_CASE(testAMOPMock)
     BOOST_CHECK(subscriptionCallbackInvoked);
 
     // Verify methods were called
-    fakeit::Verify(Method(mockAMOP, asyncSendMessageByTopic)).Exactly(1);
+    fakeit::Verify(Method(mockAMOP, sendMessageByTopic)).Exactly(1);
     fakeit::Verify(Method(mockAMOP, asyncSubscribeTopic)).Exactly(1);
 }
 
@@ -402,27 +395,17 @@ BOOST_AUTO_TEST_CASE(testComplexGatewayScenario)
     fakeit::When(Method(mockGatewayNodeManager, unregisterNode)).AlwaysReturn(true);
 
     // Setup AMOP with multiple different behaviors for different calls
-    fakeit::When(Method(mockAMOP, asyncSendMessageByTopic))
-        .AlwaysDo([](const std::string& topic, bcos::bytesConstRef /*data*/,
-                      const std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesConstRef)>&
-                          callback) {
+    fakeit::When(Method(mockAMOP, sendMessageByTopic))
+        .AlwaysDo([](const std::string& topic, bcos::bytesConstRef /*data*/)
+                      -> bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> {
             // Simulate different responses based on topic
-            if (topic == "successTopic")
-            {
-                if (callback)
-                {
-                    callback(nullptr, 0, bcos::bytesConstRef{});
-                }
-            }
-            else if (topic == "failTopic")
+            if (topic == "failTopic")
             {
                 auto error = std::make_shared<bcos::Error>(
                     bcos::Error::buildError("MockTest", -1, "Mock error for test"));
-                if (callback)
-                {
-                    callback(std::move(error), -1, bcos::bytesConstRef{});
-                }
+                co_return std::make_tuple(std::move(error), int16_t(-1), bcos::bytes{});
             }
+            co_return std::make_tuple(bcos::Error::Ptr(nullptr), int16_t(0), bcos::bytes{});
         });
 
     // Test the complex scenario
@@ -451,28 +434,19 @@ BOOST_AUTO_TEST_CASE(testComplexGatewayScenario)
     bcos::bytes testData = {0x1, 0x2, 0x3};
 
     // Test successful case
-    bool successCallbackInvoked = false;
-    amopRef.asyncSendMessageByTopic("successTopic",
-        bcos::bytesConstRef(testData.data(), testData.size()),
-        [&successCallbackInvoked](
-            const bcos::Error::Ptr& error, int16_t code, bcos::bytesConstRef /*response*/) {
-            successCallbackInvoked = true;
-            BOOST_CHECK(!error);
-            BOOST_CHECK_EQUAL(code, 0);
-        });
-    BOOST_CHECK(successCallbackInvoked);
+    auto [successError, successCode, successResponse] =
+        bcos::task::syncWait(amopRef.sendMessageByTopic(
+            "successTopic", bcos::bytesConstRef(testData.data(), testData.size())));
+    BOOST_CHECK(!successError);
+    BOOST_CHECK_EQUAL(successCode, 0);
+    BOOST_CHECK(successResponse.empty());
 
     // Test failure case
-    bool failureCallbackInvoked = false;
-    amopRef.asyncSendMessageByTopic("failTopic",
-        bcos::bytesConstRef(testData.data(), testData.size()),
-        [&failureCallbackInvoked](
-            const bcos::Error::Ptr& error, int16_t code, bcos::bytesConstRef /*response*/) {
-            failureCallbackInvoked = true;
-            BOOST_CHECK(error != nullptr);
-            BOOST_CHECK_EQUAL(code, -1);
-        });
-    BOOST_CHECK(failureCallbackInvoked);
+    auto [failError, failCode, failResponse] = bcos::task::syncWait(amopRef.sendMessageByTopic(
+        "failTopic", bcos::bytesConstRef(testData.data(), testData.size())));
+    BOOST_CHECK(failError != nullptr);
+    BOOST_CHECK_EQUAL(failCode, -1);
+    BOOST_CHECK(failResponse.empty());
 
     // Clean up - unregister nodes
     bool unreg1 = nodeManagerRef.unregisterNode("group1", nodeID1->hex());
@@ -485,7 +459,7 @@ BOOST_AUTO_TEST_CASE(testComplexGatewayScenario)
     fakeit::Verify(Method(mockP2PInterface, start)).Exactly(1);
     fakeit::Verify(Method(mockGatewayNodeManager, registerNode)).Exactly(2);
     fakeit::Verify(Method(mockGatewayNodeManager, unregisterNode)).Exactly(2);
-    fakeit::Verify(Method(mockAMOP, asyncSendMessageByTopic)).Exactly(2);
+    fakeit::Verify(Method(mockAMOP, sendMessageByTopic)).Exactly(2);
 }
 
 BOOST_AUTO_TEST_CASE(testErrorHandlingScenarios)
@@ -495,56 +469,40 @@ BOOST_AUTO_TEST_CASE(testErrorHandlingScenarios)
 
     // Setup error scenarios
     int callCount = 0;
-    fakeit::When(Method(mockAMOP, asyncSendMessageByTopic))
-        .AlwaysDo([&callCount](const std::string& /*topic*/, bcos::bytesConstRef /*data*/,
-                      const std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesConstRef)>&
-                          callback) {
+    fakeit::When(Method(mockAMOP, sendMessageByTopic))
+        .AlwaysDo([&callCount](const std::string& /*topic*/, bcos::bytesConstRef /*data*/)
+                      -> bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> {
             ++callCount;
             if (callCount == 1)
             {
                 // First call succeeds
-                if (callback)
-                {
-                    callback(nullptr, 0, bcos::bytesConstRef{});
-                }
+                co_return std::make_tuple(bcos::Error::Ptr(nullptr), int16_t(0), bcos::bytes{});
             }
-            else
-            {
-                // Subsequent calls fail
-                auto error = std::make_shared<bcos::Error>(
-                    bcos::Error::buildError("MockTest", -2, "Network timeout"));
-                if (callback)
-                {
-                    callback(std::move(error), -2, bcos::bytesConstRef{});
-                }
-            }
+            // Subsequent calls fail
+            auto error = std::make_shared<bcos::Error>(
+                bcos::Error::buildError("MockTest", -2, "Network timeout"));
+            co_return std::make_tuple(std::move(error), int16_t(-2), bcos::bytes{});
         });
 
     bcos::amop::AMOPImpl& amopRef = mockAMOP.get();
     bcos::bytes testData = {0x1, 0x2, 0x3};
 
     // First call should succeed
-    bool firstCallSucceeded = false;
-    amopRef.asyncSendMessageByTopic("testTopic",
-        bcos::bytesConstRef(testData.data(), testData.size()),
-        [&firstCallSucceeded](
-            const bcos::Error::Ptr& error, int16_t code, bcos::bytesConstRef /*response*/) {
-            firstCallSucceeded = (error == nullptr && code == 0);
-        });
-    BOOST_CHECK(firstCallSucceeded);
+    auto [firstError, firstCode, firstResponse] = bcos::task::syncWait(
+        amopRef.sendMessageByTopic("testTopic", bcos::bytesConstRef(testData.data(),
+            testData.size())));
+    BOOST_CHECK(firstError == nullptr && firstCode == 0);
+    BOOST_CHECK(firstResponse.empty());
 
     // Second call should fail
-    bool secondCallFailed = false;
-    amopRef.asyncSendMessageByTopic("testTopic",
-        bcos::bytesConstRef(testData.data(), testData.size()),
-        [&secondCallFailed](
-            const bcos::Error::Ptr& error, int16_t code, bcos::bytesConstRef /*response*/) {
-            secondCallFailed = (error != nullptr && code == -2);
-        });
-    BOOST_CHECK(secondCallFailed);
+    auto [secondError, secondCode, secondResponse] = bcos::task::syncWait(
+        amopRef.sendMessageByTopic("testTopic", bcos::bytesConstRef(testData.data(),
+            testData.size())));
+    BOOST_CHECK(secondError != nullptr && secondCode == -2);
+    BOOST_CHECK(secondResponse.empty());
 
     // Verify both calls were made
-    fakeit::Verify(Method(mockAMOP, asyncSendMessageByTopic)).Exactly(2);
+    fakeit::Verify(Method(mockAMOP, sendMessageByTopic)).Exactly(2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
