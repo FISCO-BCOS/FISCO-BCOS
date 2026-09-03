@@ -61,8 +61,12 @@ public:
     using Ptr = std::shared_ptr<LedgerConfigState>;
 
     /// Starts with an empty configuration so readers never see null before the first publish.
-    /// Until the first set(), gasLimit() is LedgerConfig's compile-time default rather than the
-    /// chain's tx_gas_limit -- looser, never stricter, so no check can reject on a stale value.
+    /// Empty is not the chain's configuration, and it is not uniformly looser either: no EVM
+    /// revision is declared, which admission reads as "stand down", and gasLimit() is
+    /// LedgerConfig's compile-time default rather than the chain's tx_gas_limit -- but chainId()
+    /// is unset, which the chain-id check refuses. So the owner of a holder publishes a real
+    /// configuration at startup and then after every commit; the empty state is for
+    /// construction, not for serving traffic.
     LedgerConfigState() : m_config(std::make_shared<LedgerConfig>()) {}
     /// A null argument is replaced by an empty configuration rather than stored: the "never null"
     /// guarantee below has to hold at every entrance, and set() already enforces it. Storing null

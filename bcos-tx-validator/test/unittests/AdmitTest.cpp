@@ -212,8 +212,10 @@ struct AdmitHarness
 
     AdmitHarness()
     {
-        ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, std::to_string(kChainId));
-        ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0");  // free gas by default
+        // The snapshot is the only chain configuration admission reads. The fake ledger's
+        // SYS_CONFIG map stays empty on purpose (see admissionReadsNoSystemConfig).
+        ledgerConfig->setChainId(evmc::bytes32{kChainId});
+        ledgerConfig->setGasPrice({"0", 0});  // free gas by default
         ledgerConfig->setBlockNumber(100);
         ledgerConfig->setGasLimit({3000000000ULL, 0});
         ledgerConfig->setEVMCRevision(EVMC_PRAGUE);
@@ -390,7 +392,7 @@ BOOST_AUTO_TEST_CASE(nonceBeyondTheQueueWindowIsRejected)
 BOOST_AUTO_TEST_CASE(feeCapBelowBaseFeeIsRejectedWithItsOwnCode)
 {
     AdmitHarness harness;
-    harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0xfffffffffff");
+    harness.ledgerConfig->setGasPrice({"0xfffffffffff", 0});
     auto tx = admitTx({.maxFeePerGas = 1000, .maxPriorityFeePerGas = 1});
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::FeeCapLessThanBaseFee);
 }
@@ -417,7 +419,7 @@ BOOST_AUTO_TEST_CASE(gasLimitAboveTheChainCapIsRejected)
 BOOST_AUTO_TEST_CASE(insufficientBalanceIsRejected)
 {
     AdmitHarness harness;
-    harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "1");
+    harness.ledgerConfig->setGasPrice({"1", 0});
     harness.account.balance = 1;
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
@@ -462,7 +464,7 @@ BOOST_AUTO_TEST_CASE(feeArithmeticDoesNotWrapAt256Bits)
     // Asserting on the arithmetic alone (which an earlier version of this case did) passes
     // whatever checkBalance is implemented in, so it pins nothing.
     AdmitHarness harness;
-    harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0x1");  // gas is charged
+    harness.ledgerConfig->setGasPrice({"0x1", 0});  // gas is charged
 
     constexpr uint64_t gasLimit = 100000;
     const auto gasPrice = std::numeric_limits<u256>::max();
@@ -483,20 +485,44 @@ BOOST_AUTO_TEST_CASE(feeArithmeticDoesNotWrapAt256Bits)
 BOOST_AUTO_TEST_CASE(wrongChainIdIsRejected)
 {
     AdmitHarness harness;
-    harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "9999");
+    harness.ledgerConfig->setChainId(evmc::bytes32{9999});
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::InvalidChainId);
 }
 
 // Fail closed. Skipping the check when the chain has no web3_chain_id would accept transactions
-// signed for any chain -- today EthEndpoint does exactly that.
+// signed for any chain -- today EthEndpoint does exactly that. A holder nothing has published
+// to is the one snapshot without a chain id (getLedgerConfig always sets one): the state between
+// a node's construction and its first publish. It refuses rather than skips.
 BOOST_AUTO_TEST_CASE(missingChainIdConfigRejectsRatherThanSkips)
 {
     AdmitHarness harness;
-    harness.ledger = std::make_shared<FakeLedger>();
-    harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0");
+    harness.ledgerConfigState = std::make_shared<ledger::LedgerConfigState>();
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::InvalidChainId);
+}
+
+/// A ledger whose SYS_CONFIG reads fail outright.
+struct SystemConfigUnreadableLedger : FakeLedger
+{
+    void asyncGetSystemConfigByKey(std::string_view const&,
+        std::function<void(Error::Ptr, std::string, protocol::BlockNumber)>) override
+    {
+        throw std::runtime_error("SYS_CONFIG must not be read at admission");
+    }
+};
+
+// The snapshot is the only source of chain configuration: the chain id and the base fee come
+// from the LedgerConfig that getLedgerConfig built, not from a per-transaction getSystemConfig.
+// Two storage round trips fewer on the hot path, and one source of truth instead of two -- this
+// case is what keeps a later check from quietly bringing the second one back.
+BOOST_AUTO_TEST_CASE(admissionReadsNoSystemConfig)
+{
+    AdmitHarness harness;
+    harness.ledger = std::make_shared<SystemConfigUnreadableLedger>();
+    harness.web3NonceChecker = std::make_shared<CountingWeb3NonceChecker>(harness.ledger);
+    auto tx = admitTx();
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
 }
 
 // ------------------------------------------------------------ contexts and policy
@@ -525,7 +551,7 @@ BOOST_AUTO_TEST_CASE(proposalVerificationReadsNoAccountState)
 BOOST_AUTO_TEST_CASE(proposalVerificationRejectsAForeignChainId)
 {
     AdmitHarness harness;
-    harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "9999");
+    harness.ledgerConfig->setChainId(evmc::bytes32{9999});
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx, AdmissionContext::ProposalVerification) ==
                 TransactionStatus::InvalidChainId);
@@ -554,7 +580,7 @@ BOOST_AUTO_TEST_CASE(poolAdmissionReadsTheFullAccountState)
 BOOST_AUTO_TEST_CASE(proposalVerificationIgnoresLocalBalance)
 {
     AdmitHarness harness;
-    harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "1");
+    harness.ledgerConfig->setGasPrice({"1", 0});
     harness.account.balance = 0;
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
@@ -568,14 +594,14 @@ BOOST_AUTO_TEST_CASE(proposalVerificationIgnoresLocalBalance)
 BOOST_AUTO_TEST_CASE(eestReplaySkipsBalanceAndNonceWindowOnly)
 {
     AdmitHarness harness;
-    harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "1");
+    harness.ledgerConfig->setGasPrice({"1", 0});
     harness.account.balance = 0;
     harness.account.nonce = u256(999999);
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx, AdmissionContext::EESTReplay) == TransactionStatus::None);
 
     // The chainId check is NOT relaxed.
-    harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "9999");
+    harness.ledgerConfig->setChainId(evmc::bytes32{9999});
     auto wrongChain = admitTx();
     BOOST_CHECK(harness.run(*wrongChain, AdmissionContext::EESTReplay) ==
                 TransactionStatus::InvalidChainId);
@@ -587,7 +613,7 @@ BOOST_AUTO_TEST_CASE(eestReplaySkipsBalanceAndNonceWindowOnly)
 BOOST_AUTO_TEST_CASE(disabledSignaturePolicySkipsSenderDependentChecks)
 {
     AdmitHarness harness;
-    harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "1");
+    harness.ledgerConfig->setGasPrice({"1", 0});
     harness.account.balance = 0;
     harness.account.nonce = u256(999999);
     auto tx = admitTx();
@@ -596,7 +622,7 @@ BOOST_AUTO_TEST_CASE(disabledSignaturePolicySkipsSenderDependentChecks)
     BOOST_CHECK_EQUAL(harness.accountStateReads(), 0);
 
     // Checks that need no sender still run.
-    harness.ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "9999");
+    harness.ledgerConfig->setChainId(evmc::bytes32{9999});
     auto wrongChain = admitTx();
     BOOST_CHECK(harness.run(*wrongChain, AdmissionContext::PoolAdmission,
                     SignaturePolicy::Disabled) == TransactionStatus::InvalidChainId);

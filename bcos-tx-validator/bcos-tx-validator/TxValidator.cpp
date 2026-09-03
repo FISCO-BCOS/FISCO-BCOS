@@ -163,8 +163,12 @@ struct Envelope
     std::string_view chainId;
 };
 
-/// The chain as of one snapshot, read once per verify() before the state stage: every check in
+/// The chain as of one snapshot, taken once per verify() before the state stage: every check in
 /// one pass judges against a single block's configuration even if a commit lands mid-pass.
+///
+/// Everything here is derived from the LedgerConfigState snapshot; the stage performs no ledger
+/// read of its own. getLedgerConfig already fills the chain id and the base fee from the same
+/// SYS_CONFIG rows an earlier version fetched again, per transaction, through getSystemConfig.
 struct ChainView
 {
     /// const: LedgerConfigState hands out a snapshot nobody may mutate.
@@ -172,9 +176,13 @@ struct ChainView
     /// nullopt = the chain declares no EVM revision; revision-dependent checks stand down rather
     /// than guess, because admission must never be STRICTER than execution.
     std::optional<evmc_revision> revision;
-    /// nullopt = the key is unset in the chain config.
-    std::optional<std::string> txGasPrice;
-    std::optional<std::string> web3ChainId;
+    /// tx_gas_price. Zero = a free-gas chain: the sender is never debited, so the fee checks
+    /// stand down. An unset row reaches the snapshot as getLedgerConfig's "0x0" default, which
+    /// is the verdict the checks always gave an unset row anyway.
+    u256 baseFee;
+    /// web3_chain_id. nullopt only on a holder nothing has published to yet: getLedgerConfig
+    /// always sets it, serving an unset row as 0 exactly as the executor's CHAINID does.
+    std::optional<u256> web3ChainId;
 };
 
 /// Inputs of the state stage. `sender` is engaged exactly when the check set contains a
@@ -343,15 +351,11 @@ TransactionStatus checkMaxGasLimit(StateInputs const& in)
 
 TransactionStatus checkFeeCapVsBaseFee(StateInputs const& in)
 {
-    if (!in.chain.txGasPrice)
+    if (in.chain.baseFee == 0)
     {
-        return TransactionStatus::None;  // unset: no baseline to compare against
+        return TransactionStatus::None;  // free-gas chain: nothing to undercut
     }
-    if (*in.chain.txGasPrice == "0" || *in.chain.txGasPrice == "0x0")
-    {
-        return TransactionStatus::None;  // free-gas chain
-    }
-    if (protocol::effectiveGasPrice(in.tx) < u256(*in.chain.txGasPrice))
+    if (protocol::effectiveGasPrice(in.tx) < in.chain.baseFee)
     {
         // Today this is reported as InsufficientFunds, which tells the user their balance is
         // short when it is not.
@@ -385,13 +389,9 @@ TransactionStatus checkChainId(StateInputs const& in)
     }
     // The transaction claims a chain. From here the configuration is required: silently
     // accepting an unverifiable claim admits transactions signed for any chain -- which is what
-    // EthEndpoint does today when web3_chain_id is unset.
-    if (!in.chain.web3ChainId)
-    {
-        return TransactionStatus::InvalidChainId;
-    }
-    auto const expected = ledger::parseWeb3ChainId(*in.chain.web3ChainId);
-    if (!expected || u256(classified.chainId) != *expected)
+    // EthEndpoint does today when web3_chain_id is unset. The snapshot lacks a chain id only
+    // while nothing has been published to the holder, and that is refused too.
+    if (!in.chain.web3ChainId || u256(classified.chainId) != *in.chain.web3ChainId)
     {
         return TransactionStatus::InvalidChainId;
     }
@@ -467,8 +467,7 @@ TransactionStatus checkBalance(StateInputs const& in)
     // max_gas_price * gas_limit + value, because on a free-gas FISCO chain the sender is never
     // actually debited the fee cap they declared -- charging it at admission would reject
     // transactions that execute perfectly well.
-    const bool chargesGas =
-        in.chain.txGasPrice && !(*in.chain.txGasPrice == "0" || *in.chain.txGasPrice == "0x0");
+    const bool chargesGas = in.chain.baseFee != 0;
 
     u256 const balance = in.sender.value().balance;
 
@@ -633,34 +632,30 @@ u256 parseBalance(std::string_view raw)
     }
 }
 
-/// The state stage's inputs, read once. Throws (never returns a status) when something cannot
-/// be read: a storage fault must not be reported as a defect in the transaction.
-task::Task<ChainView> readChainView(
-    ledger::LedgerConfigState const& configState, ledger::LedgerInterface& chainLedger)
+/// The state stage's inputs, taken once: a pointer copy and two field conversions. Whoever
+/// commits a block republishes the configuration, and nothing here goes to storage. Throws
+/// (never returns a status) on a snapshot that cannot be used -- infrastructure, not a defect in
+/// the transaction, and reported so that it cannot masquerade as a rejected transaction.
+ChainView readChainView(ledger::LedgerConfigState const& configState)
 {
     ChainView view;
-    // A snapshot, not a fetch: whoever commits a block republishes the configuration, and this
-    // is a pointer copy.
     view.config = configState.get();
     if (!view.config)
     {
         // LedgerConfigState never publishes null, so reaching here means the holder was
-        // corrupted. Infrastructure, not a defect in the transaction -- reported as an exception
-        // so it cannot masquerade as a rejected transaction.
+        // corrupted.
         BOOST_THROW_EXCEPTION(std::runtime_error("admission: ledger config state returned null"));
     }
     // Judged against the block it would execute in, which is the next one.
     view.revision = view.config->evmcRevisionForBlock(view.config->blockNumber() + 1);
-    if (auto entry = co_await ledger::getSystemConfig(chainLedger, ledger::SYSTEM_KEY_TX_GAS_PRICE))
+    // The raw SYS_CONFIG string: "0x0" by default, hex as SystemConfigPrecompiled enforces. A
+    // value u256 cannot parse throws here, as it did when the checks parsed it themselves.
+    view.baseFee = u256(std::get<0>(view.config->gasPrice()));
+    if (auto const& chainId = view.config->chainId())
     {
-        view.txGasPrice = std::get<0>(*entry);
+        view.web3ChainId = fromBigEndian<u256>(chainId->bytes);
     }
-    if (auto entry =
-            co_await ledger::getSystemConfig(chainLedger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
-    {
-        view.web3ChainId = std::get<0>(*entry);
-    }
-    co_return view;
+    return view;
 }
 }  // namespace
 
@@ -775,12 +770,13 @@ task::Task<TransactionStatus> TxValidator::verify(
         co_return status;
     }
 
-    // Stage 2: evmone's sequence against one chain view, fetched once. The account is read only
+    // Stage 2: evmone's sequence against one chain view, taken once from the snapshot. The
+    // account is read only
     // when the set contains a check that needs it -- which is how the proposal column, whose
     // sender-dependent checks are off, performs no account read at all.
     if ((checks & c_stateStage) != Check::None)
     {
-        auto const chain = co_await readChainView(*m_ledgerConfigState, *m_ledger);
+        auto const chain = readChainView(*m_ledgerConfigState);
         std::optional<AccountState> sender;
         if ((checks & c_senderDependent) != Check::None)
         {
