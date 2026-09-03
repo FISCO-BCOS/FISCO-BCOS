@@ -273,6 +273,10 @@ task::Task<void> EngineEndpoint::handleNewPayload(
         co_return;
     }
 
+    // Parse before taking the latch so a malformed request still answers InvalidParams
+    // (-32602) while a V4 payload is in flight; the latch below only bounds execution.
+    auto newPayloadReq = parseNewPayloadRequest(request, version);
+
     // One in-flight V4 newPayload; a second concurrent call answers SYNCING.
     const bool opExecution = version == engine::ApiVersion::V4;
     if (opExecution && m_opPayloadBusy.exchange(true, std::memory_order_acq_rel))
@@ -289,7 +293,6 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     }
     OpPayloadBusyReset busyReset{m_opPayloadBusy, opExecution};
 
-    auto newPayloadReq = parseNewPayloadRequest(request, version);
     engine::PayloadStatus engineResult;
     try
     {
