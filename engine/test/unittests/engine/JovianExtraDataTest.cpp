@@ -139,17 +139,15 @@ BOOST_AUTO_TEST_CASE(wrong_length_eip1559_params_are_rejected)
         engine::detail::validatePayloadAttributes(makeAttributes(bytes(9, 0), 0), 3).has_value());
 }
 
-// ValidateHolocene1559Params (eip1559.go:89-100): a zero denominator with a non-zero
-// elasticity (or vice versa) is invalid attribute input.
+// ValidateHolocene1559Params: reject only d==0 && e!=0. (0,0) and (d>0,e==0) pass.
 BOOST_AUTO_TEST_CASE(mixed_zero_eip1559_params_are_rejected)
 {
     BOOST_CHECK(engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x0000000000000006"), 0), 3)
             .has_value());
-    BOOST_CHECK(engine::detail::validatePayloadAttributes(
+    BOOST_CHECK(!engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000000"), 0), 3)
             .has_value());
-    // Both zero and both non-zero stay valid.
     BOOST_CHECK(
         !engine::detail::validatePayloadAttributes(makeAttributes(bytes(8, 0), 0), 3).has_value());
     BOOST_CHECK(engine::detail::validatePayloadAttributes(
@@ -256,11 +254,11 @@ BOOST_AUTO_TEST_CASE(execution_payload_extra_data_shape_is_validated)
     // Wrong version byte for the length: Jovian must be 0x01, Holocene 0x00.
     BOOST_CHECK(!accepted(fromHexWithPrefix("0x00000000fa000000060000000000000000")));
     BOOST_CHECK(!accepted(fromHexWithPrefix("0x01000000fa00000006")));
-    // A header, unlike attributes, may not encode a zero denominator or elasticity
-    // (validateHoloceneExtraDataPart, op-core/eip1559/eip1559.go:105-113).
+    // Header extraData uses the same Holocene pairing as attributes: only d==0 && e!=0
+    // is rejected (ValidateHolocene1559Params).
     BOOST_CHECK(!accepted(fromHexWithPrefix("0x000000000000000006")));
-    BOOST_CHECK(!accepted(fromHexWithPrefix("0x000000000000000000")));
-    BOOST_CHECK(!accepted(fromHexWithPrefix("0x00000000fa00000000")));
+    BOOST_CHECK(accepted(fromHexWithPrefix("0x000000000000000000")));
+    BOOST_CHECK(accepted(fromHexWithPrefix("0x00000000fa00000000")));
 }
 
 // A CL returning a payload under a blockHash this node minted must return the same
@@ -282,11 +280,7 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)
     strippedExtraData.extraData.clear();
     BOOST_CHECK(engine::detail::compareWithBuiltPayload(strippedExtraData, built).has_value());
 
-    // Documented non-goals of this comparison, asserted so the boundary is visible.
-    // withdrawalsRoot is dropped by the V3 wire dialect on the way back
-    // (get_payload_v5_rejects_a_v3_committed_entry_without_withdrawals_root in
-    // EngineServiceTest relies on that staying VALID), and the transaction list is
-    // left to #5468, which is what makes payload bodies verifiable at all.
+    // V3 wire may omit withdrawalsRoot; that is not a mismatch.
     auto withoutWithdrawalsRoot = built;
     withoutWithdrawalsRoot.withdrawalsRoot = std::nullopt;
     BOOST_CHECK(
@@ -294,7 +288,15 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)
 
     auto alteredTransaction = built;
     alteredTransaction.transactions[1].raw = bytes{0x02, 0x04};
-    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(alteredTransaction, built).has_value());
+    auto txError = engine::detail::compareWithBuiltPayload(alteredTransaction, built);
+    BOOST_REQUIRE(txError.has_value());
+    BOOST_CHECK_NE(txError->find("transactions"), std::string::npos);
+
+    auto alteredStateRoot = built;
+    alteredStateRoot.stateRoot = h256(1);
+    auto stateError = engine::detail::compareWithBuiltPayload(alteredStateRoot, built);
+    BOOST_REQUIRE(stateError.has_value());
+    BOOST_CHECK_NE(stateError->find("stateRoot"), std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

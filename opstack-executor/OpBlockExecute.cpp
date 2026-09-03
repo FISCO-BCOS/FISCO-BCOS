@@ -1,4 +1,5 @@
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-evm/adapter/StateDiffSanitize.h>
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
@@ -197,8 +198,14 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             }
             auto v = opValidate(view, block, tx, env, cfg, fee, blockGasLeft);
             if (const auto* err = std::get_if<std::error_code>(&v))
+            {
                 // No failed-receipt mechanism for normal txs: void the whole block (op-geth).
-                throw OpConsensusError("op block: invalid non-deposit tx: " + err->message());
+                // Tag the signed-envelope keccak so OpEngineService::parseCulpritHash can
+                // evict one bad mempool tx instead of failing the whole build.
+                auto const txHash = bcos::crypto::keccak256Hash(envRef);
+                throw OpConsensusError("op block: invalid non-deposit tx: " + err->message() +
+                                       " [tx=0x" + txHash.hex() + "]");
+            }
             // opTransition charges from props.fee (the validate-time snapshot — no second read).
             evmone::state::StateDiff diff;
             auto receipt = [&]() {

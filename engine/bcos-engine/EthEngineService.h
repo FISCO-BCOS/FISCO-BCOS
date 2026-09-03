@@ -45,9 +45,6 @@ namespace bcos::engine
 
 namespace eth_detail
 {
-std::optional<std::string> validateExecutionPayload(
-    const ExecutionPayload& executionPayload, std::uint32_t version);
-
 template <class ArtifactsMap, class ArtifactNode>
 PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guard,
     ArtifactsMap& artifacts, PayloadID const& payloadId, h256 const& blockHash,

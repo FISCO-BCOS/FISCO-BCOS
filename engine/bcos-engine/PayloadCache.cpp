@@ -10,11 +10,20 @@
 namespace bcos::engine
 {
 
+namespace
+{
+void eraseHashesForId(auto& hashToId, PayloadID const& id)
+{
+    std::erase_if(hashToId, [&](auto const& item) { return item.second == id; });
+}
+}  // namespace
+
 PayloadCache::PutResult PayloadCache::putUnbounded(
     PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
 {
     auto entries = m_entries;
     auto hashToId = m_hashToId;
+    eraseHashesForId(hashToId, id);
     hashToId[blockHash] = id;
     entries.insert_or_assign(id, std::move(entry));
     m_entries.swap(entries);
@@ -30,6 +39,7 @@ PayloadCache::PutResult PayloadCache::put(PayloadID id, h256 blockHash, BuiltPay
     PutResult result;
 
     const bool isNew = !entries.contains(id);
+    eraseHashesForId(hashToId, id);
     hashToId[blockHash] = id;
     entries.insert_or_assign(id, std::move(entry));
     if (isNew)
@@ -41,7 +51,7 @@ PayloadCache::PutResult PayloadCache::put(PayloadID id, h256 blockHash, BuiltPay
         auto evicted = std::move(order.front());
         order.pop_front();
         entries.erase(evicted);
-        std::erase_if(hashToId, [&](const auto& item) { return item.second == evicted; });
+        eraseHashesForId(hashToId, evicted);
         result.evicted.push_back(std::move(evicted));
     }
 
@@ -96,6 +106,7 @@ PayloadCache::PutResult PayloadCache::putAndRetainOnly(
     PutResult putResult;
 
     const bool isNew = !entries.contains(id);
+    eraseHashesForId(hashToId, id);
     hashToId[blockHash] = id;
     entries.insert_or_assign(id, std::move(entry));
     if (isNew)
@@ -107,7 +118,7 @@ PayloadCache::PutResult PayloadCache::putAndRetainOnly(
         auto evicted = std::move(order.front());
         order.pop_front();
         entries.erase(evicted);
-        std::erase_if(hashToId, [&](const auto& item) { return item.second == evicted; });
+        eraseHashesForId(hashToId, evicted);
         putResult.evicted.push_back(std::move(evicted));
     }
 

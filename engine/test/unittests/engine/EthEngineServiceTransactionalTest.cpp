@@ -514,7 +514,7 @@ BOOST_AUTO_TEST_CASE(commit_merge_failure_leaves_cache_and_artifacts)
         static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
 }
 
-BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_merge)
+BOOST_AUTO_TEST_CASE(commit_releases_exclusive_guard_during_merge)
 {
     GateMergeStorage legacyStorage;
     GateMergeStorage newStorage;
@@ -557,12 +557,10 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_merge)
     legacyStorage.mergeGate->store(false, std::memory_order_release);
     newStorage.mergeGate->store(false, std::memory_order_release);
 
-    std::atomic<bool> legacyProbeStarted{false};
-    std::atomic<bool> newProbeStarted{false};
     std::atomic<bool> legacyProbeFinished{false};
     std::atomic<bool> newProbeFinished{false};
     bool mergeStarted = false;
-    bool probeBlockedDuringMerge = false;
+    bool probesFinishedDuringMerge = false;
 
     std::jthread legacyThread([&](std::stop_token) {
         try
@@ -591,12 +589,10 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_merge)
     if (mergeStarted)
     {
         legacyProbe = std::jthread([&](std::stop_token) {
-            legacyProbeStarted.store(true, std::memory_order_release);
             task::syncWait(legacy.getPayload(*legacyBuild.payloadId, 3));
             legacyProbeFinished.store(true, std::memory_order_release);
         });
         newProbe = std::jthread([&](std::stop_token) {
-            newProbeStarted.store(true, std::memory_order_release);
             task::syncWait(fresh.getPayload(*newBuild.payloadId, 3));
             newProbeFinished.store(true, std::memory_order_release);
         });
@@ -606,17 +602,11 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_merge)
             .gates = {legacyStorage.mergeGate, newStorage.mergeGate},
         };
 
-        if (waitUntil(std::chrono::seconds(3), [&] {
-                return legacyProbeStarted.load(std::memory_order_acquire) &&
-                       newProbeStarted.load(std::memory_order_acquire);
-            }))
-        {
-            // EthEngineService must hold the exclusive tracker guard across gated merge so
-            // getPayload blocks. release EngineServiceImpl may finish getPayload while merge is
-            // gated (its mutex is not held across storage merge), so only require the
-            // EthEngineService probe.
-            probeBlockedDuringMerge = !newProbeFinished.load(std::memory_order_acquire);
-        }
+        // Both paths release the tracker lock before gated merge, so getPayload proceeds.
+        probesFinishedDuringMerge = waitUntil(std::chrono::seconds(3), [&] {
+            return legacyProbeFinished.load(std::memory_order_acquire) &&
+                   newProbeFinished.load(std::memory_order_acquire);
+        });
     }
     else
     {
@@ -627,12 +617,10 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_merge)
     }
 
     BOOST_CHECK(mergeStarted);
-    BOOST_CHECK(probeBlockedDuringMerge);
-    BOOST_CHECK(legacyProbeFinished.load(std::memory_order_acquire));
-    BOOST_CHECK(newProbeFinished.load(std::memory_order_acquire));
+    BOOST_CHECK(probesFinishedDuringMerge);
 }
 
-BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_prewrite)
+BOOST_AUTO_TEST_CASE(commit_releases_exclusive_guard_during_prewrite)
 {
     GateMergeStorage storage;
     MemPoolImpl memPool;
@@ -658,10 +646,9 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_prewrite)
 
     storage.mergeGate->store(false, std::memory_order_release);
 
-    std::atomic<bool> probeStarted{false};
     std::atomic<bool> probeFinished{false};
     bool prewriteStarted = false;
-    bool probeBlockedDuringPrewrite = false;
+    bool probeFinishedDuringPrewrite = false;
 
     std::jthread commitThread([&](std::stop_token) {
         try
@@ -679,7 +666,6 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_prewrite)
     if (prewriteStarted)
     {
         probeThread = std::jthread([&](std::stop_token) {
-            probeStarted.store(true, std::memory_order_release);
             task::syncWait(service.getPayload(*build.payloadId, 3));
             probeFinished.store(true, std::memory_order_release);
         });
@@ -689,11 +675,9 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_prewrite)
             .gates = {ledger->prewriteGate, storage.mergeGate},
         };
 
-        if (waitUntil(std::chrono::seconds(3),
-                [&] { return probeStarted.load(std::memory_order_acquire); }))
-        {
-            probeBlockedDuringPrewrite = !probeFinished.load(std::memory_order_acquire);
-        }
+        // newPayload no longer holds exclusive across prewrite; getPayload must proceed.
+        probeFinishedDuringPrewrite = waitUntil(
+            std::chrono::seconds(3), [&] { return probeFinished.load(std::memory_order_acquire); });
     }
     else
     {
@@ -704,8 +688,7 @@ BOOST_AUTO_TEST_CASE(commit_holds_exclusive_guard_during_prewrite)
     }
 
     BOOST_CHECK(prewriteStarted);
-    BOOST_CHECK(probeBlockedDuringPrewrite);
-    BOOST_CHECK(probeFinished.load(std::memory_order_acquire));
+    BOOST_CHECK(probeFinishedDuringPrewrite);
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_bounded_put_fifo_evicts_oldest)

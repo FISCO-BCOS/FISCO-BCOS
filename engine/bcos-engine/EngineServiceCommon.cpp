@@ -10,6 +10,7 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "engine/bcos-engine/PayloadId.h"
 #include <boost/assert.hpp>
+#include <algorithm>
 #include <span>
 
 namespace bcos::engine::engine_common
@@ -35,6 +36,13 @@ bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payl
     return false;
 }
 
+std::uint32_t payloadShapeVersion(std::uint32_t methodVersion)
+{
+    // op-geth: ForkchoiceUpdatedV3/V4 call forkchoiceUpdated(..., PayloadV3);
+    // GetPayloadV4 accepts only payloadID.Is(PayloadV3).
+    return std::min(methodVersion, static_cast<std::uint32_t>(ApiVersion::V3));
+}
+
 std::vector<std::string> supportedCapabilities()
 {
     // Everything this node implements, not a fork-narrowed subset. op-geth advertises its
@@ -44,17 +52,15 @@ std::vector<std::string> supportedCapabilities()
     // here would also break the pre-Karst callers this node still serves — the v1 Engine
     // API harness behind unsafe_allow_v1_executor and the V1-V3 integration suites.
     //
-    // forkchoiceUpdatedV4 is the one absentee, and genuinely so: the forkchoice version
-    // window tops out at V3 (isForkchoiceVersionSupported), so the endpoint answers
-    // -38005. getPayloadV5 and newPayloadV4 were added by B4.
+    // Eth and Op advertise the same list. FCU V4 is unimplemented (Endpoint -38005)
+    // and absent upstream (op-geth / op-node top out at V3), so it is not listed.
+    // A V4-shaped build still stores PayloadV3 (payloadShapeVersion).
     return {"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
         "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
         "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
         "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4"};
 }
 
-namespace
-{
 /// Shared over the two transaction carriers (attributes hex strings and payload raw
 /// bytes): a blob (type-3) or unsupported/unknown-type transaction invalidates the whole
 /// carrier — it is never dropped individually. Blob rejection is FISCO's OP policy, not an
@@ -75,6 +81,8 @@ std::optional<std::string> validateRawTransactionKind(
     return std::nullopt;
 }
 
+namespace
+{
 std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(std::span<const bcos::byte> params)
 {
     BOOST_ASSERT(params.size() >= 8);
@@ -130,9 +138,10 @@ std::optional<std::string> validatePayloadAttributes(
             "non-empty withdrawals are not supported until the withdrawals trie root is "
             "computed");
     }
-    if (version == 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
+    if (version >= 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
     {
-        return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3");
+        // op-geth ForkchoiceUpdatedV3/V4 both reject missing BeaconRoot when attrs present.
+        return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3 and later");
     }
     if (version <= 2 && payloadAttributes.eip1559Params.has_value())
     {
@@ -153,10 +162,9 @@ std::optional<std::string> validatePayloadAttributes(
             return std::string("eip1559Params must be exactly 8 bytes");
         }
         auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
-        if ((denominator == 0) != (elasticity == 0))
+        if (auto error = validateHolocene1559Params(denominator, elasticity))
         {
-            return std::string(
-                "eip1559Params denominator and elasticity must be both zero or both non-zero");
+            return error;
         }
     }
     return std::nullopt;

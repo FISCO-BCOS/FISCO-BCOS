@@ -58,6 +58,22 @@ std::optional<std::uint64_t> narrowU256ToU64(const u256& value);
 bcos::h2048 toEthLogsBloom(const Bloom& logsBloom);
 std::optional<std::string> validateOpPayloadAttributes(
     const PayloadAttributes& payloadAttributes, bool jovianActive);
+/// op-geth miner.BuildPayload uses attrs.Transactions as-is and never synthesizes
+/// an L1-attributes deposit. Phase-A single-node may synthesize zeros; production
+/// op_engine_rpc must receive the real deposit from op-node.
+inline std::optional<std::string> requireL1AttributesDeposit(
+    const PayloadAttributes& payloadAttributes, bool allowSynthesized)
+{
+    bool const missing =
+        !payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty();
+    if (missing && !allowSynthesized)
+    {
+        return std::string(
+            "payloadAttributes.transactions must include the L1 attributes deposit "
+            "(op-geth does not synthesize one)");
+    }
+    return std::nullopt;
+}
 std::optional<std::string> validateOpNewPayloadRequest(
     const NewPayloadRequest& request, bool jovianActive);
 void applyOpHeaderConstants(bcos::protocol::BlockHeader& header);
@@ -122,23 +138,22 @@ public:
     using ViewType = typename GlobalStateStorageType::ViewType;
 
     OpEngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
-        ExecutorType& executor, SchedulerType& scheduler,
-        bcos::protocol::BlockFactory::Ptr blockFactory,
+        SchedulerType& scheduler, bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V4),
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
-        std::shared_ptr<DACaps> daCaps = nullptr)
+        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = true)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
-        m_executor(executor),
         m_scheduler(scheduler),
         m_blockFactory(std::move(blockFactory)),
         m_ledger(std::move(ledger)),
         m_blockTxCountLimit(blockTxCountLimit),
         m_maxEngineVersion(maxEngineVersion),
         m_delegate(std::move(delegate)),
-        m_daCaps(std::move(daCaps))
+        m_daCaps(std::move(daCaps)),
+        m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes)
     {
         if (!m_blockFactory)
         {
@@ -172,6 +187,10 @@ public:
     {
         return m_tracker.finalizedBlockNumber();
     }
+
+    /// Header returned by the last successful newPayload execute/commit (not the
+    /// request-rebuilt announcement). Null if this call did not run or persist execution.
+    bcos::protocol::BlockHeader::Ptr lastExecutedHeader() const { return m_lastExecutedHeader; }
 
 private:
     static PayloadStatus makeStatus(PayloadValidationStatus status,
@@ -220,11 +239,21 @@ private:
     bcos::protocol::Block::Ptr buildOpBlock(
         const ExecutionPayload& payload, bcos::protocol::BlockHeader::Ptr header);
 
+    void requireDelegate() const
+    {
+        if (!m_delegate)
+        {
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    "OP engine requires an m_delegate (OpScheduler); the composition "
+                    "root did not wire one"});
+        }
+    }
+
     EngineTracker m_tracker;
     std::unordered_map<PayloadID, OpPayloadArtifacts> m_artifacts;
     MemPoolType& m_memPool;
     GlobalStateStorageType& m_globalStateStorage;
-    ExecutorType& m_executor;
     SchedulerType& m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
@@ -232,6 +261,8 @@ private:
     std::uint32_t m_maxEngineVersion;
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
     std::shared_ptr<DACaps> m_daCaps;
+    bool m_allowSynthesizedL1Attributes;
+    bcos::protocol::BlockHeader::Ptr m_lastExecutedHeader;
 };
 
 }  // namespace bcos::engine

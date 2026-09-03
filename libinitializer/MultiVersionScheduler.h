@@ -32,6 +32,9 @@ private:
 
     std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> m_schedulers;
     int m_currentIndex;
+    /// Last slot that is a real scheduler. Non-OP Initializer wires a refuse stub at
+    /// index 3; setVersion must not saturate onto that stub.
+    int m_highestWiredIndex = static_cast<int>(SUPPORTED_EXECUTOR_VERSION_COUNT) - 1;
 
     bcos::scheduler::SchedulerInterface& getScheduler();
 
@@ -77,5 +80,9 @@ public:
     void stop() override;
 
     void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) override;
+
+    /// Cap setVersion saturation. Call before setVersion when the top array slot is a
+    /// refuse stub rather than a live executor.
+    void setHighestWiredIndex(int index);
 };
 }  // namespace bcos::scheduler_v1

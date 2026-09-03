@@ -33,6 +33,10 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
     {
         return std::nullopt;
     }
+    if (!envRef.empty())
+    {
+        return std::nullopt;
+    }
     auto tarsTx = web3Tx.takeToTarsTransaction();
     tarsTx.extraTransactionHash.assign(txHash.begin(), txHash.end());
     if (tarsTx.sender.empty())
@@ -59,11 +63,9 @@ void applyOpHeaderConstants(bcos::protocol::BlockHeader& header)
 
 std::vector<std::string> supportedOpCapabilities()
 {
-    auto caps = engine_common::supportedCapabilities();
-    caps.push_back("engine_forkchoiceUpdatedV4");
-    caps.push_back("engine_getPayloadV4");
-    caps.push_back("engine_newPayloadV4");
-    return caps;
+    // Same advertised set as Eth. FCU V4 is unimplemented (Endpoint -38005) and
+    // absent upstream; getPayloadV4 / newPayloadV4 are already in the shared list.
+    return engine_common::supportedCapabilities();
 }
 
 std::optional<std::uint64_t> narrowU256ToU64(const u256& value)
@@ -104,10 +106,9 @@ std::optional<std::string> validateOpPayloadAttributes(
     };
     const auto denominator = readU32BE(0);
     const auto elasticity = readU32BE(4);
-    if ((denominator == 0) != (elasticity == 0))
+    if (auto error = engine_common::validateHolocene1559Params(denominator, elasticity))
     {
-        return std::string(
-            "eip1559Params denominator and elasticity must both be zero or both non-zero");
+        return error;
     }
     if (payloadAttributes.withdrawals.has_value() && !payloadAttributes.withdrawals->empty())
     {
@@ -136,6 +137,11 @@ std::optional<std::string> validateOpNewPayloadRequest(
         if (payload.transactions[i].raw.empty())
         {
             return "executionPayload.transactions[" + std::to_string(i) + "] is empty";
+        }
+        if (auto error = engine_common::validateRawTransactionKind(
+                dispatchRawTransaction(bcos::ref(payload.transactions[i].raw)), i))
+        {
+            return error;
         }
     }
     if (!payload.withdrawals.has_value() || !payload.withdrawals->empty())
@@ -209,13 +215,9 @@ std::optional<std::string> validateOpNewPayloadRequest(
                    (static_cast<std::uint32_t>(extra[off + 2]) << 8) |
                    static_cast<std::uint32_t>(extra[off + 3]);
         };
-        if (readU32BE(1) == 0)
+        if (auto error = engine_common::validateHolocene1559Params(readU32BE(1), readU32BE(5)))
         {
-            return std::string("extraData must encode a non-zero eip-1559 denominator");
-        }
-        if (readU32BE(5) == 0)
-        {
-            return std::string("extraData must encode a non-zero eip-1559 elasticity");
+            return error;
         }
     }
     if (!narrowU256ToU64(payload.gasUsed).has_value())

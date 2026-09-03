@@ -162,6 +162,13 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
     }
     catch (engine::UnsupportedFork const& e)
     {
+        // The request's attribute shape cannot express the chain's fork era, or the chain
+        // lacks an on-chain EVM revision entirely. geth answers -38005 Unsupported fork
+        // for the same CL/chain mismatch; the service layer throws UnsupportedFork so this
+        // stays a diagnosable fork error instead of a generic -32603 InternalError. Keep
+        // the exception's errinfo_comment so the operator can tell which gate fired — the
+        // missing-revision case is a NODE-side misconfiguration and the generic shape
+        // message would wrongly point at the CL.
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
@@ -228,7 +235,12 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     }
     catch (engine::IncompatiblePayloadVersion const&)
     {
-        // Payload was built under a different method version.
+        // The build behind this payloadId is outside the requested method's version
+        // window (forkchoiceUpdated version vs getPayload version). newPayload keeps the
+        // FCU-built version tag. The mapping is -38005 to match op-geth, whose getPayload
+        // helper answers engine.UnsupportedFork when the payloadId's encoded build version
+        // is outside the method's allowed set (eth/catalyst/api.go:531-533, GetPayloadV5
+        // allowing only PayloadV3).
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
             "Unsupported fork: payload was built by a different method version"));
     }

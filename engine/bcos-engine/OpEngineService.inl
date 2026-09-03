@@ -66,6 +66,16 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
                 .payloadId = std::nullopt,
             };
         }
+        if (auto validationError = engine_common::op::requireL1AttributesDeposit(
+                *payloadAttributes, m_allowSynthesizedL1Attributes);
+            validationError.has_value())
+        {
+            co_return ForkchoiceUpdatedResult{
+                .payloadStatus = makeStatus(
+                    PayloadValidationStatus::Invalid, std::nullopt, validationError),
+                .payloadId = std::nullopt,
+            };
+        }
     }
 
     auto view = m_globalStateStorage.fork();
@@ -89,6 +99,10 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
         co_await bcos::ledger::getBlockHash(view, *headBlockNumber, bcos::ledger::fromStorage);
     bool const headCanonical =
         canonicalHeadHash.has_value() && *canonicalHeadHash == forkchoiceState.headBlockHash;
+    auto canonicalSafeHash =
+        co_await bcos::ledger::getBlockHash(view, *safeBlockNumber, bcos::ledger::fromStorage);
+    auto canonicalFinalizedHash =
+        co_await bcos::ledger::getBlockHash(view, *finalizedBlockNumber, bcos::ledger::fromStorage);
 
     ResolvedForkchoice resolved{
         .state = forkchoiceState,
@@ -97,6 +111,10 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
         .finalizedNumber = finalizedBlockNumber,
         .headCanonical = headCanonical,
         .payloadAttributesPresent = payloadAttributes != nullptr,
+        .safeCanonical = engine_common::forkchoiceHashIsCanonical(
+            forkchoiceState.safeBlockHash, canonicalSafeHash),
+        .finalizedCanonical = engine_common::forkchoiceHashIsCanonical(
+            forkchoiceState.finalizedBlockHash, canonicalFinalizedHash),
     };
     if (m_tracker.applyForkchoice(resolved) == ForkchoiceApplyResult::Swallowed)
     {
@@ -132,6 +150,7 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
     const PayloadAttributes& payloadAttributes, std::uint32_t version,
     bcos::protocol::BlockNumber nextBlockNumber)
 {
+    requireDelegate();
     // Same policy as EthEngineService (option B): deterministic derivePayloadId, not a
     // process-local sequence counter.
     auto payloadIdOpt =
@@ -154,6 +173,8 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
     }
 
     std::vector<bytes> forcedEnvelopes;
+    // Reached only when requireL1AttributesDeposit allowed synthesis (Phase-A
+    // single-node). op-geth never invents this envelope.
     if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
     {
         forcedEnvelopes.push_back(m_scheduler.synthesizeL1AttributesEnvelope());
@@ -210,8 +231,7 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
         }
     }
 
-    auto const parentBeaconBlockRoot =
-        payloadAttributes.parentBeaconBlockRoot.value_or(crypto::HashType{});
+    auto const parentBeaconBlockRoot = payloadAttributes.parentBeaconBlockRoot.value();
 
     auto assemblePayload = [&](std::vector<bytes> candidateEnvelopes) {
         std::vector<EngineTransaction> candidateTransactions;
@@ -226,51 +246,12 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
             .stateRoot = h256{},
             .receiptsRoot = h256{},
             .prevRandao = payloadAttributes.prevRandao,
-            .gasLimit = payloadAttributes.gasLimit.has_value() ?
-                            u256(*payloadAttributes.gasLimit) :
-                            u256(std::get<0>(ledgerConfig.gasLimit())),
+            .gasLimit = u256(payloadAttributes.gasLimit.value()),
             .gasUsed = 0,
             .baseFeePerGas = baseFee,
             .blockHash = h256{},
             .transactions = std::move(candidateTransactions),
-            .extraData =
-                [this, &payloadAttributes]() {
-                    uint32_t denominator = 1, elasticity = 1;
-                    if (auto const& params = payloadAttributes.eip1559Params;
-                        params.has_value() && params->size() == 8)
-                    {
-                        denominator = (static_cast<uint32_t>((*params)[0]) << 24) |
-                                      (static_cast<uint32_t>((*params)[1]) << 16) |
-                                      (static_cast<uint32_t>((*params)[2]) << 8) |
-                                      static_cast<uint32_t>((*params)[3]);
-                        elasticity = (static_cast<uint32_t>((*params)[4]) << 24) |
-                                     (static_cast<uint32_t>((*params)[5]) << 16) |
-                                     (static_cast<uint32_t>((*params)[6]) << 8) |
-                                     static_cast<uint32_t>((*params)[7]);
-                    }
-                    bcos::bytes extra{0x00, static_cast<uint8_t>(denominator >> 24),
-                        static_cast<uint8_t>(denominator >> 16),
-                        static_cast<uint8_t>(denominator >> 8),
-                        static_cast<uint8_t>(denominator),
-                        static_cast<uint8_t>(elasticity >> 24),
-                        static_cast<uint8_t>(elasticity >> 16),
-                        static_cast<uint8_t>(elasticity >> 8),
-                        static_cast<uint8_t>(elasticity)};
-                    if (m_scheduler.isJovianActive())
-                    {
-                        extra[0] = 0x01;
-                        extra.resize(17, 0x00);
-                        if (auto minBaseFee = payloadAttributes.minBaseFee; minBaseFee.has_value())
-                        {
-                            for (std::size_t i = 0; i < 8; ++i)
-                            {
-                                extra[9 + i] = static_cast<bcos::byte>(
-                                    (*minBaseFee >> (56 - 8 * i)) & 0xFF);
-                            }
-                        }
-                    }
-                    return extra;
-                }(),
+            .extraData = detail::encodeOptimismExtraData(payloadAttributes),
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .timestamp = payloadAttributes.timestamp,
             .blockNumber = nextBlockNumber,
@@ -404,13 +385,13 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
     }
 
     auto commonEntry = std::make_shared<BuiltPayload>();
-    commonEntry->version = version;
+    commonEntry->version = engine_common::payloadShapeVersion(version);
     commonEntry->executionPayload = std::move(payload);
     commonEntry->blockValue = 0;
     commonEntry->blobsBundle = std::nullopt;
     commonEntry->shouldOverrideBuilder = false;
     commonEntry->parentBeaconBlockRoot = parentBeaconBlockRoot;
-    if (version == static_cast<std::uint32_t>(ApiVersion::V3))
+    if (engine_common::payloadShapeVersion(version) == static_cast<std::uint32_t>(ApiVersion::V3))
     {
         commonEntry->blobsBundle = BlobsBundleV1{};
     }
@@ -485,6 +466,7 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
 task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
     SchedulerType>::runOpNewPayloadSteps(const NewPayloadRequest& request)
 {
+    m_lastExecutedHeader.reset();
     auto const& payload = request.executionPayload;
 
     if (auto validationError = engine_common::op::validateOpNewPayloadRequest(
@@ -521,6 +503,7 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, E
                 co_return makeStatus(
                     PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
             }
+            requireDelegate();
             bcos::Error::Ptr commitError;
             m_delegate->commitBlock(
                 builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
@@ -530,12 +513,11 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, E
             {
                 co_return mapDelegateError(*commitError, std::nullopt);
             }
+            m_lastExecutedHeader = builtHeader;
             co_return makeStatus(
                 PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
         }
     }
-
-    auto guard = m_tracker.lockExclusive();
 
     auto view = m_globalStateStorage.fork();
     auto parentBlockNumber = co_await bcos::ledger::getBlockNumber(
@@ -632,13 +614,7 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, E
         }
     }
 
-    if (!m_delegate)
-    {
-        BOOST_THROW_EXCEPTION(
-            OpExecutionInternalError{} << bcos::errinfo_comment{
-                "OP newPayload requires an m_delegate (OpScheduler) for block execution; "
-                "the composition root did not wire one"});
-    }
+    requireDelegate();
 
     auto block = buildOpBlock(payload, ethHeader);
 
@@ -664,6 +640,7 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, E
         co_return mapDelegateError(*commitError, latestValidHash);
     }
 
+    m_lastExecutedHeader = executedHeader;
     co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
 }
 
@@ -686,9 +663,8 @@ bcos::protocol::Block::Ptr OpEngineService<MemPoolType, GlobalStateStorageType, 
         auto tarsTx = engine_common::op::opEnvelopeToTars(env, txHash);
         if (!tarsTx)
         {
-            bcostars::Transaction fallback;
-            fallback.extraTransactionHash.assign(txHash.begin(), txHash.end());
-            tarsTx = std::move(fallback);
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "failed to decode payload transaction envelope"});
         }
         tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
         auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(

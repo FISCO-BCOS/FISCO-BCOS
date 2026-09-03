@@ -98,8 +98,8 @@ public:
     }
     std::shared_ptr<bcos::engine::AnyEngineService> engineService();
 
-    /// The DA throttling caps shared between the OP engine build path and the RPC's
-    /// miner_setMaxDASize (created at the OP composition root; null in non-OP modes).
+    /// The DA throttling caps shared with the OP engine build path (created at the OP
+    /// composition root; null in non-OP modes). There is no miner_setMaxDASize writer yet.
     std::shared_ptr<bcos::engine::DACaps> daCaps() const { return m_daCaps; }
 
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> singleNodeConsensus()

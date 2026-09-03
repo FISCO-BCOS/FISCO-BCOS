@@ -87,6 +87,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <string>
 #include <toml++/toml.hpp>
@@ -433,13 +434,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     m_executorVersion = executorVersion;
 
-    // Engine API (OP-Stack engine endpoints) is wired to the v1 TransactionExecutorImpl.
-    // It must not be built for executor_version >= 2: a v2 chain's state transitions run
-    // through the pure-Ethereum EthereumExecutor, and an Engine API driven through the v1
-    // executor would produce blocks with v1 semantics that diverge from the v2 main chain
-    // (a state-root fork). v2 chains therefore have no Engine API; engine RPC endpoints
-    // respond "engine service not available" (see EngineEndpoint.cpp).
+    // Engine API on executor_version < 2 is the v1 TransactionExecutorImpl path
+    // (engineApiForV1Only). executor_version == 2 uses EthEngineService on the
+    // EthereumExecutor when engine-driven; executor_version >= 3 uses OpEngineService.
+    // A v2+ chain must not be driven through the v1 executor (state-root fork).
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
+    // executor_version >= 3 replaces the Eth EngineService with OpEngineService below.
+    // Skip the Eth composition so m_engineServiceInitializer is not built and discarded.
+    const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
 
     // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
     // endpoint would silently serve the v1 EngineService built below, and an external
@@ -517,7 +519,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // [op_engine_rpc] endpoint. In either mode the EngineService is the sole block
         // producer — the legacy txpool/PBFT pipeline is never initialized or started (see
         // engineDrivenBlockProduction() guards below and in start()).
-        if (!engineApiForV1Only &&
+        if (!engineApiForV1Only && !opStackMode &&
             (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc()))
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -550,7 +552,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
         // branch above for why op_engine_rpc.enable also builds the EngineService here.
-        if (!engineApiForV1Only &&
+        if (!engineApiForV1Only && !opStackMode &&
             (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc()))
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -563,29 +565,46 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // OpSchedulerSeam (SchedulerType) + OpScheduler (delegate / MultiVersionScheduler slot 3).
     // engineApiForV1Only (<2) and opStackMode (>=3) are mutually exclusive; version 2 remains
     // pure EthereumExecutor (+ EthEngineService when single-node / op_engine_rpc).
-    const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
+    // OP mode is engine-driven only: without the EngineService the OpScheduler has no
+    // producer (legacy PBFT is not an OP EL).
+    // Eth EngineService was skipped above when opStackMode so this is the only assignment.
     if (opStackMode)
     {
+        if (!m_nodeConfig->engineDrivenBlockProduction())
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "OP mode (executor_version>=3) requires engine-driven block production "
+                    "([consensus] enable_single_node_consensus or [op_engine_rpc] enable)"));
+        }
         auto forkFlags = bcos::evm::opstack::OpForkFlags{
             .jovianActive = m_nodeConfig->opJovianActive(),
         };
-        uint64_t opChainId = 0;
-        try
+        // EIP-155 chain id is [web3] chain_id, not FISCO [chain] chain_id (op-geth
+        // params.ChainID). ethereumChainId() is only pinned in EL mode; OP L2 always
+        // reads the genesis web3 id and refuses 0.
+        auto const& web3ChainId = m_nodeConfig->genesisConfig().m_web3ChainID;
+        auto parsedChainId = ledger::parseWeb3ChainId(web3ChainId);
+        if (!parsedChainId.has_value())
         {
-            opChainId = std::stoull(m_nodeConfig->chainId(), nullptr, 0);
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "OP mode (executor_version>=3) requires a numeric [web3] chain_id "
+                    "(decimal or 0x-prefixed hex)"));
         }
-        catch (const std::invalid_argument&)
+        if (*parsedChainId == 0)
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "OP mode (executor_version>=3) requires a numeric chain_id "
-                                      "(decimal or 0x-prefixed hex)"));
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "OP mode (executor_version>=3) requires a non-zero [web3] chain_id"));
         }
-        catch (const std::out_of_range&)
+        if (*parsedChainId > std::numeric_limits<uint64_t>::max())
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "OP mode (executor_version>=3) requires a numeric chain_id "
-                                      "(decimal or 0x-prefixed hex)"));
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "OP mode (executor_version>=3) [web3] chain_id exceeds uint64"));
         }
+        uint64_t const opChainId = static_cast<uint64_t>(*parsedChainId);
         auto opScheduler =
             std::make_shared<bcos::evm::engine::OpSchedulerSeam<GlobalStateStorage::ViewType>>(
                 forkFlags, bcos::evm::opstack::L1BlockInfo{});
@@ -602,8 +621,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
             transactionExecutor, m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
-            /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4),
-            m_daCaps);
+            /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), m_daCaps,
+            /*allowSynthesizedL1Attributes=*/m_nodeConfig->enableSingleNodeConsensus());
 
         m_opScheduler = opDelegate;
         m_setOpSchedulerBlockNumberNotifier =
@@ -622,7 +641,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                // switch to a leader during startup
-    m_scheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
+    auto multiVersionScheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager, m_ioServicePool),
@@ -630,10 +649,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 // Slot 3 = OP scheduler (executor_version>=3). Non-OP mode: refuse stub so
                 // scheduler(3) fails loudly instead of null-dereferencing.
                 m_opScheduler ? m_opScheduler : std::make_shared<OpRefusingStubScheduler>()}));
+    // Saturate setVersion to the last wired slot. Without this, a non-OP node whose
+    // ledger version is >2 would land on the refuse stub at index 3.
+    multiVersionScheduler->setHighestWiredIndex(m_opScheduler ?
+                                                    scheduler_v1::OPSTACK_EXECUTOR_VERSION :
+                                                    scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
 
     // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
     INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
-    m_scheduler->setVersion(m_executorVersion, {});
+    multiVersionScheduler->setVersion(m_executorVersion, {});
+    m_scheduler = std::move(multiVersionScheduler);
 
     // Parse and log the effective EVMC revision once at startup (v2+). It is fixed at genesis
     // (NodeConfig requires an explicit evm_revision for executor_version>=2), so a one-time

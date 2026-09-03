@@ -528,6 +528,10 @@ BOOST_AUTO_TEST_CASE(generic_rebuild_on_parent_matches)
 {
     ServicePair pair;
     auto parentForkchoice = makeForkchoiceState();
+    // op-geth: safe/finalized must match ReadCanonicalHash(number). Three distinct
+    // hashes cannot all be canonical at the same height.
+    parentForkchoice.safeBlockHash = parentForkchoice.headBlockHash;
+    parentForkchoice.finalizedBlockHash = parentForkchoice.headBlockHash;
     setForkchoiceBlockNumbers(pair.legacyStorage, parentForkchoice, c_rebuildBaseBlockNumber,
         c_rebuildBaseBlockNumber, c_rebuildBaseBlockNumber);
     setForkchoiceBlockNumbers(pair.newStorage, parentForkchoice, c_rebuildBaseBlockNumber,
@@ -813,8 +817,11 @@ BOOST_AUTO_TEST_CASE(generic_cache_only_parent_known_matches)
     newRequest.executionPayload.parentHash = newBuilt->executionPayload.blockHash;
     newRequest.executionPayload.blockHash = legacyRequest.executionPayload.blockHash;
 
-    checkStatusParity(task::syncWait(pair.legacy.newPayload(legacyRequest, 3)),
-        task::syncWait(pair.fresh.newPayload(newRequest, 3)));
+    auto legacyStatus = task::syncWait(pair.legacy.newPayload(legacyRequest, 3));
+    auto newStatus = task::syncWait(pair.fresh.newPayload(newRequest, 3));
+    checkStatusParity(legacyStatus, newStatus);
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(newStatus.status), static_cast<int>(PayloadValidationStatus::Syncing));
 }
 
 BOOST_AUTO_TEST_CASE(generic_unknown_parent_syncing_matches)
@@ -1323,6 +1330,37 @@ BOOST_AUTO_TEST_CASE(mirror_new_payload_rejects_altered_extra_data)
                           makeNewPayloadRequestV3(legacyPayload->executionPayload), 3)),
         task::syncWait(
             pair.fresh.newPayload(makeNewPayloadRequestV3(newPayload->executionPayload), 3)));
+}
+
+BOOST_AUTO_TEST_CASE(mirror_new_payload_rejects_altered_state_root)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+
+    auto legacyBuild =
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    auto newBuild =
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyBuild.payloadId, 3));
+    auto newPayload = task::syncWait(pair.fresh.getPayload(*newBuild.payloadId, 3));
+
+    auto legacyAltered = makeNewPayloadRequestV3(legacyPayload->executionPayload);
+    legacyAltered.executionPayload.stateRoot = h256(1);
+    auto newAltered = makeNewPayloadRequestV3(newPayload->executionPayload);
+    newAltered.executionPayload.stateRoot = h256(1);
+
+    auto legacyStatus = task::syncWait(pair.legacy.newPayload(legacyAltered, 3));
+    auto newStatus = task::syncWait(pair.fresh.newPayload(newAltered, 3));
+    checkStatusParity(legacyStatus, newStatus);
+    BOOST_CHECK_EQUAL(static_cast<int>(newStatus.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(newStatus.validationError.has_value());
+    BOOST_CHECK_NE(newStatus.validationError->find("stateRoot"), std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(mirror_new_payload_rejects_malformed_extra_data)

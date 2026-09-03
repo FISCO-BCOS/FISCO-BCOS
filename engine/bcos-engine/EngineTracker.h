@@ -33,6 +33,11 @@ struct ResolvedForkchoice
     std::optional<bcos::protocol::BlockNumber> finalizedNumber;
     bool headCanonical;
     bool payloadAttributesPresent;
+    /// op-geth forkchoiceUpdated: after SetCanonical(head), ReadCanonicalHash(number)
+    /// must equal the submitted safe/finalized hash. Default true so unit fixtures that
+    /// construct ResolvedForkchoice without a ledger still apply.
+    bool safeCanonical = true;
+    bool finalizedCanonical = true;
 };
 
 enum class ForkchoiceApplyResult
@@ -70,8 +75,21 @@ class EngineTracker::ExclusiveAccess
 {
 public:
     ExclusiveAccess() = default;
-    ExclusiveAccess(ExclusiveAccess&&) noexcept = default;
-    ExclusiveAccess& operator=(ExclusiveAccess&&) noexcept = default;
+    ExclusiveAccess(ExclusiveAccess&& other) noexcept
+      : m_owner(other.m_owner), m_lock(std::move(other.m_lock))
+    {
+        other.m_owner = nullptr;
+    }
+    ExclusiveAccess& operator=(ExclusiveAccess&& other) noexcept
+    {
+        if (this != &other)
+        {
+            m_lock = std::move(other.m_lock);
+            m_owner = other.m_owner;
+            other.m_owner = nullptr;
+        }
+        return *this;
+    }
     ExclusiveAccess(const ExclusiveAccess&) = delete;
     ExclusiveAccess& operator=(const ExclusiveAccess&) = delete;
 
@@ -84,12 +102,13 @@ public:
         PayloadID id, h256 blockHash, BuiltPayloadPtr entry);
     void retainOnly(const PayloadID& id, const h256& blockHash);
     PayloadCache snapshotPayloadCache() const;
-    void restorePayloadCache(PayloadCache cache) noexcept;
+    void restorePayloadCache(PayloadCache cache);
     const ForkchoiceState& forkchoiceState() const;
 
 private:
     friend class EngineTracker;
     explicit ExclusiveAccess(EngineTracker& owner) : m_owner(&owner), m_lock(owner.m_mutex) {}
+    void requireOwner() const;
     EngineTracker* m_owner = nullptr;
     std::unique_lock<std::shared_mutex> m_lock;
 };
@@ -98,8 +117,21 @@ class EngineTracker::SharedAccess
 {
 public:
     SharedAccess() = default;
-    SharedAccess(SharedAccess&&) noexcept = default;
-    SharedAccess& operator=(SharedAccess&&) noexcept = default;
+    SharedAccess(SharedAccess&& other) noexcept
+      : m_owner(other.m_owner), m_lock(std::move(other.m_lock))
+    {
+        other.m_owner = nullptr;
+    }
+    SharedAccess& operator=(SharedAccess&& other) noexcept
+    {
+        if (this != &other)
+        {
+            m_lock = std::move(other.m_lock);
+            m_owner = other.m_owner;
+            other.m_owner = nullptr;
+        }
+        return *this;
+    }
     SharedAccess(const SharedAccess&) = delete;
     SharedAccess& operator=(const SharedAccess&) = delete;
 
@@ -110,6 +142,7 @@ public:
 private:
     friend class EngineTracker;
     explicit SharedAccess(const EngineTracker& owner) : m_owner(&owner), m_lock(owner.m_mutex) {}
+    void requireOwner() const;
     const EngineTracker* m_owner = nullptr;
     std::shared_lock<std::shared_mutex> m_lock;
 };

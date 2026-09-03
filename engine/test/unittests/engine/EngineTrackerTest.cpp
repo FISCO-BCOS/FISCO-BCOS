@@ -21,6 +21,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <stdexcept>
 #include <thread>
 
 using namespace bcos;
@@ -148,6 +149,19 @@ BOOST_AUTO_TEST_CASE(payload_cache_deduplicates_repeated_payload_id)
     }
     BOOST_REQUIRE(cache.find(id));
     BOOST_CHECK_EQUAL(*cache.payloadIdForHash(h256(7)), id);
+}
+
+BOOST_AUTO_TEST_CASE(payload_cache_replacing_same_id_drops_stale_hash)
+{
+    PayloadCache cache;
+    const PayloadID id = "0xaaaaaaaaaaaaaaaa";
+    cache.put(id, h256(1), makePayload(1));
+    cache.put(id, h256(2), makePayload(2));
+    BOOST_CHECK(!cache.payloadIdForHash(h256(1)).has_value());
+    BOOST_REQUIRE(cache.payloadIdForHash(h256(2)).has_value());
+    BOOST_CHECK_EQUAL(*cache.payloadIdForHash(h256(2)), id);
+    BOOST_REQUIRE(cache.find(id));
+    BOOST_CHECK_EQUAL(cache.find(id)->version, 2);
 }
 
 BOOST_AUTO_TEST_CASE(payload_cache_put_and_retain_only_clears_intermediate_state)
@@ -303,6 +317,77 @@ BOOST_AUTO_TEST_CASE(engine_tracker_updates_safe_and_finalized_on_apply)
     BOOST_CHECK_EQUAL(*tracker.finalizedBlockNumber(), 7);
 }
 
+BOOST_AUTO_TEST_CASE(engine_tracker_rejects_non_canonical_safe)
+{
+    // op-geth: "safe block not in canonical chain"
+    EngineTracker tracker;
+    ResolvedForkchoice bad{
+        .state = ForkchoiceState{h256(10), h256(11), h256(12)},
+        .headNumber = 10,
+        .safeNumber = 8,
+        .finalizedNumber = 7,
+        .headCanonical = true,
+        .payloadAttributesPresent = false,
+        .safeCanonical = false,
+        .finalizedCanonical = true,
+    };
+    checkExceptionMessage<InvalidForkchoiceState>(
+        [&]() { tracker.applyForkchoice(bad); }, "Forkchoice safe block not in canonical chain");
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_rejects_non_canonical_finalized)
+{
+    // op-geth: "final block not in canonical chain"
+    EngineTracker tracker;
+    ResolvedForkchoice bad{
+        .state = ForkchoiceState{h256(10), h256(11), h256(12)},
+        .headNumber = 10,
+        .safeNumber = 8,
+        .finalizedNumber = 7,
+        .headCanonical = true,
+        .payloadAttributesPresent = false,
+        .safeCanonical = true,
+        .finalizedCanonical = false,
+    };
+    checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(bad); },
+        "Forkchoice finalized block not in canonical chain");
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_allows_safe_finalized_number_rewind)
+{
+    // op-geth SetSafe/SetFinalized overwrite; lower numbers are legal when canonical.
+    EngineTracker tracker;
+    ResolvedForkchoice first{
+        .state = ForkchoiceState{h256(10), h256(11), h256(12)},
+        .headNumber = 10,
+        .safeNumber = 8,
+        .finalizedNumber = 7,
+        .headCanonical = true,
+        .payloadAttributesPresent = false,
+    };
+    tracker.applyForkchoice(first);
+    ResolvedForkchoice rewind{
+        .state = ForkchoiceState{h256(11), h256(13), h256(14)},
+        .headNumber = 11,
+        .safeNumber = 6,
+        .finalizedNumber = 5,
+        .headCanonical = true,
+        .payloadAttributesPresent = false,
+    };
+    BOOST_CHECK(tracker.applyForkchoice(rewind) == ForkchoiceApplyResult::Applied);
+    BOOST_CHECK_EQUAL(*tracker.safeBlockNumber(), 6);
+    BOOST_CHECK_EQUAL(*tracker.finalizedBlockNumber(), 5);
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_moved_from_exclusive_access_is_dead)
+{
+    EngineTracker tracker;
+    auto guard = tracker.lockExclusive();
+    auto moved = std::move(guard);
+    BOOST_CHECK_THROW(guard.findPayload("0x01"), std::logic_error);
+    BOOST_CHECK(moved.findPayload("0x01") == nullptr);
+}
+
 BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_unknown)
 {
     EngineTracker tracker;
@@ -324,7 +409,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_incompatible_version)
     guard.putPayload(id, h256(7), makePayload(4));
     guard = EngineTracker::ExclusiveAccess{};
 
-    BOOST_CHECK_THROW(tracker.getPayload(id, 1), IncompatiblePayloadVersion);
+    checkExceptionMessage<IncompatiblePayloadVersion>([&]() { tracker.getPayload(id, 1); },
+        "Payload version is incompatible with requested method version");
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_v4_requires_withdrawals_root)
@@ -335,7 +421,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_v4_requires_withdrawals_root)
         auto guard = tracker.lockExclusive();
         guard.putPayload(id, h256(7), makePayload(3));
     }
-    BOOST_CHECK_THROW(tracker.getPayload(id, 4), IncompatiblePayloadVersion);
+    checkExceptionMessage<IncompatiblePayloadVersion>(
+        [&]() { tracker.getPayload(id, 4); }, "Payload does not carry the V4+ response shape");
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_v4_includes_execution_requests)
@@ -580,6 +667,8 @@ BOOST_AUTO_TEST_CASE(engine_common_validate_payload_attributes_matches_legacy)
     missingBeacon.parentBeaconBlockRoot = std::nullopt;
     BOOST_CHECK(engine_common::validatePayloadAttributes(missingBeacon, 3) ==
                 bcos::engine::detail::validatePayloadAttributes(missingBeacon, 3));
+    BOOST_CHECK(engine_common::validatePayloadAttributes(missingBeacon, 4) ==
+                bcos::engine::detail::validatePayloadAttributes(missingBeacon, 4));
 
     PayloadAttributes badHex = minimalPayloadAttributes();
     badHex.transactions = std::vector<std::string>{"0xZZ"};

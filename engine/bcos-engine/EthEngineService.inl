@@ -10,8 +10,8 @@
 #include <range/v3/view/indirect.hpp>
 #include <range/v3/view/transform.hpp>
 
-#include "EngineServiceImpl.h"
 #include <bcos-ledger/mpt/Constants.h>
+#include <optional>
 
 namespace bcos::engine
 {
@@ -85,6 +85,10 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         co_await bcos::ledger::getBlockHash(view, *headBlockNumber, bcos::ledger::fromStorage);
     bool const headCanonical =
         canonicalHeadHash.has_value() && *canonicalHeadHash == forkchoiceState.headBlockHash;
+    auto canonicalSafeHash =
+        co_await bcos::ledger::getBlockHash(view, *safeBlockNumber, bcos::ledger::fromStorage);
+    auto canonicalFinalizedHash =
+        co_await bcos::ledger::getBlockHash(view, *finalizedBlockNumber, bcos::ledger::fromStorage);
 
     ResolvedForkchoice resolved{
         .state = forkchoiceState,
@@ -93,6 +97,10 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         .finalizedNumber = finalizedBlockNumber,
         .headCanonical = headCanonical,
         .payloadAttributesPresent = payloadAttributes != nullptr,
+        .safeCanonical = engine_common::forkchoiceHashIsCanonical(
+            forkchoiceState.safeBlockHash, canonicalSafeHash),
+        .finalizedCanonical = engine_common::forkchoiceHashIsCanonical(
+            forkchoiceState.finalizedBlockHash, canonicalFinalizedHash),
     };
     if (m_tracker.applyForkchoice(resolved) == ForkchoiceApplyResult::Swallowed)
     {
@@ -219,53 +227,57 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
     }
 
-    auto guard = m_tracker.lockExclusive();
-    auto const& forkchoiceState = guard.forkchoiceState();
-    auto parentKnown = request.executionPayload.parentHash == forkchoiceState.headBlockHash ||
-                       guard.payloadIdForHash(request.executionPayload.parentHash).has_value();
-    if (!parentKnown)
-    {
-        co_return engine_common::makeStatus(
-            PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
-    }
-
+    BuiltPayloadPtr cached;
     PayloadID payloadId;
-    if (auto existingId = guard.payloadIdForHash(request.executionPayload.blockHash))
+    std::optional<EthPayloadArtifacts<ViewType>> localArtifact;
     {
-        payloadId = *existingId;
-    }
-    else
-    {
-        auto hash = bcos::crypto::keccak256Hash(request.executionPayload.blockHash.ref());
-        payloadId = bcos::toHex(hash.ref().getCroppedData(0, 8), "0x");
-    }
+        auto guard = m_tracker.lockExclusive();
+        auto const& forkchoiceState = guard.forkchoiceState();
+        auto parentKnown = request.executionPayload.parentHash == forkchoiceState.headBlockHash ||
+                           guard.payloadIdForHash(request.executionPayload.parentHash).has_value();
+        if (!parentKnown)
+        {
+            co_return engine_common::makeStatus(
+                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+        }
 
-    auto cached = guard.findPayload(payloadId);
-    if (cached)
-    {
-        // Match EngineServiceImpl: on a local-build hit, reject a CL that keeps the
-        // blockHash but alters extraData (cannot re-derive Eth block hash here).
-        if (auto mismatch =
-                detail::compareWithBuiltPayload(request.executionPayload, cached->executionPayload))
+        auto existingId = guard.payloadIdForHash(request.executionPayload.blockHash);
+        if (!existingId)
+        {
+            // #5468 / finding E: op-geth executes (InsertBlockWithoutSetHead) before VALID.
+            // An external payload this node did not build is not executed here yet.
+            co_return engine_common::makeStatus(
+                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+        }
+        payloadId = *existingId;
+        cached = guard.findPayload(payloadId);
+        if (!cached)
+        {
+            co_return engine_common::makeStatus(
+                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+        }
+        if (auto mismatch = detail::compareWithBuiltPayload(
+                request.executionPayload, cached->executionPayload))
         {
             co_return engine_common::makeStatus(
                 PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
         }
-    }
-    auto artifactIt = m_artifacts.find(payloadId);
-    if (artifactIt != m_artifacts.end() && artifactIt->second.view)
-    {
-        if (!cached)
+        auto artifactIt = m_artifacts.find(payloadId);
+        if (artifactIt != m_artifacts.end() && artifactIt->second.view)
         {
-            BOOST_THROW_EXCEPTION(
-                std::runtime_error{"missing cached payload for locally built commit"});
+            localArtifact = std::move(artifactIt->second);
+            m_artifacts.erase(artifactIt);
         }
-        m_globalStateStorage.pushView(std::move(*artifactIt->second.view));
-        if (m_ledger && artifactIt->second.header)
+    }
+
+    if (localArtifact && localArtifact->view)
+    {
+        m_globalStateStorage.pushView(std::move(*localArtifact->view));
+        if (m_ledger && localArtifact->header)
         {
             typename GlobalStateStorageType::MutableStorage prewriteStorage;
             auto block = m_blockFactory->createBlock();
-            block->setBlockHeader(artifactIt->second.header);
+            block->setBlockHeader(localArtifact->header);
             auto const& bloom = cached->executionPayload.logsBloom;
             block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
             for (auto const& tx : cached->executionPayload.transactions)
@@ -275,7 +287,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                     block->appendTransaction(tx.decoded);
                 }
             }
-            for (auto const& receipt : artifactIt->second.receipts)
+            for (auto const& receipt : localArtifact->receipts)
             {
                 block->appendReceipt(receipt);
             }
@@ -294,23 +306,15 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
     }
 
-    auto entry = std::make_shared<BuiltPayload>();
-    entry->version = version;
-    entry->executionPayload = request.executionPayload;
-    entry->blockValue = 0;
-    entry->blobsBundle = std::nullopt;
-    entry->shouldOverrideBuilder = false;
-    entry->parentBeaconBlockRoot = request.parentBeaconBlockRoot;
-    if (version == static_cast<std::uint32_t>(ApiVersion::V3))
     {
-        entry->blobsBundle = BlobsBundleV1{};
+        auto guard = m_tracker.lockExclusive();
+        // Keep the locally built body (executed at FCU). Do not rewrite from the CL request.
+        eth_detail::commitRetainedPayload(
+            guard, m_artifacts, payloadId, cached->executionPayload.blockHash, cached);
     }
 
-    eth_detail::commitRetainedPayload(
-        guard, m_artifacts, payloadId, request.executionPayload.blockHash, std::move(entry));
-
     co_return engine_common::makeStatus(
-        PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);
+        PayloadValidationStatus::Valid, cached->executionPayload.blockHash, std::nullopt);
 }
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>

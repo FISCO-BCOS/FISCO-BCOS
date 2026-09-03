@@ -6,6 +6,7 @@
 #include "EngineTracker.h"
 
 #include <bcos-utilities/Exceptions.h>
+#include <stdexcept>
 
 namespace bcos::engine
 {
@@ -41,6 +42,20 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
             InvalidForkchoiceState{} << bcos::errinfo_comment{
                 "Forkchoice finalized block number must not exceed safe block number"});
     }
+    // Ancestor proxy for a linear ledger: number <= head (above) plus the resolver's
+    // canonical-hash check. op-geth (eth/catalyst/api.go forkchoiceUpdated) rejects
+    // "safe/final block not in canonical chain"; it does NOT reject a lower number
+    // than the previously stored safe/finalized (SetSafe/SetFinalized overwrite).
+    if (safeBlockNumber.has_value() && !resolved.safeCanonical)
+    {
+        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                  "Forkchoice safe block not in canonical chain"});
+    }
+    if (finalizedBlockNumber.has_value() && !resolved.finalizedCanonical)
+    {
+        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                  "Forkchoice finalized block not in canonical chain"});
+    }
 
     std::unique_lock lock(m_mutex);
     if (m_trackedHead.has_value())
@@ -73,6 +88,7 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
         .hash = resolved.state.headBlockHash,
         .blockNumber = headBlockNumber,
     };
+    // Number rewind is legal (op-geth SetSafe/SetFinalized overwrite).
     m_safe = safeBlockNumber;
     m_finalized = finalizedBlockNumber;
     return ForkchoiceApplyResult::Applied;
@@ -145,67 +161,95 @@ EngineTracker::SharedAccess EngineTracker::lockShared() const
     return SharedAccess{*this};
 }
 
+void EngineTracker::ExclusiveAccess::requireOwner() const
+{
+    if (m_owner == nullptr || !m_lock.owns_lock())
+    {
+        BOOST_THROW_EXCEPTION(std::logic_error{"EngineTracker::ExclusiveAccess used after move"});
+    }
+}
+
+void EngineTracker::SharedAccess::requireOwner() const
+{
+    if (m_owner == nullptr || !m_lock.owns_lock())
+    {
+        BOOST_THROW_EXCEPTION(std::logic_error{"EngineTracker::SharedAccess used after move"});
+    }
+}
+
 BuiltPayloadPtr EngineTracker::ExclusiveAccess::findPayload(const PayloadID& id) const
 {
+    requireOwner();
     return m_owner->m_payloads.find(id);
 }
 
 std::optional<PayloadID> EngineTracker::ExclusiveAccess::payloadIdForHash(
     const h256& blockHash) const
 {
+    requireOwner();
     return m_owner->m_payloads.payloadIdForHash(blockHash);
 }
 
 PayloadCache::PutResult EngineTracker::ExclusiveAccess::putPayload(
     PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
 {
+    requireOwner();
     return m_owner->m_payloads.put(std::move(id), blockHash, std::move(entry));
 }
 
 PayloadCache::PutResult EngineTracker::ExclusiveAccess::putUnboundedPayload(
     PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
 {
+    requireOwner();
     return m_owner->m_payloads.putUnbounded(std::move(id), blockHash, std::move(entry));
 }
 
 void EngineTracker::ExclusiveAccess::retainOnly(const PayloadID& id, const h256& blockHash)
 {
+    requireOwner();
     m_owner->m_payloads.retainOnly(id, blockHash);
 }
 
 PayloadCache::PutResult EngineTracker::ExclusiveAccess::putAndRetainPayload(
     PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
 {
+    requireOwner();
     return m_owner->m_payloads.putAndRetainOnly(std::move(id), blockHash, std::move(entry));
 }
 
 PayloadCache EngineTracker::ExclusiveAccess::snapshotPayloadCache() const
 {
+    requireOwner();
     return m_owner->m_payloads.duplicate();
 }
 
-void EngineTracker::ExclusiveAccess::restorePayloadCache(PayloadCache cache) noexcept
+void EngineTracker::ExclusiveAccess::restorePayloadCache(PayloadCache cache)
 {
+    requireOwner();
     m_owner->m_payloads.publishFrom(std::move(cache));
 }
 
 const ForkchoiceState& EngineTracker::ExclusiveAccess::forkchoiceState() const
 {
+    requireOwner();
     return m_owner->m_forkchoiceState;
 }
 
 BuiltPayloadPtr EngineTracker::SharedAccess::findPayload(const PayloadID& id) const
 {
+    requireOwner();
     return m_owner->m_payloads.find(id);
 }
 
 std::optional<PayloadID> EngineTracker::SharedAccess::payloadIdForHash(const h256& blockHash) const
 {
+    requireOwner();
     return m_owner->m_payloads.payloadIdForHash(blockHash);
 }
 
 const ForkchoiceState& EngineTracker::SharedAccess::forkchoiceState() const
 {
+    requireOwner();
     return m_owner->m_forkchoiceState;
 }
 

@@ -93,20 +93,30 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
                                                  " is not supported "
                                                  "(must be >= 0)"));
     }
-    // Saturate the upper bound: any version >= the last scheduler index selects the
-    // newest executor (the v3 OP scheduler in OP mode, else the v2 EthereumExecutor).
-    // This keeps the version space open-ended above the top slot so a future executor
-    // version needs no array/schema change.
-    if (static_cast<size_t>(version) >= m_schedulers.size())
+    // Saturate to the last wired slot (not necessarily the last array index — slot 3
+    // is a refuse stub on non-OP nodes). Versions above that still pick the newest
+    // live executor so the version space stays open-ended.
+    auto const cap = static_cast<size_t>(
+        std::min(m_highestWiredIndex, static_cast<int>(m_schedulers.size()) - 1));
+    if (static_cast<size_t>(version) > cap)
     {
         INITIALIZER_LOG(WARNING) << LOG_DESC(
-                                        "executor version above the newest known executor; "
-                                        "saturating to the newest")
-                                 << LOG_KV("requested", version)
-                                 << LOG_KV("selected", m_schedulers.size() - 1);
+                                        "executor version above the newest wired executor; "
+                                        "saturating to the newest wired slot")
+                                 << LOG_KV("requested", version) << LOG_KV("selected", cap);
     }
-    m_currentIndex =
-        static_cast<int>(std::min<size_t>(static_cast<size_t>(version), m_schedulers.size() - 1));
+    m_currentIndex = static_cast<int>(std::min<size_t>(static_cast<size_t>(version), cap));
+}
+
+void bcos::scheduler_v1::MultiVersionScheduler::setHighestWiredIndex(int index)
+{
+    if (index < 0 || static_cast<size_t>(index) >= m_schedulers.size())
+    {
+        BOOST_THROW_EXCEPTION(
+            ExecutorVersionNotSupported() << errinfo_comment(
+                "highest wired executor index " + std::to_string(index) + " is out of range"));
+    }
+    m_highestWiredIndex = index;
 }
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::scheduler(
     int version)

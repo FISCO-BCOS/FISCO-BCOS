@@ -1,10 +1,9 @@
 #pragma once
 // Golden sample loading + OP header decode + engine_newPayloadV4 params construction.
-// The golden encodedHeaderHex is op-geth v1.101702.2's full RLP header; parsed via FISCO's
-// BlockHeaderImpl::decodeOpHeader (BlockHeader.h:206, strict 21-field RLP inverse), and the
-// accessors build the params. Timestamp units: decodeOpHeader reads OP seconds and stores
-// FISCO milliseconds (x1000, BlockHeader.h:195 comment); params must convert back to OP
-// seconds (/1000).
+// The golden encodedHeaderHex is op-geth v1.101702.2 (commit
+// e8800cffe53d459cde8a07c8e8f1de9d86e79e07) full RLP header; parsed via
+// EthBlockHeader::toTarsHeader. Timestamp units: the RLP decoder reads OP seconds and stores FISCO
+// milliseconds (x1000); params convert back to OP seconds (/1000).
 #include "SeedPreState.h"
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
@@ -70,8 +69,8 @@ inline GoldenSample loadChainedSample(std::string const& name)
     return sample;
 }
 
-/// Parses golden.encodedHeaderHex into a FISCO BlockHeaderImpl via decodeOpHeader.
-/// Returns nullptr on failure (decodeOpHeader returns Error::UniquePtr; non-null = failed).
+/// Parses golden.encodedHeaderHex into a FISCO BlockHeaderImpl via
+/// EthBlockHeader::toTarsHeader. Throws on decode failure.
 inline bcostars::protocol::BlockHeaderImpl::Ptr decodeGoldenHeader(GoldenSample const& sample)
 {
     auto bytes = bcos::fromHex(sample.golden["encodedHeaderHex"].asString());
@@ -125,14 +124,14 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
     ep["blockNumber"] = quantityOf(bcos::u256(header->number()));
     ep["gasLimit"] = quantityOf(header->gasLimit());
     ep["gasUsed"] = quantityOf(header->gasUsed());
-    // timestamp: OP seconds (decodeOpHeader stored milliseconds; /1000)
+    // timestamp: OP seconds (toTarsHeader stored milliseconds; /1000)
     ep["timestamp"] = quantityOf(bcos::u256(header->timestamp() / 1000));
     ep["extraData"] =
         hexOfBytes(header->extraData().toBytes());         // extraData() returns bytesConstRef
     ep["baseFeePerGas"] = quantityOf(*header->baseFee());  // baseFee() returns optional<u256>
     ep["blockHash"] = golden["blockHash"].asString();
-    // OP path requires present-and-empty (validateOpNewPayloadRequest
-    // EngineServiceImpl.cpp:301-303)
+    // OP path requires present-and-empty (validateOpNewPayloadRequest,
+    // OpEngineService.cpp)
     ep["withdrawals"] = Json::Value(Json::arrayValue);
     Json::Value txs(Json::arrayValue);
     for (auto const& raw : golden["rawTransactions"])
@@ -141,9 +140,9 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
     if (header->withdrawalsRoot())
         ep["withdrawalsRoot"] = hexPrefixedH256(*header->withdrawalsRoot());
     ep["blobGasUsed"] =
-        quantityOf(*header->blobGasUsed());  // optional<u256>, always filled by decodeOpHeader
+        quantityOf(*header->blobGasUsed());  // optional<u256>, always filled by toTarsHeader
     ep["excessBlobGas"] =
-        quantityOf(*header->excessBlobGas());  // optional<u256>, always filled by decodeOpHeader
+        quantityOf(*header->excessBlobGas());  // optional<u256>, always filled by toTarsHeader
 
     Json::Value params(Json::arrayValue);
     params.append(ep);

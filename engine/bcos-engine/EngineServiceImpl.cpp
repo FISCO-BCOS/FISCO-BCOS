@@ -17,6 +17,7 @@
  */
 
 #include "EngineServiceImpl.h"
+#include "EngineServiceCommon.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-framework/engine/OpBaseFee.h>
@@ -240,9 +241,10 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
             "non-empty withdrawals are not supported until the withdrawals trie root is "
             "computed");
     }
-    if (version == 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
+    if (version >= 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
     {
-        return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3");
+        // op-geth ForkchoiceUpdatedV3/V4 both reject missing BeaconRoot when attrs present.
+        return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3 and later");
     }
     // eip1559Params (Holocene) and minBaseFee (Jovian) reach the EL only on a
     // forkchoiceUpdatedV3. op-node's FCU version ladder tops out at V3 — Config
@@ -297,14 +299,13 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
         {
             return std::string("eip1559Params must be exactly 8 bytes");
         }
-        // ValidateHolocene1559Params (op-core/eip1559/eip1559.go:89-100): denominator
-        // and elasticity must be both zero or both non-zero. 0,0 is valid attribute
-        // input and is translated to the Canyon constants by encodeOptimismExtraData.
+        // ValidateHolocene1559Params: reject only e!=0 && d==0. 0,0 is valid
+        // attribute input and is translated to Canyon constants by encodeOptimismExtraData.
         auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
-        if ((denominator == 0) != (elasticity == 0))
+        if (auto error =
+                bcos::engine::engine_common::validateHolocene1559Params(denominator, elasticity))
         {
-            return std::string(
-                "eip1559Params denominator and elasticity must be both zero or both non-zero");
+            return error;
         }
     }
     return std::nullopt;
@@ -388,11 +389,91 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
 std::optional<std::string> bcos::engine::detail::compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built)
 {
+    // op-geth ExecutableDataToBlock re-derives keccak256(rlp(header)) from every
+    // hash-relevant field. Compare the fields this node actually built (cache hit).
+    // Optional V3-omitted fields (withdrawalsRoot / blob-gas) are compared only when
+    // the CL sent them — a missing optional is not a mismatch.
+    auto mismatch = [](char const* field) {
+        return std::string("executionPayload.") + field +
+               " does not match the payload this node built under the submitted blockHash";
+    };
     if (submitted.extraData != built.extraData)
     {
-        return std::string(
-            "executionPayload.extraData does not match the payload this node built under the "
-            "submitted blockHash");
+        return mismatch("extraData");
+    }
+    if (submitted.parentHash != built.parentHash)
+    {
+        return mismatch("parentHash");
+    }
+    if (submitted.stateRoot != built.stateRoot)
+    {
+        return mismatch("stateRoot");
+    }
+    if (submitted.receiptsRoot != built.receiptsRoot)
+    {
+        return mismatch("receiptsRoot");
+    }
+    if (submitted.logsBloom != built.logsBloom)
+    {
+        return mismatch("logsBloom");
+    }
+    if (submitted.prevRandao != built.prevRandao)
+    {
+        return mismatch("prevRandao");
+    }
+    if (submitted.gasLimit != built.gasLimit)
+    {
+        return mismatch("gasLimit");
+    }
+    if (submitted.gasUsed != built.gasUsed)
+    {
+        return mismatch("gasUsed");
+    }
+    if (submitted.baseFeePerGas != built.baseFeePerGas)
+    {
+        return mismatch("baseFeePerGas");
+    }
+    if (submitted.blockHash != built.blockHash)
+    {
+        return mismatch("blockHash");
+    }
+    if (submitted.feeRecipient != built.feeRecipient)
+    {
+        return mismatch("feeRecipient");
+    }
+    if (submitted.timestamp != built.timestamp)
+    {
+        return mismatch("timestamp");
+    }
+    if (submitted.blockNumber != built.blockNumber)
+    {
+        return mismatch("blockNumber");
+    }
+    if (submitted.transactions.size() != built.transactions.size())
+    {
+        return mismatch("transactions");
+    }
+    for (std::size_t i = 0; i < submitted.transactions.size(); ++i)
+    {
+        if (submitted.transactions[i].raw != built.transactions[i].raw)
+        {
+            return mismatch("transactions");
+        }
+    }
+    if (submitted.withdrawalsRoot.has_value() && built.withdrawalsRoot.has_value() &&
+        *submitted.withdrawalsRoot != *built.withdrawalsRoot)
+    {
+        return mismatch("withdrawalsRoot");
+    }
+    if (submitted.blobGasUsed.has_value() && built.blobGasUsed.has_value() &&
+        *submitted.blobGasUsed != *built.blobGasUsed)
+    {
+        return mismatch("blobGasUsed");
+    }
+    if (submitted.excessBlobGas.has_value() && built.excessBlobGas.has_value() &&
+        *submitted.excessBlobGas != *built.excessBlobGas)
+    {
+        return mismatch("excessBlobGas");
     }
     return std::nullopt;
 }

@@ -178,6 +178,18 @@ void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, 
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
+void registerHashToNumberOnly(MLS& multiLayerStorage, bcos::h256 const& blockHash, int64_t number)
+{
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+    bcos::storage::Entry entry;
+    entry.set(boost::lexical_cast<std::string>(number));
+    bcos::task::syncWait(bcos::storage2::writeOne(view,
+        StateKey{bcos::ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
+        std::move(entry)));
+    bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
+}
+
 void checkStatusParity(
     bcos::engine::PayloadStatus const& left, bcos::engine::PayloadStatus const& right)
 {
@@ -226,10 +238,11 @@ struct OpServicePair
     EngineOpScheduler scheduler{bcos::evm::opstack::OpForkFlags{}, {}};
     OpEngine service;
 
-    OpServicePair()
-      : service(memPool, storage, executor, scheduler, blockFactory, nullptr,
+    explicit OpServicePair(bool allowSynthesizedL1Attributes = true)
+      : service(memPool, storage, scheduler, blockFactory, nullptr,
             bcos::engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), nullptr)
+            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), nullptr, nullptr,
+            allowSynthesizedL1Attributes)
     {}
 };
 
@@ -253,7 +266,7 @@ struct SharedForkchoicePair
 
     SharedForkchoicePair()
       : legacy(legacyMemPool, legacyStorage, legacyExecutor, legacyScheduler, blockFactory),
-        op(opMemPool, opStorage, opExecutor, opScheduler, blockFactory, nullptr,
+        op(opMemPool, opStorage, opScheduler, blockFactory, nullptr,
             bcos::engine::c_defaultBlockTxCountLimit,
             static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), nullptr)
     {}
@@ -470,6 +483,47 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
         BOOST_CHECK_EQUAL(stableHeader->number(), kTargetNumber);
         BOOST_CHECK_EQUAL(stableHeader.get(), initialHeader.get());
     }
+}
+
+BOOST_AUTO_TEST_CASE(op_fcu_rejects_non_canonical_safe)
+{
+    // op-geth: HASH_2_NUMBER finds the block, but ReadCanonicalHash(number) differs.
+    OpServicePair pair;
+    bcos::engine::ForkchoiceState forkchoice{
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        bcos::h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        bcos::h256("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")};
+    auto const canonicalSafe =
+        bcos::h256("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
+    registerVerifiedBlock(pair.storage, forkchoice.headBlockHash, 10);
+    registerVerifiedBlock(pair.storage, canonicalSafe, 8);
+    registerHashToNumberOnly(pair.storage, forkchoice.safeBlockHash, 8);
+    registerVerifiedBlock(pair.storage, forkchoice.finalizedBlockHash, 7);
+    BOOST_CHECK_EXCEPTION(
+        bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, nullptr, 3)),
+        bcos::engine::InvalidForkchoiceState, [&](bcos::engine::InvalidForkchoiceState const& e) {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            return comment != nullptr && *comment == "Forkchoice safe block not in canonical chain";
+        });
+}
+
+BOOST_AUTO_TEST_CASE(op_fcu_rejects_empty_txs_when_synthesis_disabled)
+{
+    // op_engine_rpc / op-geth: do not invent an L1-attributes deposit.
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false);
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.transactions = std::nullopt;
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
+    BOOST_CHECK(
+        result.payloadStatus.validationError->find("L1 attributes deposit") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
