@@ -71,6 +71,15 @@ public:
         call(std::move(tx), std::move(callback));
     }
 
+    // Adopt a verify=false probe as the pending block without re-executing.
+    // Default re-runs executeBlock(verify=true); OpScheduler overrides this.
+    virtual void adoptProbeAsPending(bcos::protocol::Block::Ptr block,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
+            callback)
+    {
+        executeBlock(std::move(block), true, std::move(callback));
+    }
+
     // clear all status
     virtual void reset(std::function<void(Error::Ptr)> callback) = 0;
     virtual void getCode(
@@ -86,7 +95,7 @@ public:
     virtual void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(Error::Ptr)> callback) = 0;
 
-    virtual void stop() {};
-    virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) {};
+    virtual void stop(){};
+    virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig){};
 };
 }  // namespace bcos::scheduler

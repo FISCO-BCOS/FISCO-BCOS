@@ -31,11 +31,16 @@ namespace bcos::evm
 /// namespaces (and the code that references it from either) resolve it by outer-scope lookup.
 struct OpConsensusError : std::runtime_error
 {
-    using std::runtime_error::runtime_error;
-    /// Offending tx (when the rejection is per-tx). Downstream pool eviction reads this
-    /// field, never the message text — a string-format contract would silently break the
-    /// moment anyone rewords the message.
     std::optional<bcos::h256> txHash;
+    /// True when the block gas pool cannot fit this tx (skip this build, do not evict).
+    bool capacity = false;
+
+    explicit OpConsensusError(std::string const& what_arg) : std::runtime_error(what_arg) {}
+
+    /// Per-tx reject. `txHash` is structured; do not encode it into `what()`.
+    OpConsensusError(std::string what_arg, bcos::h256 hash, bool _capacity = false)
+      : std::runtime_error(std::move(what_arg)), txHash(hash), capacity(_capacity)
+    {}
 };
 }  // namespace bcos::evm
 
