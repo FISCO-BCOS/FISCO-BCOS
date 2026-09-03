@@ -685,4 +685,30 @@ BOOST_AUTO_TEST_CASE(FailedCreateDepositStillBumpsNonceAndDeploysNothing)
     BOOST_CHECK_EQUAL(ts.count(evmone::state::compute_create_address(kFrom, 5)), 0u);
 }
 
+// R127: op-geth AddBalance uses uint256.Int.Add (wraps mod 2^256). A failed-deposit
+// reject on overflow would diverge from that EL.
+BOOST_AUTO_TEST_CASE(MintAdditionWrapsLikeOpGethUint256Add)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kFrom] = {.nonce = 0, .balance = ~intx::uint256{0}, .storage = {}, .code = {}};
+    test::TestBlockHashes hashes;
+    DepositTx dep{.source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = kFrom,
+        .mint = intx::uint256{2},
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = false,
+        .data = {}};
+    evmone::state::StateDiff diff;
+    const auto r = runDeposit(ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000,
+        kOpTestReceiptFactory, diff);
+    bcos::evm::applyStateDiffStrict(ts, diff);
+
+    BOOST_CHECK_EQUAL(r->status(), 0);
+    BOOST_CHECK_EQUAL(ts.at(kFrom).balance, intx::uint256{1});
+    BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 1u);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
