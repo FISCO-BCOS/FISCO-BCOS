@@ -1,10 +1,9 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// Unit tests for the OP block-context + conversion helpers (OpCommon.h). The RPC display-grade
-// raw-envelope RLP decode primitives were retired (block execution consumes the block's tars
-// Transaction objects); the CONSENSUS-grade deposit-envelope decoder is
-// OpstackExecutor.h's decodeDepositEnvelope, covered by OpDepositEnvelopeTest.
+// Unit tests for the OP block-context + conversion helpers (OpCommon.h). The raw-envelope RLP
+// decode primitives were retired with envelope parsing (block execution consumes the block's tars
+// Transaction objects), so this covers only the retained conversions / narrowing.
 
 #include <opstack-executor/OpCommon.h>
 
@@ -36,9 +35,11 @@ BOOST_AUTO_TEST_CASE(narrowU256ToU64Bounds)
 {
     // Bounds-checked narrowing: in-range passes, > uint64_max throws OpConsensusError.
     BOOST_CHECK_EQUAL(narrowU256ToU64(bcos::u256(42), "test"), 42U);
-    BOOST_CHECK_EQUAL(narrowU256ToU64(bcos::u256(std::numeric_limits<uint64_t>::max()), "test"),
+    BOOST_CHECK_EQUAL(
+        narrowU256ToU64(bcos::u256(std::numeric_limits<uint64_t>::max()), "test"),
         std::numeric_limits<uint64_t>::max());
-    BOOST_CHECK_THROW(narrowU256ToU64(bcos::u256(std::numeric_limits<uint64_t>::max()) + 1, "test"),
+    BOOST_CHECK_THROW(
+        narrowU256ToU64(bcos::u256(std::numeric_limits<uint64_t>::max()) + 1, "test"),
         OpConsensusError);
 }
 
