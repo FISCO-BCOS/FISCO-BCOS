@@ -1,7 +1,6 @@
 #pragma once
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -34,11 +33,6 @@ inline std::string_view accountTablePrefix(std::string_view address, bool system
                precompiled::contains(bcos::precompiled::c_systemTxsAddress, address)) ?
                ledger::SYS_DIRECTORY::SYS_APPS :
                ledger::SYS_DIRECTORY::USER_APPS;
-}
-
-inline std::string_view accountTablePrefix(std::string_view address, int executorVersion)
-{
-    return accountTablePrefix(address, executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION);
 }
 
 template <class Storage>

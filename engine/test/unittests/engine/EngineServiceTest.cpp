@@ -283,9 +283,13 @@ struct BloomScheduler
         Keccak256 hasher;
         auto receipt1 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
         receipt1->setLogsBloom({bloom1.data(), bloom1.size()});
+        // Non-zero gasUsed so the cumulativeGasUsed assertions below can distinguish real
+        // accumulation (21000 then 51000) from a no-op finalizeReceipts.
+        receipt1->inner().data.gasUsed = "21000";
         receipt1->calculateHash(hasher);
         auto receipt2 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
         receipt2->setLogsBloom({bloom2.data(), bloom2.size()});
+        receipt2->inner().data.gasUsed = "30000";
         receipt2->calculateHash(hasher);
 
         lastReceipts = {receipt1, receipt2};
@@ -1316,8 +1320,10 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     BOOST_REQUIRE_EQUAL(bloomScheduler.lastReceipts.size(), 2u);
     BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[0]->transactionIndex(), 0u);
     BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[1]->transactionIndex(), 1u);
-    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[0]->cumulativeGasUsed(), "0");
-    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[1]->cumulativeGasUsed(), "0");
+    // gasUsed 21000 then 30000: finalizeReceipts must accumulate to 21000 / 51000 (the stub
+    // carries non-zero gasUsed precisely so these assertions can detect a no-op finalizer).
+    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[0]->cumulativeGasUsed(), "21000");
+    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[1]->cumulativeGasUsed(), "51000");
 
     std::vector<bcos::bytes> receiptRlps;
     for (auto const& receipt : bloomScheduler.lastReceipts)

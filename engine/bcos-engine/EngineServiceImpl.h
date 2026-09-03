@@ -988,8 +988,9 @@ private:
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
 
         // Ethereum-compatible roots (executor_version >= 2): txsRoot/receiptsRoot commit to
-        // the transaction / receipt tries and empty blocks get emptyRootHash(); legacy
-        // executors keep the Merkle roots and the zero empty-root behaviour.
+        // the transaction / receipt tries; legacy executors keep the Merkle roots for
+        // non-empty blocks. Empty blocks get emptyRootHash() on every executor version (see
+        // the empty-block branch below) — there is no zero empty-root behaviour.
         const bool ethereumRoots =
             ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION;
 

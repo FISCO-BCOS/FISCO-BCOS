@@ -28,6 +28,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -156,7 +157,10 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
     {
         executorVersion = std::stoi(std::get<0>(*config));
     }
-    auto const tablePrefix = account::accountTablePrefix(_address, executorVersion);
+    // Compute the routing bool at the call site (the version-taking overload was removed to
+    // avoid a bool/int overload pair that reinterprets the same argument by type).
+    auto const tablePrefix =
+        account::accountTablePrefix(_address, executorVersion >= ETHEREUM_EXECUTOR_VERSION);
     auto const contractTableName = getContractTableName(tablePrefix, _address);
     co_return co_await bcos::storage2::readOne(
         *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
@@ -1935,8 +1939,8 @@ static void verifyL2FeatureFlagsSlot(
     }
 }
 
-static task::Task<void> importGenesisState(
-    ::ranges::forward_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+static task::Task<void> importGenesisState(::ranges::forward_range auto const& allocs,
+    auto& storage, const crypto::Hash& hashImpl, bool systemAsUser)
 {
     // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
     // a prefix. Strip a leading 0x so both shapes unhex cleanly. The exact-width /
@@ -1982,8 +1986,12 @@ static task::Task<void> importGenesisState(
             slots.emplace_back(evmKey, evmValue);
         }
 
-        account::EVMAccount account(
-            storage, address, features.get(Features::Flag::feature_raw_address));
+        // systemAsUser routes the c_systemTxsAddress members under /apps/ like the v2
+        // executor (EthereumState) and the RPC read side do. Reserved-address allocs are
+        // rejected earlier by computeGenesisStateTrie, so this is defensive uniformity
+        // rather than a reachable behaviour change.
+        account::EVMAccount account(storage, address,
+            features.get(Features::Flag::feature_raw_address), systemAsUser);
         co_await account.create();
 
         if (codeHash.has_value())
@@ -2517,8 +2525,11 @@ bool Ledger::buildGenesisBlock(
         }
 
         co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
-        co_await importGenesisState(
-            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl());
+        // executor_version is written to storage only below, after this import runs, so the
+        // routing flag must come from the genesis config here rather than be read back.
+        co_await importGenesisState(genesis.m_allocs, *m_stateStorage,
+            *m_blockFactory->cryptoSuite()->hashImpl(),
+            /*systemAsUser=*/genesis.m_executorVersion >= ETHEREUM_EXECUTOR_VERSION);
 
         // Scenario B (L2): block 1 builds the MPT incrementally on top of the genesis state
         // root (buildAndCollect with the genesis root as parent) and reads the parent trie

@@ -200,22 +200,34 @@ BOOST_AUTO_TEST_CASE(uint256EncodeAfterShrinkReuse)
     // object that previously held a wider value keeps STALE high limbs after a narrower value
     // is assigned. length() must scan only the valid limbs (backend().size()), otherwise the
     // RLP header overstates the payload length and the encoded bytes no longer round-trip.
+    //
+    // The narrowed value MUST be >= 0x80 (BYTES_HEAD_BASE): length() early-returns 1 for any
+    // smaller value and never reaches the limb scan the fix changed, so such a test would
+    // pass on the buggy base too. 0x1234 fits in a single limb (backend().size() == 1 after
+    // the shrink, below the old scan's internal_limb_count of 4), but the stale high limb
+    // from the 28-byte value is non-zero, which is exactly the trigger the old code got wrong.
     u256 v("0x0100020003000400050006000700080009000A0B4B000C000D000E01");
-    v = u256(0x14u);
-    BOOST_CHECK_EQUAL(bcos::codec::rlp::length(v), 1u);
+    v = u256(0x1234u);
+    BOOST_CHECK_EQUAL(bcos::codec::rlp::length(v), 3u);
     bcos::bytes encoded;
     bcos::codec::rlp::encode(encoded, v);
+    BOOST_CHECK_EQUAL(toHex(encoded), "821234");
     BOOST_CHECK_EQUAL(encoded.size(), bcos::codec::rlp::length(v));
 
-    // A list containing the shrunken value must decode back to the same value.
+    // A list containing the shrunken value must decode back to the same value. Shrink in
+    // place inside the vector element (rather than copying a pre-shrunk u256 into a fresh
+    // element) so the test does not depend on boost's copy-constructor semantics.
+    std::vector<u256> list{u256("0x0100020003000400050006000700080009000A0B4B000C000D000E01")};
+    list[0] = u256(0x1234u);
     bcos::bytes listEncoded;
-    bcos::codec::rlp::encode(listEncoded, std::vector<u256>{v});
+    bcos::codec::rlp::encode(listEncoded, list);
+    BOOST_CHECK_EQUAL(toHex(listEncoded), "c3821234");
     bcos::bytesRef input(listEncoded.data(), listEncoded.size());
     std::vector<u256> decoded;
     auto err = bcos::codec::rlp::decode(input, decoded);
     BOOST_CHECK(err == nullptr);
     BOOST_REQUIRE_EQUAL(decoded.size(), 1u);
-    BOOST_CHECK_EQUAL(decoded.front(), u256(0x14u));
+    BOOST_CHECK_EQUAL(decoded.front(), u256(0x1234u));
 }
 
 BOOST_AUTO_TEST_CASE(vectorsEncode)

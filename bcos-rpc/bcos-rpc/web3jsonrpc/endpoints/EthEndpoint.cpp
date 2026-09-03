@@ -23,6 +23,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-ledger/LedgerMethods.h"
@@ -347,7 +348,8 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     {
         executorVersion = std::stoi(std::get<0>(*config));
     }
-    auto const tablePrefix = ledger::account::accountTablePrefix(addressStr, executorVersion);
+    auto const tablePrefix = ledger::account::accountTablePrefix(
+        addressStr, executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION);
     auto const contractTableName = getContractTableName(tablePrefix, addressStr);
 
     // The empty-slot value: a 32-byte zero, matching the flat read's padded rendering.
