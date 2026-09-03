@@ -25,6 +25,7 @@
 #include "bcos-framework/protocol/TxGasModel.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rlp-protocol/Web3TxEnvelope.h"
 #include "bcos-tx-validator/Normalize.h"
 #include "bcos-utilities/BoostLog.h"
@@ -260,6 +261,27 @@ TransactionStatus checkSignature(Envelope const& in)
         // reintroduces the bypass.
         in.tx.clearSenderAndHash();
         in.tx.verify(*in.cryptoSuite.hashImpl(), *in.cryptoSuite.signatureImpl());
+
+        // EIP-2 low-s, for Web3 transactions only. This is the ONLY place a tars-form Web3
+        // transaction meets the rule: the raw-bytes decode funnel on the RPC ingress rejects a
+        // high-s signature inline, but a transaction that arrives from a peer already in tars
+        // form never goes through that decode. Recovery SUCCEEDS on the high-s twin -- it just
+        // derives a different address -- so without this the same logical transaction enters the
+        // pool a second time under a distinct hash. An empty signature (deposits) is exempt, and
+        // anything shorter than 65 bytes was already rejected by verify() above.
+        if (in.tx.type() == static_cast<uint8_t>(protocol::TransactionType::Web3Transaction))
+        {
+            if (auto const sig = in.tx.signatureData();
+                sig.size() == static_cast<size_t>(crypto::SECP256K1_SIGNATURE_LEN))
+            {
+                if (checkEip2Signature(sig.getCroppedData(0, crypto::SECP256K1_SIGNATURE_R_LEN),
+                        sig.getCroppedData(crypto::SECP256K1_SIGNATURE_R_LEN,
+                            crypto::SECP256K1_SIGNATURE_S_LEN)) != nullptr)
+                {
+                    return TransactionStatus::InvalidSignature;
+                }
+            }
+        }
     }
     catch (...)
     {
@@ -419,6 +441,13 @@ TransactionStatus checkNonceNotMax(StateInputs const& in)
     }
     return TransactionStatus::None;
 }
+
+/// The window below adds DEFAULT_WEB3_NONCE_CHECK_LIMIT to the account nonce in u256, which is
+/// boost::multiprecision::unchecked and would wrap silently near 2^256. That is safe only because
+/// NonceNotMax has already refused any account nonce at or above 2^64 - 1 -- an ordering
+/// dependency between two checks, pinned here so a reorder cannot quietly reopen it.
+static_assert(detail::indexOf(c_stateOrder, Check::NonceNotMax) <
+              detail::indexOf(c_stateOrder, Check::Web3NonceWindow));
 
 TransactionStatus checkWeb3NonceWindow(StateInputs const& in)
 {

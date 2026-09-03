@@ -26,13 +26,14 @@
 namespace bcos::txvalidator
 {
 
-/// Routing key. Decided from the SIGNED envelope's first byte during normalization, never from
-/// the tars mirror -- a peer can set the mirror kind to 0 and a legacy-keyed check set would
-/// then skip the fee-market rules a 1559 envelope is subject to.
+/// Routing key. Decided from the SIGNED envelope's first byte -- by kindOf() in TxValidator.cpp,
+/// once normalization has authenticated that envelope -- never from the tars mirror: a peer can
+/// set the mirror kind to 0 and a legacy-keyed check set would then skip the fee-market rules a
+/// 1559 envelope is subject to.
 ///
 /// The enumerator values are NOT EIP-2718 type bytes (Web3AccessList is 2 here and 0x01 on the
-/// wire). A TxKind is produced only by kindOf() in TxValidator.cpp, which dispatches on the
-/// decoded envelope; casting a type byte to this enum is always wrong.
+/// wire). kindOf() is the only producer, dispatching on the decoded envelope; casting a type
+/// byte to this enum is always wrong.
 enum class TxKind : uint8_t
 {
     Bcos,            ///< outer tars type == BCOSTransaction; no EIP-2718 envelope
@@ -68,9 +69,10 @@ enum class AdmissionContext : uint8_t
 /// eth_sendRawTransaction would be treated as pre-verified and skip signature, EOA, nonce and
 /// balance checks.
 ///
-/// The verified/not-verified STATE is read only inside the Signature check itself, where
-/// Transaction::verify() short-circuits on `if (!tainted()) return;`. That makes the check
-/// idempotent, so no "already verified" flag has to be threaded through any call chain.
+/// No "already verified" state is consulted at all. The Signature check re-taints the
+/// transaction (clearSenderAndHash) before Transaction::verify(), so recovery runs on every call
+/// and no flag has to be threaded through any call chain. The cost, one recovery per transaction
+/// on the sync path, is what the pool-side validator this replaces paid too.
 enum class SignaturePolicy : uint8_t
 {
     Required,
@@ -201,6 +203,23 @@ constexpr Check unionOf(std::array<Check, N> const& stage)
         out = out | check;
     }
     return out;
+}
+
+/// Position of @p check in @p stage, or the stage's size when absent. For static_asserts that
+/// pin one check's place relative to another's within a stage.
+template <std::size_t N>
+constexpr std::size_t indexOf(std::array<Check, N> const& stage, Check check)
+{
+    std::size_t index = 0;
+    for (auto entry : stage)
+    {
+        if (entry == check)
+        {
+            return index;
+        }
+        ++index;
+    }
+    return index;
 }
 }  // namespace detail
 

@@ -86,6 +86,10 @@ struct TxSpec
     /// signature bytes as sent) but recovery is impossible, so the rejection is the signature
     /// check's own and not normalization's.
     bool unrecoverableSignature = false;
+    /// Replace s by n - s after signing: the same envelope under the other of the two signatures
+    /// every ECDSA message has. Recovery succeeds on it (to a different address), and only the
+    /// EIP-2 low-s rule tells the twins apart.
+    bool highS = false;
 };
 
 std::shared_ptr<bcostars::protocol::TransactionImpl> admitTx(TxSpec const& spec = {})
@@ -115,6 +119,14 @@ std::shared_ptr<bcostars::protocol::TransactionImpl> admitTx(TxSpec const& spec 
     web3.signatureR.assign(signature->begin(), signature->begin() + 32);
     web3.signatureS.assign(signature->begin() + 32, signature->begin() + 64);
     web3.signatureV = static_cast<uint64_t>((*signature)[64]);
+    if (spec.highS)
+    {
+        auto const s = fromBigEndian<u256>(web3.signatureS);
+        BOOST_REQUIRE_LT(s, crypto::c_secp256k1nOver2);  // the signer emits low-s; the twin is high
+        bcos::bytes twin(32, 0);
+        toBigEndian(crypto::c_secp256k1n - s, twin);
+        web3.signatureS = std::move(twin);
+    }
     if (spec.unrecoverableSignature)
     {
         web3.signatureR.assign(32, 0);
@@ -675,6 +687,99 @@ BOOST_AUTO_TEST_CASE(systemTransactionIsMarkedRegardlessOfSignaturePolicy)
     BOOST_CHECK(harness.run(*tx, AdmissionContext::PoolAdmission, SignaturePolicy::Disabled) ==
                 TransactionStatus::None);
     BOOST_CHECK(tx->systemTx());
+}
+
+// ------------------------------------------------------------ every kind, through verify()
+
+// The routing table names five kinds and the cases above drive one of them. These drive the rest,
+// so that each kind's own checks are exercised by verify() and not pinned on the table alone.
+BOOST_AUTO_TEST_CASE(legacyTransactionIsAdmitted)
+{
+    AdmitHarness harness;
+    auto tx = admitTx({.type = rpc::TransactionType::Legacy});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+}
+
+BOOST_AUTO_TEST_CASE(accessListTransactionIsAdmitted)
+{
+    AdmitHarness harness;
+    auto tx = admitTx({.type = rpc::TransactionType::EIP2930});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+}
+
+BOOST_AUTO_TEST_CASE(setCodeTransactionIsAdmitted)
+{
+    AdmitHarness harness;
+    auto tx = admitTx({.type = rpc::TransactionType::EIP7702, .withAuthorization = true});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+}
+
+// EIP-7702: a set-code transaction cannot create a contract, and cannot carry nothing to set.
+BOOST_AUTO_TEST_CASE(setCodeTransactionWithoutRecipientIsRejected)
+{
+    AdmitHarness harness;
+    auto tx = admitTx(
+        {.type = rpc::TransactionType::EIP7702, .to = std::nullopt, .withAuthorization = true});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::CreateSetCodeTx);
+}
+
+BOOST_AUTO_TEST_CASE(setCodeTransactionWithEmptyAuthorizationListIsRejected)
+{
+    AdmitHarness harness;
+    auto tx = admitTx({.type = rpc::TransactionType::EIP7702});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::EmptyAuthorizationList);
+}
+
+BOOST_AUTO_TEST_CASE(priorityFeeAboveTheFeeCapIsRejected)
+{
+    AdmitHarness harness;
+    auto tx = admitTx({.maxFeePerGas = 1000, .maxPriorityFeePerGas = 2000});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::TipGreaterThanFeeCap);
+}
+
+// A blob or deposit envelope is refused before the table is consulted: normalization classifies
+// the envelope and rejects both, so Check::TypeGate's Rejected arm is the second line, not the
+// first. What verify() answers for them is pinned here, whichever line answered.
+BOOST_AUTO_TEST_CASE(blobAndDepositEnvelopesAreRefused)
+{
+    AdmitHarness harness;
+    auto blob = admitTx();
+    blob->mutableInner().extraTransactionBytes.at(0) = 0x03;
+    BOOST_CHECK(harness.run(*blob) == TransactionStatus::BlobTxNotAllowed);
+
+    auto deposit = admitTx();
+    deposit->mutableInner().extraTransactionBytes.at(0) = 0x7e;
+    BOOST_CHECK(harness.run(*deposit) == TransactionStatus::TxTypeNotSupported);
+    BOOST_CHECK_EQUAL(harness.accountStateReads(), 0);
+}
+
+// The gate's `to` format check, on the only kind whose `to` is a free-form string: a Web3 `to`
+// is decoded from the envelope and is 20 bytes or empty by construction.
+BOOST_AUTO_TEST_CASE(malformedRecipientIsRejectedAtTheGate)
+{
+    AdmitHarness harness;
+    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+    tx->mutableInner().type = static_cast<tars::Char>(TransactionType::BCOSTransaction);
+    tx->mutableInner().data.to = "0x12";
+    tx->mutableInner().data.groupID = "group0";
+    tx->mutableInner().data.chainID = "chain0";
+    BOOST_CHECK(harness.run(*tx, AdmissionContext::PoolAdmission, SignaturePolicy::Disabled) ==
+                TransactionStatus::Malformed);
+    BOOST_CHECK_EQUAL(harness.accountStateReads(), 0);
+}
+
+// EIP-2. Every ECDSA signature has a twin with s' = n - s over the same message, and recovery
+// succeeds on it -- to a different address. Without the low-s rule the same envelope enters the
+// pool a second time, under a second sender and a second hash. This is the only place a
+// tars-form Web3 transaction from a peer meets the rule: the raw-bytes decode on the RPC
+// ingress is not on that path. Without the rule this case reaches the balance check as the
+// twin's sender and fails there instead.
+BOOST_AUTO_TEST_CASE(highSSignatureIsRejected)
+{
+    AdmitHarness harness;
+    auto tx = admitTx({.highS = true});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::InvalidSignature);
+    BOOST_CHECK_EQUAL(harness.accountStateReads(), 0);
 }
 
 // ------------------------------------------------------------ wiring guard

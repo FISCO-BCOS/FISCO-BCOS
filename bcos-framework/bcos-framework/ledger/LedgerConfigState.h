@@ -71,7 +71,7 @@ public:
     /// A null argument is replaced by an empty configuration rather than stored: the "never null"
     /// guarantee below has to hold at every entrance, and set() already enforces it. Storing null
     /// here would make every revision-dependent check throw on every transaction.
-    explicit LedgerConfigState(LedgerConfig::Ptr config)
+    explicit LedgerConfigState(std::shared_ptr<const LedgerConfig> config)
       : m_config(config ? std::move(config) : std::make_shared<LedgerConfig>())
     {}
 
@@ -90,7 +90,11 @@ public:
     /// Publish the configuration for a newly committed block. A null argument is ignored rather
     /// than published: losing the configuration entirely would turn every revision-dependent
     /// check into a stand-down, which is a worse failure than serving one stale block.
-    void set(LedgerConfig::Ptr config)
+    ///
+    /// Takes a pointer to const. The caller may keep a mutable handle of its own, but what is
+    /// published is read-only from here on: the snapshot contract in the signature, not in a
+    /// comment.
+    void set(std::shared_ptr<const LedgerConfig> config)
     {
         if (!config)
         {
@@ -102,6 +106,6 @@ public:
 
 private:
     mutable SharedMutex x_config;
-    LedgerConfig::Ptr m_config;
+    std::shared_ptr<const LedgerConfig> m_config;
 };
 }  // namespace bcos::ledger

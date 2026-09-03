@@ -31,10 +31,12 @@
 #include "bcos-tx-validator/LedgerNonceChecker.h"
 #include "bcos-tx-validator/NonceCheckerInterface.h"
 #include "bcos-tx-validator/Web3NonceChecker.h"
+#include "bcos-utilities/Common.h"
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace bcos::txvalidator
 {
@@ -117,6 +119,10 @@ protected:
     /// currently fire; the implementation states what filling it correctly would require.
     /// virtual so a test can supply code and pin the rule itself, which stays correct and starts
     /// mattering the moment this fills the field.
+    ///
+    /// @p sender is a view into the transaction verify() was handed, and is read after this
+    /// coroutine's awaits: that is sound because the caller keeps the transaction alive for the
+    /// whole of verify(), the ordinary contract for a Task-returning member.
     virtual task::Task<std::optional<AccountState>> readAccountState(std::string_view sender);
 
 private:
