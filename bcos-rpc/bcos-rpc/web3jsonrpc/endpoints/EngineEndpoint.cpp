@@ -137,16 +137,32 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
 
     auto forkchoiceState = parseForkchoiceState(request);
     auto payloadAttrs = parsePayloadAttributes(request, version);
-    // TODO: engineService->updateForkchoice() MUST throw JsonRpcException in these cases:
-    //   -38002 InvalidForkchoiceState: headBlockHash is VALID but finalizedBlockHash/safeBlockHash
-    //   not in chain -38003 InvalidPayloadAttributes: payloadAttributes.timestamp <=
-    //   headBlockHash.timestamp -38005 UnsupportedFork: timestamp out of fork window (V2/V3
-    //   specific) -38006 TooDeepReorg: reorg depth exceeds limitation
+    // Typed engine failures map onto the spec error codes here (the engine library cannot
+    // depend on the RPC layer's JsonRpcException). The mapped set:
+    //   -38003 InvalidPayloadAttributes — attribute faults (op-geth's
+    //   checkOptimismPayloadAttributes channel). The OP path's own attribute gates throw it
+    //   too (V1/V2 cannot carry OP attributes, validatePayloadAttributes /
+    //   validateOpPayloadAttributes, and the buildOpPayload attrs.timestamp<=parent gate) —
+    //   all surface through this same updateForkchoice co_await, so a build-time attribute
+    //   fault answers -38003, not a retryable -32603.
+    //   -38002 InvalidForkchoiceState — head known but finalizedBlockHash/safeBlockHash not
+    //   in chain;
+    //   -38005 UnsupportedFork — CL/chain fork-era mismatch.
+    // The exception's errinfo_comment is preserved via what() so the operator can tell which
+    // gate fired — e.g. the missing-revision case is a NODE-side misconfiguration, and a
+    // generic shape message would wrongly point at the CL. Anything else (OpExecutionInternalError
+    // and friends) propagates and answers the generic -32603, the correct classification for a
+    // genuine internal fault.
     engine::ForkchoiceUpdatedResult engineResult;
     try
     {
         engineResult = co_await engineService->updateForkchoice(forkchoiceState,
             payloadAttrs.has_value() ? &*payloadAttrs : nullptr, static_cast<uint32_t>(version));
+    }
+    catch (engine::InvalidPayloadAttributes const& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidPayloadAttributes,
+            std::string("Invalid payload attributes: ") + e.what()));
     }
     catch (engine::UnsupportedFork const& e)
     {
@@ -157,8 +173,13 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
         // the exception's errinfo_comment so the operator can tell which gate fired — the
         // missing-revision case is a NODE-side misconfiguration and the generic shape
         // message would wrongly point at the CL.
-        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
-            std::string("Unsupported fork: ") + e.what()));
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
+    }
+    catch (engine::InvalidForkchoiceState const& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidForkchoiceState,
+            std::string("Invalid forkchoice state: ") + e.what()));
     }
     auto jsonResult = combineForkchoiceUpdatedResult(engineResult, version);
     buildJsonContent(jsonResult, response);
@@ -281,8 +302,25 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     // TODO: engineService->newPayload() MUST throw JsonRpcException in these cases:
     //   -32602 InvalidParams: wrong version of ExecutionPayload structure (V2)
     //   -38005 UnsupportedFork: timestamp out of fork window (V2/V3)
-    auto engineResult =
-        co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
+    bcos::engine::PayloadStatus engineResult;
+    try
+    {
+        engineResult =
+            co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
+    }
+    catch (engine::UnsupportedFork const& e)
+    {
+        // handleOpNewPayload gates version != 4 with UnsupportedFork; the RPC must answer
+        // -38005 (op-geth unsupportedForkErr) rather than the generic -32603. Keep the
+        // errinfo_comment so the operator can tell which gate fired.
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
+    }
+    catch (engine::InvalidPayloadAttributes const& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidPayloadAttributes,
+            std::string("Invalid payload attributes: ") + e.what()));
+    }
     auto result = serializePayloadStatus(engineResult, version);
     buildJsonContent(result, response);
 }

@@ -243,6 +243,10 @@ namespace bcos::executor_v1::opstack
 DERIVE_BCOS_EXCEPTION(OpEvmcRevisionNotConfigured);
 DERIVE_BCOS_EXCEPTION(OpForkRevisionMismatch);
 DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
+/// Block gas pool cannot fit the transaction (evmone GAS_LIMIT_REACHED). Distinct from
+/// OpTxValidationFailed so the engine can treat capacity as skip-for-this-build instead
+/// of pool eviction (op-geth's miner gasPool prefix stop never removes pool txs).
+DERIVE_BCOS_EXCEPTION(OpBlockGasPoolFull);
 
 using bcos::evm::evmstate::SharedErrorSlot;  // Storage2State.h
 
@@ -912,16 +916,19 @@ public:
                     call ? std::optional<uint64_t>{} : std::optional<uint64_t>(m_ctx->chainId),
                     &*m_blockInfo, call);
             }
+            catch (const OpBlockGasPoolFull& e)
+            {
+                // Capacity fault (block gas pool full): skip-for-this-build semantics —
+                // the engine must never evict this tx from the pool (F2).
+                throw bcos::evm::OpConsensusError(
+                    std::string("OpScheduler: block gas pool full: ") + e.what(),
+                    transaction.hash(), /*capacity=*/true);
+            }
             catch (const OpTxValidationFailed& e)
             {
-                // The offending tx's hash rides in a structured member (bcos::Error carries a
-                // string only across the delegate boundary): the engine's OP build loop reads
-                // e.txHash to evict the culprit from the pool instead of failing every
-                // subsequent build — never parse the message text.
-                bcos::evm::OpConsensusError err(
-                    std::string("OpScheduler: normal tx validation failed: ") + e.what());
-                err.txHash = transaction.hash();
-                throw err;
+                throw bcos::evm::OpConsensusError(
+                    std::string("OpScheduler: normal tx validation failed: ") + e.what(),
+                    transaction.hash());
             }
             // Only after a successful prepare: a rejected normal tx must not flip the
             // deposit-after-non-deposit warn path for a later deposit in the same block.
@@ -1124,13 +1131,9 @@ public:
         }
         catch (const OpTxValidationFailed& e)
         {
-            // Mirror the ExecuteContext::prepare catch: the offending tx's hash rides in a
-            // structured member so the engine's OP build loop can evict the culprit by hash —
-            // never parse the message text.
-            bcos::evm::OpConsensusError err(
-                std::string("OpScheduler: normal tx validation failed: ") + e.what());
-            err.txHash = transaction.hash();
-            throw err;
+            throw bcos::evm::OpConsensusError(
+                std::string("OpScheduler: normal tx validation failed: ") + e.what(),
+                transaction.hash());
         }
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(stateView, blockHeader, transaction, ledgerConfig, props,
@@ -1384,6 +1387,23 @@ private:
                                     blockGasLeft);
         if (auto const* err = std::get_if<std::error_code>(&validated))
         {
+            // Block path only: a tx that does not fit the block gas pool is a capacity
+            // fault (F2 skip-not-evict). eth_call/estimateGas (call=true) simulate against
+            // their own throwaway pool — there the pool is a per-call bound, not a block
+            // property, so GAS_LIMIT_REACHED stays an ordinary validation failure
+            // (OpTxValidationFailed, which the call wrapper classifies) and must not
+            // escape as OpBlockGasPoolFull.
+            if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED) &&
+                !call)
+            {
+                // Block gas pool full: the tx does not fit this block — a capacity fault,
+                // not a poisoned transaction. The engine's gas-aware prefix assembly keeps
+                // this unreachable for sealed txs; if it still fires (forced-tx overflow or
+                // accounting drift), the engine skips the tx for this build and never
+                // removes it from the pool (F2).
+                BOOST_THROW_EXCEPTION(
+                    OpBlockGasPoolFull{} << bcos::errinfo_comment(err->message()));
+            }
             // DEBUG not WARNING: this path is reachable from unauthenticated eth_call /
             // estimateGas, where any caller can trigger validation failures at will — a
             // WARNING here would be a log-amplification vector.
