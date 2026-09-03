@@ -98,18 +98,11 @@ bcos::bytes takeBytes(bcos::bytesRef& _view)
 bcos::bytes takeRlpItem(bcos::bytesRef& _view)
 {
     size_t const originalSize = _view.size();
-    bcos::byte const* const originalData = _view.data();
     auto [error, header] = bcos::codec::rlp::decodeHeader(_view);
     if (error)
     {
-        std::cerr << "[eth] takeRlpItem decodeHeader fail: err=" << (error ? error->errorMessage() : "?")
-                  << " origSize=" << originalSize
-                  << " first="
-                  << (originalSize ? bcos::toHexStringWithPrefix(
-                                         bytesConstRef(originalData, std::min<size_t>(originalSize, 16)))
-                                   : std::string("empty"))
-                  << std::endl;
-        throw std::runtime_error("eth: rlp item decode failed");
+        throw std::runtime_error(
+            "eth: rlp item decode failed: " + std::string(error->errorMessage()));
     }
     // decodeHeader consumed the item prefix; rebuild prefix + payload.
     size_t const prefixLen = originalSize - _view.size();
@@ -193,9 +186,9 @@ bcos::bytes encodeStatus(StatusMessage const& _msg)
     auto forkIdItem = rlpList(
         {rlpItem(bytesConstRef(forkHash.data(), forkHash.size())), rlpItem(_msg.forkId.next)});
 
-    if (_msg.eip8085)
+    if (_msg.eip7642)
     {
-        // eth/69+ (EIP-8085): [version, networkId, genesis, forkid, earliest, latest, latestHash]
+        // eth/69+ (EIP-7642): [version, networkId, genesis, forkid, earliest, latest, latestHash]
         return rlpList({rlpItem(_msg.protocolVersion), rlpItem(_msg.networkId),
             rlpItem(_msg.genesisHash), forkIdItem, rlpItem(_msg.earliestBlock),
             rlpItem(_msg.latestBlock), rlpItem(_msg.latestBlockHash)});
@@ -206,7 +199,7 @@ bcos::bytes encodeStatus(StatusMessage const& _msg)
         rlpItem(_msg.headHash), rlpItem(_msg.genesisHash), forkIdItem});
 }
 
-StatusMessage decodeStatus(bytesConstRef _data)
+StatusMessage decodeStatus(bytesConstRef _data, uint8_t _negotiatedVersion)
 {
     StatusMessage msg;
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
@@ -214,10 +207,20 @@ StatusMessage decodeStatus(bytesConstRef _data)
 
     msg.protocolVersion = takeUint(items);
     msg.networkId = takeUint(items);
-    if (msg.protocolVersion >= kMinProtocolVersion + 1)  // eth/69+
+    // The wire layout (eth/68 vs eth/69+) is selected from the version NEGOTIATED
+    // in the Hello exchange when the caller knows it, never from the
+    // peer-supplied field alone; a mismatched embedded version is rejected.
+    if (_negotiatedVersion != 0 && msg.protocolVersion != _negotiatedVersion)
     {
-        // EIP-8085: [version, networkId, genesis, forkid, earliest, latest, latestHash]
-        msg.eip8085 = true;
+        throw std::runtime_error("decodeStatus: peer protocol version does not match the "
+                                 "version negotiated in Hello");
+    }
+    uint64_t const effectiveVersion =
+        _negotiatedVersion != 0 ? _negotiatedVersion : msg.protocolVersion;
+    if (effectiveVersion >= kMinProtocolVersion + 1)  // eth/69+
+    {
+        // EIP-7642: [version, networkId, genesis, forkid, earliest, latest, latestHash]
+        msg.eip7642 = true;
         msg.genesisHash = takeH256(items);
         auto forkIdItems = takeListPayload(items);
         auto forkHashBytes = takeBytes(forkIdItems);
@@ -261,11 +264,11 @@ StatusMessage decodeStatus(bytesConstRef _data)
 // ---------------------------------------------------------------------------
 // GetBlockHeaders
 // ---------------------------------------------------------------------------
-// The `reverse` flag is a BOOLEAN on the wire. Wire encodings differ between
-// clients: geth RLP-encodes bool as 0x00(false)/0x01(true), while ethrex's bool
-// decoder only accepts 0x80(false)/0x01(true) (RLP_NULL = false) and rejects
-// 0x00 with MalformedBoolean. geth's decoder reads the field as an integer, so
-// it accepts both 0x00 and 0x80. Use 0x80/0x01 for cross-client compatibility.
+// The `reverse` flag is a BOOLEAN on the wire. geth RLP-encodes bool as
+// 0x80(false)/0x01(true) and its decoder rejects 0x00 as non-canonical; ethrex's
+// bool decoder likewise only accepts 0x80(false)/0x01(true) (RLP_NULL = false)
+// and rejects 0x00 with MalformedBoolean. Use 0x80/0x01 for cross-client
+// compatibility.
 bcos::bytes rlpBool(bool _value)
 {
     return bcos::bytes{static_cast<bcos::byte>(_value ? 1 : 0x80)};
@@ -377,14 +380,24 @@ bcos::bytes encodeBlockBodies(BlockBodiesMessage const& _msg)
     bodyItems.reserve(_msg.bodies.size());
     for (auto const& body : _msg.bodies)
     {
-        // Transactions / uncles / withdrawals are already-encoded RLP elements
-        // (legacy txs are lists, typed txs are 0x01||payload bytes); splice them
-        // in directly — do NOT re-wrap them as strings.
+        // Transactions: on the wire a legacy tx is a bare RLP list element while
+        // a typed (EIP-2718) tx is an RLP byte STRING whose content is
+        // 0xNN || rlp(payload). `body.transactions` holds the unwrapped form, so
+        // typed txs (first byte < 0xc0) are string-wrapped here; legacy lists are
+        // spliced directly. Uncles / withdrawals are already-encoded RLP list
+        // elements and are spliced as-is.
         std::vector<bcos::bytes> txs;
         txs.reserve(body.transactions.size());
         for (auto const& tx : body.transactions)
         {
-            txs.push_back(tx);
+            if (!tx.empty() && tx[0] < 0xc0)
+            {
+                txs.push_back(rlpItem(bytesConstRef(tx.data(), tx.size())));
+            }
+            else
+            {
+                txs.push_back(tx);
+            }
         }
         std::vector<bcos::bytes> uncles;
         uncles.reserve(body.uncles.size());

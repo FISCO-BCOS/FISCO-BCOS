@@ -98,8 +98,10 @@ BOOST_AUTO_TEST_CASE(blockBodiesRoundTrip)
     msg.requestId = 3;
     eth::BlockBody body;
     // Transactions / uncles / withdrawals are already-encoded RLP elements;
-    // legacy txs are lists, typed txs are 0xNN||payload. Use complete RLP here.
-    body.transactions = {fromHex("c3010203"), fromHex("c101")};
+    // legacy txs are lists, typed txs are 0xNN||payload (unwrapped form; the
+    // encoder applies the wire string wrapping). Use complete RLP here.
+    body.transactions = {fromHex("c3010203"), fromHex("c101"),
+        fromHex("02c3010203")};
     body.uncles = {fromHex("c0")};
     body.withdrawals = std::vector<bcos::bytes>{fromHex("c101"), fromHex("c20203")};
     msg.bodies.push_back(body);
@@ -108,9 +110,10 @@ BOOST_AUTO_TEST_CASE(blockBodiesRoundTrip)
     auto decoded = eth::decodeBlockBodies(ref(encoded));
     BOOST_CHECK_EQUAL(decoded.requestId, 3);
     BOOST_REQUIRE_EQUAL(decoded.bodies.size(), 1u);
-    BOOST_REQUIRE_EQUAL(decoded.bodies[0].transactions.size(), 2u);
+    BOOST_REQUIRE_EQUAL(decoded.bodies[0].transactions.size(), 3u);
     BOOST_CHECK(decoded.bodies[0].transactions[0] == body.transactions[0]);
     BOOST_CHECK(decoded.bodies[0].transactions[1] == body.transactions[1]);
+    BOOST_CHECK(decoded.bodies[0].transactions[2] == body.transactions[2]);
     BOOST_REQUIRE_EQUAL(decoded.bodies[0].uncles.size(), 1u);
     BOOST_CHECK(decoded.bodies[0].uncles[0] == body.uncles[0]);
 }
@@ -181,6 +184,16 @@ BOOST_AUTO_TEST_CASE(blockBodiesTypedTxStringWrapped)
     BOOST_CHECK(decoded.bodies[0].transactions[0] == typedTx);
     BOOST_CHECK(decoded.bodies[0].transactions[1] ==
                 (bcos::bytes{0xc3, 0x01, 0x02, 0x03}));
+
+    // The ENCODE path must produce exactly this hand-built wire form: typed txs
+    // string-wrapped, legacy list txs spliced bare.
+    eth::BlockBodiesMessage msg;
+    msg.requestId = 7;
+    eth::BlockBody body;
+    body.transactions = {typedTx, bcos::bytes{0xc3, 0x01, 0x02, 0x03}};
+    body.uncles = {bcos::bytes{0xc0}};
+    msg.bodies.push_back(body);
+    BOOST_CHECK(eth::encodeBlockBodies(msg) == wire);
 }
 
 BOOST_AUTO_TEST_CASE(statusRoundTrip)
@@ -228,7 +241,8 @@ BOOST_AUTO_TEST_CASE(newBlockHashesRoundTrip)
     BOOST_CHECK_EQUAL(decoded.entries[1].number, 2u);
 }
 
-// EIP-2124: mainnet genesis + forks → CRC32 chain (validated against zlib).
+// EIP-2124: mainnet genesis + forks → CRC32 chain. Vectors are the real
+// network values (EIP-2124 worked example / geth forkid testdata).
 BOOST_AUTO_TEST_CASE(forkIdMainnetChain)
 {
     auto genesis = h256(
@@ -238,16 +252,24 @@ BOOST_AUTO_TEST_CASE(forkIdMainnetChain)
     auto hash = eth::crc32(bytesConstRef(genesis.data(), genesis.size()));
     BOOST_CHECK_EQUAL(hash, 0xfc64ec04u);
 
-    // Chain mainnet fork block numbers (the same set geth's forkid tests use).
-    std::vector<uint64_t> forks = {1150000,  1920000,  2463000,  2675000, 4370000,
-        7280000, 7280000, 9069000, 9200000, 12244000, 12965000, 13773000, 15050000,
-        15537394, 17034870, 19426587};
+    // genesis + forks up to Petersburg (EIP-2124 worked example). Constantinople
+    // and Petersburg share block 7280000 and are ONE forkid point.
+    std::vector<uint64_t> forks = {1150000, 1920000, 2463000, 2675000, 4370000, 7280000};
     for (auto fork : forks)
     {
         hash = eth::forkIdAddForkPoint(hash, fork);
     }
-    // Full mainnet forkid after Cancun (validated against zlib.crc32).
-    BOOST_CHECK_EQUAL(hash, 0xa0455cf2u);
+    BOOST_CHECK_EQUAL(hash, 0x668db0afu);  // Petersburg
+
+    // Continue with the remaining block-based forks, then the timestamp-based
+    // Shanghai (1681338455) and Cancun (1710338135) points. The merge block
+    // 15537394 is TTD-triggered and is NOT a forkid point.
+    for (auto fork : {9069000ull, 9200000ull, 12244000ull, 12965000ull, 13773000ull,
+             15050000ull, 1681338455ull, 1710338135ull})
+    {
+        hash = eth::forkIdAddForkPoint(hash, fork);
+    }
+    BOOST_CHECK_EQUAL(hash, 0x9f3d2254u);  // Cancun (geth forkid testdata)
 }
 
 // Hello message golden (RLP built with an independent encoder).

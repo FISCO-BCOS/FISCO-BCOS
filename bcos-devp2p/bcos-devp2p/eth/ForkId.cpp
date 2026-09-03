@@ -57,8 +57,8 @@ uint32_t crc32(bytesConstRef _data, uint32_t _seed)
 
 uint32_t forkIdAddForkPoint(uint32_t _hash, uint64_t _forkPoint)
 {
-    // The fork point is encoded as a minimal big-endian u64 (the 8-byte form is
-    // canonical because every real fork point fits; matches geth forkid.go).
+    // The fork point is encoded as a fixed 8-byte big-endian u64 (matches geth
+    // forkid.go).
     std::array<uint8_t, 8> forkBytes{};
     for (int i = 0; i < 8; ++i)
     {

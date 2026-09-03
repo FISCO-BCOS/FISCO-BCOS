@@ -62,7 +62,7 @@ inline uint16_t frameId(uint8_t _messageId)
 
 // eth Status message. Two wire formats exist:
 //   eth/68: [protocolVersion, networkId, totalDifficulty, headHash, genesisHash, [forkHash, forkNext]]
-//   eth/69+ (EIP-8085 block range): [protocolVersion, networkId, genesisHash,
+//   eth/69+ (EIP-7642 block range): [protocolVersion, networkId, genesisHash,
 //           [forkHash, forkNext], earliestBlock, latestBlock, latestBlockHash]
 struct StatusMessage
 {
@@ -72,16 +72,20 @@ struct StatusMessage
     bcos::h256 headHash;          // eth/68 only
     bcos::h256 genesisHash;
     ForkId forkId;
-    // eth/69+ (EIP-8085) block range fields.
+    // eth/69+ (EIP-7642) block range fields.
     uint64_t earliestBlock{0};
     uint64_t latestBlock{0};
     bcos::h256 latestBlockHash;
-    // true = encode/decode the EIP-8085 7-field form (eth/69+), false = eth/68 6-field form.
-    bool eip8085{false};
+    // true = encode/decode the EIP-7642 7-field form (eth/69+), false = eth/68 6-field form.
+    bool eip7642{false};
 };
 
 bcos::bytes encodeStatus(StatusMessage const& _msg);
-StatusMessage decodeStatus(bytesConstRef _data);
+// _negotiatedVersion selects the wire layout (68 = 6-field, >= 69 = 7-field) and,
+// when non-zero, the decoded protocolVersion must match it — otherwise the peer
+// controls the layout selector. 0 = auto-detect from the embedded version
+// (test/convenience use only).
+StatusMessage decodeStatus(bytesConstRef _data, uint8_t _negotiatedVersion = 0);
 
 // GetBlockHeaders (eth/66+): [requestId, [origin, amount, skip, reverse]]
 struct GetBlockHeadersMessage
@@ -118,8 +122,11 @@ bcos::bytes encodeGetBlockBodies(GetBlockBodiesMessage const& _msg);
 GetBlockBodiesMessage decodeGetBlockBodies(bytesConstRef _data);
 
 // BlockBodies (eth/66+): [requestId, [[txs, uncles, withdrawals?], ...]]
-// Each body: [transactions (list of raw EIP-2718 tx bytes), uncles (list of raw headers),
-//             withdrawals? (list of raw EIP-4895 withdrawal RLP, Shanghai+)]
+// Each body: [transactions, uncles, withdrawals? (Shanghai+)]. In `transactions`,
+// a legacy tx is a bare RLP list element while a typed (EIP-2718) tx is an RLP
+// byte string whose content is 0xNN || rlp(payload); `transactions` here always
+// holds the UNWRAPPED form (0xNN || rlp(payload) for typed txs) and
+// encodeBlockBodies applies the string wrapping.
 struct BlockBody
 {
     std::vector<bcos::bytes> transactions;
@@ -152,7 +159,7 @@ bcos::bytes encodeNewBlockHashes(NewBlockHashesMessage const& _msg);
 NewBlockHashesMessage decodeNewBlockHashes(bytesConstRef _data);
 
 // Capability entries advertised in the Hello message: eth/69 and eth/68. The
-// handshake negotiates the highest common version; eth/69 peers use the EIP-8085
+// handshake negotiates the highest common version; eth/69 peers use the EIP-7642
 // Status format while eth/68 peers keep the legacy TD/head Status.
 inline std::vector<bcos::devp2p::rlpx::Capability> ethCapabilities()
 {

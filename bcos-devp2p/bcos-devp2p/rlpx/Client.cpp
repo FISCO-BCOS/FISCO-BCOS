@@ -22,8 +22,8 @@
 #include "Framing.h"
 #include "Messages.h"
 #include "../eth/Protocol.h"
+#include <bcos-utilities/BoostLog.h>
 #include <cctype>
-#include <iostream>
 #include <stdexcept>
 #include <string>
 
@@ -92,17 +92,22 @@ EstablishedSession exchangeHandshake(
         throw std::runtime_error("exchangeHandshake: no common eth capability with peer");
     }
     // Diagnostics: the negotiated capability layout determines every eth frame id.
-    std::cerr << "[handshake] peer client=\"" << peerHello.clientId << "\" caps:";
-    for (auto const& cap : peerHello.capabilities)
     {
-        std::cerr << " " << cap.name << "/" << static_cast<int>(cap.version);
+        std::string peerCaps;
+        for (auto const& cap : peerHello.capabilities)
+        {
+            peerCaps += " " + cap.name + "/" + std::to_string(cap.version);
+        }
+        std::string ourCaps;
+        for (auto const& cap : hello.capabilities)
+        {
+            ourCaps += " " + cap.name + "/" + std::to_string(cap.version);
+        }
+        BCOS_LOG(INFO) << LOG_BADGE("handshake")
+                       << LOG_KV("peerClient", peerHello.clientId)
+                       << LOG_KV("peerCaps", peerCaps) << LOG_KV("ourCaps", ourCaps)
+                       << LOG_KV("eth", static_cast<int>(negotiatedEth));
     }
-    std::cerr << " (our caps:";
-    for (auto const& cap : hello.capabilities)
-    {
-        std::cerr << " " << cap.name << "/" << static_cast<int>(cap.version);
-    }
-    std::cerr << ") negotiated eth/" << static_cast<int>(negotiatedEth) << std::endl;
 
     // Both peers send Hello with version >= 5 → enable snappy on the session.
     // Raw snappy is varint-prefixed + block, wire-identical across geth/erigon/
@@ -117,8 +122,8 @@ EstablishedSession exchangeHandshake(
     status.forkId = _config.forkId;
     if (negotiatedEth >= 69)
     {
-        // EIP-8085: advertise our (genesis-only) block range.
-        status.eip8085 = true;
+        // EIP-7642: advertise our (genesis-only) block range.
+        status.eip7642 = true;
         status.earliestBlock = 0;
         status.latestBlock = 0;
         status.latestBlockHash = _config.genesisHash;
@@ -141,22 +146,33 @@ EstablishedSession exchangeHandshake(
             {
                 auto disc = decodeDisconnect(
                     bytesConstRef(statusMsg.data.data(), statusMsg.data.size()));
-                std::cerr << "[handshake] peer (\"" << peerHello.clientId
-                          << "\") disconnected during Status: reason="
-                          << static_cast<int>(disc.reason) << std::endl;
+                BCOS_LOG(INFO) << LOG_BADGE("handshake") << "peer disconnected during Status"
+                               << LOG_KV("peerClient", peerHello.clientId)
+                               << LOG_KV("reason", static_cast<int>(disc.reason));
             }
             catch (std::exception const& e)
             {
-                std::cerr << "[handshake] peer (\"" << peerHello.clientId
-                          << "\") disconnected during Status (reason undecodable): "
-                          << e.what() << std::endl;
+                BCOS_LOG(INFO) << LOG_BADGE("handshake")
+                               << "peer disconnected during Status (reason undecodable)"
+                               << LOG_KV("peerClient", peerHello.clientId)
+                               << LOG_KV("error", e.what());
             }
         }
         throw std::runtime_error("exchangeHandshake: expected eth Status, got message id=" +
                                  std::to_string(statusMsg.id));
     }
-    auto peerStatus =
-        eth::decodeStatus(bytesConstRef(statusMsg.data.data(), statusMsg.data.size()));
+    // The Status layout is selected from the version negotiated in Hello (never
+    // from the peer-supplied field), and the embedded version must match it.
+    auto peerStatus = eth::decodeStatus(
+        bytesConstRef(statusMsg.data.data(), statusMsg.data.size()), negotiatedEth);
+
+    // The peer must be on our network (spec: disconnect on network-ID mismatch).
+    if (peerStatus.networkId != _config.networkId)
+    {
+        throw std::runtime_error("exchangeHandshake: peer network id mismatch: " +
+                                 std::to_string(peerStatus.networkId) +
+                                 " != " + std::to_string(_config.networkId));
+    }
 
     // Verify the peer is on our chain — only when the local config actually
     // pins a genesis hash (the server side accepts whatever the client sends).
