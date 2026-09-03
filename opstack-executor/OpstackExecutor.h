@@ -1125,6 +1125,14 @@ public:
             props = co_await m_prepare(stateView, blockHeader, transaction, ledgerConfig, fee,
                 blockGasLeft, call ? std::optional<uint64_t>{} : chainId, &blockInfo, call);
         }
+        catch (const OpBlockGasPoolFull& e)
+        {
+            // Same conversion as ExecuteContext::prepare: on the block path a full pool is a
+            // capacity fault (keep the transaction), not a poisoned-tx reject.
+            throw bcos::evm::OpConsensusError(
+                std::string("OpScheduler: block gas pool full: ") + e.what(), transaction.hash(),
+                /*capacity=*/true);
+        }
         catch (const OpTxValidationFailed& e)
         {
             throw bcos::evm::OpConsensusError(

@@ -1284,9 +1284,9 @@ private:
         co_return ledgerConfig;
     }
 
-    /// Recover culprit / capacity tags via exception_ptr. A cross-TU typed
-    /// `catch (std::exception)` can miss OpConsensusError (RTTI / static-lib boundary);
-    /// rethrow from exception_ptr still sees the complete object.
+    /// Recover culprit / capacity tags via exception_ptr. The surrounding catch sites
+    /// only see std::exception (catch (std::exception&) / catch (...)); rethrow from the
+    /// exception_ptr to recover OpConsensusError and its structured fields.
     static void attachOpRejectInfo(Error& error, std::exception_ptr eptr)
     {
         if (!eptr)
