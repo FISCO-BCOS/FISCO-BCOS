@@ -23,7 +23,6 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <iostream>
 #include <memory>
-#include <utility>
 
 namespace bcos::boostssl
 {
@@ -35,14 +34,14 @@ struct NodeIPEndpoint
 {
     using Ptr = std::shared_ptr<NodeIPEndpoint>;
     NodeIPEndpoint() = default;
-        NodeIPEndpoint(std::string _host, uint16_t _port);
-        NodeIPEndpoint(const boost::asio::ip::address& _addr, uint16_t _port);
+    NodeIPEndpoint(std::string _host, uint16_t _port);
+    NodeIPEndpoint(const boost::asio::ip::address& _addr, uint16_t _port);
     NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint) = default;
     NodeIPEndpoint(NodeIPEndpoint&& _nodeIPEndpoint) noexcept = default;
     NodeIPEndpoint& operator=(const NodeIPEndpoint& _nodeIPEndpoint) = default;
     NodeIPEndpoint& operator=(NodeIPEndpoint&& _nodeIPEndpoint) noexcept = default;
 
-    virtual ~NodeIPEndpoint() = default;
+    ~NodeIPEndpoint() = default;
     NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint);
     bool operator<(const NodeIPEndpoint& rhs) const;
     bool operator==(const NodeIPEndpoint& rhs) const;

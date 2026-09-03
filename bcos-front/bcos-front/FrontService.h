@@ -52,21 +52,21 @@ public:
     void checkParams();
 
     /**
-     * @brief: get nodeIDs from frontservice
-     * @param _onGetGroupNodeInfoFunc: response callback
-     * @return void
+     * @brief: (coroutine) get the latest groupNodeInfo the gateway pushed to this front
+     * @return {error, groupNodeInfo}: error is nullptr on success
      */
-    void asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInfoFunc) override;
+    task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo()
+        override;
     /**
-     * @brief: send response
+     * @brief: (coroutine) send response
      * @param _id: the request id
      * @param _moduleID: moduleID
      * @param _nodeID: the receiver nodeID
-     * @param _data: message
-     * @return void
+     * @param _data: message (a view kept alive by the caller for the duration of the co_await)
+     * @return error: nullptr on success, the gateway send failure otherwise
      */
-    void asyncSendResponse(const std::string& _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
-        bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback) override;
+    task::Task<Error::Ptr> sendResponse(const std::string& _id, int _moduleID,
+        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) override;
 
     task::Task<void> broadcastMessage(
         uint16_t type, int moduleID,
@@ -85,61 +85,45 @@ public:
     // FIB-185: dispatch the gateway broadcast onto a serial send queue (off the caller thread) so a
     // caller holding a lock (PBFT under m_mutex) is not coupled to gateway session-lock contention.
     // The owned payload is captured by the queued task -> the message body is never copied.
-    void asyncBroadcastMessageByOwnedPayload(
+    void broadcastMessageByOwnedPayload(
         uint16_t type, int moduleID, bytesPointer payload) override;
 
     // FIB-185: dispatch the point-to-point gateway send onto the serial send queue (off the caller
     // thread), so sendViewChange / sendRecoverResponse run under m_mutex without contending the
     // gateway session lock. Point-to-point encodes the wire frame, so this is not zero-copy; the
     // owned payload is captured only to keep it alive across the deferred encode.
-    void asyncSendMessageByNodeIDByOwnedPayload(
+    void sendMessageByNodeIDByOwnedPayload(
         int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload) override;
 
     /**
-     * @brief: receive nodeIDs from gateway
+     * @brief: (coroutine) receive nodeIDs from gateway
      * @param _groupID: groupID
-     * @param _nodeIDs: nodeIDs pushed by gateway
-     * @param _receiveMsgCallback: response callback
-     * @return void
+     * @param _groupNodeInfo: nodeIDs pushed by gateway
+     * @return error: nullptr on success
      */
-    void onReceiveGroupNodeInfo(const std::string& _groupID,
-        bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo,
-        ReceiveMsgFunc _receiveMsgCallback) override;
+    task::Task<Error::Ptr> onReceiveGroupNodeInfo(std::string _groupID,
+        bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) override;
 
     /**
-     * @brief: receive message from gateway
+     * @brief: (coroutine) receive message from gateway
      * @param _groupID: groupID
      * @param _nodeID: the node send the message
-     * @param _data: received message data
-     * @param _receiveMsgCallback: response callback
-     * @return void
+     * @param _data: received message data (a view kept alive by the caller until the task
+     *        completes; the payload is copied before the deferred module dispatch)
+     * @return error: nullptr on success
      */
-    void onReceiveMessage(const std::string& _groupID, const bcos::crypto::NodeIDPtr& _nodeID,
-        bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback) override;
+    task::Task<Error::Ptr> onReceiveMessage(std::string _groupID,
+        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) override;
 
     /**
-     * @brief: receive broadcast message from gateway
+     * @brief: (coroutine) receive broadcast message from gateway
      * @param _groupID: groupID
      * @param _nodeID: the node send the message
-     * @param _data: received message data
-     * @param _receiveMsgCallback: response callback
-     * @return void
+     * @param _data: received message data (a view — same lifetime contract as onReceiveMessage)
+     * @return error: nullptr on success
      */
-    void onReceiveBroadcastMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback) override;
-
-    /**
-     * @brief: send message
-     * @param _moduleID: moduleID
-     * @param _nodeID: the node the message sent to
-     * @param _uuid: uuid identify this message
-     * @param _data: send data payload
-     * @param isResponse: if send response message
-     * @param _receiveMsgCallback: response callback
-     * @return void
-     */
-    void sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID, const std::string& _uuid,
-        bytesConstRef _data, bool isResponse, const ReceiveMsgFunc& _receiveMsgCallback);
+    task::Task<Error::Ptr> onReceiveBroadcastMessage(std::string _groupID,
+        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) override;
 
     /**
      * @brief: handle message timeout
@@ -218,8 +202,8 @@ protected:
     // gateway send.
     void enqueueSend(std::function<void()> _sendTask);
 
-    // shared uuid/timer/callback registration used by both asyncSendMessageByNodeID and the
-    // coroutine sendMessageByNodeID, so the uuid/timer/addCallback logic is not duplicated.
+    // shared uuid/timer/callback registration used by the coroutine sendMessageByNodeID, so the
+    // uuid/timer/addCallback logic is not duplicated.
     // Returns the generated uuid (used as the message id for the module-level response routing).
     std::string registerCallback(
         bcos::crypto::NodeIDPtr _nodeID, uint32_t _timeout, CallbackFunc _callbackFunc);

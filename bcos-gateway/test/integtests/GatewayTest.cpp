@@ -54,8 +54,12 @@ std::vector<bcos::front::FrontService::Ptr> buildFrontServiceVector()
                 auto frontService = frontServiceWeakptr.lock();
                 if (frontService)
                 {
-                    frontService->asyncSendResponse(
-                        _id, bcos::protocol::ModuleID::AMOP, _nodeID, _data, [](Error::Ptr) {});
+                    task::wait([](std::shared_ptr<bcos::front::FrontService> _frontService,
+                                   std::string _responseID, bcos::crypto::NodeIDPtr _nodeID,
+                                   bcos::bytes _payload) -> task::Task<void> {
+                        co_await _frontService->sendResponse(_responseID,
+                            bcos::protocol::ModuleID::AMOP, _nodeID, bcos::ref(_payload));
+                    }(frontService, _id, _nodeID, bcos::bytes(_data.begin(), _data.end())));
                 }
             });
         frontServiceVector.push_back(frontService);
@@ -73,29 +77,27 @@ BOOST_AUTO_TEST_CASE(test_FrontServiceEcho)
     // echo test
     for (const auto& frontService : frontServiceVector)
     {
-        frontService->asyncGetGroupNodeInfo([frontService](Error::Ptr _error,
-                                                bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
-            BOOST_CHECK(_error == nullptr);
-            auto const& nodeIDs = _groupNodeInfo->nodeIDList();
-            BOOST_CHECK_EQUAL(nodeIDs.size(), nodeCount);
+        auto [error, groupNodeInfo] = task::syncWait(frontService->getGroupNodeInfo());
+        BOOST_CHECK(error == nullptr);
+        auto const& nodeIDs = groupNodeInfo->nodeIDList();
+        BOOST_CHECK_EQUAL(nodeIDs.size(), nodeCount);
 
-            for (const auto& nodeIDStr : nodeIDs)
-            {
-                auto nodeID = keyFactory->createKey(fromHex(nodeIDStr));
-                std::string sendStr = boost::uuids::to_string(boost::uuids::random_generator()());
+        for (const auto& nodeIDStr : nodeIDs)
+        {
+            auto nodeID = keyFactory->createKey(fromHex(nodeIDStr));
+            std::string sendStr = boost::uuids::to_string(boost::uuids::random_generator()());
 
-                auto payload = bcos::bytesConstRef((bcos::byte*)sendStr.data(), sendStr.size());
+            auto payload = bcos::bytesConstRef((bcos::byte*)sendStr.data(), sendStr.size());
 
-                auto result = task::syncWait(frontService->sendMessageByNodeID(
-                    bcos::protocol::ModuleID::AMOP, nodeID, ::ranges::views::single(payload),
-                    10000));
+            auto result = task::syncWait(frontService->sendMessageByNodeID(
+                bcos::protocol::ModuleID::AMOP, nodeID, ::ranges::views::single(payload),
+                10000));
 
-                BOOST_CHECK(!result.uuid.empty());
-                BOOST_CHECK(result.error == nullptr);
-                std::string retStr(result.payload.begin(), result.payload.end());
-                BOOST_CHECK_EQUAL(sendStr, retStr);
-            }
-        });
+            BOOST_CHECK(!result.uuid.empty());
+            BOOST_CHECK(result.error == nullptr);
+            std::string retStr(result.payload.begin(), result.payload.end());
+            BOOST_CHECK_EQUAL(sendStr, retStr);
+        }
     }
 }
 
@@ -106,29 +108,27 @@ BOOST_AUTO_TEST_CASE(test_FrontServiceTimeout)
     // echo test
     for (const auto& frontService : frontServiceVector)
     {
-        frontService->asyncGetGroupNodeInfo([frontService](Error::Ptr _error,
-                                                bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
-            BOOST_CHECK(_error == nullptr);
-            auto const& nodeIDs = _groupNodeInfo->nodeIDList();
-            BOOST_CHECK_EQUAL(nodeIDs.size(), nodeCount);
+        auto [error, groupNodeInfo] = task::syncWait(frontService->getGroupNodeInfo());
+        BOOST_CHECK(error == nullptr);
+        auto const& nodeIDs = groupNodeInfo->nodeIDList();
+        BOOST_CHECK_EQUAL(nodeIDs.size(), nodeCount);
 
-            for (const auto& nodeIDStr : nodeIDs)
-            {
-                auto nodeID = keyFactory->createKey(fromHex(nodeIDStr));
-                std::string sendStr = boost::uuids::to_string(boost::uuids::random_generator()());
+        for (const auto& nodeIDStr : nodeIDs)
+        {
+            auto nodeID = keyFactory->createKey(fromHex(nodeIDStr));
+            std::string sendStr = boost::uuids::to_string(boost::uuids::random_generator()());
 
-                auto payload = bcos::bytesConstRef((bcos::byte*)sendStr.data(), sendStr.size());
+            auto payload = bcos::bytesConstRef((bcos::byte*)sendStr.data(), sendStr.size());
 
-                auto result = task::syncWait(frontService->sendMessageByNodeID(
-                    bcos::protocol::ModuleID::AMOP + 1, nodeID, ::ranges::views::single(payload),
-                    10000));
+            auto result = task::syncWait(frontService->sendMessageByNodeID(
+                bcos::protocol::ModuleID::AMOP + 1, nodeID, ::ranges::views::single(payload),
+                10000));
 
-                BOOST_CHECK(!result.uuid.empty());
-                BOOST_CHECK(result.error != nullptr);
-                BOOST_CHECK_EQUAL(
-                    result.error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
-            }
-        });
+            BOOST_CHECK(!result.uuid.empty());
+            BOOST_CHECK(result.error != nullptr);
+            BOOST_CHECK_EQUAL(
+                result.error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
+        }
     }
 }
 

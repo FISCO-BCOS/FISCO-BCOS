@@ -532,53 +532,54 @@ void PBFTInitializer::syncGroupNodeInfo()
 {
     // Note: In air mode, the groupNodeInfo must be successful
     auto self = std::weak_ptr<PBFTInitializer>(shared_from_this());
-    m_frontService->asyncGetGroupNodeInfo(
-        [self](Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
-            auto pbftInit = self.lock();
-            if (!pbftInit)
+    task::wait([](std::weak_ptr<PBFTInitializer> _self,
+                   front::FrontServiceInterface::Ptr _frontService) -> task::Task<void> {
+        auto pbftInit = _self.lock();
+        if (!pbftInit)
+        {
+            co_return;
+        }
+        auto [_error, _groupNodeInfo] = co_await _frontService->getGroupNodeInfo();
+        if (_error != nullptr)
+        {
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("getGroupNodeInfo failed")
+                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+            co_return;
+        }
+        try
+        {
+            if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().empty())
             {
-                return;
+                co_return;
             }
-            if (_error != nullptr)
+            NodeIDSet nodeIdSet;
+            auto const& nodeIDList = _groupNodeInfo->nodeIDList();
+            if (nodeIDList.empty())
             {
-                INITIALIZER_LOG(WARNING)
-                    << LOG_DESC("asyncGetGroupNodeInfo failed")
-                    << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
-                return;
+                co_return;
             }
-            try
+            for (auto const& nodeIDStr : nodeIDList)
             {
-                if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().empty())
-                {
-                    return;
-                }
-                NodeIDSet nodeIdSet;
-                auto const& nodeIDList = _groupNodeInfo->nodeIDList();
-                if (nodeIDList.empty())
-                {
-                    return;
-                }
-                for (auto const& nodeIDStr : nodeIDList)
-                {
-                    auto nodeID =
-                        pbftInit->m_protocolInitializer->cryptoSuite()->keyFactory()->createKey(
-                            fromHex(nodeIDStr));
-                    nodeIdSet.insert(nodeID);
-                }
-                // the blockSync module set the connected node list
-                pbftInit->m_blockSync->config()->setConnectedNodeList(nodeIdSet);
-                // the txpool module set the connected node list
-                auto txpool = std::dynamic_pointer_cast<bcos::txpool::TxPool>(pbftInit->m_txpool);
-                INITIALIZER_LOG(INFO) << LOG_DESC("syncGroupNodeInfo for block sync and txpool")
-                                      << LOG_KV("connectedSize", nodeIdSet.size());
-                txpool->transactionSync()->config()->setConnectedNodeList(std::move(nodeIdSet));
+                auto nodeID =
+                    pbftInit->m_protocolInitializer->cryptoSuite()->keyFactory()->createKey(
+                        fromHex(nodeIDStr));
+                nodeIdSet.insert(nodeID);
             }
-            catch (std::exception const& e)
-            {
-                INITIALIZER_LOG(WARNING) << LOG_DESC("asyncGetGroupNodeInfo exception")
-                                         << LOG_KV("message", boost::diagnostic_information(e));
-            }
-        });
+            // the blockSync module set the connected node list
+            pbftInit->m_blockSync->config()->setConnectedNodeList(nodeIdSet);
+            // the txpool module set the connected node list
+            auto txpool = std::dynamic_pointer_cast<bcos::txpool::TxPool>(pbftInit->m_txpool);
+            INITIALIZER_LOG(INFO) << LOG_DESC("syncGroupNodeInfo for block sync and txpool")
+                                  << LOG_KV("connectedSize", nodeIdSet.size());
+            txpool->transactionSync()->config()->setConnectedNodeList(std::move(nodeIdSet));
+        }
+        catch (std::exception const& e)
+        {
+            INITIALIZER_LOG(WARNING) << LOG_DESC("getGroupNodeInfo exception")
+                                     << LOG_KV("message", boost::diagnostic_information(e));
+        }
+    }(self, m_frontService));
 }
 
 void PBFTInitializer::onGroupInfoChanged()

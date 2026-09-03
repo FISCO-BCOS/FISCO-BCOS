@@ -80,8 +80,8 @@ public:
 
                     bcos::bytes responseBuffer;
                     bcos::concepts::serialize::encode(response, responseBuffer);
-                    front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GET_TRANSACTIONS, nodeID,
-                        bcos::ref(responseBuffer), []([[maybe_unused]] Error::Ptr _error) {});
+                    (void)co_await front->sendResponse(id, bcos::protocol::LIGHTNODE_GET_TRANSACTIONS,
+                        nodeID, bcos::ref(responseBuffer));
                 }(ledger, front, std::move(nodeID), id, data));
             });
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_RECEIPTS,
@@ -115,8 +115,8 @@ public:
 
                     bcos::bytes responseBuffer;
                     bcos::concepts::serialize::encode(response, responseBuffer);
-                    front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GET_RECEIPTS, nodeID,
-                        bcos::ref(responseBuffer), {});
+                    (void)co_await front->sendResponse(
+                        id, bcos::protocol::LIGHTNODE_GET_RECEIPTS, nodeID, bcos::ref(responseBuffer));
                 }(ledger, weakFront, id, std::move(nodeID), data));
             });
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_STATUS,
@@ -150,9 +150,8 @@ public:
                     }
                     bcos::bytes responseBuffer;
                     bcos::concepts::serialize::encode(response, responseBuffer);
-                    front->asyncSendResponse(messageID, bcos::protocol::LIGHTNODE_GET_STATUS,
-                        nodeID, bcos::ref(responseBuffer),
-                        []([[maybe_unused]] const Error::Ptr& error) {});
+                    (void)co_await front->sendResponse(messageID, bcos::protocol::LIGHTNODE_GET_STATUS,
+                        nodeID, bcos::ref(responseBuffer));
                 }(ledger, std::move(front), std::move(nodeID), std::string(messageID), data));
             });
         front->registerModuleMessageDispatcher(
@@ -183,8 +182,8 @@ public:
                     }
                     bcos::bytes responseBuffer;
                     bcos::concepts::serialize::encode(response, responseBuffer);
-                    front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GET_ABI, nodeID,
-                        bcos::ref(responseBuffer), []([[maybe_unused]] const Error::Ptr& error) {});
+                    (void)co_await front->sendResponse(
+                        id, bcos::protocol::LIGHTNODE_GET_ABI, nodeID, bcos::ref(responseBuffer));
                 }(ledger, std::move(front), std::move(nodeID), std::string(id), data));
             });
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_SEND_TRANSACTION,
@@ -241,8 +240,14 @@ private:
 
             bcos::bytes responseBuffer;
             bcos::concepts::serialize::encode(response, responseBuffer);
-            front->asyncSendResponse(
-                std::string(id), moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr) {});
+            // fire-and-forget bridge: the payload is moved into the coroutine as an owned copy
+            // so it stays alive after task::wait detaches
+            task::wait([](std::shared_ptr<bcos::front::FrontService> _front, std::string _id,
+                           bcos::protocol::ModuleID _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+                           bcos::bytes _payload) -> task::Task<void> {
+                (void)co_await _front->sendResponse(
+                    _id, _moduleID, std::move(_nodeID), bcos::ref(_payload));
+            }(front, std::string(id), moduleID, std::move(nodeID), std::move(responseBuffer)));
         }
 
         return success;
@@ -279,15 +284,14 @@ private:
         bcos::bytes responseBuffer;
         bcos::concepts::serialize::encode(response, responseBuffer);
         auto blockNumber = request.blockNumber;
-        front->asyncSendResponse(messageID, bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID,
-            bcos::ref(responseBuffer), [blockNumber](Error::Ptr _error) {
-                if (_error)
-                {
-                    LIGHTNODE_LOG(ERROR)
-                        << "send getblockResponse failed " << LOG_KV("blockNumber", blockNumber);
-                }
-            });
-        LIGHTNODE_LOG(DEBUG) << "asyncSendResponse: sendResponseMessage to dstNode:"
+        auto error = co_await front->sendResponse(
+            messageID, bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, bcos::ref(responseBuffer));
+        if (error)
+        {
+            LIGHTNODE_LOG(ERROR)
+                << "send getblockResponse failed " << LOG_KV("blockNumber", blockNumber);
+        }
+        LIGHTNODE_LOG(DEBUG) << "sendResponse: sendResponseMessage to dstNode:"
                              << nodeID->hex() << LOG_KV("blockNUmber", blockNumber)
                              << LOG_KV("moduleID", bcos::protocol::LIGHTNODE_GET_BLOCK)
                              << LOG_KV("responseBuffer size", responseBuffer.size());
@@ -318,8 +322,8 @@ private:
         LIGHTNODE_LOG(INFO) << "Response submit transaction: " << id << " | "
                             << responseBuffer.size();
 
-        front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_SEND_TRANSACTION, nodeID,
-            bcos::ref(responseBuffer), [](const Error::Ptr&) {});
+        (void)co_await front->sendResponse(id, bcos::protocol::LIGHTNODE_SEND_TRANSACTION, nodeID,
+            bcos::ref(responseBuffer));
     }
 
     task::Task<void> call(std::shared_ptr<bcos::front::FrontService> front,
@@ -341,8 +345,8 @@ private:
 
         bcos::bytes responseBuffer;
         bcos::concepts::serialize::encode(response, responseBuffer);
-        front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_CALL, nodeID,
-            bcos::ref(responseBuffer), [](const Error::Ptr&) {});
+        (void)co_await front->sendResponse(
+            id, bcos::protocol::LIGHTNODE_CALL, nodeID, bcos::ref(responseBuffer));
     }
 };
 }  // namespace bcos::initializer
