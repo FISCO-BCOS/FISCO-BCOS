@@ -207,7 +207,7 @@ public:
      *        state as coroutine parameters)
      * @return error: nullptr on success, the gateway send failure otherwise
      */
-    virtual task::Task<Error::Ptr> sendResponse(const std::string& _id, int _moduleID,
+    virtual task::Task<Error::Ptr> sendResponse(std::string _id, int _moduleID,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) = 0;
 
     virtual task::Task<void> broadcastMessage(

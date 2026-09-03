@@ -21,6 +21,7 @@
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-gateway/Common.h"
+#include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-tars-protocol/client/FrontServiceClient.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-task/Wait.h>
@@ -262,7 +263,7 @@ bool LocalRouterTable::eraseUnreachableNodes()
 }
 
 bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _groupID,
-    uint16_t _moduleID, NodeIDPtr _srcNodeID, bytesConstRef _payload) const
+    uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<P2PMessage> _msg) const
 {
     auto frontServiceList = getGroupFrontServiceList(_groupID);
     if (frontServiceList.empty())
@@ -270,6 +271,9 @@ bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _grou
         return false;
     }
     auto srcNodeIDHex = _srcNodeID->hex();
+    // zero-copy: each dispatch task below owns the P2PMessage, so the payload view into it
+    // stays valid for the whole (possibly deferred) per-front dispatch
+    auto payloadSize = _msg->payload().size();
     for (auto const& it : frontServiceList)
     {
         if (it->nodeID() == srcNodeIDHex)
@@ -286,15 +290,13 @@ bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _grou
         ROUTER_LOG(TRACE) << LOG_BADGE(
                                  "LocalRouterTable: dispatcher broadcast-type message to node")
                           << LOG_KV("type", _nodeType) << LOG_KV("groupID", _groupID)
-                          << LOG_KV("moduleID", _moduleID) << LOG_KV("payloadSize", _payload.size())
+                          << LOG_KV("moduleID", _moduleID) << LOG_KV("payloadSize", payloadSize)
                           << LOG_KV("dst", dstNodeID);
-        // the payload view dies when the p2p handler returns; copy it into an owned coroutine
-        // parameter so it stays alive for the whole (possibly deferred) dispatch
         task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _groupID,
-                       uint16_t _moduleID, NodeIDPtr _srcNodeID, bcos::bytes _payload,
+                       uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<P2PMessage> _msg,
                        std::string _dstNodeID) -> task::Task<void> {
             auto error =
-                co_await _frontService->onReceiveMessage(_groupID, _srcNodeID, bcos::ref(_payload));
+                co_await _frontService->onReceiveMessage(_groupID, _srcNodeID, _msg->payload());
             if (error)
             {
                 GATEWAY_LOG(ERROR) << LOG_DESC("ROUTER_LOG error") << LOG_KV("groupID", _groupID)
@@ -303,8 +305,7 @@ bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _grou
                                    << LOG_KV("code", error->errorCode())
                                    << LOG_KV("msg", error->errorMessage());
             }
-        }(frontService, _groupID, _moduleID, _srcNodeID,
-            bcos::bytes(_payload.begin(), _payload.end()), dstNodeID));
+        }(frontService, _groupID, _moduleID, _srcNodeID, _msg, dstNodeID));
     }
     return true;
 }

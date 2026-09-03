@@ -89,13 +89,14 @@ public:
      * @param _groupID: groupID
      * @param _srcNodeID: the sender nodeID
      * @param _dstNodeID: the receiver nodeID
-     * @param _payload: message content
+     * @param _msg: the received p2p message, passed by ownership so its payload buffer stays
+     *        alive for the whole (possibly deferred) dispatch, keeping the dispatch zero-copy
      * @param _errorRespFunc: error func
      * @return void
      */
     virtual void onReceiveP2PMessage(const std::string& _groupID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
+        std::shared_ptr<P2PMessage> _msg, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
     P2PInterface::Ptr p2pInterface() const;
     GatewayNodeManager::Ptr gatewayNodeManager();

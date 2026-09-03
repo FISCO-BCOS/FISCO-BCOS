@@ -249,7 +249,7 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
  * @return void
  */
 void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNodeID,
-    NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc)
+    NodeIDPtr _dstNodeID, std::shared_ptr<P2PMessage> _msg, ErrorRespFunc _errorRespFunc)
 {
     auto frontService =
         m_gatewayNodeManager->localRouterTable()->getFrontService(_groupID, _dstNodeID);
@@ -273,13 +273,13 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNod
         return;
     }
 
-    // the payload view dies when this p2p handler returns; copy it into an owned coroutine
-    // parameter so it stays alive for the whole (possibly deferred) dispatch
+    // zero-copy: the owning P2PMessage is held by this coroutine frame for the whole (possibly
+    // deferred) dispatch, so the payload view into it stays valid until the task completes
     task::wait([](FrontServiceInfo::Ptr _frontServiceInfo, std::string _groupID,
-                   NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bcos::bytes _payload,
+                   NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, std::shared_ptr<P2PMessage> _msg,
                    ErrorRespFunc _errorRespFunc) -> task::Task<void> {
         auto error = co_await _frontServiceInfo->frontService()->onReceiveMessage(
-            _groupID, _srcNodeID, bcos::ref(_payload));
+            _groupID, _srcNodeID, _msg->payload());
         if (_errorRespFunc)
         {
             _errorRespFunc(error);
@@ -290,8 +290,8 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNod
                            << LOG_KV("dstNodeID", _dstNodeID->hex())
                            << LOG_KV("code", (error ? error->errorCode() : 0))
                            << LOG_KV("msg", (error ? error->errorMessage() : ""));
-    }(frontService, _groupID, _srcNodeID, _dstNodeID,
-        bcos::bytes(_payload.begin(), _payload.end()), std::move(_errorRespFunc)));
+    }(frontService, _groupID, _srcNodeID, _dstNodeID, std::move(_msg),
+        std::move(_errorRespFunc)));
 }
 
 bool Gateway::checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
@@ -404,7 +404,7 @@ void Gateway::onReceiveP2PMessage(
     auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(srcNodeID);
     auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(dstNodeIDs[0]);
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());
-    onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, payload,
+    onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, _msg,
         [groupID, moduleID, srcNodeIDPtr, dstNodeIDPtr, _session, _msg, gateway](
             Error::Ptr _error) {
             auto gatewayPtr = gateway.lock();
@@ -492,8 +492,8 @@ void Gateway::onReceiveBroadcastMessage(
         m_gatewayNodeManager->keyFactory()->createKey((_msg->options().srcNodeID()));
 
     auto type = _msg->ext();
-    m_gatewayNodeManager->localRouterTable()->broadcastMsg(type, groupID, moduleID,
-        srcNodeIDPtr, bytesConstRef(_msg->payload().data(), _msg->payload().size()));
+    m_gatewayNodeManager->localRouterTable()->broadcastMsg(
+        type, groupID, moduleID, srcNodeIDPtr, _msg);
 }
 
 void bcos::gateway::Gateway::enableReadOnlyMode()

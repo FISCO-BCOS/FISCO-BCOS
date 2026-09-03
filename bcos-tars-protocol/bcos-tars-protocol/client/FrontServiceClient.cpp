@@ -284,7 +284,7 @@ bcos::task::Task<bcos::front::SendResult> bcostars::FrontServiceClient::sendMess
     co_return co_await awaitable;
 }
 bcos::task::Task<bcos::Error::Ptr> bcostars::FrontServiceClient::sendResponse(
-    const std::string& _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+    std::string _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
     bcos::bytesConstRef _data)
 {
     auto nodeIDData = _nodeID->data();

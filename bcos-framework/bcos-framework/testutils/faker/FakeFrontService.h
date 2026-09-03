@@ -359,7 +359,7 @@ public:
         co_return nullptr;
     }
 
-    task::Task<Error::Ptr> sendResponse(const std::string& _id, int _moduleId,
+    task::Task<Error::Ptr> sendResponse(std::string _id, int _moduleId,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _responseData) override
     {
         // m_fakeGateWay is only nulled by ~SyncFixture() teardown, after stop() has joined all

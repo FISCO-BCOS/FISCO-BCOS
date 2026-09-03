@@ -30,7 +30,7 @@ public:
     bcos::task::Task<bcos::Error::Ptr> onReceiveBroadcastMessage(std::string _groupID,
         bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data) override;
 
-    bcos::task::Task<bcos::Error::Ptr> sendResponse(const std::string& _id, int _moduleID,
+    bcos::task::Task<bcos::Error::Ptr> sendResponse(std::string _id, int _moduleID,
         bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data) override;
 
     // (coroutine) send message to one node and await the module-level response via the

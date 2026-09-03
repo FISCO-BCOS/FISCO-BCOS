@@ -424,7 +424,7 @@ std::string FrontService::registerCallback(
  * @param _data: message (a view kept alive by the caller for the duration of the co_await)
  * @return error: nullptr on success, the gateway send failure otherwise
  */
-task::Task<Error::Ptr> FrontService::sendResponse(const std::string& _id, int _moduleID,
+task::Task<Error::Ptr> FrontService::sendResponse(std::string _id, int _moduleID,
     bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data)
 {
     FrontMessage message;

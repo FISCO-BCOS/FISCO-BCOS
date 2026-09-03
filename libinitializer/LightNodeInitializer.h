@@ -80,8 +80,9 @@ public:
 
                     bcos::bytes responseBuffer;
                     bcos::concepts::serialize::encode(response, responseBuffer);
-                    (void)co_await front->sendResponse(id, bcos::protocol::LIGHTNODE_GET_TRANSACTIONS,
-                        nodeID, bcos::ref(responseBuffer));
+                    (void)co_await front->sendResponse(id,
+                        bcos::protocol::LIGHTNODE_GET_TRANSACTIONS, nodeID,
+                        bcos::ref(responseBuffer));
                 }(ledger, front, std::move(nodeID), id, data));
             });
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_RECEIPTS,
@@ -116,7 +117,8 @@ public:
                     bcos::bytes responseBuffer;
                     bcos::concepts::serialize::encode(response, responseBuffer);
                     (void)co_await front->sendResponse(
-                        id, bcos::protocol::LIGHTNODE_GET_RECEIPTS, nodeID, bcos::ref(responseBuffer));
+                        id, bcos::protocol::LIGHTNODE_GET_RECEIPTS, nodeID,
+                        bcos::ref(responseBuffer));
                 }(ledger, weakFront, id, std::move(nodeID), data));
             });
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_STATUS,
@@ -150,8 +152,8 @@ public:
                     }
                     bcos::bytes responseBuffer;
                     bcos::concepts::serialize::encode(response, responseBuffer);
-                    (void)co_await front->sendResponse(messageID, bcos::protocol::LIGHTNODE_GET_STATUS,
-                        nodeID, bcos::ref(responseBuffer));
+                    (void)co_await front->sendResponse(messageID,
+                        bcos::protocol::LIGHTNODE_GET_STATUS, nodeID, bcos::ref(responseBuffer));
                 }(ledger, std::move(front), std::move(nodeID), std::string(messageID), data));
             });
         front->registerModuleMessageDispatcher(

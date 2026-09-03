@@ -65,7 +65,7 @@ public:
      * @param _data: message (a view kept alive by the caller for the duration of the co_await)
      * @return error: nullptr on success, the gateway send failure otherwise
      */
-    task::Task<Error::Ptr> sendResponse(const std::string& _id, int _moduleID,
+    task::Task<Error::Ptr> sendResponse(std::string _id, int _moduleID,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) override;
 
     task::Task<void> broadcastMessage(
