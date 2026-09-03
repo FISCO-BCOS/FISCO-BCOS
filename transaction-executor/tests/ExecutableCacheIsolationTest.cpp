@@ -89,13 +89,14 @@ BOOST_AUTO_TEST_CASE(discardedViewDoesNotPublishCode)
 
     MutableStorage speculativeView;
     seedCode(speculativeView, address, CODE_A);
-    BOOST_REQUIRE(syncWait(getExecutable(speculativeView, address, EVMC_CANCUN, false)) != nullptr);
+    BOOST_REQUIRE(
+        syncWait(resolveExecutable(speculativeView, address, EVMC_CANCUN, false)) != nullptr);
 
     // A different view that never saw that deployment. The speculative view is
     // simply dropped here, exactly as BaselineScheduler drops a forked view it
     // never pushes.
     MutableStorage consensusView;
-    BOOST_CHECK(syncWait(getExecutable(consensusView, address, EVMC_CANCUN, false)) == nullptr);
+    BOOST_CHECK(syncWait(resolveExecutable(consensusView, address, EVMC_CANCUN, false)) == nullptr);
 }
 
 // The same address holding different code in two views must resolve to that
@@ -109,8 +110,8 @@ BOOST_AUTO_TEST_CASE(codeIsResolvedPerView)
     MutableStorage secondView;
     seedCode(secondView, address, CODE_B);
 
-    auto first = syncWait(getExecutable(firstView, address, EVMC_CANCUN, false));
-    auto second = syncWait(getExecutable(secondView, address, EVMC_CANCUN, false));
+    auto first = syncWait(resolveExecutable(firstView, address, EVMC_CANCUN, false));
+    auto second = syncWait(resolveExecutable(secondView, address, EVMC_CANCUN, false));
 
     BOOST_REQUIRE(first && first->m_code);
     BOOST_REQUIRE(second && second->m_code);
@@ -131,8 +132,8 @@ BOOST_AUTO_TEST_CASE(identicalCodeSharesOneAnalysis)
     seedCode(storage, first, CODE_A);
     seedCode(storage, second, CODE_A);
 
-    auto firstExecutable = syncWait(getExecutable(storage, first, EVMC_CANCUN, false));
-    auto secondExecutable = syncWait(getExecutable(storage, second, EVMC_CANCUN, false));
+    auto firstExecutable = syncWait(resolveExecutable(storage, first, EVMC_CANCUN, false));
+    auto secondExecutable = syncWait(resolveExecutable(storage, second, EVMC_CANCUN, false));
 
     BOOST_REQUIRE(firstExecutable);
     BOOST_CHECK_EQUAL(firstExecutable.get(), secondExecutable.get());
@@ -148,8 +149,8 @@ BOOST_AUTO_TEST_CASE(revisionIsPartOfTheCacheKey)
     auto address = makeAddress(0xc1);
     seedCode(storage, address, CODE_B);
 
-    auto shanghai = syncWait(getExecutable(storage, address, EVMC_SHANGHAI, false));
-    auto cancun = syncWait(getExecutable(storage, address, EVMC_CANCUN, false));
+    auto shanghai = syncWait(resolveExecutable(storage, address, EVMC_SHANGHAI, false));
+    auto cancun = syncWait(resolveExecutable(storage, address, EVMC_CANCUN, false));
 
     BOOST_REQUIRE(shanghai);
     BOOST_REQUIRE(cancun);
@@ -165,17 +166,22 @@ BOOST_AUTO_TEST_CASE(accountWithoutCodeYieldsNoExecutable)
     ledger::account::EVMAccount account(storage, address, false);
     syncWait(account.create());
 
-    BOOST_CHECK(syncWait(getExecutable(storage, address, EVMC_CANCUN, false)) == nullptr);
+    BOOST_CHECK(syncWait(resolveExecutable(storage, address, EVMC_CANCUN, false)) == nullptr);
 }
 
 // Contracts deployed before code was split into s_code_binary keep their bytes
-// in the account table's own code field. EVMAccount::code() falls back to it and
-// getExecutable must stay on that path.
+// in the account table's own code field. EVMAccount::code() falls back to it,
+// and the miss path in getExecutable must keep reaching that fallback.
 BOOST_AUTO_TEST_CASE(legacyCodeFieldIsStillResolved)
 {
+    // Bytes no other case uses: sharing a blob would put {hash, CANCUN} in the
+    // process-wide LRU before this case runs, and the cache hit would skip the
+    // fallback this case exists to cover.
+    const bytes code{0x60, 0x04, 0x60, 0x00, 0x55, 0x00};  // PUSH1 4 PUSH1 0 SSTORE STOP
+
     MutableStorage storage;
     auto address = makeAddress(0xd2);
-    auto codeHash = hashImpl->hash(bytesConstRef(CODE_A.data(), CODE_A.size()));
+    auto codeHash = hashImpl->hash(bytesConstRef(code.data(), code.size()));
 
     // Account table records the hash and the code, but s_code_binary is empty.
     ledger::account::EVMAccount account(storage, address, false);
@@ -186,13 +192,57 @@ BOOST_AUTO_TEST_CASE(legacyCodeFieldIsStillResolved)
         storage::Entry{bcos::concepts::bytebuffer::toView(codeHash)}));
     syncWait(storage2::writeOne(storage,
         executor_v1::StateKey{tableName, ledger::ACCOUNT_TABLE_FIELDS::CODE},
-        storage::Entry{std::string_view((const char*)CODE_A.data(), CODE_A.size())}));
+        storage::Entry{std::string_view((const char*)code.data(), code.size())}));
 
-    auto executable = syncWait(getExecutable(storage, address, EVMC_CANCUN, false));
+    auto executable = syncWait(resolveExecutable(storage, address, EVMC_CANCUN, false));
     BOOST_REQUIRE(executable);
     BOOST_REQUIRE(executable->m_code);
     BOOST_CHECK_EQUAL(
-        executable->m_code->get(), std::string_view((const char*)CODE_A.data(), CODE_A.size()));
+        executable->m_code->get(), std::string_view((const char*)code.data(), code.size()));
+}
+
+// The cache-touching half of the lookup keys on the entry it is handed, not on
+// the account it fetches the bytes through. That is what stops a discarded view
+// from publishing code under an address.
+BOOST_AUTO_TEST_CASE(cachedLookupTakesTheCodeHashEntry)
+{
+    const bytes code{0x60, 0x03, 0x60, 0x00, 0x55, 0x00};  // PUSH1 3 PUSH1 0 SSTORE STOP
+
+    MutableStorage storage;
+    auto address = makeAddress(0xe1);
+    seedCode(storage, address, code);
+
+    ledger::account::EVMAccount account(storage, address, false);
+    auto codeHashEntry = syncWait(account.codeHashEntry());
+    BOOST_REQUIRE(codeHashEntry);
+
+    auto executable = syncWait(getExecutable(account, *codeHashEntry, EVMC_CANCUN));
+    BOOST_REQUIRE(executable);
+    BOOST_REQUIRE(executable->m_code);
+    BOOST_CHECK_EQUAL(
+        executable->m_code->get(), std::string_view((const char*)code.data(), code.size()));
+
+    // A different address in a different view holding the same bytes hits the
+    // same cache entry, because the key is the content and not the address.
+    MutableStorage otherStorage;
+    auto otherAddress = makeAddress(0xe2);
+    seedCode(otherStorage, otherAddress, code);
+    ledger::account::EVMAccount otherAccount(otherStorage, otherAddress, false);
+    auto otherCodeHashEntry = syncWait(otherAccount.codeHashEntry());
+    BOOST_REQUIRE(otherCodeHashEntry);
+
+    auto other = syncWait(getExecutable(otherAccount, *otherCodeHashEntry, EVMC_CANCUN));
+    BOOST_CHECK_EQUAL(other.get(), executable.get());
+
+    // The entry decides the lookup, not the account. Handing the first account -
+    // which does hold code - a hash that names no bytes anywhere must resolve to
+    // nothing. An implementation that re-read the account's own code hash and
+    // ignored the parameter would return that account's executable and fail here.
+    const std::string_view neverDeployed{"bytes never deployed"};
+    auto unrelatedHash = hashImpl->hash(
+        bytesConstRef((const bcos::byte*)neverDeployed.data(), neverDeployed.size()));
+    storage::Entry unrelatedEntry{bcos::concepts::bytebuffer::toView(unrelatedHash)};
+    BOOST_CHECK(syncWait(getExecutable(account, unrelatedEntry, EVMC_CANCUN)) == nullptr);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

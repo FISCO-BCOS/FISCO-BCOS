@@ -182,16 +182,16 @@ BOOST_AUTO_TEST_CASE(contractCodeIsUnaffected)
 }
 
 // The filter must only hide the marker from the code-reading path. This asserts
-// the step executeCall depends on - getExecutable still returning the marker -
-// rather than dispatch itself; processDynamicPrecompiled consumes that same
-// m_executable->m_code to route the call to the account precompiled.
+// the step executeCall depends on - resolveExecutable still returning the
+// marker - rather than dispatch itself; processDynamicPrecompiled consumes that
+// same m_executable->m_code to route the call to the account precompiled.
 BOOST_AUTO_TEST_CASE(dispatchStillSeesTheMarker)
 {
     auto address = eoaAddress();
     seedAccountMarker(address);
     enableFilter(true);
 
-    auto executable = syncWait(getExecutable(rollbackableStorage, address, EVMC_CANCUN, false));
+    auto executable = syncWait(resolveExecutable(rollbackableStorage, address, EVMC_CANCUN, false));
     BOOST_REQUIRE(executable);
     BOOST_REQUIRE(executable->m_code);
     BOOST_CHECK(bcos::precompiled::matchDynamicAccountCode(executable->m_code->get()));
