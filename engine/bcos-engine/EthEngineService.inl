@@ -184,7 +184,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                               << bcos::errinfo_comment{"Unsupported Engine API version"});
     }
     if (auto validationError =
-            eth_detail::validateExecutionPayload(request.executionPayload, version);
+            detail::validateExecutionPayload(request.executionPayload, version);
         validationError.has_value())
     {
         auto status = validationError->find("blockHash") != std::string::npos ?
@@ -241,6 +241,17 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     }
 
     auto cached = guard.findPayload(payloadId);
+    if (cached)
+    {
+        // Match EngineServiceImpl: on a local-build hit, reject a CL that keeps the
+        // blockHash but alters extraData (cannot re-derive Eth block hash here).
+        if (auto mismatch =
+                detail::compareWithBuiltPayload(request.executionPayload, cached->executionPayload))
+        {
+            co_return engine_common::makeStatus(
+                PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
+        }
+    }
     auto artifactIt = m_artifacts.find(payloadId);
     if (artifactIt != m_artifacts.end() && artifactIt->second.view)
     {

@@ -1279,6 +1279,86 @@ BOOST_AUTO_TEST_CASE(mirror_jovian_extra_data_on_payload)
         "0x00000000fa00000006");
 }
 
+BOOST_AUTO_TEST_CASE(mirror_new_payload_rejects_altered_extra_data)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    payloadAttributes.eip1559Params = bytes(8, 0);
+    payloadAttributes.minBaseFee = 0;
+
+    auto legacyBuild =
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    auto newBuild =
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    checkForkchoiceParity(legacyBuild, newBuild);
+    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyBuild.payloadId, 3));
+    auto newPayload = task::syncWait(pair.fresh.getPayload(*newBuild.payloadId, 3));
+    BOOST_REQUIRE(legacyPayload);
+    BOOST_REQUIRE(newPayload);
+
+    pair.legacyStorage.setBlockNumber(
+        legacyPayload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    pair.newStorage.setBlockNumber(
+        newPayload->executionPayload.blockHash, c_initialBlockNumber + 1);
+
+    auto legacyAltered = makeNewPayloadRequestV3(legacyPayload->executionPayload);
+    legacyAltered.executionPayload.extraData =
+        fromHexWithPrefix("0x01000000fa000000060000000000000009");
+    auto newAltered = makeNewPayloadRequestV3(newPayload->executionPayload);
+    newAltered.executionPayload.extraData =
+        fromHexWithPrefix("0x01000000fa000000060000000000000009");
+
+    auto legacyStatus = task::syncWait(pair.legacy.newPayload(legacyAltered, 3));
+    auto newStatus = task::syncWait(pair.fresh.newPayload(newAltered, 3));
+    checkStatusParity(legacyStatus, newStatus);
+    BOOST_CHECK_EQUAL(static_cast<int>(newStatus.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+
+    checkStatusParity(task::syncWait(pair.legacy.newPayload(
+                          makeNewPayloadRequestV3(legacyPayload->executionPayload), 3)),
+        task::syncWait(
+            pair.fresh.newPayload(makeNewPayloadRequestV3(newPayload->executionPayload), 3)));
+}
+
+BOOST_AUTO_TEST_CASE(mirror_new_payload_rejects_malformed_extra_data)
+{
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    auto legacyBuild =
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    auto newBuild =
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    checkForkchoiceParity(legacyBuild, newBuild);
+    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyBuild.payloadId, 3));
+    auto newPayload = task::syncWait(pair.fresh.getPayload(*newBuild.payloadId, 3));
+    BOOST_REQUIRE(legacyPayload);
+    BOOST_REQUIRE(newPayload);
+
+    auto legacyMalformed = makeNewPayloadRequestV3(legacyPayload->executionPayload);
+    // 17 bytes with Holocene version byte: neither shape accepts it.
+    legacyMalformed.executionPayload.extraData =
+        fromHexWithPrefix("0x00000000fa000000060000000000000000");
+    auto newMalformed = makeNewPayloadRequestV3(newPayload->executionPayload);
+    newMalformed.executionPayload.extraData =
+        fromHexWithPrefix("0x00000000fa000000060000000000000000");
+
+    auto legacyStatus = task::syncWait(pair.legacy.newPayload(legacyMalformed, 3));
+    auto newStatus = task::syncWait(pair.fresh.newPayload(newMalformed, 3));
+    checkStatusParity(legacyStatus, newStatus);
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(newStatus.status), static_cast<int>(PayloadValidationStatus::Invalid));
+}
+
 // Matrix: S4 — version × fork matrix for FCU / getPayload / newPayload gates.
 
 BOOST_AUTO_TEST_CASE(matrix_version_fork_fcu_and_get_payload)
