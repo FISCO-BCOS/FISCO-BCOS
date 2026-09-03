@@ -25,7 +25,10 @@ bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payl
     case ApiVersion::V2:
         return payloadVersion <= 2;
     case ApiVersion::V3:
-        return payloadVersion <= 3;
+        // GetPayloadV3 answers only PayloadV3 builds (op-geth passes
+        // []engine.PayloadVersion{engine.PayloadV3}); V1/V2-tagged entries cannot
+        // render the V3 wire shape (blob-gas pair, beacon root) - finding AN.
+        return payloadVersion == 3;
     case ApiVersion::V4:
         // Match release EngineServiceImpl: GetPayloadV4 accepts only PayloadV3 builds
         // (op-geth GetPayloadV4 passes []PayloadVersion{PayloadV3}).

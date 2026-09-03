@@ -9,7 +9,6 @@
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-ledger/mpt/Constants.h>
-#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <evmc/evmc.h>
 
 #include <memory>
@@ -63,16 +62,20 @@ bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payl
 std::uint32_t payloadShapeVersion(std::uint32_t methodVersion);
 std::optional<std::string> validateRawTransactionKind(
     bcos::engine::RawTransactionKind kind, std::size_t index);
-/// op-geth ValidateHolocene1559Params: reject only e!=0 && d==0.
-/// Attribute (0,0) is legal and encodeOptimismExtraData translates it to Canyon 250/6.
-/// Header extraData (0,0) and (d>0,e==0) are also accepted at the gate.
+/// EIP-1559 attribute pairing rule (finding AO): the pair must be both-zero or both
+/// non-zero. (0,0) is legal attribute input — encodeOptimismExtraData translates it to
+/// the Canyon constants 250/6 — but a mixed pair such as (d>0,e==0) would be encoded
+/// verbatim as a zero-elasticity header that calcOpBaseFee can never extend, bricking
+/// the chain on top of it. Committed headers are validated separately with a strict
+/// non-zero rule (validateOpExtraDataShape) since encode never produces a zero header.
 inline std::optional<std::string> validateHolocene1559Params(
     std::uint32_t denominator, std::uint32_t elasticity)
 {
-    if (elasticity != 0 && denominator == 0)
+    if ((denominator == 0) != (elasticity == 0))
     {
         return std::string(
-            "holocene eip-1559 params cannot have a 0 denominator unless elasticity is also 0");
+            "holocene eip-1559 params denominator and elasticity must be both zero or "
+            "both non-zero");
     }
     return std::nullopt;
 }

@@ -1,6 +1,6 @@
-#------------------------------------------------------------------------------
-# Top-level CMake file for ut of bcos-engine
-# ------------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+#Top - level CMake file for ut of bcos - engine
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 file(GLOB_RECURSE SOURCES "unittests/*.cpp" "unittests/*.h")
 include(SearchTestCases)
@@ -20,7 +20,10 @@ target_link_libraries(${TEST_BINARY_NAME} PUBLIC
     engine mempool protocol-tars rlp-protocol opstack-executor ledger rpc
     jsoncpp_static Boost::unit_test_framework)
 
-# S6: GoldenSample / t8n corpus (symlinked under opstack-executor/tests/t8n).
+#S6 : GoldenSample / t8n corpus.The corpus is external : provision
+#FISCO - BCOS / op - stack - e2e - tests and place vectors / and golden / engine / under
+#opstack - executor / tests / t8n / (or point OP_T8N_ * below at your checkout).When it
+#is absent the S6 golden cases skip explicitly(t8nCorpusAvailable).
 target_compile_definitions(${TEST_BINARY_NAME} PRIVATE
     OP_T8N_VECTORS_DIR="${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/vectors"
     OP_T8N_GOLDEN_ENGINE_DIR="${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/golden/engine")

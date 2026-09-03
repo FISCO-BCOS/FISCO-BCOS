@@ -938,7 +938,8 @@ public:
             // loud instead of executing a deterministic-but-wrong state transition.
             if (m_ctx->blockHashes == nullptr && !call)
                 throw bcos::evm::OpConsensusError(
-                    "OpstackExecutor: block execution requires wired RecentBlockHashes");
+                    "OpstackExecutor: block execution requires wired RecentBlockHashes",
+                    transaction.hash());
             if (transaction.isDepositTx())
             {
                 // executeDeposit member (not the op::runDeposit free function); applies the state
@@ -1340,11 +1341,11 @@ private:
         {
             if (auto missing = blockPathZeroSender(evmTx.sender))
             {
-                throw bcos::evm::OpConsensusError("op block: " + *missing);
+                throw bcos::evm::OpConsensusError("op block: " + *missing, transaction.hash());
             }
             if (auto gate = envelopeChainIdMismatch(transaction, *chainId))
             {
-                throw bcos::evm::OpConsensusError("op block: " + *gate);
+                throw bcos::evm::OpConsensusError("op block: " + *gate, transaction.hash());
             }
             // Fail-closed mirror↔envelope cross-check: execution fields (nonce/gasLimit/
             // to/value/data) must match the SIGNED envelope, never the forgeable mirror. Runs
@@ -1353,11 +1354,12 @@ private:
             if (auto mismatch = envelopeExecutionFieldsMismatch(transaction, evmTx))
             {
                 throw bcos::evm::OpConsensusError(
-                    "op block: tx execution fields diverge from the signed envelope: " + *mismatch);
+                    "op block: tx execution fields diverge from the signed envelope: " + *mismatch,
+                    transaction.hash());
             }
             if (auto unbound = blockPathUnboundAuthorizationList(evmTx))
             {
-                throw bcos::evm::OpConsensusError("op block: " + *unbound);
+                throw bcos::evm::OpConsensusError("op block: " + *unbound, transaction.hash());
             }
         }
         auto envRef = transaction.extraTransactionBytes();

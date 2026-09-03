@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <string>
@@ -190,7 +191,11 @@ public:
 
     /// Header returned by the last successful newPayload execute/commit (not the
     /// request-rebuilt announcement). Null if this call did not run or persist execution.
-    bcos::protocol::BlockHeader::Ptr lastExecutedHeader() const { return m_lastExecutedHeader; }
+    bcos::protocol::BlockHeader::Ptr lastExecutedHeader() const
+    {
+        std::lock_guard lock(m_lastExecutedHeaderMutex);
+        return m_lastExecutedHeader;
+    }
 
 private:
     static PayloadStatus makeStatus(PayloadValidationStatus status,
@@ -262,6 +267,9 @@ private:
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
     std::shared_ptr<DACaps> m_daCaps;
     bool m_allowSynthesizedL1Attributes;
+    /// Guards m_lastExecutedHeader: newPayload requests can run concurrently on RPC
+    /// threads (no serial executor), so the shared_ptr write/read must be synchronized.
+    mutable std::mutex m_lastExecutedHeaderMutex;
     bcos::protocol::BlockHeader::Ptr m_lastExecutedHeader;
 };
 

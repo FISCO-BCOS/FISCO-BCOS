@@ -88,9 +88,17 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
         .hash = resolved.state.headBlockHash,
         .blockNumber = headBlockNumber,
     };
-    // Number rewind is legal (op-geth SetSafe/SetFinalized overwrite).
-    m_safe = safeBlockNumber;
-    m_finalized = finalizedBlockNumber;
+    // Number rewind is legal (op-geth SetSafe/SetFinalized overwrite), but an
+    // all-zero (Engine-API "not set") safe/finalized hash must NOT clear the stored
+    // value: op-geth only calls SetSafe/SetFinalized for non-zero hashes (finding AJ).
+    if (resolved.state.safeBlockHash != bcos::h256{})
+    {
+        m_safe = safeBlockNumber;
+    }
+    if (resolved.state.finalizedBlockHash != bcos::h256{})
+    {
+        m_finalized = finalizedBlockNumber;
+    }
     return ForkchoiceApplyResult::Applied;
 }
 
@@ -119,6 +127,17 @@ GetPayloadResult EngineTracker::getPayload(const PayloadID& payloadId, std::uint
     {
         BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
                                   "Payload does not carry the V4+ response shape"});
+    }
+    // V3 responses must render the blob-gas pair and the beacon root; a V3-tagged entry
+    // that somehow lacks them would serialize an incomplete wire shape (finding AN).
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+        version < static_cast<std::uint32_t>(ApiVersion::V4) &&
+        (!entry->executionPayload.blobGasUsed.has_value() ||
+            !entry->executionPayload.excessBlobGas.has_value() ||
+            !entry->parentBeaconBlockRoot.has_value()))
+    {
+        BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
+                                  "Payload does not carry the V3+ response shape"});
     }
 
     return std::make_unique<GetPayloadData>(GetPayloadData{

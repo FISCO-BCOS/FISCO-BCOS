@@ -71,7 +71,10 @@ BOOST_AUTO_TEST_CASE(holocene_zero_params_encode_canyon_and_pass_newpayload_gate
 
 BOOST_AUTO_TEST_CASE(holocene_header_extra_data_matches_validate_holocene_1559_params)
 {
-    // op-geth ValidateHolocene1559Params: reject only d==0 && e!=0.
+    // Committed headers must carry a usable (non-zero) EIP-1559 pair - the same rule
+    // calcOpBaseFee enforces on the parent (finding AO). The lenient attribute-side
+    // 0,0 acceptance does NOT extend to headers: a zero-elasticity or zero-denominator
+    // head can never be extended by the next FCU build / child newPayload.
     auto accept = [](bytes extra, bool jovian) {
         return !engine_common::op::validateOpNewPayloadRequest(
             makeIsthmusNewPayload(std::move(extra)), jovian);
@@ -83,10 +86,10 @@ BOOST_AUTO_TEST_CASE(holocene_header_extra_data_matches_validate_holocene_1559_p
         BOOST_CHECK(error->find(std::string(needle)) != std::string::npos);
     };
 
-    BOOST_CHECK(accept(fromHex("000000000000000000"), false));
-    BOOST_CHECK(accept(fromHex("00000000fa00000000"), false));
     BOOST_CHECK(accept(fromHex("00000000fa00000006"), false));
-    rejectContains(fromHex("000000000000000006"), false, "0 denominator");
+    rejectContains(fromHex("000000000000000000"), false, "non-zero EIP-1559");
+    rejectContains(fromHex("00000000fa00000000"), false, "non-zero EIP-1559");
+    rejectContains(fromHex("000000000000000006"), false, "non-zero EIP-1559");
 }
 
 BOOST_AUTO_TEST_CASE(op_newpayload_rejects_extradata_length_and_version)
@@ -112,12 +115,15 @@ BOOST_AUTO_TEST_CASE(attrs_holocene_pairing_matches_op_geth)
 
     auto commonZeroDenom = engine_common::validatePayloadAttributes(zeroDenom, 3);
     BOOST_REQUIRE(commonZeroDenom.has_value());
-    BOOST_CHECK(commonZeroDenom->find("0 denominator") != std::string::npos);
-    BOOST_CHECK(!engine_common::validatePayloadAttributes(zeroElasticity, 3));
+    BOOST_CHECK(commonZeroDenom->find("both zero or both non-zero") != std::string::npos);
+    // (d>0,e==0) is rejected too: encode writes it verbatim and calcOpBaseFee cannot
+    // extend a zero-elasticity head (finding AO).
+    BOOST_REQUIRE(engine_common::validatePayloadAttributes(zeroElasticity, 3).has_value());
     BOOST_CHECK(!engine_common::validatePayloadAttributes(bothZero, 3));
 
-    BOOST_REQUIRE(engine_common::op::validateOpPayloadAttributes(zeroDenom, false));
-    BOOST_CHECK(!engine_common::op::validateOpPayloadAttributes(zeroElasticity, false));
+    BOOST_REQUIRE(engine_common::op::validateOpPayloadAttributes(zeroDenom, false).has_value());
+    BOOST_REQUIRE(
+        engine_common::op::validateOpPayloadAttributes(zeroElasticity, false).has_value());
     BOOST_CHECK(!engine_common::op::validateOpPayloadAttributes(bothZero, false));
 }
 

@@ -203,10 +203,18 @@ std::optional<std::string> validateOpNewPayloadRequest(
                 return std::string("extraData version byte must be 0x00 on the OP path (Isthmus)");
             }
         }
-        if (auto error = engine_common::validateHolocene1559Params(
-                engine_common::readU32BE(extra, 1), engine_common::readU32BE(extra, 5)))
+        // The extraData pair must be the SAME non-zero rule calcOpBaseFee enforces on the
+        // parent header (OpBaseFee.h validateOpExtraDataShape): an elasticity-0 or
+        // denominator-0 pair can never be extended - the next FCU build / child
+        // newPayload throws. The lenient attribute-side rule (0,0 legal, translated to
+        // Canyon at encode) does NOT apply to committed headers (finding AO).
+        auto const denominator = engine_common::readU32BE(extra, 1);
+        auto const elasticity = engine_common::readU32BE(extra, 5);
+        if (denominator == 0 || elasticity == 0)
         {
-            return error;
+            return std::string(
+                "executionPayload.extraData must encode a non-zero EIP-1559 denominator "
+                "and elasticity");
         }
     }
     if (!narrowU256ToU64(payload.gasUsed).has_value())

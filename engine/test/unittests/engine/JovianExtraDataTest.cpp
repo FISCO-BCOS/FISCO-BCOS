@@ -117,7 +117,7 @@ BOOST_AUTO_TEST_CASE(holocene_without_min_base_fee_encodes_nine_bytes)
 BOOST_AUTO_TEST_CASE(missing_eip1559_params_keeps_extra_data_empty)
 {
     BOOST_CHECK(engine::detail::encodeOptimismExtraData(makeAttributes(std::nullopt, std::nullopt))
-            .empty());
+                    .empty());
 }
 
 // minBaseFee without eip1559Params leaves the params half of the 17-byte form
@@ -139,15 +139,18 @@ BOOST_AUTO_TEST_CASE(wrong_length_eip1559_params_are_rejected)
         engine::detail::validatePayloadAttributes(makeAttributes(bytes(9, 0), 0), 3).has_value());
 }
 
-// ValidateHolocene1559Params: reject only d==0 && e!=0. (0,0) and (d>0,e==0) pass.
+// Attribute pairing (finding AO): both-zero or both non-zero. (0,0) is legal (encode
+// translates to Canyon 250/6); a mixed pair (d==0,e!=0) or (d>0,e==0) is rejected
+// because encode writes (d>0,e==0) verbatim and calcOpBaseFee cannot extend the
+// zero-elasticity head.
 BOOST_AUTO_TEST_CASE(mixed_zero_eip1559_params_are_rejected)
 {
     BOOST_CHECK(engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x0000000000000006"), 0), 3)
-            .has_value());
-    BOOST_CHECK(!engine::detail::validatePayloadAttributes(
+                    .has_value());
+    BOOST_CHECK(engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000000"), 0), 3)
-            .has_value());
+                    .has_value());
     BOOST_CHECK(
         !engine::detail::validatePayloadAttributes(makeAttributes(bytes(8, 0), 0), 3).has_value());
     BOOST_CHECK(engine::detail::validatePayloadAttributes(
@@ -185,7 +188,7 @@ BOOST_AUTO_TEST_CASE(eip1559_fields_are_rejected_below_version_three)
         // version, so any error below is attributable to the new gate.
         BOOST_REQUIRE(
             !engine::detail::validatePayloadAttributes(attributesForVersion(version), version)
-                .has_value());
+                 .has_value());
 
         auto holocene = attributesForVersion(version);
         holocene.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
@@ -208,10 +211,10 @@ BOOST_AUTO_TEST_CASE(eip1559_fields_are_rejected_below_version_three)
     // V3 is the version op-node actually uses, so both forms stay valid there.
     BOOST_CHECK(!engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000006"), std::nullopt), 3)
-            .has_value());
+                     .has_value());
     BOOST_CHECK(!engine::detail::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000006"), 7), 3)
-            .has_value());
+                     .has_value());
 }
 
 // encodeOptimismExtraData is an exported detail:: entry point reachable from
@@ -254,11 +257,12 @@ BOOST_AUTO_TEST_CASE(execution_payload_extra_data_shape_is_validated)
     // Wrong version byte for the length: Jovian must be 0x01, Holocene 0x00.
     BOOST_CHECK(!accepted(fromHexWithPrefix("0x00000000fa000000060000000000000000")));
     BOOST_CHECK(!accepted(fromHexWithPrefix("0x01000000fa00000006")));
-    // Header extraData uses the same Holocene pairing as attributes: only d==0 && e!=0
-    // is rejected (ValidateHolocene1559Params).
+    // Header extraData is a committed artifact: a zero denominator OR zero elasticity
+    // makes the head unextendable (calcOpBaseFee fail-closes), so headers carry the
+    // strict non-zero rule (validateOpExtraDataShape) — finding AO.
     BOOST_CHECK(!accepted(fromHexWithPrefix("0x000000000000000006")));
-    BOOST_CHECK(accepted(fromHexWithPrefix("0x000000000000000000")));
-    BOOST_CHECK(accepted(fromHexWithPrefix("0x00000000fa00000000")));
+    BOOST_CHECK(!accepted(fromHexWithPrefix("0x000000000000000000")));
+    BOOST_CHECK(!accepted(fromHexWithPrefix("0x00000000fa00000000")));
 }
 
 // A CL returning a payload under a blockHash this node minted must return the same
@@ -298,5 +302,84 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)
     BOOST_REQUIRE(stateError.has_value());
     BOOST_CHECK_NE(stateError->find("stateRoot"), std::string::npos);
 }
+
+// compareWithBuiltPayload must reject a mismatch on EVERY hash-relevant field, not just
+// extraData/stateRoot/transactions. Parameterized over the 15 field arms; each mutation
+// must produce a mismatch message naming the field (unique per arm), and the honest echo
+// must stay VALID. Guards against a dropped compare arm (finding AQ): deleting any arm
+// keeps the whole suite green today, so each field gets its own assertion.
+BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_every_hash_relevant_field)
+{
+    auto built = makePayloadWithTransactions(
+        fromHexWithPrefix("0x01000000fa000000060000000000000000"), {{0x7e, 0x01}, {0x02, 0x03}});
+    // Populate every optional field so each present-vs-present arm is exercised.
+    built.withdrawalsRoot = h256(1);
+    built.blobGasUsed = u256(1);
+    built.excessBlobGas = u256(1);
+
+    // Honest echo: no mismatch.
+    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(built, built).has_value());
+
+    struct Arm
+    {
+        char const* field;
+        std::function<void(ExecutionPayload&)> mutate;
+    };
+    h256 const kAltered{0xdeadbeef};
+    Arm const arms[] = {
+        {"parentHash", [kAltered](ExecutionPayload& p) { p.parentHash = kAltered; }},
+        {"stateRoot", [kAltered](ExecutionPayload& p) { p.stateRoot = kAltered; }},
+        {"receiptsRoot", [kAltered](ExecutionPayload& p) { p.receiptsRoot = kAltered; }},
+        {"logsBloom", [](ExecutionPayload& p) { p.logsBloom[0] ^= 0xFF; }},
+        {"prevRandao", [kAltered](ExecutionPayload& p) { p.prevRandao = kAltered; }},
+        {"gasLimit", [](ExecutionPayload& p) { p.gasLimit += 1; }},
+        {"gasUsed", [](ExecutionPayload& p) { p.gasUsed += 1; }},
+        {"baseFeePerGas", [](ExecutionPayload& p) { p.baseFeePerGas += 1; }},
+        {"blockHash", [kAltered](ExecutionPayload& p) { p.blockHash = kAltered; }},
+        {"feeRecipient",
+            [](ExecutionPayload& p) { p.feeRecipient = bcos::Address(std::string(40, '7')); }},
+        {"timestamp", [](ExecutionPayload& p) { p.timestamp += 1; }},
+        {"blockNumber", [](ExecutionPayload& p) { p.blockNumber += 1; }},
+        {"withdrawalsRoot", [](ExecutionPayload& p) { p.withdrawalsRoot = h256(2); }},
+        {"blobGasUsed", [](ExecutionPayload& p) { p.blobGasUsed = u256(2); }},
+        {"excessBlobGas", [](ExecutionPayload& p) { p.excessBlobGas = u256(2); }},
+    };
+    for (auto const& arm : arms)
+    {
+        auto altered = built;
+        arm.mutate(altered);
+        auto error = engine::detail::compareWithBuiltPayload(altered, built);
+        BOOST_REQUIRE_MESSAGE(error.has_value(), "arm " << arm.field << " not rejected");
+        BOOST_CHECK_NE(error->find(arm.field), std::string::npos);
+    }
+
+    // Transaction-list arms: size mismatch and per-item raw mismatch.
+    {
+        auto extra = built;
+        extra.transactions.push_back(EngineTransaction{});
+        auto err = engine::detail::compareWithBuiltPayload(extra, built);
+        BOOST_REQUIRE(err.has_value());
+        BOOST_CHECK_NE(err->find("transactions"), std::string::npos);
+    }
+    {
+        auto altered = built;
+        altered.transactions[1].raw = bytes{0x02, 0x04};
+        auto err = engine::detail::compareWithBuiltPayload(altered, built);
+        BOOST_REQUIRE(err.has_value());
+        BOOST_CHECK_NE(err->find("transactions"), std::string::npos);
+    }
+
+    // V3-omitted optionals are not mismatches (missing vs present-zero semantics).
+    {
+        auto stripped = built;
+        stripped.withdrawalsRoot = std::nullopt;
+        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        stripped.blobGasUsed = std::nullopt;
+        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        stripped.excessBlobGas = std::nullopt;
+        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+    }
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()

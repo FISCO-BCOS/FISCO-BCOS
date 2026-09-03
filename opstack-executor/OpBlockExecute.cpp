@@ -223,9 +223,12 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 }
                 catch (const std::runtime_error& e)
                 {
-                    rejectNonDeposit(
+                    // Throw the tagged error directly (evictable by tx hash). A bare
+                    // `throw;` here would be unreachable - rejectNonDeposit never returns.
+                    OpConsensusError err(
                         std::string("op block: transaction execution failed: ") + e.what());
-                    throw;
+                    err.txHash = bcos::crypto::keccak256Hash(envRef);
+                    throw err;
                 }
             }();
             applyDiffChecked(diff);

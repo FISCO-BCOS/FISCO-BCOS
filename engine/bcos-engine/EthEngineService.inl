@@ -48,13 +48,22 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     auto view = m_globalStateStorage.fork();
     auto headBlockNumber = co_await bcos::ledger::getBlockNumber(
         view, forkchoiceState.headBlockHash, bcos::ledger::fromStorage);
-    auto safeBlockNumber = co_await bcos::ledger::getBlockNumber(
-        view, forkchoiceState.safeBlockHash, bcos::ledger::fromStorage);
-    auto finalizedBlockNumber = co_await bcos::ledger::getBlockNumber(
-        view, forkchoiceState.finalizedBlockHash, bcos::ledger::fromStorage);
+    // All-zero safe/finalized hashes are the Engine-API "not set" value: skip number
+    // resolution and canonical checks for that field (op-geth SetSafe/SetFinalized are
+    // only called for non-zero hashes). A non-zero hash that cannot be resolved still
+    // answers SYNCING (fail-closed) - finding AJ.
+    bool const safeSet = forkchoiceState.safeBlockHash != bcos::h256{};
+    bool const finalizedSet = forkchoiceState.finalizedBlockHash != bcos::h256{};
+    auto safeBlockNumber = safeSet ? co_await bcos::ledger::getBlockNumber(view,
+                                         forkchoiceState.safeBlockHash, bcos::ledger::fromStorage) :
+                                     std::nullopt;
+    auto finalizedBlockNumber =
+        finalizedSet ? co_await bcos::ledger::getBlockNumber(
+                           view, forkchoiceState.finalizedBlockHash, bcos::ledger::fromStorage) :
+                       std::nullopt;
 
-    if (!headBlockNumber.has_value() || !safeBlockNumber.has_value() ||
-        !finalizedBlockNumber.has_value())
+    if (!headBlockNumber.has_value() || (safeSet && !safeBlockNumber.has_value()) ||
+        (finalizedSet && !finalizedBlockNumber.has_value()))
     {
         co_return ForkchoiceUpdatedResult{
             .payloadStatus = engine_common::makeStatus(
@@ -62,19 +71,20 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
             .payloadId = std::nullopt,
         };
     }
-    if (*safeBlockNumber > *headBlockNumber)
+    if (safeBlockNumber.has_value() && *safeBlockNumber > *headBlockNumber)
     {
         BOOST_THROW_EXCEPTION(
             InvalidForkchoiceState{} << bcos::errinfo_comment{
                 "Forkchoice safe block number must not exceed head block number"});
     }
-    if (*finalizedBlockNumber > *headBlockNumber)
+    if (finalizedBlockNumber.has_value() && *finalizedBlockNumber > *headBlockNumber)
     {
         BOOST_THROW_EXCEPTION(
             InvalidForkchoiceState{} << bcos::errinfo_comment{
                 "Forkchoice finalized block number must not exceed head block number"});
     }
-    if (*finalizedBlockNumber > *safeBlockNumber)
+    if (finalizedBlockNumber.has_value() && safeBlockNumber.has_value() &&
+        *finalizedBlockNumber > *safeBlockNumber)
     {
         BOOST_THROW_EXCEPTION(
             InvalidForkchoiceState{} << bcos::errinfo_comment{
@@ -85,10 +95,18 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         co_await bcos::ledger::getBlockHash(view, *headBlockNumber, bcos::ledger::fromStorage);
     bool const headCanonical =
         canonicalHeadHash.has_value() && *canonicalHeadHash == forkchoiceState.headBlockHash;
+    // Same-number safe/finalized already resolved above: their canonical hash is the
+    // head's (one NUMBER_2_HASH row per height), so reuse it instead of a second storage
+    // read; zero (unset) fields skip resolution entirely. Heartbeat FCUs (all three
+    // hashes equal) drop from 3 to 1 sequential reads.
     auto canonicalSafeHash =
-        co_await bcos::ledger::getBlockHash(view, *safeBlockNumber, bcos::ledger::fromStorage);
-    auto canonicalFinalizedHash =
-        co_await bcos::ledger::getBlockHash(view, *finalizedBlockNumber, bcos::ledger::fromStorage);
+        (!safeSet || *safeBlockNumber == *headBlockNumber) ?
+            canonicalHeadHash :
+            co_await bcos::ledger::getBlockHash(view, *safeBlockNumber, bcos::ledger::fromStorage);
+    auto canonicalFinalizedHash = (!finalizedSet || *finalizedBlockNumber == *headBlockNumber) ?
+                                      canonicalHeadHash :
+                                      co_await bcos::ledger::getBlockHash(
+                                          view, *finalizedBlockNumber, bcos::ledger::fromStorage);
 
     ResolvedForkchoice resolved{
         .state = forkchoiceState,
@@ -191,8 +209,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                               << bcos::errinfo_comment{"Unsupported Engine API version"});
     }
-    if (auto validationError =
-            detail::validateExecutionPayload(request.executionPayload, version);
+    if (auto validationError = detail::validateExecutionPayload(request.executionPayload, version);
         validationError.has_value())
     {
         auto status = validationError->find("blockHash") != std::string::npos ?
@@ -256,8 +273,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             co_return engine_common::makeStatus(
                 PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
-        if (auto mismatch = detail::compareWithBuiltPayload(
-                request.executionPayload, cached->executionPayload))
+        if (auto mismatch =
+                detail::compareWithBuiltPayload(request.executionPayload, cached->executionPayload))
         {
             co_return engine_common::makeStatus(
                 PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
@@ -306,6 +323,23 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
     }
 
+    // Fail-closed guard (finding AI): if no local artifact was available above, either
+    // the block was already committed by an earlier call (artifacts.clear() in
+    // commitRetainedPayload) or a previous commit attempt died mid-persist. Only the
+    // former may answer VALID - a ledger row proves the persist actually happened. When
+    // the ledger has no row for this blockHash, answering VALID would fabricate a
+    // committed block (the retry previously skipped the merge and still returned VALID).
+    if (!localArtifact && m_ledger)
+    {
+        auto checkView = m_globalStateStorage.fork();
+        if (!co_await bcos::ledger::getBlockNumber(
+                checkView, cached->executionPayload.blockHash, bcos::ledger::fromStorage))
+        {
+            co_return engine_common::makeStatus(
+                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+        }
+    }
+
     {
         auto guard = m_tracker.lockExclusive();
         // Keep the locally built body (executed at FCU). Do not rewrite from the CL request.
@@ -325,11 +359,10 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
                  std::vector<protocol::Transaction::Ptr>>
 task::Task<typename EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
     SchedulerType>::BuildPayloadResult>
-EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
-    SchedulerType>::buildPayload(const ForkchoiceState& forkchoiceState,
-    const PayloadAttributes& payloadAttributes, const PayloadID& payloadId, std::uint32_t version,
-    bcos::protocol::BlockNumber nextBlockNumber, std::vector<protocol::Transaction::Ptr> sealedTxs,
-    ViewType& view) const
+EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::buildPayload(
+    const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
+    const PayloadID& payloadId, std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
+    std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
 {
     std::vector<EngineTransaction> engineTransactions;
     engineTransactions.reserve(
@@ -399,43 +432,48 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
     auto chainRevision = ledgerConfig.evmcRevisionForBlock(nextBlockNumber);
     if (!chainRevision.has_value())
     {
-        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-            "EngineService: no on-chain EVM revision configured for block " +
-            std::to_string(nextBlockNumber) +
-            "; cannot derive the Eth header fork era (a v2 chain persists evmc_revision "
-            "at genesis)"});
+        BOOST_THROW_EXCEPTION(
+            UnsupportedFork{} << bcos::errinfo_comment{
+                "EngineService: no on-chain EVM revision configured for block " +
+                std::to_string(nextBlockNumber) +
+                "; cannot derive the Eth header fork era (a v2 chain persists evmc_revision "
+                "at genesis)"});
     }
     auto forkVersion = detail::ethBlockVersionFor(*chainRevision);
 
     if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
         !payloadAttributes.parentBeaconBlockRoot.has_value())
     {
-        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-            "EngineService: chain EVM revision requires the V3 payload attributes "
-            "(parentBeaconBlockRoot); forkchoiceUpdated must be called at version >= 3"});
+        BOOST_THROW_EXCEPTION(
+            UnsupportedFork{} << bcos::errinfo_comment{
+                "EngineService: chain EVM revision requires the V3 payload attributes "
+                "(parentBeaconBlockRoot); forkchoiceUpdated must be called at version >= 3"});
     }
     if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI &&
         !payloadAttributes.withdrawals.has_value())
     {
-        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-            "EngineService: chain EVM revision requires the V2 payload attributes "
-            "(withdrawals); forkchoiceUpdated must be called at version >= 2"});
+        BOOST_THROW_EXCEPTION(
+            UnsupportedFork{} << bcos::errinfo_comment{
+                "EngineService: chain EVM revision requires the V2 payload attributes "
+                "(withdrawals); forkchoiceUpdated must be called at version >= 2"});
     }
     if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
         forkVersion < bcos::protocol::EthBlockVersion::CANCUN)
     {
-        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-            "EngineService: forkchoiceUpdatedV3 requires a CANCUN-or-later chain fork; "
-            "chain EVM revision maps to " +
-            std::to_string(static_cast<int>(forkVersion))});
+        BOOST_THROW_EXCEPTION(
+            UnsupportedFork{} << bcos::errinfo_comment{
+                "EngineService: forkchoiceUpdatedV3 requires a CANCUN-or-later chain fork; "
+                "chain EVM revision maps to " +
+                std::to_string(static_cast<int>(forkVersion))});
     }
     if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
         forkVersion < bcos::protocol::EthBlockVersion::SHANGHAI)
     {
-        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-            "EngineService: forkchoiceUpdatedV2 requires a SHANGHAI-or-later chain "
-            "fork; chain EVM revision maps to " +
-            std::to_string(static_cast<int>(forkVersion))});
+        BOOST_THROW_EXCEPTION(
+            UnsupportedFork{} << bcos::errinfo_comment{
+                "EngineService: forkchoiceUpdatedV2 requires a SHANGHAI-or-later chain "
+                "fork; chain EVM revision maps to " +
+                std::to_string(static_cast<int>(forkVersion))});
     }
 
     if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)

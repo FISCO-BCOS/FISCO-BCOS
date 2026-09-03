@@ -78,46 +78,11 @@ std::vector<std::string> bcos::engine::detail::supportedCapabilities()
 bool bcos::engine::detail::isGetPayloadVersionCompatible(
     ApiVersion requestVersion, std::uint32_t payloadVersion)
 {
-    if (requestVersion == ApiVersion::V1)
-    {
-        return payloadVersion == 1;
-    }
-    if (requestVersion == ApiVersion::V2)
-    {
-        return payloadVersion <= 2;
-    }
-    if (requestVersion == ApiVersion::V3)
-    {
-        return payloadVersion <= 3;
-    }
-    if (requestVersion == ApiVersion::V4)
-    {
-        // Same window as V5 below, and for the same reason: op-geth's GetPayloadV4 also
-        // passes []engine.PayloadVersion{engine.PayloadV3} to its getPayload helper
-        // (eth/catalyst/api.go GetPayloadV4/GetPayloadV5 differ only in the accepted fork
-        // list). No BUILD is ever tagged above V3 — isForkchoiceVersionSupported tops out
-        // there — so the two kinds of entry `<= 4` used to let through were both wrong:
-        // a V1/V2 build, which serializeExecutionPayload cannot render in the V4 shape
-        // (no withdrawalsRoot -> -32603, no blobGasUsed / excessBlobGas), and the V4-tagged
-        // entry handleNewPayload leaves behind after a commit (PayloadEntry::version is
-        // rewritten with the newPayload version), which would replay an already-committed
-        // payload. V5 rejects both; V4 now behaves the same.
-        return payloadVersion == 3;
-    }
-    if (requestVersion == ApiVersion::V5)
-    {
-        // Exactly V3 builds, matching op-geth's GetPayloadV5, which passes
-        // []engine.PayloadVersion{engine.PayloadV3} to its getPayload helper and answers
-        // engine.UnsupportedFork for anything else (eth/catalyst/api.go:498-511, 531-533).
-        // A Karst CL always pairs getPayloadV5 with a forkchoiceUpdatedV3 build, and the
-        // built-in single-node CL uses the same V3/V5/V4 triple. Accepting V1/V2 builds
-        // here would serialize them in the V5 response shape, fabricating a zero
-        // withdrawalsRoot and omitting the required blobGasUsed / excessBlobGas. A V1/V2
-        // CL is unaffected: it fetches its builds through getPayloadV1/V2, which still
-        // accept them.
-        return payloadVersion == 3;
-    }
-    return false;
+    // Thin wrapper over engine_common::isGetPayloadVersionCompatible (finding AP):
+    // identical window semantics; the historical rationale for each arm is documented
+    // on the engine_common implementation. The parity test
+    // engine_common_payload_version_matrix_matches_legacy pins the equivalence.
+    return engine_common::isGetPayloadVersionCompatible(requestVersion, payloadVersion);
 }
 
 bcos::bytes bcos::engine::detail::encodeOptimismExtraData(
@@ -176,118 +141,11 @@ bcos::bytes bcos::engine::detail::encodeOptimismExtraData(
 std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version)
 {
-    if (payloadAttributes.transactions.has_value())
-    {
-        for (std::size_t i = 0; i < payloadAttributes.transactions->size(); ++i)
-        {
-            bcos::bytes raw;
-            try
-            {
-                raw = bcos::fromHex((*payloadAttributes.transactions)[i]);
-            }
-            catch (std::exception const&)
-            {
-                return "payloadAttributes.transactions[" + std::to_string(i) +
-                       "] is not a hex string";
-            }
-            if (auto error = engine_common::validateRawTransactionKind(
-                    dispatchRawTransaction(bcos::ref(raw)), i))
-            {
-                return error;
-            }
-        }
-    }
-    if (version == 1 && payloadAttributes.withdrawals.has_value())
-    {
-        return std::string("withdrawals are not part of PayloadAttributesV1");
-    }
-    if (version <= 2 && payloadAttributes.parentBeaconBlockRoot.has_value())
-    {
-        return std::string("parentBeaconBlockRoot is only valid for PayloadAttributesV3");
-    }
-    if (version >= 2 && !payloadAttributes.withdrawals.has_value())
-    {
-        return std::string("withdrawals are required for PayloadAttributesV2 and V3");
-    }
-    if (version >= 2 && payloadAttributes.withdrawals.has_value() &&
-        !payloadAttributes.withdrawals->empty())
-    {
-        // The withdrawals trie root is not computed yet (finalizeEthBlockHeader commits
-        // the empty-trie root as a placeholder), so a non-empty list would hash a root
-        // that differs from what geth derives (DeriveSha(withdrawals)) and every peer
-        // would reject the block. Reject the pairing until the real root is computed.
-        return std::string(
-            "non-empty withdrawals are not supported until the withdrawals trie root is "
-            "computed");
-    }
-    if (version >= 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
-    {
-        // op-geth ForkchoiceUpdatedV3/V4 both reject missing BeaconRoot when attrs present.
-        return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3 and later");
-    }
-    // eip1559Params (Holocene) and minBaseFee (Jovian) reach the EL only on a
-    // forkchoiceUpdatedV3. op-node's FCU version ladder tops out at V3 — Config
-    // ::ForkchoiceUpdatedVersion (op-node/rollup/types.go:727-745, v1.19.3) answers
-    // FCUV3 from Ecotone onwards, FCUV2 for Canyon and FCUV1 before it, and there is
-    // no FCUV4 constant at all (op-service/eth/types.go:799-801) — while Holocene and
-    // Jovian both activate after Ecotone. So a conforming CL carries both fields on V3
-    // and only V3.
-    //
-    // Note this is NOT how op-geth expresses the same rule, and the difference is worth
-    // recording. op-geth has a single engine.PayloadAttributes shared by all three FCU
-    // versions, and it does carry EIP1559Params / MinBaseFee at every version
-    // (beacon/engine/types.go:83-89); its ForkchoiceUpdatedV1/V2/V3 wrappers check only
-    // withdrawals, the beacon root and the fork window (eth/catalyst/api.go:166-214) and
-    // never look at these two fields. The rejection happens later, in the shared path:
-    // checkOptimismPayloadAttributes (eth/catalyst/api_optimism.go:40-64, called from
-    // api.go:254) answers "non-empty eip155Params pre-Holocene" as a -38003
-    // InvalidPayloadAttributes, keyed off the FORK SCHEDULE (cfg.IsHolocene(timestamp)),
-    // not off the Engine API method version. This service has no fork schedule to key
-    // off, so the FCU version is the only equivalent signal available — sound precisely
-    // because op-node's version ladder above pins these fields to V3.
-    //
-    // Without this gate a V1/V2 forkchoiceUpdated carrying
-    // eip1559Params would stamp Holocene extraData on a pre-Holocene build, which a
-    // spec-conformant CL then rejects on read-back ("extraData must be empty before
-    // Holocene", op-core/eip1559/eip1559.go:27-28).
-    if (version <= 2 && payloadAttributes.eip1559Params.has_value())
-    {
-        return std::string("eip1559Params is only valid for PayloadAttributesV3");
-    }
-    if (version <= 2 && payloadAttributes.minBaseFee.has_value())
-    {
-        return std::string("minBaseFee is only valid for PayloadAttributesV3");
-    }
-    // Jovian attributes always pair minBaseFee with eip1559Params: op-node fills both
-    // once Jovian is active (op-service/eth/types.go PayloadAttributes), and a
-    // post-Jovian block must carry the 17-byte extraData whose [1:9) params come from
-    // eip1559Params — minBaseFee alone leaves the params half undefined. op-geth rejects
-    // such attributes as invalid rather than guessing (engine error -38003
-    // InvalidPayloadAttributes); this service reports attribute errors through the
-    // INVALID payload status channel instead (see updateForkchoice).
-    if (payloadAttributes.minBaseFee.has_value() && !payloadAttributes.eip1559Params.has_value())
-    {
-        return std::string("minBaseFee requires eip1559Params (Jovian attributes carry both)");
-    }
-    if (payloadAttributes.eip1559Params.has_value())
-    {
-        // The RPC parse layer already enforces exactly 8 bytes (EngineHelper.cpp), but
-        // this gate is the precondition encodeOptimismExtraData and the decode below
-        // rely on, so enforce it here too for in-process PayloadAttributes producers.
-        if (payloadAttributes.eip1559Params->size() != 8)
-        {
-            return std::string("eip1559Params must be exactly 8 bytes");
-        }
-        // ValidateHolocene1559Params: reject only e!=0 && d==0. 0,0 is valid
-        // attribute input and is translated to Canyon constants by encodeOptimismExtraData.
-        auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
-        if (auto error =
-                bcos::engine::engine_common::validateHolocene1559Params(denominator, elasticity))
-        {
-            return error;
-        }
-    }
-    return std::nullopt;
+    // Thin wrapper over the shared engine_common rule (finding AP): the two bodies were
+    // kept byte-identical and edited in lockstep; delegate so a future change has one
+    // site. Behavior and messages are unchanged (engine_common_payload_version_matrix /
+    // engine_common_validate_payload_attributes parity tests pin the equivalence).
+    return engine_common::validatePayloadAttributes(payloadAttributes, version);
 }
 
 std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
