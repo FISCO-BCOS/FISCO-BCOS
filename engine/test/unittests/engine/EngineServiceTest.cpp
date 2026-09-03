@@ -1260,8 +1260,11 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
         c_initialBlockNumber, c_initialBlockNumber);
     std::string sender("cccccccccccccccccccc", 20);
     // Web3-shaped: only transactions with an EIP-2718 wire form enter OP payloads.
+    // The BloomScheduler stub returns two receipts, so the block must carry two
+    // transactions — the engine pairs receipt i with transaction i for the receipts trie.
     auto tx = makeWeb3Tx(sender, 0);
-    memPool.add(std::vector{tx});
+    auto tx2 = makeWeb3Tx(sender, 1);
+    memPool.add(std::vector{tx, tx2});
     globalStateStorageFixture.setNonce(sender, "0");
     auto payloadAttributes = makePayloadAttributesV2();
 
