@@ -800,12 +800,24 @@ private:
             // Pre-execution classification rejects carry the culprit tag (two-arg ctor) so
             // buildOpPayload's eviction loop can drop the sealed culprit and retry; a
             // single-arg OpConsensusError here would abort every FCU until the pool drains.
+            // hash() throws EmptyTransactionHash when both dataHash and extraTransactionHash
+            // are empty — that must not replace OpConsensusError with UnknownError.
+            auto culpritHash = [](protocol::Transaction const& tx) -> bcos::h256 {
+                try
+                {
+                    return tx.hash();
+                }
+                catch (...)
+                {
+                    return {};
+                }
+            };
             for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
             {
                 auto const& raw = rawTxBytes[i];
                 if (raw.empty())  // empty envelope: raw[0] would be out of bounds
                     throw bcos::evm::OpConsensusError(
-                        "OpScheduler: empty envelope", transactions[i]->hash());
+                        "OpScheduler: empty envelope", culpritHash(*transactions[i]));
                 auto const typeByte = raw[0];
                 if (op::classifyTxType(typeByte) == static_cast<uint8_t>(op::kDepositTxType))
                 {
@@ -818,7 +830,7 @@ private:
                     {
                         throw bcos::evm::OpConsensusError(
                             std::string("OpScheduler: malformed deposit: ") + e.what(),
-                            transactions[i]->hash());
+                            culpritHash(*transactions[i]));
                     }
                 }
                 // Reject blob (0x03) and 0x7d type bytes.
@@ -827,7 +839,7 @@ private:
                     throw bcos::evm::OpConsensusError(
                         fmt::format("OpScheduler: unsupported tx type byte 0x{:02x}",
                             static_cast<unsigned>(typeByte)),
-                        transactions[i]->hash());
+                        culpritHash(*transactions[i]));
             }
 
             bcos::ledger::LedgerConfig execLedgerConfig;

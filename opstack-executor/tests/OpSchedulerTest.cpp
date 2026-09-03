@@ -256,10 +256,16 @@ bcos::protocol::Transaction::Ptr buildFiscoTx(
 /// A one-byte 0x03 envelope — the execute hook's type-byte classification deterministically throws
 /// OpConsensusError ("unsupported tx type byte", OpScheduler.h). Used to reliably drive the execute
 /// hook into the consensus-rejected classification (independent of RTTI-boundary runtime behavior).
-bcos::protocol::Transaction::Ptr buildUnsupportedTypeTx()
+bcos::protocol::Transaction::Ptr buildUnsupportedTypeTx(bcos::crypto::Hash::Ptr const& hashImpl)
 {
+    bcos::bytes const env{0x03};
+    auto const txHash = hashImpl->hash(env);
     bcostars::Transaction tars;
-    tars.extraTransactionBytes.push_back(0x03);
+    tars.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    tars.extraTransactionBytes.assign(env.begin(), env.end());
+    // TransactionImpl::hash() throws EmptyTransactionHash when both hash fields are
+    // empty; the two-arg OpConsensusError ctor reads hash() for the [tx=0x…] tag.
+    tars.extraTransactionHash.assign(txHash.begin(), txHash.end());
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [tars = std::move(tars)]() mutable { return &tars; });
     return tx;
@@ -1248,7 +1254,7 @@ BOOST_AUTO_TEST_CASE(ConsensusRejectionClassifiedAsOpConsensusRejected)
 
     auto block = f.blockFactory->createBlock();
     block->setBlockHeader(makeHeader());
-    auto badTx = buildUnsupportedTypeTx();
+    auto badTx = buildUnsupportedTypeTx(f.hashImpl);
     BOOST_REQUIRE(badTx != nullptr);
     block->appendTransaction(badTx);
 
