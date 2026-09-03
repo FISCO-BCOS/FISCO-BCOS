@@ -86,13 +86,7 @@ namespace
 std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(std::span<const bcos::byte> params)
 {
     BOOST_ASSERT(params.size() >= 8);
-    auto readU32 = [&](std::size_t offset) {
-        return (static_cast<std::uint32_t>(params[offset]) << 24) |
-               (static_cast<std::uint32_t>(params[offset + 1]) << 16) |
-               (static_cast<std::uint32_t>(params[offset + 2]) << 8) |
-               static_cast<std::uint32_t>(params[offset + 3]);
-    };
-    return {readU32(0), readU32(4)};
+    return {readU32BE(params, 0), readU32BE(params, 4)};
 }
 }  // namespace
 

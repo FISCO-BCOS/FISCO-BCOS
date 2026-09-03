@@ -172,10 +172,17 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             const evmc::bytes_view env{btx.signedEnvelope.data(), btx.signedEnvelope.size()};
             auto const envRef =
                 bcos::bytesConstRef(btx.signedEnvelope.data(), btx.signedEnvelope.size());
+            // Pool eviction keys on OpConsensusError::txHash (keccak of the signed envelope),
+            // never a substring of what(). That hash equals Transaction::hash() for Web3 txs.
+            auto rejectNonDeposit = [&](std::string message) {
+                OpConsensusError err(std::move(message));
+                err.txHash = bcos::crypto::keccak256Hash(envRef);
+                throw err;
+            };
             if (auto mismatch =
                     bcos::executor_v1::opstack::envelopeChainIdMismatch(envRef, chainId))
             {
-                throw OpConsensusError("op block: " + *mismatch);
+                rejectNonDeposit("op block: " + *mismatch);
             }
             // Fail-closed mirror↔envelope cross-check — the SAME gate the per-tx path runs in
             // m_prepare (OpstackExecutor.h): execution fields (nonce/gasLimit/to/value/data)
@@ -185,26 +192,22 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             if (auto mismatch =
                     bcos::executor_v1::opstack::envelopeExecutionFieldsMismatch(envRef, tx))
             {
-                throw OpConsensusError(
+                rejectNonDeposit(
                     "op block: tx execution fields diverge from the signed envelope: " + *mismatch);
             }
             if (auto missing = bcos::executor_v1::opstack::blockPathZeroSender(tx.sender))
             {
-                throw OpConsensusError("op block: " + *missing);
+                rejectNonDeposit("op block: " + *missing);
             }
             if (auto unbound = bcos::executor_v1::opstack::blockPathUnboundAuthorizationList(tx))
             {
-                throw OpConsensusError("op block: " + *unbound);
+                rejectNonDeposit("op block: " + *unbound);
             }
             auto v = opValidate(view, block, tx, env, cfg, fee, blockGasLeft);
             if (const auto* err = std::get_if<std::error_code>(&v))
             {
                 // No failed-receipt mechanism for normal txs: void the whole block (op-geth).
-                // Tag the signed-envelope keccak so OpEngineService::parseCulpritHash can
-                // evict one bad mempool tx instead of failing the whole build.
-                auto const txHash = bcos::crypto::keccak256Hash(envRef);
-                throw OpConsensusError("op block: invalid non-deposit tx: " + err->message() +
-                                       " [tx=0x" + txHash.hex() + "]");
+                rejectNonDeposit("op block: invalid non-deposit tx: " + err->message());
             }
             // opTransition charges from props.fee (the validate-time snapshot — no second read).
             evmone::state::StateDiff diff;
@@ -220,8 +223,9 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 }
                 catch (const std::runtime_error& e)
                 {
-                    throw OpConsensusError(
+                    rejectNonDeposit(
                         std::string("op block: transaction execution failed: ") + e.what());
+                    throw;
                 }
             }();
             applyDiffChecked(diff);

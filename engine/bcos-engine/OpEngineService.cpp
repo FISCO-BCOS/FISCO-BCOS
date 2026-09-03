@@ -98,14 +98,8 @@ std::optional<std::string> validateOpPayloadAttributes(
     {
         return std::string("eip1559Params must be exactly 8 bytes");
     }
-    const auto readU32BE = [&](std::size_t off) {
-        return (static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off]) << 24) |
-               (static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off + 1]) << 16) |
-               (static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off + 2]) << 8) |
-               static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off + 3]);
-    };
-    const auto denominator = readU32BE(0);
-    const auto elasticity = readU32BE(4);
+    const auto denominator = engine_common::readU32BE(*payloadAttributes.eip1559Params, 0);
+    const auto elasticity = engine_common::readU32BE(*payloadAttributes.eip1559Params, 4);
     if (auto error = engine_common::validateHolocene1559Params(denominator, elasticity))
     {
         return error;
@@ -209,13 +203,8 @@ std::optional<std::string> validateOpNewPayloadRequest(
                 return std::string("extraData version byte must be 0x00 on the OP path (Isthmus)");
             }
         }
-        const auto readU32BE = [&extra](std::size_t off) {
-            return (static_cast<std::uint32_t>(extra[off]) << 24) |
-                   (static_cast<std::uint32_t>(extra[off + 1]) << 16) |
-                   (static_cast<std::uint32_t>(extra[off + 2]) << 8) |
-                   static_cast<std::uint32_t>(extra[off + 3]);
-        };
-        if (auto error = engine_common::validateHolocene1559Params(readU32BE(1), readU32BE(5)))
+        if (auto error = engine_common::validateHolocene1559Params(
+                engine_common::readU32BE(extra, 1), engine_common::readU32BE(extra, 5)))
         {
             return error;
         }

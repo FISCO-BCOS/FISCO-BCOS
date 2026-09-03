@@ -53,7 +53,7 @@ public:
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
-        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4),
+        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3),
         std::shared_ptr<bcos::engine::DACaps> daCaps = nullptr,
         bool allowSynthesizedL1Attributes = true)
     {
@@ -113,13 +113,13 @@ private:
         ConcreteOpModel(std::shared_ptr<GlobalStateStorageInitializer> storageInitializer,
             bcos::protocol::BlockFactory::Ptr blockFactory,
             std::shared_ptr<SchedulerType> scheduler,
-            std::shared_ptr<ExecutorType> transactionExecutor, bcos::txpool::MemPoolImpl& memPool,
-            bcos::ledger::LedgerInterface::Ptr ledger, int64_t blockTxCountLimit,
-            bcos::scheduler::SchedulerInterface::Ptr delegate, std::uint32_t maxEngineVersion,
-            std::shared_ptr<bcos::engine::DACaps> daCaps, bool allowSynthesizedL1Attributes)
+            std::shared_ptr<ExecutorType> /*transactionExecutor*/,
+            bcos::txpool::MemPoolImpl& memPool, bcos::ledger::LedgerInterface::Ptr ledger,
+            int64_t blockTxCountLimit, bcos::scheduler::SchedulerInterface::Ptr delegate,
+            std::uint32_t maxEngineVersion, std::shared_ptr<bcos::engine::DACaps> daCaps,
+            bool allowSynthesizedL1Attributes)
           : m_storageInitializer(std::move(storageInitializer)),
             m_memPool(memPool),
-            m_transactionExecutor(std::move(transactionExecutor)),
             m_scheduler(std::move(scheduler)),
             m_any(std::in_place_type<ConcreteEngineService>, m_memPool,
                 m_storageInitializer->storage(), *m_scheduler, std::move(blockFactory),
@@ -129,7 +129,6 @@ private:
 
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;
         std::reference_wrapper<bcos::txpool::MemPoolImpl> m_memPool;
-        std::shared_ptr<ExecutorType> m_transactionExecutor;
         std::shared_ptr<SchedulerType> m_scheduler;
         bcos::engine::AnyEngineService m_any;
     };

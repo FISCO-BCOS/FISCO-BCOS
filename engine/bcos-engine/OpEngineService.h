@@ -141,7 +141,7 @@ public:
         SchedulerType& scheduler, bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
-        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V4),
+        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3),
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
         std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = true)
       : m_memPool(memPool),

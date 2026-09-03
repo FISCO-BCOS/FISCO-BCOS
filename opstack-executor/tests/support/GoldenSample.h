@@ -9,6 +9,7 @@
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -19,6 +20,10 @@ namespace w6test
 inline Json::Value loadJsonFile(std::string const& path)
 {
     std::ifstream in(path);
+    if (!in)
+    {
+        throw std::runtime_error("loadJsonFile: cannot open: " + path);
+    }
     std::stringstream ss;
     ss << in.rdbuf();
     Json::Value root;
@@ -26,6 +31,12 @@ inline Json::Value loadJsonFile(std::string const& path)
     if (!reader.parse(ss.str(), root))
         throw std::runtime_error("loadJsonFile: parse failed: " + path);
     return root;
+}
+
+inline bool t8nCorpusAvailable()
+{
+    return std::filesystem::is_directory(OP_T8N_VECTORS_DIR) &&
+           std::filesystem::is_directory(OP_T8N_GOLDEN_ENGINE_DIR);
 }
 
 struct GoldenSample

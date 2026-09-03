@@ -39,6 +39,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using bcos::executor_v1::StateKey;
@@ -211,7 +212,7 @@ struct OpE2eFixture
             hashImpl, kChainId, forkFlags, blockFactory, multiLayerStorage, ledger, ioServicePool)),
         service(memPool, multiLayerStorage, scheduler, blockFactory, nullptr,
             bcos::engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), opDelegate)
+            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), opDelegate)
     {
         seedSysTables(multiLayerStorage);
     }
@@ -325,60 +326,78 @@ void runInvalidFieldParity(std::string const& vectorId, std::string const& corru
 
 }  // namespace op_engine_exec_parity
 
-void requireT8nCorpus()
-{
-    // tests/t8n is a symlink into op-stack-e2e-tests; skip rather than fail when absent.
-    if (!std::filesystem::exists(std::string(OP_T8N_VECTORS_DIR) + "/isthmus_deposit_only.json"))
-    {
-        BOOST_TEST_MESSAGE(
-            "skipping S6: t8n corpus missing (dangling opstack-executor/tests/t8n symlink)");
-        return;
-    }
-}
+#define SKIP_IF_NO_T8N_CORPUS()                                    \
+    do                                                             \
+    {                                                              \
+        if (!w6test::t8nCorpusAvailable())                         \
+        {                                                          \
+            BOOST_TEST_MESSAGE("skipping S6: t8n corpus missing"); \
+            return;                                                \
+        }                                                          \
+    } while (0)
 
 BOOST_AUTO_TEST_SUITE(OpEngineServiceExecParityTest)
 
 using namespace op_engine_exec_parity;
 
+BOOST_AUTO_TEST_CASE(s6_skips_when_t8n_corpus_missing)
+{
+    // Matrix: T06 — skip must return from the test case, not from a helper.
+    if (w6test::t8nCorpusAvailable())
+    {
+        BOOST_TEST_MESSAGE("t8n corpus present; skip-path not exercised");
+        return;
+    }
+    BOOST_CHECK(!w6test::t8nCorpusAvailable());
+}
+
+BOOST_AUTO_TEST_CASE(load_json_file_reports_cannot_open)
+{
+    BOOST_CHECK_EXCEPTION(w6test::loadJsonFile("/no/such/t8n/file.json"), std::runtime_error,
+        [](std::runtime_error const& e) {
+            return std::string_view(e.what()).find("cannot open") != std::string_view::npos;
+        });
+}
+
 BOOST_AUTO_TEST_CASE(op_e2e_isthmus_deposit_only_matches_golden)
 {
     // Matrix: S6
-    requireT8nCorpus();
+    SKIP_IF_NO_T8N_CORPUS();
     runGoldenVector("isthmus_deposit_only");
 }
 
 BOOST_AUTO_TEST_CASE(op_e2e_jovian_deposit_only_matches_golden)
 {
     // Matrix: S6
-    requireT8nCorpus();
+    SKIP_IF_NO_T8N_CORPUS();
     runGoldenVector("jovian_deposit_only");
 }
 
 BOOST_AUTO_TEST_CASE(op_e2e_jovian_transfer_multi_matches_golden)
 {
     // Matrix: S6
-    requireT8nCorpus();
+    SKIP_IF_NO_T8N_CORPUS();
     runGoldenVector("jovian_transfer_multi");
 }
 
 BOOST_AUTO_TEST_CASE(op_invalid_state_root_returns_invalid)
 {
     // Matrix: S6
-    requireT8nCorpus();
+    SKIP_IF_NO_T8N_CORPUS();
     runInvalidFieldParity("jovian_deposit_only", "stateRoot");
 }
 
 BOOST_AUTO_TEST_CASE(op_invalid_receipts_root_returns_invalid)
 {
     // Matrix: S6
-    requireT8nCorpus();
+    SKIP_IF_NO_T8N_CORPUS();
     runInvalidFieldParity("jovian_deposit_only", "receiptsRoot");
 }
 
 BOOST_AUTO_TEST_CASE(op_invalid_gas_used_returns_invalid)
 {
     // Matrix: S6
-    requireT8nCorpus();
+    SKIP_IF_NO_T8N_CORPUS();
     runInvalidFieldParity("jovian_deposit_only", "gasUsed");
 }
 
@@ -387,12 +406,7 @@ BOOST_AUTO_TEST_CASE(s6_request_rebuild_matches_golden_without_calling_newpayloa
     // Finding O discriminator: rebuildOpEthHeader copies stateRoot/receiptsRoot/gasUsed
     // from the request JSON. That comparison is green even when newPayload never runs.
     // runGoldenVector must therefore read lastExecutedHeader(), not this rebuild.
-    if (!std::filesystem::exists(std::string(OP_T8N_VECTORS_DIR) + "/isthmus_deposit_only.json"))
-    {
-        BOOST_TEST_MESSAGE(
-            "skipping S6: t8n corpus missing (dangling opstack-executor/tests/t8n symlink)");
-        return;
-    }
+    SKIP_IF_NO_T8N_CORPUS();
     auto sample = w6test::loadVectorSample("isthmus_deposit_only");
     auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(sample.jovian));
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);

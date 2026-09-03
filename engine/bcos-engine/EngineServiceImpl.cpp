@@ -120,28 +120,6 @@ bool bcos::engine::detail::isGetPayloadVersionCompatible(
     return false;
 }
 
-namespace
-{
-/// Shared over the two transaction carriers (attributes hex strings and payload raw
-/// bytes): a blob (type-3) or unsupported/unknown-type transaction invalidates the whole
-/// carrier — it is never dropped individually (L2 forbids blob transactions entirely).
-std::optional<std::string> validateRawTransactionKind(
-    bcos::engine::RawTransactionKind kind, std::size_t index)
-{
-    using bcos::engine::RawTransactionKind;
-    if (kind == RawTransactionKind::Blob)
-    {
-        return "blob transactions are not allowed (transaction index " + std::to_string(index) +
-               ")";
-    }
-    if (kind == RawTransactionKind::Unsupported)
-    {
-        return "unsupported transaction type (transaction index " + std::to_string(index) + ")";
-    }
-    return std::nullopt;
-}
-}  // namespace
-
 bcos::bytes bcos::engine::detail::encodeOptimismExtraData(
     const PayloadAttributes& payloadAttributes)
 {
@@ -212,7 +190,8 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
                 return "payloadAttributes.transactions[" + std::to_string(i) +
                        "] is not a hex string";
             }
-            if (auto error = validateRawTransactionKind(dispatchRawTransaction(bcos::ref(raw)), i))
+            if (auto error = engine_common::validateRawTransactionKind(
+                    dispatchRawTransaction(bcos::ref(raw)), i))
             {
                 return error;
             }
@@ -321,7 +300,8 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
         {
             return "executionPayload.transactions[" + std::to_string(i) + "] is empty";
         }
-        if (auto error = validateRawTransactionKind(dispatchRawTransaction(bcos::ref(raw)), i))
+        if (auto error = engine_common::validateRawTransactionKind(
+                dispatchRawTransaction(bcos::ref(raw)), i))
         {
             return error;
         }

@@ -26,6 +26,7 @@
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/Error.h>
 #include <bcos-utilities/Exceptions.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <opstack-executor/tests/OpSchedulerSeamTestHelpers.h>
@@ -33,10 +34,12 @@
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <exception>
 #include <latch>
 #include <optional>
+#include <span>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -79,7 +82,11 @@ using ViewType = typename MLS::ViewType;
 
 struct StubMemPool
 {
-    void removeByHash(std::span<bcos::crypto::HashType const>) {}
+    std::vector<bcos::crypto::HashType> removed;
+    void removeByHash(std::span<bcos::crypto::HashType const> hashes)
+    {
+        removed.insert(removed.end(), hashes.begin(), hashes.end());
+    }
     template <class View>
     void remove(View&)
     {}
@@ -241,7 +248,7 @@ struct OpServicePair
     explicit OpServicePair(bool allowSynthesizedL1Attributes = true)
       : service(memPool, storage, scheduler, blockFactory, nullptr,
             bcos::engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), nullptr, nullptr,
+            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), nullptr, nullptr,
             allowSynthesizedL1Attributes)
     {}
 };
@@ -268,7 +275,7 @@ struct SharedForkchoicePair
       : legacy(legacyMemPool, legacyStorage, legacyExecutor, legacyScheduler, blockFactory),
         op(opMemPool, opStorage, opScheduler, blockFactory, nullptr,
             bcos::engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), nullptr)
+            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), nullptr)
     {}
 };
 
@@ -524,6 +531,43 @@ BOOST_AUTO_TEST_CASE(op_fcu_rejects_empty_txs_when_synthesis_disabled)
     BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
     BOOST_CHECK(
         result.payloadStatus.validationError->find("L1 attributes deposit") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(op_fcu_v4_is_unsupported)
+{
+    // Matrix: T05 — maxEngineVersion is V3, so FCU V4 is UnsupportedEngineApiVersion.
+    OpServicePair pair;
+    bcos::engine::ForkchoiceState state;
+    BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.updateForkchoice(state, nullptr, 4)),
+        bcos::engine::UnsupportedEngineApiVersion);
+}
+
+BOOST_AUTO_TEST_CASE(op_culprit_hash_is_structured_not_message_text)
+{
+    // Matrix: T02 T03 — engine reads OpCulpritTxHash; a [tx=0x...] message is ignored.
+    bcos::h256 const hash(std::string(64, 'a'));
+    auto error = BCOS_ERROR_PTR(-1, "Execute block failed! invalid tx");
+    *error << bcos::engine::OpCulpritTxHash(hash);
+    auto got = bcos::engine::culpritTxHashFromError(*error);
+    BOOST_REQUIRE(got.has_value());
+    BOOST_CHECK_EQUAL(got->hex(), hash.hex());
+
+    auto plain = BCOS_ERROR_PTR(-1, "Execute block failed! [tx=0x" + hash.hex() + "]");
+    BOOST_CHECK(!bcos::engine::culpritTxHashFromError(*plain).has_value());
+
+    bcos::evm::OpConsensusError thrown("op block: invalid non-deposit tx");
+    thrown.txHash = hash;
+    auto attached = BCOS_ERROR_UNIQUE_PTR(1, thrown.what());
+    *attached << bcos::engine::OpCulpritTxHash(*thrown.txHash);
+    auto recovered = bcos::engine::culpritTxHashFromError(*attached);
+    BOOST_REQUIRE(recovered.has_value());
+    BOOST_CHECK_EQUAL(recovered->hex(), hash.hex());
+
+    StubMemPool pool;
+    std::array<bcos::crypto::HashType, 1> hashes{*recovered};
+    pool.removeByHash(std::span<bcos::crypto::HashType const>(hashes));
+    BOOST_REQUIRE_EQUAL(pool.removed.size(), 1);
+    BOOST_CHECK_EQUAL(pool.removed.front().hex(), hash.hex());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

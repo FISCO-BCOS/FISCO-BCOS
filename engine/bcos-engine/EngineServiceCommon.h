@@ -14,6 +14,7 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -74,6 +75,13 @@ inline std::optional<std::string> validateHolocene1559Params(
             "holocene eip-1559 params cannot have a 0 denominator unless elasticity is also 0");
     }
     return std::nullopt;
+}
+[[nodiscard]] inline std::uint32_t readU32BE(std::span<const bcos::byte> bytes, std::size_t off)
+{
+    return (static_cast<std::uint32_t>(bytes[off]) << 24) |
+           (static_cast<std::uint32_t>(bytes[off + 1]) << 16) |
+           (static_cast<std::uint32_t>(bytes[off + 2]) << 8) |
+           static_cast<std::uint32_t>(bytes[off + 3]);
 }
 /// op-geth ReadCanonicalHash(number) != submitted hash → not canonical.
 /// Missing NUMBER_2_HASH is not a mismatch: HASH_2_NUMBER already resolved the

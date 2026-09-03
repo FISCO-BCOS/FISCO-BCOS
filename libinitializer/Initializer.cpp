@@ -621,7 +621,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
             transactionExecutor, m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
-            /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), m_daCaps,
+            /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), m_daCaps,
             /*allowSynthesizedL1Attributes=*/m_nodeConfig->enableSingleNodeConsensus());
 
         m_opScheduler = opDelegate;

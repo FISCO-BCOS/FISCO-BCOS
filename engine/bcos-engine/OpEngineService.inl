@@ -44,7 +44,7 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
             BOOST_THROW_EXCEPTION(
                 UnsupportedFork{} << bcos::errinfo_comment{
                     "Isthmus+ payload building requires engine_forkchoiceUpdatedV3 "
-                    "or V4 (JSON-RPC -38005)"});
+                    "(JSON-RPC -38005; FCU V4 is unimplemented)"});
         }
         if (auto validationError =
                 engine_common::validatePayloadAttributes(*payloadAttributes, version);
@@ -265,28 +265,6 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
         return candidate;
     };
 
-    auto parseCulpritHash = [](std::string const& message) -> std::optional<crypto::HashType> {
-        constexpr std::string_view kTag = "[tx=0x";
-        auto pos = message.rfind(kTag);
-        if (pos == std::string::npos)
-        {
-            return std::nullopt;
-        }
-        auto hex = message.substr(pos + kTag.size(), 64);
-        if (hex.size() != 64)
-        {
-            return std::nullopt;
-        }
-        try
-        {
-            return crypto::HashType("0x" + hex);
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    };
-
     std::set<crypto::HashType> evicted;
     ExecutionPayload payload;
     bcos::protocol::BlockHeader::Ptr executedHeader;
@@ -335,7 +313,8 @@ task::Task<ForkchoiceUpdatedResult> OpEngineService<MemPoolType, GlobalStateStor
         }
         auto const message =
             executeError ? executeError->errorMessage() : std::string("no executed header");
-        auto culprit = parseCulpritHash(message);
+        auto culprit =
+            executeError ? culpritTxHashFromError(*executeError) : std::optional<crypto::HashType>{};
         if (culprit.has_value() && evicted.count(*culprit) == 0 &&
             std::any_of(sealedEnvelopes.begin(), sealedEnvelopes.end(),
                 [&culprit](auto const& entry) { return entry.first == *culprit; }))
