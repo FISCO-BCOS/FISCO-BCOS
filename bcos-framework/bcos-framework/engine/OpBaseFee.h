@@ -60,7 +60,7 @@ inline std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(
 /// Check extraData length, version byte, and non-zero EIP-1559 pair.
 /// Empty extraData is allowed when `allowEmpty` is true (pre-Holocene payloads).
 inline std::optional<std::string> validateOpExtraDataShape(
-    const bcos::bytes& extraData, bool allowEmpty = true)
+    std::span<const bcos::byte> extraData, bool allowEmpty = true)
 {
     if (extraData.empty())
     {
@@ -78,8 +78,8 @@ inline std::optional<std::string> validateOpExtraDataShape(
     {
         return std::string("version byte does not match length");
     }
-    auto [denominator, elasticity] = decodeEip1559Params(
-        std::span<const bcos::byte>(extraData).subspan(1, c_eip1559ParamsBytes));
+    auto [denominator, elasticity] =
+        decodeEip1559Params(extraData.subspan(1, c_eip1559ParamsBytes));
     if (denominator == 0 || elasticity == 0)
     {
         return std::string("must encode a non-zero EIP-1559 denominator and elasticity");
@@ -101,13 +101,14 @@ inline std::optional<std::string> validateOpExtraDataShape(
 /// is only read from exactly-17-byte extraData carrying 0x01.
 inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool parentIsJovian)
 {
-    bcos::bytes const extra(parent.extraData().begin(), parent.extraData().end());
+    auto extraView = parent.extraData();
+    std::span<const bcos::byte> extra{extraView.data(), extraView.size()};
     if (auto shapeError = validateOpExtraDataShape(extra, /*allowEmpty=*/false))
     {
         throw std::invalid_argument("OP parent extraData " + *shapeError);
     }
-    auto [denominator32, elasticity32] = decodeEip1559Params(
-        std::span<const bcos::byte>(extra.data(), extra.size()).subspan(1, c_eip1559ParamsBytes));
+    auto [denominator32, elasticity32] =
+        decodeEip1559Params(extra.subspan(1, c_eip1559ParamsBytes));
     uint64_t const denominator = denominator32;
     uint64_t const elasticity = elasticity32;
 
@@ -117,8 +118,7 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
     std::optional<bcos::u256> minBaseFee;
     if (parentIsJovian && extra.size() == 17 && extra[0] == 0x01)
     {
-        minBaseFee = bcos::u256(
-            bcos::fromBigEndian<std::uint64_t>(std::span<const bcos::byte>(extra).subspan(9, 8)));
+        minBaseFee = bcos::u256(bcos::fromBigEndian<std::uint64_t>(extra.subspan(9, 8)));
     }
 
     bcos::u256 const gasTarget = parent.gasLimit() / elasticity;

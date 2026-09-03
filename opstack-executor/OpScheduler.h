@@ -750,9 +750,19 @@ private:
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr, false};
             }
-
             auto const announcedBlockHash =
                 bcos::protocol::EthBlockHeader::computeHash(*blockHeader);
+            auto const probeHash =
+                bcos::protocol::EthBlockHeader::computeHash(*m_lastProbe->executedHeader);
+            if (probeHash != announcedBlockHash)
+            {
+                auto message = std::string{
+                    "adoptProbeAsPending: executed header hash does not match the announced hash"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                m_lastProbe.reset();
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
+                    nullptr, false};
+            }
             m_multiLayerStorage->pushView(std::move(m_lastProbe->view));
             auto executedHeader = m_lastProbe->executedHeader;
             {
@@ -957,10 +967,10 @@ private:
             for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
             {
                 auto const& raw = rawTxBytes[i];
-                auto const culprit = transactions[i]->hash();
                 if (raw.empty())  // empty envelope: raw[0] would be out of bounds
                 {
-                    throw bcos::evm::OpConsensusError("OpScheduler: empty envelope", culprit);
+                    throw bcos::evm::OpConsensusError(
+                        "OpScheduler: empty envelope", transactions[i]->hash());
                 }
                 auto const typeByte = raw[0];
                 if (op::classifyTxType(typeByte) == static_cast<uint8_t>(op::kDepositTxType))
@@ -973,7 +983,8 @@ private:
                     catch (const OpTxValidationFailed& e)
                     {
                         throw bcos::evm::OpConsensusError(
-                            std::string("OpScheduler: malformed deposit: ") + e.what(), culprit);
+                            std::string("OpScheduler: malformed deposit: ") + e.what(),
+                            transactions[i]->hash());
                     }
                 }
                 // Reject blob (0x03) and 0x7d type bytes.
@@ -983,7 +994,7 @@ private:
                     throw bcos::evm::OpConsensusError(
                         fmt::format("OpScheduler: unsupported tx type byte 0x{:02x}",
                             static_cast<unsigned>(typeByte)),
-                        culprit);
+                        transactions[i]->hash());
                 }
             }
 
@@ -1294,7 +1305,7 @@ private:
             }
             if (opErr.capacity)
             {
-                error << bcos::engine::OpBlockGasPoolFull{true};
+                error << bcos::engine::OpRejectIsCapacity{true};
             }
         }
         catch (...)

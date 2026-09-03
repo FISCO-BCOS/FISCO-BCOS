@@ -11,6 +11,7 @@
 #include <intx/intx.hpp>
 #include <limits>
 #include <optional>
+#include <stdexcept>
 #include <system_error>
 #include <variant>
 
@@ -255,11 +256,18 @@ struct L1BlockInfo
     return info.number == 0 && info.time == 0 && evmc::is_zero(info.blockHash);
 }
 
+/// Deposit gas_limit exceeds remaining block gas (op-geth ErrGasLimitReached). Distinct
+/// from executor_v1::opstack::OpBlockGasPoolFull (prepare-time normal-tx pool full).
+struct OpDepositGasLimitReached : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
 /// Execute one 0x7E deposit: skip buyGas; add balance when mint has a value; still deduct
 /// intrinsic + the EIP-7623 floor; both failure paths retain the mint and force-increment the
 /// nonce; is_system_tx==true throws std::runtime_error (block-level error); gas_limit
-/// exceeding blockGasLeft throws std::runtime_error (op-geth ErrGasLimitReached, block-level
-/// error). Returns a bcos::protocol::TransactionReceipt::Ptr
+/// exceeding blockGasLeft throws OpDepositGasLimitReached (op-geth ErrGasLimitReached,
+/// block-level error). Returns a bcos::protocol::TransactionReceipt::Ptr
 /// with the deposit_nonce/receipt_version carried via setOpStackMeta; the state diff is
 /// returned through `outStateDiff`.
 bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateView& view,

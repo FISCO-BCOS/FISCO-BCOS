@@ -25,7 +25,10 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
+#include <chrono>
 #include <memory>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -59,6 +62,8 @@ public:
         bool throwInvalidPayloadAttributes = false;
         bool throwUnsupportedFork = false;
         bool throwInvalidForkchoiceState = false;
+        std::atomic<bool> hangNewPayload{false};
+        std::atomic<bool> enteredNewPayload{false};
     };
     std::shared_ptr<State> m_state = std::make_shared<State>();
 
@@ -106,6 +111,11 @@ public:
     task::Task<engine::PayloadStatus> newPayload(
         const engine::NewPayloadRequest& request, std::uint32_t version)
     {
+        m_state->enteredNewPayload.store(true);
+        while (m_state->hangNewPayload.load())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
         m_state->capturedNewPayloadRequest = request;
         m_state->capturedNewPayloadVersion = version;
         if (m_state->throwInvalidPayloadAttributes)
@@ -650,6 +660,41 @@ BOOST_AUTO_TEST_CASE(newPayloadV4)
     BOOST_CHECK(capturedReq.expectedBlobVersionedHashes.empty());
     BOOST_REQUIRE(capturedReq.executionRequests.has_value());
     BOOST_CHECK(capturedReq.executionRequests->empty());
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV4BusyReturnsSyncing)
+{
+    mockService.m_state->hangNewPayload.store(true);
+    mockService.m_state->enteredNewPayload.store(false);
+
+    Json::Value params(Json::arrayValue);
+    params.append(makeV4ExecutionPayloadJson());
+    params.append(Json::Value(Json::arrayValue));
+    params.append(c_beaconRootHex);
+    params.append(Json::Value(Json::arrayValue));
+
+    Json::Value firstResponse;
+    std::thread first([&] { CALL_ENGINE(newPayloadV4, params, firstResponse); });
+
+    auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!mockService.m_state->enteredNewPayload.load() &&
+           std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    BOOST_REQUIRE_MESSAGE(mockService.m_state->enteredNewPayload.load(),
+        "first newPayloadV4 never entered the engine service");
+
+    Json::Value busyResponse;
+    CALL_ENGINE(newPayloadV4, params, busyResponse);
+    BOOST_REQUIRE(busyResponse.isMember("result"));
+    BOOST_CHECK_EQUAL(busyResponse["result"]["status"].asString(), "SYNCING");
+    BOOST_CHECK(!busyResponse["result"].isMember("latestValidHash"));
+
+    mockService.m_state->hangNewPayload.store(false);
+    first.join();
+    BOOST_REQUIRE(firstResponse.isMember("result"));
+    BOOST_CHECK_EQUAL(firstResponse["result"]["status"].asString(), "VALID");
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadV4TypedVersionGateMapsToSpecErrorCode)

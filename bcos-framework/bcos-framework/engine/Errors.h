@@ -47,6 +47,7 @@ DERIVE_BCOS_EXCEPTION(UnsupportedFork);
 using OpCulpritTxHash = boost::error_info<struct OpCulpritTxHashTag, bcos::h256>;
 
 /// True when the reject is a block-gas-pool capacity fault (skip this build, do not evict).
-using OpBlockGasPoolFull = boost::error_info<struct OpBlockGasPoolFullTag, bool>;
+/// Named separately from executor_v1::opstack::OpBlockGasPoolFull (the prepare-time exception).
+using OpRejectIsCapacity = boost::error_info<struct OpRejectIsCapacityTag, bool>;
 
 }  // namespace bcos::engine

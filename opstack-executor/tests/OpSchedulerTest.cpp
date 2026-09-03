@@ -1231,14 +1231,14 @@ BOOST_AUTO_TEST_CASE(CallGasAboveBlockPoolClassifiesAsConsensusRejected)
             BOOST_CHECK_MESSAGE(msg.find("consensus rejection") != std::string::npos,
                 "over-gas call must classify as a consensus rejection, got: " << msg);
             BOOST_CHECK_MESSAGE(
-                boost::get_error_info<bcos::engine::OpBlockGasPoolFull>(*err) == nullptr,
-                "eth_call must not tag OpBlockGasPoolFull / capacity");
+                boost::get_error_info<bcos::engine::OpRejectIsCapacity>(*err) == nullptr,
+                "eth_call must not tag OpRejectIsCapacity / capacity");
         });
     BOOST_REQUIRE(called);
 }
 
 /// executeBlock: a normal tx that does not fit the remaining pool is a capacity fault
-/// (OpBlockGasPoolFull + no-evict), not the eth_call classification above.
+/// (OpRejectIsCapacity + no-evict), not the eth_call classification above.
 BOOST_AUTO_TEST_CASE(ExecuteBlockGasPoolFullTagsCapacity)
 {
     Fixture f;
@@ -1259,10 +1259,35 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockGasPoolFullTagsCapacity)
     BOOST_CHECK_MESSAGE(out.err->errorMessage().find("block gas pool full") != std::string::npos ||
                             out.err->errorMessage().find("gas limit reached") != std::string::npos,
         "block-path pool full must name the capacity fault, got: " << out.err->errorMessage());
-    auto const* capacity = boost::get_error_info<bcos::engine::OpBlockGasPoolFull>(*out.err);
+    auto const* capacity = boost::get_error_info<bcos::engine::OpRejectIsCapacity>(*out.err);
     BOOST_REQUIRE_MESSAGE(capacity != nullptr && *capacity,
-        "executeBlock pool-full must tag OpBlockGasPoolFull=true (no-evict)");
+        "executeBlock pool-full must tag OpRejectIsCapacity=true (no-evict)");
     BOOST_CHECK(boost::get_error_info<bcos::engine::OpCulpritTxHash>(*out.err) != nullptr);
+    BOOST_CHECK(out.header == nullptr);
+}
+
+/// Deposit gas_limit above the remaining block pool is a capacity fault via the typed
+/// OpDepositGasLimitReached exception (not a message-text match in rethrowExecError).
+BOOST_AUTO_TEST_CASE(ExecuteBlockDepositOverBudgetTagsCapacity)
+{
+    Fixture f;
+    auto dep = makeDeposit();
+    dep.gas_limit = 50'000;
+    auto const depEnv = encodeDepositEnvelope(dep);
+
+    auto header = makeHeader();
+    header->setGasLimit(bcos::u256(30'000));
+
+    auto out = invokeExecute(f, assembleBlock(f, header, {depEnv}), /*verify=*/false);
+    BOOST_REQUIRE(out.err != nullptr);
+    BOOST_CHECK_EQUAL(
+        out.err->errorCode(), (int)bcos::scheduler::SchedulerError::OpConsensusRejected);
+    BOOST_CHECK_MESSAGE(
+        out.err->errorMessage().find("block gas limit reached") != std::string::npos,
+        "deposit over budget must name ErrGasLimitReached, got: " << out.err->errorMessage());
+    auto const* capacity = boost::get_error_info<bcos::engine::OpRejectIsCapacity>(*out.err);
+    BOOST_REQUIRE_MESSAGE(capacity != nullptr && *capacity,
+        "deposit over-budget must tag OpRejectIsCapacity=true (no-evict)");
     BOOST_CHECK(out.header == nullptr);
 }
 
@@ -2474,6 +2499,49 @@ BOOST_AUTO_TEST_CASE(adoptRejectsCommitmentMismatch)
                     std::string::npos);
     }
     BOOST_CHECK(executedHeader == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(adoptRejectsHashMismatchWhenCommitmentsMatch)
+{
+    Fixture f;
+    seedL2CompatFeature(f.multiLayerStorage);
+    fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
+    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
+
+    std::vector<bcos::bytes> const rawTxBytes{encodeDepositEnvelope(makeDeposit())};
+
+    auto header = makeHeaderAt(1, bcos::u256(1'000'000'000));
+    {
+        auto view = f.multiLayerStorage.forkCommitted();
+        view.newMutable();
+        auto const result = runExecutionProbe(f, view, *header, rawTxBytes);
+        BOOST_REQUIRE_EQUAL(result.receipts.size(), rawTxBytes.size());
+        fillAnnouncedHeader(header, result);
+    }
+
+    auto probeBlock = assembleBlock(f, header, rawTxBytes);
+    auto probeCb = invokeExecute(f, probeBlock, /*verify=*/false);
+    BOOST_REQUIRE_MESSAGE(probeCb.err == nullptr,
+        "probe executeBlock failed: " << (probeCb.err ? probeCb.err->errorMessage() : ""));
+
+    // Timestamp is outside headerCommitments; changing it after the probe keeps
+    // commitment equality and must still fail the hash-identity gate.
+    header->setTimestamp(header->timestamp() + 1000);
+    auto adoptBlock = assembleBlock(f, header, rawTxBytes);
+
+    bcos::Error::Ptr err;
+    bool called = false;
+    f.scheduler->adoptProbeAsPending(
+        adoptBlock, [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr, bool) {
+            called = true;
+            err = std::move(e);
+        });
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE_MESSAGE(err != nullptr, "adopt with a hash-only divergence must be refused");
+    BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::UnknownError);
+    BOOST_CHECK(
+        err->errorMessage().find("executed header hash does not match") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

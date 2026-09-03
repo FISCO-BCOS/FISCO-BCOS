@@ -632,7 +632,7 @@ BOOST_AUTO_TEST_CASE(GasLimitOverBlockBudgetIsBlockError)
     evmone::state::StateDiff diff;
     BOOST_CHECK_THROW(runDeposit(ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234,
                           /*blockGasLeft=*/50000, kOpTestReceiptFactory, diff),
-        std::runtime_error);
+        OpDepositGasLimitReached);
 }
 
 // D-04 边界（红队 F-6）：恰等于块剩余 gas 必须接受——">=" 作弊在此暴露

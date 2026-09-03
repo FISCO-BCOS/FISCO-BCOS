@@ -535,7 +535,7 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     if (const auto* err = std::get_if<std::error_code>(&props))
     {
         if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED))
-            throw std::runtime_error("op deposit: block gas limit reached (block error)");
+            throw OpDepositGasLimitReached("op deposit: block gas limit reached (block error)");
         // Processing-level failure (op-geth Regolith, state_transition.go:486-513):
         // mint is retained, nonce is force-incremented, gasUsed = gasLimit in full (:498).
         state.get(dep.from).nonce = preNonce + 1;

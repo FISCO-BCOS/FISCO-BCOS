@@ -84,23 +84,6 @@ inline bcos::bytes encodeDepositEnvelope(const bcos::evm::opstack::DepositTx& d)
 inline bcos::bytes synthesizeL1AttributesDeposit(
     const L1BlockInfo& l1Info, bool jovianActive, [[maybe_unused]] uint64_t l2BlockTime)
 {
-    bcos::bytes data(jovianActive ? JovianL1AttributesLen : IsthmusL1AttributesLen, 0);
-    const auto& selector = jovianActive ? JovianL1AttributesSelector :
-                                          IsthmusL1AttributesSelector;
-    std::copy(selector.begin(), selector.end(), data.begin());
-    auto dataSpan = std::span(data);
-    auto seqField = dataSpan.subspan(12, 8);
-    bcos::toBigEndian(l1Info.sequenceNumber, seqField);
-    auto timeField = dataSpan.subspan(20, 8);
-    bcos::toBigEndian(l1Info.time, timeField);
-    auto numberField = dataSpan.subspan(28, 8);
-    bcos::toBigEndian(l1Info.number, numberField);
-    intx::be::store(
-        std::span<uint8_t, 32>(dataSpan.subspan(36, 32).data(), 32), l1Info.baseFee);
-    intx::be::store(
-        std::span<uint8_t, 32>(dataSpan.subspan(68, 32).data(), 32), l1Info.blobBaseFee);
-    std::copy_n(l1Info.blockHash.bytes, sizeof(evmc::bytes32), data.begin() + 100);
-
     // op-node L1InfoDepositSource: inner = keccak(l1Hash[32] || bytes32(seq)),
     // sourceHash = keccak(bytes32(domain=1) || inner).
     std::array<uint8_t, 64> innerInput{};
@@ -125,7 +108,22 @@ inline bcos::bytes synthesizeL1AttributesDeposit(
         .value = intx::uint256{0},
         .gas_limit = c_l1InfoDepositGas,
         .is_system_tx = false,
-        .data = evmc::bytes(data.begin(), data.end())};
+        .data = {}};
+    deposit.data.resize(jovianActive ? JovianL1AttributesLen : IsthmusL1AttributesLen, 0);
+    const auto& selector =
+        jovianActive ? JovianL1AttributesSelector : IsthmusL1AttributesSelector;
+    std::copy(selector.begin(), selector.end(), deposit.data.begin());
+    auto dataSpan = std::span(deposit.data);
+    auto seqField = dataSpan.subspan(12, 8);
+    bcos::toBigEndian(l1Info.sequenceNumber, seqField);
+    auto timeField = dataSpan.subspan(20, 8);
+    bcos::toBigEndian(l1Info.time, timeField);
+    auto numberField = dataSpan.subspan(28, 8);
+    bcos::toBigEndian(l1Info.number, numberField);
+    intx::be::store(std::span<uint8_t, 32>(dataSpan.subspan(36, 32).data(), 32), l1Info.baseFee);
+    intx::be::store(
+        std::span<uint8_t, 32>(dataSpan.subspan(68, 32).data(), 32), l1Info.blobBaseFee);
+    std::copy_n(l1Info.blockHash.bytes, sizeof(evmc::bytes32), deposit.data.begin() + 100);
     return encodeDepositEnvelope(deposit);
 }
 }  // namespace bcos::evm::opstack

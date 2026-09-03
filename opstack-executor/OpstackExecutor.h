@@ -1251,7 +1251,7 @@ private:
         {
             throw;
         }
-        catch (const OpBlockGasPoolFull& e)
+        catch (const bcos::evm::opstack::OpDepositGasLimitReached& e)
         {
             bcos::evm::OpConsensusError err("OpScheduler: " + what + " failed: " + e.what());
             err.capacity = true;
@@ -1259,10 +1259,7 @@ private:
         }
         catch (const std::exception& e)
         {
-            std::string const msg = e.what();
-            bcos::evm::OpConsensusError err("OpScheduler: " + what + " failed: " + msg);
-            err.capacity = msg.find("block gas limit reached") != std::string::npos;
-            throw err;
+            throw bcos::evm::OpConsensusError("OpScheduler: " + what + " failed: " + e.what());
         }
         catch (...)
         {

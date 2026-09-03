@@ -277,7 +277,8 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     const bool opExecution = version == engine::ApiVersion::V4;
     if (opExecution && m_opPayloadBusy.exchange(true, std::memory_order_acq_rel))
     {
-        auto syncingStatus = serializePayloadStatus(engine::PayloadStatus{}, version);
+        auto syncingStatus = serializePayloadStatus(
+            engine::PayloadStatus{.status = engine::PayloadValidationStatus::Syncing}, version);
         buildJsonContent(syncingStatus, response);
         co_return;
     }

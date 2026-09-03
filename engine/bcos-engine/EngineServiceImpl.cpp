@@ -19,13 +19,13 @@
 #include "EngineServiceImpl.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <boost/assert.hpp>
+#include <bcos-framework/engine/OpBaseFee.h>
+#include <bcos-ledger/mpt/Constants.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <boost/throw_exception.hpp>
 #include <span>
 #include <stdexcept>
 #include <utility>
-#include <bcos-ledger/mpt/Constants.h>
-#include <bcos-rlp-protocol/EthBlockHeader.h>
 
 namespace
 {
@@ -141,106 +141,6 @@ std::optional<std::string> validateRawTransactionKind(
 }
 }  // namespace
 
-namespace
-{
-/// extraData version bytes (op-core/eip1559/eip1559.go:10-13). Note the Jovian version
-/// byte is 0x01, not 0x00: ValidateJovianExtraData (eip1559.go:167-176) rejects any
-/// other value on every post-Jovian block op-node reads back.
-constexpr bcos::byte c_holoceneExtraDataVersion = 0x00;
-constexpr bcos::byte c_jovianExtraDataVersion = 0x01;
-constexpr std::size_t c_holoceneExtraDataBytes = 9;
-constexpr std::size_t c_jovianExtraDataBytes = 17;
-
-/// Canyon EIP-1559 constants used to translate all-zero attribute params. op-node sends
-/// eip1559Params = 0,0 while the SystemConfig has not set the parameters, and expects
-/// the EL to translate them to the chain's Canyon constants (op-node/rollup/attributes/
-/// engine_consolidate.go checkExtraDataParamsMatch: "Translate 0,0 to the pre-Holocene
-/// protocol constants, like the EL does too", using ChainOpConfig
-/// .EIP1559DenominatorCanyon / .EIP1559Elasticity). This node has no rollup config to
-/// read them from, so they are pinned to the OP Stack defaults (250, 6) that our
-/// deployment's rollup.json chain_op_config carries (tools/opstack-genesis/
-/// gen_rollup_config.py defaults, emitted into tools/opnode-check/rollup.json).
-///
-/// DEPLOYMENT CONSTRAINT: a chain whose rollup.json sets different chain_op_config
-/// values would fail op-node's consolidation match and stall. Making these
-/// configurable is deliberately NOT done here: chain_op_config is a chain-level
-/// constant, so a per-node ini key would let two nodes stamp different extraData on
-/// the same height and split the chain. The correct home is a consensus-pinned
-/// value (the genesis config / SYS_CONFIG lane, alongside the eth genesis header),
-/// which changes the genesis artifact and belongs to that lane's PR.
-constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
-constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;
-
-/// Width of the eip1559Params attribute field and of the parameter half of a
-/// non-empty extraData (op-service/eth/types.go:521 declares it as a Bytes8).
-constexpr std::size_t c_eip1559ParamsBytes = 8;
-
-/// Big-endian read of the two u32 halves of an 8-byte eip1559Params field
-/// (op-core/eip1559/eip1559.go DecodeHolocene1559Params: denominator [0:4],
-/// elasticity [4:8]).
-///
-/// Precondition: params.size() >= 8. std::span::first / ::subspan state that as a
-/// hard precondition ([span.sub]), so a shorter span is undefined behaviour here,
-/// NOT a std::out_of_range — every caller must establish the length first. The two
-/// callers that take CL-supplied bytes do: validatePayloadAttributes and
-/// validateOptimismExtraDataShape both check the length before decoding, and
-/// encodeOptimismExtraData rejects anything else at its entry.
-std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(std::span<const bcos::byte> params)
-{
-    BOOST_ASSERT(params.size() >= c_eip1559ParamsBytes);
-    auto denominator = bcos::fromBigEndian<std::uint32_t>(params.first(4));
-    auto elasticity = bcos::fromBigEndian<std::uint32_t>(params.subspan(4, 4));
-    return {denominator, elasticity};
-}
-
-/// OP-Stack header extraData shapes, as op-geth validates them on every block it
-/// imports — including the ones a CL hands back through newPayload
-/// (consensus/beacon/consensus.go:240-243 calls eip1559.ValidateOptimismExtraData,
-/// which picks the rule from the chain's fork schedule and skips only the genesis
-/// block). This service has no fork schedule to pick with, so it accepts any of the
-/// three legal shapes and rejects everything else: empty (pre-Holocene,
-/// eip1559.go:27-28), 9 bytes with version byte 0x00 (ValidateHoloceneExtraData,
-/// eip1559.go:119-127), 17 bytes with version byte 0x01 (ValidateJovianExtraData,
-/// eip1559.go:167-176). Both non-empty forms carry the denominator/elasticity pair
-/// in [1, 9), which must be non-zero on a header — unlike the attribute side, where
-/// 0,0 is legal and gets translated (validateHoloceneExtraDataPart,
-/// eip1559.go:105-113, and the note above ValidateHoloceneExtraData spelling out the
-/// difference).
-std::optional<std::string> validateOptimismExtraDataShape(const bcos::bytes& extraData)
-{
-    if (extraData.empty())
-    {
-        return std::nullopt;
-    }
-    if (extraData.size() != c_holoceneExtraDataBytes && extraData.size() != c_jovianExtraDataBytes)
-    {
-        return "executionPayload.extraData must be empty (pre-Holocene), " +
-               std::to_string(c_holoceneExtraDataBytes) + " bytes (Holocene) or " +
-               std::to_string(c_jovianExtraDataBytes) + " bytes (Jovian), got " +
-               std::to_string(extraData.size());
-    }
-    auto const expectedVersion = extraData.size() == c_jovianExtraDataBytes ?
-                                     c_jovianExtraDataVersion :
-                                     c_holoceneExtraDataVersion;
-    if (extraData[0] != expectedVersion)
-    {
-        return "executionPayload.extraData version byte must be " +
-               std::to_string(static_cast<unsigned>(expectedVersion)) + " for a " +
-               std::to_string(extraData.size()) + "-byte extraData, got " +
-               std::to_string(static_cast<unsigned>(extraData[0]));
-    }
-    auto [denominator, elasticity] = decodeEip1559Params(
-        std::span<const bcos::byte>(extraData).subspan(1, c_eip1559ParamsBytes));
-    if (denominator == 0 || elasticity == 0)
-    {
-        return std::string(
-            "executionPayload.extraData must encode a non-zero EIP-1559 denominator and "
-            "elasticity");
-    }
-    return std::nullopt;
-}
-}  // namespace
-
 bcos::bytes bcos::engine::detail::encodeOptimismExtraData(
     const PayloadAttributes& payloadAttributes)
 {
@@ -262,6 +162,12 @@ bcos::bytes bcos::engine::detail::encodeOptimismExtraData(
             "encodeOptimismExtraData requires exactly 8 bytes of eip1559Params"});
     }
     auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
+    // Canyon translation of all-zero attribute params. op-node sends eip1559Params = 0,0
+    // while SystemConfig has not set the parameters, and expects the EL to translate them
+    // to the chain's Canyon constants (op-node engine_consolidate.go
+    // checkExtraDataParamsMatch). DEPLOYMENT CONSTRAINT: a chain whose rollup.json sets
+    // different chain_op_config values would fail consolidation; these stay pinned to the
+    // OP Stack defaults in OpBaseFee.h (250, 6).
     if (denominator == 0 && elasticity == 0)
     {
         denominator = c_eip1559DenominatorCanyon;
@@ -463,16 +369,18 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
         auto expectedRoot = withdrawalsRootFor(executionPayload);
         if (*executionPayload.withdrawalsRoot != expectedRoot)
         {
-            return std::string("withdrawalsRoot does not match the value this node commits "
-                                "for the built header");
+            return std::string(
+                "withdrawalsRoot does not match the value this node commits "
+                "for the built header");
         }
     }
     // extraData is a V1-onwards field, so this applies at every newPayload version.
     // Since this PR makes extraData part of the block hash, an unchecked extraData is
-    // an unchecked block-hash input.
-    if (auto error = validateOptimismExtraDataShape(executionPayload.extraData))
+    // an unchecked block-hash input. Shape rules live in OpBaseFee.h (shared with
+    // calcOpBaseFee); prefix the helper's short reason for the INVALID channel.
+    if (auto error = validateOpExtraDataShape(executionPayload.extraData))
     {
-        return error;
+        return "executionPayload.extraData " + *error;
     }
     return std::nullopt;
 }
@@ -519,9 +427,10 @@ bcos::protocol::EthBlockVersion bcos::engine::detail::ethBlockVersionFor(evmc_re
         {
             return bcos::protocol::EthBlockVersion::LONDON;
         }
-        BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-            "EngineService: unsupported EVM revision " + std::to_string(static_cast<int>(rev)) +
-            " for Eth header fork derivation"});
+        BOOST_THROW_EXCEPTION(
+            UnsupportedFork{} << bcos::errinfo_comment{"EngineService: unsupported EVM revision " +
+                                                       std::to_string(static_cast<int>(rev)) +
+                                                       " for Eth header fork derivation"});
     }
 }
 
