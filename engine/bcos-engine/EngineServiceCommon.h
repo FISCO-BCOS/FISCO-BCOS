@@ -123,6 +123,10 @@ std::optional<PayloadID> derivePayloadId(const PayloadAttributes& payloadAttribu
 PayloadStatus makeStatus(PayloadValidationStatus status,
     std::optional<h256> latestValidHash = std::nullopt,
     std::optional<std::string> validationError = std::nullopt);
+/// Shared getPayload shape gate (leftover Impl + EngineTracker). Throws
+/// IncompatiblePayloadVersion when the request version cannot render the stored body.
+void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& payload,
+    std::optional<h256> const& parentBeaconBlockRoot, std::uint32_t requestVersion);
 }  // namespace engine_common
 
 }  // namespace bcos::engine

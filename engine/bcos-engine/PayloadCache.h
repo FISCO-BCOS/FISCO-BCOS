@@ -30,6 +30,9 @@ public:
     /// Atomically replace the cache with a single retained entry (put then retainOnly on a
     /// staging copy, then one noexcept swap). Used by newPayload commit so no intermediate
     /// multi-entry state is observable if retainOnly would fail after put.
+    /// `evicted` lists every dropped id: FIFO overflow from the put *and* ids
+    /// discarded by the retain step (callers that erase artifacts from `evicted`
+    /// would otherwise leak the retain-dropped rows).
     PutResult putAndRetainOnly(PayloadID id, h256 const& blockHash, BuiltPayloadPtr entry);
     BuiltPayloadPtr find(const PayloadID& id) const;
     std::optional<PayloadID> payloadIdForHash(const h256& blockHash) const;

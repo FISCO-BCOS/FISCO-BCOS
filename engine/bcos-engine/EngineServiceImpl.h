@@ -46,6 +46,8 @@
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -190,8 +192,8 @@ public:
                 validationError.has_value())
             {
                 ForkchoiceUpdatedResult result{
-                    .payloadStatus =
-                        makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError),
+                    .payloadStatus = engine_common::makeStatus(
+                        PayloadValidationStatus::Invalid, std::nullopt, validationError),
                     .payloadId = std::nullopt,
                 };
                 co_return result;
@@ -210,8 +212,8 @@ public:
             !finalizedBlockNumber.has_value())
         {
             ForkchoiceUpdatedResult result{
-                .payloadStatus =
-                    makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
+                .payloadStatus = engine_common::makeStatus(
+                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
                 .payloadId = std::nullopt,
             };
             co_return result;
@@ -246,7 +248,7 @@ public:
                 if (*headBlockNumber < trackedHeadBlock.blockNumber)
                 {
                     ForkchoiceUpdatedResult result{
-                        .payloadStatus = makeStatus(PayloadValidationStatus::Valid,
+                        .payloadStatus = engine_common::makeStatus(PayloadValidationStatus::Valid,
                             forkchoiceState.headBlockHash, std::nullopt),
                         .payloadId = std::nullopt,
                     };
@@ -278,7 +280,7 @@ public:
         }  // Lock released here — safe to co_await below.
 
         ForkchoiceUpdatedResult result{
-            .payloadStatus = makeStatus(
+            .payloadStatus = engine_common::makeStatus(
                 PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt),
             .payloadId = std::nullopt,
         };
@@ -436,17 +438,6 @@ private:
                version <= static_cast<std::uint32_t>(ApiVersion::V5);
     }
 
-    static PayloadStatus makeStatus(PayloadValidationStatus status,
-        std::optional<h256> latestValidHash = std::nullopt,
-        std::optional<std::string> validationError = std::nullopt)
-    {
-        return PayloadStatus{
-            .latestValidHash = latestValidHash,
-            .validationError = std::move(validationError),
-            .status = status,
-        };
-    }
-
     GetPayloadResult handleGetPayload(const PayloadID& payloadId, std::uint32_t version) const
     {
         if (!isGetPayloadVersionSupported(version))
@@ -461,22 +452,8 @@ private:
         {
             BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
         }
-        if (!engine_common::isGetPayloadVersionCompatible(
-                static_cast<ApiVersion>(version), it->second.version))
-        {
-            BOOST_THROW_EXCEPTION(
-                IncompatiblePayloadVersion{} << bcos::errinfo_comment{
-                    "Payload version is incompatible with requested method version"});
-        }
-        // Safety net: a V3-tagged entry that somehow lacks withdrawalsRoot must not
-        // reach serializeExecutionPayload (InternalError). newPayload no longer strips
-        // the field; this still covers a V2-shaped body queried as V4/V5.
-        if (version >= static_cast<std::uint32_t>(ApiVersion::V4) &&
-            !it->second.executionPayload.withdrawalsRoot.has_value())
-        {
-            BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
-                                      "Payload does not carry the V4+ response shape"});
-        }
+        engine_common::requireGetPayloadShape(it->second.version, it->second.executionPayload,
+            it->second.parentBeaconBlockRoot, version);
 
         return std::make_unique<GetPayloadData>(GetPayloadData{
             .executionPayload = it->second.executionPayload,
@@ -508,16 +485,16 @@ private:
             auto status = validationError->find("blockHash") != std::string::npos ?
                               PayloadValidationStatus::InvalidBlockHash :
                               PayloadValidationStatus::Invalid;
-            co_return makeStatus(status, std::nullopt, validationError);
+            co_return engine_common::makeStatus(status, std::nullopt, validationError);
         }
         if (version <= 2 && request.parentBeaconBlockRoot.has_value())
         {
-            co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string("parentBeaconBlockRoot is only valid for newPayloadV3 and later"));
         }
         if (version >= 3 && !request.parentBeaconBlockRoot.has_value())
         {
-            co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string(
                     "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and later"));
         }
@@ -540,7 +517,7 @@ private:
             // transactions but no blob hashes) neither validated nor stored the payload,
             // so the CL took the block as accepted while no later forkchoiceUpdated could
             // ever make it head.
-            co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string("expectedBlobVersionedHashes must be empty (L2 forbids blob "
                             "transactions)"));
         }
@@ -553,7 +530,7 @@ private:
             // nullopt here would give in-process callers a laxer contract than the wire.
             if (!request.executionRequests.has_value() || !request.executionRequests->empty())
             {
-                co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                     std::string("executionRequests must be a present-but-empty list on this "
                                 "chain"));
             }
@@ -578,7 +555,8 @@ private:
                 m_blockHashToPayloadId.contains(request.executionPayload.parentHash);
             if (!parentKnown)
             {
-                co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+                co_return engine_common::makeStatus(
+                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
             }
 
             auto payloadIdIt = m_blockHashToPayloadId.find(request.executionPayload.blockHash);
@@ -586,18 +564,35 @@ private:
             {
                 // #5468 / finding E: unexecuted external payload. op-geth executes
                 // before VALID; we must not store the CL body and answer VALID.
-                co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+                // This leftover service has no EL sync, so SYNCING is terminal.
+                // Rate-limit the warning so a retrying CL cannot flood the log.
+                static std::atomic<std::chrono::steady_clock::time_point> lastWarn{
+                    std::chrono::steady_clock::time_point{}};
+                auto const now = std::chrono::steady_clock::now();
+                auto prev = lastWarn.load(std::memory_order_relaxed);
+                if (now - prev >= std::chrono::seconds(10) &&
+                    lastWarn.compare_exchange_strong(
+                        prev, now, std::memory_order_relaxed, std::memory_order_relaxed))
+                {
+                    BCOS_LOG(WARNING)
+                        << LOG_BADGE("EngineService")
+                        << LOG_DESC("newPayload cache miss; answering SYNCING (#5468, no EL sync)")
+                        << LOG_KV("blockHash", request.executionPayload.blockHash.hex());
+                }
+                co_return engine_common::makeStatus(
+                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
             }
             payloadId = payloadIdIt->second;
             auto builtIt = m_payloadCache.find(payloadId);
             if (builtIt == m_payloadCache.end())
             {
-                co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+                co_return engine_common::makeStatus(
+                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
             }
             if (auto mismatch = detail::compareWithBuiltPayload(
                     request.executionPayload, builtIt->second.executionPayload))
             {
-                co_return makeStatus(
+                co_return engine_common::makeStatus(
                     PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
             }
 
@@ -612,6 +607,7 @@ private:
             {
                 commitState = true;
                 m_globalStateStorage.get().pushView(std::move(*it->second.view));
+                it->second.view.reset();
                 if (m_ledger && it->second.header)
                 {
                     // Locally built payload: persist the ledger block tables atomically with
@@ -653,6 +649,8 @@ private:
                             return protocol::Transaction::ConstPtr(tx.decoded);
                         }) |
                         ::ranges::to<std::vector>());
+                    it->second.header.reset();
+                    it->second.receipts.clear();
                 }
             }
         }  // x_state released — safe to co_await below.
@@ -676,7 +674,7 @@ private:
             std::erase_if(m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });
         }
 
-        co_return makeStatus(
+        co_return engine_common::makeStatus(
             PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);
     }
 

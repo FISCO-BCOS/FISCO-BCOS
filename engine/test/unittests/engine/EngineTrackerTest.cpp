@@ -16,6 +16,7 @@
 #include <bcos-utilities/Exceptions.h>
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <barrier>
 #include <chrono>
@@ -72,18 +73,6 @@ void checkExceptionMessage(auto&& action, const char* expectedMessage)
         auto const* comment = boost::get_error_info<errinfo_comment>(e);
         return comment != nullptr && *comment == expectedMessage;
     });
-}
-
-/// Gold-standard copies of EngineServiceImpl private helpers (not callable from tests).
-PayloadStatus legacyMakeStatus(PayloadValidationStatus status,
-    std::optional<h256> latestValidHash = std::nullopt,
-    std::optional<std::string> validationError = std::nullopt)
-{
-    return PayloadStatus{
-        .latestValidHash = latestValidHash,
-        .validationError = std::move(validationError),
-        .status = status,
-    };
 }
 
 std::optional<PayloadID> legacyDerivePayloadId(
@@ -455,6 +444,24 @@ BOOST_AUTO_TEST_CASE(engine_tracker_omitted_canonical_flags_fail_closed)
         "Forkchoice safe block not in canonical chain");
 }
 
+BOOST_AUTO_TEST_CASE(engine_tracker_zero_hash_omitted_canonical_flags_applies)
+{
+    // Zero hash is Engine-API "not set". The canonical gate must use the same
+    // predicate as store (hash != 0), so default-false flags do not reject it.
+    EngineTracker tracker;
+    ResolvedForkchoice unset{
+        .state = ForkchoiceState{h256(10), h256{}, h256{}},
+        .headNumber = 10,
+        .safeNumber = 0,
+        .finalizedNumber = 0,
+        .headCanonical = true,
+        .payloadAttributesPresent = false,
+    };
+    BOOST_CHECK(tracker.applyForkchoice(unset) == ForkchoiceApplyResult::Applied);
+    BOOST_CHECK(!tracker.safeBlockNumber().has_value());
+    BOOST_CHECK(!tracker.finalizedBlockNumber().has_value());
+}
+
 BOOST_AUTO_TEST_CASE(engine_tracker_allows_safe_finalized_number_rewind)
 {
     // op-geth SetSafe/SetFinalized overwrite; lower numbers are legal when canonical.
@@ -779,6 +786,23 @@ BOOST_AUTO_TEST_CASE(engine_tracker_retain_only_through_guard)
     BOOST_CHECK(!guard.payloadIdForHash(h256(2)).has_value());
 }
 
+BOOST_AUTO_TEST_CASE(payload_cache_put_and_retain_reports_dropped_ids)
+{
+    PayloadCache cache;
+    cache.put("0xa", h256(1), makePayload(1));
+    cache.put("0xb", h256(2), makePayload(1));
+    cache.put("0xc", h256(3), makePayload(1));
+    auto result = cache.putAndRetainOnly("0xd", h256(4), makePayload(1));
+    std::vector<PayloadID> evicted = result.evicted;
+    std::sort(evicted.begin(), evicted.end());
+    std::vector<PayloadID> const expected{"0xa", "0xb", "0xc"};
+    BOOST_CHECK(evicted == expected);
+    BOOST_REQUIRE(cache.find("0xd"));
+    BOOST_CHECK(!cache.find("0xa"));
+    BOOST_CHECK(!cache.find("0xb"));
+    BOOST_CHECK(!cache.find("0xc"));
+}
+
 BOOST_AUTO_TEST_CASE(publish_built_payload_restores_replaced_entry_on_artifacts_throw)
 {
     // Finding A: put overwrites the same id; artifacts assign then throws.
@@ -949,18 +973,56 @@ BOOST_AUTO_TEST_CASE(engine_common_derive_payload_id_matches_legacy)
     BOOST_CHECK(!legacyDerivePayloadId(attrs, parentHash, 3).has_value());
 }
 
-BOOST_AUTO_TEST_CASE(engine_common_make_status_matches_legacy)
+BOOST_AUTO_TEST_CASE(compare_with_built_payload_pins_each_hash_field)
 {
-    const h256 hash(42);
-    for (auto status : {PayloadValidationStatus::Valid, PayloadValidationStatus::Invalid,
-             PayloadValidationStatus::Syncing, PayloadValidationStatus::InvalidBlockHash})
-    {
-        auto common = engine_common::makeStatus(status, hash, "error");
-        auto legacy = legacyMakeStatus(status, hash, "error");
-        BOOST_CHECK(common.status == legacy.status);
-        BOOST_CHECK(common.latestValidHash == legacy.latestValidHash);
-        BOOST_CHECK(common.validationError == legacy.validationError);
-    }
+    auto filled = []() {
+        ExecutionPayload payload;
+        payload.extraData = bytes{0x01, 0x02};
+        payload.parentHash = h256(1);
+        payload.stateRoot = h256(2);
+        payload.receiptsRoot = h256(3);
+        payload.logsBloom.fill(0x11);
+        payload.prevRandao = h256(4);
+        payload.gasLimit = 5;
+        payload.gasUsed = 6;
+        payload.baseFeePerGas = 7;
+        payload.blockHash = h256(8);
+        payload.feeRecipient = Address(9);
+        payload.timestamp = 10;
+        payload.blockNumber = 11;
+        payload.transactions.push_back(EngineTransaction{.raw = bytes{0xaa}, .decoded = nullptr});
+        payload.withdrawalsRoot = h256(12);
+        payload.blobGasUsed = u256(13);
+        payload.excessBlobGas = u256(14);
+        return payload;
+    };
+    auto const built = filled();
+    BOOST_CHECK(!bcos::engine::detail::compareWithBuiltPayload(built, built).has_value());
+
+    auto expectField = [&](auto&& mutate, char const* field) {
+        auto submitted = filled();
+        mutate(submitted);
+        auto error = bcos::engine::detail::compareWithBuiltPayload(submitted, built);
+        BOOST_REQUIRE(error.has_value());
+        BOOST_CHECK_NE(error->find(field), std::string::npos);
+    };
+    expectField([](ExecutionPayload& p) { p.extraData = bytes{0xff}; }, "extraData");
+    expectField([](ExecutionPayload& p) { p.parentHash = h256(99); }, "parentHash");
+    expectField([](ExecutionPayload& p) { p.stateRoot = h256(99); }, "stateRoot");
+    expectField([](ExecutionPayload& p) { p.receiptsRoot = h256(99); }, "receiptsRoot");
+    expectField([](ExecutionPayload& p) { p.logsBloom.fill(0x22); }, "logsBloom");
+    expectField([](ExecutionPayload& p) { p.prevRandao = h256(99); }, "prevRandao");
+    expectField([](ExecutionPayload& p) { p.gasLimit = 99; }, "gasLimit");
+    expectField([](ExecutionPayload& p) { p.gasUsed = 99; }, "gasUsed");
+    expectField([](ExecutionPayload& p) { p.baseFeePerGas = 99; }, "baseFeePerGas");
+    expectField([](ExecutionPayload& p) { p.blockHash = h256(99); }, "blockHash");
+    expectField([](ExecutionPayload& p) { p.feeRecipient = Address(99); }, "feeRecipient");
+    expectField([](ExecutionPayload& p) { p.timestamp = 99; }, "timestamp");
+    expectField([](ExecutionPayload& p) { p.blockNumber = 99; }, "blockNumber");
+    expectField([](ExecutionPayload& p) { p.transactions[0].raw = bytes{0xbb}; }, "transactions");
+    expectField([](ExecutionPayload& p) { p.withdrawalsRoot = h256(99); }, "withdrawalsRoot");
+    expectField([](ExecutionPayload& p) { p.blobGasUsed = u256(99); }, "blobGasUsed");
+    expectField([](ExecutionPayload& p) { p.excessBlobGas = u256(99); }, "excessBlobGas");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -1173,6 +1173,35 @@ BOOST_AUTO_TEST_CASE(new_payload_hit_rejects_altered_state_root_and_keeps_built_
     BOOST_CHECK_EQUAL(*committed->parentBeaconBlockRoot, *payload->parentBeaconBlockRoot);
 }
 
+BOOST_AUTO_TEST_CASE(new_payload_honest_retry_does_not_recommit)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto honest = makeNewPayloadRequestV3(payload->executionPayload);
+    auto first = task::syncWait(engineService.newPayload(honest, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(first.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    auto retry = task::syncWait(engineService.newPayload(honest, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(retry.status), static_cast<int>(PayloadValidationStatus::Valid));
+    auto stillBuilt = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_CHECK_EQUAL(stillBuilt->executionPayload.blockHash, payload->executionPayload.blockHash);
+}
+
 BOOST_AUTO_TEST_CASE(new_payload_rejects_blob_and_unknown_transaction_types)
 {
     MemPoolImpl memPool;

@@ -49,12 +49,19 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     // canonical-hash check. op-geth (eth/catalyst/api.go forkchoiceUpdated) rejects
     // "safe/final block not in canonical chain"; it does NOT reject a lower number
     // than the previously stored safe/finalized (SetSafe/SetFinalized overwrite).
-    if (safeBlockNumber.has_value() && !resolved.safeCanonical)
+    // Same predicate as the store below: an all-zero Engine-API hash is "not set"
+    // and must not be judged canonical (finding F5).
+    auto requiresCanonical = [](h256 const& hash,
+                                 std::optional<bcos::protocol::BlockNumber> const& number) {
+        return hash != bcos::h256{} && number.has_value();
+    };
+    if (requiresCanonical(resolved.state.safeBlockHash, safeBlockNumber) && !resolved.safeCanonical)
     {
         BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
                                   "Forkchoice safe block not in canonical chain"});
     }
-    if (finalizedBlockNumber.has_value() && !resolved.finalizedCanonical)
+    if (requiresCanonical(resolved.state.finalizedBlockHash, finalizedBlockNumber) &&
+        !resolved.finalizedCanonical)
     {
         BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
                                   "Forkchoice finalized block not in canonical chain"});
@@ -125,29 +132,8 @@ GetPayloadResult EngineTracker::getPayload(const PayloadID& payloadId, std::uint
     // Finding AF: BuiltPayload is immutable once published. Copy the shared_ptr
     // under the lock, then check shape and assemble GetPayloadData (tx raw /
     // blobs) outside so FCU publish / newPayload commit are not blocked.
-    if (!engine_common::isGetPayloadVersionCompatible(
-            static_cast<ApiVersion>(version), entry->version))
-    {
-        BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
-                                  "Payload version is incompatible with requested method version"});
-    }
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V4) &&
-        !entry->executionPayload.withdrawalsRoot.has_value())
-    {
-        BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
-                                  "Payload does not carry the V4+ response shape"});
-    }
-    // V3 responses must render the blob-gas pair and the beacon root; a V3-tagged entry
-    // that somehow lacks them would serialize an incomplete wire shape (finding AN).
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
-        version < static_cast<std::uint32_t>(ApiVersion::V4) &&
-        (!entry->executionPayload.blobGasUsed.has_value() ||
-            !entry->executionPayload.excessBlobGas.has_value() ||
-            !entry->parentBeaconBlockRoot.has_value()))
-    {
-        BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
-                                  "Payload does not carry the V3+ response shape"});
-    }
+    engine_common::requireGetPayloadShape(
+        entry->version, entry->executionPayload, entry->parentBeaconBlockRoot, version);
 
     return std::make_unique<GetPayloadData>(GetPayloadData{
         .executionPayload = entry->executionPayload,

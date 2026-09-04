@@ -249,6 +249,30 @@ PayloadStatus makeStatus(PayloadValidationStatus status, std::optional<h256> lat
     };
 }
 
+void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& payload,
+    std::optional<h256> const& parentBeaconBlockRoot, std::uint32_t requestVersion)
+{
+    if (!isGetPayloadVersionCompatible(static_cast<ApiVersion>(requestVersion), builtVersion))
+    {
+        BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
+                                  "Payload version is incompatible with requested method version"});
+    }
+    if (requestVersion >= static_cast<std::uint32_t>(ApiVersion::V4) &&
+        !payload.withdrawalsRoot.has_value())
+    {
+        BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
+                                  "Payload does not carry the V4+ response shape"});
+    }
+    if (requestVersion >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+        requestVersion < static_cast<std::uint32_t>(ApiVersion::V4) &&
+        (!payload.blobGasUsed.has_value() || !payload.excessBlobGas.has_value() ||
+            !parentBeaconBlockRoot.has_value()))
+    {
+        BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
+                                  "Payload does not carry the V3+ response shape"});
+    }
+}
+
 }  // namespace bcos::engine::engine_common
 
 namespace bcos::engine::detail
