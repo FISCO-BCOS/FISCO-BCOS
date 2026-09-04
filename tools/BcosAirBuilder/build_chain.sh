@@ -1471,7 +1471,7 @@ generate_common_ini() {
 
 [consensus]
     ; min block generation time(ms)
-    min_seal_time=500
+    min_seal_time=10
 
 [executor]
     enable_dag=true

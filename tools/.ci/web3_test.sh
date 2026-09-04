@@ -24,8 +24,8 @@ npm install node@22.14.0
 
 cat << EOF > .env
 PRIVATE_KEY=$hex_privatekey
-BCOS_HOST_URL=http://127.0.0.1:8545
-LOCAL_HOST_URL=http://127.0.0.1:8545
+BCOS_HOST_URL=http://127.0.0.1:${WEB3_PORT:-8545}
+LOCAL_HOST_URL=http://127.0.0.1:${WEB3_PORT:-8545}
 INFURA_API_KEY=your_infura_api_key_here
 MAINNET_URL=https://mainnet.infura.io/v3/your_infura_api_key_here
 SEPOLIA_URL=https://sepolia.infura.io/v3/your_infura_api_key_here
@@ -40,8 +40,8 @@ rm -rf .env
 
 cat << EOF > .env
 PRIVATE_KEY=$hex_privatekey
-BCOS_HOST_URL=ws://127.0.0.1:8545
-LOCAL_HOST_URL=ws://127.0.0.1:8545
+BCOS_HOST_URL=ws://127.0.0.1:${WEB3_PORT:-8545}
+LOCAL_HOST_URL=ws://127.0.0.1:${WEB3_PORT:-8545}
 INFURA_API_KEY=your_infura_api_key_here
 MAINNET_URL=https://mainnet.infura.io/v3/your_infura_api_key_here
 SEPOLIA_URL=https://sepolia.infura.io/v3/your_infura_api_key_here
