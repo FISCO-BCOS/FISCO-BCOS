@@ -183,25 +183,22 @@ struct HistoricalMptContext
 /// scenario flag below still governs how absence at it reads.
 /// The -32004 message for a missing stateRoot. With MPT pruning configured
 /// (mptPruneWindow > 0) a root older than the retention window is EXPECTED to be gone, so
-/// say so explicitly; anything else stays the generic miss message. Reads the current head
-/// only on this cold error path.
-bcos::task::Task<std::string> stateRootMissingMessage(bcos::ledger::LedgerInterface& ledger,
-    bcos::protocol::BlockNumber blockNumber, std::int64_t mptPruneWindow)
+/// say so explicitly; anything else stays the generic miss message. @p head is the chain head
+/// the CALLER already resolved for the request (getBlockNumberAndHeadByTag) — re-reading the
+/// ledger here would add a round-trip to a cold error path for a message-only decision.
+std::string stateRootMissingMessage(bcos::protocol::BlockNumber blockNumber,
+    bcos::protocol::BlockNumber head, std::int64_t mptPruneWindow)
 {
-    if (mptPruneWindow > 0)
+    if (mptPruneWindow > 0 && blockNumber < head - mptPruneWindow)
     {
-        auto const head = co_await ledger::getCurrentBlockNumber(ledger);
-        if (blockNumber < head - mptPruneWindow)
-        {
-            co_return fmt::format(
-                "State pruned: beyond MPT retention window (N={})", mptPruneWindow);
-        }
+        return fmt::format("State pruned: beyond MPT retention window (N={})", mptPruneWindow);
     }
-    co_return "Block stateRoot not in MPT node storage";
+    return "Block stateRoot not in MPT node storage";
 }
 
 bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
+    bcos::protocol::BlockNumber head,
     std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader,
     std::int64_t mptPruneWindow)
 {
@@ -224,7 +221,7 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
         if (!co_await bcos::storage2::readOne(*mptReader, stateRoot)) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
-                co_await stateRootMissingMessage(ledger, blockNumber, mptPruneWindow)));
+                stateRootMissingMessage(blockNumber, head, mptPruneWindow)));
         }
     }
     // The scenario flag decides how absence at this root is read (getProof's fullTrie).
@@ -248,7 +245,8 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
     auto const blockTag = toView(request[1U]);
-    auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
+    auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
+    auto const isLatest = std::cmp_equal(head, blockNumber);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getBalance" << LOG_KV("address", address)
@@ -280,7 +278,7 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
         // account from a non-existent one, so it errors explicitly.
         auto const mptReader = m_nodeService->mptNodeReader();
         auto const ctx = co_await resolveHistoricalMptContext(
-            *ledger, blockNumber, mptReader, m_nodeService->mptPruneWindow());
+            *ledger, blockNumber, head, mptReader, m_nodeService->mptPruneWindow());
         bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
         auto const account = co_await view.readAccount(
             bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
@@ -347,7 +345,8 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     }
 
     auto const blockTag = toView(request[2U]);
-    auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
+    auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
+    auto const isLatest = std::cmp_equal(head, blockNumber);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getStorageAt" << LOG_KV("address", address)
@@ -421,7 +420,7 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     // as getProof / getBalance / getTransactionCount / getCode).
     auto const mptReader = m_nodeService->mptNodeReader();
     auto const ctx = co_await resolveHistoricalMptContext(
-        *ledger, blockNumber, mptReader, m_nodeService->mptPruneWindow());
+        *ledger, blockNumber, head, mptReader, m_nodeService->mptPruneWindow());
 
     // Query the slot through the MPT at that root: account leaf -> storageRoot -> slot leaf
     // (slotKeyHash(slot)). Absence semantics are scenario-driven, exactly like getProof:
@@ -503,7 +502,8 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
     auto const blockTag = toView(request[1U]);
-    auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
+    auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
+    auto const isLatest = std::cmp_equal(head, blockNumber);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getTransactionCount" << LOG_KV("address", address)
@@ -543,7 +543,7 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
         // reads a missing account as zero; scenario A errors for a dormant account.
         auto const mptReader = m_nodeService->mptNodeReader();
         auto const ctx = co_await resolveHistoricalMptContext(
-            *ledger, blockNumber, mptReader, m_nodeService->mptPruneWindow());
+            *ledger, blockNumber, head, mptReader, m_nodeService->mptPruneWindow());
         bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
         auto const account = co_await view.readAccount(
             bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
@@ -627,7 +627,8 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
     auto const blockTag = toView(request[1u]);
-    auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
+    auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
+    auto const isLatest = std::cmp_equal(head, blockNumber);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getCode" << LOG_KV("address", address)
@@ -692,7 +693,7 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
         auto const ledger = m_nodeService->ledger();
         auto const mptReader = m_nodeService->mptNodeReader();
         auto const ctx = co_await resolveHistoricalMptContext(
-            *ledger, blockNumber, mptReader, m_nodeService->mptPruneWindow());
+            *ledger, blockNumber, head, mptReader, m_nodeService->mptPruneWindow());
         bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
         auto const account = co_await view.readAccount(
             bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
@@ -939,7 +940,8 @@ task::Task<void> EthEndpoint::call(
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid call request!"));
     }
     auto const blockTag = toView(request[1U]);
-    auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
+    auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
+    auto const isLatest = std::cmp_equal(head, blockNumber);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
@@ -1313,6 +1315,19 @@ task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberB
     co_return std::make_tuple(number, std::cmp_equal(latest, number));
 }
 
+/// The block number for @p blockTag plus the head it was resolved against. Historical-state
+/// paths (resolveHistoricalMptContext, getProof) pass the head to stateRootMissingMessage so
+/// the pruned-vs-missing distinction needs no second ledger read on the error path.
+task::Task<std::tuple<protocol::BlockNumber, protocol::BlockNumber>>
+    EthEndpoint::getBlockNumberAndHeadByTag(std::string_view blockTag)
+{
+    auto ledger = m_nodeService->ledger();
+    auto latest = co_await ledger::getCurrentBlockNumber(*ledger);
+    auto [number, _] = bcos::rpc::getBlockNumberByTag(
+        latest, blockTag, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
+    co_return std::make_tuple(number, latest);
+}
+
 task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     const Json::Value& request, Json::Value& response)
 {
@@ -1357,7 +1372,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         }
     }
     auto const blockTag = toView(request[2U]);
-    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getProof" << LOG_KV("address", address.hexPrefixed())
@@ -1399,8 +1414,8 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     {
         auto const message = (*errorCode == ledger::mpt::ProofErrorCode::AccountNotInMPT) ?
                                  std::string{"Account not in trie (dormant in scenario A)"} :
-                                 co_await stateRootMissingMessage(
-                                     *ledger, blockNumber, m_nodeService->mptPruneWindow());
+                                 stateRootMissingMessage(
+                                     blockNumber, head, m_nodeService->mptPruneWindow());
         BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable, message));
     }
     auto& proof = std::get<ledger::mpt::EIP1186Proof>(result);

@@ -1,5 +1,6 @@
 #pragma once
 #include "CheckpointStorage.h"
+#include "MemoryStorage.h"
 #include "Storage.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
@@ -10,6 +11,7 @@
 #include <boost/throw_exception.hpp>
 #include <concepts>
 #include <functional>
+#include <optional>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/map.hpp>
 #include <range/v3/view/zip.hpp>
@@ -493,6 +495,8 @@ public:
     [[no_unique_address]] std::conditional_t<withCacheStorage,
         std::reference_wrapper<std::remove_reference_t<CachedStorage>>, std::monostate>
         m_cacheStorage;
+    /// Cache fan-out admission filter; see setCacheMergeFilter. nullopt = merge everything.
+    std::optional<std::function<bool(KeyType const&)>> m_cacheMergeFilter;
     OpenedStorage m_latestBackend;
 
     using MutableStorage = MutableStorageType;
@@ -622,8 +626,23 @@ public:
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                         ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
-                    task::tbb::syncWait(
-                        storage2::merge(m_cacheStorage.get(), backStorage, extraStorages...));
+                    if (m_cacheMergeFilter)
+                    {
+                        // Cache admission filter (setCacheMergeFilter): rows failing the
+                        // predicate — e.g. the MPT pruning metadata, which churns every block
+                        // and is never read back through the cache — are merged into the
+                        // backend above but NOT into the cache, where they would only evict
+                        // hot entries from the LRU.
+                        task::tbb::syncWait(m_cacheStorage.get().merge(
+                            memory_storage::MergeRowFilter{
+                                std::cref(*m_cacheMergeFilter)},
+                            backStorage, extraStorages...));
+                    }
+                    else
+                    {
+                        task::tbb::syncWait(
+                            storage2::merge(m_cacheStorage.get(), backStorage, extraStorages...));
+                    }
                 });
         }
         else
@@ -652,6 +671,18 @@ public:
     BackendStorage& backendStorage() { return m_backendStorage; }
 
     OpenedStorage& latestBackend() { return m_latestBackend; }
+
+    /// Set an optional admission filter for the CACHE fan-out of mergeBackStorage: rows whose
+    /// key fails the predicate are merged into the backend as usual but not into the cache.
+    /// Motivation: rows that are written every block and never read back through the cache
+    /// (the MPT pruning metadata tables) would otherwise occupy and evict entries of the
+    /// fixed-capacity LRU. Set once at startup, before the first merge — not thread-safe with
+    /// a concurrent mergeBackStorage. No-op semantics when never called (everything cached).
+    void setCacheMergeFilter(std::function<bool(KeyType const&)> filter)
+        requires withCacheStorage
+    {
+        m_cacheMergeFilter = std::move(filter);
+    }
 };
 
 }  // namespace bcos::storage2

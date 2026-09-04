@@ -139,6 +139,10 @@ BOOST_AUTO_TEST_CASE(SelfdestructRemovesAccountFromTrie)
     // account-trie rebuild obsoletes the prior root node.
     BOOST_CHECK(output.obsoletedNodes.contains(accountA.storageRoot));
     BOOST_CHECK(output.obsoletedNodes.contains(parentRoot));
+    // The tombstone path is the one producer that writes refCountDeltas by hand: the prior
+    // storage root's −1 lets the pruner schedule it like any other obsoletion (F4).
+    BOOST_REQUIRE(output.refCountDeltas.contains(accountA.storageRoot));
+    BOOST_CHECK_EQUAL(output.refCountDeltas.at(accountA.storageRoot), -1);
 
     // The new state trie is exactly a from-scratch build over the survivors.
     BOOST_CHECK(output.stateRoot == stateRootOracle({{addrB, accountB}}));

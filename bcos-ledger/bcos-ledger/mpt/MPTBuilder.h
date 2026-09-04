@@ -244,13 +244,16 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     // would be a fork.
     if (rows.nonce.deleted && rows.balance.deleted && rows.codeHash.deleted)
     {
-        // Record the prior storage root for future pathdb pruning — the full subtree walk
-        // is deferred to the pruning spec, the root hash is the ledger entry. Removing an
-        // absent leaf is a legal no-op (commitTrie treats it as such).
+        // Record the prior storage root for pathdb pruning — the full subtree walk is
+        // deferred (MPTPruner documents the gap), the root hash is the ledger entry. Removing
+        // an absent leaf is a legal no-op (commitTrie treats it as such). The refcount tally
+        // is hand-maintained here: this obsoletion bypasses commitTrie, so mergeNodeDelta
+        // never sees it — the ONLY place refCountDeltas is written outside mergeNodeDelta.
         auto prior = co_await context.parentView.readAccount(address);
         if (prior && prior->storageRoot != emptyRootHash())
         {
             output.obsoletedNodes.insert(prior->storageRoot);
+            output.refCountDeltas[prior->storageRoot] -= 1;
         }
         accountChanges[accountKeyHash(address)] = std::nullopt;
         co_return;
@@ -494,6 +497,9 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
     // refCountDeltas is deliberately NOT adjusted here: mergeNodeDelta already nets each hash's
     // emissions against its obsoletions (and cancels byte-identical re-emits via
     // TrieMergeResult::reemittedNodes), which is exactly the movement the pruning spec counts.
+    // The one entry mergeNodeDelta never saw — the tombstone path's manual storage-root
+    // obsoletion (finalizeAccount, the only hand-maintained refcount entry) — needs no
+    // adjustment either: it has no countervailing emission in this block by construction.
 
     // One batched flush for the whole block (spec §5.4): nothing inside this build reads a
     // node it produced — storage-trie merges read parent-version nodes only, and the account

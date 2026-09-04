@@ -130,11 +130,15 @@ bcos::task::Task<bcos::h256> computeGenesisStateRoot(GenesisConfig const& genesi
 
 /// The genesis state trie in full: the op-geth-compatible root plus EVERY node the build
 /// produced — account trie and each account's storage sub-trie — as hash-keyed raw RLP.
-/// Identical encodings across sub-tries hash identically and dedupe in the map.
+/// Identical encodings across sub-tries hash identically and dedupe in `nodes`; `nodeCounts`
+/// keeps the per-hash EMISSION multiplicity the dedupe drops (1 for account-trie nodes, plus 1
+/// per storage sub-trie that produced the byte-identical node), which is exactly the reference
+/// count MPT pruning seeds its genesis refcount rows from (writePruneSeedRows).
 struct GenesisStateTrie
 {
     bcos::h256 root;
     std::unordered_map<bcos::h256, bcos::bytes> nodes;
+    std::unordered_map<bcos::h256, uint64_t> nodeCounts;
 };
 
 // computeGenesisStateRoot plus the produced nodes. Scenario B (L2, Ethereum-compatible)

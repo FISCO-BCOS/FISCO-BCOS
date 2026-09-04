@@ -394,17 +394,16 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
                     << blockHeader->number() << " | " << boost::diagnostic_information(e);
                 if (blockHeader->number() == 1)
                 {
-                    // The known scenario-B gap has exactly this shape, and a bare
-                    // missing-node error from the trie core cannot say so: an L2 genesis
-                    // built from a NON-EMPTY alloc writes the genesis stateRoot but not
-                    // the trie nodes behind it, so block 1's incremental build cannot
-                    // resolve the parent trie. Name it instead of leaving operators to
-                    // guess.
+                    // Block 1 is where a missing parent trie first bites on an L2 chain: the
+                    // genesis trie nodes ARE persisted with the genesis state (Ledger.cpp's
+                    // l2EthereumCompat prewrite, #5374), so a failure here means that prewrite
+                    // did not run (e.g. a genesis written by a binary predating #5374). Name
+                    // it instead of leaving operators to guess at a bare missing-node error
+                    // from the trie core.
                     BASELINE_SCHEDULER_LOG(ERROR)
-                        << "Block 1 build failure on an L2 chain: if genesis was created "
-                           "with a non-empty alloc, its trie nodes were never persisted "
-                           "(known limitation) — only empty-alloc genesis chains block 1 "
-                           "today";
+                        << "Block 1 build failure on an L2 chain: the genesis trie nodes are "
+                           "missing from \"/mpt/\" storage — the genesis was likely written by "
+                           "a binary that predates genesis node persistence (#5374)";
                 }
                 throw;
             }
@@ -639,19 +638,28 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // (RocksDBStorage2::merge).
         //
         // MPT pruning (CommitObserver::coPreparePruneRows): the observer turns the block's
-        // delta into its pruning metadata rows (refcount / delete-queue / watermark), which
-        // are written into prewriteStorage so they land in the SAME WriteBatch as the block
-        // data — metadata and data can never diverge across a crash. No node deletes are
-        // issued on this path: deletion is posted asynchronously by onCommit below
-        // (MPTPruner). The NoopCommitObserver default returns no rows, so a node without
-        // pruning configured pays nothing here.
+        // delta into its pruning metadata rows (refcount / delete-queue / watermark) PLUS the
+        // deletions of expired node rows, all applied to prewriteStorage so they land in the
+        // SAME WriteBatch as the block data — metadata, data and deletions can never diverge
+        // across a crash, and the deletion decision runs here, under m_commitMutex, so it can
+        // never race a concurrent commit reviving the node (F2 review fix: an earlier revision
+        // deleted from the observer's private worker thread, which could remove a node a
+        // concurrent block had just revived). The NoopCommitObserver default returns an empty
+        // batch, so a node without pruning configured pays nothing here.
         if (result->m_mptDelta)
         {
             auto pruneRows = co_await m_mptCommitObserver->coPreparePruneRows(
                 header->number(), *result->m_mptDelta);
-            if (!pruneRows.empty())
+            if (!pruneRows.rows.empty())
             {
-                co_await storage2::writeSome(prewriteStorage, std::move(pruneRows));
+                co_await storage2::writeSome(prewriteStorage, std::move(pruneRows.rows));
+            }
+            if (!pruneRows.deletions.empty())
+            {
+                // The mutable layer is LOGICAL_DELETION: removeSome writes tombstones that the
+                // merge turns into physical deletes in the backend's WriteBatch (and removals
+                // in the cache fan-out).
+                co_await storage2::removeSome(prewriteStorage, std::move(pruneRows.deletions));
             }
         }
         {

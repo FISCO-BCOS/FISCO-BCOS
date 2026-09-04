@@ -466,4 +466,53 @@ BOOST_AUTO_TEST_CASE(preImageCaptureBypassMultiLayerRegression)
     }());
 }
 
+// setCacheMergeFilter (MergeRowFilter fan-out): rows whose key fails the predicate are merged
+// into the BACKEND fan-out as usual but skipped in the CACHE fan-out — the MPT pruning
+// metadata tables churn every block and are never read back through the cache, so admitting
+// them would only occupy and evict entries of the fixed-capacity LRU.
+BOOST_AUTO_TEST_CASE(cacheMergeFilterExcludesRowsFromCacheOnly)
+{
+    using CacheStorage = memory_storage::MemoryStorage<StateKey, StateValue,
+        memory_storage::Attribute(memory_storage::CONCURRENT | memory_storage::LRU)>;
+
+    task::syncWait([this]() -> task::Task<void> {
+        BackendStorage filteredBackendStorage;
+        CheckpointBackend filteredCheckpoint(filteredBackendStorage);
+        CacheStorage cache;
+        MultiLayerStorage<MutableStorage, CacheStorage, CheckpointBackend> cachedStorage(
+            filteredCheckpoint, cache);
+        cachedStorage.setCacheMergeFilter([](StateKey const& key) {
+            return StateKeyView{key}.m_table != "prune_table"sv;
+        });
+
+        StateKey keepKey{"test_table"sv, "cached_key"sv};
+        StateKey skipKey{"prune_table"sv, "uncached_key"sv};
+        storage::Entry entry;
+        entry.set("value");
+
+        auto view = cachedStorage.fork();
+        view.newMutable();
+        co_await storage2::writeOne(view, keepKey, entry);
+        co_await storage2::writeOne(view, skipKey, entry);
+        cachedStorage.pushView(std::move(view));
+        co_await cachedStorage.mergeBackStorage();
+
+        // The backend fan-out is unfiltered: BOTH rows land.
+        BOOST_CHECK(co_await storage2::existsOne(cachedStorage.latestBackend(), keepKey));
+        BOOST_CHECK(co_await storage2::existsOne(cachedStorage.latestBackend(), skipKey));
+
+        // The cache fan-out dropped the filtered row, kept the admitted one.
+        BOOST_CHECK(co_await storage2::existsOne(cache, keepKey));
+        BOOST_CHECK(!co_await storage2::existsOne(cache, skipKey));
+
+        // A view read still resolves the filtered row — through the backend, not the cache.
+        auto view2 = cachedStorage.fork();
+        auto readBack = co_await storage2::readOne(view2, skipKey);
+        BOOST_REQUIRE(readBack.has_value());
+        BOOST_CHECK_EQUAL(readBack->get(), "value"sv);
+
+        co_return;
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

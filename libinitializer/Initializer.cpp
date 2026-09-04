@@ -411,10 +411,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // MPT pruning (storage.mpt_prune_window; pathdb spec §4.8): ONE pruner instance shared by
     // every baseline scheduler variant built below — MultiVersionScheduler activates exactly
     // one at a time, and the pruner's state lives in the committed backend's metadata rows,
-    // so sharing carries no cross-version conflict. Every pruner read and delete hits
-    // latestBackend() DIRECTLY: no cache layer may sit between the pruner and the physical
-    // rows (MPTPruner.h contract). -1 (the default) disables pruning entirely: the
-    // schedulers keep their built-in NoopCommitObserver.
+    // so sharing carries no cross-version conflict. Every pruner read hits latestBackend()
+    // DIRECTLY: no cache layer may sit between the pruner and the physical rows (MPTPruner.h
+    // contract). -1 (the default) disables pruning entirely: the schedulers keep their
+    // built-in NoopCommitObserver.
     if (m_nodeConfig->mptPruneWindow() > 0)
     {
         auto& pruneBackend = m_globalStateStorageInitializer->storage().latestBackend();
@@ -423,9 +423,25 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             pruneBackend, m_nodeConfig->mptPruneWindow(),
             static_cast<size_t>(
                 m_nodeConfig->mptPruneBatchSize() > 0 ? m_nodeConfig->mptPruneBatchSize() : 1));
-        // Startup recovery: restore the persisted watermark and replay every deletion it
-        // covers. Throws (MPTDecodeError) on a corrupted watermark row — fail loudly at boot.
-        task::syncWait(pruner->init());
+        // Startup guard + watermark recovery: refuses to boot when pruning would run against
+        // blocks whose node deltas were never counted (mid-chain enablement, or a gap from
+        // having been disabled) — that would delete live state. Throws InvalidConfig naming
+        // both block numbers; MPTDecodeError on a corrupted watermark row. Both fail loudly
+        // at boot.
+        auto const currentBlock = task::syncWait(ledger::getCurrentBlockNumber(*ledger));
+        task::syncWait(pruner->init(currentBlock));
+
+        // Keep the churn-heavy pruning metadata rows (up to a few hundred per block, never
+        // re-read through the cache) out of the LRU state cache: admitting them would evict
+        // hot flat-state rows. The backend merge is unaffected — the rows still land on disk.
+        m_globalStateStorageInitializer->storage().setCacheMergeFilter(
+            [](executor_v1::StateKey const& key) {
+                executor_v1::StateKeyView const view{key};
+                return view.m_table != ledger::mpt::kPruneRefTable &&
+                       view.m_table != ledger::mpt::kPruneQueueTable &&
+                       view.m_table != ledger::mpt::kPruneMetaTable;
+            });
+
         INITIALIZER_LOG(INFO) << LOG_DESC("MPT pruning enabled")
                               << LOG_KV("window", m_nodeConfig->mptPruneWindow())
                               << LOG_KV("batchSize", m_nodeConfig->mptPruneBatchSize())

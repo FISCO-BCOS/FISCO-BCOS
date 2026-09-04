@@ -16,6 +16,7 @@
 #include <concepts>
 #include <optional>
 #include <range/v3/view/chunk_by.hpp>
+#include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 #include <type_traits>
@@ -50,6 +51,26 @@ concept HasMemberSize = requires(Object object) {
 struct Empty
 {
 };
+
+namespace detail
+{
+/// The default row filter for a filtered merge: admits every row.
+struct KeepAllRows
+{
+    constexpr bool operator()(auto const& /*key*/) const noexcept { return true; }
+};
+}  // namespace detail
+
+/// Merge-time row-admission filter for MemoryStorage::merge: rows whose key fails the
+/// predicate (false) are skipped — writes and deletes alike. Generic over the key type; the
+/// predicate carries the policy (e.g. "no pruning metadata rows in the LRU state cache").
+template <class Predicate>
+struct MergeRowFilter
+{
+    Predicate predicate;
+};
+template <class Predicate>
+MergeRowFilter(Predicate) -> MergeRowFilter<Predicate>;
 
 enum Attribute : uint8_t
 {
@@ -563,9 +584,25 @@ public:
         requires(withConcurrent && !FromStorage::withConcurrent &&
                  (... && (!FromStorages::withConcurrent)))
     {
+        mergeConcurrentFiltered(detail::KeepAllRows{}, toStorage, fromStorage, fromStorages...);
+    }
+
+    void mergeConcurrentFiltered(auto const& keep, MemoryStorage& /*toStorage*/)
+        requires withConcurrent
+    {}
+    template <class Keep, class FromStorage, class... FromStorages>
+    void mergeConcurrentFiltered(
+        Keep const& keep, MemoryStorage& toStorage, FromStorage& fromStorage,
+        FromStorages&... fromStorages)
+        requires(withConcurrent && !FromStorage::withConcurrent &&
+                 (... && (!FromStorages::withConcurrent)))
+    {
         auto& bucket = fromStorage.m_buckets[0];
         auto& index = bucket.container.template get<0>();
-        auto sortedList = ::ranges::views::transform(index,
+        auto sortedList = ::ranges::views::transform(
+                              index | ::ranges::views::filter(
+                                          [&](typename std::decay_t<FromStorage>::Data const&
+                                                  data) { return keep(data.key); }),
                               [&](typename std::decay_t<FromStorage>::Data const& data) {
                                   return std::make_tuple(
                                       std::addressof(data), toStorage.getBucketIndex(data.key));
@@ -597,7 +634,7 @@ public:
                 }
             }
         });
-        mergeConcurrent(toStorage, fromStorages...);
+        mergeConcurrentFiltered(keep, toStorage, fromStorages...);
     }
 
     template <class... FromStorages>
@@ -605,6 +642,20 @@ public:
     task::AwaitableValue<void> merge(FromStorages&... fromStorage)
     {
         mergeConcurrent(*this, fromStorage...);
+        return {};
+    }
+
+    /// Filtered merge: rows whose key fails the filter's predicate are SKIPPED — writes and
+    /// deletes alike — so this storage never learns about them. Meant for cache admission
+    /// policies (MultiLayerStorage::setCacheMergeFilter): rows that churn every block and are
+    /// never read back through the cache would otherwise evict hot entries from an LRU cache.
+    template <class Predicate, class... FromStorages>
+        requires(withConcurrent && sizeof...(FromStorages) >= 1 &&
+                 (... && (!FromStorages::withConcurrent)))
+    task::AwaitableValue<void> merge(
+        MergeRowFilter<Predicate> filter, FromStorages&... fromStorage)
+    {
+        mergeConcurrentFiltered(filter.predicate, *this, fromStorage...);
         return {};
     }
 };

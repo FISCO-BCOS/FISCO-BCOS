@@ -19,6 +19,7 @@
 #include "PruneMetadata.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/throw_exception.hpp>
 #include <string>
 
@@ -26,28 +27,6 @@ namespace bcos::ledger::mpt
 {
 
 namespace rlp = bcos::codec::rlp;
-
-namespace
-{
-// Fixed-width big-endian u64, the byte order that makes lexicographic key order numeric order.
-void appendBigEndian64(uint64_t value, std::string& out)
-{
-    for (int shift = 56; shift >= 0; shift -= 8)
-    {
-        out.push_back(static_cast<char>((value >> shift) & 0xFFU));
-    }
-}
-
-uint64_t readBigEndian64(bcos::bytesConstRef bytes)
-{
-    uint64_t value = 0;
-    for (auto const byte : bytes)
-    {
-        value = (value << 8) | static_cast<uint64_t>(byte);
-    }
-    return value;
-}
-}  // namespace
 
 bcos::executor_v1::StateKey pruneRefKey(bcos::h256 const& hash)
 {
@@ -58,9 +37,10 @@ bcos::executor_v1::StateKey pruneRefKey(bcos::h256 const& hash)
 
 bcos::executor_v1::StateKey pruneQueueKey(uint64_t targetBlock, bcos::h256 const& hash)
 {
-    std::string keyPart;
-    keyPart.reserve(8 + bcos::h256::SIZE);
-    appendBigEndian64(targetBlock, keyPart);
+    // Fixed-width big-endian u64 first: the byte order that makes lexicographic key order
+    // numeric order.
+    std::string keyPart(8, '\0');
+    bcos::toBigEndian(targetBlock, keyPart);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     keyPart.append(reinterpret_cast<const char*>(hash.data()), bcos::h256::SIZE);
     return {kPruneQueueTable, keyPart};
@@ -74,8 +54,8 @@ std::pair<uint64_t, bcos::h256> decodeQueueKeyPart(std::string_view keyPart)
                                   "PruneMetadata: queue key part is " +
                                   std::to_string(keyPart.size()) + " bytes, expected 40"));
     }
-    auto const targetBlock = readBigEndian64(
-        bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(keyPart.data()), 8));
+    auto const targetBlock = bcos::fromBigEndian<uint64_t>(
+        std::string_view{keyPart.data(), 8});
     auto const hash = bcos::h256(bcos::bytesConstRef(
         reinterpret_cast<bcos::byte const*>(keyPart.data() + 8), bcos::h256::SIZE));
     return {targetBlock, hash};
@@ -84,6 +64,11 @@ std::pair<uint64_t, bcos::h256> decodeQueueKeyPart(std::string_view keyPart)
 bcos::executor_v1::StateKey watermarkKey()
 {
     return {kPruneMetaTable, kWatermarkRowKey};
+}
+
+bcos::executor_v1::StateKey seedMarkerKey()
+{
+    return {kPruneMetaTable, kSeedMarkerRowKey};
 }
 
 bcos::bytes encodeRefCount(PruneRefCount const& refCount)
@@ -113,10 +98,7 @@ PruneRefCount decodeRefCount(bcos::bytesConstRef encoded)
 bcos::bytes encodeWatermark(uint64_t blockNumber)
 {
     bcos::bytes out(8);
-    for (int shift = 56; shift >= 0; shift -= 8)
-    {
-        out[(56 - shift) / 8] = static_cast<bcos::byte>((blockNumber >> shift) & 0xFFU);
-    }
+    bcos::toBigEndian(blockNumber, out);
     return out;
 }
 
@@ -128,7 +110,7 @@ uint64_t decodeWatermark(bcos::bytesConstRef encoded)
                                   "PruneMetadata: watermark value is " +
                                   std::to_string(encoded.size()) + " bytes, expected 8"));
     }
-    return readBigEndian64(encoded);
+    return bcos::fromBigEndian<uint64_t>(encoded);
 }
 
 }  // namespace bcos::ledger::mpt

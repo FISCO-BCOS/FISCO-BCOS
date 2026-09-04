@@ -125,6 +125,12 @@ BOOST_AUTO_TEST_CASE(RefAndWatermarkKeys)
     BOOST_CHECK(metaView.m_table == kPruneMetaTable);
     BOOST_CHECK(metaView.m_key == kWatermarkRowKey);
 
+    auto const seedKey = seedMarkerKey();
+    bcos::executor_v1::StateKeyView const seedView{seedKey};
+    BOOST_CHECK(seedView.m_table == kPruneMetaTable);
+    BOOST_CHECK(seedView.m_key == kSeedMarkerRowKey);
+    BOOST_CHECK(seedView.m_key != metaView.m_key);
+
     // The three tables are pairwise distinct and none contains a StateKey separator.
     BOOST_CHECK(kPruneRefTable != kPruneQueueTable);
     BOOST_CHECK(kPruneQueueTable != kPruneMetaTable);
