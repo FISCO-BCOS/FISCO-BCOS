@@ -6,8 +6,8 @@
 project(bcos-engine VERSION ${VERSION})
 
 file(GLOB_RECURSE SRC_LIST "bcos-engine/*.cpp")
-# Helpers live in EngineServiceCommon.cpp. EngineServiceImpl is header-only;
-# production still constructs it from the header.
+# EngineServiceImpl.h is leftover until parity fixtures migrate off it.
+# The .cpp TU is gone; production helpers live in EngineServiceCommon.cpp.
 
 add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC
@@ -24,7 +24,14 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS engine EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
-install(DIRECTORY "bcos-engine" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING
-    PATTERN "*.h"
-    PATTERN "OpEngineService.inl")
-    PATTERN "EthEngineService.inl")
+# Production headers only (finding CD). EngineServiceImpl.h is leftover / test-only.
+install(DIRECTORY "bcos-engine" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    FILES_MATCHING
+    PATTERN "EthEngineService.h"
+    PATTERN "EthEngineService.inl"
+    PATTERN "OpEngineService.h"
+    PATTERN "OpEngineService.inl"
+    PATTERN "EngineServiceCommon.h"
+    PATTERN "EngineTracker.h"
+    PATTERN "PayloadCache.h"
+    PATTERN "PayloadId.h")
