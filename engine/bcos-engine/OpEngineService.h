@@ -157,6 +157,11 @@ public:
             BOOST_THROW_EXCEPTION(std::invalid_argument{"blockFactory must not be null"});
         }
     }
+    ~OpEngineService() = default;
+    OpEngineService(const OpEngineService&) = delete;
+    OpEngineService(OpEngineService&&) = delete;
+    OpEngineService& operator=(const OpEngineService&) = delete;
+    OpEngineService& operator=(OpEngineService&&) = delete;
 
     task::Task<std::vector<std::string>> exchangeCapabilities(
         std::vector<std::string> remoteCapabilities)

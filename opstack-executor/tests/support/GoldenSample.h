@@ -192,8 +192,9 @@ struct InvalidSample
 /// - `withdrawals` is a fixed OP-path requirement (present-and-empty,
 ///   OpEngineService.cpp validateOpNewPayloadRequest); when the vector omits it,
 ///   pad an empty array;
-/// - null `blobGasUsed`/`excessBlobGas` in `_op_payload` must not enter ep —
-///   parseNewPayloadRequest's `isMember` + `fromBigQuantity("")` would throw; remove them;
+/// - JSON null `blobGasUsed`/`excessBlobGas` stay in `ep`. Stripping them would turn a
+///   wire-null into "field absent", so parseNewPayloadRequest never sees the -32602
+///   quantity/type rejection those nulls must produce (finding E6);
 /// - `parentBeaconBlockRoot` is params[2] (not an ExecutionPayload field), so it does not
 ///   enter ep.
 inline Json::Value makeInvalidParamsJson(InvalidSample const& sample)
@@ -210,10 +211,6 @@ inline Json::Value makeInvalidParamsJson(InvalidSample const& sample)
         ep["withdrawals"] = Json::Value(Json::arrayValue);
     if (!ep.isMember("transactions"))
         ep["transactions"] = Json::Value(Json::arrayValue);  // static-face rawTransactions missing
-    if (ep.isMember("blobGasUsed") && ep["blobGasUsed"].isNull())
-        ep.removeMember("blobGasUsed");
-    if (ep.isMember("excessBlobGas") && ep["excessBlobGas"].isNull())
-        ep.removeMember("excessBlobGas");
 
     Json::Value params(Json::arrayValue);
     params.append(ep);

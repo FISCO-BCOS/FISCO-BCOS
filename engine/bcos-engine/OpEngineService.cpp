@@ -90,6 +90,14 @@ std::optional<std::string> validateOpPayloadAttributes(
     {
         return std::string("gasLimit parameter is required (OP rollup)");
     }
+    // Same 2^63-1 cap as validateOpNewPayloadRequest. JSON parseQuantity already
+    // rejects >uint64; this closes the window where FCU would stamp a payloadId
+    // that newPayload then refuses (op-geth defers the cap to VerifyHeader).
+    if (*payloadAttributes.gasLimit >
+        static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+    {
+        return std::string("gasLimit exceeds the maximum block gas limit (2^63-1)");
+    }
     if (!payloadAttributes.eip1559Params.has_value())
     {
         return std::string("eip1559Params is required on the OP path (Holocene+)");

@@ -14,14 +14,20 @@
 #include "engine/bcos-engine/EngineServiceCommon.h"
 #include "engine/bcos-engine/OpEngineService.h"
 #include "engine/bcos-engine/PayloadCache.h"
+#include "support/GoldenSample.h"
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
+#include <bcos-rpc/jsonrpc/Common.h>
+#include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <json/json.h>
 #include <opstack-executor/tests/OpSchedulerSeamTestHelpers.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <limits>
 #include <optional>
+#include <string>
 #include <string_view>
 
 using namespace bcos;
@@ -54,6 +60,53 @@ NewPayloadRequest makeIsthmusNewPayload(bytes extraData)
     request.executionPayload.extraData = std::move(extraData);
     request.parentBeaconBlockRoot = h256(2);
     return request;
+}
+
+Json::Value hex32(char fill)
+{
+    return Json::Value("0x" + std::string(64, fill));
+}
+
+Json::Value hex20(char fill)
+{
+    return Json::Value("0x" + std::string(40, fill));
+}
+
+// Minimal `_op_payload` that reaches parseNewPayloadRequest field readers. `nullField`
+// is left as JSON null so makeInvalidParamsJson must not strip it (finding E6).
+w6test::InvalidSample invalidSampleWithNullField(char const* nullField)
+{
+    w6test::InvalidSample sample;
+    Json::Value op(Json::objectValue);
+    op["parentHash"] = hex32('1');
+    op["stateRoot"] = hex32('2');
+    op["receiptsRoot"] = hex32('3');
+    op["prevRandao"] = hex32('4');
+    op["blockHash"] = hex32('5');
+    op["feeRecipient"] = hex20('6');
+    op["gasLimit"] = "0x1";
+    op["gasUsed"] = "0x0";
+    op["baseFeePerGas"] = "0x0";
+    op["timestamp"] = "0x1";
+    op["blockNumber"] = "0x1";
+    op["withdrawals"] = Json::Value(Json::arrayValue);
+    op["transactions"] = Json::Value(Json::arrayValue);
+    op["blobGasUsed"] = "0x0";
+    op["excessBlobGas"] = "0x0";
+    op["withdrawalsRoot"] = hex32('0');
+    op["parentBeaconBlockRoot"] = hex32('7');
+    op[nullField] = Json::Value(Json::nullValue);
+    sample.vector["_op_payload"] = std::move(op);
+    return sample;
+}
+
+void checkParseRejects(
+    Json::Value const& params, bcos::engine::ApiVersion version, int32_t code, char const* message)
+{
+    BOOST_CHECK_EXCEPTION(bcos::rpc::parseNewPayloadRequest(params, version),
+        bcos::rpc::JsonRpcException, [&](bcos::rpc::JsonRpcException const& e) {
+            return e.code() == code && e.msg() == message;
+        });
 }
 }  // namespace
 
@@ -202,6 +255,90 @@ BOOST_AUTO_TEST_CASE(l1_attributes_deposit_required_when_synthesis_disabled)
     auto withDeposit = holoceneAttributes(bytes(8, 0));
     withDeposit.transactions = std::vector<std::string>{"0x7e00"};
     BOOST_CHECK(!engine_common::op::requireL1AttributesDeposit(withDeposit, false));
+}
+
+BOOST_AUTO_TEST_CASE(invalid_params_json_keeps_null_blob_fields)
+{
+    // Matrix: E6 — helper must not strip JSON null before parse sees it.
+    auto sample = invalidSampleWithNullField("blobGasUsed");
+    auto params = w6test::makeInvalidParamsJson(sample);
+    BOOST_REQUIRE(params[0u].isMember("blobGasUsed"));
+    BOOST_CHECK(params[0u]["blobGasUsed"].isNull());
+    BOOST_REQUIRE(params[0u].isMember("excessBlobGas"));
+    BOOST_CHECK(params[0u]["excessBlobGas"].isString());
+
+    auto excessNull = invalidSampleWithNullField("excessBlobGas");
+    auto excessParams = w6test::makeInvalidParamsJson(excessNull);
+    BOOST_REQUIRE(excessParams[0u].isMember("excessBlobGas"));
+    BOOST_CHECK(excessParams[0u]["excessBlobGas"].isNull());
+}
+
+BOOST_AUTO_TEST_CASE(parse_rejects_json_null_blob_fields)
+{
+    // Matrix: E6 — wire-null blob fields are -32602, not "absent then Engine INVALID".
+    auto blobParams = w6test::makeInvalidParamsJson(invalidSampleWithNullField("blobGasUsed"));
+    checkParseRejects(blobParams, bcos::engine::ApiVersion::V4, bcos::rpc::InvalidParams,
+        "executionPayload.blobGasUsed must be a hex string for ExecutionPayloadV4");
+    checkParseRejects(blobParams, bcos::engine::ApiVersion::V3, bcos::rpc::InvalidParams,
+        "executionPayload.blobGasUsed must be a hex quantity string of at most 32 bytes");
+
+    auto excessParams = w6test::makeInvalidParamsJson(invalidSampleWithNullField("excessBlobGas"));
+    checkParseRejects(excessParams, bcos::engine::ApiVersion::V4, bcos::rpc::InvalidParams,
+        "executionPayload.excessBlobGas must be a hex string for ExecutionPayloadV4");
+    checkParseRejects(excessParams, bcos::engine::ApiVersion::V3, bcos::rpc::InvalidParams,
+        "executionPayload.excessBlobGas must be a hex quantity string of at most 32 bytes");
+}
+
+BOOST_AUTO_TEST_CASE(op_newpayload_rejects_missing_blob_fields_and_wide_gas_limit)
+{
+    // Matrix: E6 — OP static face, not golden-stripped JSON.
+    auto const extra = fromHex("00000000fa00000006");
+    auto base = makeIsthmusNewPayload(extra);
+
+    auto missingBlob = base;
+    missingBlob.executionPayload.blobGasUsed = std::nullopt;
+    auto missingBlobError =
+        engine_common::op::validateOpNewPayloadRequest(missingBlob, /*jovianActive=*/false);
+    BOOST_REQUIRE(missingBlobError.has_value());
+    BOOST_CHECK_EQUAL(*missingBlobError, "blobGasUsed must be present on the OP path");
+
+    auto missingExcess = base;
+    missingExcess.executionPayload.excessBlobGas = std::nullopt;
+    auto missingExcessError =
+        engine_common::op::validateOpNewPayloadRequest(missingExcess, /*jovianActive=*/false);
+    BOOST_REQUIRE(missingExcessError.has_value());
+    BOOST_CHECK_EQUAL(*missingExcessError, "excessBlobGas must be present and zero on the OP path");
+
+    auto overSigned = base;
+    overSigned.executionPayload.gasLimit = u256(1) << 63;
+    auto overSignedError =
+        engine_common::op::validateOpNewPayloadRequest(overSigned, /*jovianActive=*/false);
+    BOOST_REQUIRE(overSignedError.has_value());
+    BOOST_CHECK_EQUAL(*overSignedError, "gasLimit exceeds the maximum block gas limit (2^63-1)");
+
+    auto overUint64 = base;
+    overUint64.executionPayload.gasLimit = u256(1) << 64;
+    auto overUint64Error =
+        engine_common::op::validateOpNewPayloadRequest(overUint64, /*jovianActive=*/false);
+    BOOST_REQUIRE(overUint64Error.has_value());
+    BOOST_CHECK_EQUAL(
+        *overUint64Error, "gasLimit exceeds the uint64 range of the ETH header field");
+}
+
+BOOST_AUTO_TEST_CASE(op_fcu_attrs_reject_gas_limit_above_signed_max)
+{
+    // Matrix: A1 — FCU attrs share newPayload's 2^63-1 cap.
+    constexpr auto kMaxBlockGas =
+        static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
+    auto over = holoceneAttributes(bytes(8, 0));
+    over.gasLimit = kMaxBlockGas + 1;
+    auto overError = engine_common::op::validateOpPayloadAttributes(over, /*jovianActive=*/false);
+    BOOST_REQUIRE(overError.has_value());
+    BOOST_CHECK_EQUAL(*overError, "gasLimit exceeds the maximum block gas limit (2^63-1)");
+
+    auto atMax = holoceneAttributes(bytes(8, 0));
+    atMax.gasLimit = kMaxBlockGas;
+    BOOST_CHECK(!engine_common::op::validateOpPayloadAttributes(atMax, /*jovianActive=*/false));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

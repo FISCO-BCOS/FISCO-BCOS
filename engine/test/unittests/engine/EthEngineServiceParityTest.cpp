@@ -695,6 +695,8 @@ BOOST_AUTO_TEST_CASE(generic_bounded_cache_evicts_front_after_sixty_five_builds)
 
 BOOST_AUTO_TEST_CASE(eth_derive_payload_id_stable_under_identical_attrs)
 {
+    // Matrix: E4 — presence-only FCU ID comparison is option B (checkForkchoiceParity).
+    // This case is the same-attrs overwrite contract, not an ID-string equality vs Impl.
     // Option B: Eth contract is derivePayloadId — identical attrs → identical id and cache
     // overwrite (no FIFO growth). Legacy nextPayloadID characterization kept alongside for
     // cutover awareness; it is not a defect on the Eth path.
@@ -735,6 +737,13 @@ BOOST_AUTO_TEST_CASE(eth_derive_payload_id_stable_under_identical_attrs)
     auto ethPayload = task::syncWait(pair.fresh.getPayload(newIds.front(), 3));
     BOOST_REQUIRE(ethPayload);
     BOOST_CHECK_EQUAL(ethPayload->executionPayload.timestamp, attrs.timestamp);
+
+    auto otherAttrs = attrs;
+    otherAttrs.timestamp += 1000;
+    auto otherFcu = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &otherAttrs, 3));
+    BOOST_REQUIRE(otherFcu.payloadId.has_value());
+    BOOST_CHECK_NE(*otherFcu.payloadId, newIds.front());
+    BOOST_CHECK_NO_THROW(task::syncWait(pair.fresh.getPayload(newIds.front(), 3)));
 }
 
 BOOST_AUTO_TEST_CASE(generic_v3_v5_v4_round_trip_matches)
@@ -1030,6 +1039,64 @@ BOOST_AUTO_TEST_CASE(generic_validation_error_table_matches)
                 return r;
             },
             4, "executionRequests must be a present-but-empty list on this chain"},
+        // Matrix: E6 — wide/bad in-process payloads. JSON-null blob fields are a parse
+        // concern (OpEngineReviewFixTest); these rows hit validateExecutionPayload.
+        {"v2_with_blob_gas",
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+                r.executionPayload.blobGasUsed = u256(0);
+                return r;
+            },
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+                r.executionPayload.blobGasUsed = u256(0);
+                return r;
+            },
+            2, "blob gas fields are only valid for ExecutionPayloadV3 and later"},
+        {"v3_missing_blob_gas",
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+                return r;
+            },
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+                return r;
+            },
+            3, "blob gas fields are required for ExecutionPayloadV3 and later"},
+        {"v3_missing_excess_blob_gas",
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+                r.executionPayload.blobGasUsed = u256(0);
+                return r;
+            },
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+                r.executionPayload.blobGasUsed = u256(0);
+                return r;
+            },
+            3, "blob gas fields are required for ExecutionPayloadV3 and later"},
+        {"v4_missing_withdrawals_root",
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+                r.executionPayload.blobGasUsed = u256(0);
+                r.executionPayload.excessBlobGas = u256(0);
+                return r;
+            },
+            [&] {
+                NewPayloadRequest r;
+                r.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
+                r.executionPayload.blobGasUsed = u256(0);
+                r.executionPayload.excessBlobGas = u256(0);
+                return r;
+            },
+            4, "withdrawalsRoot is required for ExecutionPayloadV4 and later"},
     };
 
     for (auto const& c : cases)

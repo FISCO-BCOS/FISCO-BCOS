@@ -19,6 +19,7 @@
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/engine/EngineService.h>
 #include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/engine/OpBaseFee.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
@@ -47,6 +48,7 @@
 #include <exception>
 #include <functional>
 #include <latch>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -415,6 +417,18 @@ void registerHashToNumberOnly(MLS& multiLayerStorage, bcos::h256 const& blockHas
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
+void registerCurrentBlockNumber(MLS& multiLayerStorage, int64_t number)
+{
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+    bcos::storage::Entry entry;
+    entry.set(boost::lexical_cast<std::string>(number));
+    bcos::task::syncWait(bcos::storage2::writeOne(view,
+        StateKey{bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER},
+        std::move(entry)));
+    bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
+}
+
 void registerParentHeader(MLS& multiLayerStorage, bcos::protocol::BlockFactory& blockFactory,
     int64_t number, int64_t timestampMs)
 {
@@ -601,6 +615,26 @@ BOOST_AUTO_TEST_CASE(op_missing_gas_limit_returns_invalid)
         static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
     BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
     BOOST_CHECK(result.payloadStatus.validationError->find("gasLimit") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(op_fcu_gas_limit_above_signed_max_is_invalid)
+{
+    // Matrix: A1 — FCU INVALID (not -32603), same message as newPayload, no payloadId.
+    OpServicePair pair;
+    auto attrs = makeOpPayloadAttributes();
+    attrs.gasLimit = static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) + 1;
+    bcos::engine::ForkchoiceState forkchoice{
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        bcos::h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        bcos::h256("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")};
+    registerVerifiedBlock(pair.storage, forkchoice.headBlockHash, 0);
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_CHECK(!result.payloadId.has_value());
+    BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
+    BOOST_CHECK_EQUAL(*result.payloadStatus.validationError,
+        "gasLimit exceeds the maximum block gas limit (2^63-1)");
 }
 
 BOOST_AUTO_TEST_CASE(op_safe_above_head_matches_eth_legacy)
@@ -1065,6 +1099,48 @@ BOOST_AUTO_TEST_CASE(op_fcu_getpayload_newpayload_roundtrip)
     BOOST_CHECK_EQUAL(static_cast<int>(status.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     BOOST_REQUIRE(pair.service.lastExecutedHeader());
+}
+
+BOOST_AUTO_TEST_CASE(op_newpayload_occupied_nontip_height_is_syncing)
+{
+    // Matrix: A2 — height N already has hash A, payload is hash B, tip is past N.
+    // Engine API answers SYNCING; must not throw OpExecutionInternalError (-32603).
+    OpServicePair pair;
+    auto const parent =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    auto const occupied =
+        bcos::h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    auto const tip = bcos::h256("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+    registerVerifiedBlock(pair.storage, parent, 0);
+    registerVerifiedBlock(pair.storage, occupied, 1);
+    registerVerifiedBlock(pair.storage, tip, 2);
+    registerCurrentBlockNumber(pair.storage, 2);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto parentHeader = pair.blockFactory->blockHeaderFactory()->createBlockHeader();
+    parentHeader->setNumber(0);
+    parentHeader->setTimestamp(1'699'000'000'000);
+    parentHeader->setGasLimit(30'000'000);
+    parentHeader->setGasUsed(0);
+    parentHeader->setExtraData(bcos::fromHex("00000000fa00000006"));
+    parentHeader->setBaseFee(bcos::u256(1'000'000'000));
+
+    auto request = makeValidIsthmusNewPayload(*pair.blockFactory, parent, 1);
+    request.executionPayload.baseFeePerGas = bcos::engine::calcOpBaseFee(*parentHeader, false);
+    auto const txRoot = EngineOpScheduler::computeTxRoot(
+        bcos::engine::op_detail::rawEnvelopes(request.executionPayload));
+    auto header =
+        bcos::engine::engine_common::op::rebuildOpEthHeader(pair.blockFactory->blockHeaderFactory(),
+            request.executionPayload, txRoot, *request.parentBeaconBlockRoot);
+    request.executionPayload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
+    BOOST_CHECK_NE(request.executionPayload.blockHash.hex(), occupied.hex());
+
+    bcos::engine::PayloadStatus status;
+    BOOST_CHECK_NO_THROW(status = bcos::task::syncWait(pair.service.newPayload(request, 4)));
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing));
+    BOOST_CHECK(!status.latestValidHash.has_value());
+    BOOST_CHECK(!status.validationError.has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

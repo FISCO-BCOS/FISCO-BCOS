@@ -698,11 +698,11 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
         }
         if (!siblingOfTip)
         {
-            BOOST_THROW_EXCEPTION(
-                OpExecutionInternalError{} << bcos::errinfo_comment{
-                    "non-tip parent not supported: a different block is already registered "
-                    "at this height (and it is not a one-level reorg sibling of the tip), "
-                    "so the forked view's base state is not the payload's parent"});
+            // Occupied height that is not a tip sibling: the forked view cannot
+            // apply this payload. Engine API answers SYNCING (CL retries), not
+            // -32603 OpExecutionInternalError. op-geth would InsertBlockWithoutSetHead
+            // and return VALID; this node has no side-chain store.
+            co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
     }
 

@@ -130,6 +130,11 @@ public:
             BOOST_THROW_EXCEPTION(std::invalid_argument{"blockFactory must not be null"});
         }
     }
+    ~EthEngineService() = default;
+    EthEngineService(const EthEngineService&) = delete;
+    EthEngineService(EthEngineService&&) = delete;
+    EthEngineService& operator=(const EthEngineService&) = delete;
+    EthEngineService& operator=(EthEngineService&&) = delete;
 
     task::Task<std::vector<std::string>> exchangeCapabilities(
         std::vector<std::string> remoteCapabilities)
