@@ -27,4 +27,6 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS engine EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
-install(DIRECTORY "bcos-engine" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY "bcos-engine" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING
+    PATTERN "*.h"
+    PATTERN "OpEngineService.inl")

@@ -306,9 +306,10 @@ namespace engine = bcos::evm::engine;
 }
 
 /// (legacy = bare list; typed 0x01..0x04 = type byte + list, field order per EIP-2718/2930/1559).
-/// BOUND COVERAGE: type byte, nonce, gasLimit, to, value, data. NOT bound: sender (needs
-/// ecrecover), the fee fields, accessList, blobVersionedHashes, authorizationList — part-5
-/// wiring must close those before this gate is the sole trust boundary.
+/// BOUND COVERAGE: type byte, nonce, gasLimit, to, value, data. Fee fields and sender
+/// (ecrecover) stay unbound until part-5. Non-empty accessList / blobVersionedHashes are
+/// fail-closed here (finding BZ) — same posture as authorizationList — so a forged mirror
+/// cannot change warm-slot or blob-gas accounting. Empty lists remain legal.
 /// The envelope-bytes core below is shared by the per-tx path (m_prepare) and the block path
 /// (processOpBlock). Unbound fields are not trusted as a signature: the block path rejects
 /// a missing sender and a non-empty authorizationList until ecrecover lands in part-5.
@@ -475,6 +476,13 @@ namespace engine = bcos::evm::engine;
             !std::equal(mirrorData.begin(), mirrorData.end(), dataPayload->begin()))
             return "data mismatch";
     }
+    // Fail-closed on unbound non-empty accessList / blob hashes (finding BZ). Full
+    // equality bind is part-5; executing with a non-empty unbound list would let the
+    // mirror change warm-slot / blob-gas accounting. Empty lists stay legal.
+    if (!evmTx.access_list.empty())
+        return "accessList is not bound to the signed envelope";
+    if (!evmTx.blob_hashes.empty())
+        return "blobVersionedHashes is not bound to the signed envelope";
     return std::nullopt;
 }
 
@@ -938,7 +946,8 @@ public:
             // loud instead of executing a deterministic-but-wrong state transition.
             if (m_ctx->blockHashes == nullptr && !call)
                 throw bcos::evm::OpConsensusError(
-                    "OpstackExecutor: block execution requires wired RecentBlockHashes");
+                    "OpstackExecutor: block execution requires wired RecentBlockHashes",
+                    transaction.hash());
             if (transaction.isDepositTx())
             {
                 // executeDeposit member (not the op::runDeposit free function); applies the state
@@ -1316,11 +1325,11 @@ private:
         // TRUST BOUNDARY (envelope↔mirror gate, below): the execution fields come from the tars
         // mirror, so they are bound against the signed envelope by
         // envelopeExecutionFieldsMismatch — type byte, nonce, gasLimit, to, value, data are
-        // fail-closed (OpConsensusError) on both the scheduler and block paths. NOT bound at
-        // this head: sender (needs ecrecover), the fee fields, accessList, blobVersionedHashes,
-        // authorizationList. The block path (chainId.has_value()) additionally rejects a
-        // zero sender and a non-empty authorizationList; ecrecover of sender/auth signers is
-        // part-5. Do not read this gate as "no execution path trusts an unbound mirror".
+        // fail-closed (OpConsensusError) on both the scheduler and block paths. Non-empty
+        // accessList / blobVersionedHashes are also fail-closed (finding BZ) until part-5
+        // binds them. NOT bound at this head: sender (needs ecrecover), the fee fields.
+        // The block path (chainId.has_value()) additionally rejects a zero sender and a
+        // non-empty authorizationList; ecrecover of sender/auth signers is part-5.
         // eth_call (call=true) simulates without fee constraints — op-geth's eth_call does
         // not enforce max_gas_price >= base_fee. A pricing-less call (e.g. the RPC default
         // 2 gwei cap) would fail MAX_FEE_PER_GAS_TOO_LOW once the OP base fee exceeds it, so
@@ -1340,11 +1349,11 @@ private:
         {
             if (auto missing = blockPathZeroSender(evmTx.sender))
             {
-                throw bcos::evm::OpConsensusError("op block: " + *missing);
+                throw bcos::evm::OpConsensusError("op block: " + *missing, transaction.hash());
             }
             if (auto gate = envelopeChainIdMismatch(transaction, *chainId))
             {
-                throw bcos::evm::OpConsensusError("op block: " + *gate);
+                throw bcos::evm::OpConsensusError("op block: " + *gate, transaction.hash());
             }
             // Fail-closed mirror↔envelope cross-check: execution fields (nonce/gasLimit/
             // to/value/data) must match the SIGNED envelope, never the forgeable mirror. Runs
@@ -1353,11 +1362,12 @@ private:
             if (auto mismatch = envelopeExecutionFieldsMismatch(transaction, evmTx))
             {
                 throw bcos::evm::OpConsensusError(
-                    "op block: tx execution fields diverge from the signed envelope: " + *mismatch);
+                    "op block: tx execution fields diverge from the signed envelope: " + *mismatch,
+                    transaction.hash());
             }
             if (auto unbound = blockPathUnboundAuthorizationList(evmTx))
             {
-                throw bcos::evm::OpConsensusError("op block: " + *unbound);
+                throw bcos::evm::OpConsensusError("op block: " + *unbound, transaction.hash());
             }
         }
         auto envRef = transaction.extraTransactionBytes();
