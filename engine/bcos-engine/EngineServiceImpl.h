@@ -67,9 +67,27 @@ DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
 
 namespace detail
 {
-std::string encodePayloadSequence(std::uint64_t value);
+/// Impl-only helpers. Defined here so TUs that instantiate EngineServiceImpl
+/// (e.g. test-transaction-scheduler) do not need EngineServiceImpl.cpp, which
+/// is excluded from libengine. Production validators live in engine_common.
+inline std::string encodePayloadSequence(std::uint64_t value)
+{
+    return bcos::toHex(value, "0x");
+}
 
-bcos::h256 syntheticHash(std::string_view seed);
+inline bcos::h256 syntheticHash(std::string_view seed)
+{
+    constexpr std::size_t hashBytes = 32;
+    std::string hex = "0x";
+    hex.reserve((hashBytes * 2) + 2);
+    auto payload = seed.substr(seed.rfind('x') + 1);
+    while (hex.size() < ((hashBytes * 2) + 2))
+    {
+        hex.append(payload.begin(), payload.end());
+    }
+    hex.resize((hashBytes * 2) + 2);
+    return bcos::h256(bcos::fromHex(hex));
+}
 
 std::vector<std::string> supportedCapabilities();
 
@@ -156,7 +174,7 @@ public:
         std::vector<std::string> remoteCapabilities)
     {
         (void)remoteCapabilities;
-        co_return detail::supportedCapabilities();
+        co_return engine_common::supportedCapabilities();
     }
 
     bcos::task::Task<ForkchoiceUpdatedResult> updateForkchoice(
@@ -171,7 +189,7 @@ public:
         if (payloadAttributes != nullptr)
         {
             if (auto validationError =
-                    detail::validatePayloadAttributes(*payloadAttributes, version);
+                    engine_common::validatePayloadAttributes(*payloadAttributes, version);
                 validationError.has_value())
             {
                 ForkchoiceUpdatedResult result{
@@ -446,7 +464,7 @@ private:
         {
             BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
         }
-        if (!detail::isGetPayloadVersionCompatible(
+        if (!engine_common::isGetPayloadVersionCompatible(
                 static_cast<ApiVersion>(version), it->second.version))
         {
             BOOST_THROW_EXCEPTION(

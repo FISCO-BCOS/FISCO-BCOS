@@ -28,30 +28,6 @@
 #include <stdexcept>
 #include <utility>
 
-namespace
-{
-constexpr std::size_t c_hashBytes = 32;
-constexpr std::size_t c_payloadIdBytes = 8;
-}  // namespace
-
-std::string bcos::engine::detail::encodePayloadSequence(std::uint64_t value)
-{
-    return bcos::toHex(value, "0x");
-}
-
-bcos::h256 bcos::engine::detail::syntheticHash(std::string_view seed)
-{
-    std::string hex = "0x";
-    hex.reserve((c_hashBytes * 2) + 2);
-    auto payload = seed.substr(seed.rfind('x') + 1);
-    while (hex.size() < ((c_hashBytes * 2) + 2))
-    {
-        hex.append(payload.begin(), payload.end());
-    }
-    hex.resize((c_hashBytes * 2) + 2);
-    return bcos::h256(bcos::fromHex(hex));
-}
-
 std::vector<std::string> bcos::engine::detail::supportedCapabilities()
 {
     // Everything this node implements, not a fork-narrowed subset. op-geth advertises its
