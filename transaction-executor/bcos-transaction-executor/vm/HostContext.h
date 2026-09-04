@@ -30,10 +30,6 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/Common.h"
-#include "bcos-executor/src/vm/Eip2929AccessState.h"
-#include "bcos-executor/src/vm/Eip2929CheckpointGuard.h"
-#include "bcos-executor/src/vm/Eip2929TransactionPrewarm.h"
-#include "bcos-executor/src/vm/Eip2929Util.h"
 #include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -195,11 +191,6 @@ private:
     int64_t m_level;
     bool m_web3Tx;
 
-    // EIP-2929/2930 access tracking (shared Eip2929AccessState; see accessAccount/accessStorage)
-    std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
-    std::shared_ptr<const executor::Eip2930AccessList> m_eip2930AccessList;
-    uint8_t m_web3TypedTxKindForAccessList = 0;
-
     constexpr auto buildLegacyExternalCaller()
     {
         return
@@ -245,10 +236,7 @@ private:
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
         crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce,
-        const evmc_host_interface* hostInterface,
-        std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
-        uint8_t web3TypedTxKind = 0,
-        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
+        const evmc_host_interface* hostInterface)
       : m_hostInterface(hostInterface),
         m_rollbackableStorage(storage),
         m_rollbackableTransientStorage(transientStorage),
@@ -270,30 +258,18 @@ private:
             std::max(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version()),
                 EVMC_CANCUN)),
         m_level(seq),
-        m_web3Tx(web3Tx),
-        m_eip2929Access(std::move(eip2929Access)),
-        m_eip2930AccessList(std::move(accessList)),
-        m_web3TypedTxKindForAccessList(web3TypedTxKind)
-    {
-        // W1 warm at top-level construction (sync). Nested HostContext (m_level>0) skips.
-        // prepare() handles prepareCall/Create only; see TransactionExecutorImpl prepare().
-        warmEip2929AtTransactionEntry();
-        assert(!executor::eip2929Enabled(m_revision, m_ledgerConfig.get()) || m_eip2929Access);
-    }
+        m_web3Tx(web3Tx)
+    {}
 
 public:
     HostContext(Storage& storage, TransientStorage& transientStorage,
         protocol::BlockHeader const& blockHeader, const evmc_message& message,
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
-        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator,
-        std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
-        uint8_t web3TypedTxKind = 0,
-        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
+        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator)
       : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
             contextID, seq, precompiledManager, ledgerConfig, hashImpl, web3Tx, nonce,
-            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)),
-            std::move(accessList), web3TypedTxKind, std::move(eip2929Access))
+            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)))
     {}
 
     ~HostContext() noexcept = default;
@@ -479,13 +455,6 @@ public:
         auto savepoint = m_rollbackableStorage.get().current();
         auto transientSavepoint = m_rollbackableTransientStorage.get().current();
 
-        std::optional<bcos::executor::Eip2929CheckpointGuard> topCheckpointGuard;
-        if (m_level == 0 && m_eip2929Access &&
-            executor::eip2929Enabled(m_revision, m_ledgerConfig.get()))
-        {
-            topCheckpointGuard.emplace(m_eip2929Access);
-        }
-
         std::optional<EVMCResult> evmResult;
         // FIB-76~92 (bugfix_v1_error_handling): read once, gates all receipt-affecting
         // error paths below for hard-fork compat
@@ -512,27 +481,6 @@ public:
 
             if (!evmResult)
             {
-                // EIP-7623 calldata floor cost (Prague+, top-level transactions only)
-                // Computes max(standard_calldata_gas, tokens*10) and deducts it upfront.
-                // The 21000 base cost sits outside this formula and is handled separately.
-                if (m_level == 0 && m_revision >= EVMC_PRAGUE)
-                {
-                    auto& msg = mutableMessage();
-                    const int64_t calldataGas = executor::calcEip7623CalldataGas(
-                        bcos::bytesConstRef(msg.input_data, msg.input_size));
-                    if (msg.gas < calldataGas)
-                    {
-                        evmResult.emplace(
-                            makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                                EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : msg.gas,
-                                "EIP-7623 calldata floor OOG", fixErrorHandling));
-                    }
-                    else
-                    {
-                        msg.gas -= calldataGas;
-                    }
-                }
-
                 // Transfer first, then proceed execute
                 if (m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_delegatecall_transfer))
@@ -628,10 +576,6 @@ public:
 
         HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
                                 << " level: " << m_level << " seq: " << m_seq << " " << *evmResult;
-        if (topCheckpointGuard && evmResult->status_code == EVMC_SUCCESS)
-        {
-            topCheckpointGuard->commit();
-        }
         co_return std::move(*evmResult);
     }
 
@@ -644,23 +588,10 @@ public:
         auto nonceStr = co_await senderAccount.nonce();
         auto nonce = u256(nonceStr.value_or(std::string("0")));
 
-        std::optional<bcos::executor::Eip2929CheckpointGuard> checkpointGuard;
-        if (m_eip2929Access && executor::eip2929Enabled(m_revision, m_ledgerConfig.get()))
-        {
-            checkpointGuard.emplace(m_eip2929Access);
-            if (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2)
-            {
-                // EVM CREATE passes empty code_address; pin must match getMessage() resolution.
-                auto const resolved = getMessage(m_web3Tx, message, m_blockHeader.get().number(),
-                    m_contextID, m_seq, nonce, m_hashImpl);
-                m_eip2929Access->setCreateRollbackPin(resolved.code_address);
-            }
-        }
-
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
-            m_hostInterface, m_eip2930AccessList, m_web3TypedTxKindForAccessList, m_eip2929Access);
+            m_hostInterface);
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
@@ -670,66 +601,12 @@ public:
             m_logs.reserve(m_logs.size() + ::ranges::size(logs));
             ::ranges::move(logs, std::back_inserter(m_logs));
         }
-        if (checkpointGuard)
-        {
-            if (result.status_code == EVMC_SUCCESS)
-            {
-                checkpointGuard->commit();
-            }
-        }
         co_return result;
     }
 
     std::vector<protocol::LogEntry>& logs() & { return m_logs; }
 
-    evmc_access_status accessAccount(const evmc_address& addr) noexcept
-    {
-        if (!m_eip2929Access ||
-            !executor::eip2929Enabled(m_revision, m_ledgerConfig.get().features()))
-        {
-            return EVMC_ACCESS_COLD;
-        }
-        return m_eip2929Access->warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
-    }
-
-    evmc_access_status accessStorage(const evmc_address& addr, const evmc_bytes32& key) noexcept
-    {
-        if (!m_eip2929Access ||
-            !executor::eip2929Enabled(m_revision, m_ledgerConfig.get().features()))
-        {
-            return EVMC_ACCESS_COLD;
-        }
-        return m_eip2929Access->warmUpStorage(addr, key) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
-    }
-
 private:
-    void warmEip2929AtTransactionEntry() noexcept
-    {
-        auto const& ref = message();
-        if (!executor::eip2929TransactionEntryWarmEnabled(
-                m_level, m_revision, m_ledgerConfig.get().features(), m_eip2929Access.get()))
-        {
-            return;
-        }
-
-        executor::Eip2929TxPrewarmInput input;
-        input.revision = m_revision;
-        input.origin = m_origin;
-        if (ref.kind != EVMC_CREATE && ref.kind != EVMC_CREATE2)
-        {
-            input.callee = ref.recipient;
-        }
-        if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
-        {
-            input.createCodeAddress = ref.code_address;
-        }
-        // TODO(EIP-3651): set input.coinbase from block sealer at revision >= EVMC_SHANGHAI.
-        input.web3TypedTxKind = m_web3TypedTxKindForAccessList;
-        input.accessList = m_eip2930AccessList.get();
-        executor::warmEip2929AtTransactionEntry(
-            *m_eip2929Access, input, [](bcos::Address const& addr) { return toEvmC(addr); });
-    }
-
     void prepareCreate()
     {
         auto& ref = message();

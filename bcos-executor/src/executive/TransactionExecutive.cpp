@@ -23,8 +23,6 @@
 #include "../precompiled/extension/AccountPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../vm/DelegateHostContext.h"
-#include "../vm/Eip2929TransactionPrewarm.h"
-#include "../vm/Eip2929Util.h"
 #include "../vm/HostContext.h"
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
@@ -438,11 +436,6 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                 }(std::move(address), callParameters->nonce));
             }
         }
-    }
-
-    if (callParameters->seq == 0)
-    {
-        warmUpEip2929InitialSet(*callParameters);
     }
 
     if (callParameters->create)
@@ -2018,74 +2011,4 @@ std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransie
         }
     }
     return transientStorage;
-}
-
-std::shared_ptr<Eip2929AccessState> TransactionExecutive::getEip2929AccessState(int64_t contextID)
-{
-    auto accessMap = blockContext().getEip2929AccessMap();
-    std::shared_ptr<Eip2929AccessState> accessState;
-    bool has = false;
-    {
-        BlockContext::Eip2929AccessMap::ReadAccessor readAccessor;
-        has =
-            accessMap->find<BlockContext::Eip2929AccessMap::ReadAccessor>(readAccessor, contextID);
-        if (has)
-        {
-            accessState = readAccessor.value();
-        }
-    }
-    if (!has)
-    {
-        BlockContext::Eip2929AccessMap::WriteAccessor writeAccessor;
-        auto hasWrite = accessMap->find<BlockContext::Eip2929AccessMap::WriteAccessor>(
-            writeAccessor, contextID);
-        if (!hasWrite)
-        {
-            accessState = std::make_shared<Eip2929AccessState>();
-            accessMap->insert(writeAccessor, {contextID, accessState});
-        }
-        else
-        {
-            accessState = writeAccessor.value();
-        }
-    }
-    return accessState;
-}
-
-void TransactionExecutive::warmUpEip2929InitialSet(CallParameters const& params)
-{
-    auto const revision = toRevision(blockContext().vmSchedule());
-    if (!eip2929Enabled(revision, blockContext().features()))
-    {
-        return;
-    }
-
-    auto const originSv = params.origin.empty() ? std::string_view{params.senderAddress} :
-                                                  std::string_view{params.origin};
-
-    Eip2929TxPrewarmInput input;
-    input.revision = revision;
-    input.origin = unhexAddress(originSv);
-    if (!params.create && !params.receiveAddress.empty())
-    {
-        input.callee = unhexAddress(std::string_view{params.receiveAddress});
-    }
-    // TODO(EIP-3651): set input.coinbase from block sealer at revision >= EVMC_SHANGHAI.
-    input.web3TypedTxKind = params.web3TypedTxKind;
-    input.accessList = &params.eip2930AccessList;
-
-    warmEip2929AtTransactionEntry(*getEip2929AccessState(m_contextID), input,
-        [](bcos::Address const& addr) { return toEvmC(addr); });
-}
-
-void TransactionExecutive::warmUpEip2930AccessList(CallParameters const& params)
-{
-    auto const revision = toRevision(blockContext().vmSchedule());
-    if (!eip2929Enabled(revision, blockContext().features()))
-    {
-        return;
-    }
-
-    warmEip2930AccessListOnly(*getEip2929AccessState(m_contextID), params.web3TypedTxKind,
-        params.eip2930AccessList, [](bcos::Address const& addr) { return toEvmC(addr); });
 }

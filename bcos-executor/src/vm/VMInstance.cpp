@@ -86,14 +86,6 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
 
 evmc_revision toRevision(VMSchedule const& _schedule)
 {
-    if (_schedule.enableOsaka)
-    {
-        return EVMC_OSAKA;
-    }
-    if (_schedule.enablePrague)
-    {
-        return EVMC_PRAGUE;
-    }
     if (_schedule.enablePairs)
     {
         return EVMC_PARIS;
@@ -108,15 +100,7 @@ evmc_revision toRevision(VMSchedule const& _schedule)
 evmc_revision toRevision(ledger::Features const& features, uint32_t blockVersion)
 {
     VMSchedule schedule;
-    if (features.get(ledger::Features::Flag::feature_evm_osaka))
-    {
-        schedule = FiscoBcosScheduleOsaka;
-    }
-    else if (features.get(ledger::Features::Flag::feature_evm_prague))
-    {
-        schedule = FiscoBcosSchedulePrague;
-    }
-    else if (features.get(ledger::Features::Flag::feature_evm_cancun))
+    if (features.get(ledger::Features::Flag::feature_evm_cancun))
     {
         schedule = FiscoBcosScheduleCancun;
     }

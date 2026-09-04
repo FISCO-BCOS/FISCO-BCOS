@@ -62,6 +62,7 @@ public:
     TestHostContextFixture()
       : rollbackableStorage(storage), rollbackableTransientStorage(transientStorage)
     {
+        bcos::executor_v1::clearGlobalExecutableCache();
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
         precompiledManager.emplace(hashImpl);
 

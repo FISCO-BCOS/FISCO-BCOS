@@ -41,6 +41,7 @@ public:
 
     Web3NonceOrderFixture()
     {
+        bcos::executor_v1::clearGlobalExecutableCache();
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     }
 
