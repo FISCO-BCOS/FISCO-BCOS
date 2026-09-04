@@ -176,6 +176,12 @@ task::Task<std::shared_ptr<Executable>> getExecutable(
 // address hold - and reads it from `storage` on every call, so nothing that
 // depends on the view can reach the cache. It also owns the uncached branch for
 // accounts that record no code hash.
+//
+// executeCall is the only production caller: it is about to run the bytecode,
+// so the analysis it pays for is used. The EXTCODE* family reads the bytes
+// straight off the account instead (see HostContext::code below) and analyzes
+// nothing. prepareCreate also builds an Executable, but from the deploy init
+// code it holds in hand, without going through the cache.
 task::Task<std::shared_ptr<Executable>> resolveExecutable(
     auto& storage, const evmc_address& address, evmc_revision revision, bool binaryAddress)
 {
@@ -382,17 +388,26 @@ public:
             m_rollbackableTransientStorage.get(), std::move(stateKey), std::move(valueEntry));
     }
 
+    // EXTCODECOPY and EXTCODESIZE want the bytes, not an analysis, so this reads
+    // them off the account and stops there. Going through resolveExecutable
+    // would run evmone::baseline::analyze() over bytecode nobody is about to
+    // execute and take an LRU slot for it - once per balance-only account,
+    // whose marker string embeds its own table name and so never shares a slot
+    // with anything.
+    //
+    // EVMAccount::code() keeps the two-step read this used to inherit: the
+    // s_code_binary lookup by hash, falling back to the account table's own
+    // code field.
     task::Task<std::optional<storage::Entry>> code(
         const evmc_address& address, auto&&... /*unused*/)
     {
-        if (auto executable = co_await resolveExecutable(m_rollbackableStorage.get(), address,
-                m_revision,
-                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
-            executable && executable->m_code &&
-            !precompiled::hideDynamicAccountCode(
-                m_ledgerConfig.get().features(), executable->m_code->get()))
+        auto account = getAccount(*this, address);
+        auto codeHashEntry = co_await account.codeHashEntry();
+        if (auto codeEntry = co_await account.code(codeHashEntry);
+            codeEntry &&
+            !precompiled::hideDynamicAccountCode(m_ledgerConfig.get().features(), codeEntry->get()))
         {
-            co_return executable->m_code;
+            co_return codeEntry;
         }
         co_return {};
     }
@@ -414,9 +429,7 @@ public:
 
     task::Task<h256> codeHashAt(const evmc_address& address, auto&&... /*unused*/)
     {
-        using AccountType = Account<Storage>;
-        AccountType account(m_rollbackableStorage.get(), address,
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+        auto account = getAccount(*this, address);
         auto codeHashEntry = co_await account.codeHashEntry();
         if (!codeHashEntry)
         {
@@ -426,18 +439,20 @@ public:
         // Apply the same filter code() applies, so EXTCODESIZE and EXTCODEHASH
         // cannot disagree within one execution: an account whose code is hidden
         // reads as codeless and must hash as zero too, and so must one that
-        // records a code hash whose bytes are missing.
+        // records a code hash whose bytes are missing. Deciding that needs the
+        // bytes and nothing more, so this reads them without analyzing them.
+        // With the feature off the hash entry alone answers the opcode and the
+        // bytes are never read.
         if (m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_v1_eoa_as_contract))
         {
-            auto executable = co_await getExecutable(account, *codeHashEntry, m_revision);
-            if (!executable || !executable->m_code ||
-                precompiled::hideDynamicAccountCode(
-                    m_ledgerConfig.get().features(), executable->m_code->get()))
+            auto codeEntry = co_await account.code(codeHashEntry);
+            if (!codeEntry || precompiled::hideDynamicAccountCode(
+                                  m_ledgerConfig.get().features(), codeEntry->get()))
             {
                 co_return {};
             }
         }
-        co_return AccountType::toCodeHash(*codeHashEntry);
+        co_return decltype(account)::toCodeHash(*codeHashEntry);
     }
 
     task::Task<bool> exists([[maybe_unused]] const evmc_address& address, auto&&... /*unused*/)

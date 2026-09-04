@@ -27,6 +27,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/storage2/Storage.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
@@ -112,6 +113,15 @@ struct EOACodeVisibilityFixture
             features.set(ledger::Features::Flag::bugfix_v1_eoa_as_contract);
         }
         ledgerConfig.setFeatures(features);
+    }
+
+    // Does the process-wide analyzed-code cache hold an entry for these bytes
+    // under the revision HostContext pins (m_revision = EVMC_CANCUN)?
+    static bool isCached(const h256& codeHash)
+    {
+        return syncWait(storage2::readOne(getCacheExecutables(),
+                            ExecutableKey{.codeHash = codeHash, .revision = EVMC_CANCUN}))
+            .has_value();
     }
 
     auto makeHostContext(const evmc_address& address)
@@ -236,6 +246,61 @@ BOOST_AUTO_TEST_CASE(sharedPredicateGatesOnTheFeature)
     auto tableMarker = precompiled::getDynamicPrecompiledCodeString(
         precompiled::KV_TABLE_ADDRESS, "/tables/t_test");
     BOOST_CHECK(!precompiled::hideDynamicAccountCode(on, tableMarker));
+}
+
+// EXTCODESIZE / EXTCODECOPY / EXTCODEHASH only need the bytes. Serving them out
+// of the executable cache ran evmone::baseline::analyze() over bytecode nobody
+// was about to execute and spent an LRU slot on the result, so a contract
+// merely observed by another contract warmed - and evicted from - the cache
+// that the execution path depends on.
+BOOST_AUTO_TEST_CASE(extcodeReadsDoNotPublishToTheCache)
+{
+    // Bytes no other case uses, so this key cannot already be in the cache.
+    const bytes code{0x60, 0x05, 0x60, 0x00, 0x55, 0x00};  // PUSH1 5 PUSH1 0 SSTORE STOP
+    evmc_address address{};
+    address.bytes[sizeof(address.bytes) - 1] = 0xc5;
+    seedCode(address, code);
+    enableFilter(true);
+
+    auto codeHash = hashImpl->hash(bytesConstRef(code.data(), code.size()));
+    BOOST_REQUIRE(!isCached(codeHash));
+
+    auto hostContext = makeHostContext(address);
+    BOOST_CHECK_EQUAL(syncWait(hostContext.codeSizeAt(address)), code.size());
+    BOOST_CHECK_EQUAL(syncWait(hostContext.codeHashAt(address)), codeHash);
+    BOOST_CHECK(syncWait(hostContext.code(address)).has_value());
+
+    // Every EXTCODE* answer came back right, and none of them analyzed.
+    BOOST_CHECK(!isCached(codeHash));
+
+    // The execution path still fills the cache - this is a live cache, not a
+    // field nothing writes any more.
+    BOOST_REQUIRE(syncWait(resolveExecutable(rollbackableStorage, address, EVMC_CANCUN, false)));
+    BOOST_CHECK(isCached(codeHash));
+}
+
+// A balance-only account's marker embeds its own table name, so no two such
+// accounts share a code hash: observing one used to cost an analysis and an LRU
+// slot per account, for a string that is never run as bytecode.
+BOOST_AUTO_TEST_CASE(markerAccountIsNeverAnalyzed)
+{
+    evmc_address address{};
+    address.bytes[sizeof(address.bytes) - 1] = 0xe5;
+    ledger::account::EVMAccount account(rollbackableStorage, address, false);
+    auto tableName = std::string(syncWait(account.path()));
+    auto marker =
+        precompiled::getDynamicPrecompiledCodeString(precompiled::ACCOUNT_ADDRESS, tableName);
+    bytes markerBytes(marker.begin(), marker.end());
+    seedCode(address, markerBytes);
+    enableFilter(true);
+
+    auto markerHash = hashImpl->hash(bytesConstRef(markerBytes.data(), markerBytes.size()));
+    BOOST_REQUIRE(!isCached(markerHash));
+
+    auto hostContext = makeHostContext(address);
+    BOOST_CHECK_EQUAL(syncWait(hostContext.codeSizeAt(address)), 0U);
+    BOOST_CHECK_EQUAL(syncWait(hostContext.codeHashAt(address)), h256{});
+    BOOST_CHECK(!isCached(markerHash));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
