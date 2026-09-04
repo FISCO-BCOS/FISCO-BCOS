@@ -214,8 +214,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     }
 
     std::vector<bytes> forcedEnvelopes;
-    // Reached only when requireL1AttributesDeposit allowed synthesis (Phase-A
-    // single-node). op-geth never invents this envelope.
+    // Reached only when tests set allowSynthesizedL1Attributes. Production
+    // op_engine_rpc never invents this envelope (op-geth does not either).
     if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
     {
         forcedEnvelopes.push_back(m_scheduler.synthesizeL1AttributesEnvelope());
@@ -229,6 +229,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     }
 
     std::vector<std::pair<crypto::HashType, bytes>> sealedEnvelopes;
+    std::vector<std::string> sealedSenders;
+    sealedEnvelopes.reserve(sealedTxs.size());
+    sealedSenders.reserve(sealedTxs.size());
     for (auto& sealedTx : sealedTxs)
     {
         if (sealedTx->type() !=
@@ -243,12 +246,54 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         sealedEnvelopes.emplace_back(
             sealedTx->hash(), bcostars::protocol::reassembleWeb3RawTransaction(
                                   sealedTx->extraTransactionBytes(), sealedTx->signatureData()));
+        sealedSenders.emplace_back(sealedTx->sender());
     }
+
+    std::set<crypto::HashType> evicted;
+    // op-geth miner: excluding nonce n of sender S also drops S's later nonces from
+    // this candidate and never evicts those successors from the pool (R3-F1).
+    auto skipSenderTail = [&](crypto::HashType const& hash) {
+        evicted.insert(hash);
+        std::string sender;
+        for (std::size_t i = 0; i < sealedEnvelopes.size(); ++i)
+        {
+            if (sealedEnvelopes[i].first == hash)
+            {
+                sender = sealedSenders[i];
+                break;
+            }
+        }
+        if (sender.empty())
+        {
+            return;
+        }
+        bool seenCulprit = false;
+        for (std::size_t i = 0; i < sealedEnvelopes.size(); ++i)
+        {
+            if (sealedSenders[i] != sender)
+            {
+                continue;
+            }
+            if (sealedEnvelopes[i].first == hash)
+            {
+                seenCulprit = true;
+                continue;
+            }
+            if (seenCulprit)
+            {
+                evicted.insert(sealedEnvelopes[i].first);
+            }
+        }
+    };
     if (m_daCaps)
     {
-        auto over = [this](auto const& entry) { return !m_daCaps->txFits(entry.second.size()); };
-        auto it = std::remove_if(sealedEnvelopes.begin(), sealedEnvelopes.end(), over);
-        sealedEnvelopes.erase(it, sealedEnvelopes.end());
+        for (auto const& [hash, env] : sealedEnvelopes)
+        {
+            if (!m_daCaps->txFits(env.size()))
+            {
+                skipSenderTail(hash);
+            }
+        }
     }
 
     ledger::LedgerConfig ledgerConfig;
@@ -291,7 +336,6 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         return candidate;
     };
 
-    std::set<crypto::HashType> evicted;
     ExecutionPayload payload;
     bcos::protocol::BlockHeader::Ptr executedHeader;
     // Retry loop: each evicted culprit re-executes the whole candidate block from scratch
@@ -375,7 +419,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             std::any_of(sealedEnvelopes.begin(), sealedEnvelopes.end(),
                 [&culprit](auto const& entry) { return entry.first == *culprit; }))
         {
-            evicted.insert(*culprit);
+            skipSenderTail(*culprit);
             if (!isCapacityReject)
             {
                 std::array<crypto::HashType, 1> hashSpan{*culprit};

@@ -61,8 +61,8 @@ bcos::h2048 toEthLogsBloom(const Bloom& logsBloom);
 std::optional<std::string> validateOpPayloadAttributes(
     const PayloadAttributes& payloadAttributes, bool jovianActive);
 /// op-geth miner.BuildPayload uses attrs.Transactions as-is and never synthesizes
-/// an L1-attributes deposit. Phase-A single-node may synthesize zeros; production
-/// op_engine_rpc must receive the real deposit from op-node.
+/// an L1-attributes deposit. Synthesis is test-only (`allowSynthesizedL1Attributes`);
+/// production op_engine_rpc must receive the real deposit from op-node.
 inline std::optional<std::string> requireL1AttributesDeposit(
     const PayloadAttributes& payloadAttributes, bool allowSynthesized)
 {

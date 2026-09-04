@@ -178,8 +178,8 @@ BOOST_AUTO_TEST_CASE(op_envelope_to_tars_rejects_rlp_leftover)
 BOOST_AUTO_TEST_CASE(forkchoice_hash_canonical_helper_matches_op_geth)
 {
     // op-geth ReadCanonicalHash(number) != hash → not canonical.
-    // Missing NUMBER_2_HASH is not a mismatch.
-    BOOST_CHECK(engine_common::forkchoiceHashIsCanonical(h256(1), std::nullopt));
+    // Missing NUMBER_2_HASH is fail-closed (not canonical).
+    BOOST_CHECK(!engine_common::forkchoiceHashIsCanonical(h256(1), std::nullopt));
     BOOST_CHECK(engine_common::forkchoiceHashIsCanonical(h256(1), h256(1)));
     BOOST_CHECK(!engine_common::forkchoiceHashIsCanonical(h256(1), h256(2)));
 }

@@ -575,7 +575,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             BOOST_THROW_EXCEPTION(
                 bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                     "OP mode (executor_version>=3) requires engine-driven block production "
-                    "([consensus] enable_single_node_consensus or [op_engine_rpc] enable)"));
+                    "([op_engine_rpc] enable)"));
         }
         auto forkFlags = bcos::evm::opstack::OpForkFlags{
             .jovianActive = m_nodeConfig->opJovianActive(),
@@ -622,7 +622,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
             /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), m_daCaps,
-            /*allowSynthesizedL1Attributes=*/m_nodeConfig->enableSingleNodeConsensus());
+            /*allowSynthesizedL1Attributes=*/false);
 
         m_opScheduler = opDelegate;
         m_setOpSchedulerBlockNumberNotifier =

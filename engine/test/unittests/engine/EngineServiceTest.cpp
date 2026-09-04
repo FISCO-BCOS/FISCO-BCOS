@@ -160,6 +160,12 @@ task::Task<void> writeBlockNumberToStorage(RealGlobalStateBackendStorage& backen
         bcos::executor_v1::StateKey{
             ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
         std::move(entry));
+    storage::Entry hashEntry;
+    hashEntry.set(blockHash.asBytes());
+    co_await bcos::storage2::writeOne(backendStorage,
+        bcos::executor_v1::StateKey{
+            ledger::SYS_NUMBER_2_HASH, boost::lexical_cast<std::string>(blockNumber)},
+        std::move(hashEntry));
 }
 
 struct RealGlobalStateStorageFixture

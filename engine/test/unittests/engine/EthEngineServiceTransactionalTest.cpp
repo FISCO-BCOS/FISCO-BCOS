@@ -330,17 +330,21 @@ void seedForkchoiceStorage(GateMergeStorage& storageFixture, ForkchoiceState con
     writeSysConfig(
         ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(EVMC_CANCUN, {}));
 
-    auto writeBlock = [&](h256 const& hash) {
+    auto writeBlock = [&](h256 const& hash, char const* number) {
         storage::Entry entry;
-        entry.set("5");
+        entry.set(number);
         task::syncWait(bcos::storage2::writeOne(storageFixture.backendStorage,
             bcos::executor_v1::StateKey{
                 ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(hash)},
             std::move(entry)));
+        storage::Entry hashEntry;
+        hashEntry.set(hash.asBytes());
+        task::syncWait(bcos::storage2::writeOne(storageFixture.backendStorage,
+            bcos::executor_v1::StateKey{ledger::SYS_NUMBER_2_HASH, number}, std::move(hashEntry)));
     };
-    writeBlock(forkchoice.headBlockHash);
-    writeBlock(forkchoice.safeBlockHash);
-    writeBlock(forkchoice.finalizedBlockHash);
+    writeBlock(forkchoice.finalizedBlockHash, "3");
+    writeBlock(forkchoice.safeBlockHash, "4");
+    writeBlock(forkchoice.headBlockHash, "5");
 }
 
 PayloadAttributes makeAttrs(std::uint64_t timestamp)
@@ -509,6 +513,48 @@ BOOST_AUTO_TEST_CASE(commit_merge_failure_leaves_cache_and_artifacts)
     BOOST_CHECK_NO_THROW(task::syncWait(service.getPayload(*build.payloadId, 3)));
 
     storage.throwOnMerge->store(false);
+    auto retryStatus = task::syncWait(service.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Syncing));
+}
+
+BOOST_AUTO_TEST_CASE(commit_retry_valid_when_ledger_row_exists)
+{
+    GateMergeStorage storage;
+    MemPoolImpl memPool;
+    StubExecutor executor;
+    StubScheduler scheduler;
+    auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    auto ledger = std::make_shared<bcos::test::FakeLedger>(blockFactory, 20, 10, 10);
+
+    using Service = EthEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
+    Service service(memPool, storage, executor, scheduler, blockFactory, ledger);
+
+    auto forkchoice = makeForkchoiceState();
+    seedForkchoiceStorage(storage, forkchoice);
+
+    PayloadAttributes attrs = makeAttrs(1'700'000'001'000ULL);
+    auto build = task::syncWait(service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE(build.payloadId.has_value());
+    auto payload = task::syncWait(service.getPayload(*build.payloadId, 3));
+
+    storage.mergeGate->store(true);
+
+    NewPayloadRequest request;
+    request.executionPayload = payload->executionPayload;
+    request.parentBeaconBlockRoot = attrs.parentBeaconBlockRoot;
+
+    auto firstStatus = task::syncWait(service.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(firstStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    storage::Entry persisted;
+    persisted.set(std::to_string(static_cast<int64_t>(request.executionPayload.blockNumber)));
+    task::syncWait(bcos::storage2::writeOne(storage.backendStorage,
+        bcos::executor_v1::StateKey{ledger::SYS_HASH_2_NUMBER,
+            bcos::concepts::bytebuffer::toView(request.executionPayload.blockHash)},
+        std::move(persisted)));
+
     auto retryStatus = task::syncWait(service.newPayload(request, 3));
     BOOST_CHECK_EQUAL(
         static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Valid));

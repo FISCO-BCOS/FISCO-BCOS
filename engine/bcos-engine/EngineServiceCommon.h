@@ -88,12 +88,12 @@ inline std::optional<std::string> validateHolocene1559Params(
            static_cast<std::uint32_t>(bytes[off + 3]);
 }
 /// op-geth ReadCanonicalHash(number) != submitted hash → not canonical.
-/// Missing NUMBER_2_HASH is not a mismatch: HASH_2_NUMBER already resolved the
-/// block (legacy test fixtures write only that index).
+/// Missing NUMBER_2_HASH is also not canonical (fail closed). Fixtures must write
+/// both HASH_2_NUMBER and NUMBER_2_HASH (`registerVerifiedBlock` already does).
 inline bool forkchoiceHashIsCanonical(
     const h256& submitted, const std::optional<h256>& canonicalAtNumber)
 {
-    return !canonicalAtNumber.has_value() || *canonicalAtNumber == submitted;
+    return canonicalAtNumber.has_value() && *canonicalAtNumber == submitted;
 }
 std::optional<std::string> validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version);

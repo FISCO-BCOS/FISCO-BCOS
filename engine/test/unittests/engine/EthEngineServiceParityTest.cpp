@@ -257,9 +257,24 @@ void setForkchoiceBlockNumbers(RealGlobalStateStorageFixture& storageFixture,
     const ForkchoiceState& forkchoiceState, bcos::protocol::BlockNumber headBlockNumber,
     bcos::protocol::BlockNumber safeBlockNumber, bcos::protocol::BlockNumber finalizedBlockNumber)
 {
-    storageFixture.setBlockNumber(forkchoiceState.headBlockHash, headBlockNumber);
-    storageFixture.setBlockNumber(forkchoiceState.safeBlockHash, safeBlockNumber);
-    storageFixture.setBlockNumber(forkchoiceState.finalizedBlockHash, finalizedBlockNumber);
+    // One number → one canonical hash. Distinct hashes at the same height overwrite
+    // NUMBER_2_HASH and fail R3-F4's fail-closed check. Legacy fixtures that reused a
+    // height for makeForkchoiceState()'s three hashes get finalized < safe < head.
+    if (forkchoiceState.headBlockHash != forkchoiceState.safeBlockHash &&
+        headBlockNumber == safeBlockNumber)
+    {
+        BOOST_REQUIRE_GE(headBlockNumber, 1);
+        safeBlockNumber = headBlockNumber - 1;
+    }
+    if (forkchoiceState.headBlockHash != forkchoiceState.finalizedBlockHash &&
+        (headBlockNumber == finalizedBlockNumber || safeBlockNumber == finalizedBlockNumber))
+    {
+        BOOST_REQUIRE_GE(std::min(safeBlockNumber, headBlockNumber), 1);
+        finalizedBlockNumber = std::min(safeBlockNumber, headBlockNumber) - 1;
+    }
+    storageFixture.setCanonicalBlock(forkchoiceState.headBlockHash, headBlockNumber);
+    storageFixture.setCanonicalBlock(forkchoiceState.safeBlockHash, safeBlockNumber);
+    storageFixture.setCanonicalBlock(forkchoiceState.finalizedBlockHash, finalizedBlockNumber);
 }
 
 struct ServicePair

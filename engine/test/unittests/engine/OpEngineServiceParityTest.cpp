@@ -14,6 +14,7 @@
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/engine/EngineService.h>
@@ -168,6 +169,71 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
     {}
 };
 
+/// Rejects `culprit` whenever that hash is in the block; if only `successor` remains,
+/// rejects it as a non-capacity nonce-gap (the R3-F1 production shape).
+/// `culprit`/`successor` are pool hashes (OpCulpritTxHash). `*EnvHash` are
+/// keccak(reassembled envelope), matching buildOpBlock's transactionHash.
+struct NonceChainScheduler : RecordingScheduler
+{
+    bcos::h256 successor;
+    bcos::h256 culpritEnvHash;
+    bcos::h256 successorEnvHash;
+
+    void executeBlock(bcos::protocol::Block::Ptr block, bool,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> callback)
+        override
+    {
+        ++executeCalls;
+        bool hasCulprit = false;
+        bool hasSuccessor = false;
+        if (block)
+        {
+            for (auto txView : block->transactions())
+            {
+                auto tx = std::move(txView).toShared();
+                if (!tx)
+                {
+                    continue;
+                }
+                auto const hash = tx->hash();
+                if (hash == culpritEnvHash)
+                {
+                    hasCulprit = true;
+                }
+                if (hash == successorEnvHash)
+                {
+                    hasSuccessor = true;
+                }
+            }
+        }
+        if (hasCulprit)
+        {
+            auto error = BCOS_ERROR_PTR(-1, "op block: reject sealed tx");
+            *error << bcos::engine::OpCulpritTxHash(culprit);
+            if (rejectAsCapacity)
+            {
+                *error << bcos::engine::OpRejectIsCapacity(true);
+            }
+            callback(std::move(error), nullptr, false);
+            return;
+        }
+        if (hasSuccessor)
+        {
+            auto error = BCOS_ERROR_PTR(-1, "op block: nonce gap");
+            *error << bcos::engine::OpCulpritTxHash(successor);
+            callback(std::move(error), nullptr, false);
+            return;
+        }
+        auto header = headerFactory->createBlockHeader();
+        header->setStateRoot(bcos::h256{});
+        header->setReceiptsRoot(bcos::h256{});
+        header->setGasUsed(0);
+        header->setWithdrawalsRoot(bcos::h256{});
+        header->setBlobGasUsed(0);
+        callback(nullptr, std::move(header), false);
+    }
+};
+
 class TestTransactionImpl : public bcostars::protocol::TransactionImpl
 {
 public:
@@ -182,7 +248,16 @@ struct DecodableWeb3Tx
     std::string rawHex;
 };
 
-static DecodableWeb3Tx makeDecodableWeb3Tx(uint64_t nonce)
+static bcos::h256 envelopeHashOf(bcos::protocol::Transaction::Ptr const& tx)
+{
+    bcos::crypto::Keccak256 hasher;
+    auto const raw = bcostars::protocol::reassembleWeb3RawTransaction(
+        tx->extraTransactionBytes(), tx->signatureData());
+    return hasher.hash(bcos::ref(raw));
+}
+
+static DecodableWeb3Tx makeDecodableWeb3Tx(
+    uint64_t nonce, bcos::crypto::KeyPairInterface* keyPair = nullptr)
 {
     bcos::rpc::Web3Transaction w3;
     w3.type = bcos::rpc::TransactionType::EIP1559;
@@ -194,8 +269,9 @@ static DecodableWeb3Tx makeDecodableWeb3Tx(uint64_t nonce)
     w3.to = bcos::Address("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
     w3.value = 0;
     bcos::crypto::Secp256k1Crypto secp;
-    auto keyPair = secp.generateKeyPair();
-    auto const sig = secp.sign(*keyPair, w3.hashForSign(), false);
+    auto owned = keyPair == nullptr ? secp.generateKeyPair() : nullptr;
+    auto const& kp = keyPair != nullptr ? *keyPair : *owned;
+    auto const sig = secp.sign(kp, w3.hashForSign(), false);
     BOOST_REQUIRE(sig);
     BOOST_REQUIRE_EQUAL(sig->size(), 65);
     w3.signatureR.assign(sig->begin(), sig->begin() + 32);
@@ -850,6 +926,65 @@ BOOST_AUTO_TEST_CASE(op_build_culprit_hash_evicts_through_retry_loop)
 {
     // BC — structured OpCulpritTxHash on a sealed pool tx is evicted via removeByHash.
     driveBuildWithCulprit(/*capacityReject=*/false);
+}
+
+static void driveBuildWithSenderNonceChain(bool capacityReject)
+{
+    // R3-F1 / R2-F4 — same sender, nonce n then n+1. Excluding n must not evict n+1.
+    auto delegate = std::make_shared<NonceChainScheduler>();
+    delegate->rejectAsCapacity = capacityReject;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/true, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    bcos::crypto::Secp256k1Crypto secp;
+    auto keyPair = secp.generateKeyPair();
+    auto dummy = makeDecodableWeb3Tx(0);
+    auto nonceN = makeDecodableWeb3Tx(1, keyPair.get());
+    auto nonceN1 = makeDecodableWeb3Tx(2, keyPair.get());
+    delegate->culprit = nonceN.tx->hash();
+    delegate->successor = nonceN1.tx->hash();
+    delegate->culpritEnvHash = envelopeHashOf(nonceN.tx);
+    delegate->successorEnvHash = envelopeHashOf(nonceN1.tx);
+    pair.memPool.pool.push_back(nonceN.tx);
+    pair.memPool.pool.push_back(nonceN1.tx);
+
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.noTxPool = false;
+    attrs.transactions = std::vector<std::string>{dummy.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    BOOST_CHECK_GE(delegate->executeCalls, 2);
+    auto const n1Hex = nonceN1.tx->hash().hex();
+    if (capacityReject)
+    {
+        BOOST_CHECK(pair.memPool.removed.empty());
+    }
+    else
+    {
+        BOOST_REQUIRE_EQUAL(pair.memPool.removed.size(), 1);
+        BOOST_CHECK_EQUAL(pair.memPool.removed.front().hex(), nonceN.tx->hash().hex());
+    }
+    BOOST_CHECK(std::none_of(pair.memPool.removed.begin(), pair.memPool.removed.end(),
+        [&](auto const& removed) { return removed.hex() == n1Hex; }));
+}
+
+BOOST_AUTO_TEST_CASE(op_build_capacity_skip_keeps_sender_successor)
+{
+    driveBuildWithSenderNonceChain(/*capacityReject=*/true);
+}
+
+BOOST_AUTO_TEST_CASE(op_build_intrinsic_evict_keeps_sender_successor)
+{
+    driveBuildWithSenderNonceChain(/*capacityReject=*/false);
 }
 
 BOOST_AUTO_TEST_CASE(op_fcu_unknown_nonzero_safe_is_invalid_forkchoice)
