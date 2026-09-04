@@ -14,11 +14,15 @@
  *  limitations under the License.
  *
  * @file EngineServiceImpl.h
- * @brief Minimal Engine API service implementation
+ * @brief Tests-only leftover Engine API service (findings BK / BW).
+ *
+ * Production is EthEngineService / OpEngineService. Do not port new consensus
+ * guards here; delete this TU after parity tests stop using it as `legacy`.
  */
 
 #pragma once
 
+#include "EngineServiceCommon.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/engine/EngineService.h"
@@ -32,7 +36,6 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include <bcos-ledger/mpt/Constants.h>
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/BoostLog.h"
@@ -40,6 +43,7 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <bcos-ledger/mpt/Constants.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <cstdint>
 #include <deque>
@@ -66,9 +70,27 @@ DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
 
 namespace detail
 {
-std::string encodePayloadSequence(std::uint64_t value);
+/// Impl-only helpers. Defined here so TUs that instantiate EngineServiceImpl
+/// (e.g. test-transaction-scheduler) do not need EngineServiceImpl.cpp, which
+/// is excluded from libengine. Production validators live in engine_common.
+inline std::string encodePayloadSequence(std::uint64_t value)
+{
+    return bcos::toHex(value, "0x");
+}
 
-bcos::h256 syntheticHash(std::string_view seed);
+inline bcos::h256 syntheticHash(std::string_view seed)
+{
+    constexpr std::size_t hashBytes = 32;
+    std::string hex = "0x";
+    hex.reserve((hashBytes * 2) + 2);
+    auto payload = seed.substr(seed.rfind('x') + 1);
+    while (hex.size() < ((hashBytes * 2) + 2))
+    {
+        hex.append(payload.begin(), payload.end());
+    }
+    hex.resize((hashBytes * 2) + 2);
+    return bcos::h256(bcos::fromHex(hex));
+}
 
 std::vector<std::string> supportedCapabilities();
 
@@ -84,49 +106,15 @@ std::optional<std::string> validatePayloadAttributes(
 /// (pre-Holocene), eip1559Params only -> 9-byte Holocene form, eip1559Params +
 /// minBaseFee -> 17-byte Jovian form (op-core/eip1559/eip1559.go
 /// EncodeHoloceneExtraData / EncodeJovianExtraData). Requires attributes that passed
-/// validatePayloadAttributes (8-byte params, valid zero-pairing).
+/// validatePayloadAttributes (8-byte params, Holocene 1559 pairing).
 bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 
-/// The withdrawals trie root this node commits for a block: the empty-trie root while the
-/// list is empty (matching geth's DeriveSha([])), and — when MPT work lands — the
-/// L2ToL1MessagePasser storage root on Isthmus. Non-empty lists are rejected earlier in
-/// validatePayloadAttributes; the hashed header and the served ExecutionPayload both call
-/// this helper so they always carry the same 32 bytes.
-/// FOLLOW-UP (ywy F8): the Isthmus branch is a placeholder pending C4 — a real
-/// L2ToL1MessagePasser storage root would make locally built hashes diverge from op-geth
-/// after the first L1 message; until then newPayloadV4 rejects any root other than this.
-inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
-{
-    return bcos::ledger::mpt::emptyRootHash();
-}
-
-/// Compares a payload the CL submitted through newPayload against the one this node
-/// built and handed out under the same blockHash.
-///
-/// Deliberately narrow: only extraData is compared. Two other candidates are
-/// excluded on purpose.
-///  - Version-specific fields (withdrawalsRoot, the blob-gas pair) are dropped by the
-///    wire dialect on the way back — a V3 newPayload request carries no
-///    withdrawalsRoot even when the build set one — so comparing them would reject
-///    honest CLs.
-///  - The transaction list is NOT compared, even though a differing list under a
-///    blockHash this node minted is equally contradictory — and, on this branch, it
-///    would be perfectly comparable, since the built payload is right here. The
-///    blocker is a contract, not a capability: newPayload is currently specified to
-///    REWRITE the cached payload body from the request, which
-///    new_payload_round_trips_deposit_raw_bytes pins by appending transactions to a
-///    locally built payload and asserting VALID. Tightening the body half means
-///    changing that contract first, which belongs with #5468 (the work that makes
-///    externally supplied payload bodies verifiable at all).
-/// FOLLOW-UP (ywy F5): a full re-derivation of keccak256(rlp(header)) from the submitted
-/// payload on every newPayload is tracked in #5468; the cache-miss path still answers
-/// VALID without execute/store.
-///
-/// extraData is in scope here because this change puts it into the block hash, so
-/// leaving it unchecked would leave a hash input unchecked.
+/// Hash-relevant fields vs the locally built payload (op-geth ExecutableDataToBlock).
+/// Optional V3 fields are compared only when both sides have them (finding BL).
+/// Cache-miss (unexecuted external body) is SYNCING, not VALID — #5468.
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
 
@@ -146,9 +134,8 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
 // excessBlobGas and @p parentBeaconBlockRoot must be engaged (this function uses .value()
 // on them and would throw std::bad_optional_access otherwise). buildPayload guarantees the
 // precondition under the same forkVersion-derived gate; a direct caller must too.
-void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header,
-    const ExecutionPayload& payload, std::optional<bcos::h256> parentBeaconBlockRoot,
-    bcos::protocol::EthBlockVersion forkVersion);
+void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
+    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion);
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -190,7 +177,7 @@ public:
         std::vector<std::string> remoteCapabilities)
     {
         (void)remoteCapabilities;
-        co_return detail::supportedCapabilities();
+        co_return engine_common::supportedCapabilities();
     }
 
     bcos::task::Task<ForkchoiceUpdatedResult> updateForkchoice(
@@ -205,7 +192,7 @@ public:
         if (payloadAttributes != nullptr)
         {
             if (auto validationError =
-                    detail::validatePayloadAttributes(*payloadAttributes, version);
+                    engine_common::validatePayloadAttributes(*payloadAttributes, version);
                 validationError.has_value())
             {
                 ForkchoiceUpdatedResult result{
@@ -409,20 +396,15 @@ private:
 
     struct PayloadEntry
     {
-        /// Engine API version of the call that last wrote this entry: the forkchoiceUpdated
-        /// version for a build, the newPayload version for a commit. getPayload's version
-        /// window (detail::isGetPayloadVersionCompatible) is checked against it, so
-        /// re-querying a payloadId AFTER committing it through newPayloadV4 answers -38005
-        /// rather than replaying the payload. op-node never does that — it fetches a build
-        /// exactly once — and op-geth's build cache is likewise not meant to outlive the
-        /// commit.
+        /// Engine API version of the forkchoiceUpdated that built this entry. newPayload
+        /// keeps the locally built body (finding E) and does not rewrite the version tag.
         std::uint32_t version = 0;
         ExecutionPayload executionPayload;
         u256 blockValue = 0;
         std::optional<BlobsBundleV1> blobsBundle;
         bool shouldOverrideBuilder = false;
-        /// Beacon root the payload was built with (from PayloadAttributes) or received
-        /// with (from NewPayloadRequest); echoed in the getPayload response (OP Stack).
+        /// Beacon root the payload was built with (from PayloadAttributes).
+        /// newPayload does not overwrite this from the CL request.
         std::optional<h256> parentBeaconBlockRoot;
         std::shared_ptr<ViewType> view;
         /// Built-block artifacts kept so newPayload() can persist the ledger block tables
@@ -485,19 +467,16 @@ private:
         {
             BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
         }
-        if (!detail::isGetPayloadVersionCompatible(
+        if (!engine_common::isGetPayloadVersionCompatible(
                 static_cast<ApiVersion>(version), it->second.version))
         {
             BOOST_THROW_EXCEPTION(
                 IncompatiblePayloadVersion{} << bcos::errinfo_comment{
                     "Payload version is incompatible with requested method version"});
         }
-        // The version window alone is not enough once the entry may have been REWRITTEN by
-        // a commit: newPayload replaces the cached payload with the request's, and a V3
-        // request carries no withdrawalsRoot (it is a V4+/Isthmus field). Such an entry is
-        // still tagged version 3, so it passes the V4/V5 window above, and
-        // serializeExecutionPayload would then throw InternalError on the missing field.
-        // Answer the version error it really is instead of -32603.
+        // Safety net: a V3-tagged entry that somehow lacks withdrawalsRoot must not
+        // reach serializeExecutionPayload (InternalError). newPayload no longer strips
+        // the field; this still covers a V2-shaped body queried as V4/V5.
         if (version >= static_cast<std::uint32_t>(ApiVersion::V4) &&
             !it->second.executionPayload.withdrawalsRoot.has_value())
         {
@@ -587,21 +566,6 @@ private:
         }
 
         PayloadID payloadId;
-        PayloadEntry entry{
-            .version = version,
-            .executionPayload = request.executionPayload,
-            .blockValue = 0,
-            .blobsBundle = std::nullopt,
-            .shouldOverrideBuilder = false,
-            .parentBeaconBlockRoot = request.parentBeaconBlockRoot,
-            .view = nullptr,
-            .header = nullptr,
-            .receipts = {},
-        };
-        if (version == static_cast<std::uint32_t>(ApiVersion::V3))
-        {
-            entry.blobsBundle = BlobsBundleV1{};
-        }
 
         // Commit I/O (ledger persist + state merge) is performed WITHOUT x_state held: a
         // POSIX mutex must not be locked across a coroutine suspension point, because the
@@ -626,44 +590,21 @@ private:
             auto payloadIdIt = m_blockHashToPayloadId.find(request.executionPayload.blockHash);
             if (payloadIdIt == m_blockHashToPayloadId.end())
             {
-                payloadId = nextPayloadID();
-                m_blockHashToPayloadId.emplace(request.executionPayload.blockHash, payloadId);
+                // #5468 / finding E: unexecuted external payload. op-geth executes
+                // before VALID; we must not store the CL body and answer VALID.
+                co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
             }
-            else
+            payloadId = payloadIdIt->second;
+            auto builtIt = m_payloadCache.find(payloadId);
+            if (builtIt == m_payloadCache.end())
             {
-                payloadId = payloadIdIt->second;
-                // Local-build hit: the CL is handing back a payload this node built. op-geth
-                // needs no such comparison because it re-derives the block hash from the
-                // payload fields it received and answers INVALID_BLOCK_HASH when the two
-                // disagree (beacon/engine/types.go:287-288, reached from
-                // eth/catalyst/api.go:831). This service cannot re-derive an Ethereum block
-                // hash from an ExecutionPayload, so it compares against what it handed out
-                // instead. Without this a CL could alter the extraData, keep the blockHash it
-                // was given, and have the node commit its own (different) header while
-                // answering VALID — the submitted payload never checked. Only extraData is
-                // compared; the transaction list stays out of scope for the contract reason
-                // spelled out on compareWithBuiltPayload.
-                //
-                // Every cache hit is compared, including a re-submission of an already
-                // committed block (whose entry no longer carries a header). An honest
-                // idempotent re-submit is byte-identical and passes; gating on the header
-                // would let a second, altered submission of the same blockHash overwrite the
-                // cached payload and still be answered VALID. op-geth likewise re-derives the
-                // hash on every newPayload, committed or not.
-                //
-                // SCOPE: payloads this node did NOT build (lookup miss) are a separate,
-                // pre-existing gap — they are answered VALID without being executed or
-                // stored at all. That is tracked as #5468 and deliberately not addressed
-                // here.
-                if (auto builtIt = m_payloadCache.find(payloadId); builtIt != m_payloadCache.end())
-                {
-                    if (auto mismatch = detail::compareWithBuiltPayload(
-                            request.executionPayload, builtIt->second.executionPayload))
-                    {
-                        co_return makeStatus(PayloadValidationStatus::InvalidBlockHash,
-                            std::nullopt, mismatch);
-                    }
-                }
+                co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            }
+            if (auto mismatch = detail::compareWithBuiltPayload(
+                    request.executionPayload, builtIt->second.executionPayload))
+            {
+                co_return makeStatus(
+                    PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
             }
 
             // If this payload was built locally (via updateForkchoice), commit the view's
@@ -712,7 +653,8 @@ private:
                     }
                     blockTxs = std::make_shared<protocol::ConstTransactions>(
                         it->second.executionPayload.transactions |
-                        ::ranges::views::filter([](auto const& tx) { return tx.decoded != nullptr; }) |
+                        ::ranges::views::filter(
+                            [](auto const& tx) { return tx.decoded != nullptr; }) |
                         ::ranges::views::transform([](auto const& tx) {
                             return protocol::Transaction::ConstPtr(tx.decoded);
                         }) |
@@ -734,19 +676,9 @@ private:
 
         {
             std::unique_lock lock(x_state);
-            m_payloadCache[payloadId] = std::move(entry);
-
-            // Evict stale payload entries. A payload is only read between updateForkchoice /
-            // getPayload and newPayload, so once a block is committed its payloadId and
-            // blockHash are unreachable. The built-in single-node driver mints one new
-            // payloadId per block_interval tick, so without eviction both maps grow by one
-            // row per produced block and hold strong references to every transaction ever
-            // executed (unbounded memory over time). Keep only the just-committed block; the
-            // newPayload() parent check accepts the head hash directly, so dropping older
-            // blockHash rows is safe.
-            std::erase_if(m_blockHashToPayloadId, [&](auto const& kv) {
-                return kv.first != request.executionPayload.blockHash;
-            });
+            // Keep the locally built body. Evict everything else (one row per produced block).
+            std::erase_if(m_blockHashToPayloadId,
+                [&](auto const& kv) { return kv.first != request.executionPayload.blockHash; });
             std::erase_if(m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });
         }
 
@@ -877,11 +809,12 @@ private:
         auto chainRevision = ledgerConfig.evmcRevisionForBlock(nextBlockNumber);
         if (!chainRevision.has_value())
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: no on-chain EVM revision configured for block " +
-                std::to_string(nextBlockNumber) +
-                "; cannot derive the Eth header fork era (a v2 chain persists evmc_revision "
-                "at genesis)"});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: no on-chain EVM revision configured for block " +
+                    std::to_string(nextBlockNumber) +
+                    "; cannot derive the Eth header fork era (a v2 chain persists evmc_revision "
+                    "at genesis)"});
         }
         auto forkVersion = bcos::engine::detail::ethBlockVersionFor(*chainRevision);
 
@@ -895,16 +828,18 @@ private:
         if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
             !payloadAttributes.parentBeaconBlockRoot.has_value())
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: chain EVM revision requires the V3 payload attributes "
-                "(parentBeaconBlockRoot); forkchoiceUpdated must be called at version >= 3"});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: chain EVM revision requires the V3 payload attributes "
+                    "(parentBeaconBlockRoot); forkchoiceUpdated must be called at version >= 3"});
         }
         if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI &&
             !payloadAttributes.withdrawals.has_value())
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: chain EVM revision requires the V2 payload attributes "
-                "(withdrawals); forkchoiceUpdated must be called at version >= 2"});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: chain EVM revision requires the V2 payload attributes "
+                    "(withdrawals); forkchoiceUpdated must be called at version >= 2"});
         }
         // The reverse direction: a method version NEWER than the chain fork cannot be
         // served either. The served ExecutionPayload shape is contracted by the method the
@@ -916,18 +851,20 @@ private:
         if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
             forkVersion < bcos::protocol::EthBlockVersion::CANCUN)
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: forkchoiceUpdatedV3 requires a CANCUN-or-later chain fork; "
-                "chain EVM revision maps to " +
-                std::to_string(static_cast<int>(forkVersion))});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: forkchoiceUpdatedV3 requires a CANCUN-or-later chain fork; "
+                    "chain EVM revision maps to " +
+                    std::to_string(static_cast<int>(forkVersion))});
         }
         if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
             forkVersion < bcos::protocol::EthBlockVersion::SHANGHAI)
         {
-            BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{
-                "EngineService: forkchoiceUpdatedV2 requires a SHANGHAI-or-later chain "
-                "fork; chain EVM revision maps to " +
-                std::to_string(static_cast<int>(forkVersion))});
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "EngineService: forkchoiceUpdatedV2 requires a SHANGHAI-or-later chain "
+                    "fork; chain EVM revision maps to " +
+                    std::to_string(static_cast<int>(forkVersion))});
         }
 
         // The payload SHAPE also follows the chain fork, not the request's method version
@@ -958,22 +895,24 @@ private:
             // [op_engine_rpc] guard in libinitializer/Initializer.cpp REQUIRES
             // executor_version >= 2 (it throws for executor_version < 2 unless the
             // test-only escape hatch unsafe_allow_v1_executor is set); it does not keep
-            // this code off a production endpoint. EngineServiceInitializer::build
-            // instantiates this same template for the v2 EthereumExecutor, so the
+            // this code off a production endpoint. Production now wires EthEngineService
+            // via EngineServiceInitializer; this EngineServiceImpl path remains for
+            // parity tests. The v2 EthereumExecutor build still stamps the same
+            // placeholder withdrawalsRoot in EthEngineService, so the
             // intended production configuration — executor_version >= 2 with
             // [op_engine_rpc] enabled — serves exactly this placeholder: FCU V3 stamps it
-            // here, getPayloadV5 serializes it, and newPayloadV4 accepts it on presence
-            // alone. Until C4 computes and verifies the real L2ToL1MessagePasser storage
-            // root, no L1 withdrawal proof may be taken against a root produced by this
-            // node. The v2 instantiation serving the empty-trie root is pinned by
+            // here (legacy) / in EthEngineService (production), getPayloadV5 serializes it, and
+            // newPayloadV4 accepts it on presence alone. Until C4 computes and verifies the real
+            // L2ToL1MessagePasser storage root, no L1 withdrawal proof may be taken against a root
+            // produced by this node. The v2 instantiation serving the empty-trie root is pinned by
             // TestEthereumExecutorScheduler/engineServiceKarstServesZeroWithdrawalsRoot,
             // which has to be updated when the real value lands.
             //
             // The served payload value and the hashed header value must agree (both go
             // through withdrawalsRootFor): a consumer rebuilding the header from the
             // payload's withdrawalsRoot field must reproduce blockHash.
-            executionPayload.withdrawalsRoot = bcos::engine::detail::withdrawalsRootFor(
-                executionPayload);
+            executionPayload.withdrawalsRoot =
+                bcos::engine::detail::withdrawalsRootFor(executionPayload);
         }
 
         // Fill gasLimit from ledger config. baseFeePerGas is carried in the payload (currently
@@ -1006,9 +945,8 @@ private:
             emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setGasUsed(0);
-            detail::finalizeEthBlockHeader(
-                *emptyHeader, executionPayload, payloadAttributes.parentBeaconBlockRoot,
-                forkVersion);
+            detail::finalizeEthBlockHeader(*emptyHeader, executionPayload,
+                payloadAttributes.parentBeaconBlockRoot, forkVersion);
             executionPayload.stateRoot = emptyHeader->stateRoot();
             executionPayload.receiptsRoot = bcos::ledger::mpt::emptyRootHash();
             executionPayload.gasUsed = 0;

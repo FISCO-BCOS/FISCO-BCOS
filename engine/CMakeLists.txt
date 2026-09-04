@@ -6,12 +6,15 @@
 project(bcos-engine VERSION ${VERSION})
 
 file(GLOB_RECURSE SRC_LIST "bcos-engine/*.cpp")
+# Helpers live in EngineServiceCommon.cpp. The leftover Impl TU is header-only
+# for tests; production still constructs EngineServiceImpl from the header.
+list(FILTER SRC_LIST EXCLUDE REGEX ".*/EngineServiceImpl\\.cpp$")
 
 add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-engine>)
-target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec PRIVATE rlp-protocol)
+target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec rlp-protocol)
 set_target_properties(engine PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
