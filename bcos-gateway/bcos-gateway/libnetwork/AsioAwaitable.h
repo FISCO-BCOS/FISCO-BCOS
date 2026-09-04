@@ -31,56 +31,26 @@
 
 namespace bcos::gateway
 {
-// Awaitable bridging one callback-style asio operation into a task::Task coroutine.
+// Bridge a callback-style asio operation into a task::Task coroutine via symmetric transfer.
 //
-// Threading contract: initiations are expected to defer — the completion handler is handed to a
-// deferred executor (asio, or a post to some io_context) — so the suspended coroutine is resumed
-// on the io_context thread that completes the operation, the same thread the old hand-written
-// callback chain ran on. A synchronous invocation or drop from the initiating call does not
-// corrupt the running coroutine either: it is neutralized by the arm/cancel handshake below.
-// resume() is wrapped in try/catch (including catch(...)): an exception escaping the resumed
-// coroutine must not unwind the asio handler into io_context::run() (the same containment the
-// hand-written callbacks applied). The loop coroutines additionally catch everything internally,
-// so this is the second line of defence.
+// await_suspend builds a fire-and-forget TaskPure "bridge" coroutine that owns the actual asio
+// initiation, then returns the bridge's handle. Symmetric transfer guarantees the awaiting
+// coroutine is suspended BEFORE the bridge runs, so when the bridge calls m_initiate the awaiting
+// coroutine is already suspended — the completion may then resume it unconditionally, removing
+// the "resume a not-yet-suspended frame" hazard an inline initiate has.
 //
-// Lifetime contract: the awaitable object lives inside the coroutine frame, and the coroutine
-// can only unwind through the completion handler (or the cancellation path below), so the
-// `this` capture is valid for as long as the handler may run.
+// Completion lifecycle (AsioCompletion::m_armed):
+//  - Created disarmed; the bridge body arms it via active() right before initiating.
+//  - operator() (asio invokes it): writes the result and resumes the awaiting coroutine.
+//  - ~AsioCompletion with armed=true (uninvoked: io_context torn down / fake drops the handler):
+//    writes operation_aborted and resumes the awaiting coroutine, which unwinds through its own
+//    error path — no frame leak and no orphaned wrapper, unlike a raw destroy().
+//  - A completion destroyed during bridge-frame construction (e.g. bad_alloc) is still disarmed,
+//    so it never resumes a frame that await_suspend has not finished suspending.
 //
-// Completion-or-cancel contract: asio normally invokes the completion handler exactly once, but
-// only while the io_context keeps running — a handler destroyed WITHOUT being invoked (an
-// io_context torn down with the operation still pending, or a test fake that drops the handler)
-// would otherwise pin the suspended coroutine frame forever, leaking everything the frame owns
-// (the strong Session/Host reference, socket, buffers). The completion therefore watches its
-// own destruction: an armed completion that is destroyed without having run DESTROYS the
-// suspended frame, releasing its references. Destroying — rather than resuming — the coroutine
-// runs no loop code: at that point the objects the loop body would touch may already be gone or
-// deliberately torn down, and this matches the base semantics, where destroying an uninvoked
-// handler simply released its captured shared_ptr without firing any logic.
+// resume() is wrapped in try/catch: an exception escaping the resumed coroutine must not unwind
+// the asio handler into io_context::run().
 //
-// Arm/cancel handshake: the completion and await_suspend share ONE atomic state (see
-// detail::CompletionState below), and each side claims its transition with a single
-// compare_exchange_strong, so a completion that resolves DURING initiation can never touch a
-// frame that has not suspended yet, and exactly one side wins the transition:
-//  - await_suspend claims Init -> Suspended only after initiate() returns. On success the
-//    coroutine suspends and the completion owns the resume; on failure the observed state
-//    (Completed or Dropped) means the completion already settled synchronously inside
-//    initiate(), so await_suspend resumes inline (returns false) instead.
-//  - operator() writes the result, then claims Init -> Completed. On success await_suspend will
-//    observe it and resume inline — operator() must NOT resume the still-running frame; on
-//    failure the state is Suspended, so it resumes the suspended coroutine.
-//  - ~AsioCompletion claims Init -> Dropped when an armed completion is destroyed without
-//    invocation. On success await_suspend observes it and resumes inline with operation_aborted;
-//    on failure the state is Suspended, so the frame-destroying rescue runs.
-// The single-atomic claim removes the check-then-set window a multi-flag handshake has: a
-// cross-thread completion landing between a read and a later store can no longer be lost.
-//
-// Rescue scope: destroying the suspended frame releases the strong Session/Host reference, the
-// socket and the buffers — everything the coroutine body owns. One small frame is NOT
-// reclaimed: task::wait wraps these loop coroutines in an AsyncTask frame that is resumed only
-// through the inner coroutine's final_suspend, so destroying the inner handle directly orphans
-// the wrapper frame (a bounded, shutdown-scoped leak — one small AsyncTask per rescued
-// operation).
 namespace detail
 {
 // Result tuple for the dropped-completion path: the first element (always boost::system::
@@ -89,25 +59,21 @@ namespace detail
 template <typename First, typename... Rest>
 std::tuple<First, Rest...> makeOperationAbortedResult()
 {
+    static_assert(std::is_same_v<First, boost::system::error_code>,
+        "the first result of every asio awaitable must be boost::system::error_code");
     return std::make_tuple(
         boost::system::error_code(boost::asio::error::operation_aborted), Rest{}...);
 }
-// The completion handler handed to asio. Move-only: asio moves (never copies) the handler into
-// the operation, and a move transfers the completion duty to the new instance. Exactly one of
-// three exits happens: operator() runs the handler path, the armed instance is destroyed while
-// the coroutine is suspended (the rescue above), or the armed instance is destroyed while the
-// coroutine is still running on the initiator's stack (a synchronous drop inside initiate()),
-// which is recorded as a cancellation for await_suspend to observe (see the handshake above).
 template <typename... Results>
 class AsioCompletion
 {
 public:
     AsioCompletion(std::tuple<Results...>* result, std::coroutine_handle<> handle) : m_result(result), m_handle(handle) {}
     AsioCompletion(AsioCompletion&& other) noexcept
-      : m_result(other.m_result), m_handle(other.m_handle), m_armed(other.m_armed)
+      : m_result(other.m_result), m_handle(other.m_handle), m_armed(other.m_armed.load())
     {
         // the moved-from instance no longer owns the completion duty
-        other.m_armed = false;
+        other.m_armed.store(false);
     }
     AsioCompletion(const AsioCompletion&) = delete;
     AsioCompletion& operator=(const AsioCompletion&) = delete;
@@ -119,13 +85,23 @@ public:
         {
             if (!m_armed)
             {
-                // moved-from, or the completion already ran: nothing to settle
+                // moved-from, already ran, or never activated (bridge-frame construction failed)
                 return;
             }
+            // Rescue: an armed completion destroyed without being invoked (io_context torn down,
+            // fake drops the handler) reports operation_aborted so the awaiting coroutine unwinds
+            // through its own error path instead of being destroyed/leaked.
+            *m_result = detail::makeOperationAbortedResult<Results...>();
             m_handle.resume();
         }
-        catch (...)
-        {}
+        catch (...){}
+    }
+    // Arm the completion: called by the bridge body right before initiating. The completion is
+    // created disarmed so a temporary destroyed during bridge-frame construction (bad_alloc) is a
+    // no-op and can never resume a frame await_suspend has not finished suspending.
+    void active()
+    {
+        m_armed = true;
     }
 
     void operator()(Results... results)
@@ -156,7 +132,7 @@ public:
 private:
     std::tuple<Results...>* m_result;
     std::coroutine_handle<> m_handle;
-    bool m_armed = true;
+    std::atomic<bool> m_armed = false;
 };
 }  // namespace detail
 
@@ -165,41 +141,48 @@ struct AsioAwaitable
 {   
     Initiate m_initiate;
     std::tuple<Results...> m_result;
-    std::exception_ptr m_error = nullptr;
 
     constexpr bool await_ready() const noexcept { return false; }
     std::coroutine_handle<> await_suspend(std::coroutine_handle<> handle)
     {
         try
         {
-            // create a coroutine task to invoke the initiate function
-            // create a completion handler and pass it to the initiate as callback function
+            // Build the bridge coroutine (parked at initial_suspend): it arms the completion and
+            // runs m_initiate. Returning its handle is a symmetric transfer — the compiler
+            // suspends the awaiting coroutine first, then resumes the bridge, so the awaiting
+            // frame is always suspended when m_initiate runs.
             auto task = [this](auto completion) mutable -> task::TaskPure {
                 try
                 {
+                    completion.active();
                     m_initiate(std::move(completion));
                 }
                 catch (...)
                 {
-                    m_error = std::current_exception();
+                    // initiate threw after arming: the completion's destructor already ran the
+                    // rescue (abort + resume). Swallow here to avoid terminate.
                 }
+                co_return;
             }(detail::AsioCompletion<Results...>(&m_result, handle));
             return task.getHandle();
         }
         catch (...)
         {
-            m_error = std::current_exception();
+            // Bridge-frame construction failed (bad_alloc): returning our own handle resumes the
+            // awaiting coroutine immediately (equivalent to not suspending) with an aborted result.
+            m_result = detail::makeOperationAbortedResult<Results...>();
             return handle;
         }
     }
 
     std::tuple<Results...> await_resume()
     {
-        if (m_error)
-        {
-            std::rethrow_exception(m_error);
-        }
         return std::move(m_result);
     }
 };
+template <typename... Results, typename Initiate>
+auto makeAsioAwaitable(Initiate&& initiate)
+{
+    return AsioAwaitable<std::decay_t<Initiate>, Results...>{std::forward<Initiate>(initiate), {}};
+}
 }  // namespace bcos::gateway

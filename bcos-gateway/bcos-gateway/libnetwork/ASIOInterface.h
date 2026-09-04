@@ -113,10 +113,10 @@ public:
     };
 
     template <typename ReadPolicy = DefaultReadPolicy>
-    AsioAwaitable<boost::system::error_code, std::size_t> awaitableReadSome(
+    auto awaitableReadSome(
         const std::shared_ptr<SocketFace>& socket, boost::asio::mutable_buffer buffers)
     {
-        return AsioAwaitable<boost::system::error_code, std::size_t>(
+        return makeAsioAwaitable<boost::system::error_code, std::size_t>(
             [this, socket, buffers](auto handler) {
                 ReadPolicy::invoke(this, socket, buffers, std::move(handler));
             });
@@ -124,7 +124,7 @@ public:
 
     auto awaitableAccept(const std::shared_ptr<SocketFace>& socket)
     {
-        return AsioAwaitable<boost::system::error_code>(
+        return makeAsioAwaitable<boost::system::error_code>(
             [this, socket](auto handler) {
                 m_acceptor.async_accept(socket->ref(), std::move(handler));
             });
@@ -132,14 +132,14 @@ public:
 
     auto awaitableResolveConnect(const std::shared_ptr<SocketFace>& socket)
     {
-        return AsioAwaitable<boost::system::error_code>(
+        return makeAsioAwaitable<boost::system::error_code>(
             [this, socket](auto handler) { resolveConnect(socket, std::move(handler)); });
     }
 
     static auto awaitableHandshake(const std::shared_ptr<SocketFace>& socket,
         ba::ssl::stream_base::handshake_type type)
     {
-        return AsioAwaitable<boost::system::error_code>(
+        return makeAsioAwaitable<boost::system::error_code>(
             [socket, type](auto handler) {
                 socket->sslref().async_handshake(type, std::move(handler));
             });
@@ -147,7 +147,7 @@ public:
 
     auto awaitableWrite(const std::shared_ptr<SocketFace>& socket, auto buffers)
     {
-        return AsioAwaitable<boost::system::error_code, std::size_t>(
+        return makeAsioAwaitable<boost::system::error_code, std::size_t>(
             [this, socket, buffers = std::move(buffers)](auto handler) mutable {
                 auto type = m_type;
                 auto& ioService = socket->ioService();
