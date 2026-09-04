@@ -21,7 +21,7 @@
 #include <boost/asio/error.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/system/error_code.hpp>
-#include <atomic>
+#include <bcos-task/Task.h>
 #include <coroutine>
 #include <cstdint>
 #include <exception>
@@ -83,15 +83,6 @@ namespace bcos::gateway
 // operation).
 namespace detail
 {
-// Handshake state shared by the completion and await_suspend (see the arm/cancel handshake
-// contract above). Each transition is claimed by exactly one side via compare_exchange_strong.
-enum class CompletionState : uint8_t
-{
-    Init = 0,   // no side has claimed the completion yet
-    Suspended,  // await_suspend has suspended the coroutine; the completion owns the resume
-    Completed,  // operator() ran (result written); await_suspend resumes inline
-    Dropped     // the armed completion was destroyed uninvoked; await_suspend fails inline
-};
 // Result tuple for the dropped-completion path: the first element (always boost::system::
 // error_code for every awaitable in this file) is operation_aborted, the remaining elements are
 // zero-initialized so the awaiting coroutine sees a well-formed error result.
@@ -101,7 +92,6 @@ std::tuple<First, Rest...> makeOperationAbortedResult()
     return std::make_tuple(
         boost::system::error_code(boost::asio::error::operation_aborted), Rest{}...);
 }
-
 // The completion handler handed to asio. Move-only: asio moves (never copies) the handler into
 // the operation, and a move transfers the completion duty to the new instance. Exactly one of
 // three exits happens: operator() runs the handler path, the armed instance is destroyed while
@@ -112,13 +102,9 @@ template <typename... Results>
 class AsioCompletion
 {
 public:
-    AsioCompletion(std::tuple<Results...>* result, std::coroutine_handle<> handle,
-        std::atomic<CompletionState>* state)
-      : m_result(result), m_handle(handle), m_state(state)
-    {}
+    AsioCompletion(std::tuple<Results...>* result, std::coroutine_handle<> handle) : m_result(result), m_handle(handle) {}
     AsioCompletion(AsioCompletion&& other) noexcept
-      : m_result(other.m_result), m_handle(other.m_handle), m_state(other.m_state),
-        m_armed(other.m_armed)
+      : m_result(other.m_result), m_handle(other.m_handle), m_armed(other.m_armed)
     {
         // the moved-from instance no longer owns the completion duty
         other.m_armed = false;
@@ -136,36 +122,7 @@ public:
                 // moved-from, or the completion already ran: nothing to settle
                 return;
             }
-            // The Init -> Dropped claim is safe in EVERY destruction context, including stack
-            // unwinding: it only records the cancellation — it never touches the frame. When the
-            // destruction comes from an initiation failure unwinding through await_suspend, the
-            // claim succeeds harmlessly and await_suspend's catch resumes inline and rethrows
-            // the initiation error (the Dropped state is never consulted); any other Init-state
-            // destruction (a test fake dropping the handler, io_context teardown on a thread
-            // that happens to be unwinding) records Dropped so await_suspend resumes inline with
-            // operation_aborted instead of parking forever. This is why the claim must NOT be
-            // gated on std::uncaught_exceptions(): that thread-global counter keys on an
-            // unrelated property (is THIS thread unwinding right now), not on the fact that
-            // matters (did initiate() throw on this stack), and gating on it would strand a
-            // genuinely armed completion destroyed on an unwinding thread. The frame-destroying
-            // rescue below needs no such guard either: Suspended is published by await_suspend's
-            // CAS only after initiate() returned normally, so a Suspended frame is structurally
-            // never the still-running case.
-            auto expected = CompletionState::Init;
-            if (m_state->compare_exchange_strong(
-                    expected, CompletionState::Dropped, std::memory_order_acq_rel))
-            {
-                // we claimed the drop: await_suspend has not suspended yet (state was Init),
-                // so it will observe Dropped and resume inline with operation_aborted
-                return;
-            }
-            if (expected == CompletionState::Suspended ||
-                m_state->load(std::memory_order_acquire) == CompletionState::Suspended)
-            {
-                // the coroutine has suspended and no completion will ever come: release the
-                // frame (and everything it owns) — the completion-or-cancel rescue
-                m_handle.destroy();
-            }
+            m_handle.resume();
         }
         catch (...)
         {}
@@ -180,25 +137,6 @@ public:
         }
         m_armed = false;
         *m_result = std::make_tuple(std::move(results)...);
-        auto expected = CompletionState::Init;
-        if (m_state->compare_exchange_strong(
-                expected, CompletionState::Completed, std::memory_order_acq_rel))
-        {
-            // we claimed the completion: await_suspend has not suspended yet, so it will
-            // observe Completed and resume inline (return false) — resuming here would resume
-            // a still-running frame (UB)
-            return;
-        }
-        if (expected == CompletionState::Suspended)
-        {
-            // normal asynchronous completion: the coroutine has suspended, resume it
-            resume();
-        }
-    }
-
-private:
-    void resume() noexcept
-    {
         try
         {
             m_handle.resume();
@@ -215,77 +153,46 @@ private:
         }
     }
 
+private:
     std::tuple<Results...>* m_result;
     std::coroutine_handle<> m_handle;
-    std::atomic<CompletionState>* m_state;
     bool m_armed = true;
 };
 }  // namespace detail
 
 template <typename Initiate, typename... Results>
 struct AsioAwaitable
-{
+{   
     Initiate m_initiate;
-    std::tuple<Results...> m_result{};
+    std::tuple<Results...> m_result;
     std::exception_ptr m_error = nullptr;
-    // Arm/cancel handshake with the completion (see the detail::CompletionState contract above):
-    // a single atomic state, claimed once by whichever side wins — await_suspend (Suspended),
-    // the completion (Completed), or its destructor (Dropped). A cross-thread completion landing
-    // between a read and a store of a multi-flag handshake can no longer be lost.
-    std::atomic<detail::CompletionState> m_state{detail::CompletionState::Init};
 
     constexpr bool await_ready() const noexcept { return false; }
-    bool await_suspend(std::coroutine_handle<> handle)
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<> handle)
     {
-        // Move the initiate function onto the stack: the completion it schedules may resume (and
-        // finish) this coroutine on another thread before initiate() returns — for the write
-        // path the initiating thread is an arbitrary producer while completion runs on the
-        // socket's io_context — destroying this frame while initiate() is still on the stack.
-        auto initiate = std::move(m_initiate);
         try
         {
-            // The completion is moved into the operation: initiate must either hand it to a
-            // deferred executor (asio) or invoke it before returning — never drop it. Both the
-            // synchronous-invocation and the synchronous-drop cases are neutralized by the
-            // handshake (the completion's CAS observes Init and defers to await_suspend instead
-            // of touching the running frame); the only sanctioned drop is initiation failure,
-            // which unwinds through this catch.
-            initiate(detail::AsioCompletion<Results...>(&m_result, handle, &m_state));
+            // create a coroutine task to invoke the initiate function
+            // create a completion handler and pass it to the initiate as callback function
+            auto task = [this](auto completion) mutable -> task::TaskPure {
+                try
+                {
+                    m_initiate(std::move(completion));
+                }
+                catch (...)
+                {
+                    m_error = std::current_exception();
+                }
+            }(detail::AsioCompletion<Results...>(&m_result, handle));
+            return task.getHandle();
         }
         catch (...)
         {
-            // Initiation itself threw: no handler reached asio, so nothing will resume the
-            // coroutine. Resume immediately by NOT suspending; await_resume rethrows so the
-            // loop's own catch handles it, exactly as a synchronous throw from the old
-            // callback-style initiation did.
             m_error = std::current_exception();
-            return false;
+            return handle;
         }
-        // After initiate() returns, touch only the single atomic state below — and only until
-        // the CAS decides: on success we return immediately (the completion owns the resume), so
-        // a cross-thread resume cannot catch us touching members; on failure the completion
-        // settled synchronously inside initiate() WITHOUT resuming (it observed Init and
-        // deferred to us), so the frame is still running and safe to read.
-        auto expected = detail::CompletionState::Init;
-        if (m_state.compare_exchange_strong(
-                expected, detail::CompletionState::Suspended, std::memory_order_acq_rel))
-        {
-            // we claimed the suspend: the coroutine is now parked and the completion (or its
-            // destructor) will resume / release it
-            return true;
-        }
-        if (expected == detail::CompletionState::Completed)
-        {
-            // the completion fired synchronously inside initiate(): the result is already in
-            // m_result, so resume inline (return false) instead of suspending
-            return false;
-        }
-        // Dropped: the completion was dropped synchronously inside initiate() without throwing.
-        // Resume inline with operation_aborted so the awaiting coroutine completes with an error
-        // instead of suspending forever.
-        m_result = detail::makeOperationAbortedResult<Results...>();
-        return false;
     }
+
     std::tuple<Results...> await_resume()
     {
         if (m_error)
@@ -295,10 +202,4 @@ struct AsioAwaitable
         return std::move(m_result);
     }
 };
-
-template <typename... Results, typename Initiate>
-auto makeAsioAwaitable(Initiate&& initiate)
-{
-    return AsioAwaitable<std::decay_t<Initiate>, Results...>{std::forward<Initiate>(initiate), {}};
-}
 }  // namespace bcos::gateway

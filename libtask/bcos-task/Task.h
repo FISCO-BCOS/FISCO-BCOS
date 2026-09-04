@@ -92,6 +92,39 @@ struct PromiseValue : public PromiseBase<TaskType, PromiseValue<TaskType>>
     }
 };
 
+struct TaskPure
+{
+public:
+    struct promise_type
+    {
+        constexpr std::suspend_always initial_suspend() noexcept { return {}; }
+        constexpr std::suspend_never final_suspend() noexcept { return {}; }
+        constexpr void return_void() noexcept {}
+        void unhandled_exception()
+        {
+            auto exception = std::current_exception();
+            throw exception;
+        }
+        TaskPure get_return_object()
+        {
+            auto handle =
+                std::coroutine_handle<promise_type>::from_promise(*static_cast<promise_type*>(this));
+            return TaskPure{handle};
+        }
+    };
+
+    explicit TaskPure(std::coroutine_handle<promise_type> handle) : m_handle(handle) {}
+    TaskPure(const TaskPure&) = delete;
+    TaskPure(TaskPure&&) noexcept = default;
+    TaskPure& operator=(const TaskPure&) = delete;
+    TaskPure& operator=(TaskPure&&) noexcept = default;
+    ~TaskPure() noexcept = default;
+    const std::coroutine_handle<promise_type>& getHandle() const { return m_handle; }
+    
+private:
+    std::coroutine_handle<promise_type> m_handle;
+};
+
 template <class TaskType>
 struct Awaitable
 {
