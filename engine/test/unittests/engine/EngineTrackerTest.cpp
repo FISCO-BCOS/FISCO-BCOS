@@ -127,6 +127,12 @@ struct ThrowingArtifact
     static inline bool throwOnAssign = false;
     ThrowingArtifact() = default;
     explicit ThrowingArtifact(int v) : value(v) {}
+    // Declaring operator= below would delete the implicit copy ctor and suppress
+    // the move ctor; publishBuiltPayload() snapshots the whole map (copy) and
+    // emplaces node values, so both must exist. Only operator= may throw: the
+    // rollback snapshot is taken while throwOnAssign can already be true.
+    ThrowingArtifact(ThrowingArtifact const&) = default;
+    ThrowingArtifact(ThrowingArtifact&&) noexcept = default;
     ThrowingArtifact& operator=(ThrowingArtifact&& other)
     {
         if (throwOnAssign)
