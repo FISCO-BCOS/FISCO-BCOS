@@ -20,6 +20,7 @@
  */
 #pragma once
 #include <bcos-framework/consensus/ConsensusNode.h>
+#include <bcos-framework/ledger/LedgerConfigState.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-framework/testutils/faker/FakeBlockHeader.h>
@@ -33,18 +34,18 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-tool/TreeTopology.h>
+#include <bcos-tx-validator/TxValidator.h>
 #include <bcos-txpool/TxPoolConfig.h>
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-txpool/sync/TransactionSync.h>
 #include <bcos-txpool/txpool/storage/MemoryStorage.h>
-#include <bcos-txpool/txpool/validator/TxValidator.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
-#include <thread>
 #include <list>
-#include <bcos-utilities/BoostLog.h>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -79,8 +80,8 @@ public:
 class FakeMemoryStorage : public MemoryStorage
 {
 public:
-    FakeMemoryStorage(TxPoolConfig::Ptr _config, boost::asio::io_context& _ioContext,
-        size_t _notifyWorkerNum = 2)
+    FakeMemoryStorage(
+        TxPoolConfig::Ptr _config, boost::asio::io_context& _ioContext, size_t _notifyWorkerNum = 2)
       : MemoryStorage(_config, _ioContext, _notifyWorkerNum)
     {}
 };
@@ -122,6 +123,13 @@ public:
         m_txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, 20, 10, 10);
         m_ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_COUNT_LIMIT, "1000");
+        // What Initializer does at boot: publish the ledger's configuration into the holder the
+        // validator reads. Admission takes the chain id and the base fee from this snapshot, not
+        // from SYS_CONFIG, and an unpublished holder refuses every EIP-155 transaction.
+        auto ledgerConfig = std::make_shared<ledger::LedgerConfig>(*m_ledger->ledgerConfig());
+        ledgerConfig->setChainId(evmc::bytes32{20200});
+        ledgerConfig->setGasPrice({"0", 0});
+        m_ledgerConfigState = std::make_shared<ledger::LedgerConfigState>(std::move(ledgerConfig));
 
         m_frontService = std::make_shared<FakeFrontService>(m_nodeId);
         if (enableTree)
@@ -135,6 +143,7 @@ public:
         auto txPoolFactory = std::make_shared<TxPoolFactory>(m_nodeId, _cryptoSuite,
             m_txResultFactory, m_blockFactory, m_frontService, m_ledger, m_groupId, m_chainId,
             m_blockLimit, bcos::txpool::DEFAULT_POOL_LIMIT, true);
+        txPoolFactory->setLedgerConfigState(m_ledgerConfigState);
         m_txpool = txPoolFactory->createTxPool(*ioServicePool->getIOService(), ioServicePool);
 
         m_sync = std::dynamic_pointer_cast<TransactionSync>(m_txpool->transactionSync());
@@ -192,7 +201,9 @@ public:
                 auto txPoolFactoryTemp = std::make_shared<TxPoolFactory>(nodeId, _cryptoSuite,
                     m_txResultFactory, m_blockFactory, frontService, m_ledger, m_groupId, m_chainId,
                     m_blockLimit, bcos::txpool::DEFAULT_POOL_LIMIT, true);
-                txpool = txPoolFactoryTemp->createTxPool(*ioServicePool->getIOService(), ioServicePool);
+                txPoolFactoryTemp->setLedgerConfigState(m_ledgerConfigState);
+                txpool =
+                    txPoolFactoryTemp->createTxPool(*ioServicePool->getIOService(), ioServicePool);
             }
             else
             {
@@ -337,12 +348,12 @@ public:
     int64_t m_blockLimit;
 
     FakeLedger::Ptr m_ledger;
+    ledger::LedgerConfigState::Ptr m_ledgerConfigState;
     FakeFrontService::Ptr m_frontService;
     FakeGateWay::Ptr m_fakeGateWay;
     // ioServicePool MUST be declared before m_txpool and m_sync to ensure it
     // outlives Timer objects they create that reference its io_context.
-    bcos::IOServicePool::Ptr ioServicePool =
-        std::make_shared<bcos::IOServicePool>(1, "txpoolTest");
+    bcos::IOServicePool::Ptr ioServicePool = std::make_shared<bcos::IOServicePool>(1, "txpoolTest");
     TxPool::Ptr m_txpool;
     TransactionSync::Ptr m_sync;
 

@@ -297,9 +297,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     BOOST_TEST(_txpoolStorage->size() == originTxsSize - sealedTxs->size());
     // check the txpoolNonce
     auto txPoolNonceChecker = _faker->txpool()->txpoolConfig()->txPoolNonceChecker();
-    auto validator =
-        std::dynamic_pointer_cast<TxValidator>(_faker->txpool()->txpoolConfig()->txValidator());
-    auto ledgerNonceChecker = validator->ledgerNonceChecker();
+    auto ledgerNonceChecker = _faker->txpool()->txpoolConfig()->ledgerNonceChecker();
     for (const auto& tx : notifiedTxs | ::ranges::views::filter([](auto const& tx) {
              return tx->type() != static_cast<uint8_t>(TransactionType::Web3Transaction);
          }))
@@ -517,7 +515,6 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     auto txpool = faker->txpool();
     auto txpoolStorage = txpool->txpoolStorage();
     auto ledger = faker->ledger();
-    ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0");
     auto const eoaKey = _cryptoSuite->signatureImpl()->generateKeyPair();
     // case3: transaction with invalid nonce(conflict with the ledger nonce)
     auto const& blockData = ledger->ledgerData();
@@ -525,16 +522,24 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
 
     auto duplicatedNonce =
         blockData[ledger->blockNumber() - blockLimit + 1]->transactions()[0]->nonce();
+    u256 fakeNonce = u256(duplicatedNonce);
+
+    // Seed the account BEFORE submitting. Admission now checks the Web3 nonce window on the
+    // submit path, and a window is measured from the account's committed nonce -- so a sender
+    // with no on-chain state and a nonce this large is legitimately unqueueable. Putting the
+    // account at that nonce keeps what this case is actually about: a Web3 transaction whose
+    // nonce collides with a BCOS one is still admitted, because the two nonce spaces are
+    // separate.
+    StorageState state{.nonce = fakeNonce.convert_to<std::string>(), .balance = "1"};
+    faker->ledger()->setStorageState(
+        eoaKey->address(_cryptoSuite->hashImpl()).hex(), std::move(state));
+
     auto tx = fakeWeb3Tx(_cryptoSuite, std::string(duplicatedNonce), eoaKey);
     // bcos nonce not effect web3 nonce
     checkWebTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None, importedTxNum);
 
-    u256 fakeNonce = u256(duplicatedNonce);
-    StorageState state{.nonce = fakeNonce.convert_to<std::string>(), .balance = "1"};
-    faker->ledger()->setStorageState(
-        eoaKey->address(_cryptoSuite->hashImpl()).hex(), std::move(state));
-    // ledger update to fakeNonce, tx do not clean
+    // ledger already at fakeNonce, tx do not clean
     std::this_thread::sleep_for(std::chrono::milliseconds(TXPOOL_CLEANUP_TIME));
     BOOST_CHECK_EQUAL(txpoolStorage->size(), importedTxNum);
 
@@ -627,7 +632,7 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     testAsyncFillBlock(faker, txpool, txpoolStorage, _cryptoSuite);
     std::cout << "#### testAsyncSealTxs" << std::endl;
     testAsyncSealTxs(faker, txpool, txpoolStorage, blockLimit, _cryptoSuite, [&]() {
-        txpool->txpoolConfig()->txValidator()->web3NonceChecker()->insert(
+        txpool->txpoolConfig()->web3NonceChecker()->insert(
             std::string(tx->sender()), u256("0xffffffffffffffffffffffffff"));
     });
     // clear all the txs before exit

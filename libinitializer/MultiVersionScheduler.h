@@ -2,6 +2,7 @@
 
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/LedgerConfigState.h"
 #include "bcos-utilities/Exceptions.h"
 
 namespace bcos::scheduler_v1
@@ -25,14 +26,21 @@ private:
 
     std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> m_schedulers;
     int m_currentIndex;
+    /// Republished after every commit, whichever scheduler performed it. Transaction admission
+    /// reads its chain configuration from this holder and nowhere else, so the publisher has to
+    /// see every commit on every executor version -- and this dispatcher is the node's single
+    /// commit funnel (PBFT, block sync and the startup system block all commit through it). A
+    /// scheduler that never learned about the holder cannot leave it stale from here.
+    ledger::LedgerConfigState::Ptr m_ledgerConfigState;
 
     bcos::scheduler::SchedulerInterface& getScheduler();
 
 public:
     bcos::scheduler::SchedulerInterface& scheduler(int version);
 
-    MultiVersionScheduler(std::array<scheduler::SchedulerInterface::Ptr,
-        SUPPORTED_EXECUTOR_VERSION_COUNT> schedulers);
+    MultiVersionScheduler(
+        std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> schedulers,
+        ledger::LedgerConfigState::Ptr ledgerConfigState);
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>

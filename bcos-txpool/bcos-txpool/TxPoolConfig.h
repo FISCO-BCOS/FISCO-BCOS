@@ -20,24 +20,27 @@
  * @date 2021-05-08
  */
 #pragma once
-#include "txpool/interfaces/TxValidatorInterface.h"
 #include "txpool/utilities/Common.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionMetaData.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
+#include <bcos-tx-validator/LedgerNonceChecker.h>
 #include <bcos-tx-validator/NonceCheckerInterface.h>
+#include <bcos-tx-validator/TxValidator.h>
+#include <bcos-tx-validator/Web3NonceChecker.h>
 namespace bcos::txpool
 {
 class TxPoolConfig
 {
 public:
     using Ptr = std::shared_ptr<TxPoolConfig>;
-    TxPoolConfig(TxValidatorInterface::Ptr _txValidator,
+    TxPoolConfig(std::shared_ptr<txvalidator::TxValidator> _txValidator,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
-        txvalidator::NonceCheckerInterface::Ptr _txpoolNonceChecker, int64_t _blockLimit,
+        txvalidator::NonceCheckerInterface::Ptr _txpoolNonceChecker,
+        txvalidator::Web3NonceChecker::Ptr _web3NonceChecker, int64_t _blockLimit,
         size_t _poolLimit, bool checkTransactionSignature);
 
     virtual ~TxPoolConfig() = default;
@@ -46,7 +49,17 @@ public:
 
     txvalidator::NonceCheckerInterface::Ptr txPoolNonceChecker();
 
-    TxValidatorInterface::Ptr txValidator();
+    /// The admission layer. Every ingress into this pool goes through it.
+    std::shared_ptr<txvalidator::TxValidator> txValidator();
+
+    /// The pool owns the nonce tables and lends them to the validator, not the other way round:
+    /// the insert path reserves a nonce here and the commit path clears it, both without going
+    /// near admission.
+    txvalidator::Web3NonceChecker::Ptr web3NonceChecker();
+    txvalidator::LedgerNonceChecker::Ptr ledgerNonceChecker();
+    /// Bound once the pool has replayed the chain's nonce history, which needs the block limit.
+    void setLedgerNonceChecker(txvalidator::LedgerNonceChecker::Ptr _ledgerNonceChecker);
+
     bcos::protocol::TransactionSubmitResultFactory::Ptr txResultFactory();
 
     bcos::protocol::BlockFactory::Ptr blockFactory();
@@ -59,7 +72,9 @@ public:
     bool checkTransactionSignature() const;
 
 private:
-    TxValidatorInterface::Ptr m_txValidator;
+    std::shared_ptr<txvalidator::TxValidator> m_txValidator;
+    txvalidator::Web3NonceChecker::Ptr m_web3NonceChecker;
+    txvalidator::LedgerNonceChecker::Ptr m_ledgerNonceChecker;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;
