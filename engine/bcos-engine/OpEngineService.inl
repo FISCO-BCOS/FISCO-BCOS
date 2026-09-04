@@ -22,14 +22,9 @@ inline auto rawEnvelopes(ExecutionPayload const& payload)
 }
 }  // namespace op_detail
 
-template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
-    requires executor_v1::TransactionExecutor<ExecutorType,
-                 typename GlobalStateStorageType::ViewType> &&
-             scheduler_v1::TransactionScheduler<SchedulerType,
-                 typename GlobalStateStorageType::ViewType, ExecutorType,
-                 std::vector<protocol::Transaction::Ptr>>
+template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
 task::Task<ForkchoiceUpdatedResult>
-OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::updateForkchoice(
+OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkchoice(
     const ForkchoiceState& forkchoiceState, const PayloadAttributes* payloadAttributes,
     std::uint32_t version)
 {
@@ -84,8 +79,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType
         view, forkchoiceState.headBlockHash, bcos::ledger::fromStorage);
     // All-zero safe/finalized hashes are the Engine-API "not set" value: skip number
     // resolution and canonical checks for that field (op-geth SetSafe/SetFinalized are
-    // only called for non-zero hashes). A non-zero hash that cannot be resolved still
-    // answers SYNCING (fail-closed) - finding AJ.
+    // only called for non-zero hashes). A missing HEAD is SYNCING; a non-zero
+    // unresolvable safe/finalized is InvalidForkchoiceState (op-geth, finding BJ).
     bool const safeSet = forkchoiceState.safeBlockHash != bcos::h256{};
     bool const finalizedSet = forkchoiceState.finalizedBlockHash != bcos::h256{};
     auto safeBlockNumber = safeSet ? co_await bcos::ledger::getBlockNumber(view,
@@ -96,14 +91,19 @@ OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType
                            view, forkchoiceState.finalizedBlockHash, bcos::ledger::fromStorage) :
                        std::nullopt;
 
-    if (!headBlockNumber.has_value() || (safeSet && !safeBlockNumber.has_value()) ||
-        (finalizedSet && !finalizedBlockNumber.has_value()))
+    if (!headBlockNumber.has_value())
     {
         co_return ForkchoiceUpdatedResult{
             .payloadStatus =
                 makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
             .payloadId = std::nullopt,
         };
+    }
+    if ((safeSet && !safeBlockNumber.has_value()) ||
+        (finalizedSet && !finalizedBlockNumber.has_value()))
+    {
+        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                  "Forkchoice safe or finalized block is unknown"});
     }
 
     auto canonicalHeadHash =
@@ -158,29 +158,51 @@ OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType
         forkchoiceState, *payloadAttributes, version, *headBlockNumber + 1);
 }
 
-template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
-    requires executor_v1::TransactionExecutor<ExecutorType,
-                 typename GlobalStateStorageType::ViewType> &&
-             scheduler_v1::TransactionScheduler<SchedulerType,
-                 typename GlobalStateStorageType::ViewType, ExecutorType,
-                 std::vector<protocol::Transaction::Ptr>>
+template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
 task::Task<ForkchoiceUpdatedResult>
-OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::buildOpPayload(
+OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayload(
     const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
     std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber)
 {
-    requireDelegate();
     // Same policy as EthEngineService (option B): deterministic derivePayloadId, not a
     // process-local sequence counter.
     auto payloadIdOpt =
         engine_common::derivePayloadId(payloadAttributes, forkchoiceState.headBlockHash, version);
     if (!payloadIdOpt.has_value())
     {
-        BOOST_THROW_EXCEPTION(
-            OpExecutionInternalError{} << bcos::errinfo_comment{
-                "buildOpPayload: payloadAttributes.transactions contains undecodable hex"});
+        co_return ForkchoiceUpdatedResult{
+            .payloadStatus = makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                std::string("payloadAttributes.transactions contains undecodable hex")),
+            .payloadId = std::nullopt,
+        };
     }
     auto payloadId = *payloadIdOpt;
+
+    u256 baseFee;
+    {
+        auto view = m_globalStateStorage.fork();
+        auto parentNumberStr = boost::lexical_cast<std::string>(nextBlockNumber - 1);
+        auto parentHeaderEntry = co_await storage2::readOne(
+            view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
+        if (!parentHeaderEntry.has_value())
+        {
+            // Parent hash already resolved (canonical). Missing header is local-state
+            // corruption — fail closed rather than pricing the block at 1 gwei.
+            co_return ForkchoiceUpdatedResult{
+                .payloadStatus = makeStatus(PayloadValidationStatus::Invalid,
+                    forkchoiceState.headBlockHash,
+                    std::string("parent block header is missing from storage")),
+                .payloadId = std::nullopt,
+            };
+        }
+        auto stored = parentHeaderEntry->get();
+        bcos::bytes parentHeaderBytes(stored.begin(), stored.end());
+        auto parentHeader =
+            m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
+        baseFee = calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive());
+    }
+
+    requireDelegate();
 
     auto sealView = m_globalStateStorage.fork();
     std::vector<protocol::Transaction::Ptr> sealedTxs;
@@ -233,21 +255,6 @@ OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType
     {
         auto view = m_globalStateStorage.fork();
         co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
-    }
-    u256 baseFee{1'000'000'000};
-    {
-        auto view = m_globalStateStorage.fork();
-        auto parentNumberStr = boost::lexical_cast<std::string>(nextBlockNumber - 1);
-        if (auto parentHeaderEntry = co_await storage2::readOne(view,
-                executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
-            parentHeaderEntry.has_value())
-        {
-            auto stored = parentHeaderEntry->get();
-            bcos::bytes parentHeaderBytes(stored.begin(), stored.end());
-            auto parentHeader =
-                m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
-            baseFee = calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive());
-        }
     }
 
     auto const parentBeaconBlockRoot = payloadAttributes.parentBeaconBlockRoot.value();
@@ -322,7 +329,25 @@ OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType
             SchedulerType::computeTxRoot(op_detail::rawEnvelopes(payload));
         auto provisionalHeader = engine_common::op::rebuildOpEthHeader(
             m_blockFactory->blockHeaderFactory(), payload, transactionsRoot, parentBeaconBlockRoot);
-        auto block = buildOpBlock(payload, provisionalHeader);
+        bcos::protocol::Block::Ptr block;
+        try
+        {
+            block = buildOpBlock(payload, provisionalHeader);
+        }
+        catch (const OpExecutionInternalError& e)
+        {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            if (comment != nullptr &&
+                std::string_view(*comment).find("failed to decode") != std::string_view::npos)
+            {
+                co_return ForkchoiceUpdatedResult{
+                    .payloadStatus = makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                        std::string("undecodable payload transaction envelope")),
+                    .payloadId = std::nullopt,
+                };
+            }
+            throw;
+        }
 
         m_delegate->reset([](bcos::Error::Ptr) {});
         bcos::Error::Ptr executeError;
@@ -379,7 +404,25 @@ OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType
             SchedulerType::computeTxRoot(op_detail::rawEnvelopes(payload)), parentBeaconBlockRoot);
     payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
 
-    auto finalBlock = buildOpBlock(payload, finalHeader);
+    bcos::protocol::Block::Ptr finalBlock;
+    try
+    {
+        finalBlock = buildOpBlock(payload, finalHeader);
+    }
+    catch (const OpExecutionInternalError& e)
+    {
+        auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+        if (comment != nullptr &&
+            std::string_view(*comment).find("failed to decode") != std::string_view::npos)
+        {
+            co_return ForkchoiceUpdatedResult{
+                .payloadStatus = makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                    std::string("undecodable payload transaction envelope")),
+                .payloadId = std::nullopt,
+            };
+        }
+        throw;
+    }
     m_delegate->reset([](bcos::Error::Ptr) {});
     bcos::Error::Ptr canonicalError;
     bcos::protocol::BlockHeader::Ptr canonicalHeader;
@@ -423,26 +466,16 @@ OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType
     };
 }
 
-template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
-    requires executor_v1::TransactionExecutor<ExecutorType,
-                 typename GlobalStateStorageType::ViewType> &&
-             scheduler_v1::TransactionScheduler<SchedulerType,
-                 typename GlobalStateStorageType::ViewType, ExecutorType,
-                 std::vector<protocol::Transaction::Ptr>>
+template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
 task::Task<PayloadStatus>
-OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::newPayload(
+OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::newPayload(
     const NewPayloadRequest& request, std::uint32_t version)
 {
     co_return co_await handleOpNewPayload(request, version);
 }
 
-template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
-    requires executor_v1::TransactionExecutor<ExecutorType,
-                 typename GlobalStateStorageType::ViewType> &&
-             scheduler_v1::TransactionScheduler<SchedulerType,
-                 typename GlobalStateStorageType::ViewType, ExecutorType,
-                 std::vector<protocol::Transaction::Ptr>>
-task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
+task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
     SchedulerType>::handleOpNewPayload(const NewPayloadRequest& request, std::uint32_t version)
 {
     constexpr std::uint32_t c_opIsthmusPayloadVersion = 4;
@@ -470,13 +503,8 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, E
     }
 }
 
-template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
-    requires executor_v1::TransactionExecutor<ExecutorType,
-                 typename GlobalStateStorageType::ViewType> &&
-             scheduler_v1::TransactionScheduler<SchedulerType,
-                 typename GlobalStateStorageType::ViewType, ExecutorType,
-                 std::vector<protocol::Transaction::Ptr>>
-task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
+task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
     SchedulerType>::runOpNewPayloadSteps(const NewPayloadRequest& request)
 {
     {
@@ -559,43 +587,46 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, E
     }
 
     const auto parentNumberStr = boost::lexical_cast<std::string>(*parentBlockNumber);
-    if (auto parentHeaderEntry = co_await storage2::readOne(
-            view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
-        parentHeaderEntry.has_value())
+    auto parentHeaderEntry = co_await storage2::readOne(
+        view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
+    if (!parentHeaderEntry.has_value())
     {
-        const auto storedHeader = parentHeaderEntry->get();
-        bcos::protocol::BlockHeader::Ptr parentHeader;
-        try
-        {
-            bcos::bytes parentHeaderBytes(storedHeader.begin(), storedHeader.end());
-            parentHeader =
-                m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
-        }
-        catch (const std::exception& e)
-        {
-            BOOST_THROW_EXCEPTION(
-                OpExecutionInternalError{} << bcos::errinfo_comment{
-                    std::string("stored parent block header is undecodable: ") + e.what()});
-        }
-        if (parentHeader->number() != static_cast<int64_t>(*parentBlockNumber))
-        {
-            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                      "stored parent block header height mismatch"});
-        }
-        if (static_cast<uint64_t>(payload.timestamp) <=
-            static_cast<uint64_t>(parentHeader->timestamp()))
+        // Parent hash already resolved and is canonical. Skipping timestamp / baseFee
+        // here would accept a payload we cannot price — fail closed.
+        co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+            std::string("parent block header is missing from storage"));
+    }
+    const auto storedHeader = parentHeaderEntry->get();
+    bcos::protocol::BlockHeader::Ptr parentHeader;
+    try
+    {
+        bcos::bytes parentHeaderBytes(storedHeader.begin(), storedHeader.end());
+        parentHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
+    }
+    catch (const std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                  std::string("stored parent block header is undecodable: ") +
+                                  e.what()});
+    }
+    if (parentHeader->number() != static_cast<int64_t>(*parentBlockNumber))
+    {
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                  "stored parent block header height mismatch"});
+    }
+    if (static_cast<uint64_t>(payload.timestamp) <=
+        static_cast<uint64_t>(parentHeader->timestamp()))
+    {
+        co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+            std::string("timestamp must be strictly greater than the parent's"));
+    }
+    {
+        auto expectedBaseFee = calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive());
+        if (payload.baseFeePerGas != expectedBaseFee)
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-                std::string("timestamp must be strictly greater than the parent's"));
-        }
-        {
-            auto expectedBaseFee = calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive());
-            if (payload.baseFeePerGas != expectedBaseFee)
-            {
-                co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-                    std::string("baseFeePerGas does not match the value computed "
-                                "from the parent"));
-            }
+                std::string("baseFeePerGas does not match the value computed "
+                            "from the parent"));
         }
     }
 
@@ -678,14 +709,9 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType, E
     co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
 }
 
-template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
-    requires executor_v1::TransactionExecutor<ExecutorType,
-                 typename GlobalStateStorageType::ViewType> &&
-             scheduler_v1::TransactionScheduler<SchedulerType,
-                 typename GlobalStateStorageType::ViewType, ExecutorType,
-                 std::vector<protocol::Transaction::Ptr>>
+template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
 bcos::protocol::Block::Ptr
-OpEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::buildOpBlock(
+OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpBlock(
     const ExecutionPayload& payload, bcos::protocol::BlockHeader::Ptr header)
 {
     auto block = m_blockFactory->createBlock();

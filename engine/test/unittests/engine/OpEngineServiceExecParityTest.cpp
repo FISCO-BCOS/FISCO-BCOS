@@ -115,7 +115,7 @@ struct StubExecutor
 };
 
 using EngineOpScheduler = bcos::evm::engine::OpSchedulerSeam<ViewType>;
-using OpEngine = bcos::engine::OpEngineService<StubMemPool, MLS, StubExecutor, EngineOpScheduler>;
+using OpEngine = bcos::engine::OpEngineService<StubMemPool, MLS, EngineOpScheduler>;
 
 constexpr uint64_t kChainId = 0x2105;
 
@@ -326,14 +326,19 @@ void runInvalidFieldParity(std::string const& vectorId, std::string const& corru
 
 }  // namespace op_engine_exec_parity
 
-#define SKIP_IF_NO_T8N_CORPUS()                                    \
-    do                                                             \
-    {                                                              \
-        if (!w6test::t8nCorpusAvailable())                         \
-        {                                                          \
-            BOOST_TEST_MESSAGE("skipping S6: t8n corpus missing"); \
-            return;                                                \
-        }                                                          \
+#define SKIP_IF_NO_T8N_CORPUS()                                                              \
+    do                                                                                       \
+    {                                                                                        \
+        if (!w6test::t8nCorpusAvailable())                                                   \
+        {                                                                                    \
+            if (w6test::t8nCorpusRequired())                                                 \
+            {                                                                                \
+                BOOST_FAIL("S6 t8n corpus required in CI but missing at " OP_T8N_VECTORS_DIR \
+                           " / " OP_T8N_GOLDEN_ENGINE_DIR);                                  \
+            }                                                                                \
+            BOOST_TEST_MESSAGE("skipping S6: t8n corpus missing");                           \
+            return;                                                                          \
+        }                                                                                    \
     } while (0)
 
 BOOST_AUTO_TEST_SUITE(OpEngineServiceExecParityTest)
@@ -343,6 +348,13 @@ using namespace op_engine_exec_parity;
 BOOST_AUTO_TEST_CASE(s6_skips_when_t8n_corpus_missing)
 {
     // Matrix: T06 — skip must return from the test case, not from a helper.
+    // CI (FISCO_REQUIRE_T8N_CORPUS) must have the corpus; a missing tree is a fail.
+    if (w6test::t8nCorpusRequired())
+    {
+        BOOST_REQUIRE_MESSAGE(w6test::t8nCorpusAvailable(),
+            "CI requires FISCO-BCOS/op-stack-e2e-tests under OP_T8N_*");
+        return;
+    }
     if (w6test::t8nCorpusAvailable())
     {
         BOOST_TEST_MESSAGE("t8n corpus present; skip-path not exercised");

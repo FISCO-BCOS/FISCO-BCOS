@@ -40,6 +40,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -127,12 +128,7 @@ bcos::protocol::BlockHeader::Ptr findBuiltHeader(
 }
 }  // namespace op_detail
 
-template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
-    requires executor_v1::TransactionExecutor<ExecutorType,
-                 typename GlobalStateStorageType::ViewType> &&
-             scheduler_v1::TransactionScheduler<SchedulerType,
-                 typename GlobalStateStorageType::ViewType, ExecutorType,
-                 std::vector<protocol::Transaction::Ptr>>
+template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
 class OpEngineService
 {
 public:
@@ -144,7 +140,7 @@ public:
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3),
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
-        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = true)
+        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_scheduler(scheduler),

@@ -41,7 +41,8 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 /// Hash-relevant fields vs the locally built payload (op-geth ExecutableDataToBlock).
-/// Optional V3-omitted fields are compared only when the CL sent them.
+/// Keep-local-body: optional V3-omitted fields are compared only when both sides
+/// sent them (submitted-absent vs built-present is not a mismatch).
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
 bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);

@@ -619,7 +619,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_daCaps = std::make_shared<bcos::engine::DACaps>();
         m_engineServiceInitializer = EngineServiceInitializer::buildOp(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
-            transactionExecutor, m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
+            m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
             /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), m_daCaps,
             /*allowSynthesizedL1Attributes=*/m_nodeConfig->enableSingleNodeConsensus());

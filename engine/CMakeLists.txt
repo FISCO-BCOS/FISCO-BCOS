@@ -6,6 +6,9 @@
 project(bcos-engine VERSION ${VERSION})
 
 file(GLOB_RECURSE SRC_LIST "bcos-engine/*.cpp")
+# EngineServiceImpl is the pre-cutover TU. Its remaining symbols are test-only
+# wrappers; production Eth/Op helpers live in EngineServiceCommon.cpp.
+list(FILTER SRC_LIST EXCLUDE REGEX ".*/EngineServiceImpl\\.cpp$")
 
 add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC

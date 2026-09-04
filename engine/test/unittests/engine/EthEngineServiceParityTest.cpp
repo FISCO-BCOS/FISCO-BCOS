@@ -473,6 +473,17 @@ BOOST_AUTO_TEST_CASE(generic_unknown_head_matches)
     checkForkchoiceParity(legacyResult, newResult);
 }
 
+BOOST_AUTO_TEST_CASE(eth_unknown_nonzero_safe_is_invalid_forkchoice)
+{
+    // BJ — known head + unresolved non-zero safe is InvalidForkchoiceState (not SYNCING).
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    pair.newStorage.setBlockNumber(forkchoiceState.headBlockHash, c_validationBlockNumber);
+    pair.newStorage.setCanonicalBlock(forkchoiceState.headBlockHash, c_validationBlockNumber);
+    BOOST_CHECK_THROW(task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, nullptr, 3)),
+        InvalidForkchoiceState);
+}
+
 BOOST_AUTO_TEST_CASE(generic_safe_finalized_validation_matches)
 {
     ServicePair pair;

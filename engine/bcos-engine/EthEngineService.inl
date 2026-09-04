@@ -50,8 +50,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         view, forkchoiceState.headBlockHash, bcos::ledger::fromStorage);
     // All-zero safe/finalized hashes are the Engine-API "not set" value: skip number
     // resolution and canonical checks for that field (op-geth SetSafe/SetFinalized are
-    // only called for non-zero hashes). A non-zero hash that cannot be resolved still
-    // answers SYNCING (fail-closed) - finding AJ.
+    // only called for non-zero hashes). A missing HEAD is SYNCING; a non-zero
+    // unresolvable safe/finalized is InvalidForkchoiceState (op-geth, finding BJ).
     bool const safeSet = forkchoiceState.safeBlockHash != bcos::h256{};
     bool const finalizedSet = forkchoiceState.finalizedBlockHash != bcos::h256{};
     auto safeBlockNumber = safeSet ? co_await bcos::ledger::getBlockNumber(view,
@@ -62,14 +62,19 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
                            view, forkchoiceState.finalizedBlockHash, bcos::ledger::fromStorage) :
                        std::nullopt;
 
-    if (!headBlockNumber.has_value() || (safeSet && !safeBlockNumber.has_value()) ||
-        (finalizedSet && !finalizedBlockNumber.has_value()))
+    if (!headBlockNumber.has_value())
     {
         co_return ForkchoiceUpdatedResult{
             .payloadStatus = engine_common::makeStatus(
                 PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
             .payloadId = std::nullopt,
         };
+    }
+    if ((safeSet && !safeBlockNumber.has_value()) ||
+        (finalizedSet && !finalizedBlockNumber.has_value()))
+    {
+        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                  "Forkchoice safe or finalized block is unknown"});
     }
     if (safeBlockNumber.has_value() && *safeBlockNumber > *headBlockNumber)
     {
@@ -167,7 +172,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         nextBlockNumber, std::move(sealedTxs), view);
 
     auto commonEntry = std::make_shared<BuiltPayload>();
-    commonEntry->version = version;
+    commonEntry->version = engine_common::payloadShapeVersion(version);
     commonEntry->executionPayload = std::move(built.executionPayload);
     commonEntry->blockValue = 0;
     commonEntry->blobsBundle = std::nullopt;

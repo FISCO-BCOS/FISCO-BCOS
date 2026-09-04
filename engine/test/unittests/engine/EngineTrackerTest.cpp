@@ -52,6 +52,13 @@ BuiltPayloadPtr makePayload(std::uint32_t version, bool withWithdrawalsRoot = fa
     {
         entry->executionPayload.withdrawalsRoot = h256(42);
     }
+    // V3+ getPayload requires the blob-gas pair and beacon root (EngineTracker shape gate).
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
+    {
+        entry->executionPayload.blobGasUsed = u256(0);
+        entry->executionPayload.excessBlobGas = u256(0);
+        entry->parentBeaconBlockRoot = h256(1);
+    }
     return entry;
 }
 

@@ -39,6 +39,15 @@ inline bool t8nCorpusAvailable()
            std::filesystem::is_directory(OP_T8N_GOLDEN_ENGINE_DIR);
 }
 
+inline bool t8nCorpusRequired()
+{
+#ifdef FISCO_REQUIRE_T8N_CORPUS
+    return true;
+#else
+    return false;
+#endif
+}
+
 struct GoldenSample
 {
     std::string id;
@@ -181,7 +190,8 @@ struct InvalidSample
 /// seconds; Quantity hex); corrupted values + recomputed blockHash + base truths
 /// (logsBloom/extraData/withdrawalsRoot etc.) all come from `_op_payload`.
 /// - `withdrawals` is a fixed OP-path requirement (present-and-empty,
-///   EngineServiceImpl.cpp:332); when the vector omits it, pad an empty array;
+///   OpEngineService.cpp validateOpNewPayloadRequest); when the vector omits it,
+///   pad an empty array;
 /// - null `blobGasUsed`/`excessBlobGas` in `_op_payload` must not enter ep —
 ///   parseNewPayloadRequest's `isMember` + `fromBigQuantity("")` would throw; remove them;
 /// - `parentBeaconBlockRoot` is params[2] (not an ExecutionPayload field), so it does not

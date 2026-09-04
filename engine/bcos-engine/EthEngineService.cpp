@@ -5,5 +5,5 @@
 
 #include "EthEngineService.h"
 
-// Production Eth validation/encode helpers live in engine::detail (EngineServiceCommon /
-// EngineServiceImpl.cpp). This TU remains so the engine library glob stays stable.
+// Production Eth validation/encode helpers live in engine::detail
+// (EngineServiceCommon.cpp). This TU remains so the engine library glob stays stable.

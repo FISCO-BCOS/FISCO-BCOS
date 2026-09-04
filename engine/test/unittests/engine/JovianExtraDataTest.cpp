@@ -226,9 +226,13 @@ BOOST_AUTO_TEST_CASE(encode_rejects_params_shorter_than_eight_bytes)
 {
     for (std::size_t size : {std::size_t{0}, std::size_t{1}, std::size_t{7}, std::size_t{9}})
     {
-        BOOST_CHECK_THROW(
+        BOOST_CHECK_EXCEPTION(
             engine::detail::encodeOptimismExtraData(makeAttributes(bytes(size, 0), 0)),
-            std::invalid_argument);
+            std::invalid_argument, [](std::invalid_argument const& e) {
+                return std::string_view(e.what()).find(
+                           "encodeOptimismExtraData requires exactly 8 bytes of eip1559Params") !=
+                       std::string_view::npos;
+            });
     }
 }
 
@@ -379,6 +383,27 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_every_hash_relevant_fiel
         stripped.excessBlobGas = std::nullopt;
         BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
     }
+}
+
+// Finding BL: keep-local-body contract. A V3 echo that omits optionals the node
+// stored must still ACCEPT; only present-vs-present disagreement is a mismatch.
+BOOST_AUTO_TEST_CASE(compare_absent_optional_keeps_local_body)
+{
+    auto built = makePayloadWithTransactions(
+        fromHexWithPrefix("0x01000000fa000000060000000000000000"), {{0x7e, 0x01}});
+    built.withdrawalsRoot = h256(1);
+    built.blobGasUsed = u256(0);
+    built.excessBlobGas = u256(0);
+
+    auto omitted = built;
+    omitted.withdrawalsRoot = std::nullopt;
+    omitted.blobGasUsed = std::nullopt;
+    omitted.excessBlobGas = std::nullopt;
+    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(omitted, built).has_value());
+
+    auto disagreed = built;
+    disagreed.withdrawalsRoot = h256(2);
+    BOOST_CHECK(engine::detail::compareWithBuiltPayload(disagreed, built).has_value());
 }
 
 
