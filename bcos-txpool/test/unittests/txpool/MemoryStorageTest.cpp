@@ -589,6 +589,10 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     // reported as absent, which is what these fabricated senders are.
     fakeit::When(Method(mockWeb3NonceChecker, committedNonce))
         .AlwaysDo([](auto) -> task::Task<std::optional<u256>> { co_return std::nullopt; });
+    // The pool stage asks whether a pending transaction already holds this (sender, nonce). These
+    // fixtures reserve nothing, so nothing is held.
+    fakeit::When(Method(mockWeb3NonceChecker, existsMemoryNonce))
+        .AlwaysDo([](auto, auto) -> task::Task<bool> { co_return false; });
 
     // Shared by both storages, so a section that republishes the chain id reaches both.
     auto configState = makePermissiveConfigState();
