@@ -29,6 +29,7 @@
 #include "bcos-framework/testutils/faker/FakeScheduler.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
+#include "bcos-rlp-protocol/Web3TxEnvelope.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tx-validator/LedgerNonceChecker.h"
 #include "bcos-tx-validator/Normalize.h"
@@ -514,6 +515,49 @@ BOOST_AUTO_TEST_CASE(missingChainIdConfigRejectsRatherThanSkips)
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::InvalidChainId);
 }
 
+// The classifier answers three ways and the two cases above drive one of them. A pre-EIP-155
+// legacy transaction makes no claim about which chain it is for -- its signing preimage is the
+// bare six fields, with no chainId item to compare -- so the check stands down even though the
+// chain HAS a configured id, which is what separates this from the case above.
+BOOST_AUTO_TEST_CASE(unprotectedLegacyTransactionIsExemptFromTheChainIdCheck)
+{
+    AdmitHarness harness;
+    auto tx = admitTx({.type = rpc::TransactionType::Legacy, .chainId = std::nullopt});
+    BOOST_REQUIRE(harness.ledgerConfig->chainId().has_value());
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+}
+
+// The third answer: Malformed, which checkChainId refuses rather than granting it the exemption
+// above. It never gets that far -- decoding rejects the same bytes first and normalization
+// reports that as Malformed -- so what this pins is the ORDER, not checkChainId's Malformed arm.
+// That arm is the second line of a defence whose first line is the decoder, kept because the
+// walker and the decoder are only in sync as long as someone keeps them so (Web3TxEnvelope.h
+// says exactly that). Should the order ever change, this case turns red and points at the arm
+// that then becomes reachable. Blob and deposit envelopes below are pinned the same way.
+//
+// The mutation is a junk item, not an invalid `v`: a transaction built the way this fixture (and
+// the RPC ingress) builds one carries the SIGNING PREIMAGE, with r/s/v in a separate tars field,
+// because that is what Web3TarsBridge's encodeForSign produces. A peer chooses its own
+// extraTransactionBytes and the block path carries sealed envelopes, so the classifier handles
+// both forms; there is simply no v in THESE bytes to corrupt.
+BOOST_AUTO_TEST_CASE(malformedEnvelopeIsRejectedBeforeTheChainIdCheck)
+{
+    AdmitHarness harness;
+    auto tx = admitTx({.type = rpc::TransactionType::Legacy});
+    auto& envelope = tx->mutableInner().extraTransactionBytes;
+    // Short list header (0xc0..0xf7): one length byte, so appending one item is a bump plus a
+    // push_back. The REQUIRE says so, rather than assuming it.
+    const auto header = static_cast<uint8_t>(envelope.at(0));
+    BOOST_REQUIRE(header >= 0xc0 && header < 0xf7);
+    envelope.at(0) = static_cast<tars::Char>(header + 1);
+    envelope.push_back(static_cast<tars::Char>(0x09));
+    // Both halves of the claim: the classifier calls these bytes Malformed, and verify() still
+    // answers with normalization's verdict rather than checkChainId's.
+    BOOST_REQUIRE(rlp::protocol::classifyWeb3EnvelopeChainId(tx->extraTransactionBytes()).kind ==
+                  rlp::protocol::Web3EnvelopeChainIdKind::Malformed);
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::Malformed);
+}
+
 /// A ledger whose SYS_CONFIG reads fail outright.
 struct SystemConfigUnreadableLedger : FakeLedger
 {
@@ -638,6 +682,22 @@ BOOST_AUTO_TEST_CASE(disabledSignaturePolicySkipsSenderDependentChecks)
     auto wrongChain = admitTx();
     BOOST_CHECK(harness.run(*wrongChain, AdmissionContext::PoolAdmission,
                     SignaturePolicy::Disabled) == TransactionStatus::InvalidChainId);
+}
+
+// Web3PoolNonce is sender-dependent for a reason worth its own case: its key is the PAIR
+// (sender, nonce), where BcosPoolNonce's is a nonce value alone. Run with no recovered sender it
+// would file every pending Web3 transaction under the empty string, and one sender's nonce would
+// then refuse another's.
+//
+// The reservation here is the one such an admission would have written: nonce 7 under the empty
+// sender. A transaction with nonce 7 from a real sender must still be admitted.
+BOOST_AUTO_TEST_CASE(disabledSignaturePolicySkipsTheWeb3PendingNonceCheck)
+{
+    AdmitHarness harness;
+    BOOST_REQUIRE(task::syncWait(harness.web3NonceChecker->insertMemoryNonce("", "7")));
+    auto tx = admitTx({.nonce = 7});
+    BOOST_CHECK(harness.run(*tx, AdmissionContext::PoolAdmission, SignaturePolicy::Disabled) ==
+                TransactionStatus::None);
 }
 
 // The P0 regression. This transaction is built exactly the way EthEndpoint::sendRawTransaction
@@ -784,6 +844,24 @@ BOOST_AUTO_TEST_CASE(highSSignatureIsRejected)
 
 // ------------------------------------------------------------ wiring guard
 
+// Two of the constructor's arguments are mandatory and the rest are not, so the difference is
+// pinned here. A null snapshot holder would turn every revision-dependent check into a
+// stand-down; a null Web3 nonce checker would be dereferenced by the first Web3 transaction's
+// account read. Neither can be answered with a transaction status, so neither is allowed to be
+// built.
+BOOST_AUTO_TEST_CASE(mandatoryCollaboratorsAreRefusedAtConstruction)
+{
+    AdmitHarness harness;
+    auto cryptoSuite = std::make_shared<crypto::CryptoSuite>(std::make_shared<crypto::Keccak256>(),
+        std::make_shared<crypto::Secp256k1Crypto>(), nullptr);
+    BOOST_CHECK_THROW(TxValidator(cryptoSuite, harness.ledger, nullptr, nullptr,
+                          harness.web3NonceChecker, harness.isSystemTx, "group0", "chain0"),
+        std::invalid_argument);
+    BOOST_CHECK_THROW(TxValidator(cryptoSuite, harness.ledger, harness.ledgerConfigState, nullptr,
+                          nullptr, harness.isSystemTx, "group0", "chain0"),
+        std::invalid_argument);
+}
+
 BOOST_AUTO_TEST_CASE(bcosLedgerNonceWithoutABoundCheckerPasses)
 {
     AdmitHarness harness;
@@ -847,6 +925,29 @@ BOOST_AUTO_TEST_CASE(bcosPendingNonceRejectsAdmissionButNotProposals)
         std::make_shared<StubLedgerNonceChecker>(TransactionStatus::NonceCheckFail);
     BOOST_CHECK(harness.run(*tx, AdmissionContext::ProposalVerification,
                     SignaturePolicy::Disabled) == TransactionStatus::NonceCheckFail);
+}
+
+// The Web3 counterpart, and the rule this module dropped when it stopped calling the pool-side
+// validator's checkWeb3Nonce: a (sender, nonce) pair a pending transaction already holds is
+// refused at admission, and ignored on the proposal path where two honest nodes' pools differ.
+//
+// MemoryStorage reserves the pair with insertMemoryNonce once verify() has passed, and THAT is
+// what refuses two concurrent submissions of one pair -- one atomic step, no window. What this
+// pins is that the answer is also given here, by a rule the table names, rather than only inside
+// that storage call.
+BOOST_AUTO_TEST_CASE(web3PendingNonceRejectsAdmissionButNotProposals)
+{
+    AdmitHarness harness;
+    auto first = admitTx();
+    BOOST_REQUIRE(harness.run(*first) == TransactionStatus::None);
+    // Exactly the call MemoryStorage makes after a successful admission.
+    BOOST_REQUIRE(task::syncWait(harness.web3NonceChecker->insertMemoryNonce(
+        std::string(first->sender()), std::string(first->nonce()))));
+
+    auto second = admitTx();
+    BOOST_CHECK(harness.run(*second) == TransactionStatus::NonceCheckFail);
+    BOOST_CHECK(
+        harness.run(*second, AdmissionContext::ProposalVerification) == TransactionStatus::None);
 }
 
 // A BCOS transaction's hash is NOT recomputed from its data when the wire already carries one:

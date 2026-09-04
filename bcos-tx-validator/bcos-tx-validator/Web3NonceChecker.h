@@ -228,6 +228,23 @@ public:
     /// would undo FIB-59.
     virtual task::Task<std::optional<u256>> committedNonce(std::string_view sender);
 
+    /// Whether a PENDING transaction in this pool already holds (sender, nonce) -- the read half
+    /// of insertMemoryNonce's reservation, split out for the same reason committedNonce was:
+    /// the admission layer states the rule as its own check instead of calling a function that
+    /// also re-applies the ledger window it has already applied.
+    ///
+    /// This does NOT make insertMemoryNonce redundant. That call remains the authority: it
+    /// reserves and refuses in one atomic step, which is the only thing that closes the window
+    /// between two threads submitting the same pair (FIB-51). Asking here answers the same
+    /// question before that write, so the rule can be stated as a check rather than lived inside
+    /// the storage call.
+    ///
+    /// @param sender RAW 20 bytes, as committedNonce takes them and insertMemoryNonce stores
+    /// them -- not hex.
+    /// @param nonce decimal or 0x-prefixed; converted to u256 exactly as insertMemoryNonce
+    /// converts it, so "0x10" and "16" are one entry rather than two (FIB-58).
+    virtual task::Task<bool> existsMemoryNonce(std::string_view sender, std::string_view nonce);
+
     // only for test, inset nonce into ledgerStateNonces
     virtual void insert(std::string sender, u256 nonce);
 

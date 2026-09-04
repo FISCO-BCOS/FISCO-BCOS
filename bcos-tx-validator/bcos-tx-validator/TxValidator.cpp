@@ -135,6 +135,18 @@ TxValidator::TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
         BOOST_THROW_EXCEPTION(
             std::invalid_argument("TxValidator: ledgerConfigState must not be null"));
     }
+    if (!m_web3NonceChecker)
+    {
+        // Every Web3 nonce rule reads through this one, and readAccountState dereferences it
+        // unconditionally -- a null would be a crash on the first Web3 transaction, not a
+        // rejection. The BCOS checkers next to it ARE nullable on purpose (see
+        // checkBcosPoolNonce): their absence means "no pool to be pending in", a state the
+        // mempool-side validator is legitimately in. There is no such reading here -- the Web3
+        // committed nonce is chain state, so a validator that cannot read it cannot judge a Web3
+        // transaction at all.
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("TxValidator: web3NonceChecker must not be null"));
+    }
 }
 
 void TxValidator::setLedgerNonceChecker(std::shared_ptr<LedgerNonceChecker> ledgerNonceChecker)
@@ -186,11 +198,11 @@ struct ChainView
     std::optional<u256> web3ChainId;
 };
 
-/// Inputs of the state stage. `sender` is engaged exactly when the check set contains a
-/// sender-dependent check: verify() reads the account only then, and the four checks in
-/// c_senderDependent are the only readers, so they take it with value(). An absent account on
-/// that path is a programming error in the table, and bad_optional_access says so rather than a
-/// silent pass.
+/// Inputs of the state stage. `sender` is engaged exactly when the check set contains an
+/// account-state check: verify() reads the account only then, and the four checks in
+/// c_accountStateDependent are the only readers, so they take it with value(). An absent account
+/// on that path is a programming error in the table, and bad_optional_access says so rather than
+/// a silent pass.
 struct StateInputs
 {
     protocol::Transaction& tx;
@@ -201,11 +213,21 @@ struct StateInputs
 
 /// Inputs of the pool stage. Either checker may be null: see checkBcosPoolNonce and
 /// checkBcosLedgerNonce.
+///
+/// `web3NonceHeldInPool` is the ANSWER to the Web3 reservation lookup, not the means of asking:
+/// that lookup is a coroutine, and a check function is a synchronous rule. verify() awaits it
+/// once before the stage, exactly as the other two stages take their inputs, which leaves the
+/// check what every other one is -- a comparison over data already in hand.
+///
+/// Engaged exactly when the set contains Web3PoolNonce, and read with value() for the same
+/// reason `sender` above is: the table says whether it was needed, so a missing answer is a
+/// programming error in verify(), not a transaction that passes.
 struct PoolInputs
 {
     protocol::Transaction& tx;
     NonceCheckerInterface* txPoolNonceChecker;
     LedgerNonceChecker* ledgerNonceChecker;
+    std::optional<bool> web3NonceHeldInPool;
 };
 
 // ---------------------------------------------------------------- the checks
@@ -536,11 +558,31 @@ TransactionStatus checkIntrinsicGas(StateInputs const& in)
     return TransactionStatus::None;
 }
 
-// The two halves of the old pool-side TxValidator::checkTransaction, minus its Web3 branch (Web3
-// nonce rules need only the account nonce and are their own check, Web3NonceWindow). They are
-// separate bits because they answer to different state: the pool set is node-local and the
-// proposal column drops it, the committed window is chain state and every column keeps it. That
-// decision lives in CheckSet.h, so neither function looks at the context.
+// The old pool-side TxValidator::checkTransaction, split by the state each part answers to: a
+// pending set is node-local and the proposal column drops it, a committed window is chain state
+// and every column keeps it. That decision lives in CheckSet.h, so none of these looks at the
+// context.
+//
+// Its Web3 branch splits the same way and lands in two places: the committed-nonce window is
+// Web3NonceWindow in the state stage (it needs the account, not the pool), and the pending-pair
+// rule is here.
+
+/// The Web3 half of the pool set, keyed on (sender, nonce) rather than on a nonce value alone.
+///
+/// This does not make MemoryStorage's reservation redundant. insertMemoryNonce is what refuses
+/// the second of two concurrent submissions of one pair, in a single atomic step, and it stays.
+/// What this restores is the answer before that write, and a row in the table saying the rule
+/// exists at all -- which is the whole claim of a module whose value is that the table is the
+/// full set of rules.
+///
+/// It costs a state stage the pool-side validator did not pay: it answered before
+/// validateBalance, and this answers after, since the pool stage runs last. A duplicate pair is
+/// therefore refused one account read later than it was on the old path.
+TransactionStatus checkWeb3PoolNonce(PoolInputs const& in)
+{
+    return in.web3NonceHeldInPool.value() ? TransactionStatus::NonceCheckFail :
+                                            TransactionStatus::None;
+}
 
 TransactionStatus checkBcosPoolNonce(PoolInputs const& in)
 {
@@ -601,6 +643,10 @@ constexpr std::array<CheckEntry<StateInputs>, c_stateOrder.size()> c_stateRegist
 }};
 
 constexpr std::array<CheckEntry<PoolInputs>, c_poolOrder.size()> c_poolRegistry{{
+    // Web3PoolNonce sits first because c_poolOrder puts it there; the position is not
+    // observable, since no check set contains both it and the BCOS rows -- kindOf() decides
+    // which pair of rules a transaction is subject to, and the two never overlap.
+    {Check::Web3PoolNonce, &checkWeb3PoolNonce},
     {Check::BcosPoolNonce, &checkBcosPoolNonce},
     {Check::BcosLedgerNonce, &checkBcosLedgerNonce},
 }};
@@ -800,14 +846,15 @@ task::Task<TransactionStatus> TxValidator::verify(
     }
 
     // Stage 2: evmone's sequence against one chain view, taken once from the snapshot. The
-    // account is read only
-    // when the set contains a check that needs it -- which is how the proposal column, whose
-    // sender-dependent checks are off, performs no account read at all.
+    // account is read only when the set contains a check that needs the account's own state --
+    // which is how the proposal column, whose account checks are off, performs no account read
+    // at all. c_senderDependent is the wider set and is deliberately NOT the condition here: its
+    // extra member keys on the sender address without reading anything.
     if ((checks & c_stateStage) != Check::None)
     {
         auto const chain = readChainView(*m_ledgerConfigState);
         std::optional<AccountState> sender;
-        if ((checks & c_senderDependent) != Check::None)
+        if ((checks & c_accountStateDependent) != Check::None)
         {
             sender = co_await readAccountState(tx.sender());
         }
@@ -820,7 +867,8 @@ task::Task<TransactionStatus> TxValidator::verify(
     }
 
     // Stage 3: the pool. The ledger nonce checker is copied out under the lock and held for the
-    // stage, so both pool checks judge against one window.
+    // stage, so both BCOS checks judge against one window, and the Web3 reservation is looked up
+    // here rather than inside its check -- the stage takes its inputs, then runs.
     if ((checks & c_poolStage) != Check::None)
     {
         std::shared_ptr<LedgerNonceChecker> ledgerNonceChecker;
@@ -828,9 +876,18 @@ task::Task<TransactionStatus> TxValidator::verify(
             ReadGuard guard(x_lateBound);
             ledgerNonceChecker = m_ledgerNonceChecker;
         }
+        // Asked only when the set contains the check, the way the account read is: a BCOS
+        // transaction has no (sender, nonce) reservation to look up.
+        std::optional<bool> web3NonceHeldInPool;
+        if (contains(checks, Check::Web3PoolNonce))
+        {
+            web3NonceHeldInPool =
+                co_await m_web3NonceChecker->existsMemoryNonce(tx.sender(), tx.nonce());
+        }
         const PoolInputs pool{.tx = tx,
             .txPoolNonceChecker = m_txPoolNonceChecker.get(),
-            .ledgerNonceChecker = ledgerNonceChecker.get()};
+            .ledgerNonceChecker = ledgerNonceChecker.get(),
+            .web3NonceHeldInPool = web3NonceHeldInPool};
         co_return runStage(c_poolRegistry, checks, pool);
     }
     co_return TransactionStatus::None;

@@ -335,6 +335,34 @@ BOOST_AUTO_TEST_CASE(FIB58_NonceNormalizationDetectsDuplicates)
         task::syncWait(checker.checkWeb3Nonce(sender2, "0x10")), TransactionStatus::NonceCheckFail);
 }
 
+// existsMemoryNonce is the reservation lookup on its own: the same answer checkWeb3Nonce's
+// memory half gives, over the same value-keyed entries, and NOTHING else. The admission layer
+// applies the ledger window itself (Check::Web3NonceWindow), so a checker that also answered
+// "outside the window" here would make that check run twice and report through two paths.
+BOOST_AUTO_TEST_CASE(existsMemoryNonceAnswersTheReservationOnly)
+{
+    const std::string sender = Address::generateRandomFixedBytes().toRawString();
+    BOOST_CHECK(!task::syncWait(checker.existsMemoryNonce(sender, "0x1")));
+
+    task::syncWait(checker.insertMemoryNonce(sender, "0x1"));
+    BOOST_CHECK(task::syncWait(checker.existsMemoryNonce(sender, "0x1")));
+    // Same value, three spellings, one entry (FIB-58).
+    BOOST_CHECK(task::syncWait(checker.existsMemoryNonce(sender, "0x01")));
+    BOOST_CHECK(task::syncWait(checker.existsMemoryNonce(sender, "1")));
+    BOOST_CHECK(!task::syncWait(checker.existsMemoryNonce(sender, "0x2")));
+
+    // Another sender's pending nonce is not this sender's: the key is the pair.
+    const std::string other = Address::generateRandomFixedBytes().toRawString();
+    BOOST_CHECK(!task::syncWait(checker.existsMemoryNonce(other, "0x1")));
+
+    // A nonce nowhere near the committed window is still "not reserved" -- that verdict belongs
+    // to the window check, not here. The committed nonce has to be seeded for this to say
+    // anything: with none, checkWeb3Nonce's storage miss makes it decline to judge too, and an
+    // implementation that consulted the window would pass this case by accident.
+    checker.insert(sender, u256(0));
+    BOOST_CHECK(!task::syncWait(checker.existsMemoryNonce(sender, "0xfffffff")));
+}
+
 BOOST_AUTO_TEST_CASE(FIB59_CacheHitSkipsLedgerQuery)
 {
     // FIB-59: After checking m_ledgerStateNonces, the code unconditionally queried storage

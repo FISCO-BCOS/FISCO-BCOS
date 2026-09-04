@@ -67,8 +67,10 @@ struct AccountState
 /// catching binary-wide -- into every module that admits a transaction.
 using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 
-/// The single place a transaction is judged admissible, for every ingress: Web3 JSON-RPC, P2P,
-/// and block-proposal verification.
+/// The one place a transaction is judged admissible, for every ingress: Web3 JSON-RPC, P2P, and
+/// block-proposal verification. As of this commit no ingress calls it yet -- the pool still runs
+/// txpool::TxValidator, and the callers move over in the wiring commits that follow. Read the
+/// sentence above as what this class is for, not as a claim about who calls it today.
 ///
 /// It OWNS the nonce checkers rather than reaching them through callbacks. Nonce admission is
 /// the same question at every ingress, and routing it through a per-caller hook is how the pool
@@ -80,6 +82,10 @@ public:
     /// configuration there, and verify() picks it up on the next transaction. Passing a
     /// snapshot holder rather than the configuration itself is what keeps a long-lived
     /// TxValidator from pinning the genesis config forever.
+    ///
+    /// @p ledgerConfigState and @p web3NonceChecker must be non-null and throw if they are not;
+    /// @p txPoolNonceChecker and the two late-bound setters below are nullable by design, each
+    /// with a check that says what its absence means.
     TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
         std::shared_ptr<ledger::LedgerInterface> ledger,
         ledger::LedgerConfigState::Ptr ledgerConfigState,

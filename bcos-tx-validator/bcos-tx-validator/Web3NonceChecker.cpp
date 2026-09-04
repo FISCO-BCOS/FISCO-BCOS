@@ -54,8 +54,7 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     // sent by the address. For example, if 5 is stored in the storage, then the transactionCount
     // obtained from the rpc api by the web3 tool is 5; then the new transaction will be sent
     // from 5.
-    if (!onlyCheckLedgerNonce &&
-        co_await bcos::storage2::existsOne(m_memoryNonces, std::make_pair(sender, nonceU256)))
+    if (!onlyCheckLedgerNonce && co_await existsMemoryNonce(sender, nonce))
     {
         // memory nonce check nonce existence in memory first, if not exist, then check from storage
         TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce mem check fail")
@@ -106,6 +105,12 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce)
 {
     co_return co_await checkWeb3Nonce(_tx.sender(), _tx.nonce(), onlyCheckLedgerNonce);
+}
+
+task::Task<bool> Web3NonceChecker::existsMemoryNonce(
+    std::string_view sender, std::string_view nonce)
+{
+    co_return co_await storage2::existsOne(m_memoryNonces, std::make_pair(sender, u256(nonce)));
 }
 
 task::Task<bool> Web3NonceChecker::insertMemoryNonce(std::string sender, std::string nonce)
