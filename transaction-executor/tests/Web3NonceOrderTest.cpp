@@ -84,7 +84,8 @@ public:
             BOOST_CHECK_EQUAL(
                 lowReceipt->status(), static_cast<int32_t>(protocol::TransactionStatus::None));
 
-            ledger::account::EVMAccount senderAccount(storage, sender, false);
+            ledger::account::EVMAccount senderAccount(
+                storage, sender, false, /*treatSystemAsUser=*/false);
             co_return (co_await senderAccount.nonce()).value();
         }());
     }

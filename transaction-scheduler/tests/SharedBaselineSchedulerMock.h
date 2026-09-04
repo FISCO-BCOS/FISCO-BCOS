@@ -121,7 +121,8 @@ struct SharedMockExecutor
             co_return {};
         }
 
-        ledger::account::EVMAccount account(storage, m_probeAddress, false);
+        ledger::account::EVMAccount account(
+            storage, m_probeAddress, false, /*treatSystemAsUser=*/false);
         if (m_mode == Mode::WriteThenReadSlot)
         {
             co_await account.setStorage(m_probeSlot, m_writeValue);

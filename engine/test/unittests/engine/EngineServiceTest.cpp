@@ -207,7 +207,8 @@ struct RealGlobalStateStorageFixture
         // Use the same path here so the sealed nonce the test relies on is visible to seal().
         evmc_address addr{};
         std::copy_n(sender.begin(), std::min(sender.size(), sizeof(addr.bytes)), addr.bytes);
-        ledger::account::EVMAccount account{backendStorage, addr, false};
+        ledger::account::EVMAccount account{backendStorage, addr, false,
+            /*treatSystemAsUser=*/true};
         task::syncWait(account.setNonce(std::move(nonce)));
     }
 
@@ -1224,22 +1225,25 @@ BOOST_AUTO_TEST_CASE(forkchoice_attributes_reject_blob_forced_transactions)
     BOOST_CHECK_EQUAL(static_cast<int>(badHexResult.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Invalid));
 
-    // A deposit in the forced transaction list is admissible (dep-1 arrives this way)
-    // AND actually lands in the built payload, byte-for-byte.
+    // A deposit in the forced transaction list passes attribute validation (dep-1 arrives
+    // this way), but buildPayload then FAILS CLOSED: a raw-only entry cannot produce a
+    // reproducible receiptsRoot until the execution-lane wiring executes deposits.
     auto depositAttributes = makePayloadAttributesV3();
     depositAttributes.transactions = std::vector<std::string>{"0x7e010203"};
-    auto depositResult =
-        task::syncWait(engineService.updateForkchoice(forkchoiceState, &depositAttributes, 3));
-    BOOST_CHECK_EQUAL(static_cast<int>(depositResult.payloadStatus.status),
-        static_cast<int>(PayloadValidationStatus::Valid));
-    BOOST_REQUIRE(depositResult.payloadId.has_value());
-    auto depositPayload = task::syncWait(engineService.getPayload(*depositResult.payloadId, 3));
-    BOOST_REQUIRE_EQUAL(depositPayload->executionPayload.transactions.size(), 1);
-    BOOST_CHECK(depositPayload->executionPayload.transactions.front().raw ==
-                (bytes{0x7e, 0x01, 0x02, 0x03}));
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &depositAttributes, 3)),
+        std::runtime_error, [](const std::runtime_error& e) {
+            return std::string(e.what()).find(
+                       "raw-only (forced/deposit) transactions not executable yet") !=
+                   std::string::npos;
+        });
 }
 
-BOOST_AUTO_TEST_CASE(forced_transactions_enter_payload_first)
+// Forced transactions (deposits) are placed FIRST in the engine transaction list, ahead of
+// the pool transactions, in the order the CL gave them — but on the v2 path the build then
+// fails closed on the raw-only entries (see the receipts guard in buildPayload), so the
+// ordering is only observable via the refusal's raw-vs-decoded counts for now.
+BOOST_AUTO_TEST_CASE(forced_transactions_fail_closed_until_execution_lane_wiring)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
@@ -1252,22 +1256,17 @@ BOOST_AUTO_TEST_CASE(forced_transactions_enter_payload_first)
     globalStateStorageFixture.setNonce(sender, "0");
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
-    // Two forced transactions (dep-1 first) plus one mempool transaction:
-    // payload order = forced list order, then pool transactions.
+    // Two forced transactions (dep-1 first) plus one mempool transaction: the payload would
+    // commit 3 raw transactions but only 1 executable, so buildPayload refuses it.
     auto attributes = makePayloadAttributesV3();
     attributes.transactions = std::vector<std::string>{"0x7e0102030405", "0x02f8aabb"};
-    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
-    BOOST_REQUIRE(result.payloadId.has_value());
-
-    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
-    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 3);
-    // Forced first, in the order the attributes gave them, byte-for-byte.
-    BOOST_CHECK(payload->executionPayload.transactions[0].raw ==
-                (bytes{0x7e, 0x01, 0x02, 0x03, 0x04, 0x05}));
-    BOOST_CHECK(payload->executionPayload.transactions[0].decoded == nullptr);
-    BOOST_CHECK(payload->executionPayload.transactions[1].raw == (bytes{0x02, 0xf8, 0xaa, 0xbb}));
-    // The mempool transaction follows the forced list.
-    BOOST_CHECK(payload->executionPayload.transactions[2].decoded == poolTx);
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3)),
+        std::runtime_error, [](const std::runtime_error& e) {
+            return std::string(e.what()).find(
+                       "raw-only (forced/deposit) transactions not executable yet: 3 raw vs 1 "
+                       "decoded") != std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(no_tx_pool_true_excludes_mempool_transactions)
@@ -1283,17 +1282,19 @@ BOOST_AUTO_TEST_CASE(no_tx_pool_true_excludes_mempool_transactions)
     globalStateStorageFixture.setNonce(sender, "0");
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
-    // noTxPool=true with a forced deposit: the payload contains exactly the forced
-    // list; the sealable mempool transaction must not appear and stays in the pool.
+    // noTxPool=true with a forced deposit: the build fails closed on the raw-only entry
+    // (until the execution-lane wiring lands), and the sealable mempool transaction — never
+    // sealed under noTxPool — stays in the pool.
     auto attributes = makePayloadAttributesV3();
     attributes.noTxPool = true;
     attributes.transactions = std::vector<std::string>{"0x7e010203"};
-    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
-    BOOST_REQUIRE(result.payloadId.has_value());
-    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
-    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 1);
-    BOOST_CHECK(
-        payload->executionPayload.transactions.front().raw == (bytes{0x7e, 0x01, 0x02, 0x03}));
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3)),
+        std::runtime_error, [](const std::runtime_error& e) {
+            return std::string(e.what()).find(
+                       "raw-only (forced/deposit) transactions not executable yet") !=
+                   std::string::npos;
+        });
     auto retained = memPool.get(std::vector{poolTx->hash()});
     BOOST_REQUIRE_EQUAL(retained.size(), 1);
     BOOST_CHECK(retained[0]);
@@ -1515,6 +1516,38 @@ BOOST_AUTO_TEST_CASE(build_payload_rejects_forged_tx_kind_mirror)
         std::runtime_error, [](const std::runtime_error& e) {
             return std::string(e.what()).find(
                        "web3TypedTxKind mirror disagrees with the signed envelope") !=
+                   std::string::npos;
+        });
+}
+
+// A v2 payload whose transactions list carries raw-only entries (forced/deposit transactions
+// from the OP attributes list, .decoded == nullptr) commits a transactions trie of N entries
+// while receipts cover only the M < N decoded executables — receipt i would be keyed at the
+// wrong receipts-trie index and no external Ethereum verifier could reproduce
+// receiptsRoot/blockHash. Until the execution-lane wiring executes deposits, buildPayload must
+// fail closed on that shape rather than build an unreproducible block.
+BOOST_AUTO_TEST_CASE(build_payload_rejects_forced_raw_only_transactions)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("b3b3b3b3b3b3b3b3b3b3", 20);
+    auto tx = makeWeb3Tx(sender, 0);
+    memPool.add(std::vector{tx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto payloadAttributes = makePayloadAttributesV2();
+    // A forced deposit (validateRawTransactionKind admits 0x7E) plus one decoded pool
+    // transaction: 2 raw entries in the payload, only 1 executable.
+    payloadAttributes.transactions = std::vector<std::string>{"0x7e010203"};
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2)),
+        std::runtime_error, [](const std::runtime_error& e) {
+            return std::string(e.what()).find(
+                       "raw-only (forced/deposit) transactions not executable yet") !=
                    std::string::npos;
         });
 }

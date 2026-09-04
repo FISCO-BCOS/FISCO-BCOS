@@ -146,13 +146,13 @@ static evmc_address senderToEvmc(std::string_view sender)
 
 static std::optional<std::string> readNonce(MapStateStorage& s, std::string_view sender)
 {
-    ledger::account::EVMAccount acc{s, senderToEvmc(sender), false};
+    ledger::account::EVMAccount acc{s, senderToEvmc(sender), false, /*treatSystemAsUser=*/false};
     return task::syncWait(acc.nonce());
 }
 
 static void setNonce(MapStateStorage& s, std::string_view sender, std::string nonce)
 {
-    ledger::account::EVMAccount acc{s, senderToEvmc(sender), false};
+    ledger::account::EVMAccount acc{s, senderToEvmc(sender), false, /*treatSystemAsUser=*/false};
     task::syncWait(acc.setNonce(std::move(nonce)));
 }
 

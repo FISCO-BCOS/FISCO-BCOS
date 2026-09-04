@@ -83,10 +83,13 @@ bcos::Bloom calculateLogsBloom(Blooms&& blooms)
 /// logsBloom from the receipt's log entries, and accumulate cumulativeGasUsed. The bloom is
 /// ALWAYS recomputed from logEntries, never taken from the producer — a wrong producer-filled
 /// bloom would otherwise be silently committed into the receipts trie and the block-level
-/// bloom. Throws std::runtime_error on a null receipt so every caller fails closed instead of
-/// dereferencing (BaselineScheduler calls this helper directly, with no call-site guard).
-/// Shared by BaselineScheduler::finishExecute and the engine's buildPayload so the two cannot
-/// drift — cumulativeGasUsed and the bloom feed the receipts trie, a consensus field.
+/// bloom. The logIndex stamp takes effect only on receipt implementations that persist it;
+/// on the tars receipt (the only production receipt type) setLogIndex is currently a no-op —
+/// logIndex() is hardcoded to 0 — tracked as a follow-up (the tars receipt needs the field).
+/// Throws std::runtime_error on a null receipt; both callers (BaselineScheduler::finishExecute
+/// and the engine's buildPayload) already guard nulls at the call site before any dereference,
+/// so this throw is defense-in-depth. Shared by the two so they cannot drift —
+/// cumulativeGasUsed and the bloom feed the receipts trie, a consensus field.
 /// @return The block's totalGasUsed (the last receipt's cumulativeGasUsed).
 template <::ranges::input_range Receipts>
 bcos::u256 finalizeReceipts(Receipts& receipts)

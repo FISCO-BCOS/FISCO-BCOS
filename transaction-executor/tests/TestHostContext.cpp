@@ -442,7 +442,8 @@ static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
 
     if (web3)
     {
-        bcos::ledger::account::EVMAccount account(self->storage, address1, false);
+        bcos::ledger::account::EVMAccount account(
+            self->storage, address1, false, /*treatSystemAsUser=*/false);
         auto nonce = co_await account.nonce();
         BOOST_REQUIRE(nonce.has_value());
         BOOST_TEST(nonce.value() == "11");
@@ -465,7 +466,8 @@ static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
         BOOST_CHECK_NE(address2, bcos::Address{});
         if (web3)
         {
-            bcos::ledger::account::EVMAccount account(self->storage, address2, false);
+            bcos::ledger::account::EVMAccount account(
+                self->storage, address2, false, /*treatSystemAsUser=*/false);
             auto nonce = co_await account.nonce();
             BOOST_REQUIRE(nonce.has_value());
             BOOST_TEST(nonce.value() == "1");
@@ -533,10 +535,12 @@ BOOST_AUTO_TEST_CASE(transferBalance)
         message.gas = 21000;
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAccount(
-            rollbackableStorage, message.sender, false);
+            rollbackableStorage, message.sender, false,
+            /*treatSystemAsUser=*/false);
         co_await senderAccount.setBalance(bcos::u256(1001));
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> recipientAccount(
-            rollbackableStorage, message.recipient, false);
+            rollbackableStorage, message.recipient, false,
+            /*treatSystemAsUser=*/false);
         co_await recipientAccount.setBalance(bcos::u256(0));
 
         evmc_address origin{};

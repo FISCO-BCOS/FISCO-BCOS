@@ -143,20 +143,15 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 {
     // TODO)): blockNumber is not used nowadays
     std::ignore = _blockNumber;
-    // Route through the shared policy (ledger::account::accountTablePrefix): below
-    // executor_version 2 the c_systemTxsAddress members live under /sys/; at v2 every
-    // address is an ordinary /apps/ account, matching the v2 executor's writes
-    // (EthereumState) and the genesis alloc import. Without this, reads for
-    // system-range accounts hit the wrong table and return empty (e.g. EEST static
-    // VMTests that call 0x1000 saw balance=0 / storage=0).
-    int executorVersion = 0;
+    // Route through the shared policy (ledger::account::accountTablePrefix), with the
+    // executor_version read via the shared ledger::getExecutorVersion helper (the same
+    // whole-string parser the LedgerConfig derivations use): below executor_version 2 the
+    // c_systemTxsAddress members live under /sys/; at v2 every address is an ordinary
+    // /apps/ account, matching the v2 executor's writes (EthereumState) and the genesis
+    // alloc import. Without this, reads for system-range accounts hit the wrong table and
+    // return empty (e.g. EEST static VMTests that call 0x1000 saw balance=0 / storage=0).
     auto const stateStorage = getStateStorage();
-    if (auto const config = co_await getSystemConfig(
-            *stateStorage, std::string_view{magic_enum::enum_name(SystemConfig::executor_version)});
-        config.has_value())
-    {
-        executorVersion = std::stoi(std::get<0>(*config));
-    }
+    auto const executorVersion = co_await getExecutorVersion(*stateStorage);
     // Compute the routing bool at the call site (the version-taking overload was removed to
     // avoid a bool/int overload pair that reinterprets the same argument by type).
     auto const tablePrefix =

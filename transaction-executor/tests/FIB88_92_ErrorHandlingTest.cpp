@@ -125,7 +125,8 @@ BOOST_AUTO_TEST_CASE(FIB88_InsufficientBalanceConsumesAllGas)
 
         // Set sender balance to 100 but try to transfer 1000
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAccount(
-            rollbackableStorage, sender, false);
+            rollbackableStorage, sender, false,
+            /*treatSystemAsUser=*/false);
         co_await senderAccount.setBalance(bcos::u256(100));
 
         constexpr int64_t GAS_LIMIT = 300000;
@@ -365,7 +366,8 @@ BOOST_AUTO_TEST_CASE(FIB88_FlagOff_InsufficientBalancePreservesGas)
         evmc_address recipient = bcos::unhexAddress("0x0000000000000000000000000000000000000DDD");
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAccount(
-            rollbackableStorage, sender, false);
+            rollbackableStorage, sender, false,
+            /*treatSystemAsUser=*/false);
         co_await senderAccount.setBalance(bcos::u256(100));
 
         constexpr int64_t GAS_LIMIT = 300000;

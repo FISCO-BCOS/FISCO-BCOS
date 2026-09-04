@@ -700,7 +700,9 @@ private:
                     // Raw-only entries (forced transactions) carry no decoded form and are
                     // not modeled as ledger transactions until execution wiring lands; the
                     // persisted transaction list therefore matches the receipts list, which
-                    // also only covers the executed (decoded) subset.
+                    // also only covers the executed (decoded) subset. (On the v2 path
+                    // buildPayload already refused payloads carrying such entries, so this
+                    // filter only ever sees them on legacy executors.)
                     for (auto const& tx : it->second.executionPayload.transactions)
                     {
                         if (tx.decoded)
@@ -797,9 +799,10 @@ private:
         // admissibility were already enforced by validatePayloadAttributes, which runs
         // before buildPayload). They carry no decoded executable form yet: 0x7E deposit
         // execution (runDeposit) and raw->executable decoding for typed/legacy forced
-        // transactions belong to the execution-lane wiring, so raw-only entries are
-        // placed in the payload, participate in the transactions root via their
-        // canonical keccak256(raw) hash, but are not executed and do not advance state.
+        // transactions belong to the execution-lane wiring. Until that wiring lands, the
+        // v2 (Ethereum roots) path REFUSES any payload still carrying raw-only entries —
+        // the receipts guard in Step 2e-0 below throws — because receipts could not be
+        // keyed at their true transactions-trie indexes.
         if (payloadAttributes.transactions.has_value())
         {
             for (auto const& forcedHex : *payloadAttributes.transactions)
@@ -1051,9 +1054,10 @@ private:
 
         // Step 2c: Execute transactions via the scheduler, over the decoded executable
         // forms. Raw-only entries (forced transactions from the OP attributes list) have
-        // no executable form yet and are skipped — see the forced-transaction comment
-        // above. Materialized into a vector because scheduler implementations require a
-        // sized range (a lazy filter view is not sized).
+        // no executable form yet and are skipped here; on the v2 path the Step 2e-0 guard
+        // below then refuses the whole payload (fail closed), so this skip is only ever
+        // committed on legacy executors. Materialized into a vector because scheduler
+        // implementations require a sized range (a lazy filter view is not sized).
         auto executableTransactions =
             executionPayload.transactions | ::ranges::views::filter([](auto const& transaction) {
                 return transaction.decoded != nullptr;
@@ -1124,13 +1128,25 @@ private:
         u256 totalGasUsed;
         if (ethereumRoots)
         {
+            // A v2 payload carrying forced (raw-only) transactions is REFUSED: receipts cover
+            // only the decoded executable subset while txsRoot commits every raw entry, so the
+            // receipts trie would be keyed 0..M-1 over M < N entries — receipt i would land at
+            // the wrong trie key and no external Ethereum verifier could reproduce
+            // receiptsRoot/blockHash. Executing raw-only entries (0x7E deposits and raw->
+            // executable decoding for the other forced kinds) belongs to the execution-lane
+            // wiring; until that lands, failing closed is the only correct outcome.
+            if (executableTransactions.size() != executionPayload.transactions.size())
+            {
+                BOOST_THROW_EXCEPTION(std::runtime_error{
+                    "Payload contains raw-only (forced/deposit) transactions not executable "
+                    "yet: " +
+                    std::to_string(executionPayload.transactions.size()) + " raw vs " +
+                    std::to_string(executableTransactions.size()) + " decoded"});
+            }
             // Receipt i commits the EIP-2718 type of transaction i, so the counts must match
             // exactly: more receipts than executed transactions is unpairable (would read past
             // txTypes), and fewer would silently commit a short receipts trie that no external
-            // Ethereum verifier can reproduce — fail closed on either. Forced (raw-only)
-            // transactions are counted in txsRoot but produce no receipts until the
-            // execution-lane wiring lands; strict per-payload-index pairing (including
-            // deposit kinds) comes with that wiring.
+            // Ethereum verifier can reproduce — fail closed on either.
             if (receipts.size() != executableTransactions.size())
             {
                 BOOST_THROW_EXCEPTION(std::runtime_error{

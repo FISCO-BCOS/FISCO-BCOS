@@ -389,7 +389,8 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         {
             ledger::account::EVMAccount address(*m_blockContext.storage(),
                 callParameters->senderAddress,
-                m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
+                m_blockContext.features().get(ledger::Features::Flag::feature_raw_address),
+                /*treatSystemAsUser=*/false);
             if (m_blockContext.features().get(ledger::Features::Flag::bugfix_nonce_initialize))
             {
                 if (!precompiled::contains(bcos::precompiled::c_systemTxsAddress,
@@ -424,7 +425,8 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                 // TODO)): set nonce here will be better
                 ledger::account::EVMAccount address(*m_blockContext.storage(),
                     callParameters->senderAddress,
-                    m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
+                    m_blockContext.features().get(ledger::Features::Flag::feature_raw_address),
+                    /*treatSystemAsUser=*/false);
                 task::wait([](decltype(address) addr, u256 callNonce) -> task::Task<void> {
                     if (!co_await addr.exists())
                     {
@@ -870,8 +872,9 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
                 ledger::Features::Flag::bugfix_set_contract_nonce_when_create)) [[unlikely]]
         {
             // set nonce to 1 when create contract
-            ledger::account::EVMAccount account(
-                *m_blockContext.storage(), callParameters->codeAddress, false);
+            ledger::account::EVMAccount account(*m_blockContext.storage(),
+                callParameters->codeAddress, false,
+                /*treatSystemAsUser=*/false);
             task::wait([](decltype(account) contractAccount) -> task::Task<void> {
                 co_await contractAccount.setNonce("1");
             }(std::move(account)));

@@ -150,7 +150,8 @@ task::Task<std::shared_ptr<Executable>> getExecutable(
         }
     }
 
-    if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
+    if (Account<std::decay_t<decltype(storage)>> account(
+            storage, address, binaryAddress, /*treatSystemAsUser=*/false);
         auto codeEntry = co_await account.code())
     {
         auto executable = std::make_shared<Executable>(std::move(*codeEntry));
@@ -310,7 +311,8 @@ public:
     {
         return Account<std::decay_t<Storage>>(hostContext.m_rollbackableStorage.get(), address,
             hostContext.m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::feature_raw_address));
+                ledger::Features::Flag::feature_raw_address),
+            /*treatSystemAsUser=*/false);
     }
 
     // Tag-forwarding variant: passes all tags through to the underlying
@@ -397,7 +399,8 @@ public:
     task::Task<h256> codeHashAt(const evmc_address& address, auto&&... /*unused*/)
     {
         Account<Storage> account(m_rollbackableStorage.get(), address,
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address),
+            /*treatSystemAsUser=*/false);
         co_return co_await account.codeHash();
     }
 

@@ -338,20 +338,6 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     }
     auto const ledger = m_nodeService->ledger();
 
-    // Same routing policy as Ledger::getStorageAt, via the shared helper: below
-    // executor_version 2 the c_systemTxsAddress members live under /sys/; at v2 every
-    // address is an ordinary /apps/ account, matching the v2 executor's writes.
-    int executorVersion = 0;
-    if (auto const config = co_await ledger::getSystemConfig(*ledger,
-            std::string_view{magic_enum::enum_name(ledger::SystemConfig::executor_version)});
-        config.has_value())
-    {
-        executorVersion = std::stoi(std::get<0>(*config));
-    }
-    auto const tablePrefix = ledger::account::accountTablePrefix(
-        addressStr, executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION);
-    auto const contractTableName = getContractTableName(tablePrefix, addressStr);
-
     // The empty-slot value: a 32-byte zero, matching the flat read's padded rendering.
     constexpr const char* c_emptyStorageValue =
         "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -375,6 +361,16 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
             auto const stateStorage = stateStorageProvider();
             if (stateStorage)
             {
+                // Same routing policy as Ledger::getStorageAt, via the shared helpers:
+                // executor_version comes from ledger::getExecutorVersion (the same
+                // whole-string parser the LedgerConfig derivations use) and the prefix from
+                // ledger::account::accountTablePrefix. Only this flat-read branch needs the
+                // table name — the ledger fallback and the historical-MPT path below derive
+                // the routing themselves, so the SYS_CONFIG read is not paid there.
+                auto const executorVersion = co_await ledger::getExecutorVersion(*ledger);
+                auto const tablePrefix = ledger::account::accountTablePrefix(
+                    addressStr, executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION);
+                auto const contractTableName = getContractTableName(tablePrefix, addressStr);
                 if (auto const entry = co_await bcos::storage2::readOne(*stateStorage,
                         executor_v1::StateKey{contractTableName, positionBytes.toRawString()});
                     entry.has_value())

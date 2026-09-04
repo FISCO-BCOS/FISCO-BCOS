@@ -179,12 +179,17 @@ std::shared_ptr<bcostars::protocol::TransactionImpl> decodeWeb3RawTransaction(
         BOOST_THROW_EXCEPTION(
             std::invalid_argument("decodeWeb3RawTransaction: " + error->errorMessage()));
     }
+    // Recover the sender BEFORE takeToTarsTransaction(): that call is destructive by
+    // contract (ranges::move of data/signatureR/signatureS), and sender() re-runs
+    // encodeForSign() over exactly those members. It happens to work today only because the
+    // moved members are containers of trivially-copyable bytes; recovering first removes the
+    // dependency on move-semantics detail entirely.
+    auto senderHex = web3Tx.sender();
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
 
     // Restore the sender from the signature so the executor can validate the nonce /
     // balance without a separate recovery pass.
-    auto senderHex = web3Tx.sender();
     bcos::bytes senderBytes =
         bcos::fromHex(senderHex.rfind("0x", 0) == 0 ? senderHex.substr(2) : senderHex);
     tx->forceSender(senderBytes);

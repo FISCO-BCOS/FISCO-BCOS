@@ -616,4 +616,25 @@ task::Task<std::optional<SystemConfigEntry>> tag_invoke(ledger::tag_t<getSystemC
     co_return {};
 }
 
+/// Read executor_version from SYS_CONFIG, parsed with the SAME whole-string parser
+/// (boost::lexical_cast) the two LedgerConfig derivations use — every consumer of the
+/// /sys/ vs /apps/ account routing policy must agree on the value, and std::stoi would
+/// silently accept trailing garbage ("2junk" -> 2). Absent config reads as 0 (a v0/v1
+/// chain). Accepts either a LedgerInterface or a storage2::ReadableStorage source,
+/// exactly like getSystemConfig.
+///
+/// Note this costs one SYS_CONFIG round trip per call; folding it into the per-block
+/// cached LedgerConfig (which also removes the double read on EthEndpoint's ledger
+/// fallback) is tracked as a follow-up ahead of the eth_sync EL wiring PR.
+inline task::Task<int> getExecutorVersion(auto& source)
+{
+    if (auto const config = co_await ledger::getSystemConfig(source,
+            std::string_view{magic_enum::enum_name(SystemConfig::executor_version)});
+        config.has_value())
+    {
+        co_return boost::lexical_cast<int>(std::get<0>(*config));
+    }
+    co_return 0;
+}
+
 }  // namespace bcos::ledger

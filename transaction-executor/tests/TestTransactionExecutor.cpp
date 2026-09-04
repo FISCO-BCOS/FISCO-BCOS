@@ -193,7 +193,8 @@ BOOST_AUTO_TEST_CASE(costBalance)
         transaction->forceSender(
             bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
 
-        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        ledger::account::EVMAccount senderAccount(
+            storage, senderAddress, false, /*treatSystemAsUser=*/false);
 
         constexpr static int64_t initBalance = 149586;
         co_await senderAccount.setBalance(initBalance);
@@ -233,7 +234,8 @@ BOOST_AUTO_TEST_CASE(insufficientBalanceNoLogs)
         // Use a deployer with enough balance for deployment
         auto deployer = unhexAddress("e0e794ca86d198042b64285c5ce667aee747509b"sv);
         deployTx->forceSender(bytes(deployer.bytes, deployer.bytes + sizeof(deployer.bytes)));
-        ledger::account::EVMAccount deployerAccount(storage, deployer, false);
+        ledger::account::EVMAccount deployerAccount(
+            storage, deployer, false, /*treatSystemAsUser=*/false);
         co_await deployerAccount.setBalance(100000000000);
 
         auto deployReceipt = co_await executor.executeTransaction(
@@ -251,7 +253,8 @@ BOOST_AUTO_TEST_CASE(insufficientBalanceNoLogs)
         auto lowBalanceSender = unhexAddress("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"sv);
         callTx->forceSender(
             bytes(lowBalanceSender.bytes, lowBalanceSender.bytes + sizeof(lowBalanceSender.bytes)));
-        ledger::account::EVMAccount lowAccount(storage, lowBalanceSender, false);
+        ledger::account::EVMAccount lowAccount(
+            storage, lowBalanceSender, false, /*treatSystemAsUser=*/false);
         co_await lowAccount.setBalance(0);
 
         auto callReceipt = co_await executor.executeTransaction(
@@ -388,11 +391,13 @@ BOOST_AUTO_TEST_CASE(web3Nonce)
         BOOST_CHECK_EQUAL(
             receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::None));
 
-        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        ledger::account::EVMAccount senderAccount(
+            storage, senderAddress, false, /*treatSystemAsUser=*/false);
         auto nonce = co_await senderAccount.nonce();
         BOOST_TEST(nonce.value() == "6");
 
-        ledger::account::EVMAccount helloworldAccount(storage, receipt->contractAddress(), false);
+        ledger::account::EVMAccount helloworldAccount(
+            storage, receipt->contractAddress(), false, /*treatSystemAsUser=*/false);
         auto contractNonce = co_await helloworldAccount.nonce();
         BOOST_CHECK_EQUAL(contractNonce.value(), "1");
 
@@ -403,7 +408,8 @@ BOOST_AUTO_TEST_CASE(web3Nonce)
         auto rawExpectAddr = newLegacyEVMAddress(bytesConstRef{helloworldAddress.bytes}, 1);
         evmc_address expectAddress;
         std::copy(rawExpectAddr.begin(), rawExpectAddr.end(), expectAddress.bytes);
-        ledger::account::EVMAccount expectAccount(storage, expectAddress, false);
+        ledger::account::EVMAccount expectAccount(
+            storage, expectAddress, false, /*treatSystemAsUser=*/false);
 
         auto input = abiCodec.abiIn("deployAndCall(int256)", bcos::s256(90));
         auto deployCallTx = transactionFactory.createTransaction(0,
@@ -450,7 +456,8 @@ BOOST_AUTO_TEST_CASE(web3Nonce)
         BOOST_TEST(receipt->status() == 0);
         bcos::Address address1{};
         abiCodec.abiOut(receipt->output(), address1);
-        bcos::ledger::account::EVMAccount deployAccount(storage, address1, false);
+        bcos::ledger::account::EVMAccount deployAccount(
+            storage, address1, false, /*treatSystemAsUser=*/false);
         BOOST_CHECK_EQUAL((co_await deployAccount.nonce()).value(), "11");
 
         for (auto i : ::ranges::views::iota(1, 11))
@@ -458,7 +465,8 @@ BOOST_AUTO_TEST_CASE(web3Nonce)
             auto rawAddr = newLegacyEVMAddress(bytesConstRef{address1.data(), address1.size()}, i);
             evmc_address expectAddress;
             std::copy(rawAddr.begin(), rawAddr.end(), expectAddress.bytes);
-            ledger::account::EVMAccount account(storage, expectAddress, false);
+            ledger::account::EVMAccount account(
+                storage, expectAddress, false, /*treatSystemAsUser=*/false);
             BOOST_TEST(co_await account.exists());
             BOOST_TEST((co_await account.nonce()).value() == "1");
         }
@@ -514,7 +522,8 @@ BOOST_AUTO_TEST_CASE(cashRevert)
         BOOST_CHECK_EQUAL(receipt->status(), 7);
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "");
 
-        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        ledger::account::EVMAccount senderAccount(
+            storage, senderAddress, false, /*treatSystemAsUser=*/false);
         auto nonce = co_await senderAccount.nonce();
         BOOST_CHECK_EQUAL(nonce.value(), "1");
     }());
@@ -551,7 +560,8 @@ BOOST_AUTO_TEST_CASE(buyGasFailsDrainsLowBalance)
             bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
         dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction).mutableInner().type = 1;
 
-        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        ledger::account::EVMAccount senderAccount(
+            storage, senderAddress, false, /*treatSystemAsUser=*/false);
         co_await senderAccount.setBalance(500);
 
         auto receipt = co_await executor.executeTransaction(
@@ -597,7 +607,8 @@ BOOST_AUTO_TEST_CASE(buyGasFailsChargesIntrinsicPenalty)
 
         constexpr static int64_t initBalance = 50'000;
         constexpr static int64_t intrinsicCost = 21'000;
-        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        ledger::account::EVMAccount senderAccount(
+            storage, senderAddress, false, /*treatSystemAsUser=*/false);
         co_await senderAccount.setBalance(initBalance);
 
         auto receipt = co_await executor.executeTransaction(
@@ -643,7 +654,8 @@ BOOST_AUTO_TEST_CASE(buyGasAndRefundSuccessFlow)
         dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction).mutableInner().type = 1;
 
         constexpr static int64_t initBalance = 1'000'000;
-        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        ledger::account::EVMAccount senderAccount(
+            storage, senderAddress, false, /*treatSystemAsUser=*/false);
         co_await senderAccount.setBalance(initBalance);
 
         auto receipt = co_await executor.executeTransaction(
@@ -692,7 +704,8 @@ BOOST_AUTO_TEST_CASE(buyGasChargesOnEvmFailure)
         dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction).mutableInner().type = 1;
 
         constexpr static int64_t initBalance = 100'000;
-        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        ledger::account::EVMAccount senderAccount(
+            storage, senderAddress, false, /*treatSystemAsUser=*/false);
         co_await senderAccount.setBalance(initBalance);
 
         auto receipt = co_await executor.executeTransaction(
@@ -727,7 +740,8 @@ BOOST_AUTO_TEST_CASE(proxyReceive)
         using namespace std::string_view_literals;
         auto sender = "e0e794ca86d198042b64285c5ce667aee747509b"sv;
         evmc_address senderAddress = unhexAddress(sender);
-        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        ledger::account::EVMAccount senderAccount(
+            storage, senderAddress, false, /*treatSystemAsUser=*/false);
         co_await senderAccount.setBalance(500);
 
         bcos::bytes input;
@@ -743,7 +757,8 @@ BOOST_AUTO_TEST_CASE(proxyReceive)
         BOOST_CHECK_GT(receipt->contractAddress().size(), 0);
         BOOST_CHECK_EQUAL(co_await senderAccount.balance(), 450);
 
-        ledger::account::EVMAccount implAccount(storage, receipt->contractAddress(), false);
+        ledger::account::EVMAccount implAccount(
+            storage, receipt->contractAddress(), false, /*treatSystemAsUser=*/false);
         BOOST_CHECK_EQUAL(co_await implAccount.balance(), 50);
 
         bcos::bytes input2;
@@ -774,7 +789,8 @@ BOOST_AUTO_TEST_CASE(proxyReceive)
         BOOST_CHECK_EQUAL(receipt3->status(), 0);
         BOOST_CHECK_EQUAL(co_await senderAccount.balance(), 350);
 
-        ledger::account::EVMAccount proxyAccount(storage, receipt2->contractAddress(), false);
+        ledger::account::EVMAccount proxyAccount(
+            storage, receipt2->contractAddress(), false, /*treatSystemAsUser=*/false);
         BOOST_CHECK_EQUAL(co_await proxyAccount.balance(), 100);
         BOOST_CHECK_EQUAL(co_await implAccount.balance(), 50);
 

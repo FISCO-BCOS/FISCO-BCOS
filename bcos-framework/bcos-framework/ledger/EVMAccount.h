@@ -290,8 +290,11 @@ public:
       : m_storage(storage), m_tableName(std::move(tableName))
     {}
 
-    EVMAccount(Storage& storage, const evmc_address& address, bool binaryAddress,
-        bool treatSystemAsUser = false)
+    // `treatSystemAsUser` is deliberately without a default, for the same reason MPTAccount
+    // records for `binaryAddress` (MPTAccount.h): it decides whether the c_systemTxsAddress
+    // members route to /sys/ or /apps/, and guessing it wrong makes those reads silently miss.
+    EVMAccount(
+        Storage& storage, const evmc_address& address, bool binaryAddress, bool treatSystemAsUser)
       : m_storage(storage)
     {
         std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
@@ -327,8 +330,8 @@ public:
      * @param storage storage instance
      * @param address address of the account, hex string, should not contain 0x prefix
      */
-    EVMAccount(Storage& storage, std::string_view address, bool binaryAddress,
-        bool treatSystemAsUser = false)
+    EVMAccount(
+        Storage& storage, std::string_view address, bool binaryAddress, bool treatSystemAsUser)
       : m_storage(storage)
     {
         if (accountTablePrefix(address, treatSystemAsUser) == ledger::SYS_DIRECTORY::SYS_APPS)
@@ -356,8 +359,8 @@ public:
         }
     }
 
-    EVMAccount(Storage& storage, const bcos::Address& address, bool binaryAddress,
-        bool treatSystemAsUser = false)
+    EVMAccount(
+        Storage& storage, const bcos::Address& address, bool binaryAddress, bool treatSystemAsUser)
       : EVMAccount(
             storage,
             [](const bcos::Address& address) {

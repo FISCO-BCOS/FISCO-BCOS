@@ -271,7 +271,8 @@ void seedSender(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Ptr con
 {
     auto view = mls.fork();
     view.newMutable();
-    bcos::ledger::account::EVMAccount account(view, addr, /*rawAddress=*/false);
+    bcos::ledger::account::EVMAccount account(
+        view, addr, /*rawAddress=*/false, /*treatSystemAsUser=*/true);
     bcos::task::syncWait(account.create());
     bcos::task::syncWait(account.setCode({}, {}, hashImpl->emptyHash()));
     bcos::task::syncWait(account.setNonce("0"));
@@ -552,7 +553,8 @@ void fundCallAccount(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Pt
 {
     auto view = mls.fork();
     view.newMutable();
-    bcos::ledger::account::EVMAccount account(view, addr, /*rawAddress=*/false);
+    bcos::ledger::account::EVMAccount account(
+        view, addr, /*rawAddress=*/false, /*treatSystemAsUser=*/true);
     bcos::task::syncWait(account.create());
     bcos::task::syncWait(account.setCode({}, {}, hashImpl->emptyHash()));
     bcos::task::syncWait(account.setNonce("0"));
@@ -569,7 +571,8 @@ void seedCorruptAccount(
 {
     auto view = mls.fork();
     view.newMutable();
-    bcos::ledger::account::EVMAccount account(view, addr, /*binaryAddress=*/false);
+    bcos::ledger::account::EVMAccount account(
+        view, addr, /*binaryAddress=*/false, /*treatSystemAsUser=*/true);
     bcos::task::syncWait(account.create());
     bcos::task::syncWait(account.setCode({}, {}, hashImpl->emptyHash()));
     bcos::task::syncWait(account.setNonce("0"));
@@ -700,7 +703,8 @@ void seedContractWithSlot(MLS& mls, bcos::Address const& addr, bcos::h256 const&
 {
     auto view = mls.fork();
     view.newMutable();
-    bcos::ledger::account::EVMAccount account(view, addr, /*rawAddress=*/false);
+    bcos::ledger::account::EVMAccount account(
+        view, addr, /*rawAddress=*/false, /*treatSystemAsUser=*/true);
     bcos::task::syncWait(account.create());
     // CALLDATASIZE; PUSH1 0x0f; JUMPI;            (calldata? → setter at 0x0f)
     // PUSH1 0; SLOAD; PUSH1 0; MSTORE; PUSH1 32; PUSH1 0; RETURN;
