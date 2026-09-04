@@ -24,8 +24,10 @@
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
+#include <boost/throw_exception.hpp>
 #include <range/v3/range.hpp>
 #include <span>
+#include <stdexcept>
 #include <type_traits>
 #include <vector>
 
@@ -77,11 +79,14 @@ bcos::Bloom calculateLogsBloom(Blooms&& blooms)
     return result;
 }
 
-/// Finalize executed receipts for commit: stamp transactionIndex / logIndex, fill a logsBloom
-/// the producer left empty (BaselineScheduler's own receipt phase always leaves it empty; an
-/// already-filled bloom is kept), and accumulate cumulativeGasUsed. Shared by
-/// BaselineScheduler::finishExecute and the engine's buildPayload so the two cannot drift —
-/// cumulativeGasUsed and the bloom feed the receipts trie, a consensus field.
+/// Finalize executed receipts for commit: stamp transactionIndex / logIndex, recompute the
+/// logsBloom from the receipt's log entries, and accumulate cumulativeGasUsed. The bloom is
+/// ALWAYS recomputed from logEntries, never taken from the producer — a wrong producer-filled
+/// bloom would otherwise be silently committed into the receipts trie and the block-level
+/// bloom. Throws std::runtime_error on a null receipt so every caller fails closed instead of
+/// dereferencing (BaselineScheduler calls this helper directly, with no call-site guard).
+/// Shared by BaselineScheduler::finishExecute and the engine's buildPayload so the two cannot
+/// drift — cumulativeGasUsed and the bloom feed the receipts trie, a consensus field.
 /// @return The block's totalGasUsed (the last receipt's cumulativeGasUsed).
 template <::ranges::input_range Receipts>
 bcos::u256 finalizeReceipts(Receipts& receipts)
@@ -91,13 +96,14 @@ bcos::u256 finalizeReceipts(Receipts& receipts)
     size_t logIndex = 0;
     for (auto const& receipt : receipts)
     {
+        if (!receipt)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
+        }
         receipt->setTransactionIndex(transactionIndex++);
         receipt->setLogIndex(logIndex);
-        if (receipt->logsBloom().empty())
-        {
-            auto logBloom = bcos::getLogsBloom(receipt->logEntries());
-            receipt->setLogsBloom({logBloom.data(), logBloom.size()});
-        }
+        auto logBloom = bcos::getLogsBloom(receipt->logEntries());
+        receipt->setLogsBloom({logBloom.data(), logBloom.size()});
         logIndex += receipt->logEntries().size();
         totalGasUsed += receipt->gasUsed();
         receipt->setCumulativeGasUsed(totalGasUsed.str());

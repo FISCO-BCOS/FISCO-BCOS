@@ -35,6 +35,7 @@
 #include "bcos-ledger/mpt/Constants.h"
 #include "bcos-ledger/mpt/EthTrieRoots.h"
 #include "bcos-rlp-protocol/EthReceipt.h"
+#include "bcos-rlp-protocol/Web3TxEnvelope.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/BoostLog.h"
@@ -1108,7 +1109,9 @@ private:
         // Step 2e-0: Validate receipts and (v2) finalize per-receipt fields — transactionIndex,
         // logIndex, logsBloom and cumulativeGasUsed — via the helper shared with
         // BaselineScheduler's receipt phase (the raw SchedulerSerialImpl path skips that
-        // phase); the receipts trie and the block-level bloom need those fields.
+        // phase); the receipts trie and the block-level bloom need those fields. The helper
+        // re-checks null itself; this loop also guards the legacy path below, which never
+        // calls the helper.
         for (auto& receipt : receipts)
         {
             if (!receipt)
@@ -1116,35 +1119,58 @@ private:
                 BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
             }
         }
+        // v2: filled by finalizeReceipts below (the single derivation, shared with
+        // BaselineScheduler); legacy: summed per receipt in Step 2f.
+        u256 totalGasUsed;
         if (ethereumRoots)
         {
-            ledger::mpt::finalizeReceipts(receipts);
+            // Receipt i commits the EIP-2718 type of transaction i, so the counts must match
+            // exactly: more receipts than executed transactions is unpairable (would read past
+            // txTypes), and fewer would silently commit a short receipts trie that no external
+            // Ethereum verifier can reproduce — fail closed on either. Forced (raw-only)
+            // transactions are counted in txsRoot but produce no receipts until the
+            // execution-lane wiring lands; strict per-payload-index pairing (including
+            // deposit kinds) comes with that wiring.
+            if (receipts.size() != executableTransactions.size())
+            {
+                BOOST_THROW_EXCEPTION(std::runtime_error{
+                    "Scheduler returned mismatched receipts vs executed transactions: " +
+                    std::to_string(receipts.size()) +
+                    " != " + std::to_string(executableTransactions.size())});
+            }
+            totalGasUsed = ledger::mpt::finalizeReceipts(receipts);
         }
 
         // Step 2e: Compute receipt root.
         //  - Ethereum executor (v2): commit to the receipts trie over EthReceipt RLP
-        //    (ledger::mpt::calculateReceiptsRoot); the EIP-2718 type comes from the executed
-        //    transaction at the same index.
+        //    (ledger::mpt::calculateReceiptsRoot); the EIP-2718 type is derived from the
+        //    executed transaction's signed envelope at the same index.
         //  - legacy: Merkle over receipt hashes (unchanged).
         h256 receiptRoot = bcos::ledger::mpt::emptyRootHash();
         if (ethereumRoots)
         {
-            // Receipt i commits the EIP-2718 type of transaction i, so more receipts than
-            // executed transactions is unpairable (and would read past txTypes); fewer is
-            // tolerated like the legacy path, which also hashed whatever the scheduler
-            // returned.
-            if (receipts.size() > executableTransactions.size())
-            {
-                BOOST_THROW_EXCEPTION(std::runtime_error{
-                    "Scheduler returned more receipts than executed transactions: " +
-                    std::to_string(receipts.size()) + " > " +
-                    std::to_string(executableTransactions.size())});
-            }
             std::vector<uint8_t> txTypes;
             txTypes.reserve(executableTransactions.size());
             for (auto const& transaction : executableTransactions)
             {
-                txTypes.push_back(transaction->web3TypedTxKind());
+                // Derive the EIP-2718 type from the SIGNED envelope's first byte (EIP-2718:
+                // a type byte is < 0x80; a legacy signing preimage starts with an RLP list
+                // header) — never from the web3TypedTxKind tars mirror, which a peer can
+                // rewrite. calculateHash already applies the same envelope-first defense
+                // for deposit detection (TransactionImpl.cpp). A mirror that disagrees
+                // with the envelope is a tampered or corrupt transaction: fail closed.
+                auto const envelope = transaction->extraTransactionBytes();
+                auto const kind = bcos::rlp::protocol::isTypedWeb3Envelope(envelope) ?
+                                      static_cast<uint8_t>(envelope[0]) :
+                                      uint8_t{0};
+                if (transaction->web3TypedTxKind() != kind)
+                {
+                    BOOST_THROW_EXCEPTION(std::runtime_error{
+                        "web3TypedTxKind mirror disagrees with the signed envelope: mirror=" +
+                        std::to_string(transaction->web3TypedTxKind()) +
+                        ", envelope=" + std::to_string(kind)});
+                }
+                txTypes.push_back(kind);
             }
             std::vector<bcos::bytes> receiptRlps;
             receiptRlps.reserve(receipts.size());
@@ -1195,14 +1221,18 @@ private:
             }
         }
 
-        // Step 2f: Compute gas used and block-level logsBloom from receipts.
-        u256 totalGasUsed;
+        // Step 2f: Compute gas used (legacy only) and block-level logsBloom from receipts.
+        // The v2 totalGasUsed came from finalizeReceipts in Step 2e-0; re-summing it here
+        // would be a second derivation of the same consensus value.
         Bloom logsBloom{};
         for (auto& receipt : receipts)
         {
-            totalGasUsed += receipt->gasUsed();
-            // v2 receipts have their bloom filled in Step 2e-0; legacy receipts may carry an
-            // empty bloom (documented limitation), which is tolerated here.
+            if (!ethereumRoots)
+            {
+                totalGasUsed += receipt->gasUsed();
+            }
+            // v2 receipts have their bloom recomputed from their logs in Step 2e-0; legacy
+            // receipts may carry an empty bloom (documented limitation), tolerated here.
             if (!receipt->logsBloom().empty())
             {
                 orBloom(logsBloom, receipt->logsBloom());
