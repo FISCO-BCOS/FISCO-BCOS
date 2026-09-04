@@ -23,6 +23,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include <unordered_map>
 
 using namespace bcos;
 using namespace bcos::engine;
@@ -40,6 +41,8 @@ ResolvedForkchoice resolved(
         .finalizedNumber = number,
         .headCanonical = canonical,
         .payloadAttributesPresent = attributes,
+        .safeCanonical = true,
+        .finalizedCanonical = true,
     };
 }
 
@@ -117,6 +120,32 @@ PayloadAttributes minimalPayloadAttributes()
     attrs.parentBeaconBlockRoot = h256(std::string(64, '4'));
     return attrs;
 }
+
+struct ThrowingArtifact
+{
+    int value = 0;
+    static inline bool throwOnAssign = false;
+    ThrowingArtifact() = default;
+    explicit ThrowingArtifact(int v) : value(v) {}
+    ThrowingArtifact& operator=(ThrowingArtifact&& other)
+    {
+        if (throwOnAssign)
+        {
+            throw std::runtime_error{"artifact assign failed"};
+        }
+        value = other.value;
+        return *this;
+    }
+    ThrowingArtifact& operator=(ThrowingArtifact const& other)
+    {
+        if (throwOnAssign)
+        {
+            throw std::runtime_error{"artifact assign failed"};
+        }
+        value = other.value;
+        return *this;
+    }
+};
 
 }  // namespace
 
@@ -264,6 +293,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_rejects_safe_above_head)
         .finalizedNumber = 4,
         .headCanonical = true,
         .payloadAttributesPresent = false,
+        .safeCanonical = true,
+        .finalizedCanonical = true,
     };
     checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(bad); },
         "Forkchoice safe block number must not exceed head block number");
@@ -279,6 +310,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_rejects_finalized_above_head)
         .finalizedNumber = 6,
         .headCanonical = true,
         .payloadAttributesPresent = false,
+        .safeCanonical = true,
+        .finalizedCanonical = true,
     };
     checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(bad); },
         "Forkchoice finalized block number must not exceed head block number");
@@ -294,6 +327,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_rejects_finalized_above_safe)
         .finalizedNumber = 6,
         .headCanonical = true,
         .payloadAttributesPresent = false,
+        .safeCanonical = true,
+        .finalizedCanonical = true,
     };
     checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(bad); },
         "Forkchoice finalized block number must not exceed safe block number");
@@ -318,9 +353,47 @@ BOOST_AUTO_TEST_CASE(engine_tracker_updates_safe_and_finalized_on_apply)
         .finalizedNumber = 7,
         .headCanonical = true,
         .payloadAttributesPresent = false,
+        .safeCanonical = true,
+        .finalizedCanonical = true,
     };
     tracker.applyForkchoice(first);
     BOOST_CHECK_EQUAL(*tracker.safeBlockNumber(), 8);
+    BOOST_CHECK_EQUAL(*tracker.finalizedBlockNumber(), 7);
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_zero_hash_keeps_safe_and_finalized)
+{
+    // Finding AJ: Engine-API unset (zero) safe/finalized must not clear stored heights.
+    EngineTracker tracker;
+    ResolvedForkchoice first{
+        .state = ForkchoiceState{h256(10), h256(11), h256(12)},
+        .headNumber = 10,
+        .safeNumber = 8,
+        .finalizedNumber = 7,
+        .headCanonical = true,
+        .payloadAttributesPresent = false,
+        .safeCanonical = true,
+        .finalizedCanonical = true,
+    };
+    BOOST_CHECK(tracker.applyForkchoice(first) == ForkchoiceApplyResult::Applied);
+
+    ResolvedForkchoice unset{
+        .state = ForkchoiceState{h256(11), h256{}, h256{}},
+        .headNumber = 11,
+        .safeNumber = 0,
+        .finalizedNumber = 0,
+        .headCanonical = true,
+        .payloadAttributesPresent = false,
+        .safeCanonical = true,
+        .finalizedCanonical = true,
+    };
+    BOOST_CHECK(tracker.applyForkchoice(unset) == ForkchoiceApplyResult::Applied);
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 11);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(11));
+    BOOST_REQUIRE(tracker.safeBlockNumber().has_value());
+    BOOST_CHECK_EQUAL(*tracker.safeBlockNumber(), 8);
+    BOOST_REQUIRE(tracker.finalizedBlockNumber().has_value());
     BOOST_CHECK_EQUAL(*tracker.finalizedBlockNumber(), 7);
 }
 
@@ -360,6 +433,22 @@ BOOST_AUTO_TEST_CASE(engine_tracker_rejects_non_canonical_finalized)
         "Forkchoice finalized block not in canonical chain");
 }
 
+BOOST_AUTO_TEST_CASE(engine_tracker_omitted_canonical_flags_fail_closed)
+{
+    // Default safeCanonical/finalizedCanonical are false. Omitting them must not apply.
+    EngineTracker tracker;
+    ResolvedForkchoice omitted{
+        .state = ForkchoiceState{h256(10), h256(11), h256(12)},
+        .headNumber = 10,
+        .safeNumber = 8,
+        .finalizedNumber = 7,
+        .headCanonical = true,
+        .payloadAttributesPresent = false,
+    };
+    checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(omitted); },
+        "Forkchoice safe block not in canonical chain");
+}
+
 BOOST_AUTO_TEST_CASE(engine_tracker_allows_safe_finalized_number_rewind)
 {
     // op-geth SetSafe/SetFinalized overwrite; lower numbers are legal when canonical.
@@ -371,6 +460,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_allows_safe_finalized_number_rewind)
         .finalizedNumber = 7,
         .headCanonical = true,
         .payloadAttributesPresent = false,
+        .safeCanonical = true,
+        .finalizedCanonical = true,
     };
     tracker.applyForkchoice(first);
     ResolvedForkchoice rewind{
@@ -380,6 +471,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_allows_safe_finalized_number_rewind)
         .finalizedNumber = 5,
         .headCanonical = true,
         .payloadAttributesPresent = false,
+        .safeCanonical = true,
+        .finalizedCanonical = true,
     };
     BOOST_CHECK(tracker.applyForkchoice(rewind) == ForkchoiceApplyResult::Applied);
     BOOST_CHECK_EQUAL(*tracker.safeBlockNumber(), 6);
@@ -398,14 +491,17 @@ BOOST_AUTO_TEST_CASE(engine_tracker_moved_from_exclusive_access_is_dead)
 BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_unknown)
 {
     EngineTracker tracker;
-    BOOST_CHECK_THROW(tracker.getPayload("0xdeadbeef", 1), UnknownPayload);
+    checkExceptionMessage<UnknownPayload>(
+        [&]() { tracker.getPayload("0xdeadbeef", 1); }, "Unknown payload");
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_unsupported_version)
 {
     EngineTracker tracker;
-    BOOST_CHECK_THROW(tracker.getPayload("0xdeadbeef", 0), UnsupportedEngineApiVersion);
-    BOOST_CHECK_THROW(tracker.getPayload("0xdeadbeef", 6), UnsupportedEngineApiVersion);
+    checkExceptionMessage<UnsupportedEngineApiVersion>(
+        [&]() { tracker.getPayload("0xdeadbeef", 0); }, "Unsupported Engine API version");
+    checkExceptionMessage<UnsupportedEngineApiVersion>(
+        [&]() { tracker.getPayload("0xdeadbeef", 6); }, "Unsupported Engine API version");
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_incompatible_version)
@@ -418,6 +514,21 @@ BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_incompatible_version)
 
     checkExceptionMessage<IncompatiblePayloadVersion>([&]() { tracker.getPayload(id, 1); },
         "Payload version is incompatible with requested method version");
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_v3_requires_blob_and_beacon)
+{
+    EngineTracker tracker;
+    const PayloadID id = "0x0102030405060708";
+    {
+        auto entry = std::make_shared<BuiltPayload>();
+        entry->version = 3;
+        entry->executionPayload.blockNumber = 1;
+        auto guard = tracker.lockExclusive();
+        guard.putPayload(id, h256(7), entry);
+    }
+    checkExceptionMessage<IncompatiblePayloadVersion>(
+        [&]() { tracker.getPayload(id, 3); }, "Payload does not carry the V3+ response shape");
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_v4_requires_withdrawals_root)
@@ -662,6 +773,35 @@ BOOST_AUTO_TEST_CASE(engine_tracker_retain_only_through_guard)
     BOOST_CHECK(!guard.payloadIdForHash(h256(2)).has_value());
 }
 
+BOOST_AUTO_TEST_CASE(publish_built_payload_restores_replaced_entry_on_artifacts_throw)
+{
+    // Finding A: put overwrites the same id; artifacts assign then throws.
+    // erasePayload(id) would drop both the new and the previous entry.
+    ThrowingArtifact::throwOnAssign = false;
+
+    EngineTracker tracker;
+    auto guard = tracker.lockExclusive();
+    const PayloadID id = "0xsameid";
+    guard.putPayload(id, h256(1), makePayload(1));
+
+    std::unordered_map<PayloadID, ThrowingArtifact> artifacts;
+    artifacts.emplace(id, ThrowingArtifact{42});
+    ThrowingArtifact::throwOnAssign = true;
+
+    BOOST_CHECK_THROW(
+        publishBuiltPayload(guard, artifacts, id, h256(2), makePayload(2), ThrowingArtifact{7}),
+        std::runtime_error);
+
+    ThrowingArtifact::throwOnAssign = false;
+    BOOST_REQUIRE(guard.findPayload(id));
+    BOOST_CHECK_EQUAL(guard.findPayload(id)->version, 1);
+    BOOST_REQUIRE(guard.payloadIdForHash(h256(1)).has_value());
+    BOOST_CHECK_EQUAL(*guard.payloadIdForHash(h256(1)), id);
+    BOOST_CHECK(!guard.payloadIdForHash(h256(2)).has_value());
+    BOOST_REQUIRE(artifacts.contains(id));
+    BOOST_CHECK_EQUAL(artifacts.at(id).value, 42);
+}
+
 BOOST_AUTO_TEST_CASE(engine_common_payload_version_matrix_gold)
 {
     // GetPayloadVn window (op-geth): V1 only PayloadV1; V2 accepts <=2; V3/V4/V5 only PayloadV3.
@@ -774,15 +914,18 @@ BOOST_AUTO_TEST_CASE(engine_common_validate_payload_attributes_gold)
     BOOST_CHECK_EQUAL(engine_common::decodedHexByteCount("aaa"), 2);
 }
 
-BOOST_AUTO_TEST_CASE(engine_common_derive_payload_id_reuses_decoded_forced_txs)
+BOOST_AUTO_TEST_CASE(engine_common_derive_payload_id_requires_decoded_forced_txs)
 {
-    // Finding AE: pre-decoded bytes must hash the same as the fromHex fallback.
+    // Hex fallback is gone: attributes with transactions and an empty decoded
+    // span return nullopt. Pre-decoded bodies still match PayloadId.h.
     const h256 parentHash = h256(std::string(64, '1'));
     auto attrs = minimalPayloadAttributes();
     attrs.transactions = std::vector<std::string>{"0x7eface"};
+    BOOST_CHECK(!engine_common::derivePayloadId(attrs, parentHash, 3).has_value());
+
     auto decoded = std::vector<bcos::bytes>{bcos::fromHex("0x7eface")};
     BOOST_CHECK(engine_common::derivePayloadId(attrs, parentHash, 3, decoded) ==
-                engine_common::derivePayloadId(attrs, parentHash, 3));
+                legacyDerivePayloadId(attrs, parentHash, 3));
 }
 
 BOOST_AUTO_TEST_CASE(engine_common_derive_payload_id_matches_legacy)

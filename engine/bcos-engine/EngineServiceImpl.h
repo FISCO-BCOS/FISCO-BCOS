@@ -14,10 +14,11 @@
  *  limitations under the License.
  *
  * @file EngineServiceImpl.h
- * @brief Tests-only leftover Engine API service (findings BK / BW).
+ * @brief Engine API template still constructed by EngineServiceInitializer.
  *
- * Production is EthEngineService / OpEngineService. Do not port new consensus
- * guards here; delete this TU after parity tests stop using it as `legacy`.
+ * This extract adds Tracker / PayloadCache / engine_common beside the live
+ * template. It does not cut production over: Initializer still instantiates
+ * EngineServiceImpl. EthEngineService / OpEngineService are later PRs.
  */
 
 #pragma once
@@ -71,8 +72,8 @@ DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
 namespace detail
 {
 /// Impl-only helpers. Defined here so TUs that instantiate EngineServiceImpl
-/// (e.g. test-transaction-scheduler) do not need EngineServiceImpl.cpp, which
-/// is excluded from libengine. Production validators live in engine_common.
+/// (e.g. test-transaction-scheduler) compile against the header. Production
+/// validators live in engine_common.
 inline std::string encodePayloadSequence(std::uint64_t value)
 {
     return bcos::toHex(value, "0x");
@@ -91,13 +92,6 @@ inline bcos::h256 syntheticHash(std::string_view seed)
     hex.resize((hashBytes * 2) + 2);
     return bcos::h256(bcos::fromHex(hex));
 }
-
-std::vector<std::string> supportedCapabilities();
-
-bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payloadVersion);
-
-std::optional<std::string> validatePayloadAttributes(
-    const PayloadAttributes& payloadAttributes, std::uint32_t version);
 
 /// Encodes the OP-Stack block-header extraData from the CL-supplied payload attributes.
 /// Attribute presence is the fork signal (op-node sends eip1559Params iff Holocene is
@@ -895,13 +889,13 @@ private:
             // [op_engine_rpc] guard in libinitializer/Initializer.cpp REQUIRES
             // executor_version >= 2 (it throws for executor_version < 2 unless the
             // test-only escape hatch unsafe_allow_v1_executor is set); it does not keep
-            // this code off a production endpoint. Production now wires EthEngineService
-            // via EngineServiceInitializer; this EngineServiceImpl path remains for
-            // parity tests. The v2 EthereumExecutor build still stamps the same
-            // placeholder withdrawalsRoot in EthEngineService, so the
+            // this code off a production endpoint. EngineServiceInitializer still
+            // constructs this template; EthEngineService / OpEngineService are not in
+            // this extract. The v2 EthereumExecutor build still stamps the same
+            // placeholder withdrawalsRoot here, so the
             // intended production configuration — executor_version >= 2 with
             // [op_engine_rpc] enabled — serves exactly this placeholder: FCU V3 stamps it
-            // here (legacy) / in EthEngineService (production), getPayloadV5 serializes it, and
+            // here, getPayloadV5 serializes it, and
             // newPayloadV4 accepts it on presence alone. Until C4 computes and verifies the real
             // L2ToL1MessagePasser storage root, no L1 withdrawal proof may be taken against a root
             // produced by this node. The v2 instantiation serving the empty-trie root is pinned by

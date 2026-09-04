@@ -5,6 +5,9 @@
 
 #include "EngineServiceCommon.h"
 
+// Upstream pin: op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
+// (eth/catalyst/api.go GetPayloadVn / forkchoiceUpdated, miner/payload_building.go).
+
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/engine/Errors.h"
 #include "bcos-framework/engine/OpBaseFee.h"
@@ -63,10 +66,12 @@ std::vector<std::string> supportedCapabilities()
     // Eth and Op advertise the same list. FCU V4 is unimplemented (Endpoint -38005)
     // and absent upstream (op-geth / op-node top out at V3), so it is not listed.
     // A V4-shaped build still stores PayloadV3 (payloadShapeVersion).
-    return {"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
-        "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
-        "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
-        "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4"};
+    static const std::vector<std::string> caps{"engine_exchangeCapabilities",
+        "engine_forkchoiceUpdatedV1", "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3",
+        "engine_getPayloadV1", "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4",
+        "engine_getPayloadV5", "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3",
+        "engine_newPayloadV4"};
+    return caps;
 }
 
 /// Shared over the two transaction carriers (attributes hex strings and payload raw
@@ -91,9 +96,24 @@ std::optional<std::string> validateRawTransactionKind(
 
 namespace
 {
+[[nodiscard]] std::uint32_t readU32BE(std::span<const bcos::byte> bytes, std::size_t off)
+{
+    if (off + 4 > bytes.size())
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument{"readU32BE: offset out of range"});
+    }
+    return (static_cast<std::uint32_t>(bytes[off]) << 24) |
+           (static_cast<std::uint32_t>(bytes[off + 1]) << 16) |
+           (static_cast<std::uint32_t>(bytes[off + 2]) << 8) |
+           static_cast<std::uint32_t>(bytes[off + 3]);
+}
+
 std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(std::span<const bcos::byte> params)
 {
-    BOOST_ASSERT(params.size() >= 8);
+    if (params.size() < 8)
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument{"decodeEip1559Params: need 8 bytes"});
+    }
     return {readU32BE(params, 0), readU32BE(params, 4)};
 }
 }  // namespace
@@ -209,21 +229,11 @@ std::optional<PayloadID> derivePayloadId(const PayloadAttributes& payloadAttribu
             txHashes.emplace_back(bcos::crypto::keccak256Hash(bcos::ref(raw)));
         }
     }
-    else if (payloadAttributes.transactions.has_value())
+    else if (payloadAttributes.transactions.has_value() && !payloadAttributes.transactions->empty())
     {
-        txHashes.reserve(payloadAttributes.transactions->size());
-        for (auto const& hexTx : *payloadAttributes.transactions)
-        {
-            try
-            {
-                auto raw = bcos::fromHex(hexTx);
-                txHashes.emplace_back(bcos::crypto::keccak256Hash(bcos::ref(raw)));
-            }
-            catch (bcos::BadHexCharacter const&)
-            {
-                return std::nullopt;
-            }
-        }
+        // No hex fallback: callers must pass validatePayloadAttributes' decoded
+        // bodies. An empty span here would otherwise unbounded-fromHex.
+        return std::nullopt;
     }
     return bcos::engine::derivePayloadId(
         payloadAttributes, parentHash, txHashes, static_cast<uint8_t>(version));

@@ -60,6 +60,14 @@ static bytes toBytes(std::string_view input)
         reinterpret_cast<const byte*>(input.data()) + input.size()};
 }
 
+void checkForkchoiceComment(auto&& action, char const* expected)
+{
+    BOOST_CHECK_EXCEPTION(action(), InvalidForkchoiceState, [&](InvalidForkchoiceState const& e) {
+        auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+        return comment != nullptr && *comment == expected;
+    });
+}
+
 class TestTransactionImpl : public bcostars::protocol::TransactionImpl
 {
 public:
@@ -723,8 +731,9 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_sequential_head_block_number)
     setForkchoiceBlockNumbers(globalStateStorageFixture, reorgForkchoice, c_reorgTargetBlockNumber,
         c_reorgTargetBlockNumber, c_reorgTargetBlockNumber);
 
-    BOOST_CHECK_THROW(task::syncWait(engineService.updateForkchoice(reorgForkchoice, nullptr, 3)),
-        bcos::engine::InvalidForkchoiceState);
+    checkForkchoiceComment(
+        [&]() { task::syncWait(engineService.updateForkchoice(reorgForkchoice, nullptr, 3)); },
+        "Forkchoice head block number must increase by exactly 1");
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_rejects_safe_block_number_above_head)
@@ -744,8 +753,9 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_safe_block_number_above_head)
     globalStateStorageFixture.setBlockNumber(
         forkchoiceState.finalizedBlockHash, c_headOrderingBlockNumber);
 
-    BOOST_CHECK_THROW(task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3)),
-        bcos::engine::InvalidForkchoiceState);
+    checkForkchoiceComment(
+        [&]() { task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3)); },
+        "Forkchoice safe block number must not exceed head block number");
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_rejects_finalized_block_number_above_safe)
@@ -765,8 +775,9 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_finalized_block_number_above_safe)
     globalStateStorageFixture.setBlockNumber(
         forkchoiceState.finalizedBlockHash, c_safeOrderingBlockNumber);
 
-    BOOST_CHECK_THROW(task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3)),
-        bcos::engine::InvalidForkchoiceState);
+    checkForkchoiceComment(
+        [&]() { task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3)); },
+        "Forkchoice finalized block number must not exceed safe block number");
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_ignores_stale_update_after_newer_head_wins)
@@ -1661,19 +1672,27 @@ BOOST_AUTO_TEST_CASE(per_method_version_windows_and_unknown_payload)
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     // Unknown payloadId surfaces as a typed UnknownPayload (RPC maps it to -38001).
-    BOOST_CHECK_THROW(
-        task::syncWait(engineService.getPayload("0x0000000000000000", 5)), UnknownPayload);
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.getPayload("0x0000000000000000", 5)),
+        UnknownPayload, [](UnknownPayload const& e) {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            return comment != nullptr && *comment == "Unknown payload";
+        });
 
     // Out-of-window versions surface as UnsupportedEngineApiVersion (RPC maps to -38005):
     // forkchoiceUpdated tops out at V3, newPayload at V4, getPayload at V5.
     auto forkchoiceState = makeForkchoiceState();
-    BOOST_CHECK_THROW(task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 4)),
-        UnsupportedEngineApiVersion);
+    auto unsupported = [](UnsupportedEngineApiVersion const& e) {
+        auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+        return comment != nullptr && *comment == "Unsupported Engine API version";
+    };
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 4)),
+        UnsupportedEngineApiVersion, unsupported);
     NewPayloadRequest request;
-    BOOST_CHECK_THROW(
-        task::syncWait(engineService.newPayload(request, 5)), UnsupportedEngineApiVersion);
-    BOOST_CHECK_THROW(
-        task::syncWait(engineService.getPayload("0x01", 6)), UnsupportedEngineApiVersion);
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.newPayload(request, 5)),
+        UnsupportedEngineApiVersion, unsupported);
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.getPayload("0x01", 6)),
+        UnsupportedEngineApiVersion, unsupported);
 }
 
 /// Build a BlockHeader carrying every field EthBlockHeader::validateHeader requires for a

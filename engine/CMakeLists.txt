@@ -6,9 +6,8 @@
 project(bcos-engine VERSION ${VERSION})
 
 file(GLOB_RECURSE SRC_LIST "bcos-engine/*.cpp")
-# Helpers live in EngineServiceCommon.cpp. The leftover Impl TU is header-only
-# for tests; production still constructs EngineServiceImpl from the header.
-list(FILTER SRC_LIST EXCLUDE REGEX ".*/EngineServiceImpl\\.cpp$")
+# Helpers live in EngineServiceCommon.cpp. EngineServiceImpl is header-only;
+# production still constructs it from the header.
 
 add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC

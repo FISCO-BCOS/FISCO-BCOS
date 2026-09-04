@@ -18,20 +18,8 @@ void eraseHashesForId(auto& hashToId, PayloadID const& id)
 }
 }  // namespace
 
-PayloadCache::PutResult PayloadCache::putUnbounded(
-    PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
-{
-    auto entries = m_entries;
-    auto hashToId = m_hashToId;
-    eraseHashesForId(hashToId, id);
-    hashToId[blockHash] = id;
-    entries.insert_or_assign(id, std::move(entry));
-    m_entries.swap(entries);
-    m_hashToId.swap(hashToId);
-    return {};
-}
-
-PayloadCache::PutResult PayloadCache::put(PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
+PayloadCache::PutResult PayloadCache::put(
+    PayloadID id, h256 const& blockHash, BuiltPayloadPtr entry)
 {
     auto entries = m_entries;
     auto hashToId = m_hashToId;
@@ -98,7 +86,7 @@ std::optional<bcos::protocol::BlockNumber> PayloadCache::blockNumberForHash(
 }
 
 PayloadCache::PutResult PayloadCache::putAndRetainOnly(
-    PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
+    PayloadID id, h256 const& blockHash, BuiltPayloadPtr entry)
 {
     auto entries = m_entries;
     auto hashToId = m_hashToId;

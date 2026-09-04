@@ -26,14 +26,11 @@ public:
         std::vector<PayloadID> evicted;
     };
 
-    PutResult put(PayloadID id, h256 blockHash, BuiltPayloadPtr entry);
-    /// Test / escape hatch: insert without FIFO eviction or order tracking. Eth/Op production
-    /// paths use put() (bounded). Prefer put() unless a test explicitly needs unbounded growth.
-    PutResult putUnbounded(PayloadID id, h256 blockHash, BuiltPayloadPtr entry);
+    PutResult put(PayloadID id, h256 const& blockHash, BuiltPayloadPtr entry);
     /// Atomically replace the cache with a single retained entry (put then retainOnly on a
     /// staging copy, then one noexcept swap). Used by newPayload commit so no intermediate
     /// multi-entry state is observable if retainOnly would fail after put.
-    PutResult putAndRetainOnly(PayloadID id, h256 blockHash, BuiltPayloadPtr entry);
+    PutResult putAndRetainOnly(PayloadID id, h256 const& blockHash, BuiltPayloadPtr entry);
     BuiltPayloadPtr find(const PayloadID& id) const;
     std::optional<PayloadID> payloadIdForHash(const h256& blockHash) const;
     std::optional<bcos::protocol::BlockNumber> blockNumberForHash(const h256& blockHash) const;

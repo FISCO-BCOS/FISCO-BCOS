@@ -60,6 +60,9 @@ inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
 
 namespace engine_common
 {
+/// Upstream pin for Engine API comments in this extract:
+/// op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
+/// (eth/catalyst/api.go, miner/payload_building.go).
 std::vector<std::string> supportedCapabilities();
 bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payloadVersion);
 /// op-geth ForkchoiceUpdatedV3/V4 both store PayloadV3; GetPayloadV4 requires PayloadV3.
@@ -82,13 +85,6 @@ inline std::optional<std::string> validateHolocene1559Params(
             "both non-zero");
     }
     return std::nullopt;
-}
-[[nodiscard]] inline std::uint32_t readU32BE(std::span<const bcos::byte> bytes, std::size_t off)
-{
-    return (static_cast<std::uint32_t>(bytes[off]) << 24) |
-           (static_cast<std::uint32_t>(bytes[off + 1]) << 16) |
-           (static_cast<std::uint32_t>(bytes[off + 2]) << 8) |
-           static_cast<std::uint32_t>(bytes[off + 3]);
 }
 /// op-geth ReadCanonicalHash(number) != submitted hash → not canonical.
 /// Missing NUMBER_2_HASH is also not canonical (fail closed). Fixtures must write
@@ -118,8 +114,9 @@ inline std::size_t decodedHexByteCount(std::string_view hex)
 
 std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& payloadAttributes,
     std::uint32_t version, std::vector<bcos::bytes>* decodedForcedTxs = nullptr);
-/// `decodedForcedTxs` reuses bytes from validate (finding AE). Empty span falls
-/// back to fromHex for unit tests that call this helper directly.
+/// `decodedForcedTxs` reuses bytes from validate (finding AE). Hex fallback is
+/// gone: if attributes carry transactions, pass the validated decoded bodies.
+/// An empty span with a non-empty transactions list returns nullopt.
 std::optional<PayloadID> derivePayloadId(const PayloadAttributes& payloadAttributes,
     const h256& parentHash, std::uint32_t version,
     std::span<const bcos::bytes> decodedForcedTxs = {});

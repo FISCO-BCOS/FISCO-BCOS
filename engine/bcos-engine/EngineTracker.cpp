@@ -5,6 +5,9 @@
 
 #include "EngineTracker.h"
 
+// Upstream pin: op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
+// (eth/catalyst/api.go forkchoiceUpdated / SetSafe / SetFinalized).
+
 #include <bcos-utilities/Exceptions.h>
 #include <stdexcept>
 
@@ -216,17 +219,10 @@ std::optional<PayloadID> EngineTracker::ExclusiveAccess::payloadIdForHash(
 }
 
 PayloadCache::PutResult EngineTracker::ExclusiveAccess::putPayload(
-    PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
+    PayloadID id, h256 const& blockHash, BuiltPayloadPtr entry)
 {
     requireOwner();
     return m_owner->m_payloads.put(std::move(id), blockHash, std::move(entry));
-}
-
-PayloadCache::PutResult EngineTracker::ExclusiveAccess::putUnboundedPayload(
-    PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
-{
-    requireOwner();
-    return m_owner->m_payloads.putUnbounded(std::move(id), blockHash, std::move(entry));
 }
 
 void EngineTracker::ExclusiveAccess::retainOnly(const PayloadID& id, const h256& blockHash)
@@ -242,7 +238,7 @@ void EngineTracker::ExclusiveAccess::erasePayload(const PayloadID& id)
 }
 
 PayloadCache::PutResult EngineTracker::ExclusiveAccess::putAndRetainPayload(
-    PayloadID id, h256 blockHash, BuiltPayloadPtr entry)
+    PayloadID id, h256 const& blockHash, BuiltPayloadPtr entry)
 {
     requireOwner();
     return m_owner->m_payloads.putAndRetainOnly(std::move(id), blockHash, std::move(entry));

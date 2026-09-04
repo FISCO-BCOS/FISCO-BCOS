@@ -31,13 +31,13 @@ struct ResolvedForkchoice
     bcos::protocol::BlockNumber headNumber;
     std::optional<bcos::protocol::BlockNumber> safeNumber;
     std::optional<bcos::protocol::BlockNumber> finalizedNumber;
-    bool headCanonical;
-    bool payloadAttributesPresent;
+    bool headCanonical = false;
+    bool payloadAttributesPresent = false;
     /// op-geth forkchoiceUpdated: after SetCanonical(head), ReadCanonicalHash(number)
-    /// must equal the submitted safe/finalized hash. Default true so unit fixtures that
-    /// construct ResolvedForkchoice without a ledger still apply.
-    bool safeCanonical = true;
-    bool finalizedCanonical = true;
+    /// must equal the submitted safe/finalized hash. Default false: a resolver that
+    /// omits the flags must not fail-open a non-canonical safe/finalized.
+    bool safeCanonical = false;
+    bool finalizedCanonical = false;
 };
 
 enum class ForkchoiceApplyResult
@@ -57,6 +57,10 @@ public:
     std::optional<TrackedHeadBlock> trackedHead() const;
     std::optional<bcos::protocol::BlockNumber> safeBlockNumber() const;
     std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber() const;
+    /// RAII guards over m_mutex. Unlock must run on the locking thread
+    /// (shared_mutex); do not move a live guard across threads or hold it
+    /// across co_await. applyForkchoice/getPayload take the same mutex —
+    /// do not call them while a guard is held (non-recursive, deadlock).
     ExclusiveAccess lockExclusive();
     SharedAccess lockShared() const;
 
@@ -71,6 +75,7 @@ private:
     PayloadCache m_payloads;
 };
 
+/// unique_lock wrapper. Same-thread unlock only; never hold across co_await.
 class EngineTracker::ExclusiveAccess
 {
 public:
@@ -90,16 +95,15 @@ public:
         }
         return *this;
     }
+    ~ExclusiveAccess() = default;
     ExclusiveAccess(const ExclusiveAccess&) = delete;
     ExclusiveAccess& operator=(const ExclusiveAccess&) = delete;
 
     BuiltPayloadPtr findPayload(const PayloadID& id) const;
     std::optional<PayloadID> payloadIdForHash(const h256& blockHash) const;
-    PayloadCache::PutResult putPayload(PayloadID id, h256 blockHash, BuiltPayloadPtr entry);
-    PayloadCache::PutResult putUnboundedPayload(
-        PayloadID id, h256 blockHash, BuiltPayloadPtr entry);
+    PayloadCache::PutResult putPayload(PayloadID id, h256 const& blockHash, BuiltPayloadPtr entry);
     PayloadCache::PutResult putAndRetainPayload(
-        PayloadID id, h256 blockHash, BuiltPayloadPtr entry);
+        PayloadID id, h256 const& blockHash, BuiltPayloadPtr entry);
     void retainOnly(const PayloadID& id, const h256& blockHash);
     void erasePayload(PayloadID const& id);
     PayloadCache snapshotPayloadCache() const;
@@ -114,6 +118,7 @@ private:
     std::unique_lock<std::shared_mutex> m_lock;
 };
 
+/// shared_lock wrapper. Same-thread unlock only; never hold across co_await.
 class EngineTracker::SharedAccess
 {
 public:
@@ -133,6 +138,7 @@ public:
         }
         return *this;
     }
+    ~SharedAccess() = default;
     SharedAccess(const SharedAccess&) = delete;
     SharedAccess& operator=(const SharedAccess&) = delete;
 
@@ -148,32 +154,35 @@ private:
     std::shared_lock<std::shared_mutex> m_lock;
 };
 
-/// Publish a built payload. PayloadCache::put is already CoW, so a throw there
-/// leaves the live cache unchanged. If the artifacts insert then throws, erase
-/// only the id just inserted — FIFO-evicted entries stay evicted (finding T).
+/// Publish a built payload. put() is CoW, so a throw there leaves the live
+/// cache unchanged. After a successful put, an artifacts insert throw must
+/// restore the pre-put cache and artifacts — erasePayload(id) would drop a
+/// replaced entry (same id, different payload) and its prior artifact.
 /// Consolidated from the eth_detail / op_detail copies (review PR #5544).
 template <class ArtifactsMap, class ArtifactNode>
 PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guard,
     ArtifactsMap& artifacts, PayloadID const& payloadId, h256 const& blockHash,
     BuiltPayloadPtr entry, ArtifactNode&& artifactNode)
 {
-    // Match release EngineServiceImpl: bounded FIFO (PayloadCache::put, cap 64).
-    auto putResult = guard.putPayload(payloadId, blockHash, std::move(entry));
+    PayloadCache cacheRollback = guard.snapshotPayloadCache();
+    ArtifactsMap artifactsRollback = artifacts;
     try
     {
+        // Match release EngineServiceImpl: bounded FIFO (PayloadCache::put, cap 64).
+        auto putResult = guard.putPayload(payloadId, blockHash, std::move(entry));
         artifacts[payloadId] = std::forward<ArtifactNode>(artifactNode);
+        for (auto const& evictedId : putResult.evicted)
+        {
+            artifacts.erase(evictedId);
+        }
+        return putResult;
     }
     catch (...)
     {
-        guard.erasePayload(payloadId);
-        artifacts.erase(payloadId);
+        guard.restorePayloadCache(std::move(cacheRollback));
+        artifacts = std::move(artifactsRollback);
         throw;
     }
-    for (auto const& evictedId : putResult.evicted)
-    {
-        artifacts.erase(evictedId);
-    }
-    return putResult;
 }
 
 }  // namespace bcos::engine

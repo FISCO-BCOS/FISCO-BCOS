@@ -248,6 +248,12 @@ BOOST_AUTO_TEST_CASE(execution_payload_extra_data_shape_is_validated)
             makeExecutionPayloadV3(std::move(extraData)), 3)
                     .has_value();
     };
+    auto rejectNeedle = [](bytes extraData, char const* needle) {
+        auto error = engine::detail::validateExecutionPayload(
+            makeExecutionPayloadV3(std::move(extraData)), 3);
+        BOOST_REQUIRE(error.has_value());
+        BOOST_CHECK_NE(error->find(needle), std::string::npos);
+    };
 
     // Empty (pre-Holocene), 9-byte Holocene and 17-byte Jovian forms.
     BOOST_CHECK(accepted({}));
@@ -255,18 +261,22 @@ BOOST_AUTO_TEST_CASE(execution_payload_extra_data_shape_is_validated)
     BOOST_CHECK(accepted(fromHexWithPrefix("0x01000000fa000000060000000000000000")));
 
     // Wrong lengths.
-    BOOST_CHECK(!accepted(bytes(8, 0)));
-    BOOST_CHECK(!accepted(bytes(16, 0)));
-    BOOST_CHECK(!accepted(bytes(32, 0)));
+    rejectNeedle(bytes(8, 0), "must be 9 (Holocene) or 17 (Jovian) bytes");
+    rejectNeedle(bytes(16, 0), "must be 9 (Holocene) or 17 (Jovian) bytes");
+    rejectNeedle(bytes(32, 0), "must be 9 (Holocene) or 17 (Jovian) bytes");
     // Wrong version byte for the length: Jovian must be 0x01, Holocene 0x00.
-    BOOST_CHECK(!accepted(fromHexWithPrefix("0x00000000fa000000060000000000000000")));
-    BOOST_CHECK(!accepted(fromHexWithPrefix("0x01000000fa00000006")));
+    rejectNeedle(fromHexWithPrefix("0x00000000fa000000060000000000000000"),
+        "version byte does not match length");
+    rejectNeedle(fromHexWithPrefix("0x01000000fa00000006"), "version byte does not match length");
     // Header extraData is a committed artifact: a zero denominator OR zero elasticity
     // makes the head unextendable (calcOpBaseFee fail-closes), so headers carry the
     // strict non-zero rule (validateOpExtraDataShape) — finding AO.
-    BOOST_CHECK(!accepted(fromHexWithPrefix("0x000000000000000006")));
-    BOOST_CHECK(!accepted(fromHexWithPrefix("0x000000000000000000")));
-    BOOST_CHECK(!accepted(fromHexWithPrefix("0x00000000fa00000000")));
+    rejectNeedle(fromHexWithPrefix("0x000000000000000006"),
+        "must encode a non-zero EIP-1559 denominator and elasticity");
+    rejectNeedle(fromHexWithPrefix("0x000000000000000000"),
+        "must encode a non-zero EIP-1559 denominator and elasticity");
+    rejectNeedle(fromHexWithPrefix("0x00000000fa00000000"),
+        "must encode a non-zero EIP-1559 denominator and elasticity");
 }
 
 // A CL returning a payload under a blockHash this node minted must return the same
@@ -406,7 +416,7 @@ BOOST_AUTO_TEST_CASE(compare_absent_optional_keeps_local_body)
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(omitted, omitted).has_value());
     // Submitted omit vs built present (GetPayloadV3 echo of a V4-capable local body).
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(omitted, built).has_value());
-    // Submitted present vs built omit (reverse XOR; still both-have, not a mismatch).
+    // Submitted present vs built omit (reverse XOR; omit vs value, not both-have).
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(built, omitted).has_value());
     // Both present and equal.
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(built, built).has_value());
