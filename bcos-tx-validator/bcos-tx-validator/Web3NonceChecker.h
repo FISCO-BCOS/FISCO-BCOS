@@ -209,6 +209,42 @@ public:
 
     virtual task::Task<std::optional<u256>> getPendingNonce(std::string_view sender);
 
+    /// The account's nonce as of the last COMMITTED block: cache hit returns immediately, a miss
+    /// reads the ledger and back-fills the cache monotonically.
+    ///
+    /// @param sender RAW 20 bytes, as Transaction::sender() returns them -- not hex. Used
+    /// verbatim as the m_ledgerStateNonces key and hex-encoded once for the ledger read, which
+    /// is what checkWeb3Nonce() and insert() do. Note that getPendingNonce() above is the
+    /// exception on this class: it takes HEX and fromHex()es it to reach the same key. Passing
+    /// hex here would silently miss every cache entry and then hex-encode it a second time for
+    /// the ledger read -- a miss that looks like a cold cache, not like a bug.
+    ///
+    /// getPendingNonce() cannot be used for this. It prefers m_maxNonces, which is "the next
+    /// nonce this pool would accept" -- using that as a lower bound would reject every legitimate
+    /// queued transaction. This deliberately consults neither m_maxNonces nor m_memoryNonces.
+    ///
+    /// Split out of checkWeb3Nonce so the admission layer can apply the window itself while
+    /// keeping the m_ledgerStateNonces cache: reading through to storage on every transaction
+    /// would undo FIB-59.
+    virtual task::Task<std::optional<u256>> committedNonce(std::string_view sender);
+
+    /// Whether a PENDING transaction in this pool already holds (sender, nonce) -- the read half
+    /// of insertMemoryNonce's reservation, split out for the same reason committedNonce was:
+    /// the admission layer states the rule as its own check instead of calling a function that
+    /// also re-applies the ledger window it has already applied.
+    ///
+    /// This does NOT make insertMemoryNonce redundant. That call remains the authority: it
+    /// reserves and refuses in one atomic step, which is the only thing that closes the window
+    /// between two threads submitting the same pair (FIB-51). Asking here answers the same
+    /// question before that write, so the rule can be stated as a check rather than lived inside
+    /// the storage call.
+    ///
+    /// @param sender RAW 20 bytes, as committedNonce takes them and insertMemoryNonce stores
+    /// them -- not hex.
+    /// @param nonce decimal or 0x-prefixed; converted to u256 exactly as insertMemoryNonce
+    /// converts it, so "0x10" and "16" are one entry rather than two (FIB-58).
+    virtual task::Task<bool> existsMemoryNonce(std::string_view sender, std::string_view nonce);
+
     // only for test, inset nonce into ledgerStateNonces
     virtual void insert(std::string sender, u256 nonce);
 
