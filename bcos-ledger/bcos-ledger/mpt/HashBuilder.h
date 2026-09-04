@@ -146,7 +146,8 @@ template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
 {
     if (changes.empty())
     {
-        co_return TrieMergeResult{.root = priorRoot, .newNodes = {}, .obsoletedNodes = {}};
+        co_return TrieMergeResult{
+            .root = priorRoot, .newNodes = {}, .obsoletedNodes = {}, .reemittedNodes = {}};
     }
     if (priorRoot != emptyRootHash())
     {
@@ -165,8 +166,10 @@ template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
         }
     }
     auto built = computeTrieRootFromSorted(survivors);
-    co_return TrieMergeResult{
-        .root = built.root, .newNodes = std::move(built.newNodes), .obsoletedNodes = {}};
+    co_return TrieMergeResult{.root = built.root,
+        .newNodes = std::move(built.newNodes),
+        .obsoletedNodes = {},
+        .reemittedNodes = {}};
 }
 
 /// Batch-write @p nodes — any input range of (hash → raw RLP) pairs — into @p storage in one

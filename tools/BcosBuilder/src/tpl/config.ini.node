@@ -48,6 +48,18 @@
     type=RocksDB
     pd_addrs=
     key_page_size=10240
+    ; MPT state-node pruning (pathdb): delete MPT nodes obsoleted more than
+    ; mpt_prune_window blocks ago, bounding state-trie disk usage.
+    ; State roots within [latest - mpt_prune_window, latest] stay fully reachable
+    ; (eth_getProof / historical eth_call); older roots answer -32004.
+    ; -1 disables pruning (default, archive-node behavior); a suggested value is 128.
+    ; WARNING: only enable this on a chain whose MPT has been tracked from genesis
+    ; (L2 mode) or from the feature_mpt_state_root activation block. Enabling it
+    ; mid-chain on an existing chain can DELETE LIVE STATE NODES, because reference
+    ; counts for nodes created before enablement are unknown.
+    ;mpt_prune_window=-1
+    ; max node rows deleted per background scan batch
+    ;mpt_prune_batch_size=1000
 
 [txpool]
     ; size of the txpool, default is 15000

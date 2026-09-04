@@ -491,6 +491,9 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
             output.intraBlockObsoleted.insert(hash);
         }
     }
+    // refCountDeltas is deliberately NOT adjusted here: mergeNodeDelta already nets each hash's
+    // emissions against its obsoletions (and cancels byte-identical re-emits via
+    // TrieMergeResult::reemittedNodes), which is exactly the movement the pruning spec counts.
 
     // One batched flush for the whole block (spec §5.4): nothing inside this build reads a
     // node it produced — storage-trie merges read parent-version nodes only, and the account

@@ -636,9 +636,24 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // into its mutable layer at execute time as ordinary "/mpt/" state rows
         // (MPTNodeStorage.h), so the single mergeBackStorage below lands flat state and
         // trie nodes in one backend merge — one WriteBatch, one Write
-        // (RocksDBStorage2::merge). delta.obsoletedNodes / intraBlockObsoleted are NOT
-        // consumed here: they are candidates for the future pathdb pruning spec only, no
-        // deletes are issued (MPTDeltaLayer.h contract).
+        // (RocksDBStorage2::merge).
+        //
+        // MPT pruning (CommitObserver::coPreparePruneRows): the observer turns the block's
+        // delta into its pruning metadata rows (refcount / delete-queue / watermark), which
+        // are written into prewriteStorage so they land in the SAME WriteBatch as the block
+        // data — metadata and data can never diverge across a crash. No node deletes are
+        // issued on this path: deletion is posted asynchronously by onCommit below
+        // (MPTPruner). The NoopCommitObserver default returns no rows, so a node without
+        // pruning configured pays nothing here.
+        if (result->m_mptDelta)
+        {
+            auto pruneRows = co_await m_mptCommitObserver->coPreparePruneRows(
+                header->number(), *result->m_mptDelta);
+            if (!pruneRows.empty())
+            {
+                co_await storage2::writeSome(prewriteStorage, std::move(pruneRows));
+            }
+        }
         {
             ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().MERGE_STATE);

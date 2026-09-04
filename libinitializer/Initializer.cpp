@@ -39,6 +39,7 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/MPTPruner.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-single-consensus/SingleNodeConsensus.h"
 #include "bcos-storage/MPTNodeReadStorage.h"
@@ -407,6 +408,31 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             "test-harness mode, never drive this endpoint with a production op-node");
     }
 
+    // MPT pruning (storage.mpt_prune_window; pathdb spec §4.8): ONE pruner instance shared by
+    // every baseline scheduler variant built below — MultiVersionScheduler activates exactly
+    // one at a time, and the pruner's state lives in the committed backend's metadata rows,
+    // so sharing carries no cross-version conflict. Every pruner read and delete hits
+    // latestBackend() DIRECTLY: no cache layer may sit between the pruner and the physical
+    // rows (MPTPruner.h contract). -1 (the default) disables pruning entirely: the
+    // schedulers keep their built-in NoopCommitObserver.
+    if (m_nodeConfig->mptPruneWindow() > 0)
+    {
+        auto& pruneBackend = m_globalStateStorageInitializer->storage().latestBackend();
+        auto pruner = std::make_shared<
+            ledger::mpt::MPTPruner<std::remove_reference_t<decltype(pruneBackend)>>>(
+            pruneBackend, m_nodeConfig->mptPruneWindow(),
+            static_cast<size_t>(
+                m_nodeConfig->mptPruneBatchSize() > 0 ? m_nodeConfig->mptPruneBatchSize() : 1));
+        // Startup recovery: restore the persisted watermark and replay every deletion it
+        // covers. Throws (MPTDecodeError) on a corrupted watermark row — fail loudly at boot.
+        task::syncWait(pruner->init());
+        INITIALIZER_LOG(INFO) << LOG_DESC("MPT pruning enabled")
+                              << LOG_KV("window", m_nodeConfig->mptPruneWindow())
+                              << LOG_KV("batchSize", m_nodeConfig->mptPruneBatchSize())
+                              << LOG_KV("recoveredWatermark", pruner->watermark());
+        m_mptCommitObserver = std::move(pruner);
+    }
+
     if (baselineSchedulerConfig.parallel)
     {
         auto parallelScheduler =
@@ -421,7 +447,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), parallelScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction());
+                transactionExecutor, m_mptCommitObserver,
+                !m_nodeConfig->engineDrivenBlockProduction());
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -446,7 +473,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
+                ethereumExecutor, m_mptCommitObserver,
+                !m_nodeConfig->engineDrivenBlockProduction());
         // Engine-driven modes on the v2 EthereumExecutor: build the Engine API service wired
         // to the ethereum scheduler + EthereumExecutor so blocks are built with
         // Ethereum-compliant semantics. Two mutually exclusive drivers use it (NodeConfig
@@ -470,7 +498,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), serialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction());
+                transactionExecutor, m_mptCommitObserver,
+                !m_nodeConfig->engineDrivenBlockProduction());
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -485,7 +514,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
+                ethereumExecutor, m_mptCommitObserver,
+                !m_nodeConfig->engineDrivenBlockProduction());
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
         // branch above for why op_engine_rpc.enable also builds the EngineService here.
         if (!engineApiForV1Only &&
