@@ -498,7 +498,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     OpPayloadArtifacts stagedArtifact{.canonicalHeader = std::move(canonicalHeader)};
     {
         auto guard = m_tracker.lockExclusive();
-        op_detail::publishBuiltPayload(guard, m_artifacts, payloadId,
+        publishBuiltPayload(guard, m_artifacts, payloadId,
             commonEntry->executionPayload.blockHash, std::move(commonEntry),
             std::move(stagedArtifact));
     }

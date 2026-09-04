@@ -147,4 +147,34 @@ private:
     std::shared_lock<std::shared_mutex> m_lock;
 };
 
+/// Publish a built payload with rollback-on-throw over the PayloadCache snapshot and
+/// the caller-side artifacts map. Consolidated from the byte-identical eth_detail /
+/// op_detail copies (review PR #5544); both engine services call this single template
+/// so cache-rollback semantics cannot drift.
+template <class ArtifactsMap, class ArtifactNode>
+PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guard,
+    ArtifactsMap& artifacts, PayloadID const& payloadId, h256 const& blockHash,
+    BuiltPayloadPtr entry, ArtifactNode&& artifactNode)
+{
+    PayloadCache cacheRollback = guard.snapshotPayloadCache();
+    ArtifactsMap artifactsRollback = artifacts;
+    try
+    {
+        // Match release EngineServiceImpl: bounded FIFO (PayloadCache::put, cap 64).
+        auto putResult = guard.putPayload(payloadId, blockHash, std::move(entry));
+        artifacts[payloadId] = std::forward<ArtifactNode>(artifactNode);
+        for (auto const& evictedId : putResult.evicted)
+        {
+            artifacts.erase(evictedId);
+        }
+        return putResult;
+    }
+    catch (...)
+    {
+        guard.restorePayloadCache(std::move(cacheRollback));
+        artifacts = std::move(artifactsRollback);
+        throw;
+    }
+}
+
 }  // namespace bcos::engine

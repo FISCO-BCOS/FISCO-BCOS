@@ -1603,7 +1603,7 @@ BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
         header->setNumber(kTargetNumber);
         EthPayloadArtifacts<RealGlobalStateStorage::ViewType> node{
             .view = nullptr, .header = header, .receipts = {}};
-        (void)eth_detail::publishBuiltPayload(
+        (void)publishBuiltPayload(
             guard, artifacts, targetPayloadId, targetHash, entry, std::move(node));
     }
 
@@ -1640,7 +1640,7 @@ BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
                 header->setNumber(99);
                 EthPayloadArtifacts<RealGlobalStateStorage::ViewType> node{
                     .view = nullptr, .header = header, .receipts = {}};
-                (void)eth_detail::publishBuiltPayload(
+                (void)publishBuiltPayload(
                     guard, artifacts, writerPayloadId, writerHash, entry, std::move(node));
                 writerFinished.store(true, std::memory_order_release);
             }

@@ -731,8 +731,8 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
         entry->executionPayload.blockHash = targetHash;
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
         header->setNumber(kTargetNumber);
-        (void)bcos::engine::op_detail::publishBuiltPayload(guard, artifacts, targetPayloadId,
-            targetHash, entry, bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
+        (void)bcos::engine::publishBuiltPayload(guard, artifacts, targetPayloadId, targetHash,
+            entry, bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
     }
 
     bcos::protocol::BlockHeader::Ptr initialHeader;
@@ -763,9 +763,8 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
                 entry->executionPayload.blockHash = writerHash;
                 auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
                 header->setNumber(99);
-                (void)bcos::engine::op_detail::publishBuiltPayload(guard, artifacts,
-                    writerPayloadId, writerHash, entry,
-                    bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
+                (void)bcos::engine::publishBuiltPayload(guard, artifacts, writerPayloadId,
+                    writerHash, entry, bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
                 writerFinished.store(true, std::memory_order_release);
             }
             catch (...)

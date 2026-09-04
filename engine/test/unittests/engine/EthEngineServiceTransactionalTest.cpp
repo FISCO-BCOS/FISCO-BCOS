@@ -411,8 +411,8 @@ BOOST_AUTO_TEST_CASE(publish_built_payload_rolls_back_cache_and_artifacts_on_thr
     artifacts.throwOnAssign = true;
 
     PayloadID newId = "0xnew";
-    BOOST_CHECK_THROW(eth_detail::publishBuiltPayload(guard, artifacts, newId, h256(2),
-                          makeEntry(newId), ArtifactNode{.value = 7}),
+    BOOST_CHECK_THROW(publishBuiltPayload(guard, artifacts, newId, h256(2), makeEntry(newId),
+                          ArtifactNode{.value = 7}),
         std::runtime_error);
 
     BOOST_REQUIRE(guard.findPayload("0xexisting"));
@@ -437,13 +437,12 @@ BOOST_AUTO_TEST_CASE(publish_built_payload_preserves_prior_generic_artifact)
         .header = std::move(header),
         .receipts = {},
     };
-    eth_detail::publishBuiltPayload(
-        guard, artifacts, keepId, h256(1), makeEntry(keepId), std::move(staged));
+    publishBuiltPayload(guard, artifacts, keepId, h256(1), makeEntry(keepId), std::move(staged));
 
     artifacts.throwOnAssign = true;
     PayloadID failingId = "0xfailing";
     BOOST_CHECK_THROW(
-        eth_detail::publishBuiltPayload(guard, artifacts, failingId, h256(99), makeEntry(failingId),
+        publishBuiltPayload(guard, artifacts, failingId, h256(99), makeEntry(failingId),
             EthPayloadArtifacts<RealGlobalStateStorage::ViewType>{}),
         std::runtime_error);
 

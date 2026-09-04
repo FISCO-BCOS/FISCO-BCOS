@@ -191,7 +191,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
 
     {
         auto guard = m_tracker.lockExclusive();
-        eth_detail::publishBuiltPayload(guard, m_artifacts, payloadId,
+        publishBuiltPayload(guard, m_artifacts, payloadId,
             commonEntry->executionPayload.blockHash, std::move(commonEntry),
             std::move(stagedArtifact));
     }

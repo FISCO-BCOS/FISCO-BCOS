@@ -88,31 +88,6 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
 
 namespace op_detail
 {
-template <class ArtifactsMap, class ArtifactNode>
-PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guard,
-    ArtifactsMap& artifacts, PayloadID const& payloadId, h256 const& blockHash,
-    BuiltPayloadPtr entry, ArtifactNode&& artifactNode)
-{
-    PayloadCache cacheRollback = guard.snapshotPayloadCache();
-    ArtifactsMap artifactsRollback = artifacts;
-    try
-    {
-        auto putResult = guard.putPayload(payloadId, blockHash, std::move(entry));
-        artifacts[payloadId] = std::forward<ArtifactNode>(artifactNode);
-        for (auto const& evictedId : putResult.evicted)
-        {
-            artifacts.erase(evictedId);
-        }
-        return putResult;
-    }
-    catch (...)
-    {
-        guard.restorePayloadCache(std::move(cacheRollback));
-        artifacts = std::move(artifactsRollback);
-        throw;
-    }
-}
-
 template <class ArtifactsMap>
 bcos::protocol::BlockHeader::Ptr findBuiltHeader(
     EngineTracker::SharedAccess& shared, ArtifactsMap const& artifacts, h256 const& blockHash)
@@ -225,12 +200,6 @@ private:
     {
         return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
                version <= m_maxEngineVersion;
-    }
-
-    static bool isNewPayloadVersionSupported(std::uint32_t version)
-    {
-        return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
-               version <= static_cast<std::uint32_t>(ApiVersion::V4);
     }
 
     task::Task<ForkchoiceUpdatedResult> buildOpPayload(const ForkchoiceState& forkchoiceState,

@@ -45,32 +45,6 @@ namespace bcos::engine
 
 namespace eth_detail
 {
-template <class ArtifactsMap, class ArtifactNode>
-PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guard,
-    ArtifactsMap& artifacts, PayloadID const& payloadId, h256 const& blockHash,
-    BuiltPayloadPtr entry, ArtifactNode&& artifactNode)
-{
-    PayloadCache cacheRollback = guard.snapshotPayloadCache();
-    ArtifactsMap artifactsRollback = artifacts;
-    try
-    {
-        // Match release EngineServiceImpl: bounded FIFO (PayloadCache::put, cap 64).
-        auto putResult = guard.putPayload(payloadId, blockHash, std::move(entry));
-        artifacts[payloadId] = std::forward<ArtifactNode>(artifactNode);
-        for (auto const& evictedId : putResult.evicted)
-        {
-            artifacts.erase(evictedId);
-        }
-        return putResult;
-    }
-    catch (...)
-    {
-        guard.restorePayloadCache(std::move(cacheRollback));
-        artifacts = std::move(artifactsRollback);
-        throw;
-    }
-}
-
 template <class Guard, class ArtifactsMap>
 void commitRetainedPayload(Guard& guard, ArtifactsMap& artifacts, PayloadID const& payloadId,
     h256 const& blockHash, BuiltPayloadPtr entry)
