@@ -51,6 +51,11 @@ using OpCulpritTxHash = boost::error_info<struct OpCulpritTxHashTag, bcos::h256>
 /// Named separately from executor_v1::opstack::OpBlockGasPoolFull (the prepare-time exception).
 using OpRejectIsCapacity = boost::error_info<struct OpRejectIsCapacityTag, bool>;
 
+/// True when buildOpBlock could not decode a payload envelope. FCU maps this to
+/// payloadStatus INVALID; other OpExecutionInternalError values stay -32603.
+/// Do not key that split on errinfo_comment text.
+using OpPayloadUndecodable = boost::error_info<struct OpPayloadUndecodableTag, bool>;
+
 [[nodiscard]] inline std::optional<bcos::h256> culpritTxHashFromError(boost::exception const& error)
 {
     if (auto const* hash = boost::get_error_info<OpCulpritTxHash>(error))

@@ -61,6 +61,7 @@ public:
         bool throwUnknownPayload = false;
         bool throwInvalidPayloadAttributes = false;
         bool throwUnsupportedFork = false;
+        bool throwUnsupportedEngineApiVersion = false;
         bool throwInvalidForkchoiceState = false;
         std::atomic<bool> hangNewPayload{false};
         std::atomic<bool> enteredNewPayload{false};
@@ -89,6 +90,10 @@ public:
         {
             BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
         }
+        if (m_state->throwUnsupportedEngineApiVersion)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{});
+        }
         if (m_state->throwInvalidForkchoiceState)
         {
             BOOST_THROW_EXCEPTION(engine::InvalidForkchoiceState{});
@@ -104,6 +109,10 @@ public:
         if (m_state->throwUnknownPayload)
         {
             BOOST_THROW_EXCEPTION(engine::UnknownPayload{});
+        }
+        if (m_state->throwUnsupportedEngineApiVersion)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{});
         }
         co_return std::make_unique<engine::GetPayloadData>(*m_state->getPayloadResult);
     }
@@ -125,6 +134,10 @@ public:
         if (m_state->throwUnsupportedFork)
         {
             BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
+        }
+        if (m_state->throwUnsupportedEngineApiVersion)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{});
         }
         co_return m_state->forkchoiceUpdatedResult.payloadStatus;
     }
@@ -274,6 +287,10 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedTypedFailuresMapToSpecErrorCodes)
     Json::Value stateOnly(Json::arrayValue);
     stateOnly.append(fc);
     expectCode(stateOnly, EngineError::InvalidForkchoiceState);
+
+    mockService.m_state->throwInvalidForkchoiceState = false;
+    mockService.m_state->throwUnsupportedEngineApiVersion = true;
+    expectCode(params, EngineError::UnsupportedFork);
 }
 
 
@@ -466,6 +483,17 @@ BOOST_AUTO_TEST_CASE(getPayloadV5UnknownPayload)
         [](JsonRpcException const& e) { return e.code() == EngineError::UnknownPayload; });
 }
 
+BOOST_AUTO_TEST_CASE(getPayloadUnsupportedEngineApiVersionMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedEngineApiVersion = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append("0x00000000deadbeef");
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(getPayloadV3, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
 BOOST_AUTO_TEST_CASE(getPayloadV5MissingParams)
 {
     Json::Value params(Json::arrayValue);
@@ -520,6 +548,18 @@ Json::Value makeV1ExecutionPayloadJson()
 BOOST_AUTO_TEST_CASE(newPayloadUnsupportedForkMapsTo38005)
 {
     mockService.m_state->throwUnsupportedFork = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append(makeV1ExecutionPayloadJson());
+
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV1, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadUnsupportedEngineApiVersionMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedEngineApiVersion = true;
 
     Json::Value params(Json::arrayValue);
     params.append(makeV1ExecutionPayloadJson());

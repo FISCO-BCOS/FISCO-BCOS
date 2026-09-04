@@ -28,27 +28,14 @@
 #include <stdexcept>
 #include <utility>
 
+// Leftover tests-only TU (findings BK / BW). Production Engine API is
+// EthEngineService / OpEngineService + engine_common. Do not port new consensus
+// guards here. Delete this TU after Eth/Op parity tests stop constructing
+// EngineServiceImpl as `legacy` (target: the PR that drops EngineServiceImpl.cpp
+// from test-bcos-engine).
 std::vector<std::string> bcos::engine::detail::supportedCapabilities()
 {
-    // Everything this node implements, not a fork-narrowed subset. op-geth advertises its
-    // full `caps` list regardless of the active fork and lets the CL pick; op-node picks
-    // its method versions from the rollup config (forkchoiceUpdatedV3 / getPayloadV5 /
-    // newPayloadV4 on Karst) without needing the EL to prune the list for it. Narrowing
-    // here would also break the pre-Karst callers this node still serves — the v1 Engine
-    // API harness behind unsafe_allow_v1_executor and the V1-V3 integration suites.
-    //
-    // Note: serving a method VERSION is not the same as being able to BUILD with it.
-    // buildPayload requires an on-chain EVM revision (executor_version >= 2); the
-    // unsafe_allow_v1_executor harness (executor_version < 2) can no longer build any
-    // payload, only answer capability/state queries.
-    //
-    // forkchoiceUpdatedV4 is the one absentee, and genuinely so: the forkchoice version
-    // window tops out at V3 (isForkchoiceVersionSupported), so the endpoint answers
-    // -38005. getPayloadV5 and newPayloadV4 were added by B4.
-    return {"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
-        "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
-        "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
-        "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4"};
+    return engine_common::supportedCapabilities();
 }
 
 bool bcos::engine::detail::isGetPayloadVersionCompatible(

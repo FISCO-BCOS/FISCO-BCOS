@@ -162,6 +162,12 @@ std::optional<std::string> validateOpNewPayloadRequest(
     {
         return std::string("withdrawalsRoot is required on the OP path (Isthmus+)");
     }
+    if (*payload.withdrawalsRoot != bcos::engine::detail::withdrawalsRootFor(payload))
+    {
+        return std::string(
+            "withdrawalsRoot does not match the value this node commits "
+            "for the built header");
+    }
     if (!payload.excessBlobGas.has_value() || *payload.excessBlobGas != 0)
     {
         return std::string("excessBlobGas must be present and zero on the OP path");

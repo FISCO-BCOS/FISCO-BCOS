@@ -20,6 +20,20 @@ inline auto rawEnvelopes(ExecutionPayload const& payload)
            ::ranges::views::transform(
                [](EngineTransaction const& tx) -> bytes const& { return tx.raw; });
 }
+
+inline std::optional<ForkchoiceUpdatedResult> fcuInvalidIfUndecodable(
+    OpExecutionInternalError const& error)
+{
+    if (boost::get_error_info<OpPayloadUndecodable>(error) == nullptr)
+    {
+        return std::nullopt;
+    }
+    return ForkchoiceUpdatedResult{
+        .payloadStatus = engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            std::string("undecodable payload transaction envelope")),
+        .payloadId = std::nullopt,
+    };
+}
 }  // namespace op_detail
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
@@ -230,8 +244,10 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
 
     std::vector<std::pair<crypto::HashType, bytes>> sealedEnvelopes;
     std::vector<std::string> sealedSenders;
+    std::vector<std::optional<std::uint64_t>> sealedNonces;
     sealedEnvelopes.reserve(sealedTxs.size());
     sealedSenders.reserve(sealedTxs.size());
+    sealedNonces.reserve(sealedTxs.size());
     for (auto& sealedTx : sealedTxs)
     {
         if (sealedTx->type() !=
@@ -247,39 +263,38 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             sealedTx->hash(), bcostars::protocol::reassembleWeb3RawTransaction(
                                   sealedTx->extraTransactionBytes(), sealedTx->signatureData()));
         sealedSenders.emplace_back(sealedTx->sender());
+        sealedNonces.emplace_back(bcos::safeFromQuantity(sealedTx->nonce()));
     }
 
     std::set<crypto::HashType> evicted;
     // op-geth miner: excluding nonce n of sender S also drops S's later nonces from
     // this candidate and never evicts those successors from the pool (R3-F1).
+    // Walk by nonce, not sealed-vector position (finding BU): seal order is not a
+    // nonce-order contract the build path may assume.
     auto skipSenderTail = [&](crypto::HashType const& hash) {
         evicted.insert(hash);
         std::string sender;
+        std::optional<std::uint64_t> culpritNonce;
         for (std::size_t i = 0; i < sealedEnvelopes.size(); ++i)
         {
             if (sealedEnvelopes[i].first == hash)
             {
                 sender = sealedSenders[i];
+                culpritNonce = sealedNonces[i];
                 break;
             }
         }
-        if (sender.empty())
+        if (sender.empty() || !culpritNonce.has_value())
         {
             return;
         }
-        bool seenCulprit = false;
         for (std::size_t i = 0; i < sealedEnvelopes.size(); ++i)
         {
-            if (sealedSenders[i] != sender)
+            if (sealedSenders[i] != sender || sealedEnvelopes[i].first == hash)
             {
                 continue;
             }
-            if (sealedEnvelopes[i].first == hash)
-            {
-                seenCulprit = true;
-                continue;
-            }
-            if (seenCulprit)
+            if (sealedNonces[i].has_value() && *sealedNonces[i] > *culpritNonce)
             {
                 evicted.insert(sealedEnvelopes[i].first);
             }
@@ -380,15 +395,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         }
         catch (const OpExecutionInternalError& e)
         {
-            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
-            if (comment != nullptr &&
-                std::string_view(*comment).find("failed to decode") != std::string_view::npos)
+            if (auto invalid = op_detail::fcuInvalidIfUndecodable(e))
             {
-                co_return ForkchoiceUpdatedResult{
-                    .payloadStatus = makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-                        std::string("undecodable payload transaction envelope")),
-                    .payloadId = std::nullopt,
-                };
+                co_return *invalid;
             }
             throw;
         }
@@ -455,15 +464,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     }
     catch (const OpExecutionInternalError& e)
     {
-        auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
-        if (comment != nullptr &&
-            std::string_view(*comment).find("failed to decode") != std::string_view::npos)
+        if (auto invalid = op_detail::fcuInvalidIfUndecodable(e))
         {
-            co_return ForkchoiceUpdatedResult{
-                .payloadStatus = makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-                    std::string("undecodable payload transaction envelope")),
-                .payloadId = std::nullopt,
-            };
+            co_return *invalid;
         }
         throw;
     }
@@ -767,8 +770,10 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpBloc
         auto tarsTx = engine_common::op::opEnvelopeToTars(env, txHash);
         if (!tarsTx)
         {
-            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                      "failed to decode payload transaction envelope"});
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << OpPayloadUndecodable{true}
+                                                             << bcos::errinfo_comment{
+                                                                    "undecodable payload "
+                                                                    "transaction envelope"});
         }
         tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
         auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(

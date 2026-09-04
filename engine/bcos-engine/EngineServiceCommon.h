@@ -11,6 +11,7 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <evmc/evmc.h>
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <span>
@@ -95,6 +96,13 @@ inline bool forkchoiceHashIsCanonical(
 {
     return canonicalAtNumber.has_value() && *canonicalAtNumber == submitted;
 }
+/// High semantic ceiling for FCU forced txs (finding BY). Not a ~256 miner
+/// limit — deposit blocks can exceed that. HTTP's default 10MiB body already
+/// bounds the RPC path; this rejects before keccak when a caller bypasses it.
+/// Forced DA overflow is still not INVALID (OP deposits are undroppable).
+inline constexpr std::size_t kMaxForcedTxCount = 16384;
+inline constexpr std::size_t kMaxForcedTxBytes = 8 * 1024 * 1024;
+
 std::optional<std::string> validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version);
 std::optional<PayloadID> derivePayloadId(

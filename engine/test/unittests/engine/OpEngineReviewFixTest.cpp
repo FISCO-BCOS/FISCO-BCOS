@@ -15,6 +15,7 @@
 #include "engine/bcos-engine/OpEngineService.h"
 #include "engine/bcos-engine/PayloadCache.h"
 #include "support/GoldenSample.h"
+#include <bcos-ledger/mpt/Constants.h>
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
@@ -51,7 +52,7 @@ NewPayloadRequest makeIsthmusNewPayload(bytes extraData)
 {
     NewPayloadRequest request;
     request.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
-    request.executionPayload.withdrawalsRoot = h256(1);
+    request.executionPayload.withdrawalsRoot = ledger::mpt::emptyRootHash();
     request.executionPayload.excessBlobGas = u256(0);
     request.executionPayload.blobGasUsed = u256(0);
     request.executionPayload.gasLimit = u256(30'000'000);
@@ -323,6 +324,18 @@ BOOST_AUTO_TEST_CASE(op_newpayload_rejects_missing_blob_fields_and_wide_gas_limi
     BOOST_REQUIRE(overUint64Error.has_value());
     BOOST_CHECK_EQUAL(
         *overUint64Error, "gasLimit exceeds the uint64 range of the ETH header field");
+}
+
+BOOST_AUTO_TEST_CASE(op_newpayload_rejects_foreign_withdrawals_root)
+{
+    auto request = makeIsthmusNewPayload(fromHex("00000000fa00000006"));
+    BOOST_CHECK(!engine_common::op::validateOpNewPayloadRequest(request, /*jovianActive=*/false));
+
+    request.executionPayload.withdrawalsRoot = h256(1);
+    auto error = engine_common::op::validateOpNewPayloadRequest(request, /*jovianActive=*/false);
+    BOOST_REQUIRE(error.has_value());
+    BOOST_CHECK(error->find("withdrawalsRoot") != std::string::npos);
+    BOOST_CHECK(error->find("does not match") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(op_fcu_attrs_reject_gas_limit_above_signed_max)

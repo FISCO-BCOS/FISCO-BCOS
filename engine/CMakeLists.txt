@@ -6,8 +6,10 @@
 project(bcos-engine VERSION ${VERSION})
 
 file(GLOB_RECURSE SRC_LIST "bcos-engine/*.cpp")
-# EngineServiceImpl is the pre-cutover TU. Its remaining symbols are test-only
-# wrappers; production Eth/Op helpers live in EngineServiceCommon.cpp.
+# EngineServiceImpl is the pre-cutover leftover TU (findings BK / BW). Its
+# remaining symbols are test-only wrappers; production Eth/Op helpers live in
+# EngineServiceCommon.cpp. Delete the TU after Eth/Op parity no longer
+# constructs it as `legacy`.
 list(FILTER SRC_LIST EXCLUDE REGEX ".*/EngineServiceImpl\\.cpp$")
 
 add_library(engine ${SRC_LIST})

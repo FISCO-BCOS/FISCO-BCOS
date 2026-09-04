@@ -103,6 +103,11 @@ std::optional<std::string> validatePayloadAttributes(
 {
     if (payloadAttributes.transactions.has_value())
     {
+        if (payloadAttributes.transactions->size() > kMaxForcedTxCount)
+        {
+            return "payloadAttributes.transactions exceeds the forced-tx count ceiling";
+        }
+        std::size_t totalBytes = 0;
         for (std::size_t i = 0; i < payloadAttributes.transactions->size(); ++i)
         {
             bcos::bytes raw;
@@ -114,6 +119,11 @@ std::optional<std::string> validatePayloadAttributes(
             {
                 return "payloadAttributes.transactions[" + std::to_string(i) +
                        "] is not a hex string";
+            }
+            totalBytes += raw.size();
+            if (totalBytes > kMaxForcedTxBytes)
+            {
+                return "payloadAttributes.transactions exceeds the forced-tx byte ceiling";
             }
             if (auto error = validateRawTransactionKind(dispatchRawTransaction(bcos::ref(raw)), i))
             {

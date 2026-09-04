@@ -25,6 +25,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/Constants.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
@@ -144,7 +145,7 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
         header->setStateRoot(bcos::h256{});
         header->setReceiptsRoot(bcos::h256{});
         header->setGasUsed(0);
-        header->setWithdrawalsRoot(bcos::h256{});
+        header->setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
         header->setBlobGasUsed(0);
         callback(nullptr, std::move(header), false);
     }
@@ -230,7 +231,7 @@ struct NonceChainScheduler : RecordingScheduler
         header->setStateRoot(bcos::h256{});
         header->setReceiptsRoot(bcos::h256{});
         header->setGasUsed(0);
-        header->setWithdrawalsRoot(bcos::h256{});
+        header->setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
         header->setBlobGasUsed(0);
         callback(nullptr, std::move(header), false);
     }
@@ -259,7 +260,7 @@ static bcos::h256 envelopeHashOf(bcos::protocol::Transaction::Ptr const& tx)
 }
 
 static DecodableWeb3Tx makeDecodableWeb3Tx(
-    uint64_t nonce, bcos::crypto::KeyPairInterface* keyPair = nullptr)
+    uint64_t nonce, bcos::crypto::KeyPairInterface* keyPair = nullptr, bcos::bytes data = {})
 {
     bcos::rpc::Web3Transaction w3;
     w3.type = bcos::rpc::TransactionType::EIP1559;
@@ -270,6 +271,7 @@ static DecodableWeb3Tx makeDecodableWeb3Tx(
     w3.gasLimit = 21000;
     w3.to = bcos::Address("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
     w3.value = 0;
+    w3.data = std::move(data);
     bcos::crypto::Secp256k1Crypto secp;
     auto owned = keyPair == nullptr ? secp.generateKeyPair() : nullptr;
     auto const& kp = keyPair != nullptr ? *keyPair : *owned;
@@ -465,7 +467,7 @@ bcos::engine::NewPayloadRequest makeValidIsthmusNewPayload(
     payload.baseFeePerGas = 1;
     payload.transactions = {};
     payload.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
-    payload.withdrawalsRoot = bcos::h256{};
+    payload.withdrawalsRoot = bcos::ledger::mpt::emptyRootHash();
     payload.excessBlobGas = bcos::u256(0);
     payload.blobGasUsed = bcos::u256(0);
     payload.extraData = bcos::fromHex("00000000fa00000006");
@@ -528,11 +530,12 @@ struct OpServicePair
     OpEngine service;
 
     explicit OpServicePair(bool allowSynthesizedL1Attributes = false,
-        bcos::scheduler::SchedulerInterface::Ptr delegateIn = nullptr)
+        bcos::scheduler::SchedulerInterface::Ptr delegateIn = nullptr,
+        std::shared_ptr<bcos::engine::DACaps> daCapsIn = nullptr)
       : delegate(std::move(delegateIn)),
         service(memPool, storage, scheduler, blockFactory, nullptr,
             bcos::engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), delegate, nullptr,
+            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), delegate, std::move(daCapsIn),
             allowSynthesizedL1Attributes)
     {}
 };
@@ -1018,6 +1021,69 @@ BOOST_AUTO_TEST_CASE(op_build_capacity_skip_keeps_sender_successor)
 BOOST_AUTO_TEST_CASE(op_build_intrinsic_evict_keeps_sender_successor)
 {
     driveBuildWithSenderNonceChain(/*capacityReject=*/false);
+}
+
+BOOST_AUTO_TEST_CASE(op_da_skip_drops_higher_nonce_regardless_of_seal_order)
+{
+    // BU — skipSenderTail must evict by nonce, not sealed-vector position.
+    // Seal order is [n+1, n]; only n exceeds maxTxSize. n+1 must still drop.
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    auto daCaps = std::make_shared<bcos::engine::DACaps>();
+    bcos::crypto::Secp256k1Crypto secp;
+    auto keyPair = secp.generateKeyPair();
+    auto dummy = makeDecodableWeb3Tx(0);
+    auto nonceN = makeDecodableWeb3Tx(1, keyPair.get(), bcos::bytes(200, 0xaa));
+    auto nonceN1 = makeDecodableWeb3Tx(2, keyPair.get());
+    auto nRaw = bcostars::protocol::reassembleWeb3RawTransaction(
+        nonceN.tx->extraTransactionBytes(), nonceN.tx->signatureData());
+    auto n1Raw = bcostars::protocol::reassembleWeb3RawTransaction(
+        nonceN1.tx->extraTransactionBytes(), nonceN1.tx->signatureData());
+    BOOST_REQUIRE_LT(n1Raw.size(), nRaw.size());
+    daCaps->maxTxSize.store(n1Raw.size(), std::memory_order_relaxed);
+
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/true, delegate, daCaps);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+    pair.memPool.pool.push_back(nonceN1.tx);
+    pair.memPool.pool.push_back(nonceN.tx);
+
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.noTxPool = false;
+    attrs.transactions = std::vector<std::string>{dummy.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(result.payloadId.has_value());
+
+    auto payload = bcos::task::syncWait(pair.service.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE(payload);
+    for (auto const& tx : payload->executionPayload.transactions)
+    {
+        BOOST_CHECK(tx.raw != nRaw);
+        BOOST_CHECK(tx.raw != n1Raw);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(op_fcu_unresolved_head_is_syncing)
+{
+    // BS — missing HASH_2_NUMBER for head is SYNCING (not an exception), no payloadId.
+    OpServicePair pair;
+    auto const unknownHead =
+        bcos::h256("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
+    bcos::engine::ForkchoiceState forkchoice{unknownHead, {}, {}};
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, nullptr, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing));
+    BOOST_CHECK(!result.payloadId.has_value());
+    BOOST_CHECK(!result.payloadStatus.latestValidHash.has_value());
+    BOOST_CHECK(!result.payloadStatus.validationError.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(op_fcu_unknown_nonzero_safe_is_invalid_forkchoice)

@@ -172,6 +172,13 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
+    catch (engine::UnsupportedEngineApiVersion const& e)
+    {
+        // Service-layer method-version reject (finding AM). Same -38005 as UnsupportedFork
+        // and the FCU V4 endpoint stub; do not let this fall through to -32603.
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
+    }
     catch (engine::InvalidForkchoiceState const& e)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidForkchoiceState,
@@ -244,6 +251,11 @@ task::Task<void> EngineEndpoint::handleGetPayload(
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
             "Unsupported fork: payload was built by a different method version"));
     }
+    catch (engine::UnsupportedEngineApiVersion const& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
+    }
     if (!engineResult)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnknownPayload,
@@ -312,6 +324,11 @@ task::Task<void> EngineEndpoint::handleNewPayload(
             co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
     }
     catch (engine::UnsupportedFork const& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
+    }
+    catch (engine::UnsupportedEngineApiVersion const& e)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));

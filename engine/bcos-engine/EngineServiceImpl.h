@@ -14,7 +14,10 @@
  *  limitations under the License.
  *
  * @file EngineServiceImpl.h
- * @brief Minimal Engine API service implementation
+ * @brief Tests-only leftover Engine API service (findings BK / BW).
+ *
+ * Production is EthEngineService / OpEngineService. Do not port new consensus
+ * guards here; delete this TU after parity tests stop using it as `legacy`.
  */
 
 #pragma once

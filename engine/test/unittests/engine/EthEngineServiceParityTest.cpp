@@ -499,6 +499,27 @@ BOOST_AUTO_TEST_CASE(eth_unknown_nonzero_safe_is_invalid_forkchoice)
         InvalidForkchoiceState);
 }
 
+BOOST_AUTO_TEST_CASE(eth_resolvable_non_canonical_safe_is_invalid_forkchoice)
+{
+    // BV — HASH_2_NUMBER finds safe, but NUMBER_2_HASH at that height differs.
+    ServicePair pair;
+    ForkchoiceState forkchoice{
+        h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        h256("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")};
+    auto const canonicalSafe =
+        h256("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
+    pair.newStorage.setCanonicalBlock(forkchoice.headBlockHash, 10);
+    pair.newStorage.setCanonicalBlock(canonicalSafe, 8);
+    pair.newStorage.setBlockNumber(forkchoice.safeBlockHash, 8);
+    pair.newStorage.setCanonicalBlock(forkchoice.finalizedBlockHash, 7);
+    BOOST_CHECK_EXCEPTION(task::syncWait(pair.fresh.updateForkchoice(forkchoice, nullptr, 3)),
+        InvalidForkchoiceState, [&](InvalidForkchoiceState const& e) {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            return comment != nullptr && *comment == "Forkchoice safe block not in canonical chain";
+        });
+}
+
 BOOST_AUTO_TEST_CASE(generic_safe_finalized_validation_matches)
 {
     ServicePair pair;

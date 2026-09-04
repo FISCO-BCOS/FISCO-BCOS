@@ -636,87 +636,104 @@ BOOST_AUTO_TEST_CASE(engine_tracker_retain_only_through_guard)
     BOOST_CHECK(!guard.payloadIdForHash(h256(2)).has_value());
 }
 
-BOOST_AUTO_TEST_CASE(engine_common_payload_version_matrix_matches_legacy)
+BOOST_AUTO_TEST_CASE(engine_common_payload_version_matrix_gold)
 {
+    // GetPayloadVn window (op-geth): V1 only PayloadV1; V2 accepts <=2; V3/V4/V5 only PayloadV3.
+    constexpr bool gold[5][4] = {
+        {true, false, false, false},  // request V1
+        {true, true, false, false},   // request V2
+        {false, false, true, false},  // request V3
+        {false, false, true, false},  // request V4
+        {false, false, true, false},  // request V5
+    };
     for (std::uint32_t request = 1; request <= 5; ++request)
     {
         for (std::uint32_t built = 1; built <= 4; ++built)
         {
             BOOST_CHECK_EQUAL(engine_common::isGetPayloadVersionCompatible(
                                   static_cast<ApiVersion>(request), built),
-                bcos::engine::detail::isGetPayloadVersionCompatible(
-                    static_cast<ApiVersion>(request), built));
+                gold[request - 1][built - 1]);
         }
     }
 }
 
-BOOST_AUTO_TEST_CASE(engine_common_capabilities_match_legacy_generic_capabilities)
+BOOST_AUTO_TEST_CASE(engine_common_capabilities_gold)
 {
-    BOOST_CHECK(
-        engine_common::supportedCapabilities() == bcos::engine::detail::supportedCapabilities());
+    auto const caps = engine_common::supportedCapabilities();
+    std::vector<std::string> const gold{"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
+        "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
+        "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
+        "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4"};
+    BOOST_CHECK(caps == gold);
 }
 
-BOOST_AUTO_TEST_CASE(engine_common_validate_payload_attributes_matches_legacy)
+BOOST_AUTO_TEST_CASE(engine_common_validate_payload_attributes_gold)
 {
-    // Matrix: S3
-    for (std::uint32_t version = 1; version <= 4; ++version)
-    {
-        auto attrs = minimalPayloadAttributes();
-        BOOST_CHECK(engine_common::validatePayloadAttributes(attrs, version) ==
-                    bcos::engine::detail::validatePayloadAttributes(attrs, version));
-    }
+    auto expectError = [](std::optional<std::string> const& error, char const* needle) {
+        BOOST_REQUIRE(error.has_value());
+        BOOST_CHECK(error->find(needle) != std::string::npos);
+    };
 
-    PayloadAttributes v1WithWithdrawals = minimalPayloadAttributes();
-    BOOST_CHECK(engine_common::validatePayloadAttributes(v1WithWithdrawals, 1) ==
-                bcos::engine::detail::validatePayloadAttributes(v1WithWithdrawals, 1));
+    auto attrs = minimalPayloadAttributes();
+    expectError(engine_common::validatePayloadAttributes(attrs, 1), "PayloadAttributesV1");
+    expectError(engine_common::validatePayloadAttributes(attrs, 2), "parentBeaconBlockRoot");
+    BOOST_CHECK(!engine_common::validatePayloadAttributes(attrs, 3));
+    BOOST_CHECK(!engine_common::validatePayloadAttributes(attrs, 4));
 
     PayloadAttributes missingBeacon = minimalPayloadAttributes();
     missingBeacon.parentBeaconBlockRoot = std::nullopt;
-    BOOST_CHECK(engine_common::validatePayloadAttributes(missingBeacon, 3) ==
-                bcos::engine::detail::validatePayloadAttributes(missingBeacon, 3));
-    BOOST_CHECK(engine_common::validatePayloadAttributes(missingBeacon, 4) ==
-                bcos::engine::detail::validatePayloadAttributes(missingBeacon, 4));
+    expectError(
+        engine_common::validatePayloadAttributes(missingBeacon, 3), "parentBeaconBlockRoot");
+    expectError(
+        engine_common::validatePayloadAttributes(missingBeacon, 4), "parentBeaconBlockRoot");
 
     PayloadAttributes badHex = minimalPayloadAttributes();
     badHex.transactions = std::vector<std::string>{"0xZZ"};
-    BOOST_CHECK(engine_common::validatePayloadAttributes(badHex, 3) ==
-                bcos::engine::detail::validatePayloadAttributes(badHex, 3));
+    expectError(engine_common::validatePayloadAttributes(badHex, 3), "is not a hex string");
 
     PayloadAttributes nonEmptyWithdrawals = minimalPayloadAttributes();
     nonEmptyWithdrawals.withdrawals = std::vector<WithdrawalV1>{
         WithdrawalV1{.index = 1, .validatorIndex = 2, .amount = 3, .address = bcos::Address{}}};
-    BOOST_CHECK(engine_common::validatePayloadAttributes(nonEmptyWithdrawals, 3) ==
-                bcos::engine::detail::validatePayloadAttributes(nonEmptyWithdrawals, 3));
+    expectError(
+        engine_common::validatePayloadAttributes(nonEmptyWithdrawals, 3), "non-empty withdrawals");
 
     PayloadAttributes missingWithdrawals = minimalPayloadAttributes();
     missingWithdrawals.withdrawals = std::nullopt;
-    BOOST_CHECK(engine_common::validatePayloadAttributes(missingWithdrawals, 2) ==
-                bcos::engine::detail::validatePayloadAttributes(missingWithdrawals, 2));
+    missingWithdrawals.parentBeaconBlockRoot = std::nullopt;
+    expectError(engine_common::validatePayloadAttributes(missingWithdrawals, 2),
+        "withdrawals are required");
 
     PayloadAttributes eip1559OnV2 = minimalPayloadAttributes();
+    eip1559OnV2.parentBeaconBlockRoot = std::nullopt;
     eip1559OnV2.eip1559Params = bcos::bytes(8, 0);
-    BOOST_CHECK(engine_common::validatePayloadAttributes(eip1559OnV2, 2) ==
-                bcos::engine::detail::validatePayloadAttributes(eip1559OnV2, 2));
+    expectError(engine_common::validatePayloadAttributes(eip1559OnV2, 2), "eip1559Params");
 
     PayloadAttributes minBaseFeeAlone = minimalPayloadAttributes();
     minBaseFeeAlone.minBaseFee = 0;
-    BOOST_CHECK(engine_common::validatePayloadAttributes(minBaseFeeAlone, 3) ==
-                bcos::engine::detail::validatePayloadAttributes(minBaseFeeAlone, 3));
+    expectError(engine_common::validatePayloadAttributes(minBaseFeeAlone, 3), "eip1559Params");
 
     PayloadAttributes badEip1559Len = minimalPayloadAttributes();
     badEip1559Len.eip1559Params = bcos::bytes(7, 1);
-    BOOST_CHECK(engine_common::validatePayloadAttributes(badEip1559Len, 3) ==
-                bcos::engine::detail::validatePayloadAttributes(badEip1559Len, 3));
+    expectError(engine_common::validatePayloadAttributes(badEip1559Len, 3), "exactly 8 bytes");
 
     PayloadAttributes mixedZeroEip1559 = minimalPayloadAttributes();
     mixedZeroEip1559.eip1559Params = bcos::fromHex("000000fa00000000");
-    BOOST_CHECK(engine_common::validatePayloadAttributes(mixedZeroEip1559, 3) ==
-                bcos::engine::detail::validatePayloadAttributes(mixedZeroEip1559, 3));
+    expectError(engine_common::validatePayloadAttributes(mixedZeroEip1559, 3),
+        "both zero or both non-zero");
 
     PayloadAttributes blobForced = minimalPayloadAttributes();
     blobForced.transactions = std::vector<std::string>{"0x03aabb"};
-    BOOST_CHECK(engine_common::validatePayloadAttributes(blobForced, 3) ==
-                bcos::engine::detail::validatePayloadAttributes(blobForced, 3));
+    expectError(engine_common::validatePayloadAttributes(blobForced, 3), "blob transactions");
+
+    PayloadAttributes tooManyForced = minimalPayloadAttributes();
+    tooManyForced.transactions =
+        std::vector<std::string>(engine_common::kMaxForcedTxCount + 1, "0x00");
+    expectError(engine_common::validatePayloadAttributes(tooManyForced, 3), "count ceiling");
+
+    PayloadAttributes tooManyForcedBytes = minimalPayloadAttributes();
+    tooManyForcedBytes.transactions = std::vector<std::string>{
+        "0x" + std::string(2 * (engine_common::kMaxForcedTxBytes + 1), 'a')};
+    expectError(engine_common::validatePayloadAttributes(tooManyForcedBytes, 3), "byte ceiling");
 }
 
 BOOST_AUTO_TEST_CASE(engine_common_derive_payload_id_matches_legacy)
