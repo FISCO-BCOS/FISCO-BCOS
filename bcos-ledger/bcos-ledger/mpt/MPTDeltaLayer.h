@@ -97,27 +97,36 @@ struct MPTDeltaLayer
 /// result is consumed, buffers are moved not copied. Duck-typed on the newNodes/obsoletedNodes
 /// /reemittedNodes members TrieMergeResult defines, so this pure-data header does not depend on
 /// the trie headers.
+/// @param trackRefCounts false skips the refCountDeltas tally (the map is left untouched, not
+/// zeroed) for callers whose CommitObserver does not count references — see
+/// CommitObserver::needsRefCountDeltas; newNodes/obsoletedNodes merge exactly as before.
 template <typename NodeDelta>
-void mergeNodeDelta(NodeDelta merged, MPTDeltaLayer& delta)
+void mergeNodeDelta(NodeDelta merged, MPTDeltaLayer& delta, bool trackRefCounts = true)
 {
     for (auto& [hash, raw] : merged.newNodes)
     {
         // Every emission is one reference CREATION, even when the map already holds the hash:
         // a second trie building the byte-identical node in this same block references it too.
-        ++delta.refCountDeltas[hash];
+        if (trackRefCounts)
+        {
+            ++delta.refCountDeltas[hash];
+        }
         delta.newNodes.insert_or_assign(hash, std::move(raw));
     }
-    for (auto const& hash : merged.obsoletedNodes)
+    if (trackRefCounts)
     {
-        --delta.refCountDeltas[hash];
-    }
-    for (auto const& hash : merged.reemittedNodes)
-    {
-        // Resolved from the prior version and re-emitted byte-identically: the SAME trie keeps
-        // referencing it, so cancel the +1 the emission loop tallied — net movement is zero.
-        // (A hash is in exactly one of obsoletedNodes / reemittedNodes per result, so the two
-        // corrections never double-count.)
-        --delta.refCountDeltas[hash];
+        for (auto const& hash : merged.obsoletedNodes)
+        {
+            --delta.refCountDeltas[hash];
+        }
+        for (auto const& hash : merged.reemittedNodes)
+        {
+            // Resolved from the prior version and re-emitted byte-identically: the SAME trie
+            // keeps referencing it, so cancel the +1 the emission loop tallied — net movement is
+            // zero. (A hash is in exactly one of obsoletedNodes / reemittedNodes per result, so
+            // the two corrections never double-count.)
+            --delta.refCountDeltas[hash];
+        }
     }
     delta.obsoletedNodes.merge(std::move(merged.obsoletedNodes));
 }

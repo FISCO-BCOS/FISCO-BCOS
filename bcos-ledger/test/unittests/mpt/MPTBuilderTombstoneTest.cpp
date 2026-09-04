@@ -148,6 +148,35 @@ BOOST_AUTO_TEST_CASE(SelfdestructRemovesAccountFromTrie)
     BOOST_CHECK(output.stateRoot == stateRootOracle({{addrB, accountB}}));
 }
 
+BOOST_AUTO_TEST_CASE(UntrackedTombstoneSkipsManualRefCountEntry)
+{
+    // The tombstone path's hand-maintained refCountDeltas entry (finalizeAccount) obeys the
+    // same trackRefCounts switch as mergeNodeDelta: untracked, the prior storage root still
+    // reaches obsoletedNodes but refCountDeltas stays empty.
+    NodeStorage storage;
+    auto const addrA = makeAddress(0x51);
+    auto const addrB = makeAddress(0x52);
+
+    Account accountA;
+    accountA.nonce = 1;
+    accountA.balance = 10;
+    accountA.storageRoot = buildStorageTrie(storage, {{slotKey(0x00), bcos::bytes{0x10}}});
+    Account accountB;
+    accountB.balance = 99;
+    auto const parentRoot = buildStateTrie(storage, {{addrA, accountA}, {addrB, accountB}});
+
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeTombstoneEntries(view, addrA);
+
+    auto output = bcos::task::syncWait(buildAndCollect(
+        storage, parentRoot, view, /*l2Mode=*/false, /*trackRefCounts=*/false));
+
+    BOOST_CHECK(output.refCountDeltas.empty());
+    BOOST_CHECK(output.obsoletedNodes.contains(accountA.storageRoot));
+    BOOST_CHECK(output.stateRoot == stateRootOracle({{addrB, accountB}}));
+}
+
 BOOST_AUTO_TEST_CASE(TombstoneOfSoleAccountEmptiesTheTrie)
 {
     // Destroying the only account leaves nothing behind: the account trie collapses back to the

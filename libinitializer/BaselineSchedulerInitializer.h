@@ -51,7 +51,8 @@ public:
             storageInitializer->storage(), *scheduler, *transactionExecutor, *blockFactory, *ledger,
             *txpool, *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
         // MPT pruning seam (CommitObserver.h): a null observer keeps the built-in Noop — the
-        // scheduler then pays nothing on the commit path (setMPTCommitObserver contract).
+        // scheduler then pays nothing on the commit path (setMPTCommitObserver contract) and
+        // skips the refCountDeltas tally on the execute path (needsRefCountDeltas).
         baselineScheduler->setMPTCommitObserver(std::move(mptCommitObserver));
         if (notifyTransactions)
         {

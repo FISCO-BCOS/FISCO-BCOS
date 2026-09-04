@@ -263,7 +263,14 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::buildMPTS
     ViewNodeStorage<typename MultiLayerStorage::ViewType> nodeStorage(view);
     bool const l2Mode =
         ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
-    co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode);
+    // Skip the per-hash refCountDeltas tally when the commit observer does not count references
+    // (NoopCommitObserver — pruning not configured): the delta's consumers then never read the
+    // map, and the execute path pays nothing for it. The observer pointer is stable for the
+    // scheduler's whole block-flow lifetime — wired before block flow starts, reset only by
+    // stop(), which Initializer orders after consensus / front / txpool have stopped feeding
+    // blocks — so this unsynchronized read cannot race the reset.
+    co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode,
+        m_mptCommitObserver->needsRefCountDeltas());
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
@@ -638,14 +645,17 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // (RocksDBStorage2::merge).
         //
         // MPT pruning (CommitObserver::coPreparePruneRows): the observer turns the block's
-        // delta into its pruning metadata rows (refcount / delete-queue / watermark) PLUS the
+        // delta into its pruning metadata rows (refcount / delete-queue / watermark / window
+        // fingerprint) PLUS the
         // deletions of expired node rows, all applied to prewriteStorage so they land in the
         // SAME WriteBatch as the block data — metadata, data and deletions can never diverge
         // across a crash, and the deletion decision runs here, under m_commitMutex, so it can
         // never race a concurrent commit reviving the node (F2 review fix: an earlier revision
         // deleted from the observer's private worker thread, which could remove a node a
         // concurrent block had just revived). The NoopCommitObserver default returns an empty
-        // batch, so a node without pruning configured pays nothing here.
+        // batch, so a node without pruning configured pays nothing here — and pays nothing on the
+        // execute path either: buildMPTStateRoot skips the refCountDeltas tally unless the
+        // observer's needsRefCountDeltas() says it counts references.
         if (result->m_mptDelta)
         {
             auto pruneRows = co_await m_mptCommitObserver->coPreparePruneRows(
@@ -982,7 +992,21 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::preE
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
-void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::stop() {};
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::stop()
+{
+    resetMPTCommitObserver();
+};
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::
+    resetMPTCommitObserver()
+{
+    // Blocking lock, unlike coCommitBlock's try_to_lock: wait out any in-flight commit so
+    // that once this returns, no thread will ever dereference the previous observer again
+    // (the commit path touches m_mptCommitObserver only while holding m_commitMutex).
+    std::unique_lock commitLock(m_commitMutex);
+    m_mptCommitObserver = std::make_shared<ledger::mpt::NoopCommitObserver>();
+}
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl,

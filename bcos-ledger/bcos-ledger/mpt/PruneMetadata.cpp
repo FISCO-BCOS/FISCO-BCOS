@@ -66,6 +66,11 @@ bcos::executor_v1::StateKey watermarkKey()
     return {kPruneMetaTable, kWatermarkRowKey};
 }
 
+bcos::executor_v1::StateKey windowKey()
+{
+    return {kPruneMetaTable, kWindowRowKey};
+}
+
 bcos::executor_v1::StateKey seedMarkerKey()
 {
     return {kPruneMetaTable, kSeedMarkerRowKey};

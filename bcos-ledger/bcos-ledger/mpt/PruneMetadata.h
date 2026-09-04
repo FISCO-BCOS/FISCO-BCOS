@@ -47,6 +47,11 @@ namespace bcos::ledger::mpt
 ///   watermark    | /sys/mpt_prune_meta/  : "watermark"             | 8-byte BE-u64, the highest
 ///                |                                                 |  block number whose pruning
 ///                |                                                 |  metadata is persisted
+///   window       | /sys/mpt_prune_meta/  : "window"                | 8-byte BE-u64, the prune
+///                |                                                 |  window N this chain's queue
+///                |                                                 |  deadlines were armed with —
+///                |                                                 |  a fingerprint the startup
+///                |                                                 |  guard rejects changes against
 ///   seed marker  | /sys/mpt_prune_meta/  : "seeded"                | empty; present only when the
 ///                |                                                 |  genesis refcounts were
 ///                |                                                 |  seeded (scenario B / L2)
@@ -57,6 +62,7 @@ inline constexpr std::string_view kPruneRefTable = "/sys/mpt_prune_ref/";
 inline constexpr std::string_view kPruneQueueTable = "/sys/mpt_prune_queue/";
 inline constexpr std::string_view kPruneMetaTable = "/sys/mpt_prune_meta/";
 inline constexpr std::string_view kWatermarkRowKey = "watermark";
+inline constexpr std::string_view kWindowRowKey = "window";
 inline constexpr std::string_view kSeedMarkerRowKey = "seeded";
 
 static_assert(kPruneRefTable.find(':') == std::string_view::npos &&
@@ -91,6 +97,12 @@ std::pair<uint64_t, bcos::h256> decodeQueueKeyPart(std::string_view keyPart);
 /// The single watermark row: highest block number whose pruning metadata is on disk.
 bcos::executor_v1::StateKey watermarkKey();
 
+/// The window fingerprint row: the prune window N this chain's pruning metadata was written
+/// with, persisted with every block's batch so the startup guard can reject a retroactive
+/// window change (the delete-queue deadlines already on disk were armed with the OLD N).
+/// Absent on chains whose pruning predates the fingerprint — the guard cannot check those.
+bcos::executor_v1::StateKey windowKey();
+
 /// The seed marker row: present iff the genesis trie nodes got their refcount rows at genesis
 /// (scenario B / L2 chains). MPTPruner::init's startup guard requires it on an L2 chain whose
 /// genesis predates seeding.
@@ -101,7 +113,9 @@ bcos::executor_v1::StateKey seedMarkerKey();
 bcos::bytes encodeRefCount(PruneRefCount const& refCount);
 
 /// The inverse of encodeRefCount. @throws MPTDecodeError on malformed input (bad RLP, trailing
-/// bytes) — a corrupted metadata row fails the commit loudly rather than miscounting silently.
+/// bytes). Callers decide the failure mode: init() fails loudly at boot; the commit path
+/// (MPTPruner::coPreparePruneRows) is fail-safe — it logs and skips the affected hash / refuses
+/// the deletion rather than failing the block's commit.
 PruneRefCount decodeRefCount(bcos::bytesConstRef encoded);
 
 /// The watermark value: exactly 8 bytes, big-endian.

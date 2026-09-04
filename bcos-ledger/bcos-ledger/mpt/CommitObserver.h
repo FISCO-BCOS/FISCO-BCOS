@@ -73,6 +73,14 @@ public:
         co_return {};
     }
 
+    /// Whether this observer consumes MPTDeltaLayer::refCountDeltas (the pruning reference
+    /// tally). The execute path consults this at build time: when false, mergeNodeDelta skips
+    /// the per-hash tally entirely and the delta's refCountDeltas arrives empty — so a
+    /// non-counting observer must also leave coPreparePruneRows at the default (the empty batch),
+    /// because the pruner's set-based fallback reading of an untallied delta would over-count.
+    /// NoopCommitObserver keeps the default; MPTPruner overrides it to true.
+    virtual bool needsRefCountDeltas() const noexcept { return false; }
+
 protected:
     // Protected, not public: derived observers keep their own defaults, but outside code cannot
     // slice a CommitObserver through a base reference (Core Guidelines C.67).

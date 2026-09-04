@@ -139,7 +139,9 @@ private:
 
     /// Post-commit hook over each MPT block's node delta — the pathdb pruning seam
     /// (CommitObserver.h). Defaults to the no-op observer; replaced via setMPTCommitObserver.
-    /// Written only before block flow starts (wiring time), read on the commit path.
+    /// Written at wiring time (setMPTCommitObserver) and reset to the no-op observer under
+    /// m_commitMutex at stop() time (resetMPTCommitObserver); read on the commit path, which
+    /// runs under m_commitMutex from beginning to end.
     std::shared_ptr<ledger::mpt::CommitObserver> m_mptCommitObserver =
         std::make_shared<ledger::mpt::NoopCommitObserver>();
 
@@ -291,6 +293,14 @@ public:
     /// flow starts. A null pointer keeps the current observer — the commit path relies on the
     /// member never being empty.
     void setMPTCommitObserver(std::shared_ptr<ledger::mpt::CommitObserver> observer);
+
+
+    /// Restore the no-op observer. stop() calls this under a BLOCKING m_commitMutex lock, so it
+    /// returns only after any in-flight commit — the only code that ever dereferences the
+    /// observer, and it does so while holding the same mutex — has finished. Afterwards every
+    /// commit goes through the no-op observer, so the pruning backend behind a previous
+    /// observer can be torn down safely.
+    void resetMPTCommitObserver();
 
 
     void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) override;

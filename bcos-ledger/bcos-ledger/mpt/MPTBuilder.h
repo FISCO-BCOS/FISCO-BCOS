@@ -58,6 +58,9 @@ struct BuildContext
     MPTReadView<Storage> const& parentView;  ///< the parent block's MPT, for baseline lookups
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher& hasher;  ///< reused slot-key context
     bool l2Mode;  ///< scenario B: a BCOS extension row is an error rather than a skip
+    /// Forwarded to every mergeNodeDelta / hand tally: false when the configured CommitObserver
+    /// does not count references (CommitObserver::needsRefCountDeltas).
+    bool trackRefCounts;
 };
 
 /// One core-field row's fate in the block's delta layer.
@@ -248,12 +251,16 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
         // deferred (MPTPruner documents the gap), the root hash is the ledger entry. Removing
         // an absent leaf is a legal no-op (commitTrie treats it as such). The refcount tally
         // is hand-maintained here: this obsoletion bypasses commitTrie, so mergeNodeDelta
-        // never sees it — the ONLY place refCountDeltas is written outside mergeNodeDelta.
+        // never sees it — the ONLY place refCountDeltas is written outside mergeNodeDelta,
+        // gated by the same trackRefCounts switch.
         auto prior = co_await context.parentView.readAccount(address);
         if (prior && prior->storageRoot != emptyRootHash())
         {
             output.obsoletedNodes.insert(prior->storageRoot);
-            output.refCountDeltas[prior->storageRoot] -= 1;
+            if (context.trackRefCounts)
+            {
+                output.refCountDeltas[prior->storageRoot] -= 1;
+            }
         }
         accountChanges[accountKeyHash(address)] = std::nullopt;
         co_return;
@@ -305,7 +312,7 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
         auto merged =
             co_await commitTrie(context.nodeStorage, priorStorageRoot, rows.storageChanges);
         updated.storageRoot = merged.root;
-        mergeNodeDelta(std::move(merged), output);
+        mergeNodeDelta(std::move(merged), output, context.trackRefCounts);
     }
     else
     {
@@ -398,19 +405,27 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 ///                        stops advancing.
 /// @param l2Mode          scenario B (Ethereum-compatible chain): a KNOWN BCOS extension row in
 ///                        the delta throws UnexpectedBCOSFieldInL2; scenario A skips it.
+/// @param trackRefCounts  false leaves the returned delta's refCountDeltas EMPTY (the per-hash
+///                        tally is skipped) — for callers whose CommitObserver does not count
+///                        references (CommitObserver::needsRefCountDeltas). stateRoot, newNodes,
+///                        obsoletedNodes and intraBlockObsoleted are unaffected.
 /// @throws MPTInvariantViolation on a deleted core-field row outside a tombstone
 ///         (spec §5.4 treats that as an error).
 /// @throws UnknownAccountRowField on an account row whose field name is not classified, in
 ///         either mode (spec §5.2).
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
 bcos::task::Task<MPTDeltaLayer> buildAndCollect(
-    Storage& nodeStorage, bcos::h256 parentStateRoot, auto& flatView, bool l2Mode)
+    Storage& nodeStorage, bcos::h256 parentStateRoot, auto& flatView, bool l2Mode,
+    bool trackRefCounts = true)
 {
     MPTDeltaLayer output;
     MPTReadView<Storage> const parentView(nodeStorage, parentStateRoot);
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-    detail::BuildContext<Storage> context{
-        .nodeStorage = nodeStorage, .parentView = parentView, .hasher = hasher, .l2Mode = l2Mode};
+    detail::BuildContext<Storage> context{.nodeStorage = nodeStorage,
+        .parentView = parentView,
+        .hasher = hasher,
+        .l2Mode = l2Mode,
+        .trackRefCounts = trackRefCounts};
 
     // The ACCOUNT trie's change-set: accountKeyHash(addr) → the account's new leaf encoding
     // (nullopt = tombstone removal). Slot changes never appear here — each account digests
@@ -477,7 +492,7 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
     // tries must be committed first. This root is the block's new MPT state root.
     auto merged = co_await commitTrie(nodeStorage, parentStateRoot, accountChanges);
     output.stateRoot = merged.root;
-    mergeNodeDelta(std::move(merged), output);
+    mergeNodeDelta(std::move(merged), output, trackRefCounts);
 
     // MPTDeltaLayer aggregates one commitTrie result per touched storage trie plus the
     // account trie. Unlike a single mergeTrie() result the union is not disjoint by
@@ -496,7 +511,8 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
     }
     // refCountDeltas is deliberately NOT adjusted here: mergeNodeDelta already nets each hash's
     // emissions against its obsoletions (and cancels byte-identical re-emits via
-    // TrieMergeResult::reemittedNodes), which is exactly the movement the pruning spec counts.
+    // TrieMergeResult::reemittedNodes), which is exactly the movement the pruning spec counts —
+    // or the map is empty outright because trackRefCounts is false.
     // The one entry mergeNodeDelta never saw — the tombstone path's manual storage-root
     // obsoletion (finalizeAccount, the only hand-maintained refcount entry) — needs no
     // adjustment either: it has no countervailing emission in this block by construction.

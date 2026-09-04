@@ -30,6 +30,7 @@
 #include <bcos-ledger/GenesisStateRoot.h>
 #include <bcos-task/Task.h>
 #include <bcos-tool/Exceptions.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/throw_exception.hpp>
@@ -39,12 +40,14 @@
 #include <range/v3/view/transform.hpp>
 #include <ranges>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 namespace bcos::ledger::mpt
 {
+#define MPT_PRUNER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("MPT_PRUNER")
 
 /// Reference-counting MPT pruning (spec §4.8), one instance per chain over the committed-state
 /// backend (production: GlobalStateStorage::latestBackend()).
@@ -120,10 +123,39 @@ public:
     ///  - no watermark, currentBlock > 0: allowed only if no MPT block has committed yet —
     ///    i.e. a non-MPT chain, or scenario A exactly at/before the feature_mpt_state_root
     ///    activation block. An L2 chain (MPT from block 1) is always past that point here.
-    /// @throws bcos::tool::InvalidConfig on any refusal, naming both block numbers;
-    ///         MPTDecodeError on a corrupted watermark row — both fail loudly at boot.
+    /// @throws bcos::tool::InvalidConfig on any refusal, naming both block numbers, and on a
+    ///         retroactive prune-window change (the persisted window fingerprint mismatches the
+    ///         configured storage.mpt_prune_window); MPTDecodeError on a corrupted watermark or
+    ///         window row — all fail loudly at boot.
     bcos::task::Task<void> init(bcos::protocol::BlockNumber currentBlock)
     {
+        // The window fingerprint, checked first: N is baked into every queue row's deadline
+        // already on disk, so changing storage.mpt_prune_window retroactively is never safe —
+        // reject it. A chain whose pruning predates the fingerprint carries no row and passes
+        // unchecked (the watermark guard below still applies to it).
+        auto windowEntry = co_await bcos::storage2::readOne(*m_backend, windowKey());
+        if (windowEntry)
+        {
+            auto raw = windowEntry->get();
+            auto const persisted = decodeWatermark(bcos::bytesConstRef(
+                reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
+            if (persisted != static_cast<uint64_t>(m_pruneWindow))
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig{}
+                                      << bcos::errinfo_comment(
+                                             "MPT pruning startup guard: persisted prune window " +
+                                             std::to_string(persisted) +
+                                             " != configured storage.mpt_prune_window " +
+                                             std::to_string(m_pruneWindow) +
+                                             " — the window is baked into the delete-queue "
+                                             "deadlines already on disk and cannot be changed "
+                                             "retroactively; restore the configured value to " +
+                                             std::to_string(persisted) +
+                                             " (changing the window means starting over from a "
+                                             "fresh data directory)"));
+            }
+        }
+
         auto entry = co_await bcos::storage2::readOne(*m_backend, watermarkKey());
         if (entry)
         {
@@ -211,12 +243,21 @@ public:
         watermarkEntry.set(encodeWatermark(static_cast<uint64_t>(blockNumber)));
         out.rows.emplace_back(watermarkKey(), std::move(watermarkEntry));
 
+        // The window fingerprint rides every block's batch (one extra row, negligible): it keeps
+        // the configured window's on-disk record current, so the startup guard's comparison never
+        // goes stale no matter which block the chain stops at.
+        storage::Entry windowEntry;
+        windowEntry.set(encodeWatermark(static_cast<uint64_t>(m_pruneWindow)));
+        out.rows.emplace_back(windowKey(), std::move(windowEntry));
+
         // Per-hash net reference movement. buildAndCollect tallies refCountDeltas through
-        // mergeNodeDelta; a delta that left it empty (hand-built, or a future producer) falls
-        // back to the set reading: +1 per newNodes hash, −1 per obsoleted/intraBlock hash. The
-        // set reading cannot see byte-identical re-emits (mergeTrie reports them only in
-        // TrieMergeResult::reemittedNodes, which the layer does not carry), so it over-counts
-        // no-net-change rebuilds — production deltas always carry refCountDeltas.
+        // mergeNodeDelta; a delta that left it empty (hand-built, a build run with
+        // trackRefCounts=false — a combination production avoids via needsRefCountDeltas — or a
+        // future producer) falls back to the set reading: +1 per newNodes hash, −1 per
+        // obsoleted/intraBlock hash. The set reading cannot see byte-identical re-emits
+        // (mergeTrie reports them only in TrieMergeResult::reemittedNodes, which the layer does
+        // not carry), so it over-counts no-net-change rebuilds — production deltas always carry
+        // refCountDeltas.
         std::unordered_map<bcos::h256, int64_t> const& netDeltas = delta.refCountDeltas;
         std::unordered_map<bcos::h256, int64_t> derived;
         if (netDeltas.empty())
@@ -260,8 +301,23 @@ public:
                 if (refEntries[i])
                 {
                     auto raw = refEntries[i]->get();
-                    refCount = decodeRefCount(bcos::bytesConstRef(
-                        reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
+                    try
+                    {
+                        refCount = decodeRefCount(bcos::bytesConstRef(
+                            reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
+                    }
+                    catch (MPTDecodeError const&)
+                    {
+                        // Fail-safe: a corrupted refcount row must not fail the block's commit.
+                        // Skip the hash entirely — no row write and no postBlock overlay entry —
+                        // so its count simply goes uncounted this block (a leak risk, never a
+                        // live-node deletion). The deletion re-check below reads the same corrupt
+                        // row and likewise refuses to confirm, so the two halves stay consistent.
+                        MPT_PRUNER_LOG(ERROR)
+                            << "MPT pruning: corrupted refcount row, hash skipped this block: "
+                            << hash.abridged();
+                        continue;
+                    }
                 }
                 uint64_t const oldCount = refCount.count;
                 uint64_t const newCount =
@@ -329,7 +385,24 @@ public:
             {
                 continue;  // tombstone on a logical-deletion backend: not a live queue row
             }
-            auto [targetBlock, hash] = decodeQueueKeyPart(keyView.m_key);
+            uint64_t targetBlock = 0;
+            bcos::h256 hash;
+            try
+            {
+                std::tie(targetBlock, hash) = decodeQueueKeyPart(keyView.m_key);
+            }
+            catch (MPTDecodeError const&)
+            {
+                // Fail-safe: a poisoned queue row (key part not 40 bytes) has no decodable
+                // targetBlock, so the scan can neither consume nor skip past it — it would sit
+                // in the table forever. Evict the row (deletions are idempotent tombstones) and
+                // keep scanning; nothing about any node is decided here.
+                MPT_PRUNER_LOG(WARNING) << "MPT pruning: evicting undecodable queue row (key "
+                                           "part "
+                                        << keyView.m_key.size() << " bytes, expected 40)";
+                out.deletions.push_back(bcos::executor_v1::StateKey{key});
+                continue;
+            }
             if (targetBlock > horizon)
             {
                 break;
@@ -371,8 +444,22 @@ public:
                 else if (auto const& entry = refEntries[backendReadIndex[i]]; entry)
                 {
                     auto raw = entry->get();
-                    refCount = decodeRefCount(bcos::bytesConstRef(
-                        reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
+                    try
+                    {
+                        refCount = decodeRefCount(bcos::bytesConstRef(
+                            reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
+                    }
+                    catch (MPTDecodeError const&)
+                    {
+                        // Fail-safe: a corrupted refcount row leaves refCount disengaged, so the
+                        // deletion is NOT confirmed — leak-safe, never a live-node deletion.
+                        // The stale queue row is still consumed below; the node and its refcount
+                        // row survive for manual inspection/repair.
+                        MPT_PRUNER_LOG(ERROR)
+                            << "MPT pruning: corrupted refcount row blocks the queued deletion "
+                               "of node "
+                            << batch[i].hash.abridged();
+                    }
                 }
                 bool const confirmed = refCount && refCount->count == 0 &&
                                        refCount->pendingDeleteAt == batch[i].targetBlock &&
@@ -392,6 +479,9 @@ public:
         }
         co_return out;
     }
+
+    /// The pruner counts references from the delta — the build must maintain the tally.
+    bool needsRefCountDeltas() const noexcept override { return true; }
 
     /// After the block's WriteBatch: advance the in-memory watermark. Deletions already landed
     /// with the batch — there is nothing to hand off. The CommitObserver contract forbids

@@ -1023,6 +1023,15 @@ void Initializer::stop()
         {
             m_scheduler->stop();
         }
+        // MPT pruning shutdown: the scheduler's stop() has reset its commit observer to the
+        // no-op under m_commitMutex, so the pruner is quiescent — no in-flight or future
+        // commit will dereference it. Dropping our reference here lets the pruner be
+        // destroyed before the storage backend it reads from (member declaration order
+        // already guarantees that; this makes it explicit rather than relying on it).
+        if (m_mptCommitObserver)
+        {
+            m_mptCommitObserver.reset();
+        }
 #ifdef TOOLS
         if (m_archiveService)
         {

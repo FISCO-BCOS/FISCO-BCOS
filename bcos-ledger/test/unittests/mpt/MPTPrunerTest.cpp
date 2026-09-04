@@ -194,6 +194,18 @@ std::optional<uint64_t> readWatermarkRow(PruneBackend& backend)
         bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
 }
 
+std::optional<uint64_t> readWindowRow(PruneBackend& backend)
+{
+    auto entry = bcos::task::syncWait(bcos::storage2::readOne(backend, windowKey()));
+    if (!entry)
+    {
+        return std::nullopt;
+    }
+    auto raw = entry->get();
+    return decodeWatermark(
+        bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
+}
+
 bool nodeRowExists(PruneBackend& backend, bcos::h256 const& hash)
 {
     return bcos::task::syncWait(
@@ -294,8 +306,9 @@ BOOST_AUTO_TEST_CASE(NewNodesCreateRefCountRowsAndWatermark)
     // Hand-built delta: refCountDeltas is empty, so the set-based fallback (+1 per newNodes
     // hash) is what runs here.
     auto batch = bcos::task::syncWait(pruner.coPreparePruneRows(7, delta));
-    // 2 refcount rows + the watermark row; no queue rows, nothing expired to delete.
-    BOOST_CHECK_EQUAL(batch.rows.size(), 3U);
+    // 2 refcount rows + the watermark row + the window fingerprint row; no queue rows, nothing
+    // expired to delete.
+    BOOST_CHECK_EQUAL(batch.rows.size(), 4U);
     BOOST_CHECK(batch.deletions.empty());
     bcos::task::syncWait(bcos::storage2::writeSome(backend, std::move(batch.rows)));
 
@@ -962,6 +975,164 @@ BOOST_AUTO_TEST_CASE(OnCommitAdvancesWatermarkAfterBatchDeletion)
         }
     }
     BOOST_CHECK_EQUAL(countRowsInTable(backend, bcos::storage2::kMPTTable), windowLive.size());
+}
+
+BOOST_AUTO_TEST_CASE(CorruptRefCountRowIsSkippedNotFatal)
+{
+    // Fail-safe decode (R2): a corrupted refcount row must not fail the block's commit. The
+    // affected hash is skipped entirely — no row write, no queue entry, no overlay — while the
+    // block's other hashes count normally.
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    MPTPruner<PruneBackend> pruner(backend, /*pruneWindow=*/5);
+    auto const hBad = makeHash(0x0B);
+    auto const hGood = makeHash(0x0C);
+
+    // Sanity: the planted row really is undecodable.
+    bcos::bytes const corrupt{0xFF};
+    BOOST_CHECK_THROW(
+        decodeRefCount(bcos::bytesConstRef(corrupt.data(), corrupt.size())), MPTDecodeError);
+    bcos::storage::Entry badEntry;
+    badEntry.set(corrupt);
+    bcos::task::syncWait(
+        bcos::storage2::writeOne(backend, pruneRefKey(hBad), std::move(badEntry)));
+
+    MPTDeltaLayer delta;
+    delta.newNodes[hBad] = bcos::bytes{0xBB};
+    delta.newNodes[hGood] = bcos::bytes{0xCC};
+    BOOST_CHECK_NO_THROW(commitPruneBlock(backend, pruner, 1, delta));
+
+    // The corrupt row is still exactly what was planted (no overwrite), the skipped hash armed
+    // no queue row, and the healthy hash counted normally.
+    auto surviving = bcos::task::syncWait(bcos::storage2::readOne(backend, pruneRefKey(hBad)));
+    BOOST_REQUIRE(surviving.has_value());
+    auto raw = surviving->get();
+    BOOST_CHECK_THROW(decodeRefCount(
+                          bcos::bytesConstRef(
+                              reinterpret_cast<bcos::byte const*>(raw.data()), raw.size())),
+        MPTDecodeError);
+    BOOST_CHECK((readRefCountRow(backend, hGood) == PruneRefCount{.count = 1}));
+    BOOST_CHECK_EQUAL(countRowsInTable(backend, kPruneQueueTable), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(CorruptQueueRowIsCleanedUp)
+{
+    // Fail-safe decode (R2): an undecodable queue row (key part not 40 bytes) has no readable
+    // deadline; the consumption pass must evict it and keep scanning — never fail the commit,
+    // never stop the scan. Rows on BOTH sides of a legitimate row in key order are exercised.
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    MPTPruner<PruneBackend> pruner(backend, /*pruneWindow=*/2);
+    auto const h1 = makeHash(0x01);
+
+    // A legitimately expiring node: created at block 1, obsoleted at block 2 → deadline 4.
+    MPTDeltaLayer delta1;
+    delta1.newNodes[h1] = bcos::bytes{0x11};
+    commitPruneBlock(backend, pruner, 1, delta1);
+    bcos::task::syncWait(nodes.writeOne(h1, bcos::bytes{0x11}));
+    MPTDeltaLayer delta2;
+    delta2.obsoletedNodes.insert(h1);
+    commitPruneBlock(backend, pruner, 2, delta2);
+    BOOST_REQUIRE_EQUAL(countRowsInTable(backend, kPruneQueueTable), 1U);
+
+    // Plant two poisoned queue rows: "\x00\x00\x00" sorts BEFORE the legit row (a prefix of its
+    // BE-u64 deadline), "bad" (0x62…) sorts AFTER it.
+    auto writePoisonedQueueRow = [&backend](std::string keyPart) {
+        bcos::storage::Entry entry;
+        entry.set(std::string{});
+        bcos::task::syncWait(bcos::storage2::writeOne(backend,
+            bcos::executor_v1::StateKey{kPruneQueueTable, std::string_view{keyPart}},
+            std::move(entry)));
+    };
+    writePoisonedQueueRow(std::string("\x00\x00\x00", 3));
+    writePoisonedQueueRow("bad");
+    BOOST_REQUIRE_EQUAL(countRowsInTable(backend, kPruneQueueTable), 3U);
+
+    // Block 3's scan evicts the leading poisoned row and stops at the not-yet-due legit one;
+    // block 4 consumes the legit deletion and evicts the trailing poisoned row behind it.
+    BOOST_CHECK_NO_THROW(runEmptyBlocks(backend, pruner, 3, 4));
+    BOOST_CHECK(!nodeRowExists(backend, h1));
+    BOOST_CHECK(!readRefCountRow(backend, h1).has_value());
+    BOOST_CHECK_EQUAL(countRowsInTable(backend, kPruneQueueTable), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(CorruptRefCountAtRecheckBlocksDeletion)
+{
+    // Fail-safe decode (R2): the deletion re-check reads the refcount row from the backend for
+    // a hash this block's delta did not touch. A corrupt row there leaves the deletion
+    // UNCONFIRMED: the stale queue row is consumed but the node row and the refcount row
+    // survive — a leak, never a deleted live node.
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    MPTPruner<PruneBackend> pruner(backend, /*pruneWindow=*/2);
+    auto const h1 = makeHash(0x01);
+
+    MPTDeltaLayer delta1;
+    delta1.newNodes[h1] = bcos::bytes{0x11};
+    commitPruneBlock(backend, pruner, 1, delta1);
+    bcos::task::syncWait(nodes.writeOne(h1, bcos::bytes{0x11}));
+    MPTDeltaLayer delta2;
+    delta2.obsoletedNodes.insert(h1);
+    commitPruneBlock(backend, pruner, 2, delta2);
+    BOOST_REQUIRE(
+        (readRefCountRow(backend, h1) == PruneRefCount{.count = 0, .pendingDeleteAt = 4}));
+
+    // The refcount row corrupts after the node was queued.
+    bcos::storage::Entry badEntry;
+    badEntry.set(bcos::bytes{0xFF});
+    bcos::task::syncWait(bcos::storage2::writeOne(backend, pruneRefKey(h1), std::move(badEntry)));
+
+    // The deadline block's prepare: no throw, and the deletions carry ONLY the queue row.
+    PruneRowBatch batch;
+    BOOST_CHECK_NO_THROW(
+        batch = bcos::task::syncWait(pruner.coPreparePruneRows(4, MPTDeltaLayer{})));
+    BOOST_CHECK_EQUAL(batch.deletions.size(), 1U);
+    bcos::task::syncWait(bcos::storage2::writeSome(backend, std::move(batch.rows)));
+    bcos::task::syncWait(bcos::storage2::removeSome(backend, std::move(batch.deletions)));
+
+    BOOST_CHECK(nodeRowExists(backend, h1));
+    BOOST_CHECK(
+        bcos::task::syncWait(bcos::storage2::existsOne(backend, pruneRefKey(h1))));
+    BOOST_CHECK_EQUAL(countRowsInTable(backend, kPruneQueueTable), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(StartupGuardRejectsWindowChange)
+{
+    // The window fingerprint persists with every block's batch; reconfiguring
+    // storage.mpt_prune_window and restarting must fail loudly — the queue deadlines already on
+    // disk were armed with the OLD window.
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    {
+        MPTPruner<PruneBackend> pruner(backend, 5);
+        commitPruneBlock(backend, pruner, 1, MPTDeltaLayer{});
+        commitPruneBlock(backend, pruner, 2, MPTDeltaLayer{});
+    }
+    BOOST_REQUIRE(readWindowRow(backend).has_value());
+    BOOST_CHECK_EQUAL(*readWindowRow(backend), 5U);
+
+    MPTPruner<PruneBackend> changed(backend, 7);
+    BOOST_CHECK_THROW(bcos::task::syncWait(changed.init(2)), bcos::tool::InvalidConfig);
+    MPTPruner<PruneBackend> unchanged(backend, 5);
+    BOOST_CHECK_NO_THROW(bcos::task::syncWait(unchanged.init(2)));
+    BOOST_CHECK_EQUAL(unchanged.watermark(), 2);
+}
+
+BOOST_AUTO_TEST_CASE(StartupGuardAcceptsMissingWindowFingerprint)
+{
+    // A chain whose pruning ran on a binary predating the window fingerprint has a watermark
+    // but no window row: the guard cannot check what was never recorded — accept (the watermark
+    // guard still applies).
+    PruneBackend backend;
+    bcos::storage::Entry watermarkEntry;
+    watermarkEntry.set(encodeWatermark(2));
+    bcos::task::syncWait(
+        bcos::storage2::writeOne(backend, watermarkKey(), std::move(watermarkEntry)));
+    BOOST_REQUIRE(!readWindowRow(backend).has_value());
+
+    MPTPruner<PruneBackend> pruner(backend, 5);
+    BOOST_CHECK_NO_THROW(bcos::task::syncWait(pruner.init(2)));
+    BOOST_CHECK_EQUAL(pruner.watermark(), 2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
