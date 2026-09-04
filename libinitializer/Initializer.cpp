@@ -58,7 +58,6 @@
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
-#include <boost/algorithm/string.hpp>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/rpc/RPCInterface.h>
@@ -79,12 +78,16 @@
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
+#include <opstack-executor/OpScheduler.h>
+#include <opstack-executor/OpSchedulerSeam.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
 #include <txpool/validator/TxValidator.h>
 #include <util/tc_clientsocket.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <string>
 #include <toml++/toml.hpp>
@@ -95,6 +98,66 @@ using namespace bcos::tool;
 using namespace bcos::protocol;
 using namespace bcos::initializer;
 namespace fs = boost::filesystem;
+
+namespace
+{
+/// A loud refuse stub for the never-selected non-OP slot 3 (MultiVersionScheduler::scheduler(int)
+/// is a public direct-index call; a null slot would crash instead of refusing).
+class OpRefusingStubScheduler : public bcos::scheduler::SchedulerInterface
+{
+public:
+    void executeBlock(bcos::protocol::Block::Ptr, bool,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
+            nullptr, false);
+    }
+    void commitBlock(bcos::protocol::BlockHeader::Ptr,
+        std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
+            nullptr);
+    }
+    void call(bcos::protocol::Transaction::Ptr,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
+            nullptr);
+    }
+    void preExecuteBlock(
+        bcos::protocol::Block::Ptr, bool, std::function<void(bcos::Error::Ptr)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+            "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"));
+    }
+    void getCode(std::string_view, std::function<void(bcos::Error::Ptr, bcos::bytes)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
+            {});
+    }
+    void getABI(std::string_view, std::function<void(bcos::Error::Ptr, std::string)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
+            {});
+    }
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view, std::string_view, bcos::protocol::BlockNumber) override
+    {
+        co_return std::nullopt;
+    }
+    void status(
+        std::function<void(bcos::Error::Ptr, bcos::protocol::Session::ConstPtr)> cb) override
+    {
+        cb({}, {});
+    }
+    void reset(std::function<void(bcos::Error::Ptr)> cb) override { cb({}); }
+};
+}  // namespace
 
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, const std::string& _logPath)
@@ -354,8 +417,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // Resolve the effective executor version BEFORE gating Engine API / wiring the
     // schedulers. The on-chain value overrides the genesis-file value and can move to >= 2
     // at runtime (executor_version is runtime-settable via SystemConfigPrecompiled, and
-    // MultiVersionScheduler::setVersion saturates any version >= 2 onto the v2
-    // EthereumExecutor), so the gate below must read the ledger rather than the node
+    // MultiVersionScheduler::setVersion saturates versions above m_highestWiredIndex
+    // onto that newest wired slot — not unconditionally onto v2; non-OP nodes keep
+    // slot 3 as a refuse stub), so the gate below must read the ledger rather than the node
     // config — a node whose genesis said v1 but whose ledger says v2 would otherwise build
     // the Engine API on the v1 executor, the state-root divergence the gate exists to
     // prevent. The residual risk of a runtime switch to v2 without genesis config is handled
@@ -371,13 +435,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     m_executorVersion = executorVersion;
 
-    // Engine API (OP-Stack engine endpoints) is wired to the v1 TransactionExecutorImpl.
-    // It must not be built for executor_version >= 2: a v2 chain's state transitions run
-    // through the pure-Ethereum EthereumExecutor, and an Engine API driven through the v1
-    // executor would produce blocks with v1 semantics that diverge from the v2 main chain
-    // (a state-root fork). v2 chains therefore have no Engine API; engine RPC endpoints
-    // respond "engine service not available" (see EngineEndpoint.cpp).
+    // Engine API on executor_version < 2 is the v1 TransactionExecutorImpl path
+    // (engineApiForV1Only). executor_version == 2 uses EthEngineService on the
+    // EthereumExecutor when engine-driven; executor_version >= 3 uses OpEngineService.
+    // A v2+ chain must not be driven through the v1 executor (state-root fork).
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
+    // executor_version >= 3 replaces the Eth EngineService with OpEngineService below.
+    // Skip the Eth composition so m_engineServiceInitializer is not built and discarded.
+    const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
 
     // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
     // endpoint would silently serve the v1 EngineService built below, and an external
@@ -455,7 +520,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // [op_engine_rpc] endpoint. In either mode the EngineService is the sole block
         // producer — the legacy txpool/PBFT pipeline is never initialized or started (see
         // engineDrivenBlockProduction() guards below and in start()).
-        if (!engineApiForV1Only &&
+        if (!engineApiForV1Only && !opStackMode &&
             (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc()))
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -488,13 +553,85 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
         // branch above for why op_engine_rpc.enable also builds the EngineService here.
-        if (!engineApiForV1Only &&
+        if (!engineApiForV1Only && !opStackMode &&
             (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc()))
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
                 ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger);
         }
+    }
+
+    // OP composition root: executor_version >= 3 enters OP mode. Wires OpEngineService with
+    // OpSchedulerSeam (SchedulerType) + OpScheduler (delegate / MultiVersionScheduler slot 3).
+    // engineApiForV1Only (<2) and opStackMode (>=3) are mutually exclusive; version 2 remains
+    // pure EthereumExecutor (+ EthEngineService when single-node / op_engine_rpc).
+    // OP mode is engine-driven only: without the EngineService the OpScheduler has no
+    // producer (legacy PBFT is not an OP EL).
+    // Eth EngineService was skipped above when opStackMode so this is the only assignment.
+    if (opStackMode)
+    {
+        if (!m_nodeConfig->engineDrivenBlockProduction())
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "OP mode (executor_version>=3) requires engine-driven block production "
+                    "([op_engine_rpc] enable)"));
+        }
+        auto forkFlags = bcos::evm::opstack::OpForkFlags{
+            .jovianActive = m_nodeConfig->opJovianActive(),
+        };
+        // EIP-155 chain id is [web3] chain_id, not FISCO [chain] chain_id (op-geth
+        // params.ChainID). ethereumChainId() is only pinned in EL mode; OP L2 always
+        // reads the genesis web3 id and refuses 0.
+        auto const& web3ChainId = m_nodeConfig->genesisConfig().m_web3ChainID;
+        auto parsedChainId = ledger::parseWeb3ChainId(web3ChainId);
+        if (!parsedChainId.has_value())
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "OP mode (executor_version>=3) requires a numeric [web3] chain_id "
+                    "(decimal or 0x-prefixed hex)"));
+        }
+        if (*parsedChainId == 0)
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "OP mode (executor_version>=3) requires a non-zero [web3] chain_id"));
+        }
+        if (*parsedChainId > std::numeric_limits<uint64_t>::max())
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "OP mode (executor_version>=3) [web3] chain_id exceeds uint64"));
+        }
+        uint64_t const opChainId = static_cast<uint64_t>(*parsedChainId);
+        auto opScheduler =
+            std::make_shared<bcos::evm::engine::OpSchedulerSeam<GlobalStateStorage::ViewType>>(
+                forkFlags, bcos::evm::opstack::L1BlockInfo{});
+        auto opDelegate =
+            std::make_shared<bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>>(
+                m_protocolInitializer->blockFactory()->receiptFactory(),
+                m_protocolInitializer->cryptoSuite()->hashImpl(), opChainId, forkFlags,
+                m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage(),
+                // Ledger lives on the delegate (commit prewrite). Engine keeps ledger=nullptr to
+                // avoid the Eth local-build double-write path.
+                m_ledger, m_ioServicePool);
+        m_daCaps = std::make_shared<bcos::engine::DACaps>();
+        m_engineServiceInitializer = EngineServiceInitializer::buildOp(
+            m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
+            m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
+            bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
+            // B1: FCU method-version ceiling. V4 may enter updateForkchoice; payload
+            // shape is still PayloadV3 (payloadShapeVersion) until B3.
+            /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), m_daCaps,
+            /*allowSynthesizedL1Attributes=*/false);
+
+        m_opScheduler = opDelegate;
+        m_setOpSchedulerBlockNumberNotifier =
+            [opDelegate](std::function<void(bcos::protocol::BlockNumber)> notifier) {
+                opDelegate->setBlockNumberNotifier(std::move(notifier));
+            };
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
@@ -507,15 +644,24 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                // switch to a leader during startup
-    m_scheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
+    auto multiVersionScheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager, m_ioServicePool),
-                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder()}));
+                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder(),
+                // Slot 3 = OP scheduler (executor_version>=3). Non-OP mode: refuse stub so
+                // scheduler(3) fails loudly instead of null-dereferencing.
+                m_opScheduler ? m_opScheduler : std::make_shared<OpRefusingStubScheduler>()}));
+    // Saturate setVersion to the last wired slot. Without this, a non-OP node whose
+    // ledger version is >2 would land on the refuse stub at index 3.
+    multiVersionScheduler->setHighestWiredIndex(m_opScheduler ?
+                                                    scheduler_v1::OPSTACK_EXECUTOR_VERSION :
+                                                    scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
 
     // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
     INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
-    m_scheduler->setVersion(m_executorVersion, {});
+    multiVersionScheduler->setVersion(m_executorVersion, {});
+    m_scheduler = std::move(multiVersionScheduler);
 
     // Parse and log the effective EVMC revision once at startup (v2+). It is fixed at genesis
     // (NodeConfig requires an explicit evm_revision for executor_version>=2), so a one-time
@@ -708,6 +854,20 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // ledger (to resolve the initial head). It is always built in this mode — for
     // executor_version < 2 on the v1 scheduler, and for executor_version >= 2 on the
     // EthereumExecutor scheduler — so this is also the in-process CL path for the Engine API.
+    //
+    // OP mode (executor_version >= 3) is NOT a single-node-CL mode: its consensus layer is
+    // an external op-node over [op_engine_rpc]. The built-in driver's FCU attributes omit
+    // the OP-mandated gasLimit/eip1559Params/minBaseFee, so wiring it here would spin
+    // forever without ever producing a block (finding AZ). Refuse the combination at boot
+    // instead of failing silently every tick.
+    if (m_nodeConfig->enableSingleNodeConsensus() &&
+        m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION)
+    {
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                  "enable_single_node_consensus is not supported with "
+                                  "executor_version >= 3 (OP mode): an OP chain is driven by "
+                                  "an external op-node over [op_engine_rpc]"));
+    }
     if (m_nodeConfig->enableSingleNodeConsensus())
     {
         // prevRandao: explicit 32-byte hex from config ([consensus] prev_randao), else a
@@ -808,6 +968,16 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     if (m_setEthereumSchedulerBlockNumberNotifier)
     {
         m_setEthereumSchedulerBlockNumberNotifier(
+            [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
+                INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
+                _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
+            });
+    }
+
+    // executor_version>=3 (OP): the delegate fires the notifier after a VALID OP block merges.
+    if (m_setOpSchedulerBlockNumberNotifier)
+    {
+        m_setOpSchedulerBlockNumberNotifier(
             [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
                 INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
                 _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
@@ -1647,8 +1817,8 @@ std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer
         m_globalStateStorageInitializer->storage().latestBackend());
 }
 
-std::function<std::shared_ptr<
-    bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
+std::function<
+    std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
 Initializer::stateStorageProvider()
 {
     if (!m_globalStateStorageInitializer)

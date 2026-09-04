@@ -43,6 +43,8 @@ target_link_libraries(init PUBLIC
     engine
     ledger
     transaction-scheduler transaction-executor
+    bcosevm::opstack
+    opstack-executor
     ethereum-executor
     scheduler storage executor rpc
     bcos-boostssl
