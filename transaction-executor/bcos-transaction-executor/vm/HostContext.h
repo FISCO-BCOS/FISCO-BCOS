@@ -29,6 +29,7 @@
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -45,6 +46,7 @@
 #include "bcos-transaction-executor/EVMCResult.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/FixedBytes.h"
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -53,6 +55,7 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/concept_archetype.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/functional/hash.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
 #include <functional>
@@ -91,27 +94,114 @@ struct Executable
 template <class Storage>
 using Account = ledger::account::EVMAccount<Storage>;
 
+// Key of the analyzed-code cache. It must name everything the cached
+// Executable depends on, and nothing that depends on the storage view:
+//   - codeHash identifies the bytecode itself. Code is content-addressed in
+//     storage (the account table holds a code hash, s_code_binary holds the
+//     bytes keyed by that hash), so the same hash always means the same bytes.
+//   - revision selects the analysis, because evmone::baseline::analyze() builds
+//     a revision-specific CodeAnalysis (see VMFactory::create).
+// The account address is deliberately NOT part of the key: "which code does
+// this address hold" is view-dependent state and must be read from the storage
+// view on every call.
+struct ExecutableKey
+{
+    h256 codeHash;
+    evmc_revision revision{};
+
+    friend bool operator==(const ExecutableKey& lhs, const ExecutableKey& rhs) noexcept = default;
+};
+
+struct ExecutableKeyHash
+{
+    size_t operator()(const ExecutableKey& key) const noexcept
+    {
+        size_t seed = std::hash<h256>{}(key.codeHash);
+        boost::hash_combine(seed, static_cast<int>(key.revision));
+        return seed;
+    }
+};
+
 using CacheExecutables =
-    storage2::memory_storage::MemoryStorage<evmc_address, std::shared_ptr<Executable>,
+    storage2::memory_storage::MemoryStorage<ExecutableKey, std::shared_ptr<Executable>,
         storage2::memory_storage::Attribute(
             storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
-        std::hash<evmc_address>>;
+        ExecutableKeyHash>;
 CacheExecutables& getCacheExecutables();
 
+// Turn the bytecode named by `codeHashEntry` into an analyzed Executable,
+// reusing the process-wide analysis cache.
+//
+// getCacheExecutables() is a process-wide singleton shared by every execution,
+// including speculative ones whose storage view is thrown away afterwards:
+// eth_call / eth_estimateGas (BaselineScheduler::call forks a view and never
+// pushes it), block execution that fails sync verification (returns before
+// pushView), and abandoned consensus proposals. Keying that cache by address
+// let such an execution publish "this address has code" to every later
+// execution on the node, including consensus ones, which then executed bytecode
+// absent from their own state view and diverged from the rest of the network.
+//
+// This is the only function that touches the cache. The key is built from
+// `codeHashEntry` alone - the entry the caller already read from its storage
+// view; `account` is passed only so a miss can fetch the bytes through
+// EVMAccount::code(), and its address-derived table name must stay out of the
+// key. The view-dependent step - which code hash does this address hold -
+// belongs to resolveExecutable below.
 task::Task<std::shared_ptr<Executable>> getExecutable(
-    auto& storage, const evmc_address& address, const evmc_revision& revision, bool binaryAddress)
+    auto& account, const storage::Entry& codeHashEntry, evmc_revision revision)
 {
-    if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
+    using AccountType = std::decay_t<decltype(account)>;
+    ExecutableKey key{.codeHash = AccountType::toCodeHash(codeHashEntry), .revision = revision};
+    if (auto executable = co_await storage2::readOne(getCacheExecutables(), key))
     {
         co_return std::move(*executable);
     }
 
-    if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
-        auto codeEntry = co_await account.code())
+    // On a miss the bytes come back through the account: EVMAccount::code()
+    // reads s_code_binary by hash and falls back to the account table's own
+    // code field when that misses.
+    if (auto codeEntry = co_await account.code(&codeHashEntry))
     {
         auto executable = std::make_shared<Executable>(std::move(*codeEntry), revision);
-        co_await storage2::writeOne(getCacheExecutables(), address, executable);
+        co_await storage2::writeOne(getCacheExecutables(), key, executable);
         co_return executable;
+    }
+    co_return {};
+}
+
+// Resolve an account's code and its analyzed form.
+//
+// This owns the view-dependent half of the lookup - which code does this
+// address hold - and reads it from `storage` on every call, so nothing that
+// depends on the view can reach the cache. It also owns the uncached branch for
+// accounts that record no code hash.
+//
+// executeCall is the only production caller: it is about to run the bytecode,
+// so the analysis it pays for is used. The EXTCODE* family reads the bytes
+// straight off the account instead (see HostContext::code below) and analyzes
+// nothing. prepareCreate also builds an Executable, but from the deploy init
+// code it holds in hand, without going through the cache.
+task::Task<std::shared_ptr<Executable>> resolveExecutable(
+    auto& storage, const evmc_address& address, evmc_revision revision, bool binaryAddress)
+{
+    using AccountType = Account<std::decay_t<decltype(storage)>>;
+    AccountType account(storage, address, binaryAddress);
+    if (auto codeHashEntry = co_await account.codeHashEntry())
+    {
+        co_return co_await getExecutable(account, *codeHashEntry, revision);
+    }
+
+    // The account table holds no code hash. Most callers land here: an EOA or a
+    // never-touched address has no code at all, account.code() comes back empty
+    // and nothing is analyzed. It also covers the historical layout where code
+    // sits in the account table's own code field with no hash beside it - every
+    // writer in the tree records a code hash today, so that shape is not
+    // produced any more, but EVMAccount::code() still falls back to it and this
+    // branch keeps that reachable. Either way there is nothing content-addressed
+    // to key the cache on, so no entry is published.
+    if (auto codeEntry = co_await account.code(nullptr))
+    {
+        co_return std::make_shared<Executable>(std::move(*codeEntry), revision);
     }
     co_return {};
 }
@@ -297,15 +387,26 @@ public:
             m_rollbackableTransientStorage.get(), std::move(stateKey), std::move(valueEntry));
     }
 
+    // EXTCODECOPY and EXTCODESIZE want the bytes, not an analysis, so this reads
+    // them off the account and stops there. Going through resolveExecutable
+    // would run evmone::baseline::analyze() over bytecode nobody is about to
+    // execute and take an LRU slot for it - once per balance-only account,
+    // whose marker string embeds its own table name and so never shares a slot
+    // with anything.
+    //
+    // EVMAccount::code() keeps the two-step read this used to inherit: the
+    // s_code_binary lookup by hash, falling back to the account table's own
+    // code field.
     task::Task<std::optional<storage::Entry>> code(
         const evmc_address& address, auto&&... /*unused*/)
     {
-        if (auto executable = co_await getExecutable(m_rollbackableStorage.get(), address,
-                m_revision,
-                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
-            executable && executable->m_code)
+        auto account = getAccount(*this, address);
+        auto codeHashEntry = co_await account.codeHashEntry();
+        if (auto codeEntry = co_await account.code(codeHashEntry ? &*codeHashEntry : nullptr);
+            codeEntry &&
+            !precompiled::hideDynamicAccountCode(m_ledgerConfig.get().features(), codeEntry->get()))
         {
-            co_return executable->m_code;
+            co_return codeEntry;
         }
         co_return {};
     }
@@ -327,9 +428,30 @@ public:
 
     task::Task<h256> codeHashAt(const evmc_address& address, auto&&... /*unused*/)
     {
-        Account<Storage> account(m_rollbackableStorage.get(), address,
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
-        co_return co_await account.codeHash();
+        auto account = getAccount(*this, address);
+        auto codeHashEntry = co_await account.codeHashEntry();
+        if (!codeHashEntry)
+        {
+            co_return {};
+        }
+
+        // Apply the same filter code() applies, so EXTCODESIZE and EXTCODEHASH
+        // cannot disagree within one execution: an account whose code is hidden
+        // reads as codeless and must hash as zero too, and so must one that
+        // records a code hash whose bytes are missing. Deciding that needs the
+        // bytes and nothing more, so this reads them without analyzing them.
+        // With the feature off the hash entry alone answers the opcode and the
+        // bytes are never read.
+        if (m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_v1_eoa_as_contract))
+        {
+            auto codeEntry = co_await account.code(codeHashEntry ? &*codeHashEntry : nullptr);
+            if (!codeEntry || precompiled::hideDynamicAccountCode(
+                                  m_ledgerConfig.get().features(), codeEntry->get()))
+            {
+                co_return {};
+            }
+        }
+        co_return decltype(account)::toCodeHash(*codeHashEntry);
     }
 
     task::Task<bool> exists([[maybe_unused]] const evmc_address& address, auto&&... /*unused*/)
@@ -722,7 +844,7 @@ private:
                 m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
         }
 
-        if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
+        if (m_executable = co_await resolveExecutable(m_rollbackableStorage.get(), ref.code_address,
                 m_revision,
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
             !m_executable)
