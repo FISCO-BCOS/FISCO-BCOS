@@ -10,8 +10,8 @@ bcostars::FrontServiceClient::FrontServiceClient(
 {}
 namespace
 {
-// shared awaitable for the Error-returning onReceive* RPCs: the Callback completes the coroutine
-// exactly once (via exchange) with the tars error converted to a bcos error
+// shared awaitable for the Error-returning RPCs (onReceive* and sendResponse): the Callback
+// completes the coroutine exactly once (via exchange) with the tars error converted to a bcos error
 struct ErrorAwaitable
 {
     struct CompletionState
@@ -47,6 +47,14 @@ struct ErrorAwaitable
             complete(bcostars::toBcosError(ret));
         }
         void callback_onReceiveBroadcastMessage_exception(tars::Int32 ret) override
+        {
+            complete(bcostars::toBcosError(ret));
+        }
+        void callback_asyncSendResponse(const bcostars::Error& ret) override
+        {
+            complete(bcostars::toBcosError(ret));
+        }
+        void callback_asyncSendResponse_exception(tars::Int32 ret) override
         {
             complete(bcostars::toBcosError(ret));
         }
@@ -288,11 +296,14 @@ bcos::task::Task<bcos::Error::Ptr> bcostars::FrontServiceClient::sendResponse(
     bcos::bytesConstRef _data)
 {
     auto nodeIDData = _nodeID->data();
-    // oneway RPC (no callback): marshal the arguments and fire
-    m_proxy->tars_set_timeout(c_frontServiceTimeout)
-        ->asyncSendResponse(_id, _moduleID, std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
-            std::vector<char>(_data.begin(), _data.end()));
-    co_return nullptr;
+    co_return co_await ErrorAwaitable{std::make_shared<ErrorAwaitable::CompletionState>(),
+        [proxy = m_proxy, timeout = c_frontServiceTimeout, id = std::move(_id), _moduleID,
+            nodeID = std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
+            data = std::vector<char>(_data.begin(), _data.end())](
+            FrontServicePrxCallback* callback) mutable {
+            proxy->tars_set_timeout(timeout)->async_asyncSendResponse(callback, id, _moduleID,
+                nodeID, data);
+        }};
 }
 bcos::task::Task<void> bcostars::FrontServiceClient::broadcastMessage(uint16_t _type,
     int _moduleID, ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads)

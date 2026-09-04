@@ -823,6 +823,8 @@ task::Task<Error::Ptr> FrontService::onReceiveMessage(
     {
         FRONT_LOG(ERROR) << "onReceiveMessage"
                          << LOG_KV("failed", boost::diagnostic_information(e));
+        co_return BCOS_ERROR_PTR(
+            CommonError::MessageDecodeFailed, boost::diagnostic_information(e));
     }
 
     co_return nullptr;
