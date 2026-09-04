@@ -421,7 +421,7 @@ BOOST_AUTO_TEST_CASE(publish_built_payload_rolls_back_cache_and_artifacts_on_thr
     BOOST_CHECK(!artifacts.inner.contains(newId));
 }
 
-BOOST_AUTO_TEST_CASE(publish_built_payload_does_not_restore_fifo_evicted_on_artifacts_throw)
+BOOST_AUTO_TEST_CASE(publish_built_payload_restores_fifo_evicted_on_artifacts_throw)
 {
     EngineTracker tracker;
     auto guard = tracker.lockExclusive();
@@ -444,8 +444,8 @@ BOOST_AUTO_TEST_CASE(publish_built_payload_does_not_restore_fifo_evicted_on_arti
 
     BOOST_CHECK(!guard.findPayload(newId));
     BOOST_CHECK(!artifacts.inner.contains(newId));
-    // Finding T: FIFO-evicted entries stay evicted when artifacts assign throws.
-    BOOST_CHECK(!guard.findPayload("0x0"));
+    // Failed publish restores the pre-put snapshot, including the FIFO victim.
+    BOOST_REQUIRE(guard.findPayload("0x0"));
     BOOST_REQUIRE(guard.findPayload("0x1"));
 }
 
