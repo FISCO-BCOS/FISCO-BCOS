@@ -6,9 +6,16 @@ set -euo pipefail
 PIN="${T8N_CORPUS_PIN:-1f1fd4d9a2e8d76a7f98231ad0a9606d01f84a8f}"
 ROOT="$(git rev-parse --show-toplevel)"
 DEST="${ROOT}/opstack-executor/tests/t8n"
+PIN_FILE="${DEST}/.t8n-pin"
 
-if [[ -d "${DEST}/vectors" && -d "${DEST}/golden/engine" ]]; then
-    echo "t8n corpus already present at ${DEST}"
+stored_pin() {
+    if [[ -f "${PIN_FILE}" ]]; then
+        tr -d '[:space:]' < "${PIN_FILE}"
+    fi
+}
+
+if [[ -d "${DEST}/vectors" && -d "${DEST}/golden/engine" && "$(stored_pin)" == "${PIN}" ]]; then
+    echo "t8n corpus already present at ${DEST} (pin ${PIN})"
     exit 0
 fi
 
@@ -21,4 +28,5 @@ git -C "${CACHE}" checkout --detach FETCH_HEAD
 
 mkdir -p "$(dirname "${DEST}")"
 ln -sfn "${CACHE}/opstack-executor/tests/t8n" "${DEST}"
+printf '%s\n' "${PIN}" > "${PIN_FILE}"
 echo "linked ${DEST} -> ${CACHE}/opstack-executor/tests/t8n @ ${PIN}"

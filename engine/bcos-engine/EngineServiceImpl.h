@@ -113,7 +113,7 @@ std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 
 /// Hash-relevant fields vs the locally built payload (op-geth ExecutableDataToBlock).
-/// Optional V3-omitted fields are compared only when the CL sent them.
+/// Optional V3 fields are compared only when both sides have them (finding BL).
 /// Cache-miss (unexecuted external body) is SYNCING, not VALID — #5468.
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);

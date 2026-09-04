@@ -24,6 +24,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
+#include <exception>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -48,6 +49,21 @@ struct OpPayloadBusyReset
         }
     }
 };
+
+/// Map remaining typed / untyped service faults to JSON-RPC -32603 with a short
+/// stable message. Must not use boost::diagnostic_information (finding AM).
+/// OpExecutionInternalError without OpPayloadUndecodable stays -32603, never INVALID.
+[[noreturn]] void rethrowAsEngineInternalError(std::exception const& e)
+{
+    auto const* what = e.what();
+    std::string message = "Internal error";
+    if (what != nullptr && what[0] != '\0')
+    {
+        message += ": ";
+        message += what;
+    }
+    BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, std::move(message)));
+}
 }  // namespace
 
 EngineEndpoint::EngineEndpoint(NodeService::Ptr nodeService) : m_nodeService(std::move(nodeService))
@@ -184,6 +200,14 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidForkchoiceState,
             std::string("Invalid forkchoice state: ") + e.what()));
     }
+    catch (engine::OpExecutionInternalError const& e)
+    {
+        rethrowAsEngineInternalError(e);
+    }
+    catch (std::exception const& e)
+    {
+        rethrowAsEngineInternalError(e);
+    }
     auto jsonResult = combineForkchoiceUpdatedResult(engineResult, version);
     buildJsonContent(jsonResult, response);
 }
@@ -255,6 +279,14 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
+    }
+    catch (engine::OpExecutionInternalError const& e)
+    {
+        rethrowAsEngineInternalError(e);
+    }
+    catch (std::exception const& e)
+    {
+        rethrowAsEngineInternalError(e);
     }
     if (!engineResult)
     {
@@ -337,6 +369,14 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidPayloadAttributes,
             std::string("Invalid payload attributes: ") + e.what()));
+    }
+    catch (engine::OpExecutionInternalError const& e)
+    {
+        rethrowAsEngineInternalError(e);
+    }
+    catch (std::exception const& e)
+    {
+        rethrowAsEngineInternalError(e);
     }
     auto result = serializePayloadStatus(engineResult, version);
     buildJsonContent(result, response);

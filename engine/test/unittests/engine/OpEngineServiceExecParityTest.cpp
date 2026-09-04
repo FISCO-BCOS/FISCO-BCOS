@@ -212,7 +212,7 @@ struct OpE2eFixture
             hashImpl, kChainId, forkFlags, blockFactory, multiLayerStorage, ledger, ioServicePool)),
         service(memPool, multiLayerStorage, scheduler, blockFactory, nullptr,
             bcos::engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), opDelegate)
+            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), opDelegate)
     {
         seedSysTables(multiLayerStorage);
     }

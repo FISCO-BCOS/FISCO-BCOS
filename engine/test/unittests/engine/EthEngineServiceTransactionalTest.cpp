@@ -421,6 +421,55 @@ BOOST_AUTO_TEST_CASE(publish_built_payload_rolls_back_cache_and_artifacts_on_thr
     BOOST_CHECK(!artifacts.inner.contains(newId));
 }
 
+BOOST_AUTO_TEST_CASE(publish_built_payload_does_not_restore_fifo_evicted_on_artifacts_throw)
+{
+    EngineTracker tracker;
+    auto guard = tracker.lockExclusive();
+
+    // PayloadCache::put FIFO cap is 64. Fill it, then a 65th put evicts the oldest.
+    constexpr std::size_t kMaxEntries = 64;
+    for (std::size_t i = 0; i < kMaxEntries; ++i)
+    {
+        auto id = "0x" + std::to_string(i);
+        guard.putPayload(id, h256(i + 1), makeEntry(id));
+    }
+    BOOST_REQUIRE(guard.findPayload("0x0"));
+
+    ThrowingArtifactsMap artifacts;
+    artifacts.throwOnAssign = true;
+    PayloadID newId = "0xnew";
+    BOOST_CHECK_THROW(publishBuiltPayload(guard, artifacts, newId, h256(100), makeEntry(newId),
+                          ArtifactNode{.value = 7}),
+        std::runtime_error);
+
+    BOOST_CHECK(!guard.findPayload(newId));
+    BOOST_CHECK(!artifacts.inner.contains(newId));
+    // Finding T: FIFO-evicted entries stay evicted when artifacts assign throws.
+    BOOST_CHECK(!guard.findPayload("0x0"));
+    BOOST_REQUIRE(guard.findPayload("0x1"));
+}
+
+BOOST_AUTO_TEST_CASE(payload_cache_erase_removes_id_hash_and_order)
+{
+    PayloadCache cache;
+    cache.put("0xkeep", h256(1), makeEntry("0xkeep"));
+    cache.put("0xdrop", h256(2), makeEntry("0xdrop"));
+    cache.erase("0xdrop");
+
+    BOOST_REQUIRE(cache.find("0xkeep"));
+    BOOST_CHECK(!cache.find("0xdrop"));
+    BOOST_CHECK(!cache.payloadIdForHash(h256(2)).has_value());
+    BOOST_CHECK_EQUAL(*cache.payloadIdForHash(h256(1)), "0xkeep");
+
+    // A later put must not evict `keep` as if `drop` were still in FIFO order.
+    for (std::size_t i = 0; i < 63; ++i)
+    {
+        auto id = "0xf" + std::to_string(i);
+        cache.put(id, h256(10 + i), makeEntry(id));
+    }
+    BOOST_REQUIRE(cache.find("0xkeep"));
+}
+
 BOOST_AUTO_TEST_CASE(publish_built_payload_preserves_prior_generic_artifact)
 {
     EngineTracker tracker;

@@ -326,16 +326,22 @@ BOOST_AUTO_TEST_CASE(op_newpayload_rejects_missing_blob_fields_and_wide_gas_limi
         *overUint64Error, "gasLimit exceeds the uint64 range of the ETH header field");
 }
 
-BOOST_AUTO_TEST_CASE(op_newpayload_rejects_foreign_withdrawals_root)
+BOOST_AUTO_TEST_CASE(op_newpayload_accepts_announced_withdrawals_root)
 {
+    // Presence is required; the announced root is not pinned to emptyRootHash.
+    // Equality vs the executed MessagePasser storage root is checked after execute.
     auto request = makeIsthmusNewPayload(fromHex("00000000fa00000006"));
     BOOST_CHECK(!engine_common::op::validateOpNewPayloadRequest(request, /*jovianActive=*/false));
 
+    auto missing = request;
+    missing.executionPayload.withdrawalsRoot = std::nullopt;
+    auto missingError =
+        engine_common::op::validateOpNewPayloadRequest(missing, /*jovianActive=*/false);
+    BOOST_REQUIRE(missingError.has_value());
+    BOOST_CHECK(missingError->find("withdrawalsRoot") != std::string::npos);
+
     request.executionPayload.withdrawalsRoot = h256(1);
-    auto error = engine_common::op::validateOpNewPayloadRequest(request, /*jovianActive=*/false);
-    BOOST_REQUIRE(error.has_value());
-    BOOST_CHECK(error->find("withdrawalsRoot") != std::string::npos);
-    BOOST_CHECK(error->find("does not match") != std::string::npos);
+    BOOST_CHECK(!engine_common::op::validateOpNewPayloadRequest(request, /*jovianActive=*/false));
 }
 
 BOOST_AUTO_TEST_CASE(op_fcu_attrs_reject_gas_limit_above_signed_max)

@@ -110,12 +110,18 @@ GetPayloadResult EngineTracker::getPayload(const PayloadID& payloadId, std::uint
                               << bcos::errinfo_comment{"Unsupported Engine API version"});
     }
 
-    std::shared_lock lock(m_mutex);
-    auto entry = m_payloads.find(payloadId);
+    BuiltPayloadPtr entry;
+    {
+        std::shared_lock lock(m_mutex);
+        entry = m_payloads.find(payloadId);
+    }
     if (!entry)
     {
         BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
     }
+    // Finding AF: BuiltPayload is immutable once published. Copy the shared_ptr
+    // under the lock, then check shape and assemble GetPayloadData (tx raw /
+    // blobs) outside so FCU publish / newPayload commit are not blocked.
     if (!engine_common::isGetPayloadVersionCompatible(
             static_cast<ApiVersion>(version), entry->version))
     {
@@ -227,6 +233,12 @@ void EngineTracker::ExclusiveAccess::retainOnly(const PayloadID& id, const h256&
 {
     requireOwner();
     m_owner->m_payloads.retainOnly(id, blockHash);
+}
+
+void EngineTracker::ExclusiveAccess::erasePayload(const PayloadID& id)
+{
+    requireOwner();
+    m_owner->m_payloads.erase(id);
 }
 
 PayloadCache::PutResult EngineTracker::ExclusiveAccess::putAndRetainPayload(

@@ -417,8 +417,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // Resolve the effective executor version BEFORE gating Engine API / wiring the
     // schedulers. The on-chain value overrides the genesis-file value and can move to >= 2
     // at runtime (executor_version is runtime-settable via SystemConfigPrecompiled, and
-    // MultiVersionScheduler::setVersion saturates any version >= 2 onto the v2
-    // EthereumExecutor), so the gate below must read the ledger rather than the node
+    // MultiVersionScheduler::setVersion saturates versions above m_highestWiredIndex
+    // onto that newest wired slot — not unconditionally onto v2; non-OP nodes keep
+    // slot 3 as a refuse stub), so the gate below must read the ledger rather than the node
     // config — a node whose genesis said v1 but whose ledger says v2 would otherwise build
     // the Engine API on the v1 executor, the state-root divergence the gate exists to
     // prevent. The residual risk of a runtime switch to v2 without genesis config is handled
@@ -621,7 +622,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
             m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
-            /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), m_daCaps,
+            // B1: FCU method-version ceiling. V4 may enter updateForkchoice; payload
+            // shape is still PayloadV3 (payloadShapeVersion) until B3.
+            /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), m_daCaps,
             /*allowSynthesizedL1Attributes=*/false);
 
         m_opScheduler = opDelegate;

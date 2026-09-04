@@ -47,6 +47,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                               << bcos::errinfo_comment{"Unsupported Engine API version"});
     }
+    std::vector<bcos::bytes> decodedForcedTxs;
     if (payloadAttributes != nullptr)
     {
         if (version < 3)
@@ -54,10 +55,10 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
             BOOST_THROW_EXCEPTION(
                 UnsupportedFork{} << bcos::errinfo_comment{
                     "Isthmus+ payload building requires engine_forkchoiceUpdatedV3 "
-                    "(JSON-RPC -38005; FCU V4 is unimplemented)"});
+                    "or V4 (JSON-RPC -38005)"});
         }
-        if (auto validationError =
-                engine_common::validatePayloadAttributes(*payloadAttributes, version);
+        if (auto validationError = engine_common::validatePayloadAttributes(
+                *payloadAttributes, version, &decodedForcedTxs);
             validationError.has_value())
         {
             co_return ForkchoiceUpdatedResult{
@@ -169,19 +170,20 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
     }
 
     co_return co_await buildOpPayload(
-        forkchoiceState, *payloadAttributes, version, *headBlockNumber + 1);
+        forkchoiceState, *payloadAttributes, version, *headBlockNumber + 1, decodedForcedTxs);
 }
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
 task::Task<ForkchoiceUpdatedResult>
 OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayload(
     const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
-    std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber)
+    std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
+    std::vector<bcos::bytes> const& decodedForcedTxs)
 {
     // Same policy as EthEngineService (option B): deterministic derivePayloadId, not a
-    // process-local sequence counter.
-    auto payloadIdOpt =
-        engine_common::derivePayloadId(payloadAttributes, forkchoiceState.headBlockHash, version);
+    // process-local sequence counter. Reuse validate's decoded forced txs (finding AE).
+    auto payloadIdOpt = engine_common::derivePayloadId(
+        payloadAttributes, forkchoiceState.headBlockHash, version, decodedForcedTxs);
     if (!payloadIdOpt.has_value())
     {
         co_return ForkchoiceUpdatedResult{
@@ -236,10 +238,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     }
     if (payloadAttributes.transactions.has_value())
     {
-        for (auto const& forcedHex : *payloadAttributes.transactions)
-        {
-            forcedEnvelopes.push_back(fromHex(forcedHex));
-        }
+        forcedEnvelopes.insert(
+            forcedEnvelopes.end(), decodedForcedTxs.begin(), decodedForcedTxs.end());
     }
 
     std::vector<std::pair<crypto::HashType, bytes>> sealedEnvelopes;
@@ -525,8 +525,7 @@ template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
 task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
     SchedulerType>::handleOpNewPayload(const NewPayloadRequest& request, std::uint32_t version)
 {
-    constexpr std::uint32_t c_opIsthmusPayloadVersion = 4;
-    if (version != c_opIsthmusPayloadVersion)
+    if (!isNewPayloadVersionSupported(version))
     {
         BOOST_THROW_EXCEPTION(
             UnsupportedFork{} << bcos::errinfo_comment{
@@ -720,11 +719,13 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
     {
         block = buildOpBlock(payload, ethHeader);
     }
-    catch (const OpExecutionInternalError& e)
+    catch (const OpExecutionInternalError&)
     {
+        // Stable Engine API string only (finding CG). FCU already returns this
+        // exact phrase via fcuInvalidIfUndecodable; dump Boost diagnostics in logs,
+        // not in validationError.
         co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-            std::string("undecodable payload transaction envelope: ") +
-                boost::diagnostic_information(e));
+            std::string("undecodable payload transaction envelope"));
     }
 
     bcos::Error::Ptr executeError;
@@ -737,6 +738,16 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
     if (executeError)
     {
         co_return mapDelegateError(*executeError, latestValidHash);
+    }
+    if (!executedHeader || !executedHeader->withdrawalsRoot().has_value())
+    {
+        co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+            std::string("executed header is missing withdrawalsRoot"));
+    }
+    if (executedHeader->withdrawalsRoot() != payload.withdrawalsRoot)
+    {
+        co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+            std::string("withdrawalsRoot does not match the executed header"));
     }
 
     bcos::Error::Ptr commitError;

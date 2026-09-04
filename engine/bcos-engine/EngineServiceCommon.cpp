@@ -98,9 +98,13 @@ std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(std::span<const bcos
 }
 }  // namespace
 
-std::optional<std::string> validatePayloadAttributes(
-    const PayloadAttributes& payloadAttributes, std::uint32_t version)
+std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& payloadAttributes,
+    std::uint32_t version, std::vector<bcos::bytes>* decodedForcedTxs)
 {
+    if (decodedForcedTxs != nullptr)
+    {
+        decodedForcedTxs->clear();
+    }
     if (payloadAttributes.transactions.has_value())
     {
         if (payloadAttributes.transactions->size() > kMaxForcedTxCount)
@@ -108,12 +112,23 @@ std::optional<std::string> validatePayloadAttributes(
             return "payloadAttributes.transactions exceeds the forced-tx count ceiling";
         }
         std::size_t totalBytes = 0;
+        if (decodedForcedTxs != nullptr)
+        {
+            decodedForcedTxs->reserve(payloadAttributes.transactions->size());
+        }
         for (std::size_t i = 0; i < payloadAttributes.transactions->size(); ++i)
         {
+            auto const& hexTx = (*payloadAttributes.transactions)[i];
+            // Finding BY: reject on hex length before fromHex allocates the body.
+            auto const estimated = decodedHexByteCount(hexTx);
+            if (estimated > kMaxForcedTxBytes || totalBytes > kMaxForcedTxBytes - estimated)
+            {
+                return "payloadAttributes.transactions exceeds the forced-tx byte ceiling";
+            }
             bcos::bytes raw;
             try
             {
-                raw = bcos::fromHex((*payloadAttributes.transactions)[i]);
+                raw = bcos::fromHex(hexTx);
             }
             catch (std::exception const&)
             {
@@ -121,13 +136,13 @@ std::optional<std::string> validatePayloadAttributes(
                        "] is not a hex string";
             }
             totalBytes += raw.size();
-            if (totalBytes > kMaxForcedTxBytes)
-            {
-                return "payloadAttributes.transactions exceeds the forced-tx byte ceiling";
-            }
             if (auto error = validateRawTransactionKind(dispatchRawTransaction(bcos::ref(raw)), i))
             {
                 return error;
+            }
+            if (decodedForcedTxs != nullptr)
+            {
+                decodedForcedTxs->push_back(std::move(raw));
             }
         }
     }
@@ -182,11 +197,19 @@ std::optional<std::string> validatePayloadAttributes(
     return std::nullopt;
 }
 
-std::optional<PayloadID> derivePayloadId(
-    const PayloadAttributes& payloadAttributes, const h256& parentHash, std::uint32_t version)
+std::optional<PayloadID> derivePayloadId(const PayloadAttributes& payloadAttributes,
+    const h256& parentHash, std::uint32_t version, std::span<const bcos::bytes> decodedForcedTxs)
 {
     std::vector<h256> txHashes;
-    if (payloadAttributes.transactions.has_value())
+    if (!decodedForcedTxs.empty())
+    {
+        txHashes.reserve(decodedForcedTxs.size());
+        for (auto const& raw : decodedForcedTxs)
+        {
+            txHashes.emplace_back(bcos::crypto::keccak256Hash(bcos::ref(raw)));
+        }
+    }
+    else if (payloadAttributes.transactions.has_value())
     {
         txHashes.reserve(payloadAttributes.transactions->size());
         for (auto const& hexTx : *payloadAttributes.transactions)
@@ -322,14 +345,23 @@ std::optional<std::string> compareWithBuiltPayload(
 {
     // op-geth ExecutableDataToBlock re-derives keccak256(rlp(header)) from every
     // hash-relevant field. Compare the fields this node actually built (cache hit).
-    // Keep-local-body contract (finding BL): optional V3-omitted fields
-    // (withdrawalsRoot / blob-gas) are compared only when BOTH sides sent them.
-    // Submitted-absent vs built-present is not a mismatch — GetPayloadV3 may omit
-    // a field the local payload still carries, and the CL is echoing the hash,
-    // not re-deriving every optional.
+    // Keep-local-body (finding BL): optional V3 fields are compared only when
+    // BOTH sides have them. Presence XOR is not INVALID — GetPayloadV3 may omit
+    // a field the local payload still carries, and the CL is echoing the hash.
     auto mismatch = [](char const* field) {
         return std::string("executionPayload.") + field +
                " does not match the payload this node built under the submitted blockHash";
+    };
+    // Presence XOR is not a mismatch. GetPayloadV3 may omit a V4-only field the
+    // in-memory payload still carries; a V2 body may omit blob-gas that a later
+    // cache entry filled. Only a present-vs-present value disagreement is INVALID.
+    auto optionalMismatch = [&](char const* field, auto const& submittedField,
+                                auto const& builtField) -> std::optional<std::string> {
+        if (submittedField.has_value() && builtField.has_value() && *submittedField != *builtField)
+        {
+            return mismatch(field);
+        }
+        return std::nullopt;
     };
     if (submitted.extraData != built.extraData)
     {
@@ -394,20 +426,19 @@ std::optional<std::string> compareWithBuiltPayload(
             return mismatch("transactions");
         }
     }
-    if (submitted.withdrawalsRoot.has_value() && built.withdrawalsRoot.has_value() &&
-        *submitted.withdrawalsRoot != *built.withdrawalsRoot)
+    if (auto error =
+            optionalMismatch("withdrawalsRoot", submitted.withdrawalsRoot, built.withdrawalsRoot))
     {
-        return mismatch("withdrawalsRoot");
+        return error;
     }
-    if (submitted.blobGasUsed.has_value() && built.blobGasUsed.has_value() &&
-        *submitted.blobGasUsed != *built.blobGasUsed)
+    if (auto error = optionalMismatch("blobGasUsed", submitted.blobGasUsed, built.blobGasUsed))
     {
-        return mismatch("blobGasUsed");
+        return error;
     }
-    if (submitted.excessBlobGas.has_value() && built.excessBlobGas.has_value() &&
-        *submitted.excessBlobGas != *built.excessBlobGas)
+    if (auto error =
+            optionalMismatch("excessBlobGas", submitted.excessBlobGas, built.excessBlobGas))
     {
-        return mismatch("excessBlobGas");
+        return error;
     }
     return std::nullopt;
 }
@@ -471,8 +502,9 @@ void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const Execution
     header.setEthBlockVersion(forkVersion);
     if (auto error = bcos::protocol::EthBlockHeader::calculateRLPHash(header))
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error{
-            "EngineService: failed to compute Eth RLP hash: " + error->errorMessage()});
+        BOOST_THROW_EXCEPTION(
+            OpExecutionInternalError{} << bcos::errinfo_comment{
+                "EngineService: failed to compute Eth RLP hash: " + error->errorMessage()});
     }
 }
 

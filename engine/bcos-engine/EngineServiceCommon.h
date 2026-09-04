@@ -16,6 +16,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace bcos::engine
@@ -42,8 +43,9 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 /// Hash-relevant fields vs the locally built payload (op-geth ExecutableDataToBlock).
-/// Keep-local-body: optional V3-omitted fields are compared only when both sides
-/// sent them (submitted-absent vs built-present is not a mismatch).
+/// Keep-local-body (BL): optional V3 fields (withdrawalsRoot / blobGasUsed /
+/// excessBlobGas) are compared only when both sides have them. Presence XOR
+/// (omit vs value) is not a mismatch.
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
 bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
@@ -103,10 +105,24 @@ inline bool forkchoiceHashIsCanonical(
 inline constexpr std::size_t kMaxForcedTxCount = 16384;
 inline constexpr std::size_t kMaxForcedTxBytes = 8 * 1024 * 1024;
 
-std::optional<std::string> validatePayloadAttributes(
-    const PayloadAttributes& payloadAttributes, std::uint32_t version);
-std::optional<PayloadID> derivePayloadId(
-    const PayloadAttributes& payloadAttributes, const h256& parentHash, std::uint32_t version);
+/// Decoded byte count of a hex string, matching `fromHex` (optional 0x, odd nibble pads).
+/// Used to reject over-ceiling forced txs before allocating the decoded buffer (finding BY).
+inline std::size_t decodedHexByteCount(std::string_view hex)
+{
+    if (hex.size() >= 2 && (hex[0] == '0') && (hex[1] == 'x' || hex[1] == 'X'))
+    {
+        hex.remove_prefix(2);
+    }
+    return (hex.size() + 1) / 2;
+}
+
+std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& payloadAttributes,
+    std::uint32_t version, std::vector<bcos::bytes>* decodedForcedTxs = nullptr);
+/// `decodedForcedTxs` reuses bytes from validate (finding AE). Empty span falls
+/// back to fromHex for unit tests that call this helper directly.
+std::optional<PayloadID> derivePayloadId(const PayloadAttributes& payloadAttributes,
+    const h256& parentHash, std::uint32_t version,
+    std::span<const bcos::bytes> decodedForcedTxs = {});
 PayloadStatus makeStatus(PayloadValidationStatus status,
     std::optional<h256> latestValidHash = std::nullopt,
     std::optional<std::string> validationError = std::nullopt);

@@ -157,6 +157,26 @@ void PayloadCache::publishFrom(PayloadCache staged) noexcept
     m_order.swap(staged.m_order);
 }
 
+void PayloadCache::erase(PayloadID const& id)
+{
+    if (!m_entries.contains(id))
+    {
+        return;
+    }
+
+    auto entries = m_entries;
+    auto hashToId = m_hashToId;
+    auto order = m_order;
+
+    entries.erase(id);
+    eraseHashesForId(hashToId, id);
+    std::erase(order, id);
+
+    m_entries.swap(entries);
+    m_hashToId.swap(hashToId);
+    m_order.swap(order);
+}
+
 void PayloadCache::retainOnly(const PayloadID& id, const h256& blockHash)
 {
     auto entries = m_entries;

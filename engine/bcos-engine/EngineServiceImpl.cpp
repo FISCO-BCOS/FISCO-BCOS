@@ -28,11 +28,10 @@
 #include <stdexcept>
 #include <utility>
 
-// Leftover tests-only TU (findings BK / BW). Production Engine API is
-// EthEngineService / OpEngineService + engine_common. Do not port new consensus
-// guards here. Delete this TU after Eth/Op parity tests stop constructing
-// EngineServiceImpl as `legacy` (target: the PR that drops EngineServiceImpl.cpp
-// from test-bcos-engine).
+// Leftover TU (findings BK / BW). Not compiled into libengine or
+// test-bcos-engine. Production Engine API is EthEngineService / OpEngineService
+// + engine_common. Do not port new consensus guards here. Delete with
+// EngineServiceImpl.h once fixtures stop instantiating the leftover template.
 std::vector<std::string> bcos::engine::detail::supportedCapabilities()
 {
     return engine_common::supportedCapabilities();

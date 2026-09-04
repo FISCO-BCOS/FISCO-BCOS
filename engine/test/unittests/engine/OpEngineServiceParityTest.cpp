@@ -123,6 +123,7 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
     bool rejectAsCapacity = false;
     bool failFirst = true;
     int executeCalls = 0;
+    bcos::h256 executedWithdrawalsRoot = bcos::ledger::mpt::emptyRootHash();
     bcos::protocol::BlockHeaderFactory::Ptr headerFactory;
 
     void executeBlock(bcos::protocol::Block::Ptr, bool,
@@ -145,7 +146,7 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
         header->setStateRoot(bcos::h256{});
         header->setReceiptsRoot(bcos::h256{});
         header->setGasUsed(0);
-        header->setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
+        header->setWithdrawalsRoot(executedWithdrawalsRoot);
         header->setBlobGasUsed(0);
         callback(nullptr, std::move(header), false);
     }
@@ -231,7 +232,7 @@ struct NonceChainScheduler : RecordingScheduler
         header->setStateRoot(bcos::h256{});
         header->setReceiptsRoot(bcos::h256{});
         header->setGasUsed(0);
-        header->setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
+        header->setWithdrawalsRoot(executedWithdrawalsRoot);
         header->setBlobGasUsed(0);
         callback(nullptr, std::move(header), false);
     }
@@ -535,7 +536,7 @@ struct OpServicePair
       : delegate(std::move(delegateIn)),
         service(memPool, storage, scheduler, blockFactory, nullptr,
             bcos::engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), delegate, std::move(daCapsIn),
+            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), delegate, std::move(daCapsIn),
             allowSynthesizedL1Attributes)
     {}
 };
@@ -562,7 +563,7 @@ struct SharedForkchoicePair
       : legacy(legacyMemPool, legacyStorage, legacyExecutor, legacyScheduler, blockFactory),
         op(opMemPool, opStorage, opScheduler, blockFactory, nullptr,
             bcos::engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), nullptr)
+            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), nullptr)
     {}
 };
 
@@ -839,12 +840,48 @@ BOOST_AUTO_TEST_CASE(op_fcu_rejects_empty_txs_when_synthesis_disabled)
         result.payloadStatus.validationError->find("L1 attributes deposit") != std::string::npos);
 }
 
-BOOST_AUTO_TEST_CASE(op_fcu_v4_is_unsupported)
+BOOST_AUTO_TEST_CASE(op_fcu_v4_passes_version_gate)
 {
-    // Matrix: T05 — maxEngineVersion is V3, so FCU V4 is UnsupportedEngineApiVersion.
+    // B1 — maxEngineVersion is V4, so FCU V4 must not throw UnsupportedEngineApiVersion.
+    // Pre-B3: V4 method version still stores PayloadV3 (payloadShapeVersion).
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    bcos::engine::ForkchoiceUpdatedResult built;
+    try
+    {
+        built = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 4));
+    }
+    catch (bcos::engine::UnsupportedEngineApiVersion const&)
+    {
+        BOOST_FAIL("FCU V4 must pass the method-version gate after B1 (maxEngineVersion=V4)");
+    }
+    BOOST_REQUIRE_EQUAL(static_cast<int>(built.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(built.payloadId.has_value());
+
+    auto payload = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 3));
+    BOOST_REQUIRE(payload);
+}
+
+BOOST_AUTO_TEST_CASE(op_fcu_v5_is_unsupported)
+{
+    // Ceiling is V4; V5 still hits the method-version gate.
     OpServicePair pair;
     bcos::engine::ForkchoiceState state;
-    BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.updateForkchoice(state, nullptr, 4)),
+    BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.updateForkchoice(state, nullptr, 5)),
         bcos::engine::UnsupportedEngineApiVersion);
 }
 
@@ -1129,6 +1166,47 @@ BOOST_AUTO_TEST_CASE(op_fcu_undecodable_envelope_is_invalid_not_internal_error)
     BOOST_CHECK(result.payloadStatus.validationError->find("undecodable") != std::string::npos);
 }
 
+BOOST_AUTO_TEST_CASE(op_newpayload_undecodable_envelope_is_short_invalid)
+{
+    // Finding CG — newPayload must return the same stable phrase as FCU, without
+    // appending boost::diagnostic_information to validationError.
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto const parent =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    registerVerifiedBlock(pair.storage, parent, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto parentHeader = pair.blockFactory->blockHeaderFactory()->createBlockHeader();
+    parentHeader->setNumber(0);
+    parentHeader->setTimestamp(1'699'000'000'000);
+    parentHeader->setGasLimit(30'000'000);
+    parentHeader->setGasUsed(0);
+    parentHeader->setExtraData(bcos::fromHex("00000000fa00000006"));
+    parentHeader->setBaseFee(bcos::u256(1'000'000'000));
+
+    auto request = makeValidIsthmusNewPayload(*pair.blockFactory, parent, 1);
+    bcos::engine::EngineTransaction garbage;
+    garbage.raw = bcos::bytes{0xde, 0xad, 0xbe, 0xef};
+    request.executionPayload.transactions.push_back(std::move(garbage));
+    request.executionPayload.baseFeePerGas = bcos::engine::calcOpBaseFee(*parentHeader, false);
+    auto const txRoot = EngineOpScheduler::computeTxRoot(
+        bcos::engine::op_detail::rawEnvelopes(request.executionPayload));
+    auto header =
+        bcos::engine::engine_common::op::rebuildOpEthHeader(pair.blockFactory->blockHeaderFactory(),
+            request.executionPayload, txRoot, *request.parentBeaconBlockRoot);
+    request.executionPayload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
+
+    auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(status.validationError.has_value());
+    BOOST_CHECK_EQUAL(*status.validationError, "undecodable payload transaction envelope");
+}
+
 BOOST_AUTO_TEST_CASE(op_fcu_getpayload_newpayload_roundtrip)
 {
     // AR — service-level FCU → getPayload → newPayload with a real delegate.
@@ -1206,6 +1284,87 @@ BOOST_AUTO_TEST_CASE(op_newpayload_occupied_nontip_height_is_syncing)
         static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing));
     BOOST_CHECK(!status.latestValidHash.has_value());
     BOOST_CHECK(!status.validationError.has_value());
+}
+
+BOOST_AUTO_TEST_CASE(op_fcu_getpayload_newpayload_roundtrip_messagepasser_root)
+{
+    // FCU stamps the executed MessagePasser storage root; newPayload must accept it.
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    delegate->executedWithdrawalsRoot = bcos::h256(1);
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto built = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(built.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(built.payloadId.has_value());
+
+    auto payload = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 3));
+    BOOST_REQUIRE(payload);
+    BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
+    BOOST_CHECK_EQUAL(
+        payload->executionPayload.withdrawalsRoot->hex(), delegate->executedWithdrawalsRoot.hex());
+
+    bcos::engine::NewPayloadRequest request;
+    request.executionPayload = payload->executionPayload;
+    request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    request.expectedBlobVersionedHashes = {};
+    auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(pair.service.lastExecutedHeader());
+}
+
+BOOST_AUTO_TEST_CASE(op_newpayload_rejects_executed_withdrawals_root_mismatch)
+{
+    // Announced empty root hashes; execute returns a different MessagePasser root.
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    delegate->executedWithdrawalsRoot = bcos::h256(42);
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto const parent =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    registerVerifiedBlock(pair.storage, parent, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto parentHeader = pair.blockFactory->blockHeaderFactory()->createBlockHeader();
+    parentHeader->setNumber(0);
+    parentHeader->setTimestamp(1'699'000'000'000);
+    parentHeader->setGasLimit(30'000'000);
+    parentHeader->setGasUsed(0);
+    parentHeader->setExtraData(bcos::fromHex("00000000fa00000006"));
+    parentHeader->setBaseFee(bcos::u256(1'000'000'000));
+
+    auto request = makeValidIsthmusNewPayload(*pair.blockFactory, parent, 1);
+    request.executionPayload.baseFeePerGas = bcos::engine::calcOpBaseFee(*parentHeader, false);
+    auto const txRoot = EngineOpScheduler::computeTxRoot(
+        bcos::engine::op_detail::rawEnvelopes(request.executionPayload));
+    auto header =
+        bcos::engine::engine_common::op::rebuildOpEthHeader(pair.blockFactory->blockHeaderFactory(),
+            request.executionPayload, txRoot, *request.parentBeaconBlockRoot);
+    request.executionPayload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
+    BOOST_REQUIRE(request.executionPayload.withdrawalsRoot.has_value());
+    BOOST_CHECK_EQUAL(
+        request.executionPayload.withdrawalsRoot->hex(), bcos::ledger::mpt::emptyRootHash().hex());
+
+    auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(status.validationError.has_value());
+    BOOST_CHECK(status.validationError->find("withdrawalsRoot") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

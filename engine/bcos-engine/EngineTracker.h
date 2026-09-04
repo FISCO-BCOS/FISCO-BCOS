@@ -101,6 +101,7 @@ public:
     PayloadCache::PutResult putAndRetainPayload(
         PayloadID id, h256 blockHash, BuiltPayloadPtr entry);
     void retainOnly(const PayloadID& id, const h256& blockHash);
+    void erasePayload(PayloadID const& id);
     PayloadCache snapshotPayloadCache() const;
     void restorePayloadCache(PayloadCache cache);
     const ForkchoiceState& forkchoiceState() const;
@@ -147,34 +148,32 @@ private:
     std::shared_lock<std::shared_mutex> m_lock;
 };
 
-/// Publish a built payload with rollback-on-throw over the PayloadCache snapshot and
-/// the caller-side artifacts map. Consolidated from the byte-identical eth_detail /
-/// op_detail copies (review PR #5544); both engine services call this single template
-/// so cache-rollback semantics cannot drift.
+/// Publish a built payload. PayloadCache::put is already CoW, so a throw there
+/// leaves the live cache unchanged. If the artifacts insert then throws, erase
+/// only the id just inserted — FIFO-evicted entries stay evicted (finding T).
+/// Consolidated from the eth_detail / op_detail copies (review PR #5544).
 template <class ArtifactsMap, class ArtifactNode>
 PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guard,
     ArtifactsMap& artifacts, PayloadID const& payloadId, h256 const& blockHash,
     BuiltPayloadPtr entry, ArtifactNode&& artifactNode)
 {
-    PayloadCache cacheRollback = guard.snapshotPayloadCache();
-    ArtifactsMap artifactsRollback = artifacts;
+    // Match release EngineServiceImpl: bounded FIFO (PayloadCache::put, cap 64).
+    auto putResult = guard.putPayload(payloadId, blockHash, std::move(entry));
     try
     {
-        // Match release EngineServiceImpl: bounded FIFO (PayloadCache::put, cap 64).
-        auto putResult = guard.putPayload(payloadId, blockHash, std::move(entry));
         artifacts[payloadId] = std::forward<ArtifactNode>(artifactNode);
-        for (auto const& evictedId : putResult.evicted)
-        {
-            artifacts.erase(evictedId);
-        }
-        return putResult;
     }
     catch (...)
     {
-        guard.restorePayloadCache(std::move(cacheRollback));
-        artifacts = std::move(artifactsRollback);
+        guard.erasePayload(payloadId);
+        artifacts.erase(payloadId);
         throw;
     }
+    for (auto const& evictedId : putResult.evicted)
+    {
+        artifacts.erase(evictedId);
+    }
+    return putResult;
 }
 
 }  // namespace bcos::engine

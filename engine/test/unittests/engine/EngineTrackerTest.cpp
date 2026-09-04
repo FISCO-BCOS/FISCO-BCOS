@@ -459,6 +459,32 @@ BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_v3_omits_execution_requests)
     BOOST_CHECK(!result->executionRequests.has_value());
 }
 
+BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_survives_cache_eviction)
+{
+    // Finding AF: getPayload copies from the shared_ptr; evicting the cache
+    // entry after the call must not empty the returned tx raw.
+    EngineTracker tracker;
+    const PayloadID id = "0x0102030405060708";
+    const PayloadID other = "0x1111111111111111";
+    {
+        auto entry = std::make_shared<BuiltPayload>(*makePayload(3, true));
+        entry->executionPayload.transactions.push_back(
+            EngineTransaction{.raw = bytes{0x7e, 0xfa, 0xce}, .decoded = nullptr});
+        auto guard = tracker.lockExclusive();
+        guard.putPayload(id, h256(7), std::move(entry));
+    }
+    auto result = tracker.getPayload(id, 3);
+    {
+        auto otherEntry = makePayload(3, true);
+        auto guard = tracker.lockExclusive();
+        guard.putAndRetainPayload(other, h256(8), std::move(otherEntry));
+    }
+    BOOST_REQUIRE(result);
+    BOOST_REQUIRE_EQUAL(result->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(result->executionPayload.transactions[0].raw == (bytes{0x7e, 0xfa, 0xce}));
+    BOOST_CHECK_THROW(tracker.getPayload(id, 3), UnknownPayload);
+}
+
 BOOST_AUTO_TEST_CASE(engine_tracker_exclusive_guard_exposes_payload_cache)
 {
     EngineTracker tracker;
@@ -734,6 +760,29 @@ BOOST_AUTO_TEST_CASE(engine_common_validate_payload_attributes_gold)
     tooManyForcedBytes.transactions = std::vector<std::string>{
         "0x" + std::string(2 * (engine_common::kMaxForcedTxBytes + 1), 'a')};
     expectError(engine_common::validatePayloadAttributes(tooManyForcedBytes, 3), "byte ceiling");
+
+    // Finding BY: hex-length estimate rejects before fromHex. Second tx alone
+    // is over the ceiling; first stays tiny so a running-total-after-decode
+    // implementation would still allocate the second body.
+    PayloadAttributes secondTxOverCeiling = minimalPayloadAttributes();
+    secondTxOverCeiling.transactions = std::vector<std::string>{
+        "0x7e00", "0x" + std::string(2 * (engine_common::kMaxForcedTxBytes + 1), 'a')};
+    expectError(engine_common::validatePayloadAttributes(secondTxOverCeiling, 3), "byte ceiling");
+
+    BOOST_CHECK_EQUAL(engine_common::decodedHexByteCount("0x"), 0);
+    BOOST_CHECK_EQUAL(engine_common::decodedHexByteCount("0x00"), 1);
+    BOOST_CHECK_EQUAL(engine_common::decodedHexByteCount("aaa"), 2);
+}
+
+BOOST_AUTO_TEST_CASE(engine_common_derive_payload_id_reuses_decoded_forced_txs)
+{
+    // Finding AE: pre-decoded bytes must hash the same as the fromHex fallback.
+    const h256 parentHash = h256(std::string(64, '1'));
+    auto attrs = minimalPayloadAttributes();
+    attrs.transactions = std::vector<std::string>{"0x7eface"};
+    auto decoded = std::vector<bcos::bytes>{bcos::fromHex("0x7eface")};
+    BOOST_CHECK(engine_common::derivePayloadId(attrs, parentHash, 3, decoded) ==
+                engine_common::derivePayloadId(attrs, parentHash, 3));
 }
 
 BOOST_AUTO_TEST_CASE(engine_common_derive_payload_id_matches_legacy)

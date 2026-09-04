@@ -38,6 +38,9 @@ public:
     std::optional<PayloadID> payloadIdForHash(const h256& blockHash) const;
     std::optional<bcos::protocol::BlockNumber> blockNumberForHash(const h256& blockHash) const;
     void retainOnly(const PayloadID& id, const h256& blockHash);
+    /// Remove one payload id from entries, hashToId, and FIFO order. Exclusive-lock
+    /// callers only (same as put). CoW: a throw leaves the live cache unchanged.
+    void erase(PayloadID const& id);
     /// Deep copy of the cache (for transactional rollback).
     PayloadCache duplicate() const;
     /// Replace live cache state from a snapshot (noexcept). Used to roll back failed publishes.

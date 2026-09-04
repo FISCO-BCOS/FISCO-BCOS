@@ -112,7 +112,7 @@ public:
         SchedulerType& scheduler, bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
-        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3),
+        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V4),
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
         std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false)
       : m_memPool(memPool),
@@ -195,15 +195,25 @@ private:
                 std::to_string(error.errorCode()) + "): " + error.errorMessage()});
     }
 
+    /// FCU method-version window. Isthmus dialect is FCU V3/V4 → getPayload V3–V5
+    /// → newPayload V4. Method versions need not intersect; stored shape is
+    /// payloadShapeVersion (V3/V4 → PayloadV3).
     bool isForkchoiceVersionSupported(std::uint32_t version) const
     {
         return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
                version <= m_maxEngineVersion;
     }
 
+    /// OP newPayload is Isthmus-only (V4). Not the Eth V1..V4 window.
+    static bool isNewPayloadVersionSupported(std::uint32_t version)
+    {
+        return version == static_cast<std::uint32_t>(ApiVersion::V4);
+    }
+
     task::Task<ForkchoiceUpdatedResult> buildOpPayload(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, std::uint32_t version,
-        bcos::protocol::BlockNumber nextBlockNumber);
+        bcos::protocol::BlockNumber nextBlockNumber,
+        std::vector<bcos::bytes> const& decodedForcedTxs);
 
     task::Task<PayloadStatus> handleOpNewPayload(
         const NewPayloadRequest& request, std::uint32_t version);

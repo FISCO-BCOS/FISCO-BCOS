@@ -52,7 +52,7 @@ public:
         bcos::txpool::MemPoolImpl& memPool, bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
-        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3),
+        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4),
         std::shared_ptr<bcos::engine::DACaps> daCaps = nullptr,
         bool allowSynthesizedL1Attributes = false)
     {

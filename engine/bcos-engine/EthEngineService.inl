@@ -31,10 +31,11 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                               << bcos::errinfo_comment{"Unsupported Engine API version"});
     }
+    std::vector<bcos::bytes> decodedForcedTxs;
     if (payloadAttributes != nullptr)
     {
-        if (auto validationError =
-                engine_common::validatePayloadAttributes(*payloadAttributes, version);
+        if (auto validationError = engine_common::validatePayloadAttributes(
+                *payloadAttributes, version, &decodedForcedTxs);
             validationError.has_value())
         {
             co_return ForkchoiceUpdatedResult{
@@ -155,8 +156,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     // Payload ID: deterministic derive from attributes + parent (op-geth-aligned). Do not
     // switch back to a process-local sequence counter — that was release EngineServiceImpl
     // only and is not the EthEngineService cutover contract (option B).
-    auto payloadIdOpt =
-        engine_common::derivePayloadId(*payloadAttributes, forkchoiceState.headBlockHash, version);
+    auto payloadIdOpt = engine_common::derivePayloadId(
+        *payloadAttributes, forkchoiceState.headBlockHash, version, decodedForcedTxs);
     if (!payloadIdOpt.has_value())
     {
         co_return ForkchoiceUpdatedResult{
@@ -169,7 +170,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     auto payloadId = *payloadIdOpt;
     auto nextBlockNumber = *headBlockNumber + 1;
     auto built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
-        nextBlockNumber, std::move(sealedTxs), view);
+        nextBlockNumber, std::move(sealedTxs), view, decodedForcedTxs);
 
     auto commonEntry = std::make_shared<BuiltPayload>();
     commonEntry->version = engine_common::payloadShapeVersion(version);
@@ -273,17 +274,22 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
         payloadId = *existingId;
         cached = guard.findPayload(payloadId);
-        if (!cached)
-        {
-            co_return engine_common::makeStatus(
-                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
-        }
-        if (auto mismatch =
-                detail::compareWithBuiltPayload(request.executionPayload, cached->executionPayload))
-        {
-            co_return engine_common::makeStatus(
-                PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
-        }
+    }
+    if (!cached)
+    {
+        co_return engine_common::makeStatus(
+            PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+    }
+    // Finding AV: compare (O(tx bytes) memcmp) runs on the immutable shared
+    // entry after releasing the exclusive tracker lock.
+    if (auto mismatch =
+            detail::compareWithBuiltPayload(request.executionPayload, cached->executionPayload))
+    {
+        co_return engine_common::makeStatus(
+            PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
+    }
+    {
+        auto guard = m_tracker.lockExclusive();
         auto artifactIt = m_artifacts.find(payloadId);
         if (artifactIt != m_artifacts.end() && artifactIt->second.view)
         {
@@ -367,7 +373,8 @@ task::Task<typename EthEngineService<MemPoolType, GlobalStateStorageType, Execut
 EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::buildPayload(
     const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
     const PayloadID& payloadId, std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
-    std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
+    std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view,
+    std::vector<bcos::bytes> const& decodedForcedTxs) const
 {
     std::vector<EngineTransaction> engineTransactions;
     engineTransactions.reserve(
@@ -375,10 +382,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         sealedTxs.size());
     if (payloadAttributes.transactions.has_value())
     {
-        for (auto const& forcedHex : *payloadAttributes.transactions)
+        for (auto const& raw : decodedForcedTxs)
         {
             engineTransactions.push_back(EngineTransaction{
-                .raw = fromHex(forcedHex),
+                .raw = raw,
                 .decoded = nullptr,
             });
         }
@@ -569,7 +576,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     {
         if (::ranges::any_of(receipts, [](auto& r) { return !r; }))
         {
-            BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "Null receipt returned by scheduler"});
         }
         auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
         auto hasher = hashImpl.hasher();
@@ -593,7 +601,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     {
         if (!receipt)
         {
-            BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "Null receipt returned by scheduler"});
         }
         totalGasUsed += receipt->gasUsed();
         if (!receipt->logsBloom().empty())

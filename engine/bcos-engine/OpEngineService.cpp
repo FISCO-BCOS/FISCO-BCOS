@@ -16,6 +16,13 @@ namespace bcos::engine::engine_common::op
 namespace
 {
 constexpr std::size_t c_hashBytes = 32;
+constexpr char const* kOpMaxBlockGasLimitMessage =
+    "gasLimit exceeds the maximum block gas limit (2^63-1)";
+
+constexpr bool gasLimitExceedsOpCap(std::uint64_t gasLimit) noexcept
+{
+    return gasLimit > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
+}
 
 const bcos::h256 c_emptyOmmersHash{
     std::string{"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}};
@@ -93,10 +100,9 @@ std::optional<std::string> validateOpPayloadAttributes(
     // Same 2^63-1 cap as validateOpNewPayloadRequest. JSON parseQuantity already
     // rejects >uint64; this closes the window where FCU would stamp a payloadId
     // that newPayload then refuses (op-geth defers the cap to VerifyHeader).
-    if (*payloadAttributes.gasLimit >
-        static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+    if (gasLimitExceedsOpCap(*payloadAttributes.gasLimit))
     {
-        return std::string("gasLimit exceeds the maximum block gas limit (2^63-1)");
+        return std::string(kOpMaxBlockGasLimitMessage);
     }
     if (!payloadAttributes.eip1559Params.has_value())
     {
@@ -162,12 +168,6 @@ std::optional<std::string> validateOpNewPayloadRequest(
     {
         return std::string("withdrawalsRoot is required on the OP path (Isthmus+)");
     }
-    if (*payload.withdrawalsRoot != bcos::engine::detail::withdrawalsRootFor(payload))
-    {
-        return std::string(
-            "withdrawalsRoot does not match the value this node commits "
-            "for the built header");
-    }
     if (!payload.excessBlobGas.has_value() || *payload.excessBlobGas != 0)
     {
         return std::string("excessBlobGas must be present and zero on the OP path");
@@ -188,10 +188,9 @@ std::optional<std::string> validateOpNewPayloadRequest(
     {
         return std::string("gasLimit exceeds the uint64 range of the ETH header field");
     }
-    if (*narrowU256ToU64(payload.gasLimit) >
-        static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+    if (gasLimitExceedsOpCap(*narrowU256ToU64(payload.gasLimit)))
     {
-        return std::string("gasLimit exceeds the maximum block gas limit (2^63-1)");
+        return std::string(kOpMaxBlockGasLimitMessage);
     }
     {
         const auto& extra = payload.extraData;

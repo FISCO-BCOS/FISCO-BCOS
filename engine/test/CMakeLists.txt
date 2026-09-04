@@ -7,8 +7,10 @@ include(SearchTestCases)
 
 set(TEST_BINARY_NAME test-bcos-engine)
 
-add_executable(${TEST_BINARY_NAME} ${SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../bcos-engine/EngineServiceImpl.cpp)
+# Finding BW: leftover EngineServiceImpl.cpp is no longer linked. Tests that still
+# include EngineServiceImpl.h instantiate the header-only template (BK stays there
+# until those fixtures migrate off leftover).
+add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE
     . ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/opstack-executor/tests
