@@ -51,6 +51,8 @@ public:
     std::string m_nonce = "0x7";   // hex quantity
     bcos::bytes m_extraBytes;
     std::optional<uint64_t> m_reportedEnvelopeChainId;
+    bcos::protocol::Web3AccessList m_accessList;
+    bcos::protocol::VersionedHashes m_blobHashes;
 
     uint8_t web3TypedTxKind() const override { return m_kind; }
     bcos::bytesConstRef input() const override
@@ -80,6 +82,8 @@ public:
             return m_reportedEnvelopeChainId;
         return bcos::rlp::protocol::web3ChainIdFromEnvelope(extraTransactionBytes());
     }
+    bcos::protocol::Web3AccessList web3AccessList() const override { return m_accessList; }
+    bcos::protocol::VersionedHashes blobVersionedHashes() const override { return m_blobHashes; }
 
     // ---- unused stubs ----
     void decode(bcos::bytesConstRef) override {}
@@ -700,6 +704,40 @@ BOOST_AUTO_TEST_CASE(ConsistentMirrorPasses)
     tx.m_gasLimit = 5000000;
     tx.m_input = {0xde, 0xad};
     BOOST_CHECK(!envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(NonEmptyUnboundAccessListIsFailClosed)
+{
+    FakeTx tx;
+    tx.m_extraBytes = eip1559Envelope(
+        10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {0xde, 0xad});
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde, 0xad};
+    tx.m_accessList.push_back(bcos::protocol::Web3AccessListEntry{
+        .account = bcos::Address(std::string(40, '1')), .storageKeys = {}});
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(mismatch->find("accessList") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(NonEmptyUnboundBlobHashesAreFailClosed)
+{
+    FakeTx tx;
+    tx.m_kind = 3;
+    tx.m_extraBytes = blobOrAuthEnvelope(
+        0x03, 10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {0xde});
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde};
+    tx.m_blobHashes.push_back(bcos::h256(1));
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(mismatch->find("blobVersionedHashes") != std::string::npos);
 }
 
 // The field-index table's legacy branch (typed == false → [0,2,3,4,5]) is exercised: a bare

@@ -10,7 +10,7 @@
 // engine_consolidate.go checkExtraDataParamsMatch for the 0,0 -> Canyon-constants
 // translation.
 
-#include "engine/bcos-engine/EngineServiceImpl.h"
+#include "engine/bcos-engine/EngineServiceCommon.h"
 
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
@@ -117,14 +117,14 @@ BOOST_AUTO_TEST_CASE(holocene_without_min_base_fee_encodes_nine_bytes)
 BOOST_AUTO_TEST_CASE(missing_eip1559_params_keeps_extra_data_empty)
 {
     BOOST_CHECK(engine::detail::encodeOptimismExtraData(makeAttributes(std::nullopt, std::nullopt))
-            .empty());
+                    .empty());
 }
 
 // minBaseFee without eip1559Params leaves the params half of the 17-byte form
 // undefined; the attributes are rejected instead of guessed at.
 BOOST_AUTO_TEST_CASE(min_base_fee_without_params_is_rejected)
 {
-    auto error = engine::detail::validatePayloadAttributes(makeAttributes(std::nullopt, 0), 3);
+    auto error = engine_common::validatePayloadAttributes(makeAttributes(std::nullopt, 0), 3);
     BOOST_REQUIRE(error.has_value());
     BOOST_CHECK_NE(error->find("eip1559Params"), std::string::npos);
 }
@@ -134,25 +134,26 @@ BOOST_AUTO_TEST_CASE(min_base_fee_without_params_is_rejected)
 BOOST_AUTO_TEST_CASE(wrong_length_eip1559_params_are_rejected)
 {
     BOOST_CHECK(
-        engine::detail::validatePayloadAttributes(makeAttributes(bytes(7, 0), 0), 3).has_value());
+        engine_common::validatePayloadAttributes(makeAttributes(bytes(7, 0), 0), 3).has_value());
     BOOST_CHECK(
-        engine::detail::validatePayloadAttributes(makeAttributes(bytes(9, 0), 0), 3).has_value());
+        engine_common::validatePayloadAttributes(makeAttributes(bytes(9, 0), 0), 3).has_value());
 }
 
-// ValidateHolocene1559Params (eip1559.go:89-100): a zero denominator with a non-zero
-// elasticity (or vice versa) is invalid attribute input.
+// Attribute pairing (finding AO): both-zero or both non-zero. (0,0) is legal (encode
+// translates to Canyon 250/6); a mixed pair (d==0,e!=0) or (d>0,e==0) is rejected
+// because encode writes (d>0,e==0) verbatim and calcOpBaseFee cannot extend the
+// zero-elasticity head.
 BOOST_AUTO_TEST_CASE(mixed_zero_eip1559_params_are_rejected)
 {
-    BOOST_CHECK(engine::detail::validatePayloadAttributes(
+    BOOST_CHECK(engine_common::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x0000000000000006"), 0), 3)
-            .has_value());
-    BOOST_CHECK(engine::detail::validatePayloadAttributes(
+                    .has_value());
+    BOOST_CHECK(engine_common::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000000"), 0), 3)
-            .has_value());
-    // Both zero and both non-zero stay valid.
+                    .has_value());
     BOOST_CHECK(
-        !engine::detail::validatePayloadAttributes(makeAttributes(bytes(8, 0), 0), 3).has_value());
-    BOOST_CHECK(engine::detail::validatePayloadAttributes(
+        !engine_common::validatePayloadAttributes(makeAttributes(bytes(8, 0), 0), 3).has_value());
+    BOOST_CHECK(engine_common::validatePayloadAttributes(
                     makeAttributes(fromHexWithPrefix("0x000000fa00000006"), 0), 3)
                     .has_value() == false);
 }
@@ -186,34 +187,34 @@ BOOST_AUTO_TEST_CASE(eip1559_fields_are_rejected_below_version_three)
         // Baseline: without the two fields these attributes are accepted at this
         // version, so any error below is attributable to the new gate.
         BOOST_REQUIRE(
-            !engine::detail::validatePayloadAttributes(attributesForVersion(version), version)
-                .has_value());
+            !engine_common::validatePayloadAttributes(attributesForVersion(version), version)
+                 .has_value());
 
         auto holocene = attributesForVersion(version);
         holocene.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
-        auto holoceneError = engine::detail::validatePayloadAttributes(holocene, version);
+        auto holoceneError = engine_common::validatePayloadAttributes(holocene, version);
         BOOST_REQUIRE(holoceneError.has_value());
         BOOST_CHECK_NE(holoceneError->find("eip1559Params"), std::string::npos);
 
         auto jovian = holocene;
         jovian.minBaseFee = 7;
-        BOOST_CHECK(engine::detail::validatePayloadAttributes(jovian, version).has_value());
+        BOOST_CHECK(engine_common::validatePayloadAttributes(jovian, version).has_value());
 
         // minBaseFee is version-gated in its own right, before the pairing rule.
         auto minBaseFeeOnly = attributesForVersion(version);
         minBaseFeeOnly.minBaseFee = 7;
-        auto minBaseFeeError = engine::detail::validatePayloadAttributes(minBaseFeeOnly, version);
+        auto minBaseFeeError = engine_common::validatePayloadAttributes(minBaseFeeOnly, version);
         BOOST_REQUIRE(minBaseFeeError.has_value());
         BOOST_CHECK_NE(minBaseFeeError->find("minBaseFee"), std::string::npos);
     }
 
     // V3 is the version op-node actually uses, so both forms stay valid there.
-    BOOST_CHECK(!engine::detail::validatePayloadAttributes(
+    BOOST_CHECK(!engine_common::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000006"), std::nullopt), 3)
-            .has_value());
-    BOOST_CHECK(!engine::detail::validatePayloadAttributes(
+                     .has_value());
+    BOOST_CHECK(!engine_common::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000006"), 7), 3)
-            .has_value());
+                     .has_value());
 }
 
 // encodeOptimismExtraData is an exported detail:: entry point reachable from
@@ -225,9 +226,13 @@ BOOST_AUTO_TEST_CASE(encode_rejects_params_shorter_than_eight_bytes)
 {
     for (std::size_t size : {std::size_t{0}, std::size_t{1}, std::size_t{7}, std::size_t{9}})
     {
-        BOOST_CHECK_THROW(
+        BOOST_CHECK_EXCEPTION(
             engine::detail::encodeOptimismExtraData(makeAttributes(bytes(size, 0), 0)),
-            std::invalid_argument);
+            std::invalid_argument, [](std::invalid_argument const& e) {
+                return std::string_view(e.what()).find(
+                           "encodeOptimismExtraData requires exactly 8 bytes of eip1559Params") !=
+                       std::string_view::npos;
+            });
     }
 }
 
@@ -243,6 +248,12 @@ BOOST_AUTO_TEST_CASE(execution_payload_extra_data_shape_is_validated)
             makeExecutionPayloadV3(std::move(extraData)), 3)
                     .has_value();
     };
+    auto rejectNeedle = [](bytes extraData, char const* needle) {
+        auto error = engine::detail::validateExecutionPayload(
+            makeExecutionPayloadV3(std::move(extraData)), 3);
+        BOOST_REQUIRE(error.has_value());
+        BOOST_CHECK_NE(error->find(needle), std::string::npos);
+    };
 
     // Empty (pre-Holocene), 9-byte Holocene and 17-byte Jovian forms.
     BOOST_CHECK(accepted({}));
@@ -250,17 +261,22 @@ BOOST_AUTO_TEST_CASE(execution_payload_extra_data_shape_is_validated)
     BOOST_CHECK(accepted(fromHexWithPrefix("0x01000000fa000000060000000000000000")));
 
     // Wrong lengths.
-    BOOST_CHECK(!accepted(bytes(8, 0)));
-    BOOST_CHECK(!accepted(bytes(16, 0)));
-    BOOST_CHECK(!accepted(bytes(32, 0)));
+    rejectNeedle(bytes(8, 0), "must be 9 (Holocene) or 17 (Jovian) bytes");
+    rejectNeedle(bytes(16, 0), "must be 9 (Holocene) or 17 (Jovian) bytes");
+    rejectNeedle(bytes(32, 0), "must be 9 (Holocene) or 17 (Jovian) bytes");
     // Wrong version byte for the length: Jovian must be 0x01, Holocene 0x00.
-    BOOST_CHECK(!accepted(fromHexWithPrefix("0x00000000fa000000060000000000000000")));
-    BOOST_CHECK(!accepted(fromHexWithPrefix("0x01000000fa00000006")));
-    // A header, unlike attributes, may not encode a zero denominator or elasticity
-    // (validateHoloceneExtraDataPart, op-core/eip1559/eip1559.go:105-113).
-    BOOST_CHECK(!accepted(fromHexWithPrefix("0x000000000000000006")));
-    BOOST_CHECK(!accepted(fromHexWithPrefix("0x000000000000000000")));
-    BOOST_CHECK(!accepted(fromHexWithPrefix("0x00000000fa00000000")));
+    rejectNeedle(fromHexWithPrefix("0x00000000fa000000060000000000000000"),
+        "version byte does not match length");
+    rejectNeedle(fromHexWithPrefix("0x01000000fa00000006"), "version byte does not match length");
+    // Header extraData is a committed artifact: a zero denominator OR zero elasticity
+    // makes the head unextendable (calcOpBaseFee fail-closes), so headers carry the
+    // strict non-zero rule (validateOpExtraDataShape) — finding AO.
+    rejectNeedle(fromHexWithPrefix("0x000000000000000006"),
+        "must encode a non-zero EIP-1559 denominator and elasticity");
+    rejectNeedle(fromHexWithPrefix("0x000000000000000000"),
+        "must encode a non-zero EIP-1559 denominator and elasticity");
+    rejectNeedle(fromHexWithPrefix("0x00000000fa00000000"),
+        "must encode a non-zero EIP-1559 denominator and elasticity");
 }
 
 // A CL returning a payload under a blockHash this node minted must return the same
@@ -282,11 +298,7 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)
     strippedExtraData.extraData.clear();
     BOOST_CHECK(engine::detail::compareWithBuiltPayload(strippedExtraData, built).has_value());
 
-    // Documented non-goals of this comparison, asserted so the boundary is visible.
-    // withdrawalsRoot is dropped by the V3 wire dialect on the way back
-    // (get_payload_v5_rejects_a_v3_committed_entry_without_withdrawals_root in
-    // EngineServiceTest relies on that staying VALID), and the transaction list is
-    // left to #5468, which is what makes payload bodies verifiable at all.
+    // V3 wire may omit withdrawalsRoot; that is not a mismatch.
     auto withoutWithdrawalsRoot = built;
     withoutWithdrawalsRoot.withdrawalsRoot = std::nullopt;
     BOOST_CHECK(
@@ -294,7 +306,142 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)
 
     auto alteredTransaction = built;
     alteredTransaction.transactions[1].raw = bytes{0x02, 0x04};
-    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(alteredTransaction, built).has_value());
+    auto txError = engine::detail::compareWithBuiltPayload(alteredTransaction, built);
+    BOOST_REQUIRE(txError.has_value());
+    BOOST_CHECK_NE(txError->find("transactions"), std::string::npos);
+
+    auto alteredStateRoot = built;
+    alteredStateRoot.stateRoot = h256(1);
+    auto stateError = engine::detail::compareWithBuiltPayload(alteredStateRoot, built);
+    BOOST_REQUIRE(stateError.has_value());
+    BOOST_CHECK_NE(stateError->find("stateRoot"), std::string::npos);
 }
+
+// compareWithBuiltPayload must reject a mismatch on EVERY hash-relevant field, not just
+// extraData/stateRoot/transactions. Parameterized over the 16 field arms; each mutation
+// must produce a mismatch message naming the field (unique per arm), and the honest echo
+// must stay VALID. Guards against a dropped compare arm (finding AQ): deleting any arm
+// keeps the whole suite green today, so each field gets its own assertion.
+BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_every_hash_relevant_field)
+{
+    auto built = makePayloadWithTransactions(
+        fromHexWithPrefix("0x01000000fa000000060000000000000000"), {{0x7e, 0x01}, {0x02, 0x03}});
+    // Populate every optional field so each present-vs-present arm is exercised.
+    built.withdrawalsRoot = h256(1);
+    built.blobGasUsed = u256(1);
+    built.excessBlobGas = u256(1);
+
+    // Honest echo: no mismatch.
+    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(built, built).has_value());
+
+    struct Arm
+    {
+        char const* field;
+        std::function<void(ExecutionPayload&)> mutate;
+    };
+    h256 const kAltered{0xdeadbeef};
+    Arm const arms[] = {
+        {"extraData", [](ExecutionPayload& p) { p.extraData[0] ^= 0xFF; }},
+        {"parentHash", [kAltered](ExecutionPayload& p) { p.parentHash = kAltered; }},
+        {"stateRoot", [kAltered](ExecutionPayload& p) { p.stateRoot = kAltered; }},
+        {"receiptsRoot", [kAltered](ExecutionPayload& p) { p.receiptsRoot = kAltered; }},
+        {"logsBloom", [](ExecutionPayload& p) { p.logsBloom[0] ^= 0xFF; }},
+        {"prevRandao", [kAltered](ExecutionPayload& p) { p.prevRandao = kAltered; }},
+        {"gasLimit", [](ExecutionPayload& p) { p.gasLimit += 1; }},
+        {"gasUsed", [](ExecutionPayload& p) { p.gasUsed += 1; }},
+        {"baseFeePerGas", [](ExecutionPayload& p) { p.baseFeePerGas += 1; }},
+        {"blockHash", [kAltered](ExecutionPayload& p) { p.blockHash = kAltered; }},
+        {"feeRecipient",
+            [](ExecutionPayload& p) { p.feeRecipient = bcos::Address(std::string(40, '7')); }},
+        {"timestamp", [](ExecutionPayload& p) { p.timestamp += 1; }},
+        {"blockNumber", [](ExecutionPayload& p) { p.blockNumber += 1; }},
+        {"withdrawalsRoot", [](ExecutionPayload& p) { p.withdrawalsRoot = h256(2); }},
+        {"blobGasUsed", [](ExecutionPayload& p) { p.blobGasUsed = u256(2); }},
+        {"excessBlobGas", [](ExecutionPayload& p) { p.excessBlobGas = u256(2); }},
+    };
+    for (auto const& arm : arms)
+    {
+        auto altered = built;
+        arm.mutate(altered);
+        auto error = engine::detail::compareWithBuiltPayload(altered, built);
+        BOOST_REQUIRE_MESSAGE(error.has_value(), "arm " << arm.field << " not rejected");
+        BOOST_CHECK_NE(error->find(arm.field), std::string::npos);
+    }
+
+    // Transaction-list arms: size mismatch and per-item raw mismatch.
+    {
+        auto extra = built;
+        extra.transactions.push_back(EngineTransaction{});
+        auto err = engine::detail::compareWithBuiltPayload(extra, built);
+        BOOST_REQUIRE(err.has_value());
+        BOOST_CHECK_NE(err->find("transactions"), std::string::npos);
+    }
+    {
+        auto altered = built;
+        altered.transactions[1].raw = bytes{0x02, 0x04};
+        auto err = engine::detail::compareWithBuiltPayload(altered, built);
+        BOOST_REQUIRE(err.has_value());
+        BOOST_CHECK_NE(err->find("transactions"), std::string::npos);
+    }
+
+    // V3-omitted optionals are not mismatches (missing vs present-zero semantics).
+    {
+        auto stripped = built;
+        stripped.withdrawalsRoot = std::nullopt;
+        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        stripped.blobGasUsed = std::nullopt;
+        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        stripped.excessBlobGas = std::nullopt;
+        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+    }
+}
+
+// Finding BL: keep-local-body contract. Optional V3 fields are compared only
+// when both sides have them. Presence XOR (omit vs value, either direction) is
+// not a mismatch; only present-vs-present disagreement is INVALID.
+BOOST_AUTO_TEST_CASE(compare_absent_optional_keeps_local_body)
+{
+    auto built = makePayloadWithTransactions(
+        fromHexWithPrefix("0x01000000fa000000060000000000000000"), {{0x7e, 0x01}});
+    built.withdrawalsRoot = h256(1);
+    built.blobGasUsed = u256(0);
+    built.excessBlobGas = u256(0);
+
+    auto omitted = built;
+    omitted.withdrawalsRoot = std::nullopt;
+    omitted.blobGasUsed = std::nullopt;
+    omitted.excessBlobGas = std::nullopt;
+
+    // Both absent.
+    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(omitted, omitted).has_value());
+    // Submitted omit vs built present (GetPayloadV3 echo of a V4-capable local body).
+    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(omitted, built).has_value());
+    // Submitted present vs built omit (reverse XOR; omit vs value, not both-have).
+    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(built, omitted).has_value());
+    // Both present and equal.
+    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(built, built).has_value());
+
+    // Per-field omit vs present still ACCEPT; only a value disagreement INVALID.
+    {
+        auto stripped = built;
+        stripped.withdrawalsRoot = std::nullopt;
+        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        stripped.blobGasUsed = std::nullopt;
+        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        stripped.excessBlobGas = std::nullopt;
+        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+    }
+
+    auto disagreedRoot = built;
+    disagreedRoot.withdrawalsRoot = h256(2);
+    BOOST_CHECK(engine::detail::compareWithBuiltPayload(disagreedRoot, built).has_value());
+    auto disagreedBlob = built;
+    disagreedBlob.blobGasUsed = u256(9);
+    BOOST_CHECK(engine::detail::compareWithBuiltPayload(disagreedBlob, built).has_value());
+    auto disagreedExcess = built;
+    disagreedExcess.excessBlobGas = u256(9);
+    BOOST_CHECK(engine::detail::compareWithBuiltPayload(disagreedExcess, built).has_value());
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()
