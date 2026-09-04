@@ -160,8 +160,7 @@ task::Task<std::shared_ptr<Executable>> getExecutable(
     // On a miss the bytes come back through the account: EVMAccount::code()
     // reads s_code_binary by hash and falls back to the account table's own
     // code field when that misses.
-    std::optional<storage::Entry> hashEntry(codeHashEntry);
-    if (auto codeEntry = co_await account.code(hashEntry))
+    if (auto codeEntry = co_await account.code(&codeHashEntry))
     {
         auto executable = std::make_shared<Executable>(std::move(*codeEntry), revision);
         co_await storage2::writeOne(getCacheExecutables(), key, executable);
@@ -200,7 +199,7 @@ task::Task<std::shared_ptr<Executable>> resolveExecutable(
     // produced any more, but EVMAccount::code() still falls back to it and this
     // branch keeps that reachable. Either way there is nothing content-addressed
     // to key the cache on, so no entry is published.
-    if (auto codeEntry = co_await account.code(std::nullopt))
+    if (auto codeEntry = co_await account.code(nullptr))
     {
         co_return std::make_shared<Executable>(std::move(*codeEntry), revision);
     }
@@ -403,7 +402,7 @@ public:
     {
         auto account = getAccount(*this, address);
         auto codeHashEntry = co_await account.codeHashEntry();
-        if (auto codeEntry = co_await account.code(codeHashEntry);
+        if (auto codeEntry = co_await account.code(codeHashEntry ? &*codeHashEntry : nullptr);
             codeEntry &&
             !precompiled::hideDynamicAccountCode(m_ledgerConfig.get().features(), codeEntry->get()))
         {
@@ -445,7 +444,7 @@ public:
         // bytes are never read.
         if (m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_v1_eoa_as_contract))
         {
-            auto codeEntry = co_await account.code(codeHashEntry);
+            auto codeEntry = co_await account.code(codeHashEntry ? &*codeHashEntry : nullptr);
             if (!codeEntry || precompiled::hideDynamicAccountCode(
                                   m_ledgerConfig.get().features(), codeEntry->get()))
             {

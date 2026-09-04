@@ -48,12 +48,11 @@ public:
         return h256((const bcos::byte*)view.data(), view.size());
     }
 
-    // 用已经读出来的code hash条目取代码，避免重复读codeHash字段
+    // 用已经读出来的code hash条目取代码，避免重复读codeHash字段；账户没有code hash时传nullptr
     // Resolve the code for an already-read code hash entry. Callers that need both the hash and
     // the code read the entry once with codeHashEntry() and pass it here, instead of calling
-    // code(), which reads that field again.
-    task::Task<std::optional<storage::Entry>> code(
-        const std::optional<storage::Entry>& codeHashEntry)
+    // code(), which reads that field again. Pass nullptr when the account records no code hash.
+    task::Task<std::optional<storage::Entry>> code(const storage::Entry* codeHashEntry)
     {
         // 先通过code hash从s_code_binary找代码
         // Start by using the code hash to find the code from the s_code_binary
@@ -80,7 +79,8 @@ public:
 
     task::Task<std::optional<storage::Entry>> code()
     {
-        co_return co_await code(co_await codeHashEntry());
+        auto entry = co_await codeHashEntry();
+        co_return co_await code(entry ? &*entry : nullptr);
     }
 
     task::Task<void> setCode(bytes code, std::string abi, const crypto::HashType& codeHash)
