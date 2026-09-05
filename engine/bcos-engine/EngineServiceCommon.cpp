@@ -337,11 +337,15 @@ std::optional<std::string> validateExecutionPayload(
     {
         return std::string("withdrawals are required for ExecutionPayloadV2 and later");
     }
-    if (version >= 4 && executionPayload.withdrawals.has_value() &&
+    if (version >= 2 && executionPayload.withdrawals.has_value() &&
         !executionPayload.withdrawals->empty())
     {
+        // Mirror validatePayloadAttributes: this node cannot compute a real withdrawals
+        // trie root (empty-trie placeholder), so a non-empty list is uncommittable at
+        // every version that carries the field — not just V4+ (Isthmus).
         return std::string(
-            "withdrawals must be an empty list for ExecutionPayloadV4 and later (Isthmus)");
+            "non-empty withdrawals are not supported until the withdrawals trie root is "
+            "computed");
     }
     if (version <= 2 &&
         (executionPayload.blobGasUsed.has_value() || executionPayload.excessBlobGas.has_value()))
@@ -464,6 +468,14 @@ std::optional<std::string> compareWithBuiltPayload(
             optionalMismatch("withdrawalsRoot", submitted.withdrawalsRoot, built.withdrawalsRoot))
     {
         return error;
+    }
+    // The withdrawals LIST is the field withdrawalsRoot commits to: the root arm
+    // above alone lets a tampered list through whenever both sides omit the root
+    // (V2/V3 wire) or the submitted root is copied from the build. Compare the
+    // lists directly — an honest echo always carries the built list.
+    if (submitted.withdrawals != built.withdrawals)
+    {
+        return mismatch("withdrawals");
     }
     if (auto error = optionalMismatch("blobGasUsed", submitted.blobGasUsed, built.blobGasUsed))
     {

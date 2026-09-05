@@ -1077,4 +1077,37 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_pins_each_hash_field)
     expectField([](ExecutionPayload& p) { p.excessBlobGas = u256(99); }, "excessBlobGas");
 }
 
+// The withdrawals LIST is the field the root commits to: with both roots absent
+// (the V2/V3 wire shape) or the submitted root copied from the build, a tampered
+// list under the same blockHash must still be rejected — an honest echo always
+// carries the built list.
+BOOST_AUTO_TEST_CASE(compare_with_built_payload_rejects_tampered_withdrawals_list)
+{
+    auto base = []() {
+        ExecutionPayload payload;
+        payload.extraData = bytes{0x01};
+        payload.parentHash = h256(1);
+        payload.stateRoot = h256(2);
+        payload.receiptsRoot = h256(3);
+        payload.prevRandao = h256(4);
+        payload.gasLimit = 5;
+        payload.gasUsed = 6;
+        payload.baseFeePerGas = 7;
+        payload.blockHash = h256(8);
+        payload.feeRecipient = Address(9);
+        payload.timestamp = 10;
+        payload.blockNumber = 11;
+        payload.withdrawals = std::vector<WithdrawalV1>{};
+        return payload;
+    };
+    auto const built = base();
+    BOOST_CHECK(!bcos::engine::detail::compareWithBuiltPayload(built, built).has_value());
+
+    auto submitted = base();
+    submitted.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{}};
+    auto error = bcos::engine::detail::compareWithBuiltPayload(submitted, built);
+    BOOST_REQUIRE(error.has_value());
+    BOOST_CHECK_NE(error->find("withdrawals"), std::string::npos);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
