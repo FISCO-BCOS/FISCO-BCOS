@@ -1,10 +1,25 @@
 /**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EthEngineServiceParityTest.cpp
+ * @brief Ethereum Engine API parity tests for EthEngineService
  */
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 #include "engine/bcos-engine/EthEngineService.h"
+#include "engine/test/unittests/engine/EthServiceStubs.h"
 
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
@@ -47,8 +62,12 @@ using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 
+constexpr bcos::protocol::BlockNumber c_rebuildBaseBlockNumber = 60;
+
 namespace eth_parity_test
 {
+
+using namespace bcos::engine::eth_test;
 // Whole-second milliseconds: finalizeEthBlockHeader / validateHeader require a whole
 // number of seconds at the Eth RLP boundary.
 constexpr std::uint64_t c_timestamp = 1700000000ULL * 1000ULL;
@@ -62,72 +81,6 @@ constexpr bcos::protocol::BlockNumber c_staleInitialBlockNumber = 50;
 constexpr bcos::protocol::BlockNumber c_staleNextBlockNumber = 51;
 constexpr bcos::protocol::BlockNumber c_staleThirdBlockNumber = 52;
 constexpr bcos::protocol::BlockNumber c_rebuildBaseBlockNumber = 60;
-
-using RealGlobalStateMutableStorage = bcos::storage2::memory_storage::MemoryStorage<
-    bcos::executor_v1::StateKey, bcos::executor_v1::StateValue,
-    bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
-                                              bcos::storage2::memory_storage::LOGICAL_DELETION)>;
-using RealGlobalStateBackendStorage =
-    bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
-        bcos::executor_v1::StateValue,
-        bcos::storage2::memory_storage::Attribute(
-            bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::CONCURRENT),
-        std::hash<bcos::executor_v1::StateKey>>;
-
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& s) : m_storage(s) {}
-    Storage& open() { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const&) { std::abort(); }
-    void createCheckpoint(Storage&, CheckpointName const&) {}
-    void deleteCheckpoint(CheckpointName const&) {}
-    std::optional<CheckpointName> latestCheckpointName() const { return std::nullopt; }
-    std::optional<CheckpointName> oldestCheckpointName() const { return std::nullopt; }
-};
-
-using RealGlobalCheckpointBackend = TrivialCheckpointStorage<bcos::executor_v1::StateKey,
-    bcos::executor_v1::StateValue, RealGlobalStateBackendStorage>;
-using RealGlobalStateStorage = bcos::storage2::MultiLayerStorage<RealGlobalStateMutableStorage,
-    void, RealGlobalCheckpointBackend>;
-
-struct StubExecutor
-{
-    template <class Storage>
-    struct ExecuteContext
-    {
-        task::Task<void> prepare() { co_return; }
-        task::Task<void> execute() { co_return; }
-        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return nullptr; }
-    };
-
-    template <class Storage>
-    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage&,
-        const protocol::BlockHeader&, const protocol::Transaction&, int,
-        const ledger::LedgerConfig&, bool)
-    {
-        co_return nullptr;
-    }
-
-    template <class Storage>
-    task::Task<ExecuteContext<Storage>> createExecuteContext(Storage&, const protocol::BlockHeader&,
-        const protocol::Transaction&, int, const ledger::LedgerConfig&, bool)
-    {
-        co_return ExecuteContext<Storage>{};
-    }
-};
-
-struct StubScheduler
-{
-    template <class Storage, class Executor>
-    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
-    {
-        co_return {};
-    }
-};
 
 using LegacyService =
     EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
@@ -1061,7 +1014,7 @@ BOOST_AUTO_TEST_CASE(generic_validation_error_table_matches)
             },
             4, "executionRequests must be a present-but-empty list on this chain"},
         // Matrix: E6 — wide/bad in-process payloads. JSON-null blob fields are a parse
-        // concern (OpEngineReviewFixTest); these rows hit validateExecutionPayload.
+        // concern below this layer (the RPC dialect tests); these rows hit validateExecutionPayload.
         {"v2_with_blob_gas",
             [&] {
                 NewPayloadRequest r;
@@ -1565,7 +1518,7 @@ BOOST_AUTO_TEST_CASE(matrix_version_fork_fcu_and_get_payload)
         BOOST_REQUIRE(newResult.payloadId.has_value());
 
         // getPayload version window: V2 build answers V1–V2; V3 build answers V1–V5 per
-        // engine_common / detail compatibility matrix (already unit-tested in S3).
+        // the engine_common compatibility matrix exercised by the rows below.
         auto const getVersion = row.fcuVersion;
         auto legacyPayload =
             task::syncWait(pair.legacy.getPayload(*legacyResult.payloadId, getVersion));
@@ -1614,14 +1567,14 @@ BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
 
     h256 const targetHash(0x42);
     PayloadID const targetPayloadId = "0xdeadbeef";
-    constexpr protocol::BlockNumber kTargetNumber = 7;
+    constexpr protocol::BlockNumber c_targetNumber = 7;
 
     {
         auto guard = tracker.lockExclusive();
         auto entry = std::make_shared<BuiltPayload>();
         entry->executionPayload.blockHash = targetHash;
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
-        header->setNumber(kTargetNumber);
+        header->setNumber(c_targetNumber);
         EthPayloadArtifacts<RealGlobalStateStorage::ViewType> node{
             .view = nullptr, .header = header, .receipts = {}};
         (void)publishBuiltPayload(
@@ -1644,7 +1597,7 @@ BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
         BOOST_REQUIRE(it != artifacts.end());
         initialHeader = it->second.header;
         BOOST_REQUIRE(initialHeader);
-        BOOST_CHECK_EQUAL(initialHeader->number(), kTargetNumber);
+        BOOST_CHECK_EQUAL(initialHeader->number(), c_targetNumber);
 
         writer.emplace([&] {
             try
@@ -1690,7 +1643,7 @@ BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
         BOOST_REQUIRE(id.has_value());
         auto it = artifacts.find(*id);
         BOOST_REQUIRE(it != artifacts.end());
-        BOOST_CHECK_EQUAL(it->second.header->number(), kTargetNumber);
+        BOOST_CHECK_EQUAL(it->second.header->number(), c_targetNumber);
         BOOST_CHECK_EQUAL(it->second.header.get(), initialHeader.get());
     }
 }
