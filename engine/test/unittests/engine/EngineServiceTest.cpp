@@ -1,11 +1,24 @@
 /**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EngineServiceTest.cpp
+ * @brief Tests for the engine-split Engine API module (EngineServiceTest)
  */
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 
-#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -20,13 +33,18 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/Ledger.h>
 #include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Error.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <atomic>
+#include <future>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::engine;
@@ -58,6 +76,14 @@ static bytes toBytes(std::string_view input)
 {
     return {reinterpret_cast<const byte*>(input.data()),
         reinterpret_cast<const byte*>(input.data()) + input.size()};
+}
+
+void checkForkchoiceComment(auto&& action, char const* expected)
+{
+    BOOST_CHECK_EXCEPTION(action(), InvalidForkchoiceState, [&](InvalidForkchoiceState const& e) {
+        auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+        return comment != nullptr && *comment == expected;
+    });
 }
 
 class TestTransactionImpl : public bcostars::protocol::TransactionImpl
@@ -160,6 +186,12 @@ task::Task<void> writeBlockNumberToStorage(RealGlobalStateBackendStorage& backen
         bcos::executor_v1::StateKey{
             ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
         std::move(entry));
+    storage::Entry hashEntry;
+    hashEntry.set(blockHash.asBytes());
+    co_await bcos::storage2::writeOne(backendStorage,
+        bcos::executor_v1::StateKey{
+            ledger::SYS_NUMBER_2_HASH, boost::lexical_cast<std::string>(blockNumber)},
+        std::move(hashEntry));
 }
 
 struct RealGlobalStateStorageFixture
@@ -178,8 +210,7 @@ struct RealGlobalStateStorageFixture
         // buildPayload FAILS CLOSED when the revision is absent (it never falls back to
         // the compile-time default), so the missing-revision test passes writeEvmcRevision
         // = false to reach that branch.
-        writeSysConfig(
-            magic_enum::enum_name(ledger::SystemConfig::executor_version),
+        writeSysConfig(magic_enum::enum_name(ledger::SystemConfig::executor_version),
             std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
         if (writeEvmcRevision)
         {
@@ -208,8 +239,7 @@ private:
     void writeSysConfig(std::string_view key, std::string value)
     {
         storage::Entry entry;
-        entry.set(bcos::storage::serialize::encode(
-            ledger::SystemConfigEntry{std::move(value), 0}));
+        entry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), 0}));
         task::syncWait(storage2::writeOne(backendStorage,
             bcos::executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
     }
@@ -347,6 +377,64 @@ public:
     }
 };
 
+/// CommitLedger whose first asyncPrewriteBlock fails with an injected error, then
+/// delegates to the real path. Models the transient storage fault behind the
+/// commit-masking scenario: the first newPayload must THROW (never answer VALID for a
+/// block whose rows were not written), and the retry must complete the commit for real.
+class FlakyLedger : public CommitLedger
+{
+public:
+    using CommitLedger::CommitLedger;
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        std::function<void(std::string, bcos::Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+    {
+        if (m_failNext.exchange(false))
+        {
+            callback("injected", BCOS_ERROR_PTR(
+                                     bcos::ledger::LedgerError::ErrorArgument,
+                                     "injected prewrite failure"));
+            return;
+        }
+        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
+            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
+            std::move(blockHashOverride), writeNonces);
+    }
+    std::atomic_bool m_failNext{true};
+};
+
+/// CommitLedger that parks the FIRST asyncPrewriteBlock until the test releases it,
+/// then passes everything through. Models the N1 window: the first newPayload's
+/// commit I/O is "in flight" (view pushed, artifacts not yet consumed) while a
+/// concurrent duplicate newPayload runs to completion.
+class GatedLedger : public CommitLedger
+{
+public:
+    using CommitLedger::CommitLedger;
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        std::function<void(std::string, bcos::Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+    {
+        if (!m_firstEntered.exchange(true))
+        {
+            // Park the first attempt until the duplicate has finished.
+            while (!m_release.load())
+            {
+                std::this_thread::yield();
+            }
+        }
+        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
+            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
+            std::move(blockHashOverride), writeNonces);
+    }
+    std::atomic_bool m_firstEntered{false};
+    std::atomic_bool m_release{false};
+};
+
 TestEngineServiceImpl makeCommittingEngineServiceImpl(MemPoolImpl& memPool,
     RealGlobalStateStorage& storage, bcos::ledger::LedgerInterface::Ptr ledger)
 {
@@ -419,8 +507,7 @@ NewPayloadRequest makeNewPayloadRequestV3(const ExecutionPayload& executionPaylo
     // never sends any and a non-empty list is INVALID from V3 up
     // (new_payload_v3_rejects_blob_versioned_hashes below).
     // Deliberately different from makePayloadAttributesV3()'s beacon root (0x2222...):
-    // tests must be able to tell whether newPayload really overwrites the cached value
-    // with the request's, not just re-reads what the attributes stored.
+    // newPayload must keep the FCU-built beacon, not rewrite from the request.
     request.parentBeaconBlockRoot =
         h256("5555555555555555555555555555555555555555555555555555555555555555");
     return request;
@@ -553,7 +640,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejected_when_evm_revision_missing)
 {
     MemPoolImpl memPool;
     // executor_version=2 but NO SYSTEM_KEY_EVMC_REVISION row.
-    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_CANCUN, /*writeEvmcRevision=*/false);
+    RealGlobalStateStorageFixture globalStateStorageFixture(
+        EVMC_CANCUN, /*writeEvmcRevision=*/false);
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
         c_initialBlockNumber, c_initialBlockNumber);
@@ -583,13 +671,13 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_empty_withdrawals)
     auto payloadAttributes = makePayloadAttributesV3();
     payloadAttributes.withdrawals = std::vector<WithdrawalV1>{
         WithdrawalV1{.index = 1, .validatorIndex = 2, .amount = 3, .address = Address{}}};
-    auto result = task::syncWait(
-        engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
     BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Invalid));
     BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
-    BOOST_CHECK_NE(result.payloadStatus.validationError->find("non-empty withdrawals"),
-        std::string::npos);
+    BOOST_CHECK_NE(
+        result.payloadStatus.validationError->find("non-empty withdrawals"), std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
@@ -719,8 +807,9 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_sequential_head_block_number)
     setForkchoiceBlockNumbers(globalStateStorageFixture, reorgForkchoice, c_reorgTargetBlockNumber,
         c_reorgTargetBlockNumber, c_reorgTargetBlockNumber);
 
-    BOOST_CHECK_THROW(task::syncWait(engineService.updateForkchoice(reorgForkchoice, nullptr, 3)),
-        bcos::engine::InvalidForkchoiceState);
+    checkForkchoiceComment(
+        [&]() { task::syncWait(engineService.updateForkchoice(reorgForkchoice, nullptr, 3)); },
+        "Forkchoice head block number must increase by exactly 1");
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_rejects_safe_block_number_above_head)
@@ -740,8 +829,9 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_safe_block_number_above_head)
     globalStateStorageFixture.setBlockNumber(
         forkchoiceState.finalizedBlockHash, c_headOrderingBlockNumber);
 
-    BOOST_CHECK_THROW(task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3)),
-        bcos::engine::InvalidForkchoiceState);
+    checkForkchoiceComment(
+        [&]() { task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3)); },
+        "Forkchoice safe block number must not exceed head block number");
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_rejects_finalized_block_number_above_safe)
@@ -761,8 +851,9 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_finalized_block_number_above_safe)
     globalStateStorageFixture.setBlockNumber(
         forkchoiceState.finalizedBlockHash, c_safeOrderingBlockNumber);
 
-    BOOST_CHECK_THROW(task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3)),
-        bcos::engine::InvalidForkchoiceState);
+    checkForkchoiceComment(
+        [&]() { task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3)); },
+        "Forkchoice finalized block number must not exceed safe block number");
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_ignores_stale_update_after_newer_head_wins)
@@ -839,13 +930,15 @@ BOOST_AUTO_TEST_CASE(new_payload_v3_with_transactions_is_validated_not_accepted)
     BOOST_REQUIRE(!request.executionPayload.transactions.empty());
 
     auto status = task::syncWait(engineService.newPayload(request, 3));
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(status.validationError.has_value());
+    BOOST_CHECK_NE(status.validationError->find("transactions"), std::string::npos);
 
-    // Stored, not merely acknowledged: the transactions came back out of the cache.
+    // Built body is retained; the CL append is not written into the cache.
     auto committed = task::syncWait(engineService.getPayload(*result.payloadId, 3));
     BOOST_CHECK_EQUAL(committed->executionPayload.transactions.size(),
-        request.executionPayload.transactions.size());
+        payload->executionPayload.transactions.size());
 }
 
 /// Non-empty expectedBlobVersionedHashes is INVALID from V3 up, not ACCEPTED: op-geth
@@ -879,12 +972,10 @@ BOOST_AUTO_TEST_CASE(new_payload_v3_rejects_blob_versioned_hashes)
     BOOST_CHECK_NE(status.validationError->find("expectedBlobVersionedHashes"), std::string::npos);
 }
 
-/// Re-querying with getPayloadV5 a payloadId that was committed through newPayloadV3 must
-/// answer the version error (-38005 at the RPC layer), not InternalError. A commit REWRITES
-/// the cache entry with the request's payload, and a V3 request carries no withdrawalsRoot
-/// — but the entry stays tagged version 3, so it passes the V5 window and used to blow up
-/// in serializeExecutionPayload's "withdrawalsRoot missing" check as -32603.
-BOOST_AUTO_TEST_CASE(get_payload_v5_rejects_a_v3_committed_entry_without_withdrawals_root)
+/// V3 newPayload no longer rewrites the built entry, so a V3 wire request that omits
+/// withdrawalsRoot keeps the FCU-built V4+ shape. getPayloadV5 must therefore succeed
+/// (the old REWRITE path stripped the field and V5 threw IncompatiblePayloadVersion).
+BOOST_AUTO_TEST_CASE(get_payload_v5_keeps_built_withdrawals_root_after_v3_commit)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
@@ -898,7 +989,6 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_rejects_a_v3_committed_entry_without_withdra
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
     BOOST_REQUIRE(result.payloadId.has_value());
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
-    // The build always sets the field; a V3 wire request never does.
     BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
 
     globalStateStorageFixture.setBlockNumber(
@@ -909,16 +999,11 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_rejects_a_v3_committed_entry_without_withdra
     BOOST_CHECK_EQUAL(
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
 
-    BOOST_CHECK_EXCEPTION(
-        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion,
-        [](const IncompatiblePayloadVersion& e) {
-            // Pin the REWRITE-path message (the entry was rewritten by the V3 commit and
-            // lost its withdrawalsRoot), not just the exception type — a swapped gate that
-            // keeps IncompatiblePayloadVersion must still fail (T4).
-            return std::string(e.what()).find("Payload does not carry the V4+ response shape") !=
-                   std::string::npos;
-        });
-    // The V3 view of the same entry is still perfectly serviceable.
+    auto v5 = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+    BOOST_REQUIRE(v5);
+    BOOST_REQUIRE(v5->executionPayload.withdrawalsRoot.has_value());
+    BOOST_CHECK_EQUAL(
+        *v5->executionPayload.withdrawalsRoot, *payload->executionPayload.withdrawalsRoot);
     auto v3 = task::syncWait(engineService.getPayload(*result.payloadId, 3));
     BOOST_CHECK(v3);
 }
@@ -948,28 +1033,32 @@ BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_ro
     BOOST_CHECK_EQUAL(
         *payload->executionPayload.withdrawalsRoot, bcos::ledger::mpt::emptyRootHash());
 
-    // newPayload carries both fields back in; the committed cache entry keeps them.
-    // This exercises the structure layer only: withdrawalsRoot is set directly on the
-    // struct, deliberately bypassing the JSON parser, whose V1-V3 dialect ignores the
-    // field (it is an ExecutionPayloadV4+/Isthmus field — see EngineProtoAlignB1Test).
+    // A CL that changes withdrawalsRoot under the built blockHash is rejected; the
+    // cached body stays the FCU build (no request rewrite).
     globalStateStorageFixture.setBlockNumber(
         payload->executionPayload.blockHash, c_initialBlockNumber + 1);
-    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    auto altered = makeNewPayloadRequestV3(payload->executionPayload);
     auto const withdrawalsRoot =
         h256("4444444444444444444444444444444444444444444444444444444444444444");
-    request.executionPayload.withdrawalsRoot = withdrawalsRoot;
+    altered.executionPayload.withdrawalsRoot = withdrawalsRoot;
+    auto alteredStatus = task::syncWait(engineService.newPayload(altered, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(alteredStatus.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(alteredStatus.validationError.has_value());
+    BOOST_CHECK_NE(alteredStatus.validationError->find("withdrawalsRoot"), std::string::npos);
+
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
     auto status = task::syncWait(engineService.newPayload(request, 3));
     BOOST_CHECK_EQUAL(
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
 
     auto committed = task::syncWait(engineService.getPayload(*result.payloadId, 3));
     BOOST_REQUIRE(committed->parentBeaconBlockRoot.has_value());
-    // The request carries a beacon root different from the attributes' — the cache must
-    // now hold the request's value, proving newPayload overwrites rather than re-reads.
     BOOST_CHECK_NE(*request.parentBeaconBlockRoot, *payloadAttributes.parentBeaconBlockRoot);
-    BOOST_CHECK_EQUAL(*committed->parentBeaconBlockRoot, *request.parentBeaconBlockRoot);
+    BOOST_CHECK_EQUAL(*committed->parentBeaconBlockRoot, *payloadAttributes.parentBeaconBlockRoot);
     BOOST_REQUIRE(committed->executionPayload.withdrawalsRoot.has_value());
-    BOOST_CHECK_EQUAL(*committed->executionPayload.withdrawalsRoot, withdrawalsRoot);
+    BOOST_CHECK_EQUAL(
+        *committed->executionPayload.withdrawalsRoot, *payload->executionPayload.withdrawalsRoot);
 }
 
 BOOST_AUTO_TEST_CASE(build_payload_reassembles_web3_raw_bytes)
@@ -1083,15 +1172,213 @@ BOOST_AUTO_TEST_CASE(new_payload_round_trips_deposit_raw_bytes)
 
     // Deposit / legacy / typed all dispatch as admissible payload transactions.
     auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(status.validationError.has_value());
+    BOOST_CHECK_NE(status.validationError->find("transactions"), std::string::npos);
+
+    auto committed = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_CHECK_EQUAL(committed->executionPayload.transactions.size(),
+        payload->executionPayload.transactions.size());
+}
+
+/// Parent known (via the locally built hash) but this blockHash was never built:
+/// op-geth would execute first; we must not VALID-store the CL body.
+BOOST_AUTO_TEST_CASE(new_payload_cache_miss_is_syncing)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    request.executionPayload.parentHash = payload->executionPayload.blockHash;
+    request.executionPayload.blockHash =
+        h256("6666666666666666666666666666666666666666666666666666666666666666");
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK(!status.latestValidHash.has_value());
+
+    auto stillBuilt = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_CHECK_EQUAL(stillBuilt->executionPayload.blockHash, payload->executionPayload.blockHash);
+}
+
+BOOST_AUTO_TEST_CASE(new_payload_hit_rejects_altered_state_root_and_keeps_built_body)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto altered = makeNewPayloadRequestV3(payload->executionPayload);
+    altered.executionPayload.stateRoot = h256(1);
+    auto alteredStatus = task::syncWait(engineService.newPayload(altered, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(alteredStatus.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(alteredStatus.validationError.has_value());
+    BOOST_CHECK_NE(alteredStatus.validationError->find("stateRoot"), std::string::npos);
+
+    auto afterReject = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_CHECK_EQUAL(afterReject->executionPayload.stateRoot, payload->executionPayload.stateRoot);
+
+    auto honest = makeNewPayloadRequestV3(payload->executionPayload);
+    auto status = task::syncWait(engineService.newPayload(honest, 3));
     BOOST_CHECK_EQUAL(
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
-
-    // getPayload returns exactly the bytes newPayload received (dep-1 byte-for-byte).
     auto committed = task::syncWait(engineService.getPayload(*result.payloadId, 3));
-    BOOST_REQUIRE_EQUAL(committed->executionPayload.transactions.size(), 3);
-    BOOST_CHECK(committed->executionPayload.transactions[0].raw == depositRaw);
-    BOOST_CHECK(committed->executionPayload.transactions[1].raw == legacyRaw);
-    BOOST_CHECK(committed->executionPayload.transactions[2].raw == typedRaw);
+    BOOST_CHECK_EQUAL(committed->executionPayload.stateRoot, payload->executionPayload.stateRoot);
+    BOOST_CHECK_EQUAL(*committed->parentBeaconBlockRoot, *payload->parentBeaconBlockRoot);
+}
+
+BOOST_AUTO_TEST_CASE(new_payload_honest_retry_does_not_recommit)
+{
+    // Pins finding F22's no-op leg: after a successful commit the entry survives with
+    // view==null and header==null (artifacts consumed post-I/O), so a repeat newPayload
+    // must skip the commit branch entirely and answer VALID WITHOUT touching storage —
+    // never a mergeBackStorage() on the drained/foreign queue.
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto honest = makeNewPayloadRequestV3(payload->executionPayload);
+    auto first = task::syncWait(engineService.newPayload(honest, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(first.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    auto retry = task::syncWait(engineService.newPayload(honest, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(retry.status), static_cast<int>(PayloadValidationStatus::Valid));
+    auto stillBuilt = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_CHECK_EQUAL(stillBuilt->executionPayload.blockHash, payload->executionPayload.blockHash);
+}
+
+// A transient prewrite failure must not be masked as success: the first newPayload
+// THROWS, and the retry COMPLETES the commit — the header row actually lands in
+// storage. Before the consume-artifacts-after-durable-write fix, the failed attempt
+// destroyed the entry's artifacts and the retry answered VALID without ever persisting.
+BOOST_AUTO_TEST_CASE(new_payload_retry_after_failed_prewrite_recommits)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto flakyLedger =
+        std::make_shared<FlakyLedger>(testBlockFactory(), nullptr, /*blockLimit=*/100);
+    auto engineService =
+        makeCommittingEngineServiceImpl(memPool, globalStateStorageFixture.storage, flakyLedger);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto honest = makeNewPayloadRequestV3(payload->executionPayload);
+
+    // First attempt: the injected prewrite error must propagate, never become VALID,
+    // and no header row may exist yet.
+    BOOST_CHECK_THROW(task::syncWait(engineService.newPayload(honest, 3)), bcos::Error);
+    BOOST_REQUIRE(readPersistedHeader(
+        globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1) == nullptr);
+
+    // Retry: the entry survived the failed attempt, so the commit completes for real —
+    // the header row lands with the same extraData the payload carries.
+    auto retryStatus = task::syncWait(engineService.newPayload(honest, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+    auto persisted =
+        readPersistedHeader(globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1);
+    BOOST_REQUIRE(persisted);
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(persisted->extraData()),
+        toHexStringWithPrefix(payload->executionPayload.extraData));
+}
+
+// finding N1: a duplicate newPayload racing the first attempt's commit I/O must
+// answer the idempotent VALID — not a NotExistsImmutableStorageError from a
+// mergeBackStorage on the queue the first attempt already drained. Both attempts
+// prewrite identical rows; the drained-queue side falls through to
+// mergeToBackends, which lands them idempotently.
+BOOST_AUTO_TEST_CASE(new_payload_concurrent_duplicate_is_idempotent)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto gatedLedger =
+        std::make_shared<GatedLedger>(testBlockFactory(), nullptr, /*blockLimit=*/100);
+    auto engineService =
+        makeCommittingEngineServiceImpl(memPool, globalStateStorageFixture.storage, gatedLedger);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto honest = makeNewPayloadRequestV3(payload->executionPayload);
+
+    std::promise<PayloadStatus> firstDone;
+    std::thread firstAttempt(
+        [&]() { firstDone.set_value(task::syncWait(engineService.newPayload(honest, 3))); });
+    // Wait until the first attempt is parked inside the commit I/O (view pushed,
+    // artifacts intact — exactly the state the concurrent duplicate must survive).
+    while (!gatedLedger->m_firstEntered.load())
+    {
+        std::this_thread::yield();
+    }
+    auto duplicateStatus = task::syncWait(engineService.newPayload(honest, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(duplicateStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    gatedLedger->m_release = true;
+    firstAttempt.join();
+    auto firstStatus = firstDone.get_future().get();
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(firstStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    // The block's ledger rows landed — the header row is readable with the payload's
+    // extraData.
+    auto persisted =
+        readPersistedHeader(globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1);
+    BOOST_REQUIRE(persisted);
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(persisted->extraData()),
+        toHexStringWithPrefix(payload->executionPayload.extraData));
 }
 
 BOOST_AUTO_TEST_CASE(new_payload_rejects_blob_and_unknown_transaction_types)
@@ -1497,18 +1784,16 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
     auto result =
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
     BOOST_REQUIRE(result.payloadId.has_value());
-    BOOST_CHECK_EXCEPTION(
-        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion,
-        [](const IncompatiblePayloadVersion& e) {
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.getPayload(*result.payloadId, 5)),
+        IncompatiblePayloadVersion, [](const IncompatiblePayloadVersion& e) {
             return std::string(e.what()).find("incompatible with requested method version") !=
                    std::string::npos;
         });
     // getPayloadV4 has the same window: op-geth's GetPayloadV4 also admits only
     // PayloadV3 builds, and the V4 response shape needs the same three fields a V2 build
     // does not have.
-    BOOST_CHECK_EXCEPTION(
-        task::syncWait(engineService.getPayload(*result.payloadId, 4)), IncompatiblePayloadVersion,
-        [](const IncompatiblePayloadVersion& e) {
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.getPayload(*result.payloadId, 4)),
+        IncompatiblePayloadVersion, [](const IncompatiblePayloadVersion& e) {
             return std::string(e.what()).find("incompatible with requested method version") !=
                    std::string::npos;
         });
@@ -1595,19 +1880,27 @@ BOOST_AUTO_TEST_CASE(per_method_version_windows_and_unknown_payload)
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     // Unknown payloadId surfaces as a typed UnknownPayload (RPC maps it to -38001).
-    BOOST_CHECK_THROW(
-        task::syncWait(engineService.getPayload("0x0000000000000000", 5)), UnknownPayload);
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.getPayload("0x0000000000000000", 5)),
+        UnknownPayload, [](UnknownPayload const& e) {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            return comment != nullptr && *comment == "Unknown payload";
+        });
 
     // Out-of-window versions surface as UnsupportedEngineApiVersion (RPC maps to -38005):
     // forkchoiceUpdated tops out at V3, newPayload at V4, getPayload at V5.
     auto forkchoiceState = makeForkchoiceState();
-    BOOST_CHECK_THROW(task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 4)),
-        UnsupportedEngineApiVersion);
+    auto unsupported = [](UnsupportedEngineApiVersion const& e) {
+        auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+        return comment != nullptr && *comment == "Unsupported Engine API version";
+    };
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 4)),
+        UnsupportedEngineApiVersion, unsupported);
     NewPayloadRequest request;
-    BOOST_CHECK_THROW(
-        task::syncWait(engineService.newPayload(request, 5)), UnsupportedEngineApiVersion);
-    BOOST_CHECK_THROW(
-        task::syncWait(engineService.getPayload("0x01", 6)), UnsupportedEngineApiVersion);
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.newPayload(request, 5)),
+        UnsupportedEngineApiVersion, unsupported);
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.getPayload("0x01", 6)),
+        UnsupportedEngineApiVersion, unsupported);
 }
 
 /// Build a BlockHeader carrying every field EthBlockHeader::validateHeader requires for a
@@ -1616,8 +1909,7 @@ static bcos::protocol::BlockHeader::Ptr makeValidCancunHeader(
     bcos::protocol::BlockFactory::Ptr blockFactory, bcos::crypto::HashType parentHash)
 {
     auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
-    header->setParentInfo(bcos::protocol::ParentInfo{
-        .blockNumber = 9, .blockHash = parentHash});
+    header->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 9, .blockHash = parentHash});
     header->setNumber(10);
     // Internal BlockHeader timestamps are milliseconds: the whole-second value × 1000.
     header->setTimestamp(1700000000 * 1000LL);
@@ -1681,8 +1973,8 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderFillsEthFieldsAndHash)
     payload.blobGasUsed = bcos::u256(0);
     payload.excessBlobGas = bcos::u256(0);
 
-    auto beaconRoot = bcos::h256(
-        "3333333333333333333333333333333333333333333333333333333333333333");
+    auto beaconRoot =
+        bcos::h256("3333333333333333333333333333333333333333333333333333333333333333");
     bcos::engine::detail::finalizeEthBlockHeader(
         *header, payload, beaconRoot, bcos::protocol::EthBlockVersion::CANCUN);
 
@@ -1747,8 +2039,8 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderVersionGatesFields)
     // V3/CANCUN: everything present.
     {
         auto header = makeValidCancunHeader(blockFactory, parentHash);
-        auto beaconRoot = bcos::h256(
-            "3333333333333333333333333333333333333333333333333333333333333333");
+        auto beaconRoot =
+            bcos::h256("3333333333333333333333333333333333333333333333333333333333333333");
         payload.blobGasUsed = bcos::u256(0);
         payload.excessBlobGas = bcos::u256(0);
         bcos::engine::detail::finalizeEthBlockHeader(
@@ -1764,12 +2056,12 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderVersionGatesFields)
     // (regression: PRAGUE previously produced a header that failed validateHeader).
     {
         auto header = makeValidCancunHeader(blockFactory, parentHash);
-        auto beaconRoot = bcos::h256(
-            "3333333333333333333333333333333333333333333333333333333333333333");
+        auto beaconRoot =
+            bcos::h256("3333333333333333333333333333333333333333333333333333333333333333");
         payload.blobGasUsed = bcos::u256(0);
         payload.excessBlobGas = bcos::u256(0);
-        BOOST_CHECK_NO_THROW(bcos::engine::detail::finalizeEthBlockHeader(*header, payload,
-            beaconRoot, bcos::protocol::EthBlockVersion::PRAGUE));
+        BOOST_CHECK_NO_THROW(bcos::engine::detail::finalizeEthBlockHeader(
+            *header, payload, beaconRoot, bcos::protocol::EthBlockVersion::PRAGUE));
         BOOST_CHECK(header->ethBlockVersion() == bcos::protocol::EthBlockVersion::PRAGUE);
         BOOST_REQUIRE(header->requestsHash().has_value());
         BOOST_CHECK_EQUAL(header->requestsHash()->hex(),
@@ -1826,8 +2118,8 @@ BOOST_AUTO_TEST_CASE(buildPayloadEmptyBlockInjectsRlpHash)
     header->setStateRoot(executionPayload.stateRoot);
     header->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
     header->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
-    header->setLogsBloom(bcos::bytesConstRef(
-        executionPayload.logsBloom.data(), executionPayload.logsBloom.size()));
+    header->setLogsBloom(
+        bcos::bytesConstRef(executionPayload.logsBloom.data(), executionPayload.logsBloom.size()));
     header->setBaseFee(executionPayload.baseFeePerGas);
     header->setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
     header->setBlobGasUsed(executionPayload.blobGasUsed.value_or(bcos::u256(0)));
@@ -1839,8 +2131,7 @@ BOOST_AUTO_TEST_CASE(buildPayloadEmptyBlockInjectsRlpHash)
     bcos::protocol::EthBlockHeader ethHeader(*header);
     bcos::bytes rlp;
     ethHeader.rlpEncode(rlp);
-    BOOST_CHECK_EQUAL(
-        blockHash.hex(), bcos::crypto::keccak256Hash(bcos::ref(rlp)).hex());
+    BOOST_CHECK_EQUAL(blockHash.hex(), bcos::crypto::keccak256Hash(bcos::ref(rlp)).hex());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
