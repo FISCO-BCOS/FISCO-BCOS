@@ -639,6 +639,36 @@ public:
         co_return backStoragePtr;
     }
 
+    /// Merge the given storages into the latest backend (and the cache storage when
+    /// enabled) WITHOUT taking a queued layer — mergeBackStorage's counterpart for a
+    /// committer whose queued layer was already drained by someone else (mergeBackStorage
+    /// throws NotExistsImmutableStorageError on an empty deque; this helper never touches
+    /// the deque).
+    task::Task<void> mergeToBackends(auto&... fromStorage)
+    {
+        std::unique_lock mergeLock(m_mergeMutex);
+        if constexpr (withCacheStorage)
+        {
+            tbb::parallel_invoke(
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                        ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
+                    task::tbb::syncWait(storage2::merge(m_latestBackend, fromStorage...));
+                },
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                        ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
+                    task::tbb::syncWait(storage2::merge(m_cacheStorage.get(), fromStorage...));
+                });
+        }
+        else
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
+            co_await storage2::merge(m_latestBackend, fromStorage...);
+        }
+    }
+
     auto fork(CheckpointName const& blockhash)
     {
         auto openedBackend = m_backendStorage.get().open(blockhash);

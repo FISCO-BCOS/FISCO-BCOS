@@ -293,6 +293,43 @@ BOOST_AUTO_TEST_CASE(execution_payload_extra_data_shape_is_validated)
         "must encode a non-zero EIP-1559 denominator and elasticity");
 }
 
+// finding N4: pre-Holocene payloads (V1/V2) must carry an empty extraData — the
+// Holocene/Jovian shape validator would otherwise accept a 9/17-byte extraData at
+// versions whose fork window forbids it (the attributes side already rejects
+// eip1559Params there — predicate symmetry).
+BOOST_AUTO_TEST_CASE(pre_holocene_payload_rejects_holocene_extra_data)
+{
+    auto payload = makeExecutionPayloadV3(fromHexWithPrefix("0x00000000fa00000006"));
+    auto error = engine::detail::validateExecutionPayload(payload, 2);
+    BOOST_REQUIRE(error.has_value());
+    BOOST_CHECK_NE(error->find("must be empty"), std::string::npos);
+    // An empty pre-Holocene extraData stays valid.
+    BOOST_CHECK(!engine::detail::validateExecutionPayload(makeExecutionPayloadV3({}), 2).has_value());
+}
+
+// finding N3: the V4 payload shape — blockAccessList and slotNumber are required
+// fields; their absence is malformed exactly like a missing withdrawalsRoot.
+BOOST_AUTO_TEST_CASE(execution_payload_v4_requires_bal_and_slot_number)
+{
+    auto payload = makeExecutionPayloadV3({});
+    payload.withdrawalsRoot = engine::detail::withdrawalsRootFor(payload);
+    payload.blockAccessList = bytes{0x01, 0x02};
+    payload.slotNumber = 7;
+    BOOST_CHECK(!engine::detail::validateExecutionPayload(payload, 4).has_value());
+
+    auto missingBal = payload;
+    missingBal.blockAccessList = std::nullopt;
+    auto error = engine::detail::validateExecutionPayload(missingBal, 4);
+    BOOST_REQUIRE(error.has_value());
+    BOOST_CHECK_NE(error->find("required for ExecutionPayloadV4"), std::string::npos);
+
+    auto missingSlot = payload;
+    missingSlot.slotNumber = std::nullopt;
+    auto slotError = engine::detail::validateExecutionPayload(missingSlot, 4);
+    BOOST_REQUIRE(slotError.has_value());
+    BOOST_CHECK_NE(slotError->find("required for ExecutionPayloadV4"), std::string::npos);
+}
+
 // A CL returning a payload under a blockHash this node minted must return the same
 // extraData it was handed, since that is a block-hash input from this change onwards.
 BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)

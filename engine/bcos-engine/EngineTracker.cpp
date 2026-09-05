@@ -76,6 +76,14 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
                                   "Forkchoice finalized block is set but its number could not "
                                   "be resolved"});
     }
+    if (resolved.state.headBlockHash == bcos::h256{})
+    {
+        // Zero-hash sentinel (finding N6): the Engine-API "not set" hash must never
+        // become the tracked head — the canonical gates below would otherwise depend
+        // on every resolver pre-guarding it. Mirrors the safe/finalized treatment.
+        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                  "Forkchoice head block hash is not set"});
+    }
     if (requiresCanonical(resolved.state.safeBlockHash, safeBlockNumber) && !resolved.safeCanonical)
     {
         BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
@@ -177,16 +185,7 @@ GetPayloadResult EngineTracker::getPayload(const PayloadID& payloadId, std::uint
     engine_common::requireGetPayloadShape(
         entry->version, entry->executionPayload, entry->parentBeaconBlockRoot, version);
 
-    return std::make_unique<GetPayloadData>(GetPayloadData{
-        .executionPayload = entry->executionPayload,
-        .blockValue = entry->blockValue,
-        .blobsBundle = entry->blobsBundle,
-        .shouldOverrideBuilder = entry->shouldOverrideBuilder,
-        .executionRequests = version >= static_cast<std::uint32_t>(ApiVersion::V4) ?
-                                 std::optional<std::vector<bytes>>{std::in_place} :
-                                 std::nullopt,
-        .parentBeaconBlockRoot = entry->parentBeaconBlockRoot,
-    });
+    return engine_common::assembleGetPayloadData(*entry, version);
 }
 
 std::optional<TrackedHeadBlock> EngineTracker::trackedHead() const

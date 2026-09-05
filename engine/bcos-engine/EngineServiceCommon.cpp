@@ -114,7 +114,8 @@ namespace
 {
     if (off + 4 > bytes.size())
     {
-        BOOST_THROW_EXCEPTION(std::invalid_argument{"readU32BE: offset out of range"});
+        BOOST_THROW_EXCEPTION(
+            InvalidEngineEncoding{} << bcos::errinfo_comment{"readU32BE: offset out of range"});
     }
     return (static_cast<std::uint32_t>(bytes[off]) << 24) |
            (static_cast<std::uint32_t>(bytes[off + 1]) << 16) |
@@ -126,7 +127,8 @@ std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(std::span<const bcos
 {
     if (params.size() < 8)
     {
-        BOOST_THROW_EXCEPTION(std::invalid_argument{"decodeEip1559Params: need 8 bytes"});
+        BOOST_THROW_EXCEPTION(InvalidEngineEncoding{} <<
+                              bcos::errinfo_comment{"decodeEip1559Params: need 8 bytes"});
     }
     return {readU32BE(params, 0), readU32BE(params, 4)};
 }
@@ -301,8 +303,10 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes)
     }
     if (payloadAttributes.eip1559Params->size() != c_eip1559ParamsBytes)
     {
-        BOOST_THROW_EXCEPTION(std::invalid_argument{
-            "encodeOptimismExtraData requires exactly 8 bytes of eip1559Params"});
+        BOOST_THROW_EXCEPTION(InvalidEngineEncoding{} <<
+                              bcos::errinfo_comment{
+                                  "encodeOptimismExtraData requires exactly 8 bytes of "
+                                  "eip1559Params"});
     }
     auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
     if (denominator == 0 && elasticity == 0)
@@ -384,6 +388,23 @@ std::optional<std::string> validateExecutionPayload(
                 "withdrawalsRoot does not match the value this node commits "
                 "for the built header");
         }
+        // finding N3: the V4 payload shape — blockAccessList and slotNumber are part
+        // of the version's fields; a payload missing them is malformed (fail closed,
+        // mirroring the withdrawalsRoot gate). No in-tree builder sets them yet, so
+        // nothing built by this node can hit this.
+        if (!executionPayload.blockAccessList.has_value() || !executionPayload.slotNumber.has_value())
+        {
+            return std::string(
+                "blockAccessList and slotNumber are required for ExecutionPayloadV4 and later");
+        }
+    }
+    // finding N4: pre-Holocene payloads (V1/V2) carry an empty extraData; the OP
+    // Holocene/Jovian shape below would otherwise accept a 9/17-byte extraData here
+    // while the attributes side rejects eip1559Params at V3- — same fork window,
+    // same rule (predicate symmetry).
+    if (version <= 2 && !executionPayload.extraData.empty())
+    {
+        return std::string("extraData must be empty for ExecutionPayloadV1/V2 (pre-Holocene)");
     }
     if (auto error = validateOpExtraDataShape(executionPayload.extraData))
     {
@@ -497,6 +518,17 @@ std::optional<std::string> compareWithBuiltPayload(
     }
     if (auto error =
             optionalMismatch("excessBlobGas", submitted.excessBlobGas, built.excessBlobGas))
+    {
+        return error;
+    }
+    // finding N3: the V4 fields are part of the payload this node built — an echo
+    // that rewrites or drops them must not pass under the same blockHash.
+    if (auto error = optionalMismatch(
+            "blockAccessList", submitted.blockAccessList, built.blockAccessList))
+    {
+        return error;
+    }
+    if (auto error = optionalMismatch("slotNumber", submitted.slotNumber, built.slotNumber))
     {
         return error;
     }

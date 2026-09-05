@@ -1,6 +1,20 @@
 /**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file Tracker.cpp
+ * @brief Tests for the engine-split Engine API module (Tracker)
  */
 
 #include "engine/bcos-engine/EngineTracker.h"
@@ -246,6 +260,19 @@ BOOST_AUTO_TEST_CASE(engine_tracker_put_and_retain_payload)
     guard.putAndRetainPayload("0x03", h256(3), makePayload(1));
     BOOST_CHECK(!guard.findPayload("0x01"));
     BOOST_REQUIRE(guard.findPayload("0x03"));
+}
+
+// The Engine-API "not set" head hash must never seed or advance the tracker: the
+// zero sentinel is rejected outright (finding N6), mirroring the safe/finalized
+// treatment — the canonical gates must not depend on resolvers pre-guarding it.
+BOOST_AUTO_TEST_CASE(engine_tracker_zero_head_hash_is_rejected)
+{
+    EngineTracker tracker;
+    auto state = resolved(h256(10), 10, true, false);
+    state.state.headBlockHash = h256{};
+    checkExceptionMessage<InvalidForkchoiceState>(
+        [&]() { tracker.applyForkchoice(state); }, "head block hash is not set");
+    BOOST_CHECK(!tracker.trackedHead().has_value());
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_swallows_parent_even_with_attributes)
@@ -1078,6 +1105,8 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_pins_each_hash_field)
         payload.withdrawalsRoot = h256(12);
         payload.blobGasUsed = u256(13);
         payload.excessBlobGas = u256(14);
+        payload.blockAccessList = bytes{0x01, 0x02};
+        payload.slotNumber = 7;
         return payload;
     };
     auto const built = filled();
@@ -1107,6 +1136,10 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_pins_each_hash_field)
     expectField([](ExecutionPayload& p) { p.withdrawalsRoot = h256(99); }, "withdrawalsRoot");
     expectField([](ExecutionPayload& p) { p.blobGasUsed = u256(99); }, "blobGasUsed");
     expectField([](ExecutionPayload& p) { p.excessBlobGas = u256(99); }, "excessBlobGas");
+    // finding N3: the V4 fields are part of the built payload — a rewritten or
+    // dropped echo must not pass under the same blockHash.
+    expectField([](ExecutionPayload& p) { p.blockAccessList = bytes{0xff}; }, "blockAccessList");
+    expectField([](ExecutionPayload& p) { p.slotNumber = 99; }, "slotNumber");
 }
 
 // The withdrawals LIST is the field the root commits to: with both roots absent

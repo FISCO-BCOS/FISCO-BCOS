@@ -160,6 +160,26 @@ inline bool isGetPayloadVersionSupported(std::uint32_t version)
     return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
            version <= static_cast<std::uint32_t>(ApiVersion::V5);
 }
+/// Shared getPayload response assembly (finding N5): the leftover Impl and
+/// EngineTracker build the same GetPayloadData from structurally identical entries;
+/// one definition so the V4+ executionRequests semantics cannot drift between the
+/// two serving paths.
+template <class EntryT>
+GetPayloadResult assembleGetPayloadData(const EntryT& entry, std::uint32_t version)
+{
+    return std::make_unique<GetPayloadData>(GetPayloadData{
+        .executionPayload = entry.executionPayload,
+        .blockValue = entry.blockValue,
+        .blobsBundle = entry.blobsBundle,
+        .shouldOverrideBuilder = entry.shouldOverrideBuilder,
+        // getPayloadV4/V5 responses must carry executionRequests; Karst never has
+        // any, so the value is a present-but-empty list (serialized as []).
+        .executionRequests = version >= static_cast<std::uint32_t>(ApiVersion::V4) ?
+                                 std::optional<std::vector<bytes>>{std::in_place} :
+                                 std::nullopt,
+        .parentBeaconBlockRoot = entry.parentBeaconBlockRoot,
+    });
+}
 }  // namespace engine_common
 
 }  // namespace bcos::engine

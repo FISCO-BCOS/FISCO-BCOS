@@ -37,6 +37,7 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include <bcos-framework/storage2/MultiLayerStorage.h>
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/BoostLog.h"
@@ -445,18 +446,7 @@ private:
         engine_common::requireGetPayloadShape(it->second.version, it->second.executionPayload,
             it->second.parentBeaconBlockRoot, version);
 
-        return std::make_unique<GetPayloadData>(GetPayloadData{
-            .executionPayload = it->second.executionPayload,
-            .blockValue = it->second.blockValue,
-            .blobsBundle = it->second.blobsBundle,
-            .shouldOverrideBuilder = it->second.shouldOverrideBuilder,
-            // getPayloadV4/V5 responses must carry executionRequests; Karst never has
-            // any, so the value is a present-but-empty list (serialized as []).
-            .executionRequests = version >= static_cast<std::uint32_t>(ApiVersion::V4) ?
-                                     std::optional<std::vector<bytes>>{std::in_place} :
-                                     std::nullopt,
-            .parentBeaconBlockRoot = it->second.parentBeaconBlockRoot,
-        });
+        return engine_common::assembleGetPayloadData(it->second, version);
     }
 
     bcos::task::Task<PayloadStatus> handleNewPayload(
@@ -656,7 +646,40 @@ private:
         {
             co_await ledger::prewriteBlockToBuffer(
                 *m_ledger, blockTxs, persistBlock, prewriteStorage);
-            co_await m_globalStateStorage.get().mergeBackStorage(prewriteStorage);
+            // Land the prewritten rows together with the oldest queued layer (the
+            // commit contract's prewrite+merge pairing), then drain the whole queue.
+            // mergeBackStorage throws NotExistsImmutableStorageError on an empty deque
+            // and exposes no emptiness query; the empty case is NOT an error here:
+            // a concurrent duplicate of this newPayload (finding N1) may have drained
+            // the layer between the two attempts, and its prewritten rows are
+            // identical to ours — fall through to mergeToBackends, which lands the
+            // rows directly (idempotent) instead of surfacing a spurious internal
+            // error where the Engine API requires the idempotent VALID. The drain
+            // loop then removes every remaining queued layer: one left behind by an
+            // abandoned failed merge (finding N2) would otherwise make every later
+            // commit merge one-behind, leaving the newest payload's state queued
+            // in-memory — lost on restart — though it answered VALID. (The
+            // MultiLayerStorage doc itself prescribes draining "in a loop until
+            // empty".)
+            try
+            {
+                co_await m_globalStateStorage.get().mergeBackStorage(prewriteStorage);
+            }
+            catch (bcos::storage2::NotExistsImmutableStorageError const&)
+            {
+                co_await m_globalStateStorage.get().mergeToBackends(prewriteStorage);
+            }
+            for (;;)
+            {
+                try
+                {
+                    co_await m_globalStateStorage.get().mergeBackStorage();
+                }
+                catch (bcos::storage2::NotExistsImmutableStorageError const&)
+                {
+                    break;
+                }
+            }
         }
 
         {

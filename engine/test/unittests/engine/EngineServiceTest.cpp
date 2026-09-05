@@ -1,6 +1,20 @@
 /**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file Service.cpp
+ * @brief Tests for the engine-split Engine API module (Service)
  */
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
@@ -29,6 +43,8 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <atomic>
+#include <future>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::engine;
@@ -387,6 +403,36 @@ public:
             std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_failNext{true};
+};
+
+/// CommitLedger that parks the FIRST asyncPrewriteBlock until the test releases it,
+/// then passes everything through. Models the N1 window: the first newPayload's
+/// commit I/O is "in flight" (view pushed, artifacts not yet consumed) while a
+/// concurrent duplicate newPayload runs to completion.
+class GatedLedger : public CommitLedger
+{
+public:
+    using CommitLedger::CommitLedger;
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        std::function<void(std::string, bcos::Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+    {
+        if (!m_firstEntered.exchange(true))
+        {
+            // Park the first attempt until the duplicate has finished.
+            while (!m_release.load())
+            {
+                std::this_thread::yield();
+            }
+        }
+        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
+            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
+            std::move(blockHashOverride), writeNonces);
+    }
+    std::atomic_bool m_firstEntered{false};
+    std::atomic_bool m_release{false};
 };
 
 TestEngineServiceImpl makeCommittingEngineServiceImpl(MemPoolImpl& memPool,
@@ -1273,6 +1319,61 @@ BOOST_AUTO_TEST_CASE(new_payload_retry_after_failed_prewrite_recommits)
     auto retryStatus = task::syncWait(engineService.newPayload(honest, 3));
     BOOST_CHECK_EQUAL(
         static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+    auto persisted =
+        readPersistedHeader(globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1);
+    BOOST_REQUIRE(persisted);
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(persisted->extraData()),
+        toHexStringWithPrefix(payload->executionPayload.extraData));
+}
+
+// finding N1: a duplicate newPayload racing the first attempt's commit I/O must
+// answer the idempotent VALID — not a NotExistsImmutableStorageError from a
+// mergeBackStorage on the queue the first attempt already drained. Both attempts
+// prewrite identical rows; the drained-queue side falls through to
+// mergeToBackends, which lands them idempotently.
+BOOST_AUTO_TEST_CASE(new_payload_concurrent_duplicate_is_idempotent)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto gatedLedger =
+        std::make_shared<GatedLedger>(testBlockFactory(), nullptr, /*blockLimit=*/100);
+    auto engineService =
+        makeCommittingEngineServiceImpl(memPool, globalStateStorageFixture.storage, gatedLedger);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto honest = makeNewPayloadRequestV3(payload->executionPayload);
+
+    std::promise<PayloadStatus> firstDone;
+    std::thread firstAttempt(
+        [&]() { firstDone.set_value(task::syncWait(engineService.newPayload(honest, 3))); });
+    // Wait until the first attempt is parked inside the commit I/O (view pushed,
+    // artifacts intact — exactly the state the concurrent duplicate must survive).
+    while (!gatedLedger->m_firstEntered.load())
+    {
+        std::this_thread::yield();
+    }
+    auto duplicateStatus = task::syncWait(engineService.newPayload(honest, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(duplicateStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    gatedLedger->m_release = true;
+    firstAttempt.join();
+    auto firstStatus = firstDone.get_future().get();
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(firstStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    // The block's ledger rows landed — the header row is readable with the payload's
+    // extraData.
     auto persisted =
         readPersistedHeader(globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1);
     BOOST_REQUIRE(persisted);

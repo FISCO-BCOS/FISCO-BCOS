@@ -38,6 +38,9 @@ DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 /// A tracker guard (Exclusive/SharedAccess) was used after move or without owning
 /// its lock — a programming error inside the tracker's callers (finding F23).
 DERIVE_BCOS_EXCEPTION(InvalidGuardState);
+/// An Engine-API byte payload (attribute/payload-id encoding) is malformed —
+/// length, range or shape violation in a wire-shaped byte sequence (finding N7).
+DERIVE_BCOS_EXCEPTION(InvalidEngineEncoding);
 
 /// JSON-RPC -38005 Unsupported fork. Isthmus+ requiring payload V4 is one use;
 /// other fork-shape mismatches share this channel (see #5517).
