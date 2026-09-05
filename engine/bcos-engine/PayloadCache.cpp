@@ -52,6 +52,14 @@ PayloadCache::PutResult putStaged(StagedCache& staged, PayloadID id, h256 const&
     {
         staged.order.push_back(id);
     }
+    else
+    {
+        // Re-put (same deterministic id re-published by an identical FCU retry) refreshes
+        // the FIFO position: the entry is now the most recently needed, so it must not
+        // age out ahead of never-re-published entries (finding F26).
+        std::erase(staged.order, id);
+        staged.order.push_back(id);
+    }
     while (staged.order.size() > maxEntries)
     {
         auto evicted = std::move(staged.order.front());
