@@ -705,6 +705,7 @@ BOOST_AUTO_TEST_CASE(newPayloadV4CompareFieldsSurviveV5RoundTrip)
     ep["extraData"] = "0xabcdef";
     ep["gasUsed"] = "0x21";
     ep["baseFeePerGas"] = "0x7";
+    ep["logsBloom"] = "0x" + std::string(512, 'a');  // non-zero: a dropped/padded bloom must fail
     ep["transactions"].append("0xaa");
 
     Json::Value params(Json::arrayValue);
@@ -727,17 +728,32 @@ BOOST_AUTO_TEST_CASE(newPayloadV4CompareFieldsSurviveV5RoundTrip)
     auto parsed = parseNewPayloadRequest(roundTrip, engine::ApiVersion::V4);
     auto const& second = parsed.executionPayload;
 
-    BOOST_CHECK(firstRequest.executionPayload.withdrawalsRoot == second.withdrawalsRoot);
-    BOOST_CHECK(firstRequest.executionPayload.withdrawals == second.withdrawals);
-    BOOST_CHECK(firstRequest.executionPayload.extraData == second.extraData);
-    BOOST_CHECK(firstRequest.executionPayload.stateRoot == second.stateRoot);
-    BOOST_CHECK(firstRequest.executionPayload.transactions.front().raw ==
-                second.transactions.front().raw);
-    BOOST_CHECK(firstRequest.executionPayload.blobGasUsed == second.blobGasUsed);
-    BOOST_CHECK(firstRequest.executionPayload.excessBlobGas == second.excessBlobGas);
+    // Pin every field compareWithBuiltPayload strictly compares (both-sides-and-equal):
+    // the 13 scalar fields + the withdrawals list + per-transaction raw bytes, plus the
+    // three presence-XOR optionals (withdrawalsRoot/blobGasUsed/excessBlobGas).
+    auto const& fp = firstRequest.executionPayload;
+    BOOST_CHECK(fp.parentHash == second.parentHash);
+    BOOST_CHECK(fp.stateRoot == second.stateRoot);
+    BOOST_CHECK(fp.receiptsRoot == second.receiptsRoot);
+    BOOST_CHECK(fp.logsBloom == second.logsBloom);
+    BOOST_CHECK(fp.prevRandao == second.prevRandao);
+    BOOST_CHECK(fp.gasLimit == second.gasLimit);
+    BOOST_CHECK(fp.gasUsed == second.gasUsed);
+    BOOST_CHECK(fp.baseFeePerGas == second.baseFeePerGas);
+    BOOST_CHECK(fp.blockHash == second.blockHash);
+    BOOST_CHECK(fp.feeRecipient == second.feeRecipient);
+    BOOST_CHECK(fp.extraData == second.extraData);
+    BOOST_CHECK(fp.timestamp == second.timestamp);
+    BOOST_CHECK(fp.blockNumber == second.blockNumber);
+    BOOST_REQUIRE_EQUAL(fp.transactions.size(), second.transactions.size());
+    BOOST_CHECK(fp.transactions.front().raw == second.transactions.front().raw);
+    BOOST_CHECK(fp.withdrawals == second.withdrawals);
+    BOOST_CHECK(fp.withdrawalsRoot == second.withdrawalsRoot);
+    BOOST_CHECK(fp.blobGasUsed == second.blobGasUsed);
+    BOOST_CHECK(fp.excessBlobGas == second.excessBlobGas);
     BOOST_REQUIRE(parsed.parentBeaconBlockRoot.has_value());
-    BOOST_REQUIRE(firstRequest.parentBeaconBlockRoot.has_value());
-    BOOST_CHECK(*parsed.parentBeaconBlockRoot == *firstRequest.parentBeaconBlockRoot);
+    BOOST_REQUIRE(fp.parentBeaconBlockRoot.has_value());
+    BOOST_CHECK(*parsed.parentBeaconBlockRoot == *fp.parentBeaconBlockRoot);
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadV4)
