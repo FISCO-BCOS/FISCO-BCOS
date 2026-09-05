@@ -195,6 +195,37 @@ BOOST_AUTO_TEST_CASE(payload_cache_replacing_same_id_drops_stale_hash)
     BOOST_CHECK_EQUAL(cache.find(id)->version, 2);
 }
 
+// Finding F26: a re-published payload (same deterministic id, identical FCU retry)
+// refreshes its FIFO position — the oldest unrefreshed entry is evicted first, not the
+// freshly re-published one.
+BOOST_AUTO_TEST_CASE(payload_cache_reput_refreshes_fifo_position)
+{
+    PayloadCache cache;
+    const PayloadID idA = "0x0101010101010101";
+    const PayloadID idB = "0x0202020202020202";
+    const PayloadID idC = "0x0303030303030303";
+    cache.put(idA, h256(1), makePayload(1));
+    cache.put(idB, h256(2), makePayload(2));
+    cache.put(idC, h256(3), makePayload(3));
+
+    // Re-put A: with the fix its FIFO slot moves to the tail, so B is now the oldest.
+    cache.put(idA, h256(1), makePayload(11));
+
+    // Fill to beyond the 64-entry bound: the FIFO front must be B, not A.
+    for (std::uint64_t i = 0; i < 62; ++i)
+    {
+        auto id = bcos::toHexStringWithPrefix(
+            bcos::bytesConstRef(reinterpret_cast<const byte*>(&i), sizeof(i)));
+        cache.put(id, h256(i + 10), makePayload(static_cast<std::uint32_t>(i) + 10));
+    }
+
+    BOOST_CHECK(!cache.find(idB));
+    BOOST_CHECK(!cache.payloadIdForHash(h256(2)).has_value());
+    BOOST_REQUIRE(cache.find(idA));
+    BOOST_CHECK_EQUAL(cache.find(idA)->version, 11);
+    BOOST_REQUIRE(cache.find(idC));
+}
+
 BOOST_AUTO_TEST_CASE(payload_cache_put_and_retain_only_clears_intermediate_state)
 {
     PayloadCache cache;
@@ -549,7 +580,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_moved_from_exclusive_access_is_dead)
     EngineTracker tracker;
     auto guard = tracker.lockExclusive();
     auto moved = std::move(guard);
-    BOOST_CHECK_THROW(guard.findPayload("0x01"), std::logic_error);
+    checkExceptionMessage<InvalidGuardState>(
+        [&]() { guard.findPayload("0x01"); }, "used after move");
     BOOST_CHECK(moved.findPayload("0x01") == nullptr);
 }
 

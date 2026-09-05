@@ -35,6 +35,9 @@ DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
 DERIVE_BCOS_EXCEPTION(InvalidPayloadAttributes);
 DERIVE_BCOS_EXCEPTION(UnknownPayload);
 DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+/// A tracker guard (Exclusive/SharedAccess) was used after move or without owning
+/// its lock — a programming error inside the tracker's callers (finding F23).
+DERIVE_BCOS_EXCEPTION(InvalidGuardState);
 
 /// JSON-RPC -38005 Unsupported fork. Isthmus+ requiring payload V4 is one use;
 /// other fork-shape mismatches share this channel (see #5517).

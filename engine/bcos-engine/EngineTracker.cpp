@@ -28,12 +28,6 @@
 namespace bcos::engine
 {
 
-bool EngineTracker::isGetPayloadVersionSupported(std::uint32_t version)
-{
-    return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
-           version <= static_cast<std::uint32_t>(ApiVersion::V5);
-}
-
 ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& resolved)
 {
     const auto& headBlockNumber = resolved.headNumber;
@@ -162,7 +156,7 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
 
 GetPayloadResult EngineTracker::getPayload(const PayloadID& payloadId, std::uint32_t version) const
 {
-    if (!isGetPayloadVersionSupported(version))
+    if (!engine_common::isGetPayloadVersionSupported(version))
     {
         BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                               << bcos::errinfo_comment{"Unsupported Engine API version"});
@@ -227,7 +221,9 @@ void EngineTracker::ExclusiveAccess::requireOwner() const
 {
     if (m_owner == nullptr || !m_lock.owns_lock())
     {
-        BOOST_THROW_EXCEPTION(std::logic_error{"EngineTracker::ExclusiveAccess used after move"});
+        BOOST_THROW_EXCEPTION(
+            InvalidGuardState{} << bcos::errinfo_comment{"EngineTracker::ExclusiveAccess used "
+                                                         "after move or without owning its lock"});
     }
 }
 
@@ -235,7 +231,9 @@ void EngineTracker::SharedAccess::requireOwner() const
 {
     if (m_owner == nullptr || !m_lock.owns_lock())
     {
-        BOOST_THROW_EXCEPTION(std::logic_error{"EngineTracker::SharedAccess used after move"});
+        BOOST_THROW_EXCEPTION(
+            InvalidGuardState{} << bcos::errinfo_comment{"EngineTracker::SharedAccess used after "
+                                                         "move or without owning its lock"});
     }
 }
 
