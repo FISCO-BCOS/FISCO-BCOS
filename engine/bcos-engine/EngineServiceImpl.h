@@ -406,11 +406,6 @@ private:
         /// received payloads leave these null/empty.
         bcos::protocol::BlockHeader::Ptr header;
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
-        /// True once this entry's view has been pushed onto the global storage (the
-        /// pushed layer stays queued until a mergeBackStorage drains it). Distinguishes
-        /// "pushed, awaiting merge" — a retry must NOT push again (the view is
-        /// moved-from), it only re-runs the prewrite/merge — from "not yet committed".
-        bool viewPushed = false;
     };
 
     /// Per-method Engine API version windows. forkchoiceUpdated tops out at V3 (the
@@ -433,15 +428,9 @@ private:
                version <= static_cast<std::uint32_t>(ApiVersion::V4);
     }
 
-    static bool isGetPayloadVersionSupported(std::uint32_t version)
-    {
-        return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
-               version <= static_cast<std::uint32_t>(ApiVersion::V5);
-    }
-
     GetPayloadResult handleGetPayload(const PayloadID& payloadId, std::uint32_t version) const
     {
-        if (!isGetPayloadVersionSupported(version))
+        if (!engine_common::isGetPayloadVersionSupported(version))
         {
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
@@ -544,7 +533,6 @@ private:
         // resume can land on a different thread (the FCU path avoids the same hazard).
         // The locked region below only validates, resolves and prepares; the co_awaits
         // follow after the lock is released; the cache publish re-acquires it.
-        bool commitState = false;
         bool persistLedger = false;
         typename GlobalStateStorageType::MutableStorage prewriteStorage;
         protocol::Block::Ptr persistBlock;
@@ -602,21 +590,20 @@ private:
             // Commit contract: pushView + view.reset() happen here under x_state (a
             // concurrent duplicate newPayload must never push the same view twice); the
             // pushed layer stays queued until a mergeBackStorage drains it (MultiLayerStorage
-            // FIFO). header/receipts are consumed ONLY after the durable write below
-            // succeeds, so a failed prewrite/merge leaves the entry retryable instead of
-            // answering VALID for a never-persisted block; viewPushed marks the
-            // pushed-but-unmerged state a retry resumes from.
+            // FIFO). The commit branch runs only when PENDING DURABLE WORK exists — a view
+            // to push, or artifacts to persist. header/receipts are consumed only after the
+            // durable write succeeds, so their presence is the retry discriminator (finding
+            // F22): both null means the block is already durably committed and the retry is
+            // a pure no-op VALID that never touches storage; artifacts intact means the
+            // retry re-runs the prewrite/merge — a failed attempt left the pushed layer
+            // queued, and mergeBackStorage below drains it.
             auto it = m_payloadCache.find(payloadId);
-            if (it != m_payloadCache.end() && (it->second.view || it->second.viewPushed))
+            if (it != m_payloadCache.end() && (it->second.view || it->second.header))
             {
-                commitState = true;
                 if (it->second.view)
                 {
                     m_globalStateStorage.get().pushView(std::move(*it->second.view));
-                    it->second.viewPushed = true;
                 }
-                // else: the view was already pushed on an earlier attempt and is queued in
-                // the storage (its merge threw); mergeBackStorage below drains it.
                 it->second.view.reset();
                 if (m_ledger && it->second.header)
                 {
@@ -670,10 +657,6 @@ private:
             co_await ledger::prewriteBlockToBuffer(
                 *m_ledger, blockTxs, persistBlock, prewriteStorage);
             co_await m_globalStateStorage.get().mergeBackStorage(prewriteStorage);
-        }
-        else if (commitState)
-        {
-            co_await m_globalStateStorage.get().mergeBackStorage();
         }
 
         {

@@ -1205,6 +1205,10 @@ BOOST_AUTO_TEST_CASE(new_payload_hit_rejects_altered_state_root_and_keeps_built_
 
 BOOST_AUTO_TEST_CASE(new_payload_honest_retry_does_not_recommit)
 {
+    // Pins finding F22's no-op leg: after a successful commit the entry survives with
+    // view==null and header==null (artifacts consumed post-I/O), so a repeat newPayload
+    // must skip the commit branch entirely and answer VALID WITHOUT touching storage —
+    // never a mergeBackStorage() on the drained/foreign queue.
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
