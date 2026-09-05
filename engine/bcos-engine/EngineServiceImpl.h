@@ -530,6 +530,7 @@ private:
         typename GlobalStateStorageType::MutableStorage prewriteStorage;
         protocol::Block::Ptr persistBlock;
         std::shared_ptr<protocol::ConstTransactions> blockTxs;
+        bool viewPushed = false;
         {
             std::unique_lock lock(x_state);
             auto parentKnown =
@@ -596,6 +597,7 @@ private:
                 if (it->second.view)
                 {
                     m_globalStateStorage.get().pushView(std::move(*it->second.view));
+                    viewPushed = true;
                 }
                 it->second.view.reset();
                 if (m_ledger && it->second.header)
@@ -679,6 +681,30 @@ private:
             {
                 co_await m_globalStateStorage.get().mergeToBackends(prewriteStorage);
             }
+            for (;;)
+            {
+                bool drained = false;
+                try
+                {
+                    co_await m_globalStateStorage.get().mergeBackStorage();
+                    drained = true;
+                }
+                catch (bcos::storage2::NotExistsImmutableStorageError const&)
+                {
+                    // Queue empty — the drain is complete.
+                }
+                if (!drained)
+                {
+                    break;
+                }
+            }
+        }
+        else if (viewPushed)
+        {
+            // A pushed view without durable work (no ledger instance / no header):
+            // the queued state layer must still drain into the backends — the
+            // merge must not depend on ledger persistence (CI-found: the pushed
+            // view stayed queued in memory and every committed balance was lost).
             for (;;)
             {
                 bool drained = false;
