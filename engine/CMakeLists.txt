@@ -13,7 +13,10 @@ add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-engine>)
-target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec rlp-protocol)
+# PRIVATE + static library: consumers still link rlp-protocol transitively
+# ($<LINK_ONLY:...>); only the include dirs stay unpropagated.
+target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec
+    PRIVATE rlp-protocol)
 set_target_properties(engine PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
