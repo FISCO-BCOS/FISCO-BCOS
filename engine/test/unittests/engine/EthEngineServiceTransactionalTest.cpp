@@ -65,6 +65,8 @@ struct GateMergeStorage
     std::shared_ptr<std::atomic<bool>> pushViewGate = std::make_shared<std::atomic<bool>>(true);
     std::shared_ptr<std::atomic<bool>> pushViewStarted = std::make_shared<std::atomic<bool>>(false);
     std::shared_ptr<std::atomic<bool>> throwOnMerge = std::make_shared<std::atomic<bool>>(false);
+    // Landed merges only: incremented after the gate and the throw check.
+    std::atomic<unsigned> mergeCount{0};
 
     ViewType fork() { return inner.fork(); }
     void pushView(ViewType view)
@@ -88,6 +90,7 @@ struct GateMergeStorage
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"merge failed"});
         }
+        ++mergeCount;
         co_return co_await inner.mergeBackStorage();
     }
 
@@ -102,6 +105,7 @@ struct GateMergeStorage
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"merge failed"});
         }
+        ++mergeCount;
         co_return co_await inner.mergeBackStorage(extra);
     }
 
@@ -116,6 +120,7 @@ struct GateMergeStorage
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"merge failed"});
         }
+        ++mergeCount;
         co_await inner.mergeToBackends(extra);
     }
 };
@@ -226,6 +231,40 @@ public:
         {
             std::this_thread::yield();
         }
+        callback("", nullptr);
+    }
+};
+
+// A ledger stub whose prewrite actually persists the row the fail-closed guard
+// reads (SYS_HASH_2_NUMBER), the way the real Ledger::asyncPrewriteBlock does.
+// The commit path's own persist — not a hand-written row — must feed the guard.
+class PersistingFakeLedger : public bcos::test::FakeLedger
+{
+public:
+    using FakeLedger::FakeLedger;
+
+    std::atomic<unsigned> prewriteCount{0};
+
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+    {
+        (void)writeTxsAndReceipts;
+        (void)features;
+        (void)blockHashOverride;
+        (void)writeNonces;
+        if (block && block->blockHeader())
+        {
+            auto const header = block->blockHeader();
+            bcos::storage::Entry hash2NumberEntry;
+            hash2NumberEntry.set(std::to_string(header->number()));
+            storage->asyncSetRow(ledger::SYS_HASH_2_NUMBER,
+                bcos::concepts::bytebuffer::toView(header->hash()),
+                std::move(hash2NumberEntry), [](auto&&) {});
+        }
+        ++prewriteCount;
         callback("", nullptr);
     }
 };
@@ -538,7 +577,7 @@ BOOST_AUTO_TEST_CASE(commit_retry_valid_when_ledger_row_exists)
     StubExecutor executor;
     StubScheduler scheduler;
     auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
-    auto ledger = std::make_shared<bcos::test::FakeLedger>(blockFactory, 20, 10, 10);
+    auto ledger = std::make_shared<PersistingFakeLedger>(blockFactory, 20, 10, 10);
 
     using Service = EthEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
     Service service(memPool, storage, executor, scheduler, blockFactory, ledger);
@@ -561,16 +600,25 @@ BOOST_AUTO_TEST_CASE(commit_retry_valid_when_ledger_row_exists)
     BOOST_CHECK_EQUAL(
         static_cast<int>(firstStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
 
-    storage::Entry persisted;
-    persisted.set(std::to_string(static_cast<int64_t>(request.executionPayload.blockNumber)));
-    task::syncWait(bcos::storage2::writeOne(storage.backendStorage,
-        bcos::executor_v1::StateKey{ledger::SYS_HASH_2_NUMBER,
-            bcos::concepts::bytebuffer::toView(request.executionPayload.blockHash)},
-        std::move(persisted)));
+    // The commit path's own persist — the prewrite the ledger stub lands through the
+    // merge — must have written the row the fail-closed guard reads. A hand-written
+    // row proves nothing about the service.
+    BOOST_CHECK_EQUAL(ledger->prewriteCount.load(), 1u);
+    BOOST_CHECK_EQUAL(storage.mergeCount.load(), 1u);
+    auto checkView = storage.fork();
+    auto persistedNumber = task::syncWait(bcos::ledger::getBlockNumber(
+        checkView, request.executionPayload.blockHash, bcos::ledger::fromStorage));
+    BOOST_REQUIRE_MESSAGE(persistedNumber.has_value(),
+        "the commit path's own persist must write the SYS_HASH_2_NUMBER row");
+    BOOST_CHECK_EQUAL(*persistedNumber, request.executionPayload.blockNumber);
 
+    // The retry is a pure no-op VALID: artifacts consumed on success, the ledger row
+    // proves the persist — no second prewrite and no second merge (no double commit).
     auto retryStatus = task::syncWait(service.newPayload(request, 3));
     BOOST_CHECK_EQUAL(
         static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+    BOOST_CHECK_EQUAL(ledger->prewriteCount.load(), 1u);
+    BOOST_CHECK_EQUAL(storage.mergeCount.load(), 1u);
 }
 
 BOOST_AUTO_TEST_CASE(commit_releases_exclusive_guard_during_merge)

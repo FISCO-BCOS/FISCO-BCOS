@@ -21,6 +21,7 @@
 #include "engine/bcos-engine/EthEngineService.h"
 #include "engine/test/unittests/engine/EthServiceStubs.h"
 
+#include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -1646,6 +1647,63 @@ BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
         BOOST_CHECK_EQUAL(it->second.header->number(), c_targetNumber);
         BOOST_CHECK_EQUAL(it->second.header.get(), initialHeader.get());
     }
+}
+
+BOOST_AUTO_TEST_CASE(wire_round_trip_through_engine_helper)
+{
+    // Parity must cross the production JSON wire dialect: build a real payload via
+    // FCU -> getPayload, serialize it with EngineHelper, parse it back into a
+    // NewPayloadRequest, and require the parsed struct to equal the built one under
+    // the production comparator — at every advertised version pair.
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+
+    auto build =
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(build.payloadId.has_value());
+    auto built = task::syncWait(pair.fresh.getPayload(*build.payloadId, 5));
+    BOOST_REQUIRE(built);
+    BOOST_REQUIRE(built->parentBeaconBlockRoot.has_value());
+
+    for (auto const [version, label] :
+        {std::pair{ApiVersion::V3, "V3"}, std::pair{ApiVersion::V5, "V5"}})
+    {
+        auto ep = bcos::rpc::serializeExecutionPayload(built->executionPayload, version);
+        Json::Value params(Json::arrayValue);
+        params.append(ep);
+        params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes (empty)
+        params.append(built->parentBeaconBlockRoot->hexPrefixed());
+        if (version >= ApiVersion::V4)
+        {
+            params.append(Json::Value(Json::arrayValue));  // executionRequests (empty)
+        }
+        auto parsed = bcos::rpc::parseNewPayloadRequest(params, version);
+        BOOST_REQUIRE(parsed.parentBeaconBlockRoot.has_value());
+        BOOST_CHECK_EQUAL(
+            parsed.parentBeaconBlockRoot->hexPrefixed(), built->parentBeaconBlockRoot->hexPrefixed());
+        auto mismatch =
+            detail::compareWithBuiltPayload(parsed.executionPayload, built->executionPayload);
+        BOOST_CHECK_MESSAGE(!mismatch, label << " wire round-trip diverged: " << *mismatch);
+    }
+
+    // V2 shape: the Shanghai payload drops the Cancun blob fields, but the dialect
+    // must still carry the withdrawals list end to end.
+    auto shanghai = built->executionPayload;
+    shanghai.blobGasUsed = std::nullopt;
+    shanghai.excessBlobGas = std::nullopt;
+    auto ep = bcos::rpc::serializeExecutionPayload(shanghai, ApiVersion::V2);
+    Json::Value params(Json::arrayValue);
+    params.append(ep);
+    auto parsed = bcos::rpc::parseNewPayloadRequest(params, ApiVersion::V2);
+    BOOST_REQUIRE(parsed.executionPayload.withdrawals.has_value());
+    BOOST_CHECK_EQUAL(parsed.executionPayload.withdrawals->size(), shanghai.withdrawals->size());
+    BOOST_CHECK(!parsed.executionPayload.blobGasUsed.has_value());
+    BOOST_CHECK(!parsed.executionPayload.excessBlobGas.has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
