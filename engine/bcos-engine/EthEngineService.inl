@@ -305,50 +305,90 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         co_return engine_common::makeStatus(
             PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
     }
+    bool viewPushed = false;
     {
         auto guard = m_tracker.lockExclusive();
         auto artifactIt = m_artifacts.find(payloadId);
-        if (artifactIt != m_artifacts.end() && artifactIt->second.view)
+        // Commit contract (mirrors EngineServiceImpl; finding F22 there): the branch
+        // runs only when PENDING DURABLE WORK exists — a view to push, or artifacts
+        // to persist. The entry stays in m_artifacts until the durable write
+        // succeeds (commitRetainedPayload clears it below): moving/erasing it here
+        // turned a transient merge failure into a terminal SYNCING — the retry
+        // found no artifact and no ledger row, stranding a fully built block.
+        // pushView + view.reset() happen under the lock so a concurrent duplicate
+        // newPayload never pushes the same view twice; header/receipts are only
+        // read here and consumed after the I/O succeeds, so their presence is the
+        // retry discriminator.
+        if (artifactIt != m_artifacts.end() &&
+            (artifactIt->second.view || artifactIt->second.header))
         {
-            localArtifact = std::move(artifactIt->second);
-            m_artifacts.erase(artifactIt);
+            if (artifactIt->second.view)
+            {
+                m_globalStateStorage.pushView(std::move(*artifactIt->second.view));
+                artifactIt->second.view.reset();
+                viewPushed = true;
+            }
+            if (m_ledger && artifactIt->second.header)
+            {
+                localArtifact = artifactIt->second;
+            }
         }
     }
 
-    if (localArtifact && localArtifact->view)
+    if (localArtifact)
     {
-        m_globalStateStorage.pushView(std::move(*localArtifact->view));
-        if (m_ledger && localArtifact->header)
+        typename GlobalStateStorageType::MutableStorage prewriteStorage;
+        auto block = m_blockFactory->createBlock();
+        block->setBlockHeader(localArtifact->header);
+        auto const& bloom = cached->executionPayload.logsBloom;
+        block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+        for (auto const& tx : cached->executionPayload.transactions)
         {
-            typename GlobalStateStorageType::MutableStorage prewriteStorage;
-            auto block = m_blockFactory->createBlock();
-            block->setBlockHeader(localArtifact->header);
-            auto const& bloom = cached->executionPayload.logsBloom;
-            block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
-            for (auto const& tx : cached->executionPayload.transactions)
+            if (tx.decoded)
             {
-                if (tx.decoded)
-                {
-                    block->appendTransaction(tx.decoded);
-                }
+                block->appendTransaction(tx.decoded);
             }
-            for (auto const& receipt : localArtifact->receipts)
-            {
-                block->appendReceipt(receipt);
-            }
-            auto blockTxs = std::make_shared<protocol::ConstTransactions>(
-                cached->executionPayload.transactions |
-                ::ranges::views::filter([](auto const& tx) { return tx.decoded != nullptr; }) |
-                ::ranges::views::transform(
-                    [](auto const& tx) { return protocol::Transaction::ConstPtr(tx.decoded); }) |
-                ::ranges::to<std::vector>());
-            co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, prewriteStorage);
+        }
+        for (auto const& receipt : localArtifact->receipts)
+        {
+            block->appendReceipt(receipt);
+        }
+        auto blockTxs = std::make_shared<protocol::ConstTransactions>(
+            cached->executionPayload.transactions |
+            ::ranges::views::filter([](auto const& tx) { return tx.decoded != nullptr; }) |
+            ::ranges::views::transform(
+                [](auto const& tx) { return protocol::Transaction::ConstPtr(tx.decoded); }) |
+            ::ranges::to<std::vector>());
+        co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, prewriteStorage);
+        // Land the prewritten rows together with the queued view layer, then let a
+        // later commit drain any layer a previously failed attempt left queued.
+        // mergeBackStorage throws NotExistsImmutableStorageError on an empty deque;
+        // the empty case is NOT an error — a concurrent duplicate may have drained
+        // the layer between the attempts, and its rows are identical to ours, so
+        // the prewritten rows land directly via mergeToBackends (idempotent) instead
+        // of surfacing a spurious internal error where the Engine API requires the
+        // idempotent VALID. Awaits stay OUT of the catch handlers (C++20 forbids
+        // them there) — the handler only records whether the rows still need landing.
+        bool rowsLanded = false;
+        try
+        {
             co_await m_globalStateStorage.mergeBackStorage(prewriteStorage);
+            rowsLanded = true;
         }
-        else
+        catch (bcos::storage2::NotExistsImmutableStorageError const&)
         {
-            co_await m_globalStateStorage.mergeBackStorage();
+            // Queue already empty — nothing to pair with; land the rows below.
         }
+        if (!rowsLanded)
+        {
+            co_await m_globalStateStorage.mergeToBackends(prewriteStorage);
+        }
+    }
+    else if (viewPushed)
+    {
+        // A pushed view without durable work: the queued state layer must still
+        // drain into the backends — the merge must not depend on ledger persistence.
+        co_await m_globalStateStorage.mergeBackStorage();
     }
 
     // Fail-closed guard (finding AI): if no local artifact was available above, either
