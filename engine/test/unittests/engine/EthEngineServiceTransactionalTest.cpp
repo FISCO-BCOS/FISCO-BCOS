@@ -67,6 +67,11 @@ struct GateMergeStorage
     std::shared_ptr<std::atomic<bool>> throwOnMerge = std::make_shared<std::atomic<bool>>(false);
     // Landed merges only: incremented after the gate and the throw check.
     std::atomic<unsigned> mergeCount{0};
+    // Mirror of the inner MultiLayerStorage deque depth: +1 per pushView, -1 per
+    // landed deque-consuming merge (bare and extra overloads), unchanged on the
+    // NotExistsImmutableStorageError empty-deque throw. The drain contract of
+    // commit_drains_every_queued_layer asserts this reaches zero.
+    std::atomic<int> queuedDepth{0};
 
     ViewType fork() { return inner.fork(); }
     void pushView(ViewType view)
@@ -77,6 +82,7 @@ struct GateMergeStorage
             std::this_thread::yield();
         }
         inner.pushView(std::move(view));
+        ++queuedDepth;
     }
 
     task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage()
@@ -90,8 +96,19 @@ struct GateMergeStorage
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"merge failed"});
         }
-        ++mergeCount;
-        co_return co_await inner.mergeBackStorage();
+        try
+        {
+            auto landed = co_await inner.mergeBackStorage();
+            ++mergeCount;
+            --queuedDepth;
+            co_return landed;
+        }
+        catch (bcos::storage2::NotExistsImmutableStorageError const&)
+        {
+            // Empty deque: nothing was consumed, depth unchanged; rethrow so a
+            // drain loop can tell the difference between landed and empty.
+            throw;
+        }
     }
 
     task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage(MutableStorage& extra)
@@ -105,8 +122,17 @@ struct GateMergeStorage
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"merge failed"});
         }
-        ++mergeCount;
-        co_return co_await inner.mergeBackStorage(extra);
+        try
+        {
+            auto landed = co_await inner.mergeBackStorage(extra);
+            ++mergeCount;
+            --queuedDepth;
+            co_return landed;
+        }
+        catch (bcos::storage2::NotExistsImmutableStorageError const&)
+        {
+            throw;
+        }
     }
 
     task::Task<void> mergeToBackends(MutableStorage& extra)
@@ -120,8 +146,8 @@ struct GateMergeStorage
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"merge failed"});
         }
-        ++mergeCount;
         co_await inner.mergeToBackends(extra);
+        ++mergeCount;
     }
 };
 
@@ -576,6 +602,66 @@ BOOST_AUTO_TEST_CASE(commit_merge_failure_leaves_cache_and_artifacts)
     auto retryStatus = task::syncWait(service.newPayload(request, 3));
     BOOST_CHECK_EQUAL(
         static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+}
+
+BOOST_AUTO_TEST_CASE(commit_drains_every_queued_layer)
+{
+    // A residual layer from an abandoned payload must not survive a later commit:
+    // MultiLayerStorage pushes to the front and merges the back, so one merge per
+    // push makes any residual queued layer permanent — the newest block's state
+    // would stay in memory while the service answers VALID, and would be lost on
+    // restart. newPayload must drain the deque in both landing branches; this
+    // test pins the invariant that the queue is EMPTY once a commit returns.
+    GateMergeStorage storage;
+    MemPoolImpl memPool;
+    StubExecutor executor;
+    StubScheduler scheduler;
+    auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    auto ledger = std::make_shared<PersistingFakeLedger>(blockFactory, 20, 10, 10);
+
+    using Service = EthEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
+    Service service(memPool, storage, executor, scheduler, blockFactory, ledger);
+
+    auto forkchoice = makeForkchoiceState();
+    seedForkchoiceStorage(storage, forkchoice);
+
+    // Payload N: build, then let the commit fail mid-merge (throwOnMerge), then
+    // abandon it — the CL never retries. Its view layer stays queued.
+    PayloadAttributes attrsN = makeAttrs(1'700'000'000'000ULL);
+    auto buildN = task::syncWait(service.updateForkchoice(forkchoice, &attrsN, 3));
+    BOOST_REQUIRE(buildN.payloadId.has_value());
+    auto payloadN = task::syncWait(service.getPayload(*buildN.payloadId, 3));
+
+    storage.throwOnMerge->store(true);
+    storage.mergeGate->store(true);
+
+    NewPayloadRequest requestN;
+    requestN.executionPayload = payloadN->executionPayload;
+    requestN.parentBeaconBlockRoot = attrsN.parentBeaconBlockRoot;
+    BOOST_CHECK_THROW(task::syncWait(service.newPayload(requestN, 3)), std::runtime_error);
+    BOOST_CHECK_EQUAL(storage.queuedDepth.load(), 1);
+
+    // Payload N+1: a fresh FCU at the same head with different attributes. The
+    // commit lands N+1's prewritten rows (together with the residual layer, FIFO)
+    // and then DRAINS the deque — N+1's own state layer must reach the backend,
+    // not linger in memory behind a VALID answer.
+    storage.throwOnMerge->store(false);
+    PayloadAttributes attrsN1 = makeAttrs(1'700'000'001'000ULL);
+    auto buildN1 = task::syncWait(service.updateForkchoice(forkchoice, &attrsN1, 3));
+    BOOST_REQUIRE(buildN1.payloadId.has_value());
+    BOOST_REQUIRE(*buildN1.payloadId != *buildN.payloadId);
+    auto payloadN1 = task::syncWait(service.getPayload(*buildN1.payloadId, 3));
+
+    NewPayloadRequest requestN1;
+    requestN1.executionPayload = payloadN1->executionPayload;
+    requestN1.parentBeaconBlockRoot = attrsN1.parentBeaconBlockRoot;
+    auto statusN1 = task::syncWait(service.newPayload(requestN1, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(statusN1.status), static_cast<int>(PayloadValidationStatus::Valid));
+    BOOST_CHECK_MESSAGE(storage.queuedDepth.load() == 0,
+        "a residual queued layer survived the commit — the newest payload's state is "
+        "in-memory only and would be lost on restart (depth " +
+            std::to_string(storage.queuedDepth.load()) + ")");
 }
 
 BOOST_AUTO_TEST_CASE(commit_retry_valid_when_ledger_row_exists)

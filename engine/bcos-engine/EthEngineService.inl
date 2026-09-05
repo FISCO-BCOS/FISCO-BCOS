@@ -80,7 +80,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
 
     if (!headBlockNumber.has_value())
     {
-        detail::warnSyncingRateLimited("forkchoice head unknown; answering SYNCING (no EL sync)",
+        detail::warnSyncingRateLimited<detail::c_forkchoiceHeadUnknown>(
+            "forkchoice head unknown; answering SYNCING (no EL sync)",
             forkchoiceState.headBlockHash);
         co_return ForkchoiceUpdatedResult{
             .payloadStatus = engine_common::makeStatus(
@@ -208,9 +209,10 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     };
 
     {
-        // Copy the hash before the entry is moved: publishBuiltPayload stores the
-        // payload by move, which leaves the original object's blockHash member
-        // moved-from, and putStaged then hashes that reference into hashToId.
+        // commonEntry is null after the move, so capture the hash before the
+        // argument list is evaluated — argument evaluation order is unspecified and
+        // publishBuiltPayload stores the payload by move, needing the hash
+        // independently of the moved pointer.
         const auto blockHash = commonEntry->executionPayload.blockHash;
         auto guard = m_tracker.lockExclusive();
         publishBuiltPayload(guard, m_artifacts, payloadId, blockHash,
@@ -238,9 +240,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     if (auto validationError = detail::validateExecutionPayload(request.executionPayload, version);
         validationError.has_value())
     {
-        auto status = validationError->find("blockHash") != std::string::npos ?
-                          PayloadValidationStatus::InvalidBlockHash :
-                          PayloadValidationStatus::Invalid;
+        // validateExecutionPayload only checks shape/semantic rules — a failure
+        // there is a malformed payload, never a blockHash mismatch (that path is
+        // compareWithBuiltPayload's and returns InvalidBlockHash directly).
+        auto status = PayloadValidationStatus::Invalid;
         co_return engine_common::makeStatus(status, std::nullopt, validationError);
     }
     if (version <= 2 && request.parentBeaconBlockRoot.has_value())
@@ -280,7 +283,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                            guard.payloadIdForHash(request.executionPayload.parentHash).has_value();
         if (!parentKnown)
         {
-            detail::warnSyncingRateLimited("newPayload parent unknown; answering SYNCING",
+            detail::warnSyncingRateLimited<detail::c_newPayloadParentUnknown>(
+                "newPayload parent unknown; answering SYNCING",
                 request.executionPayload.parentHash);
             co_return engine_common::makeStatus(
                 PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
@@ -291,7 +295,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         {
             // #5468 / finding E: op-geth executes (InsertBlockWithoutSetHead) before VALID.
             // An external payload this node did not build is not executed here yet.
-            detail::warnSyncingRateLimited(
+            detail::warnSyncingRateLimited<detail::c_newPayloadNotBuiltHere>(
                 "newPayload block not built here; answering SYNCING",
                 request.executionPayload.blockHash);
             co_return engine_common::makeStatus(
@@ -302,8 +306,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     }
     if (!cached)
     {
-        detail::warnSyncingRateLimited("newPayload cache miss; answering SYNCING",
-            request.executionPayload.blockHash);
+        detail::warnSyncingRateLimited<detail::c_newPayloadCacheMiss>(
+            "newPayload cache miss; answering SYNCING", request.executionPayload.blockHash);
         co_return engine_common::makeStatus(
             PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
     }
@@ -393,12 +397,51 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         {
             co_await m_globalStateStorage.mergeToBackends(prewriteStorage);
         }
+        // The drain loop then removes every remaining queued layer: one left behind
+        // by an abandoned failed merge would otherwise make every later commit merge
+        // one-behind, leaving the newest payload's state queued in-memory — lost on
+        // restart — though it answered VALID.
+        for (;;)
+        {
+            bool drained = false;
+            try
+            {
+                co_await m_globalStateStorage.mergeBackStorage();
+                drained = true;
+            }
+            catch (bcos::storage2::NotExistsImmutableStorageError const&)
+            {
+                // Queue empty — the drain is complete.
+            }
+            if (!drained)
+            {
+                break;
+            }
+        }
     }
     else if (viewPushed)
     {
         // A pushed view without durable work: the queued state layer must still
-        // drain into the backends — the merge must not depend on ledger persistence.
-        co_await m_globalStateStorage.mergeBackStorage();
+        // drain into the backends — the merge must not depend on ledger persistence
+        // (CI-found: the pushed view stayed queued in memory and every committed
+        // balance was lost).
+        for (;;)
+        {
+            bool drained = false;
+            try
+            {
+                co_await m_globalStateStorage.mergeBackStorage();
+                drained = true;
+            }
+            catch (bcos::storage2::NotExistsImmutableStorageError const&)
+            {
+                // Queue empty — the drain is complete.
+            }
+            if (!drained)
+            {
+                break;
+            }
+        }
     }
 
     // Fail-closed guard (finding AI): if no local artifact was available above, either
@@ -413,7 +456,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         if (!co_await bcos::ledger::getBlockNumber(
                 checkView, cached->executionPayload.blockHash, bcos::ledger::fromStorage))
         {
-            detail::warnSyncingRateLimited(
+            detail::warnSyncingUnlimited(
                 "newPayload has no ledger row and no retryable artifact; answering SYNCING "
                 "(a previous attempt died mid-persist)",
                 cached->executionPayload.blockHash);
@@ -449,7 +492,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
 {
     std::vector<EngineTransaction> engineTransactions;
     engineTransactions.reserve(
-        payloadAttributes.transactions.value_or(std::vector<std::string>{}).size() +
+        (payloadAttributes.transactions ? payloadAttributes.transactions->size() : 0) +
         sealedTxs.size());
     if (payloadAttributes.transactions.has_value())
     {
