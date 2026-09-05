@@ -271,7 +271,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_zero_head_hash_is_rejected)
     auto state = resolved(h256(10), 10, true, false);
     state.state.headBlockHash = h256{};
     checkExceptionMessage<InvalidForkchoiceState>(
-        [&]() { tracker.applyForkchoice(state); }, "head block hash is not set");
+        [&]() { tracker.applyForkchoice(state); }, "Forkchoice head block hash is not set");
     BOOST_CHECK(!tracker.trackedHead().has_value());
 }
 
