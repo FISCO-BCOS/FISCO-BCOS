@@ -75,8 +75,6 @@ public:
     SharedAccess lockShared() const;
 
 private:
-    static bool isGetPayloadVersionSupported(std::uint32_t version);
-
     mutable std::shared_mutex m_mutex;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHead;

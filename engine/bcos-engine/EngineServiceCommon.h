@@ -79,6 +79,11 @@ inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
 }
 }  // namespace detail
 
+/// Shared Engine-API service surface, distinct from implementation-internal detail
+/// helpers: these validators/status/shape helpers are consumed across the engine-split
+/// stack (the live EngineServiceImpl here, EngineTracker, and the Eth/Op services in
+/// #5548/#5549), so they get a named home instead of the private detail namespace
+/// (finding F28).
 namespace engine_common
 {
 /// Upstream pin for Engine API comments in this extract:
@@ -148,6 +153,13 @@ PayloadStatus makeStatus(PayloadValidationStatus status,
 /// IncompatiblePayloadVersion when the request version cannot render the stored body.
 void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& payload,
     std::optional<h256> const& parentBeaconBlockRoot, std::uint32_t requestVersion);
+/// Shared getPayload version window (finding F30: one definition for the leftover
+/// Impl and EngineTracker, both of which serve getPayload).
+inline bool isGetPayloadVersionSupported(std::uint32_t version)
+{
+    return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
+           version <= static_cast<std::uint32_t>(ApiVersion::V5);
+}
 }  // namespace engine_common
 
 }  // namespace bcos::engine
