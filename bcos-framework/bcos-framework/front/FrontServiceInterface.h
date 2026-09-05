@@ -30,10 +30,10 @@
 #include <functional>
 #include <range/v3/view/any_view.hpp>
 #include <range/v3/view/single.hpp>
+#include <tuple>
 
 namespace bcos::front
 {
-using GetGroupNodeInfoFunc = std::function<void(Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr)>;
 using ReceiveMsgFunc = std::function<void(Error::Ptr)>;
 using ResponseFunc = std::function<void(bytesConstRef)>;
 using CallbackFunc = std::function<void(
@@ -134,8 +134,8 @@ private:
 /**
  * @brief: the interface provided by the front service
  *
- * enable_shared_from_this lets the owned-payload bridges (asyncBroadcastMessageByOwnedPayload /
- * asyncSendMessageByNodeIDByOwnedPayload) pass an owning Ptr as the coroutine parameter, so the
+ * enable_shared_from_this lets the owned-payload bridges (broadcastMessageByOwnedPayload /
+ * sendMessageByNodeIDByOwnedPayload) pass an owning Ptr as the coroutine parameter, so the
  * front object (FrontService / FrontServiceClient / test fakes, all shared_ptr-owned) stays alive
  * for the whole detached send instead of holding a raw `this`.
  */
@@ -157,57 +157,58 @@ public:
     virtual void stop() = 0;
 
     /**
-     * @brief: get groupNodeInfo from the gateway
-     * @param _getGroupNodeInfoFunc: get groupNodeInfo callback
-     * @return void
+     * @brief: (coroutine) get the latest groupNodeInfo the gateway pushed to this front
+     * @return {error, groupNodeInfo}: error is nullptr on success; groupNodeInfo may be nullptr
+     *         if the gateway has not pushed one yet
      */
-    virtual void asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInfo) = 0;
+    virtual task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>>
+    getGroupNodeInfo() = 0;
     virtual bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
     /**
-     * @brief: receive nodeIDs from gateway, call by gateway
+     * @brief: (coroutine) receive nodeIDs from gateway, called by gateway
      * @param _groupID: groupID
      * @param _groupNodeInfo: the groupNodeInfo
-     * @return void
+     * @return error: nullptr on success
      */
-    virtual void onReceiveGroupNodeInfo(const std::string& _groupID,
-        bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo, ReceiveMsgFunc _receiveMsgCallback) = 0;
+    virtual task::Task<Error::Ptr> onReceiveGroupNodeInfo(
+        std::string _groupID, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) = 0;
 
     /**
-     * @brief: receive message from gateway, call by gateway
+     * @brief: (coroutine) receive message from gateway, called by gateway
      * @param _groupID: groupID
      * @param _nodeID: the node send this message
-     * @param _data: received message data
-     * @return void
+     * @param _data: received message data (a view — the caller keeps the buffer alive until the
+     *        returned task completes; implementations copy before any deferred dispatch)
+     * @return error: nullptr on success
      */
-    virtual void onReceiveMessage(const std::string& _groupID,
-        const bcos::crypto::NodeIDPtr& _nodeID, bytesConstRef _data,
-        ReceiveMsgFunc _receiveMsgCallback) = 0;
+    virtual task::Task<Error::Ptr> onReceiveMessage(
+        std::string _groupID, bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) = 0;
 
     /**
-     * @brief: receive broadcast message from gateway, call by gateway
+     * @brief: (coroutine) receive broadcast message from gateway, called by gateway
      * @param _groupID: groupID
-     * @param _nodeID: the node send this message
-     * @param _data: received message data
-     * @return void
+     * @param _nodeID: the node send the message
+     * @param _data: received message data (a view — same lifetime contract as onReceiveMessage)
+     * @return error: nullptr on success
      */
-    virtual void onReceiveBroadcastMessage(const std::string& _groupID,
-        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
-        ReceiveMsgFunc _receiveMsgCallback) = 0;
+    virtual task::Task<Error::Ptr> onReceiveBroadcastMessage(
+        std::string _groupID, bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) = 0;
 
     /**
-     * @brief: send response
+     * @brief: (coroutine) send response
      * @param _id: the request id
      * @param _moduleID: moduleID
      * @param _nodeID: the receiver nodeID
-     * @param _data: message
-     * @return void
+     * @param _data: message (a view — the caller keeps the buffer alive until the returned task
+     *        completes; fire-and-forget callers wrap the co_await in task::wait and pass owned
+     *        state as coroutine parameters)
+     * @return error: nullptr on success, the gateway send failure otherwise
      */
-    virtual void asyncSendResponse(const std::string& _id, int _moduleID,
-        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
-        ReceiveMsgFunc _receiveMsgCallback) = 0;
+    virtual task::Task<Error::Ptr> sendResponse(std::string _id, int _moduleID,
+        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) = 0;
 
     virtual task::Task<void> broadcastMessage(
         uint16_t type, int moduleID,
@@ -257,7 +258,7 @@ public:
      * @param moduleID: moduleID
      * @param payload: already-encoded message body; ownership is transferred to the callee
      */
-    virtual void asyncBroadcastMessageByOwnedPayload(
+    virtual void broadcastMessageByOwnedPayload(
         uint16_t type, int moduleID, bytesPointer payload)
     {
         task::wait([](FrontServiceInterface::Ptr self, uint16_t _type, int _moduleID,
@@ -271,7 +272,7 @@ public:
      * @brief send an already-encoded message to one node, taking ownership of the payload so the
      *        send can be deferred without the caller keeping the buffer alive.
      *
-     * Same rationale as asyncBroadcastMessageByOwnedPayload: the production FrontService dispatches
+     * Same rationale as broadcastMessageByOwnedPayload: the production FrontService dispatches
      * the gateway send off the caller thread (PBFT under m_mutex must not contend the gateway
      * session lock; sendViewChange / sendRecoverResponse run there). Point-to-point sends encode
      * the wire frame anyway, so this is not zero-copy; owning the payload only keeps it alive
@@ -282,7 +283,7 @@ public:
      * @param nodeID: the receiver nodeID
      * @param payload: already-encoded message body; ownership is transferred to the callee
      */
-    virtual void asyncSendMessageByNodeIDByOwnedPayload(
+    virtual void sendMessageByNodeIDByOwnedPayload(
         int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload)
     {
         task::wait([](FrontServiceInterface::Ptr self, int _moduleID,

@@ -18,10 +18,13 @@
  * @date 2021-12-29
  */
 #include "LocalRouterTable.h"
+#include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-gateway/Common.h"
+#include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-tars-protocol/client/FrontServiceClient.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include <bcos-task/Wait.h>
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::gateway;
@@ -259,8 +262,8 @@ bool LocalRouterTable::eraseUnreachableNodes()
     return updated;
 }
 
-bool LocalRouterTable::asyncBroadcastMsg(uint16_t _nodeType, const std::string& _groupID,
-    uint16_t _moduleID, NodeIDPtr _srcNodeID, bytesConstRef _payload) const
+bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _groupID,
+    uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<P2PMessage> _msg) const
 {
     auto frontServiceList = getGroupFrontServiceList(_groupID);
     if (frontServiceList.empty())
@@ -268,6 +271,9 @@ bool LocalRouterTable::asyncBroadcastMsg(uint16_t _nodeType, const std::string& 
         return false;
     }
     auto srcNodeIDHex = _srcNodeID->hex();
+    // zero-copy: each dispatch task below owns the P2PMessage, so the payload view into it
+    // stays valid for the whole (possibly deferred) per-front dispatch
+    auto payloadSize = _msg->payload().size();
     for (auto const& it : frontServiceList)
     {
         if (it->nodeID() == srcNodeIDHex)
@@ -284,39 +290,38 @@ bool LocalRouterTable::asyncBroadcastMsg(uint16_t _nodeType, const std::string& 
         ROUTER_LOG(TRACE) << LOG_BADGE(
                                  "LocalRouterTable: dispatcher broadcast-type message to node")
                           << LOG_KV("type", _nodeType) << LOG_KV("groupID", _groupID)
-                          << LOG_KV("moduleID", _moduleID) << LOG_KV("payloadSize", _payload.size())
+                          << LOG_KV("moduleID", _moduleID) << LOG_KV("payloadSize", payloadSize)
                           << LOG_KV("dst", dstNodeID);
-        frontService->onReceiveMessage(_groupID, _srcNodeID, _payload,
-            [_groupID, _moduleID, _srcNodeID, dstNodeID](Error::Ptr _error) {
-                if (_error)
-                {
-                    GATEWAY_LOG(ERROR)
-                        << LOG_DESC("ROUTER_LOG error") << LOG_KV("groupID", _groupID)
-                        << LOG_KV("moduleID", _moduleID) << LOG_KV("src", _srcNodeID->hex())
-                        << LOG_KV("dst", dstNodeID) << LOG_KV("code", _error->errorCode())
-                        << LOG_KV("msg", _error->errorMessage());
-                }
-            });
+        task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _groupID,
+                       uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<P2PMessage> _msg,
+                       std::string _dstNodeID) -> task::Task<void> {
+            auto error =
+                co_await _frontService->onReceiveMessage(_groupID, _srcNodeID, _msg->payload());
+            if (error)
+            {
+                GATEWAY_LOG(ERROR) << LOG_DESC("ROUTER_LOG error") << LOG_KV("groupID", _groupID)
+                                   << LOG_KV("moduleID", _moduleID)
+                                   << LOG_KV("src", _srcNodeID->hex()) << LOG_KV("dst", _dstNodeID)
+                                   << LOG_KV("code", error->errorCode())
+                                   << LOG_KV("msg", error->errorMessage());
+            }
+        }(frontService, _groupID, _moduleID, _srcNodeID, _msg, dstNodeID));
     }
     return true;
 }
 
 
 // send message to the local nodes
-bool LocalRouterTable::sendMessage(const std::string& _groupID, NodeIDPtr _srcNodeID,
-    NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc)
+task::Task<bcos::Error::Ptr> LocalRouterTable::sendMessage(const std::string& _groupID,
+    NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bytesConstRef _payload)
 {
     auto frontServiceInfo = getFrontService(_groupID, _dstNodeID);
     if (!frontServiceInfo)
     {
-        return false;
+        co_return BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceSendMsg,
+            "could not find a gateway to send this message, groupID:" + _groupID +
+                " ,dstNodeID:" + _dstNodeID->hex());
     }
-    frontServiceInfo->frontService()->onReceiveMessage(
-        _groupID, _srcNodeID, _payload, [_errorRespFunc](Error::Ptr _error) {
-            if (_errorRespFunc)
-            {
-                _errorRespFunc(_error);
-            }
-        });
-    return true;
+    co_return co_await frontServiceInfo->frontService()->onReceiveMessage(
+        _groupID, std::move(_srcNodeID), _payload);
 }

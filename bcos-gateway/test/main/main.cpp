@@ -65,8 +65,12 @@ int main(int argc, const char** argv)
                     GATEWAY_MAIN_LOG(INFO)
                         << LOG_DESC("echo") << LOG_KV("to", _nodeID->hex())
                         << LOG_KV("content", std::string(_data.begin(), _data.end()));
-                    frontService->asyncSendResponse(
-                        _id, bcos::protocol::ModuleID::AMOP, _nodeID, _data, [](Error::Ptr) {});
+                    task::wait([](std::shared_ptr<bcos::front::FrontService> _frontService,
+                                   std::string _responseID, bcos::crypto::NodeIDPtr _nodeID,
+                                   bcos::bytes _payload) -> task::Task<void> {
+                        co_await _frontService->sendResponse(_responseID,
+                            bcos::protocol::ModuleID::AMOP, _nodeID, bcos::ref(_payload));
+                    }(frontService, _id, _nodeID, bcos::bytes(_data.begin(), _data.end())));
                 }
             });
         auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
@@ -74,53 +78,50 @@ int main(int argc, const char** argv)
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
 
-            frontService->asyncGetGroupNodeInfo(
-                [frontService, keyFactory](
-                    Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
-                    (void)_error;
-                    if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().empty())
-                    {
-                        return;
-                    }
-                    auto const& nodeIDs = _groupNodeInfo->nodeIDList();
-                    for (const auto& nodeIDStr : nodeIDs)
-                    {
-                        auto nodeID = keyFactory->createKey(fromHex(nodeIDStr));
-                        std::string randStr =
-                            boost::uuids::to_string(boost::uuids::random_generator()());
-                        GATEWAY_MAIN_LOG(INFO) << LOG_DESC("request") << LOG_KV("to", nodeID->hex())
-                                               << LOG_KV("content", randStr);
+            auto [error, groupNodeInfo] = task::syncWait(frontService->getGroupNodeInfo());
+            (void)error;
+            if (!groupNodeInfo || groupNodeInfo->nodeIDList().empty())
+            {
+                continue;
+            }
+            auto const& nodeIDs = groupNodeInfo->nodeIDList();
+            for (const auto& nodeIDStr : nodeIDs)
+            {
+                auto nodeID = keyFactory->createKey(fromHex(nodeIDStr));
+                std::string randStr = boost::uuids::to_string(boost::uuids::random_generator()());
+                GATEWAY_MAIN_LOG(INFO)
+                    << LOG_DESC("request") << LOG_KV("to", nodeID->hex())
+                    << LOG_KV("content", randStr);
 
-                        auto payload = bytesConstRef((bcos::byte*)randStr.data(), randStr.size());
+                auto payload = bytesConstRef((bcos::byte*)randStr.data(), randStr.size());
 
-                        auto result = task::syncWait(frontService->sendMessageByNodeID(
-                            bcos::protocol::ModuleID::AMOP, nodeID,
-                            ::ranges::views::single(payload), 10000));
+                auto result = task::syncWait(frontService->sendMessageByNodeID(
+                    bcos::protocol::ModuleID::AMOP, nodeID, ::ranges::views::single(payload),
+                    10000));
 
-                        if (result.error && (result.error->errorCode() != 0))
-                        {
-                            GATEWAY_MAIN_LOG(ERROR)
-                                << LOG_DESC("request error") << LOG_KV("to", nodeID->hex())
-                                << LOG_KV("id", result.uuid);
-                            continue;
-                        }
+                if (result.error && (result.error->errorCode() != 0))
+                {
+                    GATEWAY_MAIN_LOG(ERROR)
+                        << LOG_DESC("request error") << LOG_KV("to", nodeID->hex())
+                        << LOG_KV("id", result.uuid);
+                    continue;
+                }
 
-                        std::string retMsg(result.payload.begin(), result.payload.end());
-                        if (retMsg == randStr)
-                        {
-                            GATEWAY_MAIN_LOG(INFO)
-                                << LOG_DESC("response ok") << LOG_KV("from", nodeID->hex())
-                                << LOG_KV("id", result.uuid);
-                        }
-                        else
-                        {
-                            GATEWAY_MAIN_LOG(ERROR)
-                                << LOG_DESC("response error") << LOG_KV("from", nodeID->hex())
-                                << LOG_KV("id", result.uuid) << LOG_KV("req", randStr)
-                                << LOG_KV("rep", retMsg);
-                        }
-                    }
-                });
+                std::string retMsg(result.payload.begin(), result.payload.end());
+                if (retMsg == randStr)
+                {
+                    GATEWAY_MAIN_LOG(INFO)
+                        << LOG_DESC("response ok") << LOG_KV("from", nodeID->hex())
+                        << LOG_KV("id", result.uuid);
+                }
+                else
+                {
+                    GATEWAY_MAIN_LOG(ERROR)
+                        << LOG_DESC("response error") << LOG_KV("from", nodeID->hex())
+                        << LOG_KV("id", result.uuid) << LOG_KV("req", randStr)
+                        << LOG_KV("rep", retMsg);
+                }
+            }
         }
     }
     catch (const std::exception& e)

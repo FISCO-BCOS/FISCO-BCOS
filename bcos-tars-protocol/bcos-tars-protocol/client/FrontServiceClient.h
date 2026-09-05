@@ -18,21 +18,20 @@ public:
 
     FrontServiceClient(bcostars::FrontServicePrx proxy, bcos::crypto::KeyFactory::Ptr keyFactory);
 
-    void asyncGetGroupNodeInfo(bcos::front::GetGroupNodeInfoFunc _onGetGroupNodeInfo) override;
+    bcos::task::Task<std::tuple<bcos::Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>>
+    getGroupNodeInfo() override;
 
-    void onReceiveGroupNodeInfo(const std::string& _groupID,
-        bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo,
-        bcos::front::ReceiveMsgFunc _receiveMsgCallback) override;
+    bcos::task::Task<bcos::Error::Ptr> onReceiveGroupNodeInfo(
+        std::string _groupID, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) override;
 
-    void onReceiveMessage(const std::string& _groupID, const bcos::crypto::NodeIDPtr& _nodeID,
-        bcos::bytesConstRef _data, bcos::front::ReceiveMsgFunc _receiveMsgCallback) override;
+    bcos::task::Task<bcos::Error::Ptr> onReceiveMessage(
+        std::string _groupID, bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data) override;
 
-    // Note: the _receiveMsgCallback maybe null in some cases
-    void onReceiveBroadcastMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::bytesConstRef _data, bcos::front::ReceiveMsgFunc _receiveMsgCallback) override;
+    bcos::task::Task<bcos::Error::Ptr> onReceiveBroadcastMessage(std::string _groupID,
+        bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data) override;
 
-    void asyncSendResponse(const std::string& _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::bytesConstRef _data, bcos::front::ReceiveMsgFunc _receiveMsgCallback) override;
+    bcos::task::Task<bcos::Error::Ptr> sendResponse(std::string _id, int _moduleID,
+        bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data) override;
 
     // (coroutine) send message to one node and await the module-level response via the
     // front-service RPC

@@ -81,6 +81,29 @@ BOOST_AUTO_TEST_CASE(testFrontService_buildFrontService)
     BOOST_CHECK(frontService->moduleID2MessageDispatcher().empty());
 }
 
+BOOST_AUTO_TEST_CASE(testFrontService_onReceiveMessage_decodeFailed)
+{
+    // Round-3 review (BLOCKING test gap): the fail-closed MessageDecodeFailed (1006) path added
+    // in round 2 must be pinned — a malformed/illegal frame is rejected with 1006 (which the
+    // gateway now ACKs to the sender), never ACKed as SUCCESS.
+    auto frontService = buildFrontService();
+    auto srcNodeID = createKey(g_srcNodeID);
+
+    // truncated / illegal frame
+    bcos::bytes garbage{'x', 'y', 'z'};
+    auto error = task::syncWait(
+        frontService->onReceiveMessage(g_groupID, srcNodeID, bcos::ref(garbage)));
+    BOOST_REQUIRE(error);
+    BOOST_CHECK_EQUAL(error->errorCode(), bcos::protocol::CommonError::MessageDecodeFailed);
+
+    // the broadcast entry delegates to onReceiveMessage, so it shares the same fail-closed path
+    auto broadcastError = task::syncWait(
+        frontService->onReceiveBroadcastMessage(g_groupID, srcNodeID, bcos::ref(garbage)));
+    BOOST_REQUIRE(broadcastError);
+    BOOST_CHECK_EQUAL(
+        broadcastError->errorCode(), bcos::protocol::CommonError::MessageDecodeFailed);
+}
+
 BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_fireAndForget)
 {
     auto frontService = buildFrontService();
@@ -161,8 +184,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_onRecieveNodeIDsAnd)
 
     auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
     groupNodeInfo->setNodeIDList(std::move(expectedNodeIDList));
-    frontService->onReceiveGroupNodeInfo(
-        "1", groupNodeInfo, [](Error::Ptr _error) { BOOST_CHECK(_error == nullptr); });
+    auto error = task::syncWait(frontService->onReceiveGroupNodeInfo("1", groupNodeInfo));
+    BOOST_CHECK(error == nullptr);
 
     // Use wait_for with timeout to avoid hanging indefinitely on CI
     auto status = f.wait_for(std::chrono::seconds(10));
@@ -175,15 +198,15 @@ BOOST_AUTO_TEST_CASE(testFrontService_onRecieveNodeIDsAnd)
     }
 }
 
-BOOST_AUTO_TEST_CASE(testFrontService_asyncSendResponse_coroutine)
+BOOST_AUTO_TEST_CASE(testFrontService_sendResponse_coroutine)
 {
     auto frontService = buildFrontService();
     auto dstNodeID = createKey(g_dstNodeID_0);
     std::string data(100000, '#');
     int moduleID = 12345;
 
-    // the module dispatcher replies through the (kept) asyncSendResponse API, which is now a thin
-    // wrapper over the coroutine sendMessage(isResponse=true)
+    // the module dispatcher replies through the coroutine sendResponse API; the detached task owns
+    // the id/nodeID/payload copies so the bytesConstRef view stays valid until the send completes
     auto resultPromise = std::make_shared<std::promise<SendResult>>();
     auto resultFuture = resultPromise->get_future();
     frontService->registerModuleMessageDispatcher(moduleID,
@@ -191,9 +214,14 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendResponse_coroutine)
             const std::string& _id, bytesConstRef _data) {
             (void)_nodeID;
             (void)_data;
-            frontService->asyncSendResponse(_id, moduleID, dstNodeID,
-                bytesConstRef((unsigned char*)data.data(), data.size()),
-                [](Error::Ptr _error) { (void)_error; });
+            task::wait([](decltype(frontService) _frontService, std::string _responseID,
+                           decltype(dstNodeID) _dstNodeID, int _moduleID,
+                           std::string _payload) -> task::Task<void> {
+                auto error = co_await _frontService->sendResponse(_responseID, _moduleID,
+                    _dstNodeID,
+                    bytesConstRef((unsigned char*)_payload.data(), _payload.size()));
+                (void)error;
+            }(frontService, _id, dstNodeID, moduleID, data));
         });
 
     auto self = frontService;
@@ -300,7 +328,7 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine_withResponse
     // Round-6 review finding 2 (test gap): the response-waiting coroutine path (_timeout > 0) was
     // never covered — the existing coroutine test passes _timeout == 0, which returns before the
     // SendResponseAwaitable is even constructed. This drives the real response path end-to-end:
-    // the module dispatcher receives the request and replies via sendMessage(isResponse=true), the
+    // the module dispatcher receives the request and replies via sendResponse, the
     // fake gateway loops the response back, and handleCallback completes the registered
     // SendResponseAwaitable, which resumes the suspended coroutine with the SendResult.
     auto frontService = buildFrontService();
@@ -323,10 +351,14 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine_withResponse
             // reply with an isResponse=true frame carrying the same uuid; the fake gateway loops
             // it back to onReceiveMessage, where message.isResponse() triggers handleCallback ->
             // SendResponseAwaitable::complete
-            frontService->sendMessage(moduleID, dstNodeID, _id,
-                bytesConstRef(reinterpret_cast<const bcos::byte*>(responsePayload.data()),
-                    responsePayload.size()),
-                true, nullptr);
+            auto fs = frontService;
+            task::wait([](decltype(fs) _frontService, int _moduleID,
+                           bcos::crypto::NodeIDPtr _dstNodeID, std::string _id,
+                           bcos::bytes _payload) -> task::Task<void> {
+                (void)co_await _frontService->sendResponse(
+                    _id, _moduleID, std::move(_dstNodeID), bcos::ref(_payload));
+            }(fs, moduleID, dstNodeID, _id,
+                bcos::bytes(responsePayload.begin(), responsePayload.end())));
         });
 
     auto self = frontService;

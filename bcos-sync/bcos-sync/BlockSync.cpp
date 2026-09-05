@@ -134,17 +134,22 @@ void BlockSync::initSendResponseHandler()
             {
                 return;
             }
-            frontService->asyncSendResponse(
-                _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
-                    if (_error)
-                    {
-                        BLKSYNC_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                                           << LOG_KV("module", std::to_string(_moduleID))
-                                           << LOG_KV("dst", _dstNode->shortHex())
-                                           << LOG_KV("code", _error->errorCode())
-                                           << LOG_KV("msg", _error->errorMessage());
-                    }
-                });
+            // fire-and-forget: the coroutine parameters own the payload copy so nothing
+            // dangles after task::wait detaches
+            task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _id,
+                           int _moduleID, NodeIDPtr _dstNode,
+                           bcos::bytes _payload) -> task::Task<void> {
+                auto error = co_await _frontService->sendResponse(
+                    _id, _moduleID, _dstNode, bcos::ref(_payload));
+                if (error)
+                {
+                    BLKSYNC_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                                       << LOG_KV("module", std::to_string(_moduleID))
+                                       << LOG_KV("dst", _dstNode->shortHex())
+                                       << LOG_KV("code", error->errorCode())
+                                       << LOG_KV("msg", error->errorMessage());
+                }
+            }(frontService, _id, _moduleID, _dstNode, _data.toBytes()));
         }
         catch (std::exception const& e)
         {
@@ -670,7 +675,7 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to, int32_t blockD
                 }
                 auto encodedData = blockRequest->encode();
                 // owned payload -> zero-copy through the front/gateway coroutine fast path
-                m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+                m_config->frontService()->sendMessageByNodeIDByOwnedPayload(
                     ModuleID::BlockSync, _p->nodeId(), std::move(encodedData));
 
                 m_maxRequestNumber = std::max(m_maxRequestNumber.load(), to);
@@ -883,7 +888,7 @@ void BlockSync::fetchAndSendBlock(
                 _block->encode(blockData);
                 blocksReq->appendBlockData(std::move(blockData));
                 blocksReq->setNumber(_number);
-                config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+                config->frontService()->sendMessageByNodeIDByOwnedPayload(
                     ModuleID::BlockSync, _peer, blocksReq->encode());
                 BLKSYNC_LOG(DEBUG)
                     << BLOCK_NUMBER(_number) << LOG_DESC("fetchAndSendBlock: response block")

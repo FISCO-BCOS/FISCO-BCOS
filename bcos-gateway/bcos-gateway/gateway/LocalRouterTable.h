@@ -23,11 +23,14 @@
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-framework/gateway/GatewayInterface.h"
 #include "bcos-framework/multigroup/GroupInfo.h"
+#include <bcos-task/Task.h>
 #include <memory>
 namespace bcos
 {
 namespace gateway
 {
+class P2PMessage;
+
 class LocalRouterTable
 {
 public:
@@ -55,11 +58,12 @@ public:
     // groupID => nodeID => FrontServiceInfo
     GroupNodeListType nodeList() const;
 
-    bool asyncBroadcastMsg(uint16_t _nodeType, const std::string& _groupID, uint16_t _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) const;
+    bool broadcastMsg(uint16_t _nodeType, const std::string& _groupID, uint16_t _moduleID,
+        bcos::crypto::NodeIDPtr _srcNodeID, std::shared_ptr<P2PMessage> _msg) const;
 
-    bool sendMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
-        bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc);
+    task::Task<bcos::Error::Ptr> sendMessage(const std::string& _groupID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
+        bytesConstRef _payload);
 
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
