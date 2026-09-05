@@ -16,13 +16,14 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
-#include <stdexcept>
 
 using namespace bcostars::protocol;
 
 namespace bcos::test
 {
-// Three guards share one exception type; match what() to tell them apart.
+// Guards throw domain-typed exceptions (InvalidEngineEncoding) or bare
+// std::invalid_argument (calcOpBaseFee's parameter guards, pre-existing); match
+// what() to tell them apart either way.
 static void expectThrowMessage(const std::function<void()>& call, std::string_view expectedText)
 {
     bool threw = false;
@@ -30,14 +31,14 @@ static void expectThrowMessage(const std::function<void()>& call, std::string_vi
     {
         call();
     }
-    catch (std::invalid_argument const& e)
+    catch (std::exception const& e)
     {
         threw = true;
         BOOST_CHECK_MESSAGE(std::string_view(e.what()).find(expectedText) != std::string_view::npos,
             "expected \"" << expectedText << "\" in what(): " << e.what());
     }
     BOOST_CHECK_MESSAGE(
-        threw, "expected std::invalid_argument containing \"" << expectedText << "\"");
+        threw, "expected an exception containing \"" << expectedText << "\"");
 }
 
 namespace
