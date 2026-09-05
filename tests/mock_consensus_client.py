@@ -6,9 +6,13 @@ mock_consensus_client.py — FISCO-BCOS Engine API Smoke Test (Karst dialect)
 
   1. engine_exchangeCapabilities   — 节点实现的全部方法(Karst 三件套 + V1-V3 旧版本)
   2. engine_forkchoiceUpdatedV3    — 无 payloadAttributes(纯状态更新)
-  3. engine_forkchoiceUpdatedV3    — 带 payloadAttributes:秒级时间戳、注入一笔 0x7e
-                                     deposit 裸交易、noTxPool true/false 轮换
-  4. engine_getPayloadV5           — 校验 V5 响应形状,断言 deposit 原字节在列
+  3. engine_forkchoiceUpdatedV3    — 带 payloadAttributes:秒级时间戳、noTxPool
+                                     true/false 轮换;无 forced 交易的空 payload
+                                     跑通 FCU -> getPayloadV5 -> newPayloadV4 -> 提交
+  3b. forced 0x7e deposit          — KNOWN GAP pin:execution-lane wiring 落地前,v2
+                                     buildPayload 的 fail-closed guard 拒绝该形态
+                                     (详见 test_forced_deposit_refused_... docstring)
+  4. engine_getPayloadV5           — 校验 V5 响应形状(含秒级时间戳线契约)
   5. engine_newPayloadV4           — [payload, [], beaconRoot, []] 提交
   6. V2 旧版本回路                 — FCU V2 -> getPayloadV2 -> newPayloadV2 仍然可用
   7. 负测                          — 未实现版本 -38005、未知 payloadId -38001、缺参 -32602
@@ -242,9 +246,19 @@ def next_timestamp() -> str:
     return hex(int(time.time()) + _timestamp_bump)
 
 
-def run_karst_block_flow(no_tx_pool: bool) -> bool:
-    """One op-node-shaped block: FCU V3 (deposit injected) -> getPayloadV5 -> newPayloadV4."""
-    label = f"noTxPool={str(no_tx_pool).lower()}"
+def run_karst_block_flow(no_tx_pool: bool, inject_deposit: bool) -> bool:
+    """One op-node-shaped block: FCU V3 -> getPayloadV5 -> newPayloadV4 (+ commit).
+
+    inject_deposit=True reproduces the OP shape where payloadAttributes carries the forced
+    0x7e deposit. That shape is currently REFUSED on the v2 harness chain by buildPayload's
+    fail-closed guard (no 0x7E execution until the eth_sync execution-lane wiring lands), so
+    the deposit round-trip itself is pinned as a known gap in
+    test_forced_deposit_refused_until_execution_lane_wiring, and this flow is driven with
+    inject_deposit=False: an (empty) build -> get -> newPayload -> commit round-trip that
+    still covers the V5 response shape, the Unix-seconds wire contract and the committed
+    block's head/timestamp checks.
+    """
+    label = f"noTxPool={str(no_tx_pool).lower()}, deposit={str(inject_deposit).lower()}"
     _log_test(f"FCU V3 + getPayloadV5 + newPayloadV4 ({label})")
 
     head_hash = get_head_hash()
@@ -255,13 +269,12 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
     }
     timestamp_hex = next_timestamp()
     sent_seconds = int(timestamp_hex, 16)
-    payload_attrs = {
+    payload_attrs: Dict[str, Any] = {
         "timestamp": timestamp_hex,
         "prevRandao": PREV_RANDAO,
         "suggestedFeeRecipient": FEE_RECIPIENT,
         "withdrawals": [],
         "parentBeaconBlockRoot": ZERO_HASH,
-        "transactions": [DEPOSIT_RAW],
         "noTxPool": no_tx_pool,
         "gasLimit": ATTRS_GAS_LIMIT,
         # Bare JSON number, NOT a hex string: op-node serializes MinBaseFee as a plain
@@ -275,6 +288,8 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         # built extraData.
         "eip1559Params": "0x0000000000000000",
     }
+    if inject_deposit:
+        payload_attrs["transactions"] = [DEPOSIT_RAW]
 
     fcu = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, payload_attrs])
     status = fcu["payloadStatus"]["status"]
@@ -323,15 +338,28 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         )
         return False
 
-    # dep-1 byte fidelity: the injected deposit's raw bytes lead the transaction list.
     txs = payload["transactions"]
-    if not txs or txs[0].lower() != DEPOSIT_RAW.lower():
-        _log_fail(f"deposit raw bytes not first in payload transactions: {txs[:2]}")
-        return False
-    if no_tx_pool and len(txs) != 1:
-        _log_fail(f"noTxPool=true payload must contain exactly the forced deposit, got {len(txs)}")
-        return False
-    _log_info(f"deposit in payload at index 0 ({len(txs)} tx total)")
+    if inject_deposit:
+        # dep-1 byte fidelity: the injected deposit's raw bytes lead the transaction list.
+        if not txs or txs[0].lower() != DEPOSIT_RAW.lower():
+            _log_fail(f"deposit raw bytes not first in payload transactions: {txs[:2]}")
+            return False
+        if no_tx_pool and len(txs) != 1:
+            _log_fail(
+                f"noTxPool=true payload must contain exactly the forced deposit, got {len(txs)}"
+            )
+            return False
+        _log_info(f"deposit in payload at index 0 ({len(txs)} tx total)")
+    else:
+        # No forced transactions (and an empty mempool in this harness): a noTxPool=true
+        # payload must be empty. Under noTxPool=false the mempool is the only source, so
+        # just report the count either way.
+        if no_tx_pool and txs:
+            _log_fail(
+                f"noTxPool=true with no forced txs must be empty, got {len(txs)} txs"
+            )
+            return False
+        _log_info(f"{len(txs)} tx total")
 
     beacon_root = result.get("parentBeaconBlockRoot", ZERO_HASH)
     new_status = rpc_result("engine_newPayloadV4", [payload, [], beacon_root, []])
@@ -369,6 +397,68 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
 
     _log_pass()
     return True
+
+
+def test_forced_deposit_refused_until_execution_lane_wiring() -> None:
+    """KNOWN GAP pin: a v2 payload carrying a forced 0x7e deposit is REFUSED fail-closed.
+
+    Round-4/5 review consensus (this PR series): on executor_version >= 2 the engine commits
+    txsRoot over EVERY raw payload transaction but can only build receipts for the executed
+    (decoded) subset, and a 0x7e deposit has no executable form yet — so a deposit-carrying
+    payload would commit an M-entry receipts trie beside an N-entry transactions trie keyed
+    0..M-1 that no external Ethereum verifier can reproduce. buildPayload therefore throws
+    (EngineServiceImpl.h: "Payload contains raw-only (forced/deposit) transactions not
+    executable yet"). Deposit execution (0x7E) + raw->executable decoding land in the
+    eth_sync execution-lane wiring PR; this pin turns RED the day the FCU starts building
+    the deposit again, at which point the full deposit round-trip in run_karst_block_flow
+    (inject_deposit=True) must be restored.
+    """
+    _log_test(
+        "FCU V3 + forced 0x7e deposit -> refused (known gap until execution-lane wiring)"
+    )
+
+    head_hash = get_head_hash()
+    fc_state = {
+        "headBlockHash": head_hash,
+        "safeBlockHash": head_hash,
+        "finalizedBlockHash": head_hash,
+    }
+
+    for no_tx_pool in (True, False):
+        payload_attrs: Dict[str, Any] = {
+            "timestamp": next_timestamp(),
+            "prevRandao": PREV_RANDAO,
+            "suggestedFeeRecipient": FEE_RECIPIENT,
+            "withdrawals": [],
+            "parentBeaconBlockRoot": ZERO_HASH,
+            "transactions": [DEPOSIT_RAW],
+            "noTxPool": no_tx_pool,
+            "gasLimit": ATTRS_GAS_LIMIT,
+            "minBaseFee": 0,
+            "eip1559Params": "0x0000000000000000",
+        }
+        data = rpc_raw("engine_forkchoiceUpdatedV3", [fc_state, payload_attrs])
+        if "error" not in data:
+            _log_fail(
+                f"noTxPool={str(no_tx_pool).lower()}: deposit payload was BUILT instead of "
+                "refused — execution-lane wiring landed? Restore the deposit round-trip in "
+                "run_karst_block_flow(inject_deposit=True) and drop this pin."
+            )
+            return
+        code = data["error"].get("code")
+        msg = str(data["error"].get("message", ""))
+        # The -32603 message is the boost diagnostic (throw site + type), not the guard's
+        # what() text; anchor on the code and the buildPayload throw site.
+        if code != -32603 or "buildPayload" not in msg:
+            _log_fail(
+                f"noTxPool={str(no_tx_pool).lower()}: expected -32603 from buildPayload, "
+                f"got code={code}: {msg[:200]}"
+            )
+            return
+        _log_info(
+            f"noTxPool={str(no_tx_pool).lower()}: deposit payload refused by buildPayload (-32603)"
+        )
+    _log_pass()
 
 
 def run_v2_block_flow() -> None:
@@ -687,10 +777,15 @@ def main() -> int:
         # 2. Pure forkchoice update (no payload build).
         test_forkchoice_v3_without_payload()
 
-        # 3./4./5. Two full block flows with noTxPool rotation: the forced deposit must
-        # be the whole payload under noTxPool=true, and still lead it under false.
-        if run_karst_block_flow(no_tx_pool=True):
-            run_karst_block_flow(no_tx_pool=False)
+        # 3. Known gap until the eth_sync execution-lane wiring lands: the forced 0x7e
+        # deposit shape is refused fail-closed by v2 buildPayload (pin below). The wiring
+        # PR restores the deposit round-trip in run_karst_block_flow(inject_deposit=True).
+        test_forced_deposit_refused_until_execution_lane_wiring()
+
+        # 4./5. Full build -> get -> newPayload -> commit flows with noTxPool rotation
+        # (no forced transactions; the harness mempool is empty, so the payload is empty).
+        if run_karst_block_flow(no_tx_pool=True, inject_deposit=False):
+            run_karst_block_flow(no_tx_pool=False, inject_deposit=False)
 
         # 6. The pre-Karst surface is still live.
         run_v2_block_flow()
