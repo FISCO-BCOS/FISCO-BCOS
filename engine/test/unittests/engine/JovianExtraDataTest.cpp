@@ -389,6 +389,9 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_every_hash_relevant_fiel
     built.withdrawalsRoot = h256(1);
     built.blobGasUsed = u256(1);
     built.excessBlobGas = u256(1);
+    built.withdrawals = std::vector<WithdrawalV1>{};
+    built.blockAccessList = bytes{0x01, 0x02};
+    built.slotNumber = 7;
 
     // Honest echo: no mismatch.
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(built, built).has_value());
@@ -417,6 +420,13 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_every_hash_relevant_fiel
         {"withdrawalsRoot", [](ExecutionPayload& p) { p.withdrawalsRoot = h256(2); }},
         {"blobGasUsed", [](ExecutionPayload& p) { p.blobGasUsed = u256(2); }},
         {"excessBlobGas", [](ExecutionPayload& p) { p.excessBlobGas = u256(2); }},
+        // The newer comparator arms (round-5 finding R2): present-vs-present value
+        // disagreements on the withdrawals LIST and the V4 shape fields must reject
+        // exactly like the hash fields — a dropped arm would keep every suite green.
+        {"withdrawals",
+            [](ExecutionPayload& p) { p.withdrawals->push_back(WithdrawalV1{}); }},
+        {"blockAccessList", [](ExecutionPayload& p) { p.blockAccessList = bytes{0x09}; }},
+        {"slotNumber", [](ExecutionPayload& p) { p.slotNumber = 8; }},
     };
     for (auto const& arm : arms)
     {
