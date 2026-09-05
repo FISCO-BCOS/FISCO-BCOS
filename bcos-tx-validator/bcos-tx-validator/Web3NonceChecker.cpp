@@ -54,8 +54,7 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     // sent by the address. For example, if 5 is stored in the storage, then the transactionCount
     // obtained from the rpc api by the web3 tool is 5; then the new transaction will be sent
     // from 5.
-    if (!onlyCheckLedgerNonce &&
-        co_await bcos::storage2::existsOne(m_memoryNonces, std::make_pair(sender, nonceU256)))
+    if (!onlyCheckLedgerNonce && co_await existsMemoryNonce(sender, nonce))
     {
         // memory nonce check nonce existence in memory first, if not exist, then check from storage
         TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce mem check fail")
@@ -108,6 +107,12 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     co_return co_await checkWeb3Nonce(_tx.sender(), _tx.nonce(), onlyCheckLedgerNonce);
 }
 
+task::Task<bool> Web3NonceChecker::existsMemoryNonce(
+    std::string_view sender, std::string_view nonce)
+{
+    co_return co_await storage2::existsOne(m_memoryNonces, std::make_pair(sender, u256(nonce)));
+}
+
 task::Task<bool> Web3NonceChecker::insertMemoryNonce(std::string sender, std::string nonce)
 {
     auto const uNonce = u256(nonce);
@@ -133,6 +138,28 @@ task::Task<bool> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
                           << LOG_KV("sender", toHex(sender)) << LOG_KV("newNonce", uNonce);
     }
     co_return true;
+}
+
+task::Task<std::optional<u256>> Web3NonceChecker::committedNonce(std::string_view sender)
+{
+    auto const senderView = std::string(sender);
+    if (auto const cached = co_await bcos::storage2::readOne(m_ledgerStateNonces, senderView))
+    {
+        co_return cached;
+    }
+    auto const senderHex = toHex(sender);
+    if (auto const storageState = co_await m_ledger->getStorageState(senderHex, 0);
+        storageState.has_value())
+    {
+        auto const nonceInStorage = u256(storageState.value().nonce);
+        // Monotonic: only ever raise the cached value (FIB-59).
+        co_await storage2::writeOneIf(m_ledgerStateNonces, senderView, nonceInStorage,
+            [&](u256 const& existing) { return nonceInStorage > existing; });
+        co_return nonceInStorage;
+    }
+    // The account has no on-chain state yet. Reported as absent, not as nonce 0 -- see
+    // txvalidator::AccountState::nonce.
+    co_return std::nullopt;
 }
 
 task::Task<std::optional<u256>> Web3NonceChecker::getPendingNonce(std::string_view sender)
