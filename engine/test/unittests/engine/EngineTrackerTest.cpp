@@ -308,7 +308,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_set_but_unresolved_safe_hash_is_rejected)
         .finalizedCanonical = true,
     };
     checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(unresolved); },
-        "could not be resolved");
+        "Forkchoice safe block is set but its number could not be resolved");
 
     // The stored heights survive the rejected apply.
     BOOST_REQUIRE(tracker.safeBlockNumber().has_value());
@@ -322,7 +322,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_head_canonical_required_on_first_apply_and_p
     EngineTracker tracker;
     checkExceptionMessage<InvalidForkchoiceState>(
         [&]() { tracker.applyForkchoice(resolved(h256(10), 10, false, false)); },
-        "head block is not canonical");
+        "Forkchoice head block is not canonical");
     BOOST_CHECK(!tracker.trackedHead().has_value());
 
     // First apply with a confirmed head seeds the tracker…
@@ -332,7 +332,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_head_canonical_required_on_first_apply_and_p
     // …and a +1 advance still requires the canonical confirmation.
     checkExceptionMessage<InvalidForkchoiceState>(
         [&]() { tracker.applyForkchoice(resolved(h256(11), 11, false, false)); },
-        "head block is not canonical");
+        "Forkchoice head block is not canonical");
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
 
     tracker.applyForkchoice(resolved(h256(11), 11, true, false));
@@ -608,7 +608,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_moved_from_exclusive_access_is_dead)
     auto guard = tracker.lockExclusive();
     auto moved = std::move(guard);
     checkExceptionMessage<InvalidGuardState>(
-        [&]() { guard.findPayload("0x01"); }, "used after move");
+        [&]() { guard.findPayload("0x01"); },
+        "EngineTracker::ExclusiveAccess used after move or without owning its lock");
     BOOST_CHECK(moved.findPayload("0x01") == nullptr);
 }
 
