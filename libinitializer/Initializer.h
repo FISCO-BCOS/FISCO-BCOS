@@ -64,6 +64,10 @@ namespace single_consensus
 {
 class SingleNodeConsensus;
 }
+namespace ledger::mpt
+{
+class CommitObserver;
+}
 namespace storage2
 {
 template <class Key, class ValueT>
@@ -180,6 +184,11 @@ private:
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
 #endif
     std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
+    /// The shared MPT pruner (storage.mpt_prune_window > 0), injected into every baseline
+    /// scheduler variant at build time. Declared right after the storage initializer so the
+    /// pruner — which borrows the committed backend — is always destroyed before it.
+    /// Null when pruning is disabled (the schedulers then keep their NoopCommitObserver).
+    std::shared_ptr<bcos::ledger::mpt::CommitObserver> m_mptCommitObserver;
     std::shared_ptr<EngineServiceInitializer> m_engineServiceInitializer;
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> m_singleNodeConsensus;
     std::shared_ptr<executor_v1::PrecompiledManager> m_precompiledManager;

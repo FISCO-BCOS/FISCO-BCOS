@@ -126,6 +126,10 @@ public:
     int minWriteBufferNumberToMerge() const;
     size_t blockCacheSize() const;
     bool enableRocksDBBlob() const;
+    // MPT pruning (pathdb spec §4.8): retention window in blocks, -1 = disabled (default,
+    // archive behavior); per-pass delete batch size.
+    std::int64_t mptPruneWindow() const;
+    std::int64_t mptPruneBatchSize() const;
     std::vector<std::string> const& pdAddrs() const;
     std::string const& pdCaPath() const;
     std::string const& pdCertPath() const;
@@ -489,6 +493,10 @@ private:
     int m_minWriteBufferNumberToMerge = 2;
     size_t m_blockCacheSize = 128 << 20;
     bool m_enableRocksDBBlob = false;
+    // MPT pruning (pathdb spec §4.8): a node whose refcount hits 0 at block b is deleted once
+    // block b + mptPruneWindow commits; state roots in [head - N, head] stay fully reachable.
+    std::int64_t m_mptPruneWindow = -1;  // -1 = disabled (default, archive behavior)
+    std::int64_t m_mptPruneBatchSize = 1000;
 
     bool m_enableArchive = false;
     bool m_syncArchivedBlocks = false;

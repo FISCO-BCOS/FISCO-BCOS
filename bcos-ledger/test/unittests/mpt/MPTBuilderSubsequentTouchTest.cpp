@@ -614,6 +614,54 @@ BOOST_AUTO_TEST_CASE(DeleteLastLeafThenInsertNewSlotRecomputesStorageRoot)
     BOOST_CHECK(!oldSlot.has_value());
 }
 
+BOOST_AUTO_TEST_CASE(UntrackedBuildSkipsRefCountTallyOnly)
+{
+    // CommitObserver::needsRefCountDeltas()==false (no pruning configured) makes
+    // buildAndCollect skip the refCountDeltas tally entirely — and change NOTHING else: the
+    // state root and every node set are byte-identical to the tracked build of the same block.
+    // Two fresh node storages, so the untracked build re-derives its nodes rather than seeing
+    // the tracked build's flush.
+    auto runBuild = [](bool trackRefCounts) {
+        NodeStorage storage;
+        auto const addr = makeAddress(0xAB);
+        Account prior;
+        prior.nonce = 1;
+        prior.balance = 100;
+        prior.storageRoot = buildStorageTrie(
+            storage, {{slotKey(0x00), bcos::bytes{0x10}}, {slotKey(0x01), bcos::bytes{0x11}}});
+        auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
+
+        FlatBackendStorage flatBackend;
+        auto view = makeFlatView(flatBackend);
+        writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("2"));
+        writeFlatRow(view, accountSlotKey(addr, slotKey(0x00)), slotEntry(bcos::bytes{0xFF}));
+        deleteFlatRowLogically(view, accountSlotKey(addr, slotKey(0x01)));
+        return bcos::task::syncWait(
+            buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, trackRefCounts));
+    };
+
+    auto const tracked = runBuild(true);
+    auto const untracked = runBuild(false);
+
+    // The scenario really exercised both directions of the tally (else the comparison below is
+    // vacuous): the storage rebuild emits nodes (+) and obsoletes prior ones (−).
+    bool sawPositive = false;
+    bool sawNegative = false;
+    for (auto const& [hash, movement] : tracked.refCountDeltas)
+    {
+        sawPositive = sawPositive || movement > 0;
+        sawNegative = sawNegative || movement < 0;
+    }
+    BOOST_REQUIRE(sawPositive);
+    BOOST_REQUIRE(sawNegative);
+
+    BOOST_CHECK(untracked.refCountDeltas.empty());
+    BOOST_CHECK_EQUAL(tracked.stateRoot, untracked.stateRoot);
+    BOOST_CHECK(tracked.newNodes == untracked.newNodes);
+    BOOST_CHECK(tracked.obsoletedNodes == untracked.obsoletedNodes);
+    BOOST_CHECK(tracked.intraBlockObsoleted == untracked.intraBlockObsoleted);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::ledger::mpt::test

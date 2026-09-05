@@ -1735,6 +1735,18 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_blockCacheSize = _pt.get<size_t>("storage.block_cache_size", 128 << 20);
     m_enableDBStatistics = _pt.get<bool>("storage.enable_statistics", false);
     m_enableRocksDBBlob = _pt.get<bool>("storage.enable_rocksdb_blob", false);
+    m_mptPruneWindow = _pt.get<int64_t>("storage.mpt_prune_window", -1);
+    m_mptPruneBatchSize = _pt.get<int64_t>("storage.mpt_prune_batch_size", 1000);
+    // MPT pruning retention window: -1 disables; 0 would delete nodes in the very block that
+    // obsoletes them (the head root itself must stay provable), and a huge window is a config
+    // mistake against the disk-bounding purpose. Fail loudly instead of mis-pruning.
+    if (m_mptPruneWindow < -1 || m_mptPruneWindow == 0 || m_mptPruneWindow > 10'000'000)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[storage].mpt_prune_window must be -1 (disabled) or in "
+                                  "[1, 10000000], got " +
+                                  std::to_string(m_mptPruneWindow)));
+    }
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
@@ -1776,6 +1788,8 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("archiveListenIP", m_archiveListenIP)
                          << LOG_KV("archiveListenPort", m_archiveListenPort)
                          << LOG_KV("enable_rocksdb_blob", m_enableRocksDBBlob)
+                         << LOG_KV("mptPruneWindow", m_mptPruneWindow)
+                         << LOG_KV("mptPruneBatchSize", m_mptPruneBatchSize)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
@@ -2481,6 +2495,16 @@ size_t NodeConfig::blockCacheSize() const
 bool NodeConfig::enableRocksDBBlob() const
 {
     return m_enableRocksDBBlob;
+}
+
+std::int64_t NodeConfig::mptPruneWindow() const
+{
+    return m_mptPruneWindow;
+}
+
+std::int64_t NodeConfig::mptPruneBatchSize() const
+{
+    return m_mptPruneBatchSize;
 }
 
 std::vector<std::string> const& NodeConfig::pdAddrs() const

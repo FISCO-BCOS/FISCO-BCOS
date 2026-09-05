@@ -144,6 +144,12 @@ public:
     }
     protocol::BlockNumber finalizedBlockDepth() const noexcept { return m_finalizedBlockDepth; }
 
+    /// MPT pruning retention window (storage.mpt_prune_window; pathdb spec §4.8), wired from
+    /// the node config so historical-state endpoints can distinguish "state root pruned on
+    /// schedule" from an unexpected node-storage miss. <= 0 (default): pruning disabled.
+    void setMPTPruneWindow(std::int64_t _window) noexcept { m_mptPruneWindow = _window; }
+    std::int64_t mptPruneWindow() const noexcept { return m_mptPruneWindow; }
+
     void setLedgerPrx(bcostars::LedgerServicePrx const& _ledgerPrx) { m_ledgerPrx = _ledgerPrx; }
 
     bool unreachable()
@@ -177,6 +183,9 @@ private:
 
     /// Raw pointer to the single-node-consensus mempool (see setMemPool for lifetime).
     bcos::txpool::MemPoolImpl* m_memPool = nullptr;
+
+    /// MPT pruning retention window; see setMPTPruneWindow.
+    std::int64_t m_mptPruneWindow = -1;
 
     bcostars::LedgerServicePrx m_ledgerPrx;
 };

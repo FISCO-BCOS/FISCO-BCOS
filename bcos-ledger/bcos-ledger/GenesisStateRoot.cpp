@@ -108,6 +108,11 @@ bcos::task::Task<bcos::ledger::GenesisStateTrie> bcos::ledger::computeGenesisSta
 {
     std::map<bcos::h256, bcos::bytes> stateEntries;
     std::unordered_map<bcos::h256, bcos::bytes> nodes;
+    // Per-hash emission multiplicity across the genesis tries. nodes.merge() below dedupes
+    // byte-identical nodes shared between sub-tries; each EMITTING trie holds a real reference
+    // and must be counted, or the pruning refcounts seeded from this map would under-count
+    // shared nodes (a two-accounts-with-identical-storage alloc shares whole sub-tries).
+    std::unordered_map<bcos::h256, uint64_t> nodeCounts;
     // Reject a repeated address: the map below is last-wins (the root would commit only the
     // final alloc) while both importers apply EVERY alloc in order (storage slots accumulate,
     // later nonce/balance/code overwrite). A duplicated address therefore makes the returned
@@ -120,6 +125,10 @@ bcos::task::Task<bcos::ledger::GenesisStateTrie> bcos::ledger::computeGenesisSta
     {
         auto storageTrie = co_await storageTrieOf(alloc.storage);
         auto storageRoot = storageTrie.root;
+        for (auto const& [hash, rlp] : storageTrie.newNodes)
+        {
+            ++nodeCounts[hash];
+        }
         nodes.merge(storageTrie.newNodes);
 
         auto codeBytes = unhexAllocBytes(alloc.code, "code");
@@ -184,6 +193,12 @@ bcos::task::Task<bcos::ledger::GenesisStateTrie> bcos::ledger::computeGenesisSta
     }
 
     auto accountTrie = mpt::computeTrieRoot(stateEntries);
+    for (auto const& [hash, rlp] : accountTrie.newNodes)
+    {
+        ++nodeCounts[hash];
+    }
     nodes.merge(accountTrie.newNodes);
-    co_return GenesisStateTrie{.root = accountTrie.root, .nodes = std::move(nodes)};
+    co_return GenesisStateTrie{.root = accountTrie.root,
+        .nodes = std::move(nodes),
+        .nodeCounts = std::move(nodeCounts)};
 }

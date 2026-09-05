@@ -139,8 +139,41 @@ BOOST_AUTO_TEST_CASE(SelfdestructRemovesAccountFromTrie)
     // account-trie rebuild obsoletes the prior root node.
     BOOST_CHECK(output.obsoletedNodes.contains(accountA.storageRoot));
     BOOST_CHECK(output.obsoletedNodes.contains(parentRoot));
+    // The tombstone path is the one producer that writes refCountDeltas by hand: the prior
+    // storage root's −1 lets the pruner schedule it like any other obsoletion (F4).
+    BOOST_REQUIRE(output.refCountDeltas.contains(accountA.storageRoot));
+    BOOST_CHECK_EQUAL(output.refCountDeltas.at(accountA.storageRoot), -1);
 
     // The new state trie is exactly a from-scratch build over the survivors.
+    BOOST_CHECK(output.stateRoot == stateRootOracle({{addrB, accountB}}));
+}
+
+BOOST_AUTO_TEST_CASE(UntrackedTombstoneSkipsManualRefCountEntry)
+{
+    // The tombstone path's hand-maintained refCountDeltas entry (finalizeAccount) obeys the
+    // same trackRefCounts switch as mergeNodeDelta: untracked, the prior storage root still
+    // reaches obsoletedNodes but refCountDeltas stays empty.
+    NodeStorage storage;
+    auto const addrA = makeAddress(0x51);
+    auto const addrB = makeAddress(0x52);
+
+    Account accountA;
+    accountA.nonce = 1;
+    accountA.balance = 10;
+    accountA.storageRoot = buildStorageTrie(storage, {{slotKey(0x00), bcos::bytes{0x10}}});
+    Account accountB;
+    accountB.balance = 99;
+    auto const parentRoot = buildStateTrie(storage, {{addrA, accountA}, {addrB, accountB}});
+
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeTombstoneEntries(view, addrA);
+
+    auto output = bcos::task::syncWait(buildAndCollect(
+        storage, parentRoot, view, /*l2Mode=*/false, /*trackRefCounts=*/false));
+
+    BOOST_CHECK(output.refCountDeltas.empty());
+    BOOST_CHECK(output.obsoletedNodes.contains(accountA.storageRoot));
     BOOST_CHECK(output.stateRoot == stateRootOracle({{addrB, accountB}}));
 }
 
