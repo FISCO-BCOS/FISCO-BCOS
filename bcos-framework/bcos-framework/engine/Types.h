@@ -57,6 +57,10 @@ struct WithdrawalV1
     u256 validatorIndex = 0;
     u256 amount = 0;
     Address address;
+
+    // Element-wise equality so payloads (std::vector<WithdrawalV1>) can be compared:
+    // the withdrawals LIST is the field withdrawalsRoot commits to (finding F21).
+    bool operator==(const WithdrawalV1&) const = default;
 };
 
 struct BlobsBundleV1
