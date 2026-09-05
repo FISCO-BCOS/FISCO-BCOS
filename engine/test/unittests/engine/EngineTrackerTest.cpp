@@ -229,6 +229,58 @@ BOOST_AUTO_TEST_CASE(engine_tracker_swallows_parent_even_with_attributes)
     BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
 }
 
+// A set-but-unresolved safe/finalized hash (non-zero hash, nullopt number) is rejected
+// fail-closed, and a previous FCU's stored height survives it — the store shares the
+// gate's requiresCanonical predicate, so an unresolved pair can never wipe m_safe.
+BOOST_AUTO_TEST_CASE(engine_tracker_set_but_unresolved_safe_hash_is_rejected)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    BOOST_REQUIRE(tracker.safeBlockNumber().has_value());
+    BOOST_CHECK_EQUAL(*tracker.safeBlockNumber(), 10);
+
+    ResolvedForkchoice unresolved{
+        .state = ForkchoiceState{h256(11), h256(20), h256(21)},
+        .headNumber = 11,
+        .safeNumber = std::nullopt,
+        .finalizedNumber = std::nullopt,
+        .headCanonical = true,
+        .payloadAttributesPresent = false,
+        .safeCanonical = true,
+        .finalizedCanonical = true,
+    };
+    checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(unresolved); },
+        "could not be resolved");
+
+    // The stored heights survive the rejected apply.
+    BOOST_REQUIRE(tracker.safeBlockNumber().has_value());
+    BOOST_CHECK_EQUAL(*tracker.safeBlockNumber(), 10);
+}
+
+// headCanonical is fail-closed on first apply and on +1 advance, matching the
+// safe/finalized flags — an unconfirmed head must never seed or advance the tracker.
+BOOST_AUTO_TEST_CASE(engine_tracker_head_canonical_required_on_first_apply_and_plus_one)
+{
+    EngineTracker tracker;
+    checkExceptionMessage<InvalidForkchoiceState>(
+        [&]() { tracker.applyForkchoice(resolved(h256(10), 10, false, false)); },
+        "head block is not canonical");
+    BOOST_CHECK(!tracker.trackedHead().has_value());
+
+    // First apply with a confirmed head seeds the tracker…
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+
+    // …and a +1 advance still requires the canonical confirmation.
+    checkExceptionMessage<InvalidForkchoiceState>(
+        [&]() { tracker.applyForkchoice(resolved(h256(11), 11, false, false)); },
+        "head block is not canonical");
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
+
+    tracker.applyForkchoice(resolved(h256(11), 11, true, false));
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 11);
+}
+
 BOOST_AUTO_TEST_CASE(engine_tracker_swallows_old_head_without_attributes)
 {
     EngineTracker tracker;

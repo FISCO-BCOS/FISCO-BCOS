@@ -49,12 +49,25 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     // canonical-hash check. op-geth (eth/catalyst/api.go forkchoiceUpdated) rejects
     // "safe/final block not in canonical chain"; it does NOT reject a lower number
     // than the previously stored safe/finalized (SetSafe/SetFinalized overwrite).
-    // Same predicate as the store below: an all-zero Engine-API hash is "not set"
-    // and must not be judged canonical (finding F5).
+    // The gate and the store below share this one predicate: a hash that is set but
+    // whose number the resolver could not resolve is rejected here, so the store can
+    // never observe that state and silently wipe a stored height.
     auto requiresCanonical = [](h256 const& hash,
                                  std::optional<bcos::protocol::BlockNumber> const& number) {
         return hash != bcos::h256{} && number.has_value();
     };
+    if (resolved.state.safeBlockHash != bcos::h256{} && !safeBlockNumber.has_value())
+    {
+        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                  "Forkchoice safe block is set but its number could not be "
+                                  "resolved"});
+    }
+    if (resolved.state.finalizedBlockHash != bcos::h256{} && !finalizedBlockNumber.has_value())
+    {
+        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                  "Forkchoice finalized block is set but its number could not "
+                                  "be resolved"});
+    }
     if (requiresCanonical(resolved.state.safeBlockHash, safeBlockNumber) && !resolved.safeCanonical)
     {
         BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
@@ -86,11 +99,29 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
                         "Forkchoice head block hash conflicts with tracked block number"});
             }
         }
-        else if (headBlockNumber != trackedHeadBlock.blockNumber + 1)
+        else if (headBlockNumber == trackedHeadBlock.blockNumber + 1)
+        {
+            // Fail closed like safe/finalized above: a +1 advance that the resolver
+            // cannot confirm canonical must not become the tracked head (finding —
+            // headCanonical was previously consulted only in the same-height branch).
+            if (!resolved.headCanonical)
+            {
+                BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                          "Forkchoice head block is not canonical"});
+            }
+        }
+        else
         {
             BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
                                       "Forkchoice head block number must increase by exactly 1"});
         }
+    }
+    else if (!resolved.headCanonical)
+    {
+        // First apply: same fail-closed rule — an unconfirmed head must not seed the
+        // tracker, or every later +1/conflict check runs against a bogus tip.
+        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                  "Forkchoice head block is not canonical"});
     }
 
     m_forkchoiceState = resolved.state;
@@ -101,11 +132,14 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     // Number rewind is legal (op-geth SetSafe/SetFinalized overwrite), but an
     // all-zero (Engine-API "not set") safe/finalized hash must NOT clear the stored
     // value: op-geth only calls SetSafe/SetFinalized for non-zero hashes (finding AJ).
-    if (resolved.state.safeBlockHash != bcos::h256{})
+    // Same requiresCanonical predicate as the gate above: only a fully resolved
+    // (non-zero hash + present number) pair overwrites the stored height, so a
+    // set-but-unresolved hash can never wipe it.
+    if (requiresCanonical(resolved.state.safeBlockHash, safeBlockNumber))
     {
         m_safe = safeBlockNumber;
     }
-    if (resolved.state.finalizedBlockHash != bcos::h256{})
+    if (requiresCanonical(resolved.state.finalizedBlockHash, finalizedBlockNumber))
     {
         m_finalized = finalizedBlockNumber;
     }
