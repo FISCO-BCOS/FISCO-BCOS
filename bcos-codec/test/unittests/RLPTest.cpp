@@ -27,6 +27,7 @@
 #include <boost/test/unit_test.hpp>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 
 using namespace bcos;
@@ -213,12 +214,18 @@ BOOST_AUTO_TEST_CASE(uint256EncodeAfterShrinkReuse)
     const u256 narrow{0x1234u};
     u256 v("0x0100020003000400050006000700080009000A0B4B000C000D000E01");
     v = narrow;  // lvalue copy-assign: leaves stale high limbs in v
+    // internal_limb_count is a STATIC member of the fixed-width backend type; name the type
+    // once so the non-vacuity scans below neither access the static through an instance nor
+    // hardcode the count (4 limbs on a 64-bit-limb build, 8 on a 32-bit-limb build).
+    using U256BackendType = std::remove_reference_t<decltype(v.backend())>;
     // Precondition: the shrink must genuinely leave stale high limbs behind, otherwise this
-    // test is vacuous and would pass even with the buggy internal_limb_count scan.
+    // test is vacuous and would pass even with the buggy internal_limb_count scan. Scan up to
+    // internal_limb_count (not a hardcoded 4): on a 32-bit-limb build the 256-bit backend
+    // holds 8 limbs, and the scan must cover them all for the guard to stay non-vacuous.
     BOOST_REQUIRE_EQUAL(v.backend().size(), 1u);
     {
         bool hasStaleLimb = false;
-        for (size_t i = v.backend().size(); i < 4u; ++i)
+        for (size_t i = v.backend().size(); i < U256BackendType::internal_limb_count; ++i)
         {
             hasStaleLimb = hasStaleLimb || (v.backend().limbs()[i] != 0);
         }
@@ -239,7 +246,8 @@ BOOST_AUTO_TEST_CASE(uint256EncodeAfterShrinkReuse)
     BOOST_REQUIRE_EQUAL(list[0].backend().size(), 1u);
     {
         bool hasStaleLimb = false;
-        for (size_t i = list[0].backend().size(); i < 4u; ++i)
+        for (size_t i = list[0].backend().size(); i < U256BackendType::internal_limb_count;
+             ++i)
         {
             hasStaleLimb = hasStaleLimb || (list[0].backend().limbs()[i] != 0);
         }

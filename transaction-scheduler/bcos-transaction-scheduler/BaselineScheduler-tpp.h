@@ -167,6 +167,20 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
         }
     }
 
+    // Finalize receipts BEFORE the parallel region. calculateReceiptRoot's sibling task reads
+    // receipt->hash() on the same objects finalizeReceipts mutates (transactionIndex /
+    // logsBloom / cumulativeGasUsed); benign today because TransactionReceiptImpl::hash()
+    // returns the cached dataHash over disjoint members, but finalizing first removes any
+    // scheduling dependence and matches the engine's sequential ordering. The block's receipt
+    // list is restamped here too (clearReceipts/appendReceipt), so the parallel region only
+    // reads.
+    totalGasUsed += ledger::mpt::finalizeReceipts(receipts);
+    block.clearReceipts();
+    for (auto&& receipt : receipts)
+    {
+        block.appendReceipt(receipt);
+    }
+
     tbb::parallel_invoke([&]() { transactionRoot = calculateTransactionRoot(block, hashImpl); },
         [&]() {
             // When the block was built with an Ethereum MPT root (shouldBuildMPT), the header
@@ -181,14 +195,6 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
                 calculateStateRoot(storage, block.blockHeader()->version(), hashImpl, features));
         },
         [&]() { receiptRoot = calculateReceiptRoot(receipts, block, hashImpl); },
-        [&]() {
-            block.clearReceipts();
-            totalGasUsed += ledger::mpt::finalizeReceipts(receipts);
-            for (auto&& receipt : receipts)
-            {
-                block.appendReceipt(receipt);
-            }
-        },
         [&]() {
             sysBlock = ::ranges::any_of(transactions, [](auto const& transaction) {
                 return precompiled::contains(

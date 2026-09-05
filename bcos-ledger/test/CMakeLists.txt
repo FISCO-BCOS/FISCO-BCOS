@@ -35,6 +35,12 @@ target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)
 # data port (ports-data/) under the tests manifest feature
 target_compile_definitions(${TEST_BINARY_NAME} PRIVATE
     ETHEREUM_TESTS_DIR="${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/ethereum-tests")
+# The new test_AccountTablePrefix.cpp declares global `using namespace bcos;` at file scope
+# (same pattern as the other ledger suites); keep it out of the unity blob so those
+# using-directives cannot leak into sibling translation units (mirrors the tars-protocol
+# precedent for Web3TarsBridgeTest.cpp).
+set_source_files_properties("unittests/ledger/test_AccountTablePrefix.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 # add_test(NAME test-ledger WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 include(SearchTestCases)
