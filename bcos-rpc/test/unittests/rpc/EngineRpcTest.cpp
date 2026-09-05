@@ -719,7 +719,8 @@ BOOST_AUTO_TEST_CASE(newPayloadV4CompareFieldsSurviveV5RoundTrip)
     BOOST_REQUIRE(mockService.m_state->capturedNewPayloadRequest.has_value());
     auto const& firstRequest = *mockService.m_state->capturedNewPayloadRequest;
 
-    auto serialized = serializeExecutionPayload(firstRequest.executionPayload, engine::ApiVersion::V5);
+    auto serialized =
+        serializeExecutionPayload(firstRequest.executionPayload, engine::ApiVersion::V5);
     Json::Value roundTrip(Json::arrayValue);
     roundTrip.append(serialized);
     roundTrip.append(Json::Value(Json::arrayValue));
@@ -752,8 +753,8 @@ BOOST_AUTO_TEST_CASE(newPayloadV4CompareFieldsSurviveV5RoundTrip)
     BOOST_CHECK(fp.blobGasUsed == second.blobGasUsed);
     BOOST_CHECK(fp.excessBlobGas == second.excessBlobGas);
     BOOST_REQUIRE(parsed.parentBeaconBlockRoot.has_value());
-    BOOST_REQUIRE(fp.parentBeaconBlockRoot.has_value());
-    BOOST_CHECK(*parsed.parentBeaconBlockRoot == *fp.parentBeaconBlockRoot);
+    BOOST_REQUIRE(firstRequest.parentBeaconBlockRoot.has_value());
+    BOOST_CHECK(*parsed.parentBeaconBlockRoot == *firstRequest.parentBeaconBlockRoot);
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadV4)
