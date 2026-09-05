@@ -119,32 +119,40 @@ std::optional<bcos::protocol::BlockNumber> PayloadCache::blockNumberForHash(
     return entry->executionPayload.blockNumber;
 }
 
+/// Shared retain kernel: keep only `id` (reinstated at `blockHash`), appending every
+/// dropped payload id to `dropped` when non-null. A missing `id` leaves the staged
+/// state untouched.
+void retainStaged(StagedCache& staged, PayloadID const& id, h256 const& blockHash,
+    std::vector<PayloadID>* dropped)
+{
+    const auto entryIt = staged.entries.find(id);
+    if (entryIt == staged.entries.end())
+    {
+        return;
+    }
+    const auto retainedEntry = entryIt->second;
+    for (auto const& [existingId, _] : staged.entries)
+    {
+        if (existingId != id && dropped != nullptr)
+        {
+            dropped->push_back(existingId);
+        }
+    }
+    staged.entries.clear();
+    staged.hashToId.clear();
+    staged.order.clear();
+    staged.entries.emplace(id, retainedEntry);
+    staged.hashToId.emplace(blockHash, id);
+    staged.order.push_back(id);
+}
+
 PayloadCache::PutResult PayloadCache::putAndRetainOnly(
     PayloadID id, h256 const& blockHash, BuiltPayloadPtr entry)
 {
     StagedCache staged{m_entries, m_hashToId, m_order};
     PayloadID const retainedId = id;
     auto putResult = putStaged(staged, std::move(id), blockHash, std::move(entry), c_maxEntries);
-
-    const auto entryIt = staged.entries.find(retainedId);
-    if (entryIt == staged.entries.end())
-    {
-        return putResult;
-    }
-    const auto retainedEntry = entryIt->second;
-    for (auto const& [existingId, _] : staged.entries)
-    {
-        if (existingId != retainedId)
-        {
-            putResult.evicted.push_back(existingId);
-        }
-    }
-    staged.entries.clear();
-    staged.hashToId.clear();
-    staged.order.clear();
-    staged.entries.emplace(retainedId, retainedEntry);
-    staged.hashToId.emplace(blockHash, retainedId);
-    staged.order.push_back(retainedId);
+    retainStaged(staged, retainedId, blockHash, &putResult.evicted);
 
     m_entries.swap(staged.entries);
     m_hashToId.swap(staged.hashToId);
@@ -190,28 +198,12 @@ void PayloadCache::erase(PayloadID const& id)
 
 void PayloadCache::retainOnly(const PayloadID& id, const h256& blockHash)
 {
-    auto entries = m_entries;
-    auto hashToId = m_hashToId;
-    auto order = m_order;
+    StagedCache staged{m_entries, m_hashToId, m_order};
+    retainStaged(staged, id, blockHash, /*dropped=*/nullptr);
 
-    const auto entryIt = entries.find(id);
-    if (entryIt == entries.end())
-    {
-        return;
-    }
-    const auto retainedEntry = entryIt->second;
-
-    entries.clear();
-    hashToId.clear();
-    order.clear();
-
-    entries.emplace(id, retainedEntry);
-    hashToId.emplace(blockHash, id);
-    order.push_back(id);
-
-    m_entries.swap(entries);
-    m_hashToId.swap(hashToId);
-    m_order.swap(order);
+    m_entries.swap(staged.entries);
+    m_hashToId.swap(staged.hashToId);
+    m_order.swap(staged.order);
 }
 
 }  // namespace bcos::engine
