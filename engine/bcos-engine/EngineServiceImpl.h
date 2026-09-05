@@ -654,34 +654,47 @@ private:
                 *m_ledger, blockTxs, persistBlock, prewriteStorage);
             // Land the prewritten rows together with the oldest queued layer (the
             // commit contract's prewrite+merge pairing), then drain the whole queue.
-            // mergeBackStorage throws NotExistsImmutableStorageError on an empty deque
-            // and exposes no emptiness query; the empty case is NOT an error here:
-            // a concurrent duplicate of this newPayload (finding N1) may have drained
-            // the layer between the two attempts, and its prewritten rows are
-            // identical to ours — fall through to mergeToBackends, which lands the
-            // rows directly (idempotent) instead of surfacing a spurious internal
-            // error where the Engine API requires the idempotent VALID. The drain
-            // loop then removes every remaining queued layer: one left behind by an
-            // abandoned failed merge (finding N2) would otherwise make every later
-            // commit merge one-behind, leaving the newest payload's state queued
-            // in-memory — lost on restart — though it answered VALID. (The
-            // MultiLayerStorage doc itself prescribes draining "in a loop until
-            // empty".)
+            // mergeBackStorage throws NotExistsImmutableStorageError on an empty
+            // deque and exposes no emptiness query; the empty case is NOT an error
+            // here: a concurrent duplicate of this newPayload (finding N1) may have
+            // drained the layer between the two attempts, and its prewritten rows
+            // are identical to ours — mergeToBackends then lands the rows directly
+            // (idempotent) instead of surfacing a spurious internal error where the
+            // Engine API requires the idempotent VALID. The drain loop then removes
+            // every remaining queued layer: one left behind by an abandoned failed
+            // merge (finding N2) would otherwise make every later commit merge
+            // one-behind, leaving the newest payload's state queued in-memory —
+            // lost on restart — though it answered VALID. (The MultiLayerStorage
+            // doc itself prescribes draining "in a loop until empty".) Note: awaits
+            // stay OUT of the catch handlers (C++20 forbids them there) — the
+            // handler only records whether the rows still need landing.
+            bool rowsLanded = false;
             try
             {
                 co_await m_globalStateStorage.get().mergeBackStorage(prewriteStorage);
+                rowsLanded = true;
             }
             catch (bcos::storage2::NotExistsImmutableStorageError const&)
+            {
+                // Queue already empty — nothing to pair with; land the rows below.
+            }
+            if (!rowsLanded)
             {
                 co_await m_globalStateStorage.get().mergeToBackends(prewriteStorage);
             }
             for (;;)
             {
+                bool drained = false;
                 try
                 {
                     co_await m_globalStateStorage.get().mergeBackStorage();
+                    drained = true;
                 }
                 catch (bcos::storage2::NotExistsImmutableStorageError const&)
+                {
+                    // Queue empty — the drain is complete.
+                }
+                if (!drained)
                 {
                     break;
                 }
