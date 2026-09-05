@@ -491,8 +491,10 @@ std::optional<std::string> compareWithBuiltPayload(
     {
         return error;
     }
-    // finding N3: the V4 fields are part of the payload this node built — an echo
-    // that rewrites or drops them must not pass under the same blockHash.
+    // V4 optional fields follow the presence-XOR rule like blobGasUsed/excessBlobGas:
+    // optionalMismatch only fires when BOTH sides carry the field and they differ. A
+    // drop (built present, echo absent) is tolerated — the wire dialect cannot express
+    // these fields, so an honest echo never carries them.
     if (auto error = optionalMismatch(
             "blockAccessList", submitted.blockAccessList, built.blockAccessList))
     {

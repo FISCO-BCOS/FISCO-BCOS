@@ -157,7 +157,9 @@ struct ExecutionPayload
     std::optional<u256> blobGasUsed;
     std::optional<u256> excessBlobGas;
 
-    // Required by ExecutionPayloadV4.
+    // Not carried by the ExecutionPayloadV4 wire dialect (no CL sends them, no builder
+    // fills them — see EngineServiceCommon's validator); reserved for a future built
+    // shape that actually populates them. Do not require their presence in validation.
     std::optional<bytes> blockAccessList = std::nullopt;
     std::optional<std::uint64_t> slotNumber = std::nullopt;
 
