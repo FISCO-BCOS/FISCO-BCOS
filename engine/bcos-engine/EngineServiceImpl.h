@@ -468,10 +468,11 @@ private:
                 detail::validateExecutionPayload(request.executionPayload, version);
             validationError.has_value())
         {
-            auto status = validationError->find("blockHash") != std::string::npos ?
-                              PayloadValidationStatus::InvalidBlockHash :
-                              PayloadValidationStatus::Invalid;
-            co_return engine_common::makeStatus(status, std::nullopt, validationError);
+            // validateExecutionPayload only checks shape/semantic rules — a failure
+            // there is a malformed payload, never a blockHash mismatch (that path is
+            // compareWithBuiltPayload's and returns InvalidBlockHash directly).
+            co_return engine_common::makeStatus(
+                PayloadValidationStatus::Invalid, std::nullopt, validationError);
         }
         if (version <= 2 && request.parentBeaconBlockRoot.has_value())
         {
