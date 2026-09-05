@@ -689,6 +689,55 @@ BOOST_AUTO_TEST_CASE(newPayloadV3CompareFieldsSurviveEngineHelper)
     BOOST_CHECK(first.transactions.front().raw == second.transactions.front().raw);
     BOOST_CHECK(first.blobGasUsed == second.blobGasUsed);
     BOOST_CHECK(first.excessBlobGas == second.excessBlobGas);
+    // The withdrawals list is strictly compared by compareWithBuiltPayload — pin its
+    // round trip too.
+    BOOST_CHECK(first.withdrawals == second.withdrawals);
+    BOOST_CHECK(first.withdrawalsRoot == second.withdrawalsRoot);
+}
+
+// The production version pair: getPayloadV5 responses are re-submitted as
+// newPayloadV4 (EngineServiceImpl getPayloadV5 -> newPayloadV4). Pin the full
+// compared-field set across that dialect pair, including withdrawalsRoot and the
+// withdrawals list — the fields the compare gate treats most strictly.
+BOOST_AUTO_TEST_CASE(newPayloadV4CompareFieldsSurviveV5RoundTrip)
+{
+    auto ep = makeV4ExecutionPayloadJson();
+    ep["extraData"] = "0xabcdef";
+    ep["gasUsed"] = "0x21";
+    ep["baseFeePerGas"] = "0x7";
+    ep["transactions"].append("0xaa");
+
+    Json::Value params(Json::arrayValue);
+    params.append(ep);
+    params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes
+    params.append(c_beaconRootHex);                // parentBeaconBlockRoot
+    params.append(Json::Value(Json::arrayValue));  // executionRequests
+
+    Json::Value response;
+    CALL_ENGINE(newPayloadV4, params, response);
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadRequest.has_value());
+    auto const& firstRequest = *mockService.m_state->capturedNewPayloadRequest;
+
+    auto serialized = serializeExecutionPayload(firstRequest.executionPayload, engine::ApiVersion::V5);
+    Json::Value roundTrip(Json::arrayValue);
+    roundTrip.append(serialized);
+    roundTrip.append(Json::Value(Json::arrayValue));
+    roundTrip.append(c_beaconRootHex);
+    roundTrip.append(Json::Value(Json::arrayValue));
+    auto parsed = parseNewPayloadRequest(roundTrip, engine::ApiVersion::V4);
+    auto const& second = parsed.executionPayload;
+
+    BOOST_CHECK(firstRequest.executionPayload.withdrawalsRoot == second.withdrawalsRoot);
+    BOOST_CHECK(firstRequest.executionPayload.withdrawals == second.withdrawals);
+    BOOST_CHECK(firstRequest.executionPayload.extraData == second.extraData);
+    BOOST_CHECK(firstRequest.executionPayload.stateRoot == second.stateRoot);
+    BOOST_CHECK(firstRequest.executionPayload.transactions.front().raw ==
+                second.transactions.front().raw);
+    BOOST_CHECK(firstRequest.executionPayload.blobGasUsed == second.blobGasUsed);
+    BOOST_CHECK(firstRequest.executionPayload.excessBlobGas == second.excessBlobGas);
+    BOOST_REQUIRE(parsed.parentBeaconBlockRoot.has_value());
+    BOOST_REQUIRE(firstRequest.parentBeaconBlockRoot.has_value());
+    BOOST_CHECK(*parsed.parentBeaconBlockRoot == *firstRequest.parentBeaconBlockRoot);
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadV4)
