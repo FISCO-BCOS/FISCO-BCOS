@@ -286,7 +286,8 @@ public:
                     co_await bcos::ledger::readFromStorage(features, view, blockNumber);
 
                     bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
-                        features.get(bcos::ledger::Features::Flag::feature_raw_address));
+                        features.get(bcos::ledger::Features::Flag::feature_raw_address),
+                        /*treatSystemAsUser=*/true);
                     auto code = co_await account.code();
                     if (!code)
                     {
@@ -333,7 +334,8 @@ public:
                     co_await bcos::ledger::readFromStorage(features, view, blockNumber);
 
                     bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
-                        features.get(bcos::ledger::Features::Flag::feature_raw_address));
+                        features.get(bcos::ledger::Features::Flag::feature_raw_address),
+                        /*treatSystemAsUser=*/true);
                     auto abi = co_await account.abi();
                     if (!abi)
                     {
@@ -372,8 +374,9 @@ public:
         auto view = this->m_multiLayerStorage->fork();
         bcos::ledger::Features features;
         co_await bcos::ledger::readFromStorage(features, view, number);
-        bcos::ledger::account::EVMAccount account(
-            view, addressOwned, features.get(bcos::ledger::Features::Flag::feature_raw_address));
+        bcos::ledger::account::EVMAccount account(view, addressOwned,
+            features.get(bcos::ledger::Features::Flag::feature_raw_address),
+            /*treatSystemAsUser=*/true);
         co_return co_await account.storageEntry(keyOwned);
     }
 

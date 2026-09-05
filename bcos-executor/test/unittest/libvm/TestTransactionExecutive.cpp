@@ -34,7 +34,8 @@ public:
         auto const sender = keyPair->address(hashImpl);
         auto const address = newLegacyEVMAddressString(sender.ref(), u256(nonce));
 
-        bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
+        bcos::ledger::account::EVMAccount eoa(
+            *storage, sender.hex(), false, /*treatSystemAsUser=*/false);
         static_assert(bcos::ledger::account::Account<decltype(eoa)>);
 
         task::syncWait(eoa.create());
@@ -77,7 +78,8 @@ public:
 
         auto const nonceOfEoa = task::syncWait(eoa.nonce());
 
-        bcos::ledger::account::EVMAccount contractAddress(*storage, address, false);
+        bcos::ledger::account::EVMAccount contractAddress(
+            *storage, address, false, /*treatSystemAsUser=*/false);
         auto const nonceOfContract = task::syncWait(contractAddress.nonce());
         if (type == TransactionType::BCOSTransaction)
         {
@@ -105,7 +107,8 @@ public:
 
         auto const sender = keyPair->address(hashImpl);
 
-        bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
+        bcos::ledger::account::EVMAccount eoa(
+            *storage, sender.hex(), false, /*treatSystemAsUser=*/false);
         task::syncWait(eoa.create());
         task::syncWait(eoa.setBalance(u256(1000000000000000ULL)));
 
@@ -145,7 +148,8 @@ public:
 
         auto const nonceOfEoa = task::syncWait(eoa.nonce());
 
-        bcos::ledger::account::EVMAccount contractAccount(*storage, contractAddress, false);
+        bcos::ledger::account::EVMAccount contractAccount(
+            *storage, contractAddress, false, /*treatSystemAsUser=*/false);
         auto const nonceOfContract = task::syncWait(contractAccount.nonce());
         if (type == TransactionType::BCOSTransaction)
         {
@@ -172,7 +176,8 @@ public:
 
         auto const sender = keyPair->address(hashImpl);
 
-        bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
+        bcos::ledger::account::EVMAccount eoa(
+            *storage, sender.hex(), false, /*treatSystemAsUser=*/false);
         task::syncWait(eoa.create());
         task::syncWait(eoa.setBalance(u256(1000000000000000ULL)));
 
@@ -212,7 +217,8 @@ public:
 
         auto const nonceOfEoa = task::syncWait(eoa.nonce());
 
-        bcos::ledger::account::EVMAccount contractAccount(*storage, contractAddress, false);
+        bcos::ledger::account::EVMAccount contractAccount(
+            *storage, contractAddress, false, /*treatSystemAsUser=*/false);
         auto const nonceOfContract = task::syncWait(contractAccount.nonce());
         if (type == TransactionType::BCOSTransaction)
         {
@@ -240,7 +246,7 @@ public:
 
         auto sender = keyPair->address(hashImpl).hex();
 
-        bcos::ledger::account::EVMAccount eoa(*storage, sender, false);
+        bcos::ledger::account::EVMAccount eoa(*storage, sender, false, /*treatSystemAsUser=*/false);
         task::syncWait(eoa.create());
         task::syncWait(eoa.setBalance(u256(initBalance)));
 
@@ -298,7 +304,8 @@ public:
         ::ranges::input_range auto nonces, int32_t status)
     {
         auto const sender = keyPair->address(hashImpl);
-        bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
+        bcos::ledger::account::EVMAccount eoa(
+            *storage, sender.hex(), false, /*treatSystemAsUser=*/false);
         task::syncWait(eoa.create());
         task::syncWait(eoa.setBalance(u256(1000000000000000ULL)));
 
@@ -423,7 +430,8 @@ BOOST_AUTO_TEST_CASE(testMultiNonce)
     commitBlock(newBlock);
 
     auto const sender = keyPair->address(hashImpl);
-    bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
+    bcos::ledger::account::EVMAccount eoa(
+        *storage, sender.hex(), false, /*treatSystemAsUser=*/false);
     auto const nonceOfEoa = task::syncWait(eoa.nonce());
 
     BOOST_CHECK_EQUAL(nonceOfEoa.value(), "10020");

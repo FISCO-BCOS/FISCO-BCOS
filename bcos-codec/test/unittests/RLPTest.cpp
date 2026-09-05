@@ -27,6 +27,7 @@
 #include <boost/test/unit_test.hpp>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 
 using namespace bcos;
@@ -192,6 +193,76 @@ BOOST_AUTO_TEST_CASE(uint256Encode)
     BOOST_CHECK_EQUAL(
         staticEncode(u256("0x0100020003000400050006000700080009000A0B4B000C000D000E01")),
         "9c0100020003000400050006000700080009000a0b4b000c000d000e01");
+}
+
+BOOST_AUTO_TEST_CASE(uint256EncodeAfterShrinkReuse)
+{
+    // Regression: boost's cpp_int_base COPY-assignment memcpys only the source's significant
+    // limbs and leaves the destination's higher limbs untouched, so a u256 that previously
+    // held a wider value keeps STALE high limbs after a narrower value is copy-assigned into
+    // it. MOVE-assignment from a temporary instead copies the temporary's whole internal limb
+    // array (whose high limbs are all zero), so `v = u256(0x1234u)` would NOT reproduce the
+    // stale-limb state and the test would be vacuous — the shrink must be done via lvalue
+    // copy-assignment. length() must scan only the valid limbs (backend().size()), otherwise
+    // the RLP header overstates the payload length and the encoded bytes no longer round-trip.
+    //
+    // The narrowed value MUST be >= 0x80 (BYTES_HEAD_BASE): length() early-returns 1 for any
+    // smaller value and never reaches the limb scan the fix changed, so such a test would
+    // pass on the buggy base too. 0x1234 fits in a single limb (backend().size() == 1 after
+    // the shrink, below the old scan's internal_limb_count of 4), but the stale high limb
+    // from the 28-byte value is non-zero, which is exactly the trigger the old code got wrong.
+    const u256 narrow{0x1234u};
+    u256 v("0x0100020003000400050006000700080009000A0B4B000C000D000E01");
+    v = narrow;  // lvalue copy-assign: leaves stale high limbs in v
+    // internal_limb_count is a STATIC member of the fixed-width backend type; name the type
+    // once so the non-vacuity scans below neither access the static through an instance nor
+    // hardcode the count (4 limbs on a 64-bit-limb build, 8 on a 32-bit-limb build).
+    using U256BackendType = std::remove_reference_t<decltype(v.backend())>;
+    // Precondition: the shrink must genuinely leave stale high limbs behind, otherwise this
+    // test is vacuous and would pass even with the buggy internal_limb_count scan. Scan up to
+    // internal_limb_count (not a hardcoded 4): on a 32-bit-limb build the 256-bit backend
+    // holds 8 limbs, and the scan must cover them all for the guard to stay non-vacuous.
+    BOOST_REQUIRE_EQUAL(v.backend().size(), 1u);
+    {
+        bool hasStaleLimb = false;
+        for (size_t i = v.backend().size(); i < U256BackendType::internal_limb_count; ++i)
+        {
+            hasStaleLimb = hasStaleLimb || (v.backend().limbs()[i] != 0);
+        }
+        BOOST_REQUIRE_MESSAGE(
+            hasStaleLimb, "shrink left no stale high limbs; test would be vacuous");
+    }
+    BOOST_CHECK_EQUAL(bcos::codec::rlp::length(v), 3u);
+    bcos::bytes encoded;
+    bcos::codec::rlp::encode(encoded, v);
+    BOOST_CHECK_EQUAL(toHex(encoded), "821234");
+    BOOST_CHECK_EQUAL(encoded.size(), bcos::codec::rlp::length(v));
+
+    // A list containing the shrunken value must decode back to the same value. Shrink the
+    // vector element in place via the same lvalue copy-assign so it also carries stale high
+    // limbs (rather than copying a pre-shrunk u256 into a fresh element).
+    std::vector<u256> list{u256("0x0100020003000400050006000700080009000A0B4B000C000D000E01")};
+    list[0] = narrow;  // lvalue copy-assign: leaves stale high limbs in list[0]
+    BOOST_REQUIRE_EQUAL(list[0].backend().size(), 1u);
+    {
+        bool hasStaleLimb = false;
+        for (size_t i = list[0].backend().size(); i < U256BackendType::internal_limb_count;
+             ++i)
+        {
+            hasStaleLimb = hasStaleLimb || (list[0].backend().limbs()[i] != 0);
+        }
+        BOOST_REQUIRE_MESSAGE(
+            hasStaleLimb, "shrink left no stale high limbs; test would be vacuous");
+    }
+    bcos::bytes listEncoded;
+    bcos::codec::rlp::encode(listEncoded, list);
+    BOOST_CHECK_EQUAL(toHex(listEncoded), "c3821234");
+    bcos::bytesRef input(listEncoded.data(), listEncoded.size());
+    std::vector<u256> decoded;
+    auto err = bcos::codec::rlp::decode(input, decoded);
+    BOOST_CHECK(err == nullptr);
+    BOOST_REQUIRE_EQUAL(decoded.size(), 1u);
+    BOOST_CHECK_EQUAL(decoded.front(), u256(0x1234u));
 }
 
 BOOST_AUTO_TEST_CASE(vectorsEncode)

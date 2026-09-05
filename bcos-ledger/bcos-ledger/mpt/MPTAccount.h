@@ -121,7 +121,7 @@ public:
     /// silently miss on a raw-address chain.
     MPTAccount(Storage& storage, NodeStorage& nodeStorage, BackendStorage& backendStorage,
         bcos::Address address, bool binaryAddress)
-      : Base(storage, address, binaryAddress),
+      : Base(storage, address, binaryAddress, /*treatSystemAsUser=*/true),
         m_nodeStorage(nodeStorage),
         m_backendStorage(backendStorage),
         m_address(address)
@@ -138,7 +138,7 @@ public:
     /// from the account type.
     MPTAccount(Storage& storage, const evmc_address& address, bool binaryAddress)
         requires HistoricalStorageContext<Storage>
-      : Base(storage, address, binaryAddress),
+      : Base(storage, address, binaryAddress, /*treatSystemAsUser=*/true),
         m_nodeStorage(storage.mptNodeStorage()),
         m_backendStorage(storage.mptBackendStorage()),
         m_address(bcos::bytesConstRef{address.bytes, sizeof(address.bytes)})

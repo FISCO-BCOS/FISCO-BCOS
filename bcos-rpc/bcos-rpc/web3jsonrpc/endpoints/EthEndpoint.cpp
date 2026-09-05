@@ -20,9 +20,12 @@
 
 #include "EthEndpoint.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
@@ -335,16 +338,6 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     }
     auto const ledger = m_nodeService->ledger();
 
-    // System-contract addresses (0x1000 range, etc.) are stored under the "/sys/" prefix by
-    // EVMAccount; user accounts under "/apps/". Picking the right prefix here keeps
-    // eth_getStorageAt consistent with both the genesis alloc import and the v2 executor
-    // (which both go through EVMAccount) — same logic as Ledger::getStorageAt.
-    auto const tablePrefix =
-        precompiled::contains(bcos::precompiled::c_systemTxsAddress, std::string_view{addressStr}) ?
-            ledger::SYS_DIRECTORY::SYS_APPS :
-            ledger::SYS_DIRECTORY::USER_APPS;
-    auto const contractTableName = getContractTableName(tablePrefix, addressStr);
-
     // The empty-slot value: a 32-byte zero, matching the flat read's padded rendering.
     constexpr const char* c_emptyStorageValue =
         "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -368,6 +361,16 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
             auto const stateStorage = stateStorageProvider();
             if (stateStorage)
             {
+                // Same routing policy as Ledger::getStorageAt, via the shared helpers:
+                // executor_version comes from ledger::getExecutorVersion (the same
+                // whole-string parser the LedgerConfig derivations use) and the prefix from
+                // ledger::account::accountTablePrefix. Only this flat-read branch needs the
+                // table name — the ledger fallback and the historical-MPT path below derive
+                // the routing themselves, so the SYS_CONFIG read is not paid there.
+                auto const executorVersion = co_await ledger::getExecutorVersion(*ledger);
+                auto const tablePrefix = ledger::account::accountTablePrefix(
+                    addressStr, executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION);
+                auto const contractTableName = getContractTableName(tablePrefix, addressStr);
                 if (auto const entry = co_await bcos::storage2::readOne(*stateStorage,
                         executor_v1::StateKey{contractTableName, positionBytes.toRawString()});
                     entry.has_value())

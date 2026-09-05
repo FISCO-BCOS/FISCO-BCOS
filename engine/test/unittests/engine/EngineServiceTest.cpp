@@ -5,7 +5,6 @@
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 
-#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -19,7 +18,10 @@
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/Ledger.h>
+#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-rlp-protocol/EthReceipt.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
@@ -84,7 +86,12 @@ static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t n
 /// type=Web3Transaction, extraTransactionBytes = 0x02 || rlp(unsigned fields),
 /// signature = r(32) || s(32) || yParity(1). calculateHash() runs the same raw-bytes
 /// splice buildPayload uses, so constructing one also validates the payload shape.
-static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint64_t nonce)
+/// mirrorKind is written to the web3TypedTxKind tars mirror; the default 2 agrees with
+/// the 0x02 envelope. buildPayload derives the receipt's EIP-2718 type from the signed
+/// envelope and fails closed when the mirror disagrees — pass a wrong mirrorKind to
+/// exercise that rejection (a peer can rewrite the mirror; never the envelope).
+static protocol::Transaction::Ptr makeWeb3Tx(
+    std::string_view senderBytes, uint64_t nonce, uint8_t mirrorKind = 2)
 {
     bytes body;
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));  // chainId
@@ -105,6 +112,7 @@ static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint6
     auto tx = std::make_shared<TestTransactionImpl>();
     tx->mutableInner().type = static_cast<int>(bcos::protocol::TransactionType::Web3Transaction);
     tx->mutableInner().extraTransactionBytes.assign(payload.begin(), payload.end());
+    tx->mutableInner().web3TypedTxKind = static_cast<tars::Char>(mirrorKind);
     bytes signature(65, 0);
     signature[31] = 0x12;  // r != 0
     signature[63] = 0x34;  // s != 0
@@ -178,8 +186,7 @@ struct RealGlobalStateStorageFixture
         // buildPayload FAILS CLOSED when the revision is absent (it never falls back to
         // the compile-time default), so the missing-revision test passes writeEvmcRevision
         // = false to reach that branch.
-        writeSysConfig(
-            magic_enum::enum_name(ledger::SystemConfig::executor_version),
+        writeSysConfig(magic_enum::enum_name(ledger::SystemConfig::executor_version),
             std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
         if (writeEvmcRevision)
         {
@@ -197,10 +204,13 @@ struct RealGlobalStateStorageFixture
     {
         // The mempool stores senders as raw bytes and MemPoolImpl::seal/remove resolve the
         // account via the evmc_address overload (lower-case hex path), matching the executor.
-        // Use the same path here so the sealed nonce the test relies on is visible to seal().
+        // seal() reads the sender's nonce with treatSystemAsUser=false (MemPoolImpl.h), so the
+        // write mirrors that flag exactly — the sealed nonce the test relies on is then
+        // visible to seal().
         evmc_address addr{};
         std::copy_n(sender.begin(), std::min(sender.size(), sizeof(addr.bytes)), addr.bytes);
-        ledger::account::EVMAccount account{backendStorage, addr, false};
+        ledger::account::EVMAccount account{backendStorage, addr, false,
+            /*treatSystemAsUser=*/false};
         task::syncWait(account.setNonce(std::move(nonce)));
     }
 
@@ -208,8 +218,7 @@ private:
     void writeSysConfig(std::string_view key, std::string value)
     {
         storage::Entry entry;
-        entry.set(bcos::storage::serialize::encode(
-            ledger::SystemConfigEntry{std::move(value), 0}));
+        entry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), 0}));
         task::syncWait(storage2::writeOne(backendStorage,
             bcos::executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
     }
@@ -256,34 +265,86 @@ struct StubExecutor
 
 struct StubScheduler
 {
+    // One default receipt per executed transaction: buildPayload fails closed when the
+    // receipt count differs from the executed-transaction count (a short receipts trie
+    // would silently diverge from any external verifier), so a stub returning an empty
+    // list for a non-empty block would make every payload build throw.
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
+        const protocol::BlockHeader&, ::ranges::input_range auto&& transactions,
+        const ledger::LedgerConfig&)
     {
-        co_return {};
+        std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        for (auto const& transaction : transactions)
+        {
+            (void)transaction;
+            receipts.push_back(std::make_shared<bcostars::protocol::TransactionReceiptImpl>());
+        }
+        co_return receipts;
     }
 };
 
 struct BloomScheduler
 {
+    // The engine finalizes the returned receipts in place (transactionIndex / logIndex /
+    // logsBloom / cumulativeGasUsed), so keeping them here lets the test pin the header
+    // roots against the exact receipt objects the roots were computed from.
+    std::vector<protocol::TransactionReceipt::Ptr> lastReceipts;
+
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
         const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
     {
-        Bloom bloom1{};
-        bloom1[255] = static_cast<bcos::byte>(0x01);
-        Bloom bloom2{};
-        bloom2[255] = static_cast<bcos::byte>(0x02);
+        // One log entry per receipt: finalizeReceipts recomputes each receipt's logsBloom
+        // from its log entries (a producer-filled bloom is never trusted) and stamps
+        // logIndex 0 then 1 across the two receipts.
+        protocol::LogEntries logs1{protocol::LogEntry{toBytes("11111111111111111111"),
+            {h256("1111111111111111111111111111111111111111111111111111111111111111")}, {}}};
+        protocol::LogEntries logs2{protocol::LogEntry{toBytes("22222222222222222222"),
+            {h256("2222222222222222222222222222222222222222222222222222222222222222")}, {}}};
 
         Keccak256 hasher;
         auto receipt1 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-        receipt1->setLogsBloom({bloom1.data(), bloom1.size()});
+        receipt1->setLogEntries(logs1);
+        // Non-zero gasUsed so the cumulativeGasUsed assertions below can distinguish real
+        // accumulation (21000 then 51000) from a no-op finalizeReceipts.
+        receipt1->inner().data.gasUsed = "21000";
         receipt1->calculateHash(hasher);
         auto receipt2 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-        receipt2->setLogsBloom({bloom2.data(), bloom2.size()});
+        receipt2->setLogEntries(logs2);
+        receipt2->inner().data.gasUsed = "30000";
         receipt2->calculateHash(hasher);
 
-        co_return std::vector<protocol::TransactionReceipt::Ptr>{receipt1, receipt2};
+        lastReceipts = {receipt1, receipt2};
+        co_return lastReceipts;
+    }
+};
+
+// Returns more receipts than there are transactions: receipt i pairs with transaction i
+// for the receipts trie, so the excess is unpairable and the engine must throw.
+struct OverReceiptScheduler
+{
+    template <class Storage, class Executor>
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
+        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
+    {
+        co_return std::vector<protocol::TransactionReceipt::Ptr>{
+            std::make_shared<bcostars::protocol::TransactionReceiptImpl>(),
+            std::make_shared<bcostars::protocol::TransactionReceiptImpl>(),
+            std::make_shared<bcostars::protocol::TransactionReceiptImpl>()};
+    }
+};
+
+// Returns FEWER receipts than there are transactions: the short receipts trie would
+// silently diverge from any external Ethereum verifier, so the engine must fail closed.
+struct UnderReceiptScheduler
+{
+    template <class Storage, class Executor>
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
+        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
+    {
+        co_return std::vector<protocol::TransactionReceipt::Ptr>{
+            std::make_shared<bcostars::protocol::TransactionReceiptImpl>()};
     }
 };
 
@@ -553,7 +614,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejected_when_evm_revision_missing)
 {
     MemPoolImpl memPool;
     // executor_version=2 but NO SYSTEM_KEY_EVMC_REVISION row.
-    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_CANCUN, /*writeEvmcRevision=*/false);
+    RealGlobalStateStorageFixture globalStateStorageFixture(
+        EVMC_CANCUN, /*writeEvmcRevision=*/false);
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
         c_initialBlockNumber, c_initialBlockNumber);
@@ -583,13 +645,13 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_empty_withdrawals)
     auto payloadAttributes = makePayloadAttributesV3();
     payloadAttributes.withdrawals = std::vector<WithdrawalV1>{
         WithdrawalV1{.index = 1, .validatorIndex = 2, .amount = 3, .address = Address{}}};
-    auto result = task::syncWait(
-        engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
     BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Invalid));
     BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
-    BOOST_CHECK_NE(result.payloadStatus.validationError->find("non-empty withdrawals"),
-        std::string::npos);
+    BOOST_CHECK_NE(
+        result.payloadStatus.validationError->find("non-empty withdrawals"), std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
@@ -909,9 +971,8 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_rejects_a_v3_committed_entry_without_withdra
     BOOST_CHECK_EQUAL(
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
 
-    BOOST_CHECK_EXCEPTION(
-        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion,
-        [](const IncompatiblePayloadVersion& e) {
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.getPayload(*result.payloadId, 5)),
+        IncompatiblePayloadVersion, [](const IncompatiblePayloadVersion& e) {
             // Pin the REWRITE-path message (the entry was rewritten by the V3 commit and
             // lost its withdrawalsRoot), not just the exception type — a swapped gate that
             // keeps IncompatiblePayloadVersion must still fail (T4).
@@ -1166,22 +1227,25 @@ BOOST_AUTO_TEST_CASE(forkchoice_attributes_reject_blob_forced_transactions)
     BOOST_CHECK_EQUAL(static_cast<int>(badHexResult.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Invalid));
 
-    // A deposit in the forced transaction list is admissible (dep-1 arrives this way)
-    // AND actually lands in the built payload, byte-for-byte.
+    // A deposit in the forced transaction list passes attribute validation (dep-1 arrives
+    // this way), but buildPayload then FAILS CLOSED: a raw-only entry cannot produce a
+    // reproducible receiptsRoot until the execution-lane wiring executes deposits.
     auto depositAttributes = makePayloadAttributesV3();
     depositAttributes.transactions = std::vector<std::string>{"0x7e010203"};
-    auto depositResult =
-        task::syncWait(engineService.updateForkchoice(forkchoiceState, &depositAttributes, 3));
-    BOOST_CHECK_EQUAL(static_cast<int>(depositResult.payloadStatus.status),
-        static_cast<int>(PayloadValidationStatus::Valid));
-    BOOST_REQUIRE(depositResult.payloadId.has_value());
-    auto depositPayload = task::syncWait(engineService.getPayload(*depositResult.payloadId, 3));
-    BOOST_REQUIRE_EQUAL(depositPayload->executionPayload.transactions.size(), 1);
-    BOOST_CHECK(depositPayload->executionPayload.transactions.front().raw ==
-                (bytes{0x7e, 0x01, 0x02, 0x03}));
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &depositAttributes, 3)),
+        std::runtime_error, [](const std::runtime_error& e) {
+            return std::string(e.what()).find(
+                       "raw-only (forced/deposit) transactions not executable yet") !=
+                   std::string::npos;
+        });
 }
 
-BOOST_AUTO_TEST_CASE(forced_transactions_enter_payload_first)
+// Forced transactions (deposits) are placed FIRST in the engine transaction list, ahead of
+// the pool transactions, in the order the CL gave them — but on the v2 path the build then
+// fails closed on the raw-only entries (see the receipts guard in buildPayload), so the
+// ordering is only observable via the refusal's raw-vs-decoded counts for now.
+BOOST_AUTO_TEST_CASE(forced_transactions_fail_closed_until_execution_lane_wiring)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
@@ -1194,22 +1258,17 @@ BOOST_AUTO_TEST_CASE(forced_transactions_enter_payload_first)
     globalStateStorageFixture.setNonce(sender, "0");
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
-    // Two forced transactions (dep-1 first) plus one mempool transaction:
-    // payload order = forced list order, then pool transactions.
+    // Two forced transactions (dep-1 first) plus one mempool transaction: the payload would
+    // commit 3 raw transactions but only 1 executable, so buildPayload refuses it.
     auto attributes = makePayloadAttributesV3();
     attributes.transactions = std::vector<std::string>{"0x7e0102030405", "0x02f8aabb"};
-    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
-    BOOST_REQUIRE(result.payloadId.has_value());
-
-    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
-    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 3);
-    // Forced first, in the order the attributes gave them, byte-for-byte.
-    BOOST_CHECK(payload->executionPayload.transactions[0].raw ==
-                (bytes{0x7e, 0x01, 0x02, 0x03, 0x04, 0x05}));
-    BOOST_CHECK(payload->executionPayload.transactions[0].decoded == nullptr);
-    BOOST_CHECK(payload->executionPayload.transactions[1].raw == (bytes{0x02, 0xf8, 0xaa, 0xbb}));
-    // The mempool transaction follows the forced list.
-    BOOST_CHECK(payload->executionPayload.transactions[2].decoded == poolTx);
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3)),
+        std::runtime_error, [](const std::runtime_error& e) {
+            return std::string(e.what()).find(
+                       "raw-only (forced/deposit) transactions not executable yet: 3 raw vs 1 "
+                       "decoded") != std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(no_tx_pool_true_excludes_mempool_transactions)
@@ -1225,17 +1284,19 @@ BOOST_AUTO_TEST_CASE(no_tx_pool_true_excludes_mempool_transactions)
     globalStateStorageFixture.setNonce(sender, "0");
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
-    // noTxPool=true with a forced deposit: the payload contains exactly the forced
-    // list; the sealable mempool transaction must not appear and stays in the pool.
+    // noTxPool=true with a forced deposit: the build fails closed on the raw-only entry
+    // (until the execution-lane wiring lands), and the sealable mempool transaction — never
+    // sealed under noTxPool — stays in the pool.
     auto attributes = makePayloadAttributesV3();
     attributes.noTxPool = true;
     attributes.transactions = std::vector<std::string>{"0x7e010203"};
-    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
-    BOOST_REQUIRE(result.payloadId.has_value());
-    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
-    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 1);
-    BOOST_CHECK(
-        payload->executionPayload.transactions.front().raw == (bytes{0x7e, 0x01, 0x02, 0x03}));
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3)),
+        std::runtime_error, [](const std::runtime_error& e) {
+            return std::string(e.what()).find(
+                       "raw-only (forced/deposit) transactions not executable yet") !=
+                   std::string::npos;
+        });
     auto retained = memPool.get(std::vector{poolTx->hash()});
     BOOST_REQUIRE_EQUAL(retained.size(), 1);
     BOOST_CHECK(retained[0]);
@@ -1260,8 +1321,11 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
         c_initialBlockNumber, c_initialBlockNumber);
     std::string sender("cccccccccccccccccccc", 20);
     // Web3-shaped: only transactions with an EIP-2718 wire form enter OP payloads.
+    // The BloomScheduler stub returns two receipts, so the block must carry two
+    // transactions — the engine pairs receipt i with transaction i for the receipts trie.
     auto tx = makeWeb3Tx(sender, 0);
-    memPool.add(std::vector{tx});
+    auto tx2 = makeWeb3Tx(sender, 1);
+    memPool.add(std::vector{tx, tx2});
     globalStateStorageFixture.setNonce(sender, "0");
     auto payloadAttributes = makePayloadAttributesV2();
 
@@ -1278,13 +1342,216 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
 
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
 
-    // Verify bloom aggregation: bloom1[255]=0x01 | bloom2[255]=0x02 = 0x03
-    BOOST_CHECK_EQUAL(static_cast<int>(payload->executionPayload.logsBloom[255]), 0x03);
-    // Other bytes remain zero (only the last byte was set in both blooms)
-    for (size_t i = 0; i < 255; ++i)
+    // Bloom finalization and aggregation: finalizeReceipts recomputes each receipt's
+    // bloom from its log entries (a producer-filled bloom is never trusted), and the
+    // block bloom is the OR of the per-receipt blooms. NOTE: RefDataContainer::operator==
+    // compares POINTERS, not contents — compare hex encodings instead.
+    BOOST_REQUIRE_EQUAL(bloomScheduler.lastReceipts.size(), 2u);
+    auto const expectedBloom1 = bcos::getLogsBloom(bloomScheduler.lastReceipts[0]->logEntries());
+    auto const expectedBloom2 = bcos::getLogsBloom(bloomScheduler.lastReceipts[1]->logEntries());
+    BOOST_REQUIRE(expectedBloom1 != Bloom{} && expectedBloom2 != Bloom{});
+    BOOST_CHECK_EQUAL(toHex(bloomScheduler.lastReceipts[0]->logsBloom()), toHex(expectedBloom1));
+    BOOST_CHECK_EQUAL(toHex(bloomScheduler.lastReceipts[1]->logsBloom()), toHex(expectedBloom2));
+    Bloom expectedBlockBloom{};
+    bcos::orBloom(expectedBlockBloom, expectedBloom1);
+    bcos::orBloom(expectedBlockBloom, expectedBloom2);
+    BOOST_CHECK(payload->executionPayload.logsBloom == expectedBlockBloom);
+
+    // The engine finalized the stub's receipts in place: indices stamped, gas accumulated.
+    // (logIndex is stamped by finalizeReceipts but cannot be pinned here: the tars-backed
+    // TransactionReceiptImpl hardcodes logIndex() to 0 and setLogIndex is a no-op.)
+    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[0]->transactionIndex(), 0u);
+    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[1]->transactionIndex(), 1u);
+    // gasUsed 21000 then 30000: finalizeReceipts must accumulate to 21000 / 51000 (the stub
+    // carries non-zero gasUsed precisely so these assertions can detect a no-op finalizer).
+    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[0]->cumulativeGasUsed(), "21000");
+    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[1]->cumulativeGasUsed(), "51000");
+    // totalGasUsed flows from finalizeReceipts' return into the payload's gasUsed.
+    BOOST_CHECK_EQUAL(payload->executionPayload.gasUsed, bcos::u256(51000));
+
+    std::vector<bcos::bytes> receiptRlps;
+    for (auto const& receipt : bloomScheduler.lastReceipts)
     {
-        BOOST_CHECK_EQUAL(static_cast<int>(payload->executionPayload.logsBloom[i]), 0);
+        protocol::EthReceiptData eth;
+        BOOST_REQUIRE(protocol::toEthReceiptData(*receipt, tx->web3TypedTxKind(), eth) == nullptr);
+        protocol::EthReceipt ethReceipt(std::move(eth));
+        bcos::bytes encoded;
+        BOOST_REQUIRE(ethReceipt.rlpEncode(encoded) == nullptr);
+        receiptRlps.push_back(std::move(encoded));
     }
+    std::vector<bcos::bytesConstRef> receiptRefs;
+    for (auto const& rlp : receiptRlps)
+    {
+        receiptRefs.emplace_back(bcos::ref(rlp));
+    }
+    BOOST_CHECK_EQUAL(
+        payload->executionPayload.receiptsRoot, ledger::mpt::calculateReceiptsRoot(receiptRefs));
+
+    // Pin txsRoot: the Engine API payload carries no field for it, so rebuild the Eth
+    // header with the transactions trie root computed over the payload's raw wire bytes
+    // and check keccak(rlp(header)) == blockHash — the same reconstruction
+    // buildPayloadEmptyBlockInjectsRlpHash performs for the empty block.
+    std::vector<bcos::bytesConstRef> txRaws;
+    for (auto const& engineTx : payload->executionPayload.transactions)
+    {
+        txRaws.emplace_back(bcos::ref(engineTx.raw));
+    }
+    auto const expectedTxsRoot = ledger::mpt::calculateTransactionsRoot(txRaws);
+
+    static auto blockFactory =
+        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+    auto const& executionPayload = payload->executionPayload;
+    header->setParentInfo(bcos::protocol::ParentInfo{
+        .blockNumber = static_cast<int64_t>(executionPayload.blockNumber) - 1,
+        .blockHash = executionPayload.parentHash});
+    header->setNumber(static_cast<int64_t>(executionPayload.blockNumber));
+    // Internal BlockHeader milliseconds; the bridge converts to seconds at encode.
+    header->setTimestamp(static_cast<int64_t>(executionPayload.timestamp));
+    header->setCoinbase(executionPayload.feeRecipient);
+    header->setUncleHash(bcos::crypto::HashType(
+        "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
+    header->setPrevRandao(executionPayload.prevRandao);
+    header->setNonce(bcos::h64(0));
+    header->setDifficulty(bcos::u256(0));
+    header->setGasLimit(executionPayload.gasLimit);
+    header->setGasUsed(executionPayload.gasUsed);
+    header->setStateRoot(executionPayload.stateRoot);
+    header->setReceiptsRoot(executionPayload.receiptsRoot);
+    header->setTxsRoot(expectedTxsRoot);
+    header->setLogsBloom(
+        bcos::bytesConstRef(executionPayload.logsBloom.data(), executionPayload.logsBloom.size()));
+    header->setBaseFee(executionPayload.baseFeePerGas);
+    header->setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
+    header->setEthBlockVersion(bcos::protocol::EthBlockVersion::SHANGHAI);
+
+    bcos::protocol::EthBlockHeader ethHeader(*header);
+    bcos::bytes headerRlp;
+    ethHeader.rlpEncode(headerRlp);
+    BOOST_CHECK_EQUAL(
+        executionPayload.blockHash.hex(), bcos::crypto::keccak256Hash(bcos::ref(headerRlp)).hex());
+}
+
+// Receipt i commits the EIP-2718 type of transaction i: a scheduler that returns MORE
+// receipts than executed transactions is unpairable, and the engine must throw instead of
+// reading past the transaction list. Match the message, not just the type — any unrelated
+// runtime_error on the build path would fake-pass a type-only assertion.
+BOOST_AUTO_TEST_CASE(build_payload_rejects_more_receipts_than_transactions)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("bebebebebebebebebebe", 20);
+    auto tx = makeWeb3Tx(sender, 0);
+    auto tx2 = makeWeb3Tx(sender, 1);
+    memPool.add(std::vector{tx, tx2});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto payloadAttributes = makePayloadAttributesV2();
+
+    OverReceiptScheduler overReceiptScheduler;
+    auto engineService =
+        EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, OverReceiptScheduler>(
+            memPool, globalStateStorageFixture.storage, sharedStubExecutor(), overReceiptScheduler,
+            testBlockFactory());
+
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2)),
+        std::runtime_error, [](const std::runtime_error& e) {
+            return std::string(e.what()).find("mismatched receipts vs executed transactions") !=
+                   std::string::npos;
+        });
+}
+
+// The symmetric failure: a scheduler returning FEWER receipts than executed transactions
+// would silently commit a short receipts trie that no external Ethereum verifier can
+// reproduce, so the engine must fail closed on that too.
+BOOST_AUTO_TEST_CASE(build_payload_rejects_fewer_receipts_than_transactions)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("b1b1b1b1b1b1b1b1b1b1", 20);
+    auto tx = makeWeb3Tx(sender, 0);
+    auto tx2 = makeWeb3Tx(sender, 1);
+    memPool.add(std::vector{tx, tx2});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto payloadAttributes = makePayloadAttributesV2();
+
+    UnderReceiptScheduler underReceiptScheduler;
+    auto engineService =
+        EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, UnderReceiptScheduler>(
+            memPool, globalStateStorageFixture.storage, sharedStubExecutor(), underReceiptScheduler,
+            testBlockFactory());
+
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2)),
+        std::runtime_error, [](const std::runtime_error& e) {
+            return std::string(e.what()).find("mismatched receipts vs executed transactions") !=
+                   std::string::npos;
+        });
+}
+
+// The receipt's EIP-2718 type is derived from the signed envelope's first byte, never the
+// web3TypedTxKind tars mirror (a peer can rewrite the mirror; never the envelope). A mirror
+// that disagrees with the envelope — here mirror=1 on a 0x02 envelope — must fail closed
+// instead of silently committing a wrong receiptsRoot.
+BOOST_AUTO_TEST_CASE(build_payload_rejects_forged_tx_kind_mirror)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("b2b2b2b2b2b2b2b2b2b2", 20);
+    auto tx = makeWeb3Tx(sender, 0, 1);  // forged mirror: claims kind 1, envelope says 2
+    memPool.add(std::vector{tx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto payloadAttributes = makePayloadAttributesV2();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2)),
+        std::runtime_error, [](const std::runtime_error& e) {
+            return std::string(e.what()).find(
+                       "web3TypedTxKind mirror disagrees with the signed envelope") !=
+                   std::string::npos;
+        });
+}
+
+// A v2 payload whose transactions list carries raw-only entries (forced/deposit transactions
+// from the OP attributes list, .decoded == nullptr) commits a transactions trie of N entries
+// while receipts cover only the M < N decoded executables — receipt i would be keyed at the
+// wrong receipts-trie index and no external Ethereum verifier could reproduce
+// receiptsRoot/blockHash. Until the execution-lane wiring executes deposits, buildPayload must
+// fail closed on that shape rather than build an unreproducible block.
+BOOST_AUTO_TEST_CASE(build_payload_rejects_forced_raw_only_transactions)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("b3b3b3b3b3b3b3b3b3b3", 20);
+    auto tx = makeWeb3Tx(sender, 0);
+    memPool.add(std::vector{tx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto payloadAttributes = makePayloadAttributesV2();
+    // A forced deposit (validateRawTransactionKind admits 0x7E) plus one decoded pool
+    // transaction: 2 raw entries in the payload, only 1 executable.
+    payloadAttributes.transactions = std::vector<std::string>{"0x7e010203"};
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2)),
+        std::runtime_error, [](const std::runtime_error& e) {
+            return std::string(e.what()).find(
+                       "raw-only (forced/deposit) transactions not executable yet") !=
+                   std::string::npos;
+        });
 }
 
 // ---- B4: Karst method surface (forkchoiceUpdatedV3 -> getPayloadV5 -> newPayloadV4) ----
@@ -1497,18 +1764,16 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
     auto result =
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
     BOOST_REQUIRE(result.payloadId.has_value());
-    BOOST_CHECK_EXCEPTION(
-        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion,
-        [](const IncompatiblePayloadVersion& e) {
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.getPayload(*result.payloadId, 5)),
+        IncompatiblePayloadVersion, [](const IncompatiblePayloadVersion& e) {
             return std::string(e.what()).find("incompatible with requested method version") !=
                    std::string::npos;
         });
     // getPayloadV4 has the same window: op-geth's GetPayloadV4 also admits only
     // PayloadV3 builds, and the V4 response shape needs the same three fields a V2 build
     // does not have.
-    BOOST_CHECK_EXCEPTION(
-        task::syncWait(engineService.getPayload(*result.payloadId, 4)), IncompatiblePayloadVersion,
-        [](const IncompatiblePayloadVersion& e) {
+    BOOST_CHECK_EXCEPTION(task::syncWait(engineService.getPayload(*result.payloadId, 4)),
+        IncompatiblePayloadVersion, [](const IncompatiblePayloadVersion& e) {
             return std::string(e.what()).find("incompatible with requested method version") !=
                    std::string::npos;
         });
@@ -1616,8 +1881,7 @@ static bcos::protocol::BlockHeader::Ptr makeValidCancunHeader(
     bcos::protocol::BlockFactory::Ptr blockFactory, bcos::crypto::HashType parentHash)
 {
     auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
-    header->setParentInfo(bcos::protocol::ParentInfo{
-        .blockNumber = 9, .blockHash = parentHash});
+    header->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 9, .blockHash = parentHash});
     header->setNumber(10);
     // Internal BlockHeader timestamps are milliseconds: the whole-second value × 1000.
     header->setTimestamp(1700000000 * 1000LL);
@@ -1681,8 +1945,8 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderFillsEthFieldsAndHash)
     payload.blobGasUsed = bcos::u256(0);
     payload.excessBlobGas = bcos::u256(0);
 
-    auto beaconRoot = bcos::h256(
-        "3333333333333333333333333333333333333333333333333333333333333333");
+    auto beaconRoot =
+        bcos::h256("3333333333333333333333333333333333333333333333333333333333333333");
     bcos::engine::detail::finalizeEthBlockHeader(
         *header, payload, beaconRoot, bcos::protocol::EthBlockVersion::CANCUN);
 
@@ -1747,8 +2011,8 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderVersionGatesFields)
     // V3/CANCUN: everything present.
     {
         auto header = makeValidCancunHeader(blockFactory, parentHash);
-        auto beaconRoot = bcos::h256(
-            "3333333333333333333333333333333333333333333333333333333333333333");
+        auto beaconRoot =
+            bcos::h256("3333333333333333333333333333333333333333333333333333333333333333");
         payload.blobGasUsed = bcos::u256(0);
         payload.excessBlobGas = bcos::u256(0);
         bcos::engine::detail::finalizeEthBlockHeader(
@@ -1764,12 +2028,12 @@ BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderVersionGatesFields)
     // (regression: PRAGUE previously produced a header that failed validateHeader).
     {
         auto header = makeValidCancunHeader(blockFactory, parentHash);
-        auto beaconRoot = bcos::h256(
-            "3333333333333333333333333333333333333333333333333333333333333333");
+        auto beaconRoot =
+            bcos::h256("3333333333333333333333333333333333333333333333333333333333333333");
         payload.blobGasUsed = bcos::u256(0);
         payload.excessBlobGas = bcos::u256(0);
-        BOOST_CHECK_NO_THROW(bcos::engine::detail::finalizeEthBlockHeader(*header, payload,
-            beaconRoot, bcos::protocol::EthBlockVersion::PRAGUE));
+        BOOST_CHECK_NO_THROW(bcos::engine::detail::finalizeEthBlockHeader(
+            *header, payload, beaconRoot, bcos::protocol::EthBlockVersion::PRAGUE));
         BOOST_CHECK(header->ethBlockVersion() == bcos::protocol::EthBlockVersion::PRAGUE);
         BOOST_REQUIRE(header->requestsHash().has_value());
         BOOST_CHECK_EQUAL(header->requestsHash()->hex(),
@@ -1826,8 +2090,8 @@ BOOST_AUTO_TEST_CASE(buildPayloadEmptyBlockInjectsRlpHash)
     header->setStateRoot(executionPayload.stateRoot);
     header->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
     header->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
-    header->setLogsBloom(bcos::bytesConstRef(
-        executionPayload.logsBloom.data(), executionPayload.logsBloom.size()));
+    header->setLogsBloom(
+        bcos::bytesConstRef(executionPayload.logsBloom.data(), executionPayload.logsBloom.size()));
     header->setBaseFee(executionPayload.baseFeePerGas);
     header->setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
     header->setBlobGasUsed(executionPayload.blobGasUsed.value_or(bcos::u256(0)));
@@ -1839,8 +2103,7 @@ BOOST_AUTO_TEST_CASE(buildPayloadEmptyBlockInjectsRlpHash)
     bcos::protocol::EthBlockHeader ethHeader(*header);
     bcos::bytes rlp;
     ethHeader.rlpEncode(rlp);
-    BOOST_CHECK_EQUAL(
-        blockHash.hex(), bcos::crypto::keccak256Hash(bcos::ref(rlp)).hex());
+    BOOST_CHECK_EQUAL(blockHash.hex(), bcos::crypto::keccak256Hash(bcos::ref(rlp)).hex());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

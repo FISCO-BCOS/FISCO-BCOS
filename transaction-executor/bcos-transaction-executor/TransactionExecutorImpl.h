@@ -169,7 +169,8 @@ public:
                 auto& callNonce = m_data->m_nonce;
                 ledger::account::EVMAccount account(m_data->m_rollbackableStorage, m_data->m_origin,
                     m_data->m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::feature_raw_address));
+                        ledger::Features::Flag::feature_raw_address),
+                    /*treatSystemAsUser=*/false);
 
                 if (!co_await account.exists())
                 {

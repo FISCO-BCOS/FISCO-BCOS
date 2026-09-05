@@ -22,6 +22,19 @@ struct FromTableName
     explicit FromTableName() = default;
 };
 
+/// Route an account address to its storage table prefix — the single home for the
+/// /sys/ vs /apps/ policy so the v2 executor's writes and the ledger/RPC reads cannot
+/// drift apart. systemAsUser (executor_version >= ETHEREUM_EXECUTOR_VERSION) treats the
+/// c_systemTxsAddress members as ordinary user accounts under /apps/ — in Ethereum they
+/// are; the genesis MPT builder and the OP Storage2State already do the same.
+inline std::string_view accountTablePrefix(std::string_view address, bool systemAsUser)
+{
+    return (!systemAsUser &&
+               precompiled::contains(bcos::precompiled::c_systemTxsAddress, address)) ?
+               ledger::SYS_DIRECTORY::SYS_APPS :
+               ledger::SYS_DIRECTORY::USER_APPS;
+}
+
 template <class Storage>
 class EVMAccount
 {
@@ -277,13 +290,17 @@ public:
       : m_storage(storage), m_tableName(std::move(tableName))
     {}
 
-    EVMAccount(Storage& storage, const evmc_address& address, bool binaryAddress)
+    // `treatSystemAsUser` is deliberately without a default, for the same reason MPTAccount
+    // records for `binaryAddress` (MPTAccount.h): it decides whether the c_systemTxsAddress
+    // members route to /sys/ or /apps/, and guessing it wrong makes those reads silently miss.
+    EVMAccount(
+        Storage& storage, const evmc_address& address, bool binaryAddress, bool treatSystemAsUser)
       : m_storage(storage)
     {
         std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
         boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), table.data());
-        if (auto view = std::string_view(table.data(), table.size());
-            precompiled::contains(bcos::precompiled::c_systemTxsAddress, view))
+        auto const view = std::string_view(table.data(), table.size());
+        if (accountTablePrefix(view, treatSystemAsUser) == ledger::SYS_DIRECTORY::SYS_APPS)
         {
             m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + table.size());
             m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
@@ -313,9 +330,11 @@ public:
      * @param storage storage instance
      * @param address address of the account, hex string, should not contain 0x prefix
      */
-    EVMAccount(Storage& storage, std::string_view address, bool binaryAddress) : m_storage(storage)
+    EVMAccount(
+        Storage& storage, std::string_view address, bool binaryAddress, bool treatSystemAsUser)
+      : m_storage(storage)
     {
-        if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, address))
+        if (accountTablePrefix(address, treatSystemAsUser) == ledger::SYS_DIRECTORY::SYS_APPS)
         {
             m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + address.size());
             m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
@@ -340,7 +359,8 @@ public:
         }
     }
 
-    EVMAccount(Storage& storage, const bcos::Address& address, bool binaryAddress)
+    EVMAccount(
+        Storage& storage, const bcos::Address& address, bool binaryAddress, bool treatSystemAsUser)
       : EVMAccount(
             storage,
             [](const bcos::Address& address) {
@@ -348,7 +368,7 @@ public:
                 ::ranges::copy(address, std::span{evmcAddress.bytes}.data());
                 return evmcAddress;
             }(address),
-            binaryAddress)
+            binaryAddress, treatSystemAsUser)
     {}
     ~EVMAccount() noexcept = default;
 

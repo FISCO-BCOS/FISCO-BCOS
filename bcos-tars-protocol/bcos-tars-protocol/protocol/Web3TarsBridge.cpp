@@ -29,12 +29,16 @@
 
 #include "bcos-framework/protocol/Transaction.h"  // bcos::protocol::TransactionType
 #include "bcos-rlp-protocol/Web3Transaction.h"
+#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-crypto/hash/Keccak256.h>
+#include <boost/throw_exception.hpp>
 #include <iterator>
+#include <memory>
 #include <range/v3/algorithm/move.hpp>
+#include <stdexcept>
 
 namespace bcos::rpc
 {
@@ -163,5 +167,33 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
 
     // dataHash and sender left empty — TxValidator::verify() computes them
     return tarsTx;
+}
+
+std::shared_ptr<bcostars::protocol::TransactionImpl> decodeWeb3RawTransaction(
+    bcos::bytesConstRef raw, const bcos::crypto::Hash& hashImpl)
+{
+    Web3Transaction web3Tx;
+    bcos::bytesRef input(const_cast<byte*>(raw.data()), raw.size());
+    if (auto error = codec::rlp::decode(input, web3Tx); error != nullptr)
+    {
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("decodeWeb3RawTransaction: " + error->errorMessage()));
+    }
+    // Recover the sender BEFORE takeToTarsTransaction(): that call is destructive by
+    // contract (ranges::move of data/signatureR/signatureS), and sender() re-runs
+    // encodeForSign() over exactly those members. It happens to work today only because the
+    // moved members are containers of trivially-copyable bytes; recovering first removes the
+    // dependency on move-semantics detail entirely.
+    auto senderHex = web3Tx.sender();
+    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
+
+    // Restore the sender from the signature so the executor can validate the nonce /
+    // balance without a separate recovery pass.
+    bcos::bytes senderBytes =
+        bcos::fromHex(senderHex.rfind("0x", 0) == 0 ? senderHex.substr(2) : senderHex);
+    tx->forceSender(senderBytes);
+    tx->calculateHash(hashImpl);
+    return tx;
 }
 }  // namespace bcos::rpc

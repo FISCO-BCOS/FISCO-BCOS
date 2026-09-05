@@ -299,7 +299,8 @@ bcos::task::Task<int64_t> measureProbeGasTask(Fixture& fixture,
     runner.bytes[19] = runnerTag;
 
     bcos::ledger::account::EVMAccount<decltype(fixture.rollbackableStorage)> originAcc(
-        fixture.rollbackableStorage, origin, false);
+        fixture.rollbackableStorage, origin, false,
+        /*treatSystemAsUser=*/false);
     if (!co_await originAcc.exists())
     {
         co_await originAcc.create();
@@ -307,7 +308,8 @@ bcos::task::Task<int64_t> measureProbeGasTask(Fixture& fixture,
     co_await originAcc.setBalance(bcos::u256(1) << 96);
 
     bcos::ledger::account::EVMAccount<decltype(fixture.rollbackableStorage)> runnerAcc(
-        fixture.rollbackableStorage, runner, false);
+        fixture.rollbackableStorage, runner, false,
+        /*treatSystemAsUser=*/false);
     if (!co_await runnerAcc.exists())
     {
         co_await runnerAcc.create();

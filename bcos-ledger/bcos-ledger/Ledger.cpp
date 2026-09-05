@@ -28,6 +28,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -71,13 +72,13 @@
 #include <exception>
 #include <future>
 #include <iterator>
+#include <list>
 #include <memory>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/view/chunk.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/take.hpp>
 #include <utility>
-#include <list>
 
 using namespace bcos;
 using namespace bcos::ledger;
@@ -142,19 +143,20 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 {
     // TODO)): blockNumber is not used nowadays
     std::ignore = _blockNumber;
-    // System-contract addresses (0x1000 range, etc.) are stored under the
-    // "/sys/" prefix by EVMAccount; user accounts under "/apps/". Picking the
-    // right prefix here keeps eth_getBalance / eth_getStorageAt /
-    // eth_getTransactionCount consistent with both the genesis alloc import and
-    // the v2 executor (which both go through EVMAccount). Without this, reads
-    // for system-range accounts hit the wrong table and return empty (e.g.
-    // EEST static VMTests that call 0x1000 saw balance=0 / storage=0).
-    auto const tablePrefix =
-        precompiled::contains(bcos::precompiled::c_systemTxsAddress, _address) ?
-            SYS_DIRECTORY::SYS_APPS :
-            SYS_DIRECTORY::USER_APPS;
-    auto const contractTableName = getContractTableName(tablePrefix, _address);
+    // Route through the shared policy (ledger::account::accountTablePrefix), with the
+    // executor_version read via the shared ledger::getExecutorVersion helper (the same
+    // whole-string parser the LedgerConfig derivations use): below executor_version 2 the
+    // c_systemTxsAddress members live under /sys/; at v2 every address is an ordinary
+    // /apps/ account, matching the v2 executor's writes (EthereumState) and the genesis
+    // alloc import. Without this, reads for system-range accounts hit the wrong table and
+    // return empty (e.g. EEST static VMTests that call 0x1000 saw balance=0 / storage=0).
     auto const stateStorage = getStateStorage();
+    auto const executorVersion = co_await getExecutorVersion(*stateStorage);
+    // Compute the routing bool at the call site (the version-taking overload was removed to
+    // avoid a bool/int overload pair that reinterprets the same argument by type).
+    auto const tablePrefix =
+        account::accountTablePrefix(_address, executorVersion >= ETHEREUM_EXECUTOR_VERSION);
+    auto const contractTableName = getContractTableName(tablePrefix, _address);
     co_return co_await bcos::storage2::readOne(
         *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
 }
@@ -1876,8 +1878,7 @@ static void verifyL2FeatureFlagsSlot(
         // slot = keccak256(utf8("feature_flags") || be32(101))
         bcos::bytes slotInput;
         slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
-        slotInput.insert(
-            slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
+        slotInput.insert(slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
         bcos::bytes baseSlotBytes(32, 0);
         baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
         slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());
@@ -1933,8 +1934,8 @@ static void verifyL2FeatureFlagsSlot(
     }
 }
 
-static task::Task<void> importGenesisState(
-    ::ranges::forward_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+static task::Task<void> importGenesisState(::ranges::forward_range auto const& allocs,
+    auto& storage, const crypto::Hash& hashImpl, bool systemAsUser)
 {
     // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
     // a prefix. Strip a leading 0x so both shapes unhex cleanly. The exact-width /
@@ -1980,8 +1981,12 @@ static task::Task<void> importGenesisState(
             slots.emplace_back(evmKey, evmValue);
         }
 
-        account::EVMAccount account(
-            storage, address, features.get(Features::Flag::feature_raw_address));
+        // systemAsUser routes the c_systemTxsAddress members under /apps/ like the v2
+        // executor (EthereumState) and the RPC read side do. Reserved-address allocs are
+        // rejected earlier by computeGenesisStateTrie, so this is defensive uniformity
+        // rather than a reachable behaviour change.
+        account::EVMAccount account(storage, address,
+            features.get(Features::Flag::feature_raw_address), systemAsUser);
         co_await account.create();
 
         if (codeHash.has_value())
@@ -2515,8 +2520,11 @@ bool Ledger::buildGenesisBlock(
         }
 
         co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
-        co_await importGenesisState(
-            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl());
+        // executor_version is written to storage only below, after this import runs, so the
+        // routing flag must come from the genesis config here rather than be read back.
+        co_await importGenesisState(genesis.m_allocs, *m_stateStorage,
+            *m_blockFactory->cryptoSuite()->hashImpl(),
+            /*systemAsUser=*/genesis.m_executorVersion >= ETHEREUM_EXECUTOR_VERSION);
 
         // Scenario B (L2): block 1 builds the MPT incrementally on top of the genesis state
         // root (buildAndCollect with the genesis root as parent) and reads the parent trie

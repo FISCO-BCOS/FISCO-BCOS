@@ -44,6 +44,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-ledger/mpt/EthTrieRoots.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
@@ -153,6 +154,33 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     h256 stateRoot;
     h256 receiptRoot;
 
+    // Null-check every receipt BEFORE the parallel region below: calculateReceiptRoot
+    // dereferences receipt->hash() with no check of its own, so a throw from the sibling
+    // finalizeReceipts task would not dominate a concurrent segfault. Same guard shape as
+    // the engine's buildPayload (EngineServiceImpl.h); receipts is iterated by multiple
+    // lambdas below already, so it is at least a forward range and one extra pass is safe.
+    for (auto& receipt : receipts)
+    {
+        if (!receipt)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
+        }
+    }
+
+    // Finalize receipts BEFORE the parallel region. calculateReceiptRoot's sibling task reads
+    // receipt->hash() on the same objects finalizeReceipts mutates (transactionIndex /
+    // logsBloom / cumulativeGasUsed); benign today because TransactionReceiptImpl::hash()
+    // returns the cached dataHash over disjoint members, but finalizing first removes any
+    // scheduling dependence and matches the engine's sequential ordering. The block's receipt
+    // list is restamped here too (clearReceipts/appendReceipt), so the parallel region only
+    // reads.
+    totalGasUsed += ledger::mpt::finalizeReceipts(receipts);
+    block.clearReceipts();
+    for (auto&& receipt : receipts)
+    {
+        block.appendReceipt(receipt);
+    }
+
     tbb::parallel_invoke([&]() { transactionRoot = calculateTransactionRoot(block, hashImpl); },
         [&]() {
             // When the block was built with an Ethereum MPT root (shouldBuildMPT), the header
@@ -167,22 +195,6 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
                 calculateStateRoot(storage, block.blockHeader()->version(), hashImpl, features));
         },
         [&]() { receiptRoot = calculateReceiptRoot(receipts, block, hashImpl); },
-        [&]() {
-            size_t logIndex = 0;
-            block.clearReceipts();
-            for (auto&& [index, receipt] : ::ranges::views::enumerate(receipts))
-            {
-                receipt->setTransactionIndex(index);
-                receipt->setLogIndex(logIndex);
-                auto logBloom = getLogsBloom(receipt->logEntries());
-                receipt->setLogsBloom({logBloom.data(), logBloom.size()});
-                logIndex += receipt->logEntries().size();
-                totalGasUsed += receipt->gasUsed();
-                receipt->setCumulativeGasUsed(totalGasUsed.str());
-
-                block.appendReceipt(receipt);
-            }
-        },
         [&]() {
             sysBlock = ::ranges::any_of(transactions, [](auto const& transaction) {
                 return precompiled::contains(
@@ -899,7 +911,8 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getC
             co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
 
         ledger::account::EVMAccount account(view, contractAddress,
-            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address),
+            /*treatSystemAsUser=*/false);
         auto code = co_await account.code();
 
         if (!code)
@@ -925,7 +938,8 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getA
             co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
 
         ledger::account::EVMAccount account(view, contractAddress,
-            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address),
+            /*treatSystemAsUser=*/false);
         auto abi = co_await account.abi();
 
         if (!abi)
@@ -945,8 +959,9 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getPendin
     auto view = m_multiLayerStorage.get().fork();
     auto ledgerConfig = co_await ledger::getLedgerConfig(view, number, m_blockFactory.get());
 
-    ledger::account::EVMAccount account(
-        view, address, ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+    ledger::account::EVMAccount account(view, address,
+        ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address),
+        /*treatSystemAsUser=*/false);
     co_return co_await account.storageEntry(key);
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
