@@ -598,8 +598,13 @@ public:
         }
     }
 
+private:
     /// Shared merge body of mergeBackStorage / mergeToBackends — the only difference
     /// between the two is whether a queued layer participates in the merge.
+    /// Private on purpose (finding R1): every other public mutator on this class
+    /// self-locks; this body performs an unlocked storage2::merge into the backends,
+    /// so exposing it would let a caller race mergeBackStorage on m_latestBackend.
+    /// mergeBackStorage/mergeToBackends hold m_mergeMutex around the call.
     task::Task<void> mergeIntoBackends(auto&... storages)
     {
         if constexpr (withCacheStorage)
@@ -625,6 +630,7 @@ public:
         co_return;
     }
 
+public:
     task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage(auto&... extraStorages)
     {
         std::unique_lock mergeLock(m_mergeMutex);
