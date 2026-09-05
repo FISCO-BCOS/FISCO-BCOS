@@ -82,9 +82,19 @@ void commitRetainedPayload(Guard& guard, ArtifactsMap& artifacts, PayloadID cons
 
 /// Terminal-SYNCING visibility: the CL keeps retrying an answer it cannot move
 /// past without EL sync; keep the fail-closed answer but make the gap visible
-/// (rate-limited log naming it). One shared CAS gate (10 s) across this
-/// service's SYNCING sites — same shape as EngineServiceImpl's cache-miss
-/// warning. The desc names the specific gap at each call site.
+/// (rate-limited log naming it). One CAS gate (10 s) PER call site (template
+/// parameter, one static per instantiation) so a noisy routine site cannot
+/// suppress another site's window. The desc names the specific gap at each
+/// call site.
+enum SyncingWarnSite : std::size_t
+{
+    c_forkchoiceHeadUnknown,
+    c_newPayloadParentUnknown,
+    c_newPayloadNotBuiltHere,
+    c_newPayloadCacheMiss,
+};
+
+template <SyncingWarnSite kSiteV>
 inline void warnSyncingRateLimited(const char* desc, h256 const& blockHash)
 {
     static std::atomic<std::chrono::steady_clock::time_point> lastWarn{
@@ -98,6 +108,14 @@ inline void warnSyncingRateLimited(const char* desc, h256 const& blockHash)
         BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService") << LOG_DESC(desc)
                           << LOG_KV("blockHash", blockHash.hex());
     }
+}
+
+/// Unlimited variant for the mid-persist alarm: a fully built block lost
+/// mid-commit must never be dropped by another site's 10 s window.
+inline void warnSyncingUnlimited(const char* desc, h256 const& blockHash)
+{
+    BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService") << LOG_DESC(desc)
+                      << LOG_KV("blockHash", blockHash.hex());
 }
 }  // namespace detail
 
