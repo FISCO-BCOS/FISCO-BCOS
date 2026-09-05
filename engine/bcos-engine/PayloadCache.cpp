@@ -70,6 +70,33 @@ PayloadCache::PutResult putStaged(StagedCache& staged, PayloadID id, h256 const&
     }
     return result;
 }
+
+/// Shared retain kernel: keep only `id` (reinstated at `blockHash`), appending every
+/// dropped payload id to `dropped` when non-null. A missing `id` leaves the staged
+/// state untouched.
+void retainStaged(StagedCache& staged, PayloadID const& id, h256 const& blockHash,
+    std::vector<PayloadID>* dropped)
+{
+    const auto entryIt = staged.entries.find(id);
+    if (entryIt == staged.entries.end())
+    {
+        return;
+    }
+    const auto retainedEntry = entryIt->second;
+    for (auto const& [existingId, _] : staged.entries)
+    {
+        if (existingId != id && dropped != nullptr)
+        {
+            dropped->push_back(existingId);
+        }
+    }
+    staged.entries.clear();
+    staged.hashToId.clear();
+    staged.order.clear();
+    staged.entries.emplace(id, retainedEntry);
+    staged.hashToId.emplace(blockHash, id);
+    staged.order.push_back(id);
+}
 }  // namespace
 
 PayloadCache::PutResult PayloadCache::put(
@@ -117,33 +144,6 @@ std::optional<bcos::protocol::BlockNumber> PayloadCache::blockNumberForHash(
         return std::nullopt;
     }
     return entry->executionPayload.blockNumber;
-}
-
-/// Shared retain kernel: keep only `id` (reinstated at `blockHash`), appending every
-/// dropped payload id to `dropped` when non-null. A missing `id` leaves the staged
-/// state untouched.
-void retainStaged(StagedCache& staged, PayloadID const& id, h256 const& blockHash,
-    std::vector<PayloadID>* dropped)
-{
-    const auto entryIt = staged.entries.find(id);
-    if (entryIt == staged.entries.end())
-    {
-        return;
-    }
-    const auto retainedEntry = entryIt->second;
-    for (auto const& [existingId, _] : staged.entries)
-    {
-        if (existingId != id && dropped != nullptr)
-        {
-            dropped->push_back(existingId);
-        }
-    }
-    staged.entries.clear();
-    staged.hashToId.clear();
-    staged.order.clear();
-    staged.entries.emplace(id, retainedEntry);
-    staged.hashToId.emplace(blockHash, id);
-    staged.order.push_back(id);
 }
 
 PayloadCache::PutResult PayloadCache::putAndRetainOnly(
