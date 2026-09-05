@@ -112,8 +112,8 @@ std::optional<std::string> validateOpPayloadAttributes(
     {
         return std::string("eip1559Params must be exactly 8 bytes");
     }
-    const auto denominator = engine_common::readU32BE(*payloadAttributes.eip1559Params, 0);
-    const auto elasticity = engine_common::readU32BE(*payloadAttributes.eip1559Params, 4);
+    const auto [denominator, elasticity] =
+        bcos::engine::decodeEip1559Params(*payloadAttributes.eip1559Params);
     if (auto error = engine_common::validateHolocene1559Params(denominator, elasticity))
     {
         return error;
