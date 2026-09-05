@@ -437,16 +437,22 @@ private:
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
 
-        std::shared_lock lock(x_state);
-        auto it = m_payloadCache.find(payloadId);
-        if (it == m_payloadCache.end())
+        PayloadEntry entryCopy;
         {
-            BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
+            std::shared_lock lock(x_state);
+            auto it = m_payloadCache.find(payloadId);
+            if (it == m_payloadCache.end())
+            {
+                BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
+            }
+            engine_common::requireGetPayloadShape(it->second.version, it->second.executionPayload,
+                it->second.parentBeaconBlockRoot, version);
+            entryCopy = it->second;
         }
-        engine_common::requireGetPayloadShape(it->second.version, it->second.executionPayload,
-            it->second.parentBeaconBlockRoot, version);
-
-        return engine_common::assembleGetPayloadData(it->second, version);
+        // Assemble outside x_state: the entry copy above is the only work under the
+        // shared lock (which blocks the commit/publish writers); the response
+        // assembly re-copies the payload lock-free.
+        return engine_common::assembleGetPayloadData(entryCopy, version);
     }
 
     bcos::task::Task<PayloadStatus> handleNewPayload(
