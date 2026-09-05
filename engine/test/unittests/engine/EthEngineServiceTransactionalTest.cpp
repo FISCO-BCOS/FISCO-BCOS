@@ -1,12 +1,27 @@
 /**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EthEngineServiceTransactionalTest.cpp
+ * @brief Transactional (retry/commit) tests for EthEngineService
  */
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 #include "engine/bcos-engine/EngineTracker.h"
 #include "engine/bcos-engine/EthEngineService.h"
 #include "engine/bcos-engine/PayloadCache.h"
+#include "engine/test/unittests/engine/EthServiceStubs.h"
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -35,35 +50,7 @@ using namespace bcos::txpool;
 namespace eth_tx_test
 {
 
-using RealGlobalStateMutableStorage = bcos::storage2::memory_storage::MemoryStorage<
-    bcos::executor_v1::StateKey, bcos::executor_v1::StateValue,
-    bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
-                                              bcos::storage2::memory_storage::LOGICAL_DELETION)>;
-using RealGlobalStateBackendStorage =
-    bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
-        bcos::executor_v1::StateValue,
-        bcos::storage2::memory_storage::Attribute(
-            bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::CONCURRENT),
-        std::hash<bcos::executor_v1::StateKey>>;
-
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& s) : m_storage(s) {}
-    Storage& open() { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const&) { std::abort(); }
-    void createCheckpoint(Storage&, CheckpointName const&) {}
-    void deleteCheckpoint(CheckpointName const&) {}
-    std::optional<CheckpointName> latestCheckpointName() const { return std::nullopt; }
-    std::optional<CheckpointName> oldestCheckpointName() const { return std::nullopt; }
-};
-
-using RealGlobalCheckpointBackend = TrivialCheckpointStorage<bcos::executor_v1::StateKey,
-    bcos::executor_v1::StateValue, RealGlobalStateBackendStorage>;
-using RealGlobalStateStorage = bcos::storage2::MultiLayerStorage<RealGlobalStateMutableStorage,
-    void, RealGlobalCheckpointBackend>;
+using namespace bcos::engine::eth_test;
 
 struct GateMergeStorage
 {
@@ -130,42 +117,6 @@ struct GateMergeStorage
             BOOST_THROW_EXCEPTION(std::runtime_error{"merge failed"});
         }
         co_await inner.mergeToBackends(extra);
-    }
-};
-
-struct StubExecutor
-{
-    template <class Storage>
-    struct ExecuteContext
-    {
-        task::Task<void> prepare() { co_return; }
-        task::Task<void> execute() { co_return; }
-        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return nullptr; }
-    };
-
-    template <class Storage>
-    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage&,
-        const protocol::BlockHeader&, const protocol::Transaction&, int,
-        const ledger::LedgerConfig&, bool)
-    {
-        co_return nullptr;
-    }
-
-    template <class Storage>
-    task::Task<ExecuteContext<Storage>> createExecuteContext(Storage&, const protocol::BlockHeader&,
-        const protocol::Transaction&, int, const ledger::LedgerConfig&, bool)
-    {
-        co_return ExecuteContext<Storage>{};
-    }
-};
-
-struct StubScheduler
-{
-    template <class Storage, class Executor>
-    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
-    {
-        co_return {};
     }
 };
 
@@ -441,8 +392,8 @@ BOOST_AUTO_TEST_CASE(publish_built_payload_restores_fifo_evicted_on_artifacts_th
     auto guard = tracker.lockExclusive();
 
     // PayloadCache::put FIFO cap is 64. Fill it, then a 65th put evicts the oldest.
-    constexpr std::size_t kMaxEntries = 64;
-    for (std::size_t i = 0; i < kMaxEntries; ++i)
+    constexpr std::size_t c_maxEntries = 64;
+    for (std::size_t i = 0; i < c_maxEntries; ++i)
     {
         auto id = "0x" + std::to_string(i);
         guard.putPayload(id, h256(i + 1), makeEntry(id));
@@ -534,7 +485,7 @@ BOOST_AUTO_TEST_CASE(commit_retained_payload_rolls_back_on_artifacts_clear_throw
                   });
 
     artifacts.throwOnClear = true;
-    BOOST_CHECK_THROW(eth_detail::commitRetainedPayload(
+    BOOST_CHECK_THROW(detail::commitRetainedPayload(
                           guard, artifacts, "0xcommit", h256(2), makeEntry("0xcommit")),
         std::runtime_error);
 
