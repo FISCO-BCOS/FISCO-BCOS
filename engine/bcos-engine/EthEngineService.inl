@@ -25,6 +25,7 @@
 #include <range/v3/view/transform.hpp>
 
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <optional>
 
 namespace bcos::engine

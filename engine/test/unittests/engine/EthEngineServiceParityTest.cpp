@@ -63,8 +63,6 @@ using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 
-constexpr bcos::protocol::BlockNumber c_rebuildBaseBlockNumber = 60;
-
 namespace eth_parity_test
 {
 
@@ -1597,14 +1595,14 @@ BOOST_AUTO_TEST_CASE(eth_nonempty_withdrawals_rejected_with_pinned_message)
     NewPayloadRequest legacyV2;
     legacyV2.executionPayload = legacyPayload->executionPayload;
     legacyV2.executionPayload.withdrawals =
-        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .amount = 1}};
+        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
     auto legacyV2Status = task::syncWait(pair.legacy.newPayload(legacyV2, 2));
     checkNonEmptyWithdrawalsInvalid(legacyV2Status, "legacy V2");
 
     NewPayloadRequest newV2;
     newV2.executionPayload = newPayload->executionPayload;
     newV2.executionPayload.withdrawals =
-        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .amount = 1}};
+        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
     auto newV2Status = task::syncWait(pair.fresh.newPayload(newV2, 2));
     checkNonEmptyWithdrawalsInvalid(newV2Status, "fresh V2");
 
@@ -1612,14 +1610,14 @@ BOOST_AUTO_TEST_CASE(eth_nonempty_withdrawals_rejected_with_pinned_message)
     NewPayloadRequest legacyV4 = makeNewPayloadRequestV3(legacyPayload->executionPayload);
     legacyV4.executionRequests = std::vector<bytes>{};
     legacyV4.executionPayload.withdrawals =
-        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .amount = 1}};
+        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
     auto legacyV4Status = task::syncWait(pair.legacy.newPayload(legacyV4, 4));
     checkNonEmptyWithdrawalsInvalid(legacyV4Status, "legacy V4");
 
     NewPayloadRequest newV4 = makeNewPayloadRequestV3(newPayload->executionPayload);
     newV4.executionRequests = std::vector<bytes>{};
     newV4.executionPayload.withdrawals =
-        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .amount = 1}};
+        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
     auto newV4Status = task::syncWait(pair.fresh.newPayload(newV4, 4));
     checkNonEmptyWithdrawalsInvalid(newV4Status, "fresh V4");
 }
@@ -1752,7 +1750,8 @@ BOOST_AUTO_TEST_CASE(wire_round_trip_through_engine_helper)
         BOOST_CHECK_EQUAL(parsed.parentBeaconBlockRoot->hexPrefixed(),
             built->parentBeaconBlockRoot->hexPrefixed());
         auto mismatch =
-            detail::compareWithBuiltPayload(parsed.executionPayload, built->executionPayload);
+            bcos::engine::detail::compareWithBuiltPayload(
+                parsed.executionPayload, built->executionPayload);
         BOOST_CHECK_MESSAGE(!mismatch, label << " wire round-trip diverged: " << *mismatch);
     }
 
