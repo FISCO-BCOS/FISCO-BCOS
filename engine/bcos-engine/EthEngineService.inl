@@ -191,10 +191,13 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     };
 
     {
+        // Copy the hash before the entry is moved: publishBuiltPayload stores the
+        // payload by move, which leaves the original object's blockHash member
+        // moved-from, and putStaged then hashes that reference into hashToId.
+        const auto blockHash = commonEntry->executionPayload.blockHash;
         auto guard = m_tracker.lockExclusive();
-        publishBuiltPayload(guard, m_artifacts, payloadId,
-            commonEntry->executionPayload.blockHash, std::move(commonEntry),
-            std::move(stagedArtifact));
+        publishBuiltPayload(guard, m_artifacts, payloadId, blockHash,
+            std::move(commonEntry), std::move(stagedArtifact));
     }
     result.payloadId = payloadId;
     co_return result;
