@@ -117,6 +117,20 @@ struct GateMergeStorage
         }
         co_return co_await inner.mergeBackStorage(extra);
     }
+
+    task::Task<void> mergeToBackends(MutableStorage& extra)
+    {
+        mergeStarted->store(true, std::memory_order_release);
+        while (!mergeGate->load(std::memory_order_acquire))
+        {
+            std::this_thread::yield();
+        }
+        if (throwOnMerge->load())
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"merge failed"});
+        }
+        co_await inner.mergeToBackends(extra);
+    }
 };
 
 struct StubExecutor
