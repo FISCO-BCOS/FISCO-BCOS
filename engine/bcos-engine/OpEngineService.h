@@ -15,6 +15,10 @@
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/OpBaseFee.h>
 #include <bcos-framework/engine/Types.h>
+
+/// Tag on OpExecutionInternalError marking an undecodable payload transaction
+/// envelope: fcuInvalidIfUndecodable maps it to an Invalid FCU status.
+using OpPayloadUndecodable = boost::error_info<struct tag_op_payload_undecodable, bool>;
 #include <bcos-framework/ledger/Ledger.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockFactory.h>
