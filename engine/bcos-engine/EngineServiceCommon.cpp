@@ -108,32 +108,6 @@ std::optional<std::string> validateRawTransactionKind(
     return std::nullopt;
 }
 
-namespace
-{
-[[nodiscard]] std::uint32_t readU32BE(std::span<const bcos::byte> bytes, std::size_t off)
-{
-    if (off + 4 > bytes.size())
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidEngineEncoding{} << bcos::errinfo_comment{"readU32BE: offset out of range"});
-    }
-    return (static_cast<std::uint32_t>(bytes[off]) << 24) |
-           (static_cast<std::uint32_t>(bytes[off + 1]) << 16) |
-           (static_cast<std::uint32_t>(bytes[off + 2]) << 8) |
-           static_cast<std::uint32_t>(bytes[off + 3]);
-}
-
-std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(std::span<const bcos::byte> params)
-{
-    if (params.size() < 8)
-    {
-        BOOST_THROW_EXCEPTION(InvalidEngineEncoding{} <<
-                              bcos::errinfo_comment{"decodeEip1559Params: need 8 bytes"});
-    }
-    return {readU32BE(params, 0), readU32BE(params, 4)};
-}
-}  // namespace
-
 std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& payloadAttributes,
     std::uint32_t version, std::vector<bcos::bytes>* decodedForcedTxs)
 {
@@ -279,8 +253,9 @@ void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& 
         BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
                                   "Payload does not carry the V4+ response shape"});
     }
+    // V4/V5 responses embed the full V3 field set, so the V3 shape requirements
+    // apply at V3 and above — no upper bound.
     if (requestVersion >= static_cast<std::uint32_t>(ApiVersion::V3) &&
-        requestVersion < static_cast<std::uint32_t>(ApiVersion::V4) &&
         (!payload.blobGasUsed.has_value() || !payload.excessBlobGas.has_value() ||
             !parentBeaconBlockRoot.has_value()))
     {
@@ -388,15 +363,10 @@ std::optional<std::string> validateExecutionPayload(
                 "withdrawalsRoot does not match the value this node commits "
                 "for the built header");
         }
-        // finding N3: the V4 payload shape — blockAccessList and slotNumber are part
-        // of the version's fields; a payload missing them is malformed (fail closed,
-        // mirroring the withdrawalsRoot gate). No in-tree builder sets them yet, so
-        // nothing built by this node can hit this.
-        if (!executionPayload.blockAccessList.has_value() || !executionPayload.slotNumber.has_value())
-        {
-            return std::string(
-                "blockAccessList and slotNumber are required for ExecutionPayloadV4 and later");
-        }
+        // blockAccessList / slotNumber are intentionally NOT required here: the V4
+        // wire dialect does not carry them (the CL cannot send what the shape omits),
+        // and no in-tree builder fills them — requiring their presence would reject
+        // every honest newPayloadV4, including echoes of this node's own builds.
     }
     // finding N4: pre-Holocene payloads (V1/V2) carry an empty extraData; the OP
     // Holocene/Jovian shape below would otherwise accept a 9/17-byte extraData here
