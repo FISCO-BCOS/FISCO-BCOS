@@ -36,6 +36,17 @@ jobs:
       - uses: actions/checkout@v3
         with:
           clean: false
+      - name: Checkout S6 t8n corpus
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: 1f1fd4d9a2e8d76a7f98231ad0a9606d01f84a8f
+          path: .t8n-corpus
+      - name: Link t8n corpus into the source tree
+        run: |
+          mkdir -p opstack-executor/tests
+          ln -sfn "${{ github.workspace }}/.t8n-corpus/opstack-executor/tests/t8n" \
+            opstack-executor/tests/t8n
       - name: Initialize vcpkg submodule
         run: git submodule update --init --recursive -- vcpkg
       - name: Compute vcpkg revision
@@ -311,6 +322,17 @@ jobs:
       - uses: actions/checkout@v3
         with:
           clean: false
+      - name: Checkout S6 t8n corpus
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: 1f1fd4d9a2e8d76a7f98231ad0a9606d01f84a8f
+          path: .t8n-corpus
+      - name: Link t8n corpus into the source tree
+        run: |
+          mkdir -p opstack-executor/tests
+          ln -sfn "${{ github.workspace }}/.t8n-corpus/opstack-executor/tests/t8n" \
+            opstack-executor/tests/t8n
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup \

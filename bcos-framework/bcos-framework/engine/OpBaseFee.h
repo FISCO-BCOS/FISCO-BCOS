@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "Errors.h"
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -50,7 +51,8 @@ inline std::pair<std::uint32_t, std::uint32_t> decodeEip1559Params(
 {
     if (params.size() != 8)
     {
-        throw std::invalid_argument("eip1559Params must be 8 bytes");
+        BOOST_THROW_EXCEPTION(
+            InvalidEngineEncoding{} << bcos::errinfo_comment{"eip1559Params must be 8 bytes"});
     }
     auto denominator = bcos::fromBigEndian<std::uint32_t>(params.first(4));
     auto elasticity = bcos::fromBigEndian<std::uint32_t>(params.subspan(4, 4));
