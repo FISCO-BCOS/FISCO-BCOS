@@ -48,8 +48,13 @@ public:
                 }
 
                 bcostars::RequestBlock request;
-                init->decodeRequest<bcostars::ResponseBlock>(
-                    request, front, protocol::LIGHTNODE_GET_BLOCK, nodeID, messageID, data);
+                // a decode failure already sent an error response inside decodeRequest: do not
+                // also run getBlock on the default-constructed request and send a second response
+                if (!init->decodeRequest<bcostars::ResponseBlock>(
+                        request, front, protocol::LIGHTNODE_GET_BLOCK, nodeID, messageID, data))
+                {
+                    return;
+                }
                 bcos::task::wait(init->getBlock(std::move(front), ledger, std::move(nodeID),
                     std::string(messageID), std::move(request)));
             });
@@ -217,8 +222,13 @@ public:
                     return;
                 }
                 bcostars::RequestSendTransaction request;
-                init->decodeRequest<bcostars::ResponseSendTransaction>(
-                    request, front, protocol::LIGHTNODE_SEND_TRANSACTION, nodeID, id, data);
+                // a decode failure already sent an error response inside decodeRequest: do not
+                // also submitTransaction on the default-constructed request
+                if (!init->decodeRequest<bcostars::ResponseSendTransaction>(request, front,
+                        protocol::LIGHTNODE_SEND_TRANSACTION, nodeID, id, data))
+                {
+                    return;
+                }
                 bcos::task::wait(init->submitTransaction(
                     front, transactionPool, nodeID, id, std::move(request)));
             });
@@ -234,8 +244,13 @@ public:
                 }
 
                 bcostars::RequestSendTransaction request;
-                init->decodeRequest<bcostars::ResponseSendTransaction>(
-                    request, front, protocol::LIGHTNODE_CALL, nodeID, id, data);
+                // a decode failure already sent an error response inside decodeRequest: do not
+                // also run call on the default-constructed request
+                if (!init->decodeRequest<bcostars::ResponseSendTransaction>(request, front,
+                        protocol::LIGHTNODE_CALL, nodeID, id, data))
+                {
+                    return;
+                }
                 bcos::task::wait(init->call(front, scheduler, nodeID, id, std::move(request)));
             });
     }

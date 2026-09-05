@@ -81,6 +81,29 @@ BOOST_AUTO_TEST_CASE(testFrontService_buildFrontService)
     BOOST_CHECK(frontService->moduleID2MessageDispatcher().empty());
 }
 
+BOOST_AUTO_TEST_CASE(testFrontService_onReceiveMessage_decodeFailed)
+{
+    // Round-3 review (BLOCKING test gap): the fail-closed MessageDecodeFailed (1006) path added
+    // in round 2 must be pinned — a malformed/illegal frame is rejected with 1006 (which the
+    // gateway now ACKs to the sender), never ACKed as SUCCESS.
+    auto frontService = buildFrontService();
+    auto srcNodeID = createKey(g_srcNodeID);
+
+    // truncated / illegal frame
+    bcos::bytes garbage{'x', 'y', 'z'};
+    auto error = task::syncWait(
+        frontService->onReceiveMessage(g_groupID, srcNodeID, bcos::ref(garbage)));
+    BOOST_REQUIRE(error);
+    BOOST_CHECK_EQUAL(error->errorCode(), bcos::protocol::CommonError::MessageDecodeFailed);
+
+    // the broadcast entry delegates to onReceiveMessage, so it shares the same fail-closed path
+    auto broadcastError = task::syncWait(
+        frontService->onReceiveBroadcastMessage(g_groupID, srcNodeID, bcos::ref(garbage)));
+    BOOST_REQUIRE(broadcastError);
+    BOOST_CHECK_EQUAL(
+        broadcastError->errorCode(), bcos::protocol::CommonError::MessageDecodeFailed);
+}
+
 BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_fireAndForget)
 {
     auto frontService = buildFrontService();

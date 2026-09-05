@@ -773,9 +773,12 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
 task::Task<Error::Ptr> FrontService::onReceiveMessage(
     std::string _groupID, bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data)
 {
+    FrontMessage message;
+    // only the decode step maps to MessageDecodeFailed on the gateway ACK — anything raised
+    // later (response-callback handling, dispatcher posting onto a stopping io pool) is not a
+    // decode failure and must not be reported to the peer as one (Round-3 review finding)
     try
     {
-        FrontMessage message;
         auto ret = message.decode(_data);
         if (MessageDecodeStatus::MESSAGE_COMPLETE != ret)
         {
@@ -783,16 +786,26 @@ task::Task<Error::Ptr> FrontService::onReceiveMessage(
                              << LOG_KV("length", _data.size()) << LOG_KV("nodeID", m_nodeID->hex());
             BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment("illegal message"));
         }
+    }
+    catch (const std::exception& e)
+    {
+        FRONT_LOG(ERROR) << "onReceiveMessage"
+                         << LOG_KV("failed", boost::diagnostic_information(e));
+        co_return BCOS_ERROR_PTR(
+            CommonError::MessageDecodeFailed, boost::diagnostic_information(e));
+    }
 
-        int moduleID = message.moduleID();
-        int ext = message.ext();
-        std::string uuid = std::string(message.uuid().begin(), message.uuid().end());
+    int moduleID = message.moduleID();
+    int ext = message.ext();
+    std::string uuid = std::string(message.uuid().begin(), message.uuid().end());
 
-        FRONT_LOG(TRACE) << LOG_BADGE("onReceiveMessage") << LOG_KV("moduleID", moduleID)
-                         << LOG_KV("uuid", uuid) << LOG_KV("ext", ext)
-                         << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", _nodeID->hex())
-                         << LOG_KV("length", _data.size());
+    FRONT_LOG(TRACE) << LOG_BADGE("onReceiveMessage") << LOG_KV("moduleID", moduleID)
+                     << LOG_KV("uuid", uuid) << LOG_KV("ext", ext)
+                     << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", _nodeID->hex())
+                     << LOG_KV("length", _data.size());
 
+    try
+    {
         if (message.isResponse())
         {
             handleCallback(nullptr, message.payload(), uuid, moduleID, _nodeID);
@@ -821,10 +834,10 @@ task::Task<Error::Ptr> FrontService::onReceiveMessage(
     }
     catch (const std::exception& e)
     {
-        FRONT_LOG(ERROR) << "onReceiveMessage"
+        // non-decode failure (e.g. shutdown ordering): log locally and ack success as before
+        // round-2 — it must not be mislabelled MessageDecodeFailed on the peer ACK
+        FRONT_LOG(ERROR) << "onReceiveMessage dispatch"
                          << LOG_KV("failed", boost::diagnostic_information(e));
-        co_return BCOS_ERROR_PTR(
-            CommonError::MessageDecodeFailed, boost::diagnostic_information(e));
     }
 
     co_return nullptr;

@@ -202,6 +202,21 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
             {
                 co_return nullptr;
             }
+            if (respCode == bcos::protocol::CommonError::MessageDecodeFailed)
+            {
+                // a receiver-side decode rejection is a property of the bytes, not of the route:
+                // re-sending the identical payload to another gateway cannot succeed, and
+                // reporting GatewaySendMsgFailed here would misdirect the diagnosis. Return the
+                // real code the destination front produced (Round-3 review finding).
+                GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
+                                   << LOG_KV("p2pid", printShortP2pID(p2pID))
+                                   << LOG_KV("moduleID", _moduleID)
+                                   << LOG_KV("message",
+                                          "destination front failed to decode the message, "
+                                          "terminal");
+                co_return BCOS_ERROR_PTR(bcos::protocol::CommonError::MessageDecodeFailed,
+                    "the destination front failed to decode the message");
+            }
             GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
                                << LOG_KV("p2pid", printShortP2pID(p2pID))
                                << LOG_KV("moduleID", _moduleID) << LOG_KV("code", respCode)
