@@ -275,20 +275,22 @@ BOOST_AUTO_TEST_CASE(WithdrawalFieldsMustFitUint64)
     WithdrawalV1 wideIndex;
     wideIndex.index = bcos::u256{1} << 70;
     overIndex.withdrawals = std::vector<WithdrawalV1>{wideIndex};
-    BOOST_CHECK_THROW(derivePayloadId(overIndex, f.parentHash, {}, 0x02), bcos::engine::InvalidEngineEncoding);
+    BOOST_CHECK_THROW(
+        derivePayloadId(overIndex, f.parentHash, {}, 0x02), bcos::engine::InvalidEngineEncoding);
 
     auto overValidator = makeAttrs(f);
     WithdrawalV1 wideValidator;
     wideValidator.validatorIndex = bcos::u256{1} << 70;
     overValidator.withdrawals = std::vector<WithdrawalV1>{wideValidator};
-    BOOST_CHECK_THROW(
-        derivePayloadId(overValidator, f.parentHash, {}, 0x02), bcos::engine::InvalidEngineEncoding);
+    BOOST_CHECK_THROW(derivePayloadId(overValidator, f.parentHash, {}, 0x02),
+        bcos::engine::InvalidEngineEncoding);
 
     auto overAmount = makeAttrs(f);
     WithdrawalV1 wideAmount;
     wideAmount.amount = bcos::u256{1} << 70;
     overAmount.withdrawals = std::vector<WithdrawalV1>{wideAmount};
-    BOOST_CHECK_THROW(derivePayloadId(overAmount, f.parentHash, {}, 0x02), bcos::engine::InvalidEngineEncoding);
+    BOOST_CHECK_THROW(
+        derivePayloadId(overAmount, f.parentHash, {}, 0x02), bcos::engine::InvalidEngineEncoding);
 
     auto maxOk = makeAttrs(f);
     WithdrawalV1 edge;
@@ -305,15 +307,18 @@ BOOST_AUTO_TEST_CASE(Eip1559ParamsMustBeEightBytes)
     FixtureInputs f;
     auto empty = makeAttrs(f);
     empty.eip1559Params = bcos::bytes{};
-    BOOST_CHECK_THROW(derivePayloadId(empty, f.parentHash, {}, 0x04), bcos::engine::InvalidEngineEncoding);
+    BOOST_CHECK_THROW(
+        derivePayloadId(empty, f.parentHash, {}, 0x04), bcos::engine::InvalidEngineEncoding);
 
     auto seven = makeAttrs(f);
     seven.eip1559Params = bcos::bytes{0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10};
-    BOOST_CHECK_THROW(derivePayloadId(seven, f.parentHash, {}, 0x04), bcos::engine::InvalidEngineEncoding);
+    BOOST_CHECK_THROW(
+        derivePayloadId(seven, f.parentHash, {}, 0x04), bcos::engine::InvalidEngineEncoding);
 
     auto nine = makeAttrs(f);
     nine.eip1559Params = bcos::bytes{0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12};
-    BOOST_CHECK_THROW(derivePayloadId(nine, f.parentHash, {}, 0x04), bcos::engine::InvalidEngineEncoding);
+    BOOST_CHECK_THROW(
+        derivePayloadId(nine, f.parentHash, {}, 0x04), bcos::engine::InvalidEngineEncoding);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
