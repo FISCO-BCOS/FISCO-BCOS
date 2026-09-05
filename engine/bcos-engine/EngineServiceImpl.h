@@ -410,6 +410,11 @@ private:
         /// received payloads leave these null/empty.
         bcos::protocol::BlockHeader::Ptr header;
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        /// True once this entry's view has been pushed onto the global storage (the
+        /// pushed layer stays queued until a mergeBackStorage drains it). Distinguishes
+        /// "pushed, awaiting merge" — a retry must NOT push again (the view is
+        /// moved-from), it only re-runs the prewrite/merge — from "not yet committed".
+        bool viewPushed = false;
     };
 
     /// Per-method Engine API version windows. forkchoiceUpdated tops out at V3 (the
@@ -598,15 +603,24 @@ private:
 
             // If this payload was built locally (via updateForkchoice), commit the view's
             // state changes to storage. Externally received payloads have no view to commit.
-            // NOTE: mergeView() exists (MultiLayerStorage.h) but is intentionally
-            // non-atomic (pushView and mergeBackStorage are independent critical
-            // sections). Using bare pushView here keeps the state change immediate;
-            // mergeBackStorage follows in the co_await block below.
+            // Commit contract: pushView + view.reset() happen here under x_state (a
+            // concurrent duplicate newPayload must never push the same view twice); the
+            // pushed layer stays queued until a mergeBackStorage drains it (MultiLayerStorage
+            // FIFO). header/receipts are consumed ONLY after the durable write below
+            // succeeds, so a failed prewrite/merge leaves the entry retryable instead of
+            // answering VALID for a never-persisted block; viewPushed marks the
+            // pushed-but-unmerged state a retry resumes from.
             auto it = m_payloadCache.find(payloadId);
-            if (it != m_payloadCache.end() && it->second.view)
+            if (it != m_payloadCache.end() && (it->second.view || it->second.viewPushed))
             {
                 commitState = true;
-                m_globalStateStorage.get().pushView(std::move(*it->second.view));
+                if (it->second.view)
+                {
+                    m_globalStateStorage.get().pushView(std::move(*it->second.view));
+                    it->second.viewPushed = true;
+                }
+                // else: the view was already pushed on an earlier attempt and is queued in
+                // the storage (its merge threw); mergeBackStorage below drains it.
                 it->second.view.reset();
                 if (m_ledger && it->second.header)
                 {
@@ -649,8 +663,8 @@ private:
                             return protocol::Transaction::ConstPtr(tx.decoded);
                         }) |
                         ::ranges::to<std::vector>());
-                    it->second.header.reset();
-                    it->second.receipts.clear();
+                    // header/receipts stay intact here: they are consumed only after the
+                    // durable write succeeds, so a throw leaves the entry retryable.
                 }
             }
         }  // x_state released — safe to co_await below.
@@ -668,7 +682,13 @@ private:
 
         {
             std::unique_lock lock(x_state);
-            // Keep the locally built body. Evict everything else (one row per produced block).
+            // Durable write succeeded: consume the persist artifacts. Keep the locally
+            // built body. Evict everything else (one row per produced block).
+            if (auto it = m_payloadCache.find(payloadId); it != m_payloadCache.end())
+            {
+                it->second.header.reset();
+                it->second.receipts.clear();
+            }
             std::erase_if(m_blockHashToPayloadId,
                 [&](auto const& kv) { return kv.first != request.executionPayload.blockHash; });
             std::erase_if(m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });

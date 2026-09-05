@@ -24,9 +24,11 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Error.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <atomic>
 
 using namespace bcos;
 using namespace bcos::engine;
@@ -357,6 +359,34 @@ public:
     {
         callback(nullptr, 0, 0, 0);
     }
+};
+
+/// CommitLedger whose first asyncPrewriteBlock fails with an injected error, then
+/// delegates to the real path. Models the transient storage fault behind the
+/// commit-masking scenario: the first newPayload must THROW (never answer VALID for a
+/// block whose rows were not written), and the retry must complete the commit for real.
+class FlakyLedger : public CommitLedger
+{
+public:
+    using CommitLedger::CommitLedger;
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        std::function<void(std::string, bcos::Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+    {
+        if (m_failNext.exchange(false))
+        {
+            callback("injected", BCOS_ERROR_PTR(
+                                     bcos::ledger::LedgerError::ErrorArgument,
+                                     "injected prewrite failure"));
+            return;
+        }
+        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
+            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
+            std::move(blockHashOverride), writeNonces);
+    }
+    std::atomic_bool m_failNext{true};
 };
 
 TestEngineServiceImpl makeCommittingEngineServiceImpl(MemPoolImpl& memPool,
@@ -1200,6 +1230,50 @@ BOOST_AUTO_TEST_CASE(new_payload_honest_retry_does_not_recommit)
         static_cast<int>(retry.status), static_cast<int>(PayloadValidationStatus::Valid));
     auto stillBuilt = task::syncWait(engineService.getPayload(*result.payloadId, 3));
     BOOST_CHECK_EQUAL(stillBuilt->executionPayload.blockHash, payload->executionPayload.blockHash);
+}
+
+// A transient prewrite failure must not be masked as success: the first newPayload
+// THROWS, and the retry COMPLETES the commit — the header row actually lands in
+// storage. Before the consume-artifacts-after-durable-write fix, the failed attempt
+// destroyed the entry's artifacts and the retry answered VALID without ever persisting.
+BOOST_AUTO_TEST_CASE(new_payload_retry_after_failed_prewrite_recommits)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto flakyLedger =
+        std::make_shared<FlakyLedger>(testBlockFactory(), nullptr, /*blockLimit=*/100);
+    auto engineService =
+        makeCommittingEngineServiceImpl(memPool, globalStateStorageFixture.storage, flakyLedger);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto honest = makeNewPayloadRequestV3(payload->executionPayload);
+
+    // First attempt: the injected prewrite error must propagate, never become VALID,
+    // and no header row may exist yet.
+    BOOST_CHECK_THROW(task::syncWait(engineService.newPayload(honest, 3)), bcos::Error);
+    BOOST_REQUIRE(readPersistedHeader(
+        globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1) == nullptr);
+
+    // Retry: the entry survived the failed attempt, so the commit completes for real —
+    // the header row lands with the same extraData the payload carries.
+    auto retryStatus = task::syncWait(engineService.newPayload(honest, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+    auto persisted =
+        readPersistedHeader(globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1);
+    BOOST_REQUIRE(persisted);
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(persisted->extraData()),
+        toHexStringWithPrefix(payload->executionPayload.extraData));
 }
 
 BOOST_AUTO_TEST_CASE(new_payload_rejects_blob_and_unknown_transaction_types)
