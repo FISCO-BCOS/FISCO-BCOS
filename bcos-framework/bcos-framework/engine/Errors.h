@@ -51,6 +51,8 @@ using OpCulpritTxHash = boost::error_info<struct OpCulpritTxHashTag, bcos::h256>
 /// Named separately from executor_v1::opstack::OpBlockGasPoolFull (the prepare-time exception).
 using OpRejectIsCapacity = boost::error_info<struct OpRejectIsCapacityTag, bool>;
 
+/// Consumed by OpEngineService (#5549) to classify execute-reject culprits; unused
+/// within #5547 itself.
 [[nodiscard]] inline std::optional<bcos::h256> culpritTxHashFromError(boost::exception const& error)
 {
     if (auto const* hash = boost::get_error_info<OpCulpritTxHash>(error))

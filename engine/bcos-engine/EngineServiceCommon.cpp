@@ -1,6 +1,20 @@
 /**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EngineServiceCommon.cpp
+ * @brief Definitions of the shared Engine API validators and helpers
  */
 
 #include "EngineServiceCommon.h"
@@ -127,7 +141,7 @@ std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& pa
     }
     if (payloadAttributes.transactions.has_value())
     {
-        if (payloadAttributes.transactions->size() > kMaxForcedTxCount)
+        if (payloadAttributes.transactions->size() > c_maxForcedTxCount)
         {
             return "payloadAttributes.transactions exceeds the forced-tx count ceiling";
         }
@@ -141,7 +155,7 @@ std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& pa
             auto const& hexTx = (*payloadAttributes.transactions)[i];
             // Finding BY: reject on hex length before fromHex allocates the body.
             auto const estimated = decodedHexByteCount(hexTx);
-            if (estimated > kMaxForcedTxBytes || totalBytes > kMaxForcedTxBytes - estimated)
+            if (estimated > c_maxForcedTxBytes || totalBytes > c_maxForcedTxBytes - estimated)
             {
                 return "payloadAttributes.transactions exceeds the forced-tx byte ceiling";
             }
@@ -518,9 +532,9 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev)
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
     std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion)
 {
-    static const auto kEmptyOmmersHash = bcos::crypto::HashType(
+    static const auto c_emptyOmmersHash = bcos::crypto::HashType(
         "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
-    header.setUncleHash(kEmptyOmmersHash);
+    header.setUncleHash(c_emptyOmmersHash);
     header.setDifficulty(bcos::u256(0));
     header.setNonce(bcos::h64(0));
 

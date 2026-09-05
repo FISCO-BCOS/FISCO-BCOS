@@ -1133,22 +1133,6 @@ private:
     }
 
 
-    std::optional<bcos::protocol::BlockNumber> lookupBlockNumberByHash(const h256& blockHash) const
-    {
-        auto it = m_blockHashToPayloadId.find(blockHash);
-        if (it == m_blockHashToPayloadId.end())
-        {
-            return std::nullopt;
-        }
-
-        auto payloadIt = m_payloadCache.find(it->second);
-        if (payloadIt == m_payloadCache.end())
-        {
-            return std::nullopt;
-        }
-        return payloadIt->second.executionPayload.blockNumber;
-    }
-
     void updateTrackedBlockNumbers(std::optional<bcos::protocol::BlockNumber> safeBlockNumber,
         std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber)
     {

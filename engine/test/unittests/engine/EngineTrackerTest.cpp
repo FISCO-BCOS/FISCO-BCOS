@@ -759,7 +759,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_exclusive_guard_blocks_shared_readers)
         bool notAcquiredWhileExclusive = false;
         bool acquiredAfterRelease = false;
     } outcome;
-    constexpr auto kTimeout = std::chrono::seconds(2);
+    constexpr auto c_timeout = std::chrono::seconds(2);
 
     auto guard = tracker.lockExclusive();
 
@@ -788,12 +788,12 @@ BOOST_AUTO_TEST_CASE(engine_tracker_exclusive_guard_blocks_shared_readers)
 
     {
         std::unique_lock lock(syncMutex);
-        if (workerReadyCv.wait_for(lock, kTimeout, [&]() { return workerReady; }))
+        if (workerReadyCv.wait_for(lock, c_timeout, [&]() { return workerReady; }))
         {
             outcome.workerReadySeen = true;
             permissionGranted = true;
             permissionCv.notify_one();
-            if (permissionCv.wait_for(lock, kTimeout, [&]() { return permissionConsumed; }))
+            if (permissionCv.wait_for(lock, c_timeout, [&]() { return permissionConsumed; }))
             {
                 outcome.permissionConsumedWhileExclusive = true;
                 outcome.notAcquiredWhileExclusive = !lockAcquired;
@@ -810,7 +810,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_exclusive_guard_blocks_shared_readers)
 
     {
         std::unique_lock lock(syncMutex);
-        if (acquiredCv.wait_for(lock, kTimeout, [&]() { return lockAcquired; }))
+        if (acquiredCv.wait_for(lock, c_timeout, [&]() { return lockAcquired; }))
         {
             outcome.acquiredAfterRelease = lockAcquired;
         }
@@ -975,12 +975,12 @@ BOOST_AUTO_TEST_CASE(engine_common_validate_payload_attributes_gold)
 
     PayloadAttributes tooManyForced = minimalPayloadAttributes();
     tooManyForced.transactions =
-        std::vector<std::string>(engine_common::kMaxForcedTxCount + 1, "0x00");
+        std::vector<std::string>(engine_common::c_maxForcedTxCount + 1, "0x00");
     expectError(engine_common::validatePayloadAttributes(tooManyForced, 3), "count ceiling");
 
     PayloadAttributes tooManyForcedBytes = minimalPayloadAttributes();
     tooManyForcedBytes.transactions = std::vector<std::string>{
-        "0x" + std::string(2 * (engine_common::kMaxForcedTxBytes + 1), 'a')};
+        "0x" + std::string(2 * (engine_common::c_maxForcedTxBytes + 1), 'a')};
     expectError(engine_common::validatePayloadAttributes(tooManyForcedBytes, 3), "byte ceiling");
 
     // Finding BY: hex-length estimate rejects before fromHex. Second tx alone
@@ -988,7 +988,7 @@ BOOST_AUTO_TEST_CASE(engine_common_validate_payload_attributes_gold)
     // implementation would still allocate the second body.
     PayloadAttributes secondTxOverCeiling = minimalPayloadAttributes();
     secondTxOverCeiling.transactions = std::vector<std::string>{
-        "0x7e00", "0x" + std::string(2 * (engine_common::kMaxForcedTxBytes + 1), 'a')};
+        "0x7e00", "0x" + std::string(2 * (engine_common::c_maxForcedTxBytes + 1), 'a')};
     expectError(engine_common::validatePayloadAttributes(secondTxOverCeiling, 3), "byte ceiling");
 
     BOOST_CHECK_EQUAL(engine_common::decodedHexByteCount("0x"), 0);
