@@ -598,6 +598,33 @@ public:
         }
     }
 
+    /// Shared merge body of mergeBackStorage / mergeToBackends — the only difference
+    /// between the two is whether a queued layer participates in the merge.
+    task::Task<void> mergeIntoBackends(auto&... storages)
+    {
+        if constexpr (withCacheStorage)
+        {
+            tbb::parallel_invoke(
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                        ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
+                    task::tbb::syncWait(storage2::merge(m_latestBackend, storages...));
+                },
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                        ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
+                    task::tbb::syncWait(storage2::merge(m_cacheStorage.get(), storages...));
+                });
+        }
+        else
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
+            co_await storage2::merge(m_latestBackend, storages...);
+        }
+        co_return;
+    }
+
     task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage(auto&... extraStorages)
     {
         std::unique_lock mergeLock(m_mergeMutex);
@@ -610,28 +637,7 @@ public:
         auto& backStorage = *backStoragePtr;
         listLock.unlock();
 
-        if constexpr (withCacheStorage)
-        {
-            tbb::parallel_invoke(
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                        ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-                    task::tbb::syncWait(
-                        storage2::merge(m_latestBackend, backStorage, extraStorages...));
-                },
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                        ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
-                    task::tbb::syncWait(
-                        storage2::merge(m_cacheStorage.get(), backStorage, extraStorages...));
-                });
-        }
-        else
-        {
-            ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-            co_await storage2::merge(m_latestBackend, backStorage, extraStorages...);
-        }
+        co_await mergeIntoBackends(backStorage, extraStorages...);
 
         listLock.lock();
         m_storages.pop_back();
@@ -647,26 +653,7 @@ public:
     task::Task<void> mergeToBackends(auto&... fromStorage)
     {
         std::unique_lock mergeLock(m_mergeMutex);
-        if constexpr (withCacheStorage)
-        {
-            tbb::parallel_invoke(
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                        ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-                    task::tbb::syncWait(storage2::merge(m_latestBackend, fromStorage...));
-                },
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                        ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
-                    task::tbb::syncWait(storage2::merge(m_cacheStorage.get(), fromStorage...));
-                });
-        }
-        else
-        {
-            ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-            co_await storage2::merge(m_latestBackend, fromStorage...);
-        }
+        co_await mergeIntoBackends(fromStorage...);
     }
 
     auto fork(CheckpointName const& blockhash)
