@@ -1183,7 +1183,10 @@ private:
     /// Upper bound on retained payload entries (both m_payloadCache and m_blockHashToPayloadId
     /// rows). A payload is only needed between updateForkchoice / getPayload and newPayload.
     static constexpr size_t c_maxPayloadEntries = 64;
-    std::uint64_t m_nextPayloadSequence = 1;
+    /// Payload-id sequence. Atomic: updateForkchoice calls nextPayloadID() outside
+    /// x_state (between lock release and the publish re-acquire), so a plain counter
+    /// would race concurrent forkchoiceUpdated calls into duplicate payload ids.
+    std::atomic<std::uint64_t> m_nextPayloadSequence = 1;
 };
 
 }  // namespace bcos::engine
