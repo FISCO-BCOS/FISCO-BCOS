@@ -47,6 +47,8 @@
 #include <boost/lexical_cast.hpp>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -75,6 +77,26 @@ void commitRetainedPayload(Guard& guard, ArtifactsMap& artifacts, PayloadID cons
         guard.restorePayloadCache(std::move(cacheRollback));
         artifacts = std::move(artifactsRollback);
         throw;
+    }
+}
+
+/// Terminal-SYNCING visibility: the CL keeps retrying an answer it cannot move
+/// past without EL sync; keep the fail-closed answer but make the gap visible
+/// (rate-limited log naming it). One shared CAS gate (10 s) across this
+/// service's SYNCING sites — same shape as EngineServiceImpl's cache-miss
+/// warning. The desc names the specific gap at each call site.
+inline void warnSyncingRateLimited(const char* desc, h256 const& blockHash)
+{
+    static std::atomic<std::chrono::steady_clock::time_point> lastWarn{
+        std::chrono::steady_clock::time_point{}};
+    auto const now = std::chrono::steady_clock::now();
+    auto prev = lastWarn.load(std::memory_order_relaxed);
+    if (now - prev >= std::chrono::seconds(10) &&
+        lastWarn.compare_exchange_strong(
+            prev, now, std::memory_order_relaxed, std::memory_order_relaxed))
+    {
+        BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService") << LOG_DESC(desc)
+                          << LOG_KV("blockHash", blockHash.hex());
     }
 }
 }  // namespace detail
@@ -124,6 +146,16 @@ public:
     EthEngineService& operator=(const EthEngineService&) = delete;
     EthEngineService& operator=(EthEngineService&&) = delete;
 
+    /// Version-window contract (the four surfaces deliberately differ, matching
+    /// op-geth's by-design ceiling split; do not "fix" them to agree):
+    /// - exchangeCapabilities: the FULL supported list regardless of
+    ///   m_maxEngineVersion — capability advertisement is static, method windows
+    ///   are what gate actual dispatch.
+    /// - updateForkchoice (FCU): instance-gated by m_maxEngineVersion (V1–V3 for
+    ///   the default-constructed service).
+    /// - newPayload: V1–V4 (Isthmus V4 empty-lists shape).
+    /// - getPayload: V1–V5 via the tracker's window (the V2 build answers V1–V2,
+    ///   the V3 build answers V1–V5).
     task::Task<std::vector<std::string>> exchangeCapabilities(
         std::vector<std::string> remoteCapabilities)
     {

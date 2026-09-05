@@ -1015,7 +1015,8 @@ BOOST_AUTO_TEST_CASE(generic_validation_error_table_matches)
             },
             4, "executionRequests must be a present-but-empty list on this chain"},
         // Matrix: E6 — wide/bad in-process payloads. JSON-null blob fields are a parse
-        // concern below this layer (the RPC dialect tests); these rows hit validateExecutionPayload.
+        // concern below this layer (the RPC dialect tests); these rows hit
+        // validateExecutionPayload.
         {"v2_with_blob_gas",
             [&] {
                 NewPayloadRequest r;
@@ -1558,8 +1559,72 @@ BOOST_AUTO_TEST_CASE(matrix_new_payload_v4_empty_lists_match)
         task::syncWait(pair.fresh.newPayload(newRequest, 4)));
 }
 
-// Matrix: S7 — Eth publish under shared guard blocks exclusive writer (same handshake as OP).
+BOOST_AUTO_TEST_CASE(eth_nonempty_withdrawals_rejected_with_pinned_message)
+{
+    // Pin the non-empty-withdrawals gate (validateExecutionPayload): a non-empty
+    // list is uncommittable at every version that carries the field, because this
+    // node cannot compute the withdrawals trie root. The tests around it route
+    // around this gate with empty lists; this is the negative half, with the
+    // message pinned so the reason stays greppable.
+    ServicePair pair;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto attrs = makeKarstPayloadAttributes();
+    auto legacyBuild = task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attrs, 3));
+    auto newBuild = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attrs, 3));
+    BOOST_REQUIRE(legacyBuild.payloadId.has_value());
+    BOOST_REQUIRE(newBuild.payloadId.has_value());
+    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyBuild.payloadId, 5));
+    auto newPayload = task::syncWait(pair.fresh.getPayload(*newBuild.payloadId, 5));
+    BOOST_REQUIRE(legacyPayload);
+    BOOST_REQUIRE(newPayload);
 
+    auto checkNonEmptyWithdrawalsInvalid =
+        [](PayloadStatus const& status, const char* what)
+    {
+        BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+            static_cast<int>(PayloadValidationStatus::Invalid));
+        BOOST_REQUIRE(status.validationError.has_value());
+        BOOST_CHECK_MESSAGE(status.validationError->find("non-empty withdrawals") !=
+                                std::string::npos,
+            what << ": unexpected validationError: " << *status.validationError);
+    };
+
+    // V2: the first version that carries withdrawals.
+    NewPayloadRequest legacyV2;
+    legacyV2.executionPayload = legacyPayload->executionPayload;
+    legacyV2.executionPayload.withdrawals =
+        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .amount = 1}};
+    auto legacyV2Status = task::syncWait(pair.legacy.newPayload(legacyV2, 2));
+    checkNonEmptyWithdrawalsInvalid(legacyV2Status, "legacy V2");
+
+    NewPayloadRequest newV2;
+    newV2.executionPayload = newPayload->executionPayload;
+    newV2.executionPayload.withdrawals =
+        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .amount = 1}};
+    auto newV2Status = task::syncWait(pair.fresh.newPayload(newV2, 2));
+    checkNonEmptyWithdrawalsInvalid(newV2Status, "fresh V2");
+
+    // V4 (Isthmus): the advertised newPayload ceiling.
+    NewPayloadRequest legacyV4 = makeNewPayloadRequestV3(legacyPayload->executionPayload);
+    legacyV4.executionRequests = std::vector<bytes>{};
+    legacyV4.executionPayload.withdrawals =
+        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .amount = 1}};
+    auto legacyV4Status = task::syncWait(pair.legacy.newPayload(legacyV4, 4));
+    checkNonEmptyWithdrawalsInvalid(legacyV4Status, "legacy V4");
+
+    NewPayloadRequest newV4 = makeNewPayloadRequestV3(newPayload->executionPayload);
+    newV4.executionRequests = std::vector<bytes>{};
+    newV4.executionPayload.withdrawals =
+        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .amount = 1}};
+    auto newV4Status = task::syncWait(pair.fresh.newPayload(newV4, 4));
+    checkNonEmptyWithdrawalsInvalid(newV4Status, "fresh V4");
+}
+
+// Matrix: S7 — Eth publish under shared guard blocks exclusive writer (same handshake as OP).
 BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
 {
     EngineTracker tracker;
@@ -1684,8 +1749,8 @@ BOOST_AUTO_TEST_CASE(wire_round_trip_through_engine_helper)
         }
         auto parsed = bcos::rpc::parseNewPayloadRequest(params, version);
         BOOST_REQUIRE(parsed.parentBeaconBlockRoot.has_value());
-        BOOST_CHECK_EQUAL(
-            parsed.parentBeaconBlockRoot->hexPrefixed(), built->parentBeaconBlockRoot->hexPrefixed());
+        BOOST_CHECK_EQUAL(parsed.parentBeaconBlockRoot->hexPrefixed(),
+            built->parentBeaconBlockRoot->hexPrefixed());
         auto mismatch =
             detail::compareWithBuiltPayload(parsed.executionPayload, built->executionPayload);
         BOOST_CHECK_MESSAGE(!mismatch, label << " wire round-trip diverged: " << *mismatch);

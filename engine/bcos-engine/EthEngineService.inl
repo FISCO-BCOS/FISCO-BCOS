@@ -79,6 +79,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
 
     if (!headBlockNumber.has_value())
     {
+        detail::warnSyncingRateLimited("forkchoice head unknown; answering SYNCING (no EL sync)",
+            forkchoiceState.headBlockHash);
         co_return ForkchoiceUpdatedResult{
             .payloadStatus = engine_common::makeStatus(
                 PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
@@ -277,6 +279,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                            guard.payloadIdForHash(request.executionPayload.parentHash).has_value();
         if (!parentKnown)
         {
+            detail::warnSyncingRateLimited("newPayload parent unknown; answering SYNCING",
+                request.executionPayload.parentHash);
             co_return engine_common::makeStatus(
                 PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
@@ -286,6 +290,9 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         {
             // #5468 / finding E: op-geth executes (InsertBlockWithoutSetHead) before VALID.
             // An external payload this node did not build is not executed here yet.
+            detail::warnSyncingRateLimited(
+                "newPayload block not built here; answering SYNCING",
+                request.executionPayload.blockHash);
             co_return engine_common::makeStatus(
                 PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
@@ -294,6 +301,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     }
     if (!cached)
     {
+        detail::warnSyncingRateLimited("newPayload cache miss; answering SYNCING",
+            request.executionPayload.blockHash);
         co_return engine_common::makeStatus(
             PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
     }
@@ -403,6 +412,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         if (!co_await bcos::ledger::getBlockNumber(
                 checkView, cached->executionPayload.blockHash, bcos::ledger::fromStorage))
         {
+            detail::warnSyncingRateLimited(
+                "newPayload has no ledger row and no retryable artifact; answering SYNCING "
+                "(a previous attempt died mid-persist)",
+                cached->executionPayload.blockHash);
             co_return engine_common::makeStatus(
                 PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
@@ -656,11 +669,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     Bloom logsBloom{};
     for (auto& receipt : receipts)
     {
-        if (!receipt)
-        {
-            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                      "Null receipt returned by scheduler"});
-        }
+        // Null receipts were rejected by the any_of guard above the merkle.
         totalGasUsed += receipt->gasUsed();
         if (!receipt->logsBloom().empty())
         {
