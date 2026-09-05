@@ -13,8 +13,8 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Service.cpp
- * @brief Tests for the engine-split Engine API module (Service)
+ * @file EngineServiceTest.cpp
+ * @brief Tests for the engine-split Engine API module (EngineServiceTest)
  */
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
