@@ -22,6 +22,13 @@
 namespace bcos::engine
 {
 
+/// One shared definition (was duplicated in EngineTracker.h and EngineServiceImpl.h).
+struct TrackedHeadBlock
+{
+    h256 hash;
+    bcos::protocol::BlockNumber blockNumber = 0;
+};
+
 struct BuiltPayload
 {
     std::uint32_t version = 0;

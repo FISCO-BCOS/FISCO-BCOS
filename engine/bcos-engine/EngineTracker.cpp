@@ -276,9 +276,11 @@ void EngineTracker::ExclusiveAccess::restorePayloadCache(PayloadCache cache)
     m_owner->m_payloads.publishFrom(std::move(cache));
 }
 
-const ForkchoiceState& EngineTracker::ExclusiveAccess::forkchoiceState() const
+ForkchoiceState EngineTracker::ExclusiveAccess::forkchoiceState() const
 {
     requireOwner();
+    // By value: a reference into the guarded member would outlive this guard's lock
+    // and race a concurrent applyForkchoice writer.
     return m_owner->m_forkchoiceState;
 }
 
@@ -294,7 +296,7 @@ std::optional<PayloadID> EngineTracker::SharedAccess::payloadIdForHash(const h25
     return m_owner->m_payloads.payloadIdForHash(blockHash);
 }
 
-const ForkchoiceState& EngineTracker::SharedAccess::forkchoiceState() const
+ForkchoiceState EngineTracker::SharedAccess::forkchoiceState() const
 {
     requireOwner();
     return m_owner->m_forkchoiceState;

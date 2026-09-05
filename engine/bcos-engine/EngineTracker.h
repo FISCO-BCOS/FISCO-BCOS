@@ -19,11 +19,7 @@
 namespace bcos::engine
 {
 
-struct TrackedHeadBlock
-{
-    h256 hash;
-    bcos::protocol::BlockNumber blockNumber = 0;
-};
+// TrackedHeadBlock now lives in EngineServiceCommon.h (one shared definition).
 
 struct ResolvedForkchoice
 {
@@ -108,7 +104,7 @@ public:
     void erasePayload(PayloadID const& id);
     PayloadCache snapshotPayloadCache() const;
     void restorePayloadCache(PayloadCache cache);
-    const ForkchoiceState& forkchoiceState() const;
+    ForkchoiceState forkchoiceState() const;
 
 private:
     friend class EngineTracker;
@@ -144,7 +140,7 @@ public:
 
     BuiltPayloadPtr findPayload(const PayloadID& id) const;
     std::optional<PayloadID> payloadIdForHash(const h256& blockHash) const;
-    const ForkchoiceState& forkchoiceState() const;
+    ForkchoiceState forkchoiceState() const;
 
 private:
     friend class EngineTracker;

@@ -384,11 +384,7 @@ public:
     }
 
 private:
-    struct TrackedHeadBlock
-    {
-        h256 hash;
-        bcos::protocol::BlockNumber blockNumber = 0;
-    };
+    // TrackedHeadBlock comes from EngineServiceCommon.h (one shared definition).
 
     struct PayloadEntry
     {
