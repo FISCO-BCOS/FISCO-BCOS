@@ -22,6 +22,7 @@
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
+#include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
@@ -617,6 +618,143 @@ BOOST_AUTO_TEST_CASE(newPayloadV3)
         c_beaconRootHex);
     BOOST_REQUIRE(mockService.m_state->capturedNewPayloadVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 3);
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV3CompareFieldsSurviveEngineHelper)
+{
+    auto ep = makeV4ExecutionPayloadJson();
+    ep.removeMember("withdrawalsRoot");
+    ep["extraData"] = "0xabcdef";
+    ep["gasLimit"] = "0x5208";
+    ep["gasUsed"] = "0x21";
+    ep["baseFeePerGas"] = "0x7";
+    ep["blockNumber"] = "0xb";
+    ep["timestamp"] = "0xa";
+    ep["transactions"].append("0xaa");
+    ep["blobGasUsed"] = "0xd";
+    ep["excessBlobGas"] = "0xe";
+
+    Json::Value params(Json::arrayValue);
+    params.append(ep);
+    params.append(Json::Value(Json::arrayValue));
+    params.append(c_beaconRootHex);
+
+    Json::Value response;
+    CALL_ENGINE(newPayloadV3, params, response);
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadRequest.has_value());
+    auto const& first = mockService.m_state->capturedNewPayloadRequest->executionPayload;
+
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(first.extraData), "0xabcdef");
+    BOOST_CHECK_EQUAL(first.parentHash.hexPrefixed(), ep["parentHash"].asString());
+    BOOST_CHECK_EQUAL(first.stateRoot.hexPrefixed(), ep["stateRoot"].asString());
+    BOOST_CHECK_EQUAL(first.receiptsRoot.hexPrefixed(), ep["receiptsRoot"].asString());
+    BOOST_CHECK_EQUAL(first.prevRandao.hexPrefixed(), ep["prevRandao"].asString());
+    BOOST_CHECK_EQUAL(first.blockHash.hexPrefixed(), ep["blockHash"].asString());
+    BOOST_CHECK_EQUAL(first.feeRecipient.hexPrefixed(), ep["feeRecipient"].asString());
+    BOOST_CHECK_EQUAL(first.gasLimit, u256(0x5208));
+    BOOST_CHECK_EQUAL(first.gasUsed, u256(0x21));
+    BOOST_CHECK_EQUAL(first.baseFeePerGas, u256(7));
+    BOOST_CHECK_EQUAL(first.blockNumber, 11);
+    BOOST_CHECK_EQUAL(first.timestamp, 10 * 1000);
+    BOOST_REQUIRE_EQUAL(first.transactions.size(), 1);
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(first.transactions.front().raw), "0xaa");
+    BOOST_REQUIRE(first.blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(*first.blobGasUsed, u256(0xd));
+    BOOST_REQUIRE(first.excessBlobGas.has_value());
+    BOOST_CHECK_EQUAL(*first.excessBlobGas, u256(0xe));
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(bytes(first.logsBloom.begin(), first.logsBloom.end())),
+        ep["logsBloom"].asString());
+
+    auto serialized = serializeExecutionPayload(first, engine::ApiVersion::V3);
+    Json::Value roundTrip(Json::arrayValue);
+    roundTrip.append(serialized);
+    roundTrip.append(Json::Value(Json::arrayValue));
+    roundTrip.append(c_beaconRootHex);
+    auto parsed = parseNewPayloadRequest(roundTrip, engine::ApiVersion::V3);
+    auto const& second = parsed.executionPayload;
+    BOOST_CHECK(first.extraData == second.extraData);
+    BOOST_CHECK(first.parentHash == second.parentHash);
+    BOOST_CHECK(first.stateRoot == second.stateRoot);
+    BOOST_CHECK(first.receiptsRoot == second.receiptsRoot);
+    BOOST_CHECK(first.logsBloom == second.logsBloom);
+    BOOST_CHECK(first.prevRandao == second.prevRandao);
+    BOOST_CHECK(first.gasLimit == second.gasLimit);
+    BOOST_CHECK(first.gasUsed == second.gasUsed);
+    BOOST_CHECK(first.baseFeePerGas == second.baseFeePerGas);
+    BOOST_CHECK(first.blockHash == second.blockHash);
+    BOOST_CHECK(first.feeRecipient == second.feeRecipient);
+    BOOST_CHECK_EQUAL(first.timestamp, second.timestamp);
+    BOOST_CHECK_EQUAL(first.blockNumber, second.blockNumber);
+    BOOST_REQUIRE_EQUAL(first.transactions.size(), second.transactions.size());
+    BOOST_CHECK(first.transactions.front().raw == second.transactions.front().raw);
+    BOOST_CHECK(first.blobGasUsed == second.blobGasUsed);
+    BOOST_CHECK(first.excessBlobGas == second.excessBlobGas);
+    // The withdrawals list is strictly compared by compareWithBuiltPayload — pin its
+    // round trip too.
+    BOOST_CHECK(first.withdrawals == second.withdrawals);
+    BOOST_CHECK(first.withdrawalsRoot == second.withdrawalsRoot);
+}
+
+// The production version pair: getPayloadV5 responses are re-submitted as
+// newPayloadV4 (EngineServiceImpl getPayloadV5 -> newPayloadV4). Pin the full
+// compared-field set across that dialect pair, including withdrawalsRoot and the
+// withdrawals list — the fields the compare gate treats most strictly.
+BOOST_AUTO_TEST_CASE(newPayloadV4CompareFieldsSurviveV5RoundTrip)
+{
+    auto ep = makeV4ExecutionPayloadJson();
+    ep["extraData"] = "0xabcdef";
+    ep["gasUsed"] = "0x21";
+    ep["baseFeePerGas"] = "0x7";
+    ep["logsBloom"] = "0x" + std::string(512, 'a');  // non-zero: a dropped/padded bloom must fail
+    ep["transactions"].append("0xaa");
+
+    Json::Value params(Json::arrayValue);
+    params.append(ep);
+    params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes
+    params.append(c_beaconRootHex);                // parentBeaconBlockRoot
+    params.append(Json::Value(Json::arrayValue));  // executionRequests
+
+    Json::Value response;
+    CALL_ENGINE(newPayloadV4, params, response);
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadRequest.has_value());
+    auto const& firstRequest = *mockService.m_state->capturedNewPayloadRequest;
+
+    auto serialized =
+        serializeExecutionPayload(firstRequest.executionPayload, engine::ApiVersion::V5);
+    Json::Value roundTrip(Json::arrayValue);
+    roundTrip.append(serialized);
+    roundTrip.append(Json::Value(Json::arrayValue));
+    roundTrip.append(c_beaconRootHex);
+    roundTrip.append(Json::Value(Json::arrayValue));
+    auto parsed = parseNewPayloadRequest(roundTrip, engine::ApiVersion::V4);
+    auto const& second = parsed.executionPayload;
+
+    // Pin every field compareWithBuiltPayload strictly compares (both-sides-and-equal):
+    // the 13 scalar fields + the withdrawals list + per-transaction raw bytes, plus the
+    // three presence-XOR optionals (withdrawalsRoot/blobGasUsed/excessBlobGas).
+    auto const& fp = firstRequest.executionPayload;
+    BOOST_CHECK(fp.parentHash == second.parentHash);
+    BOOST_CHECK(fp.stateRoot == second.stateRoot);
+    BOOST_CHECK(fp.receiptsRoot == second.receiptsRoot);
+    BOOST_CHECK(fp.logsBloom == second.logsBloom);
+    BOOST_CHECK(fp.prevRandao == second.prevRandao);
+    BOOST_CHECK(fp.gasLimit == second.gasLimit);
+    BOOST_CHECK(fp.gasUsed == second.gasUsed);
+    BOOST_CHECK(fp.baseFeePerGas == second.baseFeePerGas);
+    BOOST_CHECK(fp.blockHash == second.blockHash);
+    BOOST_CHECK(fp.feeRecipient == second.feeRecipient);
+    BOOST_CHECK(fp.extraData == second.extraData);
+    BOOST_CHECK(fp.timestamp == second.timestamp);
+    BOOST_CHECK(fp.blockNumber == second.blockNumber);
+    BOOST_REQUIRE_EQUAL(fp.transactions.size(), second.transactions.size());
+    BOOST_CHECK(fp.transactions.front().raw == second.transactions.front().raw);
+    BOOST_CHECK(fp.withdrawals == second.withdrawals);
+    BOOST_CHECK(fp.withdrawalsRoot == second.withdrawalsRoot);
+    BOOST_CHECK(fp.blobGasUsed == second.blobGasUsed);
+    BOOST_CHECK(fp.excessBlobGas == second.excessBlobGas);
+    BOOST_REQUIRE(parsed.parentBeaconBlockRoot.has_value());
+    BOOST_REQUIRE(firstRequest.parentBeaconBlockRoot.has_value());
+    BOOST_CHECK(*parsed.parentBeaconBlockRoot == *firstRequest.parentBeaconBlockRoot);
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadV4)
