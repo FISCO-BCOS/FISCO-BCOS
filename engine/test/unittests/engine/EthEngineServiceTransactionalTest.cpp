@@ -255,8 +255,10 @@ public:
         (void)features;
         (void)blockHashOverride;
         (void)writeNonces;
-        if (block && block->blockHeader())
+        if (block)
         {
+            // AnyBlockHeader is returned by value and cannot be null; use it directly,
+            // the way Ledger::asyncPrewriteBlock does.
             auto const header = block->blockHeader();
             bcos::storage::Entry hash2NumberEntry;
             hash2NumberEntry.set(std::to_string(header->number()));
@@ -524,7 +526,7 @@ BOOST_AUTO_TEST_CASE(commit_retained_payload_rolls_back_on_artifacts_clear_throw
                   });
 
     artifacts.throwOnClear = true;
-    BOOST_CHECK_THROW(detail::commitRetainedPayload(
+    BOOST_CHECK_THROW(bcos::engine::detail::commitRetainedPayload(
                           guard, artifacts, "0xcommit", h256(2), makeEntry("0xcommit")),
         std::runtime_error);
 
@@ -565,9 +567,15 @@ BOOST_AUTO_TEST_CASE(commit_merge_failure_leaves_cache_and_artifacts)
     BOOST_CHECK_NO_THROW(task::syncWait(service.getPayload(*build.payloadId, 3)));
 
     storage.throwOnMerge->store(false);
+    // The retryable-commit contract: the retained artifact means the durable write
+    // never succeeded, so the retry lands the prewritten rows and answers the
+    // idempotent VALID — a terminal-Syncing retry would strand a fully built block
+    // forever (the bug the retryable-commit fix removed). Terminal SYNCING stays
+    // reserved for the mid-persist-death guard (no artifact, no ledger row), which
+    // 81f6576fb made visible via warnSyncingRateLimited.
     auto retryStatus = task::syncWait(service.newPayload(request, 3));
     BOOST_CHECK_EQUAL(
-        static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Syncing));
+        static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
 }
 
 BOOST_AUTO_TEST_CASE(commit_retry_valid_when_ledger_row_exists)
