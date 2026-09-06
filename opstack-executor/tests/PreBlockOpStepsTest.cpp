@@ -13,10 +13,12 @@
 #include <bcos-evm/test/opstack/OpTestReceiptFactory.h>
 
 #include <opstack-executor/OpBlockExecute.h>
+#include <opstack-executor/OpDepositEncode.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
 #include <opstack-executor/Storage2State.h>
 
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -355,6 +357,92 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockNormalizesWritebackFailure)
         bcos::evm::engine::OpStorageError, [](bcos::evm::engine::OpStorageError const& e) {
             return std::string(e.what()).find("storage write-back failed") != std::string::npos;
         });
+}
+
+BOOST_AUTO_TEST_CASE(ProcessOpBlockCapacityFaultIsNotAnEvictableCulprit)
+{
+    // The block path must classify a full remaining-gas pool exactly like the per-tx
+    // path does (m_prepare -> OpBlockGasPoolFull): the tx is VALID but does not fit
+    // this candidate, so the thrown OpConsensusError carries capacity and NO txHash —
+    // a set txHash marks a pool-evictable culprit, and evicting a legitimate tail tx
+    // per retry would drain the pool on a candidate-fit fault.
+    MutableStorage storage;
+    bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
+    evmone::state::BlockInfo block;
+    block.gas_limit = 30'000'000;
+    bcos::executor_v1::opstack::NullBlockHashes hashes;
+    auto vm = evmc::VM{evmc_create_evmone()};
+
+    op::DepositTx dep{};
+    dep.gas_limit = 1'000'000;
+    dep.data = evmc::bytes(op::IsthmusL1AttributesLen, uint8_t{0});
+
+    // A normal EIP-1559 tx whose gasLimit exceeds the block's remaining gas; the
+    // mirror fields must match the signed envelope (the block path cross-checks them).
+    evmone::state::Transaction tx;
+    tx.type = evmone::state::Transaction::Type::eip1559;
+    tx.nonce = 0;
+    tx.gas_limit = block.gas_limit + 1;
+    tx.to = evmc::address{};
+    std::memset(tx.to->bytes, 0x11, sizeof(tx.to->bytes));
+    tx.value = intx::uint256{0};
+    tx.sender = evmc::address{};
+    std::memset(tx.sender.bytes, 0xaa, sizeof(tx.sender.bytes));
+
+    namespace rlp = bcos::codec::rlp;
+    auto intItem = [](uint64_t v) {
+        bcos::bytes out;
+        rlp::encode(out, v);
+        return out;
+    };
+    bcos::bytes payload;
+    auto append = [&payload](bcos::bytes const& b) {
+        payload.insert(payload.end(), b.begin(), b.end());
+    };
+    append(intItem(10));  // chainId
+    append(intItem(0));   // nonce
+    append(intItem(30000000000));
+    append(intItem(30000000000));
+    append(intItem(static_cast<uint64_t>(tx.gas_limit)));
+    bcos::bytes toBytes(std::begin(tx.to->bytes), std::end(tx.to->bytes));
+    bcos::bytes toItem;
+    rlp::encode(toItem, bcos::bytesConstRef{toBytes.data(), toBytes.size()});
+    append(toItem);
+    append(intItem(0));  // value
+    payload.push_back(0x80);  // empty data (bare byte)
+    payload.push_back(0xc0);  // empty accessList
+    bcos::bytes listHeader;
+    rlp::encodeHeader(listHeader, {.isList = true, .payloadLength = payload.size()});
+    evmc::bytes envelope;
+    envelope.push_back(0x02);
+    envelope.insert(envelope.end(), listHeader.begin(), listHeader.end());
+    envelope.insert(envelope.end(), payload.begin(), payload.end());
+
+    try
+    {
+        op::OpBlockTx depTx;
+        depTx.tx = dep;
+        auto const depEnvelope = bcos::evm::opstack::encodeDepositEnvelope(dep);
+        depTx.signedEnvelope.assign(depEnvelope.begin(), depEnvelope.end());
+        op::OpBlockTx normalTx;
+        normalTx.tx = tx;
+        normalTx.signedEnvelope = envelope;
+        std::vector<op::OpBlockTx> const txs{depTx, normalTx};
+        (void)op::processOpBlock(view, block, hashes, txs,
+            op::isthmusConfig(), vm, /*chainId=*/10,
+            bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+            [](const evmone::state::StateDiff&) {});
+        BOOST_FAIL("a tx over the remaining block gas must void the block");
+    }
+    catch (bcos::evm::OpConsensusError const& e)
+    {
+        BOOST_CHECK(e.capacity);
+        BOOST_CHECK(!e.txHash.has_value());
+        BOOST_CHECK_MESSAGE(
+            std::string(e.what()).find("does not fit the remaining block gas") !=
+                std::string::npos,
+            "unexpected reject: " << e.what());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -210,6 +210,21 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             auto v = opValidate(view, block, tx, env, cfg, fee, blockGasLeft);
             if (const auto* err = std::get_if<std::error_code>(&v))
             {
+                // A full remaining-gas pool is a capacity fault, not a poisoned tx —
+                // the same classification m_prepare gives GAS_LIMIT_REACHED on the
+                // per-tx path (OpBlockGasPoolFull): the tx is VALID but does not fit
+                // this candidate and must stay pooled for a later block. Thrown
+                // WITHOUT the per-tx txHash tag (a set txHash marks a pool-evictable
+                // culprit) and with capacity set, so a wired eviction consumer skips
+                // instead of evicting. The block itself is still voided — op-geth has
+                // no failed-receipt mechanism for normal txs.
+                if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED))
+                {
+                    OpConsensusError capacityFault(
+                        "op block: tx does not fit the remaining block gas");
+                    capacityFault.capacity = true;
+                    throw capacityFault;
+                }
                 // No failed-receipt mechanism for normal txs: void the whole block (op-geth).
                 // The classification survives as the typed `validateErrorCode` field on the
                 // thrown OpConsensusError, not only as message text.
