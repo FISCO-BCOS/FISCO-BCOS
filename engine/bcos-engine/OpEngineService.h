@@ -278,18 +278,23 @@ private:
     /// Guards m_lastExecutedHeader: newPayload requests can run concurrently on RPC
     /// threads (no serial executor), so the shared_ptr write/read must be synchronized.
     ///
-    /// The m_delegate sequences (reset → executeBlock, executeBlock → commitBlock) need no
-    /// extra serialization of their own: BaselineScheduler guards each operation internally
-    /// (m_executeMutex / m_commitMutex try-locks, FIB-102/103 — a concurrent second caller
-    /// gets "Another block is executing/committing!" and fails closed), reset is a no-op
-    /// there, each build attempt re-forks its own storage layer, and the build loop retries
-    /// on the resulting InvalidStatus. Out-of-order parents cannot interleave: the sequencer
-    /// advances height n+1 only after height n's canonical status, and the delegate's
-    /// continuity check rejects anything else.
+    /// The m_delegate (an OpScheduler) sequences (reset → executeBlock, executeBlock →
+    /// commitBlock) need no extra serialization of their own — the reasoning, precisely:
+    /// OpScheduler::executeBlock try-locks m_executeMutex AND m_commitMutex ("Another
+    /// block is executing/committing!" — a concurrent second caller fails closed), and
+    /// executeBlock/commitBlock drive their task via task::syncWait, so a sequence's calls
+    /// are ordered within the calling thread. OpScheduler::reset is NOT a no-op: it takes
+    /// all three mutexes (scoped_lock, so it cannot interleave with an in-flight execute
+    /// or commit), then drops any uncommitted pending block (popping its verified storage
+    /// layer) and restores the continuity watermark to the committed tip. A reset landing
+    /// between another caller's executeBlock and commitBlock therefore makes that caller's
+    /// commitBlock fail CLOSED ("Unexpected empty results!" — the pending it needs was
+    /// dropped/replaced), which the OP service reports as an error and the sequencer
+    /// retries — convergent, never corrupt. Out-of-order parents cannot interleave: the
+    /// sequencer advances height n+1 only after height n's canonical status, and the
+    /// delegate's continuity check rejects anything else.
     mutable std::mutex m_lastExecutedHeaderMutex;
     bcos::protocol::BlockHeader::Ptr m_lastExecutedHeader;
 };
 
 }  // namespace bcos::engine
-
-#include "OpEngineService.inl"
