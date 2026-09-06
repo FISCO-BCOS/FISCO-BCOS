@@ -1733,7 +1733,7 @@ BOOST_AUTO_TEST_CASE(wire_round_trip_through_engine_helper)
     BOOST_REQUIRE(built);
     BOOST_REQUIRE(built->parentBeaconBlockRoot.has_value());
 
-    for (auto const [version, label] :
+    for (auto const& [version, label] :
         {std::pair{ApiVersion::V3, "V3"}, std::pair{ApiVersion::V5, "V5"}})
     {
         auto ep = bcos::rpc::serializeExecutionPayload(built->executionPayload, version);
