@@ -277,6 +277,15 @@ private:
     bool m_allowSynthesizedL1Attributes;
     /// Guards m_lastExecutedHeader: newPayload requests can run concurrently on RPC
     /// threads (no serial executor), so the shared_ptr write/read must be synchronized.
+    ///
+    /// The m_delegate sequences (reset → executeBlock, executeBlock → commitBlock) need no
+    /// extra serialization of their own: BaselineScheduler guards each operation internally
+    /// (m_executeMutex / m_commitMutex try-locks, FIB-102/103 — a concurrent second caller
+    /// gets "Another block is executing/committing!" and fails closed), reset is a no-op
+    /// there, each build attempt re-forks its own storage layer, and the build loop retries
+    /// on the resulting InvalidStatus. Out-of-order parents cannot interleave: the sequencer
+    /// advances height n+1 only after height n's canonical status, and the delegate's
+    /// continuity check rejects anything else.
     mutable std::mutex m_lastExecutedHeaderMutex;
     bcos::protocol::BlockHeader::Ptr m_lastExecutedHeader;
 };
