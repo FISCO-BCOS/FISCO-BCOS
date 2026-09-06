@@ -1522,6 +1522,34 @@ BOOST_AUTO_TEST_CASE(op_getpayload_v4_v5_serve_the_built_payload)
     }
 }
 
+/// The payload id is derived at the SHAPE version, not the method version (upstream:
+/// FCU V3 and V4 both build a PayloadV3 shape): identical attributes under the two
+/// methods must derive the SAME id, so a CL pairing FCU V3 with a later getPayload V4
+/// (and vice versa) lands on the same payload. Regression for the shape-version fix.
+BOOST_AUTO_TEST_CASE(op_fcu_v3_and_v4_same_attributes_same_payload_id)
+{
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto v3Built = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE(v3Built.payloadId.has_value());
+    auto v4Built = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 4));
+    BOOST_REQUIRE(v4Built.payloadId.has_value());
+    BOOST_CHECK_EQUAL(*v4Built.payloadId, *v3Built.payloadId);
+}
+
 /// The full getPayload-response JSON shape as the CL sees it (Karst pairing
 /// FCU V3 -> getPayload V5 -> newPayload V4): combineGetPayloadResponse must
 /// wrap the payload with blockValue/blobsBundle/shouldOverrideBuilder/
