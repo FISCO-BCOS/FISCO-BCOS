@@ -315,6 +315,129 @@ bcos::bytes blobOrAuthEnvelope(uint8_t typeByte, uint64_t chainId, uint64_t nonc
     out.insert(out.end(), payload.begin(), payload.end());
     return out;
 }
+
+/// RLP-encode an EIP-2930 access list: [[address20, [keys32...]], ...].
+bcos::bytes rlpAccessList(bcos::protocol::Web3AccessList const& list)
+{
+    auto stringItem = [](bcos::bytes const& payload) {
+        bcos::bytes out;
+        rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+        return out;
+    };
+    bcos::bytes entries;
+    for (auto const& entry : list)
+    {
+        bcos::bytes entryPayload = stringItem(
+            bcos::bytes(entry.account.data(), entry.account.data() + entry.account.size()));
+        bcos::bytes keysPayload;
+        for (auto const& key : entry.storageKeys)
+        {
+            auto encoded = stringItem(
+                bcos::bytes(key.data(), key.data() + key.size()));
+            keysPayload.insert(keysPayload.end(), encoded.begin(), encoded.end());
+        }
+        bcos::bytes keys;
+        rlp::encodeHeader(keys, {.isList = true, .payloadLength = keysPayload.size()});
+        keys.insert(keys.end(), keysPayload.begin(), keysPayload.end());
+        entryPayload.insert(entryPayload.end(), keys.begin(), keys.end());
+        bcos::bytes entryRlp;
+        rlp::encodeHeader(entryRlp, {.isList = true, .payloadLength = entryPayload.size()});
+        entryRlp.insert(entryRlp.end(), entryPayload.begin(), entryPayload.end());
+        entries.insert(entries.end(), entryRlp.begin(), entryRlp.end());
+    }
+    bcos::bytes out;
+    rlp::encodeHeader(out, {.isList = true, .payloadLength = entries.size()});
+    out.insert(out.end(), entries.begin(), entries.end());
+    return out;
+}
+
+/// RLP-encode a list of 32-byte versioned hashes.
+bcos::bytes rlpHashList(std::vector<bcos::h256> const& hashes)
+{
+    bcos::bytes payload;
+    for (auto const& hash : hashes)
+    {
+        bcos::bytes encoded;
+        rlp::encode(encoded, bcos::bytesConstRef{hash.data(), hash.size()});
+        payload.insert(payload.end(), encoded.begin(), encoded.end());
+    }
+    bcos::bytes out;
+    rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+    out.insert(out.end(), payload.begin(), payload.end());
+    return out;
+}
+
+/// EIP-1559 (0x02) envelope carrying a NON-EMPTY accessList (12-item shape, no 4844 fields).
+bcos::bytes eip1559EnvelopeWithAccessList(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
+    std::string_view toHex, bcos::u256 value, bcos::bytes const& data,
+    bcos::protocol::Web3AccessList const& accessList)
+{
+    auto item = [](bcos::bytes const& payload) {
+        bcos::bytes out;
+        rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+        return out;
+    };
+    auto intItem = [](uint64_t v) {
+        bcos::bytes out;
+        rlp::encode(out, v);
+        return out;
+    };
+    bcos::bytes payload;
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(chainId));
+    append(intItem(nonce));
+    append(intItem(30000000000));
+    append(intItem(30000000000));
+    append(intItem(gasLimit));
+    auto toBytes = bcos::fromHex(toHex.substr(2));
+    append(item(toBytes));
+    append(intItem(static_cast<uint64_t>(value)));
+    append(item(data));
+    append(rlpAccessList(accessList));
+
+    bcos::bytes out{static_cast<bcos::byte>(0x02)};
+    rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+    out.insert(out.end(), payload.begin(), payload.end());
+    return out;
+}
+
+/// 0x03 blob envelope with explicit accessList and blobVersionedHashes (14-item shape).
+bcos::bytes blobEnvelopeWithHashes(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
+    std::string_view toHex, bcos::u256 value, bcos::bytes const& data,
+    bcos::protocol::Web3AccessList const& accessList, std::vector<bcos::h256> const& blobHashes)
+{
+    auto item = [](bcos::bytes const& payload) {
+        bcos::bytes out;
+        rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+        return out;
+    };
+    auto intItem = [](uint64_t v) {
+        bcos::bytes out;
+        rlp::encode(out, v);
+        return out;
+    };
+    bcos::bytes payload;
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(chainId));
+    append(intItem(nonce));
+    append(intItem(30000000000));
+    append(intItem(30000000000));
+    append(intItem(gasLimit));
+    auto toBytes = bcos::fromHex(toHex.substr(2));
+    append(item(toBytes));
+    append(intItem(static_cast<uint64_t>(value)));
+    append(item(data));
+    append(rlpAccessList(accessList));
+    append(intItem(1));  // maxFeePerBlobGas
+    append(rlpHashList(blobHashes));
+
+    bcos::bytes out{static_cast<bcos::byte>(0x03)};
+    rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+    out.insert(out.end(), payload.begin(), payload.end());
+    return out;
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpEnvelopeMirrorSuite)
@@ -1003,6 +1126,116 @@ BOOST_AUTO_TEST_CASE(BlockPathRejectsSetCodeWithEmptyMirrorList)
     auto const gate = blockPathUnboundAuthorizationList(setCodeTx);
     BOOST_REQUIRE(gate.has_value());
     BOOST_CHECK_EQUAL(*gate, "authorizationList is not bound to the signed envelope");
+}
+
+// The full accessList bind: a mirror STRIPPED against a non-empty envelope list must be
+// rejected (previously only the mirror side was read, so this exact strip passed the gate
+// and executed the signed envelope without its warm slots).
+BOOST_AUTO_TEST_CASE(EnvelopeAccessListStrippedMirrorRejected)
+{
+    FakeTx tx;
+    bcos::protocol::Web3AccessList envelopeList;
+    envelopeList.push_back(bcos::protocol::Web3AccessListEntry{
+        .account = bcos::Address(std::string(40, '1')), .storageKeys = {bcos::h256(1)}});
+    tx.m_extraBytes = eip1559EnvelopeWithAccessList(10, 7, 5000000,
+        "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {0xde, 0xad}, envelopeList);
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde, 0xad};
+    // m_accessList stays empty: the mirror lost the envelope's entry.
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK_EQUAL(*mismatch, "accessList is not bound to the signed envelope");
+}
+
+// A mirror that faithfully echoes the envelope's accessList (addresses + storage keys)
+// passes the gate — the honest caller is not punished for carrying a real list.
+BOOST_AUTO_TEST_CASE(EnvelopeAccessListFullBindPasses)
+{
+    FakeTx tx;
+    bcos::protocol::Web3AccessList envelopeList;
+    envelopeList.push_back(bcos::protocol::Web3AccessListEntry{
+        .account = bcos::Address(std::string(40, '1')),
+        .storageKeys = {bcos::h256(1), bcos::h256(2)}});
+    envelopeList.push_back(bcos::protocol::Web3AccessListEntry{
+        .account = bcos::Address(std::string(40, '2')), .storageKeys = {}});
+    tx.m_extraBytes = eip1559EnvelopeWithAccessList(10, 7, 5000000,
+        "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {0xde, 0xad}, envelopeList);
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde, 0xad};
+    tx.m_accessList = envelopeList;
+    BOOST_CHECK(!envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
+}
+
+// Both sides non-empty but divergent (different storage key): content-level mismatch gets
+// its own message so the strip (presence) and the divergence (content) are distinguishable.
+BOOST_AUTO_TEST_CASE(EnvelopeAccessListContentMismatchRejected)
+{
+    FakeTx tx;
+    bcos::protocol::Web3AccessList envelopeList;
+    envelopeList.push_back(bcos::protocol::Web3AccessListEntry{
+        .account = bcos::Address(std::string(40, '1')), .storageKeys = {bcos::h256(1)}});
+    tx.m_extraBytes = eip1559EnvelopeWithAccessList(10, 7, 5000000,
+        "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {0xde, 0xad}, envelopeList);
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde, 0xad};
+    tx.m_accessList.push_back(bcos::protocol::Web3AccessListEntry{
+        .account = bcos::Address(std::string(40, '1')), .storageKeys = {bcos::h256(2)}});
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK_EQUAL(*mismatch, "accessList mismatch");
+}
+
+// The 0x03 blob bind: a matching mirror passes, a stripped mirror is rejected.
+BOOST_AUTO_TEST_CASE(EnvelopeBlobHashesBind)
+{
+    FakeTx tx;
+    tx.m_kind = 3;
+    std::vector<bcos::h256> const hashes = {bcos::h256(1), bcos::h256(2)};
+    tx.m_extraBytes = blobEnvelopeWithHashes(10, 7, 5000000,
+        "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {0xde},
+        /*accessList=*/{}, hashes);
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde};
+    tx.m_blobHashes = hashes;
+    BOOST_CHECK(!envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
+
+    // Stripped mirror: the envelope's hashes are gone from the mirror.
+    tx.m_blobHashes.clear();
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK_EQUAL(*mismatch, "blobVersionedHashes is not bound to the signed envelope");
+}
+
+// The legacy posture is preserved: an envelope without an accessList field (legacy, and a
+// fortiori 0x7e deposits) still rejects any non-empty mirror list.
+BOOST_AUTO_TEST_CASE(LegacyEnvelopeMirrorAccessListRejected)
+{
+    FakeTx tx;
+    tx.m_kind = 0;
+    tx.m_extraBytes = legacyEnvelope(
+        7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {0xde, 0xad});
+    tx.m_value = bcos::u256{5};
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde, 0xad};
+    tx.m_accessList.push_back(bcos::protocol::Web3AccessListEntry{
+        .account = bcos::Address(std::string(40, '1')), .storageKeys = {}});
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK_EQUAL(*mismatch, "accessList is not bound to the signed envelope");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
