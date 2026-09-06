@@ -213,15 +213,20 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 // A full remaining-gas pool is a capacity fault, not a poisoned tx —
                 // the same classification m_prepare gives GAS_LIMIT_REACHED on the
                 // per-tx path (OpBlockGasPoolFull): the tx is VALID but does not fit
-                // this candidate and must stay pooled for a later block. Thrown
-                // WITHOUT the per-tx txHash tag (a set txHash marks a pool-evictable
-                // culprit) and with capacity set, so a wired eviction consumer skips
-                // instead of evicting. The block itself is still voided — op-geth has
-                // no failed-receipt mechanism for normal txs.
+                // this candidate and must stay pooled for a later block. The txHash
+                // tag names the culprit whose bytes (plus its sender's nonce tail)
+                // the wired build loop trims from THIS candidate; `capacity` alone
+                // decides evict-vs-skip (keep the tx pooled). Without the tag the
+                // consumer's only skip path is unreachable: it would fall through to
+                // the internal-error throw and forkchoiceUpdated would answer
+                // -32603 for a full gas pool on every retry.
+                // The block itself is still voided — op-geth has no failed-receipt
+                // mechanism for normal txs.
                 if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED))
                 {
                     OpConsensusError capacityFault(
                         "op block: tx does not fit the remaining block gas");
+                    capacityFault.txHash = bcos::crypto::keccak256Hash(envRef);
                     capacityFault.capacity = true;
                     throw capacityFault;
                 }

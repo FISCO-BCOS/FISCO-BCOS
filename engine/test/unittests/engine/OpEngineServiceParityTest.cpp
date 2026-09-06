@@ -338,8 +338,9 @@ static DecodableWeb3Tx makeDecodableWeb3Tx(
     std::copy(w3.signatureR.begin(), w3.signatureR.end(), signature.begin());
     std::copy(w3.signatureS.begin(), w3.signatureS.end(), signature.begin() + 32);
     signature[64] = static_cast<bcos::byte>(w3.signatureV);
+    bcos::bytes reassembled;
     {
-        auto reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
+        reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
             bcos::bytesConstRef(signPayload.data(), signPayload.size()),
             bcos::bytesConstRef(signature.data(), signature.size()));
         BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(reassembled, bcos::h256{}));
@@ -355,6 +356,12 @@ static DecodableWeb3Tx makeDecodableWeb3Tx(
     tx->calculateHash(hasher);
     tx->markClean();
     tx->setImportTime(static_cast<int64_t>(nonce));
+    // The build loop's culprit matching rests on this identity: the producer tags the
+    // culprit with keccak256(signed envelope) (OpBlockExecute) and the consumer matches it
+    // against the sealed carrier's hash() (OpEngineService.inl) — they must be the same
+    // bytes, or every reject (capacity or not) falls through to -32603.
+    BOOST_REQUIRE_EQUAL(
+        bcos::crypto::keccak256Hash(bcos::ref(reassembled)).hex(), tx->hash().hex());
     return DecodableWeb3Tx{.tx = std::move(tx), .rawHex = bcos::toHexStringWithPrefix(raw)};
 }
 

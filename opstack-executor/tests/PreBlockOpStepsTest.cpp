@@ -363,9 +363,12 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockCapacityFaultIsNotAnEvictableCulprit)
 {
     // The block path must classify a full remaining-gas pool exactly like the per-tx
     // path does (m_prepare -> OpBlockGasPoolFull): the tx is VALID but does not fit
-    // this candidate, so the thrown OpConsensusError carries capacity and NO txHash —
-    // a set txHash marks a pool-evictable culprit, and evicting a legitimate tail tx
-    // per retry would drain the pool on a candidate-fit fault.
+    // this candidate. The thrown OpConsensusError carries capacity (never evict — the
+    // tx must stay pooled) AND the culprit's txHash, which names whose bytes the wired
+    // build loop trims from THIS candidate (plus its sender's nonce tail). Without the
+    // tag the loop's only skip path is unreachable and a full gas pool would answer
+    // -32603 on every retry; capacity alone decides evict-vs-skip,
+    // so the tagged hash does not make the tx pool-evictable.
     MutableStorage storage;
     bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
     evmone::state::BlockInfo block;
@@ -437,7 +440,11 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockCapacityFaultIsNotAnEvictableCulprit)
     catch (bcos::evm::OpConsensusError const& e)
     {
         BOOST_CHECK(e.capacity);
-        BOOST_CHECK(!e.txHash.has_value());
+        BOOST_REQUIRE(e.txHash.has_value());
+        BOOST_CHECK_EQUAL(e.txHash->hex(),
+            bcos::crypto::keccak256Hash(
+                bcos::bytesConstRef{envelope.data(), envelope.size()})
+                .hex());
         BOOST_CHECK_MESSAGE(
             std::string(e.what()).find("does not fit the remaining block gas") !=
                 std::string::npos,
