@@ -65,6 +65,7 @@ PayloadAttributes holoceneAttributes(bytes eip1559Params)
 NewPayloadRequest makeIsthmusNewPayload(bytes extraData)
 {
     NewPayloadRequest request;
+    request.executionRequests = std::vector<bytes>{};  // present-but-empty: the Isthmus wire contract
     request.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
     request.executionPayload.withdrawalsRoot = ledger::mpt::emptyRootHash();
     request.executionPayload.excessBlobGas = u256(0);
@@ -241,7 +242,10 @@ BOOST_AUTO_TEST_CASE(validate_op_newpayload_request_static_rules)
 
     expectReject(withViolation([](NewPayloadRequest& r) {
         r.executionRequests = std::vector<bytes>{bytes{0x01}};
-    }), "executionRequests must be absent or empty");
+    }), "executionRequests must be a present-but-empty list");
+    expectReject(withViolation([](NewPayloadRequest& r) {
+        r.executionRequests.reset();
+    }), "executionRequests must be a present-but-empty list");
     expectReject(withViolation([](NewPayloadRequest& r) {
         r.executionPayload.withdrawals.reset();
     }), "withdrawals must be present and empty");

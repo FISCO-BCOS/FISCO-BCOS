@@ -253,9 +253,14 @@ std::optional<std::string> validateOpNewPayloadRequest(
     {
         return std::string("DA footprint (blobGasUsed) exceeds the block gas limit");
     }
-    if (request.executionRequests.has_value() && !request.executionRequests->empty())
+    // Same reasoning as the Eth sibling (EngineServiceImpl.h): the wire already enforces
+    // the fourth newPayloadV4 parameter (parseNewPayloadRequest always sets the list for
+    // V4), so accepting a missing list here would hand in-process callers a laxer
+    // Isthmus contract than the wire — executionRequests must be present and empty.
+    if (!request.executionRequests.has_value() || !request.executionRequests->empty())
     {
-        return std::string("executionRequests must be absent or empty on the OP path");
+        return std::string(
+            "executionRequests must be a present-but-empty list on the OP path");
     }
     return std::nullopt;
 }
