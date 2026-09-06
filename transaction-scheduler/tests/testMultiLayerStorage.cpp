@@ -475,7 +475,7 @@ BOOST_AUTO_TEST_CASE(cacheMergeFilterExcludesRowsFromCacheOnly)
     using CacheStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::CONCURRENT | memory_storage::LRU)>;
 
-    task::syncWait([this]() -> task::Task<void> {
+    task::syncWait([]() -> task::Task<void> {
         BackendStorage filteredBackendStorage;
         CheckpointBackend filteredCheckpoint(filteredBackendStorage);
         CacheStorage cache;
