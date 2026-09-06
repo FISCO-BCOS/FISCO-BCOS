@@ -326,7 +326,11 @@ namespace engine = bcos::evm::engine;
         walker = walker.getCroppedData(entryHeader.payloadLength);
 
         auto [addrErr, addrHeader] = rlp::decodeHeader(entry);
-        if (addrErr || addrHeader.isList || addrHeader.payloadLength != sizeof(evmc_address))
+        // decodeHeader does not bound the payload against the remaining view (every other
+        // call site re-checks explicitly); a 20-declaring header on a shorter tail would
+        // otherwise memcpy past the buffer below.
+        if (addrErr || addrHeader.isList || addrHeader.payloadLength != sizeof(evmc_address) ||
+            addrHeader.payloadLength > entry.size())
             return "accessList address is malformed";
         evmc::address addr{};
         std::memcpy(addr.bytes, entry.data(), sizeof(addr.bytes));
@@ -340,7 +344,9 @@ namespace engine = bcos::evm::engine;
         while (!keys.empty())
         {
             auto [keyErr, keyHeader] = rlp::decodeHeader(keys);
-            if (keyErr || keyHeader.isList || keyHeader.payloadLength != sizeof(evmc::bytes32))
+            if (keyErr || keyHeader.isList ||
+                keyHeader.payloadLength != sizeof(evmc::bytes32) ||
+                keyHeader.payloadLength > keys.size())
                 return "accessList storage key is malformed";
             evmc::bytes32 key{};
             std::memcpy(key.bytes, keys.data(), sizeof(key.bytes));
@@ -376,7 +382,9 @@ namespace engine = bcos::evm::engine;
     while (!walker.empty())
     {
         auto [hashErr, hashHeader] = rlp::decodeHeader(walker);
-        if (hashErr || hashHeader.isList || hashHeader.payloadLength != sizeof(evmc::bytes32))
+        if (hashErr || hashHeader.isList ||
+            hashHeader.payloadLength != sizeof(evmc::bytes32) ||
+            hashHeader.payloadLength > walker.size())
             return "blobVersionedHashes entry is malformed";
         evmc::bytes32 hash{};
         std::memcpy(hash.bytes, walker.data(), sizeof(hash.bytes));
@@ -512,7 +520,10 @@ namespace engine = bcos::evm::engine;
         ++idx;
     }
     if (!nonceItem || !gasItem || !valueItem || !toPayload || !dataPayload ||
-        (typed && envelopeKind != 0x7e && !accessListPayload))
+        (typed && envelopeKind != 0x7e && !accessListPayload) ||
+        // A type-0x03 envelope must carry blobVersionedHashes (idx 10): without this arm a
+        // 9/10-item 0x03 passed the guard and dereferenced a disengaged blobPayload below.
+        (typed && envelopeKind == 0x03 && !blobPayload))
         return "envelope has fewer fields than the type requires";
 
     // nonce (uint64). rlp::decode rejects over-wide payloads (UnexpectedLength); the plen

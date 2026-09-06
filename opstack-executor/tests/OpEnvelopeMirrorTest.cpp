@@ -1238,4 +1238,162 @@ BOOST_AUTO_TEST_CASE(LegacyEnvelopeMirrorAccessListRejected)
     BOOST_CHECK_EQUAL(*mismatch, "accessList is not bound to the signed envelope");
 }
 
+// A type-0x03 envelope that stops after maxFeePerBlobGas (10 items, no blobVersionedHashes
+// at idx 10) is malformed. The fewer-fields guard must reject it BEFORE the blob bind
+// dereferences blobPayload: blobFieldsPresent is true for every 0x03 envelope, but
+// blobPayload is engaged only when the walk reached idx 10 (regression: the old guard
+// covered accessListPayload only, so a 10-item 0x03 hit an empty-optional dereference).
+BOOST_AUTO_TEST_CASE(ShortType03EnvelopeFewerFieldsRejected)
+{
+    auto intItem = [](uint64_t v) {
+        bcos::bytes out;
+        rlp::encode(out, v);
+        return out;
+    };
+    auto item = [](bcos::bytes const& payload) {
+        bcos::bytes out;
+        rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+        return out;
+    };
+    bcos::bytes payload;
+    auto append = [&payload](bcos::bytes const& b) {
+        payload.insert(payload.end(), b.begin(), b.end());
+    };
+    append(intItem(10));            // chainId
+    append(intItem(7));             // nonce
+    append(intItem(30000000000));   // maxPriorityFeePerGas
+    append(intItem(30000000000));   // maxFeePerGas
+    append(intItem(5000000));       // gasLimit
+    append(item(bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7")));  // to
+    append(intItem(5));             // value
+    append(item({0xde}));           // data
+    payload.push_back(0xc0);        // accessList (idx 8)
+    append(intItem(1));             // maxFeePerBlobGas (idx 9) — no idx 10 follows
+
+    bcos::bytes envelope{static_cast<bcos::byte>(0x03)};
+    rlp::encodeHeader(envelope, {.isList = true, .payloadLength = payload.size()});
+    envelope.insert(envelope.end(), payload.begin(), payload.end());
+
+    FakeTx tx;
+    tx.m_kind = 3;
+    tx.m_extraBytes = envelope;
+    tx.m_blobHashes = {bcos::h256(1)};  // non-empty mirror: the old code dereferenced the
+                                        // disengaged blobPayload right here
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK_EQUAL(*mismatch, "envelope has fewer fields than the type requires");
+}
+
+// The bind's fixed-width memcpys must fit the remaining buffer: an accessList address item
+// that declares 20 bytes but carries fewer is "malformed", never an out-of-bounds read
+// (decodeHeader does not bound payloadLength against the view; the walk re-checks, these
+// sub-decodes must too).
+BOOST_AUTO_TEST_CASE(TruncatedAccessListAddressRejected)
+{
+    auto item = [](bcos::bytes const& payload) {
+        bcos::bytes out;
+        rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+        return out;
+    };
+    auto intItem = [](uint64_t v) {
+        bcos::bytes out;
+        rlp::encode(out, v);
+        return out;
+    };
+    // Address item: string header declaring 20, only 5 bytes present.
+    bcos::bytes addrItem{0x94, 0x01, 0x02, 0x03, 0x04, 0x05};
+    bcos::bytes entryPayload(addrItem);
+    entryPayload.push_back(0xc0);  // empty storageKeys
+    bcos::bytes entry;
+    rlp::encodeHeader(entry, {.isList = true, .payloadLength = entryPayload.size()});
+    entry.insert(entry.end(), entryPayload.begin(), entryPayload.end());
+    bcos::bytes listPayload(entry);
+    bcos::bytes accessListItem;
+    rlp::encodeHeader(accessListItem, {.isList = true, .payloadLength = listPayload.size()});
+    accessListItem.insert(accessListItem.end(), listPayload.begin(), listPayload.end());
+
+    bcos::bytes payload;
+    auto append = [&payload](bcos::bytes const& b) {
+        payload.insert(payload.end(), b.begin(), b.end());
+    };
+    append(intItem(10));          // chainId
+    append(intItem(7));           // nonce
+    append(intItem(1000000000));  // gasPrice
+    append(intItem(5000000));     // gasLimit
+    append(item(bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7")));  // to
+    append(intItem(5));           // value
+    append(item({0xde}));         // data
+    append(accessListItem);       // accessList (idx 7 for 0x01)
+    bcos::bytes envelope{static_cast<bcos::byte>(0x01)};
+    rlp::encodeHeader(envelope, {.isList = true, .payloadLength = payload.size()});
+    envelope.insert(envelope.end(), payload.begin(), payload.end());
+
+    FakeTx tx;
+    tx.m_kind = 1;
+    tx.m_extraBytes = envelope;
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_value = bcos::u256{5};
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde};
+    tx.m_accessList.push_back(bcos::protocol::Web3AccessListEntry{
+        .account = bcos::Address(std::string(40, '1')), .storageKeys = {}});
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK_EQUAL(*mismatch, "accessList address is malformed");
+}
+
+// Same bound check for the blob field: a 32-declaring hash item with fewer bytes present is
+// "malformed", not an out-of-bounds read of the truncated tail.
+BOOST_AUTO_TEST_CASE(TruncatedBlobHashRejected)
+{
+    auto item = [](bcos::bytes const& payload) {
+        bcos::bytes out;
+        rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+        return out;
+    };
+    auto intItem = [](uint64_t v) {
+        bcos::bytes out;
+        rlp::encode(out, v);
+        return out;
+    };
+    // Blob hash item: string header declaring 32, only 5 bytes present.
+    bcos::bytes hashItem{0xa0, 0x01, 0x02, 0x03, 0x04, 0x05};
+    bcos::bytes blobListItem;
+    rlp::encodeHeader(blobListItem, {.isList = true, .payloadLength = hashItem.size()});
+    blobListItem.insert(blobListItem.end(), hashItem.begin(), hashItem.end());
+
+    bcos::bytes payload;
+    auto append = [&payload](bcos::bytes const& b) {
+        payload.insert(payload.end(), b.begin(), b.end());
+    };
+    append(intItem(10));            // chainId
+    append(intItem(7));             // nonce
+    append(intItem(30000000000));   // maxPriorityFeePerGas
+    append(intItem(30000000000));   // maxFeePerGas
+    append(intItem(5000000));       // gasLimit
+    append(item(bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7")));  // to
+    append(intItem(5));             // value
+    append(item({0xde}));           // data
+    payload.push_back(0xc0);        // accessList
+    append(intItem(1));             // maxFeePerBlobGas
+    append(blobListItem);           // blobVersionedHashes (idx 10)
+    bcos::bytes envelope{static_cast<bcos::byte>(0x03)};
+    rlp::encodeHeader(envelope, {.isList = true, .payloadLength = payload.size()});
+    envelope.insert(envelope.end(), payload.begin(), payload.end());
+
+    FakeTx tx;
+    tx.m_kind = 3;
+    tx.m_extraBytes = envelope;
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_value = bcos::u256{5};
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_input = {0xde};
+    tx.m_blobHashes = {bcos::h256(1)};
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK_EQUAL(*mismatch, "blobVersionedHashes entry is malformed");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
