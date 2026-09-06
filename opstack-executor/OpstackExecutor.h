@@ -943,11 +943,14 @@ public:
             requireBlockContext();
             // A missing block-hashes source on the block path would silently degrade BLOCKHASH
             // to zeros (NullBlockHashes is the documented eth_call/standalone fallback) — fail
-            // loud instead of executing a deterministic-but-wrong state transition.
+            // loud instead of executing a deterministic-but-wrong state transition. Node-wiring
+            // fault: thrown WITHOUT the per-tx txHash tag — a set txHash marks a
+            // pool-evictable culprit, and evicting one innocent tx per retry cannot fix an
+            // unwired RecentBlockHashes source. The sibling free-function checks below already
+            // throw the 1-arg form for the same fault class.
             if (m_ctx->blockHashes == nullptr && !call)
                 throw bcos::evm::OpConsensusError(
-                    "OpstackExecutor: block execution requires wired RecentBlockHashes",
-                    transaction.hash());
+                    "OpstackExecutor: block execution requires wired RecentBlockHashes");
             if (transaction.isDepositTx())
             {
                 // executeDeposit member (not the op::runDeposit free function); applies the state

@@ -174,9 +174,13 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 bcos::bytesConstRef(btx.signedEnvelope.data(), btx.signedEnvelope.size());
             // Pool eviction keys on OpConsensusError::txHash (keccak of the signed envelope),
             // never a substring of what(). That hash equals Transaction::hash() for Web3 txs.
-            auto rejectNonDeposit = [&](std::string message) {
+            // `validateErrorCode` carries the opValidate table's typed classification for
+            // validate-class rejects — empty for every other reject shape.
+            auto rejectNonDeposit = [&](std::string message,
+                                    std::error_code validateErrorCode = {}) {
                 OpConsensusError err(std::move(message));
                 err.txHash = bcos::crypto::keccak256Hash(envRef);
+                err.validateErrorCode = std::move(validateErrorCode);
                 throw err;
             };
             if (auto mismatch =
@@ -207,7 +211,9 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             if (const auto* err = std::get_if<std::error_code>(&v))
             {
                 // No failed-receipt mechanism for normal txs: void the whole block (op-geth).
-                rejectNonDeposit("op block: invalid non-deposit tx: " + err->message());
+                // The classification survives as the typed `validateErrorCode` field on the
+                // thrown OpConsensusError, not only as message text.
+                rejectNonDeposit("op block: invalid non-deposit tx: " + err->message(), *err);
             }
             // opTransition charges from props.fee (the validate-time snapshot — no second read).
             evmone::state::StateDiff diff;
