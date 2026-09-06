@@ -19,6 +19,12 @@
 
 #pragma once
 
+// EthBlockHeader (rlp-protocol) is implementation-only: the installed public header keeps no
+// rlp-protocol include (its dirs are PRIVATE on engine), so a consumer of the declarations does
+// not need it. Instantiating the template — i.e. including this .inl — does; in-tree
+// instantiators (libinitializer, the engine tests) link rlp-protocol.
+#include <bcos-rlp-protocol/EthBlockHeader.h>
+
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/view/transform.hpp>
 

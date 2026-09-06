@@ -14,7 +14,10 @@ target_include_directories(engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-engine>)
 # PRIVATE + static library: consumers still link rlp-protocol transitively
-# ($<LINK_ONLY:...>); only the include dirs stay unpropagated.
+# ($<LINK_ONLY:...>); only the include dirs stay unpropagated. The installed
+# OpEngineService.h declares no rlp-protocol types (the EthBlockHeader include lives
+# in the .inl), so consuming the declarations needs no rlp-protocol include dirs;
+# instantiating the template does — in-tree instantiators link rlp-protocol.
 target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec
     PRIVATE rlp-protocol)
 set_target_properties(engine PROPERTIES UNITY_BUILD "ON")
