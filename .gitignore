@@ -69,13 +69,20 @@ tools/BcosProBuilder/generated**
 tools/BcosAirBuilder/*
 *.log
 
-# t8n reference vectors: regenerated on demand (see t8n/generator/regen.sh) and by CI
-# (composite action .github/actions/opstack-t8n-regen). Only the non-generated contract
-# files (manifest.txt, *.md, SHA256SUMS) and the generator itself are tracked.
+# t8n reference vectors: the vendored subset that OpEngineServiceExecParityTest
+# executes is TRACKED (see opstack-executor/tests/t8n/PROVENANCE.md for the upstream
+# pin + SHA256); the bcos-evm generator cases and any other locally regenerated
+# vector/golden files stay untracked.
 bcos-evm/test/opstack/t8n/cases/
 opstack-executor/tests/t8n/cases/
 opstack-executor/tests/t8n/vectors/*.json
+!opstack-executor/tests/t8n/vectors/isthmus_deposit_only.json
+!opstack-executor/tests/t8n/vectors/jovian_deposit_only.json
+!opstack-executor/tests/t8n/vectors/jovian_transfer_multi.json
 opstack-executor/tests/t8n/golden/engine/*.golden.json
+!opstack-executor/tests/t8n/golden/engine/isthmus_deposit_only.golden.json
+!opstack-executor/tests/t8n/golden/engine/jovian_deposit_only.golden.json
+!opstack-executor/tests/t8n/golden/engine/jovian_transfer_multi.golden.json
 opstack-executor/tests/t8n/golden/engine/chained/*.json
 
 test/*

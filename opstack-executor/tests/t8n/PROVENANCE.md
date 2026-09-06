@@ -1,15 +1,27 @@
 # t8n golden corpus (vendored subset) — provenance
 
 Vendored from FISCO-BCOS/op-stack-e2e-tests @ 1f1fd4d9a2e8d76a7f98231ad0a9606d01f84a8f
-(op-geth v1.101702.2 reference corpus; see DIVERGENCES.md below for the block-execution
-divergence matrix). Only the vectors the OpEngineServiceExecParityTest executes are
-vendored — the golden/engine files are op-geth t8n outputs and are the op-geth oracle
-for this suite. To refresh or extend: fetch the upstream repo at the pin above and
-re-verify the SHA256 sums below.
+(op-geth v1.101702.2 reference corpus; see the divergence matrix below for the
+block-execution divergences). Only the vectors the OpEngineServiceExecParityTest
+executes are vendored — the golden/engine files are op-geth t8n outputs and are
+the op-geth oracle for this suite. To refresh or extend: fetch the upstream repo
+at the pin above and re-verify the SHA256 sums below.
 
 ## SHA256
 
+ab54499af927eb8cfe1a9ede8ca7097797435028545a5d63e15351d8a5873fe3  vectors/isthmus_deposit_only.json
+3cc80b4de6fd7787c548033e55fc9114c5a704fe83701dac521281f59430656d  vectors/jovian_deposit_only.json
+a21f92b165d258633d50765ccb758005d8ce6b127838f122bcb8126740b3d4df  vectors/jovian_transfer_multi.json
+8f35b0526c4240981bf101b1f0435b36eb7d75f719775bc9e36250b3970ca3a3  golden/engine/isthmus_deposit_only.golden.json
+0c7c087545530f34560d632e9260147bbb6f62021110f90fba154ab079de2d72  golden/engine/jovian_deposit_only.golden.json
+5c4fe8f5b461987f92aad640e3e2892c5b458b7e98c0113dd37ea238207366c7  golden/engine/jovian_transfer_multi.golden.json
+
+---
+
 # DIVERGENCES — FISCO opstack ↔ op-geth v1.101702.2 块执行差异矩阵
+
+> 以下为上游仓库（FISCO-BCOS/op-stack-e2e-tests @ 1f1fd4d9）的 DIVERGENCES 文档原文照录，
+> 作为 vendored corpus 的出处与分歧依据，未作改动。
 
 > 来源：W4（L0 静态对拍）。锚点以 `ANCHOR-CORRECTIONS.md` 校正后为准。
 > 判定：等价 / 已知分叉 / 结构性差异。状态：已确认 / 已修一致 / 事实达成 / 待W5。
@@ -248,9 +260,3 @@ runInvalidVector -32603 分支）先投 canonical（VALID 写 SYS_NUMBER_2_HASH 
 抛 OpExecutionInternalError。
 
 **处置**：FISCO 侧保留该行为（PBFT 单一权威链语义），记为结构性差异，不修。
-ab54499af927eb8cfe1a9ede8ca7097797435028545a5d63e15351d8a5873fe3  vectors/isthmus_deposit_only.json
-3cc80b4de6fd7787c548033e55fc9114c5a704fe83701dac521281f59430656d  vectors/jovian_deposit_only.json
-a21f92b165d258633d50765ccb758005d8ce6b127838f122bcb8126740b3d4df  vectors/jovian_transfer_multi.json
-8f35b0526c4240981bf101b1f0435b36eb7d75f719775bc9e36250b3970ca3a3  golden/engine/isthmus_deposit_only.golden.json
-0c7c087545530f34560d632e9260147bbb6f62021110f90fba154ab079de2d72  golden/engine/jovian_deposit_only.golden.json
-5c4fe8f5b461987f92aad640e3e2892c5b458b7e98c0113dd37ea238207366c7  golden/engine/jovian_transfer_multi.golden.json
