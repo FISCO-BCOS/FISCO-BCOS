@@ -23,9 +23,10 @@
 // installed consumer of the declarations needs no rlp-protocol include dirs (engine links
 // rlp-protocol PRIVATE and does not propagate them). Including this .inl is the opt-in
 // instantiation point — the template's members use bcos::protocol::EthBlockHeader::computeHash
-// (a non-dependent name), so instantiating TUs (the engine parity tests) need rlp-protocol
-// include dirs and link rlp-protocol.
+// (a non-dependent name) and bcos::evm::opstack::estimatedDaSize, so instantiating TUs need
+// rlp-protocol and bcos-evm-opstack include dirs and link both (in-tree instantiators do).
 #include "OpEngineService.h"
+#include <bcos-evm/opstack/RollupCost.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 
 #include <range/v3/algorithm/any_of.hpp>
@@ -36,6 +37,14 @@ namespace bcos::engine
 
 namespace detail
 {
+/// DA-caps unit bridge: the caps count ESTIMATED DA bytes (the Fjord FastLZ size estimate
+/// of the sealed envelope), which takes an evmc::bytes_view while the envelope carrier is
+/// a bcos::bytes.
+inline auto estimatedDaBytes(bcos::bytes const& env)
+{
+    return bcos::evm::opstack::estimatedDaSize(evmc::bytes_view(env.data(), env.size()));
+}
+
 /// release ExecutionPayload keeps a single carrier: `transactions[i].raw`.
 inline auto rawEnvelopes(ExecutionPayload const& payload)
 {
@@ -339,11 +348,16 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             }
         }
     };
-    if (m_daCaps)
+    if (m_daCaps && m_daCaps->maxTxSize.load(std::memory_order_relaxed) != 0)
     {
+        // DACaps count ESTIMATED DA bytes — the Fjord FastLZ size estimate of the sealed
+        // envelope (op-geth's RollupCostData().EstimatedDASize()), never the raw envelope
+        // length. While the cap is unset (zero = uncapped) skip the estimate entirely:
+        // FastLZ over every sealed envelope on every attempt would tax the uncapped
+        // default path for nothing.
         for (auto const& [hash, env] : sealedEnvelopes)
         {
-            if (!m_daCaps->txFits(env.size()))
+            if (!m_daCaps->txFits(detail::estimatedDaBytes(env)))
             {
                 skipSenderTail(hash);
             }
@@ -397,12 +411,15 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     {
         std::vector<bytes> candidateEnvelopes = forcedEnvelopes;
         std::optional<bcos::engine::DACaps::Budget> budget;
-        if (m_daCaps)
+        if (m_daCaps && m_daCaps->maxBlockSize.load(std::memory_order_relaxed) != 0)
         {
+            // Same estimated-DA unit as txFits above: the block-size budget accumulates
+            // the forced (undroppable) envelopes' estimates and admits each sealed tx by
+            // its estimate, not its raw length.
             std::uint64_t forcedBytes = 0;
             for (auto const& env : forcedEnvelopes)
             {
-                forcedBytes += env.size();
+                forcedBytes += detail::estimatedDaBytes(env);
             }
             budget.emplace(*m_daCaps, forcedBytes);
         }
@@ -412,7 +429,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             {
                 continue;
             }
-            if (budget && !budget->admits(env.size()))
+            if (budget && !budget->admits(detail::estimatedDaBytes(env)))
             {
                 break;
             }
