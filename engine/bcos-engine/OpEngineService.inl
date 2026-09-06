@@ -336,12 +336,6 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         }
     }
 
-    ledger::LedgerConfig ledgerConfig;
-    {
-        auto view = m_globalStateStorage.fork();
-        co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
-    }
-
     auto const parentBeaconBlockRoot = payloadAttributes.parentBeaconBlockRoot.value();
 
     auto assemblePayload = [&](std::vector<bytes> candidateEnvelopes) {
