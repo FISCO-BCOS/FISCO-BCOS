@@ -31,7 +31,7 @@
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 #include "engine/bcos-engine/EngineTracker.h"
-#include "engine/bcos-engine/OpEngineService.h"
+#include "engine/bcos-engine/OpEngineService.inl"
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>

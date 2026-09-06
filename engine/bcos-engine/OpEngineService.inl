@@ -19,10 +19,13 @@
 
 #pragma once
 
-// EthBlockHeader (rlp-protocol) is implementation-only: the installed public header keeps no
-// rlp-protocol include (its dirs are PRIVATE on engine), so a consumer of the declarations does
-// not need it. Instantiating the template — i.e. including this .inl — does; in-tree
-// instantiators (libinitializer, the engine tests) link rlp-protocol.
+// This is the DEFINITION half of the split: OpEngineService.h is declarations-only so an
+// installed consumer of the declarations needs no rlp-protocol include dirs (engine links
+// rlp-protocol PRIVATE and does not propagate them). Including this .inl is the opt-in
+// instantiation point — the template's members use bcos::protocol::EthBlockHeader::computeHash
+// (a non-dependent name), so instantiating TUs (the engine parity tests) need rlp-protocol
+// include dirs and link rlp-protocol.
+#include "OpEngineService.h"
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 
 #include <range/v3/algorithm/any_of.hpp>

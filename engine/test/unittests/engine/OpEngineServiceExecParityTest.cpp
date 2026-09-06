@@ -45,7 +45,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <engine/bcos-engine/OpEngineService.h>
+#include <engine/bcos-engine/OpEngineService.inl>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/lexical_cast.hpp>
