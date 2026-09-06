@@ -202,6 +202,16 @@ BOOST_AUTO_TEST_CASE(op_does_not_advertise_unimplemented_fcu_v4)
     BOOST_CHECK(std::find(caps.begin(), caps.end(), "engine_forkchoiceUpdatedV4") == caps.end());
     BOOST_CHECK(std::find(caps.begin(), caps.end(), "engine_getPayloadV4") != caps.end());
     BOOST_CHECK(std::find(caps.begin(), caps.end(), "engine_newPayloadV4") != caps.end());
+    // The OP lane must not advertise methods its own gates deterministically reject:
+    // newPayload is Isthmus-only V4 (-38005 for V1-V3) and getPayloadV1/V2 cannot
+    // render a PayloadV3 build — a pre-Isthmus CL reading them has no sync path back.
+    for (auto const* dead :
+        {"engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3",
+            "engine_getPayloadV1", "engine_getPayloadV2"})
+    {
+        BOOST_CHECK_MESSAGE(std::find(caps.begin(), caps.end(), dead) == caps.end(),
+            "OP caps must not advertise " << dead);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(newpayload_rejects_blob_type_as_fisco_op_policy)
@@ -212,6 +222,72 @@ BOOST_AUTO_TEST_CASE(newpayload_rejects_blob_type_as_fisco_op_policy)
     auto error = engine_common::op::validateOpNewPayloadRequest(request, /*jovianActive=*/false);
     BOOST_REQUIRE(error.has_value());
     BOOST_CHECK(error->find("blob transactions are not allowed") != std::string::npos);
+}
+
+/// Reject-form pins for the OP newPayload static rules that no other case drives —
+/// each rule must answer its own message, not a generic invalid.
+BOOST_AUTO_TEST_CASE(validate_op_newpayload_request_static_rules)
+{
+    auto withViolation = [](auto&& mutate) {
+        auto request = makeIsthmusNewPayload(fromHex("00000000fa00000006"));
+        mutate(request);
+        return engine_common::op::validateOpNewPayloadRequest(request, /*jovianActive=*/false);
+    };
+    auto expectReject = [](std::optional<std::string> const& error, std::string const& needle) {
+        BOOST_REQUIRE_MESSAGE(error.has_value(), "expected a reject mentioning " << needle);
+        BOOST_CHECK_MESSAGE(error->find(needle) != std::string::npos,
+            "reject \"" << *error << "\" does not mention " << needle);
+    };
+
+    expectReject(withViolation([](NewPayloadRequest& r) {
+        r.executionRequests = std::vector<bytes>{bytes{0x01}};
+    }), "executionRequests must be absent or empty");
+    expectReject(withViolation([](NewPayloadRequest& r) {
+        r.executionPayload.withdrawals.reset();
+    }), "withdrawals must be present and empty");
+    expectReject(withViolation([](NewPayloadRequest& r) {
+        r.executionPayload.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{}};
+    }), "withdrawals must be present and empty");
+    expectReject(withViolation([](NewPayloadRequest& r) {
+        r.expectedBlobVersionedHashes = {h256(1)};
+    }), "expectedBlobVersionedHashes must be an empty array");
+    expectReject(withViolation([](NewPayloadRequest& r) {
+        r.executionPayload.withdrawalsRoot.reset();
+    }), "withdrawalsRoot is required");
+    expectReject(withViolation([](NewPayloadRequest& r) {
+        r.executionPayload.excessBlobGas = u256(1);
+    }), "excessBlobGas must be present and zero");
+    expectReject(withViolation([](NewPayloadRequest& r) {
+        r.executionPayload.blobGasUsed = u256(1);
+    }), "blobGasUsed must be zero before Jovian");
+    expectReject(withViolation([](NewPayloadRequest& r) {
+        r.executionPayload.blockNumber = -1;
+    }), "blockNumber must not be negative");
+}
+
+/// Same treatment for the FCU attributes-side rules (validateOpPayloadAttributes).
+BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_static_rules)
+{
+    auto withViolation = [](auto&& mutate, bool jovianActive) {
+        auto attributes = holoceneAttributes(bytes(8, 0));
+        mutate(attributes);
+        return engine_common::op::validateOpPayloadAttributes(attributes, jovianActive);
+    };
+    auto expectReject = [](std::optional<std::string> const& error, std::string const& needle) {
+        BOOST_REQUIRE_MESSAGE(error.has_value(), "expected a reject mentioning " << needle);
+        BOOST_CHECK_MESSAGE(error->find(needle) != std::string::npos,
+            "reject \"" << *error << "\" does not mention " << needle);
+    };
+
+    expectReject(withViolation([](PayloadAttributes& a) {
+        a.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{}};
+    }, false), "withdrawals must be empty on the OP path");
+    expectReject(withViolation([](PayloadAttributes& a) {
+        a.minBaseFee = std::nullopt;
+    }, /*jovianActive=*/true), "minBaseFee is required after the Jovian fork");
+    expectReject(withViolation([](PayloadAttributes& a) {
+        a.minBaseFee = 0;  // a pre-Jovian CL sending a floor is a reject
+    }, /*jovianActive=*/false), "minBaseFee must be null before the Jovian fork");
 }
 
 BOOST_AUTO_TEST_CASE(fcu_v4_missing_beacon_root_is_invalid)

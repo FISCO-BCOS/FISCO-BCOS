@@ -83,9 +83,17 @@ void applyOpHeaderConstants(bcos::protocol::BlockHeader& header)
 
 std::vector<std::string> supportedOpCapabilities()
 {
-    // Same advertised set as Eth. FCU V4 is unimplemented (Endpoint -38005) and
-    // absent upstream; getPayloadV4 / newPayloadV4 are already in the shared list.
-    return engine_common::supportedCapabilities();
+    // The OP lane's real window, NOT the Eth list: OP newPayload is Isthmus-only
+    // (V4; the service answers -38005 for V1-V3) and getPayloadV1/V2 cannot render
+    // a PayloadV3 build (IncompatiblePayloadVersion). Advertising them would strand
+    // a pre-Isthmus CL on methods that deterministically fail, with no sync path
+    // to recover. FCU V1/V2 stay listed (heartbeat FCUs are accepted); FCU V4 is
+    // unimplemented (Endpoint -38005) and absent upstream.
+    static const std::vector<std::string> caps{"engine_exchangeCapabilities",
+        "engine_forkchoiceUpdatedV1", "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3",
+        "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
+        "engine_newPayloadV4"};
+    return caps;
 }
 
 std::optional<std::uint64_t> narrowU256ToU64(const u256& value)

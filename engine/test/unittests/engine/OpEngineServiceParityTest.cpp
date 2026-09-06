@@ -1522,6 +1522,59 @@ BOOST_AUTO_TEST_CASE(op_getpayload_v4_v5_serve_the_built_payload)
     }
 }
 
+/// The full getPayload-response JSON shape as the CL sees it (Karst pairing
+/// FCU V3 -> getPayload V5 -> newPayload V4): combineGetPayloadResponse must
+/// wrap the payload with blockValue/blobsBundle/shouldOverrideBuilder/
+/// executionRequests/parentBeaconBlockRoot, and the embedded executionPayload
+/// must re-parse to the built payload.
+BOOST_AUTO_TEST_CASE(op_getpayload_v5_response_json_shape)
+{
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+    auto built = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE(built.payloadId.has_value());
+    auto payload = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 3));
+    BOOST_REQUIRE(payload);
+
+    Json::Value response;
+    bcos::rpc::combineGetPayloadResponse(
+        response, payload, bcos::engine::ApiVersion::V5);
+    BOOST_REQUIRE(response.isMember("executionPayload"));
+    BOOST_CHECK_EQUAL(response["blockValue"].asString(), "0x0");
+    BOOST_REQUIRE(response["blobsBundle"].isObject());
+    BOOST_CHECK_EQUAL(response["blobsBundle"]["commitments"].size(), 0U);
+    BOOST_CHECK_EQUAL(response["blobsBundle"]["proofs"].size(), 0U);
+    BOOST_CHECK_EQUAL(response["blobsBundle"]["blobs"].size(), 0U);
+    BOOST_CHECK_EQUAL(response["shouldOverrideBuilder"].asBool(), false);
+    BOOST_REQUIRE(response["executionRequests"].isArray());
+    BOOST_CHECK_EQUAL(response["executionRequests"].size(), 0U);
+    BOOST_REQUIRE(response.isMember("parentBeaconBlockRoot"));
+    BOOST_CHECK_EQUAL(response["parentBeaconBlockRoot"].asString(),
+        "0x" + payload->parentBeaconBlockRoot->hex());
+
+    // The embedded executionPayload must re-parse to the built payload (wire round trip
+    // through the response's own JSON).
+    Json::Value params(Json::arrayValue);
+    params.append(response["executionPayload"]);
+    params.append(Json::Value(Json::arrayValue));
+    params.append(response["parentBeaconBlockRoot"]);
+    params.append(Json::Value(Json::arrayValue));
+    auto parsed = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
+    checkSameExecutionPayload(payload->executionPayload, parsed.executionPayload);
+}
+
 BOOST_AUTO_TEST_CASE(op_newpayload_occupied_nontip_height_is_syncing)
 {
     // Matrix: A2 — height N already has hash A, payload is hash B, tip is past N.
