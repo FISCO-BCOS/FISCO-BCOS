@@ -37,11 +37,8 @@ constexpr bool gasLimitExceedsOpCap(std::uint64_t gasLimit) noexcept
     return gasLimit > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
 }
 
-const bcos::h256 c_emptyOmmersHash{
-    std::string{"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}};
-const bcos::h64 c_posNonce{std::string{"0x0000000000000000"}};
-const bcos::h256 c_opEmptyRequestsHash{
-    std::string{"0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}};
+// Consensus header constants live in engine_common (EngineServiceCommon.h) — shared with
+// the Eth builder so the keccak256(rlp(header))-critical literals have exactly one home.
 }  // namespace
 
 std::optional<bcostars::Transaction> opEnvelopeToTars(
@@ -76,9 +73,9 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
 
 void applyOpHeaderConstants(bcos::protocol::BlockHeader& header)
 {
-    header.setUncleHash(c_emptyOmmersHash);
+    header.setUncleHash(engine_common::c_emptyOmmersHash);
     header.setDifficulty(bcos::u256(0));
-    header.setNonce(c_posNonce);
+    header.setNonce(engine_common::c_posNonce);
 }
 
 std::vector<std::string> supportedOpCapabilities()
@@ -267,6 +264,19 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const h256& transactionsRoot, const h256& parentBeaconBlockRoot)
 {
+    // Intentionally NO setEthBlockVersion (unlike detail::finalizeEthBlockHeader): the OP
+    // header is a FISCO BlockHeader whose ethBlockVersion stays NON_ETH, which is exactly
+    // the header class EthBlockHeader::computeHash documents itself for ("block-identity
+    // hash for FISCO-native/OP headers ... that validateHeader rejects"). The RLP encoding
+    // cannot depend on that field: the ctor builds EthBlockHeaderData from field presence
+    // (each optional fork field copied when set) and the shared codec encodes exactly the
+    // set optionals positionally — EthBlockHeaderData carries no version input at all. With
+    // every fork field stamped below, the encoding is the full 21-field form op-geth
+    // produces, and the external-oracle golden test
+    // (op_golden_vector_rebuild_matches_op_geth_block_hash, vendored corpus) pins it byte
+    // for byte. calculateRLPHash (validateHeader path) is not usable on these headers by
+    // design; finalizeEthBlockHeader needs setEthBlockVersion only because it goes through
+    // calculateRLPHash on the Eth lane.
     auto header = factory->createBlockHeader();
     const auto number = static_cast<bcos::protocol::BlockNumber>(payload.blockNumber);
     header->setNumber(number);
@@ -288,7 +298,7 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     header->setBlobGasUsed(payload.blobGasUsed.value());
     header->setExcessBlobGas(bcos::u256(0));
     header->setParentBeaconBlockRoot(parentBeaconBlockRoot);
-    header->setRequestsHash(c_opEmptyRequestsHash);
+    header->setRequestsHash(engine_common::c_emptyRequestsHash);
     applyOpHeaderConstants(*header);
     return header;
 }

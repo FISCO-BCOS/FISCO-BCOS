@@ -127,6 +127,15 @@ inline bool forkchoiceHashIsCanonical(
 inline constexpr std::size_t c_maxForcedTxCount = 16384;
 inline constexpr std::size_t c_maxForcedTxBytes = 8 * 1024 * 1024;
 
+/// Consensus header constants shared by the Eth and OP header builders
+/// (finalizeEthBlockHeader / rebuildOpEthHeader + applyOpHeaderConstants). Both stamp
+/// keccak256(rlp(header))-critical values, so the literals must live in exactly one place.
+inline const bcos::h256 c_emptyOmmersHash{
+    std::string{"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}};
+inline const bcos::h64 c_posNonce{std::string{"0x0000000000000000"}};
+inline const bcos::h256 c_emptyRequestsHash{
+    std::string{"0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}};
+
 /// Decoded byte count of a hex string, matching `fromHex` (optional 0x, odd nibble pads).
 /// Used to reject over-ceiling forced txs before allocating the decoded buffer (finding BY).
 inline std::size_t decodedHexByteCount(std::string_view hex)
