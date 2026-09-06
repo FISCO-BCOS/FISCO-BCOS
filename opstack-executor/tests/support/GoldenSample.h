@@ -97,17 +97,6 @@ inline GoldenSample loadVectorSample(std::string const& id)
     return sample;
 }
 
-inline GoldenSample loadChainedSample(std::string const& name)
-{
-    GoldenSample sample;
-    sample.id = name;
-    sample.vector =
-        loadJsonFile(std::string(OP_T8N_GOLDEN_ENGINE_DIR) + "/chained/" + name + ".golden.json");
-    sample.golden = sample.vector;  // flat document is both vector and golden
-    sample.jovian = isJovianVector(sample.vector);
-    return sample;
-}
-
 /// Parses golden.encodedHeaderHex into a FISCO BlockHeaderImpl via
 /// EthBlockHeader::toTarsHeader. Throws on decode failure.
 inline bcostars::protocol::BlockHeaderImpl::Ptr decodeGoldenHeader(GoldenSample const& sample)
@@ -240,18 +229,6 @@ inline Json::Value makeInvalidParamsJson(InvalidSample const& sample)
         params.append(Json::Value(Json::nullValue));
     params.append(Json::Value(Json::arrayValue));  // executionRequests = []
     return params;
-}
-
-/// On-disk corpus loading (the generator emits `invalid_*.json`; the outer `{ "<stem>": {...} }`
-/// wrapper matches existing vectors).
-inline InvalidSample loadInvalidSample(std::string const& id)
-{
-    InvalidSample sample;
-    auto root = loadJsonFile(std::string(OP_T8N_VECTORS_DIR) + "/" + id + ".json");
-    sample.vector = root[id];
-    sample.hardfork = sample.vector["_info"]["hardfork"].asString();
-    sample.jovian = isJovianVector(sample.vector);
-    return sample;
 }
 
 }  // namespace w6test
