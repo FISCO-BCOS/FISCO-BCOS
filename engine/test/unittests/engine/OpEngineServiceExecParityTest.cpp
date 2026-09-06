@@ -269,9 +269,8 @@ struct OpE2eFixture
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
             hashImpl, kChainId, forkFlags, blockFactory, multiLayerStorage, ledger, ioServicePool)),
-        service(memPool, multiLayerStorage, scheduler, blockFactory, nullptr,
-            bcos::engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), opDelegate)
+        service(memPool, multiLayerStorage, scheduler, blockFactory,
+            bcos::engine::c_defaultBlockTxCountLimit, opDelegate)
     {
         seedSysTables(multiLayerStorage);
     }

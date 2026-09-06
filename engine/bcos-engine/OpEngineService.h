@@ -130,18 +130,14 @@ public:
 
     OpEngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         SchedulerType& scheduler, bcos::protocol::BlockFactory::Ptr blockFactory,
-        bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
-        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V4),
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
         std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_scheduler(scheduler),
         m_blockFactory(std::move(blockFactory)),
-        m_ledger(std::move(ledger)),
         m_blockTxCountLimit(blockTxCountLimit),
-        m_maxEngineVersion(maxEngineVersion),
         m_delegate(std::move(delegate)),
         m_daCaps(std::move(daCaps)),
         m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes)
@@ -216,13 +212,14 @@ private:
                 std::to_string(error.errorCode()) + "): " + error.errorMessage()});
     }
 
-    /// FCU method-version window. Isthmus dialect is FCU V3/V4 → getPayload V3–V5
-    /// → newPayload V4. Method versions need not intersect; stored shape is
-    /// payloadShapeVersion (V3/V4 → PayloadV3).
-    bool isForkchoiceVersionSupported(std::uint32_t version) const
+    /// FCU method-version window for the OP lane: V1-V3 exactly (Isthmus/Jovian —
+    /// upstream has no FCU V4 on this fork; the caps list advertises exactly this
+    /// window and V4 answers -38005). newPayload is Isthmus-only (V4). Method windows
+    /// need not intersect; stored shape is payloadShapeVersion (V3/V4 → PayloadV3).
+    static bool isForkchoiceVersionSupported(std::uint32_t version)
     {
         return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
-               version <= m_maxEngineVersion;
+               version <= static_cast<std::uint32_t>(ApiVersion::V3);
     }
 
     /// OP newPayload is Isthmus-only (V4). Not the Eth V1..V4 window.
@@ -261,9 +258,7 @@ private:
     GlobalStateStorageType& m_globalStateStorage;
     SchedulerType& m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    bcos::ledger::LedgerInterface::Ptr m_ledger;
     int64_t m_blockTxCountLimit;
-    std::uint32_t m_maxEngineVersion;
     /// Block-commit delegate. CONTRACT: executeBlock/commitBlock must invoke the
     /// completion callback synchronously, before the call returns — this service
     /// reads the captured error immediately after the call and answers VALID on a
