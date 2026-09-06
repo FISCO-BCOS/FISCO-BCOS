@@ -199,6 +199,49 @@ void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, 
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
+/// Seed the parent (genesis) header row the payload validation reads. Values derive from the
+/// vector's env so the golden payload's parent constraints hold exactly: parent number =
+/// currentNumber - 1, a whole-second timestamp strictly below the payload's, the env gas
+/// limit and base fee at the steady state (gasUsed == gasLimit / elasticity, so calcOpBaseFee
+/// reproduces the golden baseFeePerGas verbatim), and the fork's Holocene/Jovian extraData
+/// carrying the corpus 50/6 pair. Without this row newPayload fails closed with
+/// "parent block header is missing from storage".
+void registerGoldenParentHeader(MLS& multiLayerStorage,
+    bcos::protocol::BlockFactory::Ptr const& blockFactory, Json::Value const& env, bool jovian)
+{
+    auto quantity = [](std::string const& hex) {
+        auto const digits = hex.rfind("0x", 0) == 0 ? hex.substr(2) : hex;
+        return std::stoull(digits, nullptr, 16);
+    };
+    auto const currentNumber = quantity(env["currentNumber"].asString());
+    BOOST_REQUIRE_MESSAGE(currentNumber >= 1, "golden env expects a non-genesis target block");
+    auto const parentNumber = static_cast<int64_t>(currentNumber - 1);
+    auto const parentTimestampMs =
+        static_cast<int64_t>((quantity(env["currentTimestamp"].asString()) - 1) * 1000ULL);
+    auto const gasLimit = static_cast<int64_t>(quantity(env["currentGasLimit"].asString()));
+    auto const baseFee = bcos::u256(quantity(env["currentBaseFee"].asString()));
+    auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(parentNumber);
+    header->setTimestamp(parentTimestampMs);
+    header->setGasLimit(gasLimit);
+    header->setGasUsed(gasLimit / 6);  // steady state: next base fee == parent's
+    header->setBaseFee(baseFee);
+    header->setBlobGasUsed(0);
+    // Holocene: 0x00 || denominator=50 || elasticity=6; Jovian adds the zero minBaseFee floor.
+    header->setExtraData(jovian ? bcos::fromHex("0100000032000000060000000000000000") :
+                                  bcos::fromHex("000000003200000006"));
+    bcos::bytes encoded;
+    header->encode(encoded);
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+    bcos::storage::Entry entry;
+    entry.set(std::move(encoded));
+    bcos::task::syncWait(bcos::storage2::writeOne(view,
+        StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(parentNumber)},
+        std::move(entry)));
+    bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
+}
+
 struct OpE2eFixture
 {
     BackendMemStorage backendStorage{1};
@@ -280,6 +323,8 @@ void runGoldenVector(std::string const& id)
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
+    registerGoldenParentHeader(fixture->multiLayerStorage, fixture->blockFactory,
+        sample.vector["env"], sample.jovian);
 
     auto params = w6test::makeParamsJson(sample);
     auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
@@ -305,6 +350,8 @@ void runInvalidFieldParity(std::string const& vectorId, std::string const& corru
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
+    registerGoldenParentHeader(fixture->multiLayerStorage, fixture->blockFactory,
+        sample.vector["env"], sample.jovian);
 
     auto params = w6test::makeParamsJson(sample);
     if (corruptField == "stateRoot")
