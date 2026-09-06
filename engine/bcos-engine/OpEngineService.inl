@@ -438,7 +438,16 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             throw;
         }
 
-        m_delegate->reset([](bcos::Error::Ptr) {});
+        bcos::Error::Ptr resetError;
+        m_delegate->reset([&](bcos::Error::Ptr error) { resetError = std::move(error); });
+        if (resetError)
+        {
+            // The build loop's whole model rests on reset having done its documented effect
+            // (dropping any uncommitted pending, restoring the watermark) before executeBlock
+            // runs; a failed reset must not be silently ignored.
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                std::string("OP payload build reset failed: ") + resetError->errorMessage()});
+        }
         bcos::Error::Ptr executeError;
         m_delegate->executeBlock(block, /*verify=*/false,
             [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
@@ -506,7 +515,13 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         }
         throw;
     }
-    m_delegate->reset([](bcos::Error::Ptr) {});
+    bcos::Error::Ptr resetError;
+    m_delegate->reset([&](bcos::Error::Ptr error) { resetError = std::move(error); });
+    if (resetError)
+    {
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+            std::string("OP payload build reset failed: ") + resetError->errorMessage()});
+    }
     bcos::Error::Ptr canonicalError;
     bcos::protocol::BlockHeader::Ptr canonicalHeader;
     m_delegate->executeBlock(finalBlock, /*verify=*/true,

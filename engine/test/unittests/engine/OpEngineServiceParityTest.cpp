@@ -146,6 +146,12 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
     bool rejectAsCapacity = false;
     bool failFirst = true;
     bool failCommit = false;
+    // Error code for the stub commit failure. -1 is the generic stub; the mapDelegateError
+    // routing test sets real SchedulerError codes (UnknownError = the dropped-pending shape
+    // a concurrent reset produces in OpScheduler; OpConsensusRejected = the one code the
+    // service is allowed to answer INVALID for).
+    int commitErrorCode = -1;
+    bool failReset = false;
     int executeCalls = 0;
     int commitCalls = 0;
     bcos::h256 executedWithdrawalsRoot = bcos::ledger::mpt::emptyRootHash();
@@ -181,7 +187,7 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
         ++commitCalls;
         if (failCommit)
         {
-            callback(BCOS_ERROR_PTR(-1, "stub commit failure"), nullptr);
+            callback(BCOS_ERROR_PTR(commitErrorCode, "stub commit failure"), nullptr);
             return;
         }
         callback(nullptr, nullptr);
@@ -191,7 +197,10 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
     void call(bcos::protocol::Transaction::Ptr,
         std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr)>) override
     {}
-    void reset(std::function<void(bcos::Error::Ptr)> callback) override { callback(nullptr); }
+    void reset(std::function<void(bcos::Error::Ptr)> callback) override
+    {
+        callback(failReset ? BCOS_ERROR_PTR(-1, "stub reset failure") : nullptr);
+    }
     void getCode(std::string_view, std::function<void(bcos::Error::Ptr, bcos::bytes)>) override {}
     void getABI(std::string_view, std::function<void(bcos::Error::Ptr, std::string)>) override {}
     bcos::task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
@@ -1489,6 +1498,91 @@ BOOST_AUTO_TEST_CASE(op_newpayload_retry_after_failed_commit_recommits)
 /// getPayloadV4/V5 (the advertised capability set) serve the built payload through the
 /// service, not just V3: the V4+ shape gate requires withdrawalsRoot and the response
 /// embeds the full V3 field set unchanged.
+/// mapDelegateError's routing is the load-bearing half of the delegate-concurrency
+/// rationale: a commitBlock whose pending was dropped by a concurrent reset
+/// reports SchedulerError::UnknownError ("Unexpected empty results!", OpScheduler.h) — that
+/// must surface as -32603 (OpExecutionInternalError), NEVER as a consensus INVALID for a
+/// valid payload. OpConsensusRejected is the ONLY code the service may answer INVALID for;
+/// pin both routes so a future change to either side cannot silently flip them.
+BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
+{
+    auto makeRequest = [](OpServicePair& pair, RecordingScheduler& delegate)
+    {
+        auto decoded = makeDecodableWeb3Tx(1);
+        auto attrs = makeOpPayloadAttributes();
+        attrs.minBaseFee = std::nullopt;
+        attrs.transactions = std::vector<std::string>{decoded.rawHex};
+        auto const hash =
+            bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+        registerVerifiedBlock(pair.storage, hash, 0);
+        registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+        auto built = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+        BOOST_REQUIRE(built.payloadId.has_value());
+        auto payload = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 3));
+        BOOST_REQUIRE(payload);
+        bcos::engine::NewPayloadRequest request;
+        request.executionPayload = payload->executionPayload;
+        request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+        request.expectedBlobVersionedHashes = {};
+        return request;
+    };
+
+    // Dropped-pending shape: UnknownError → internal error (-32603), never INVALID.
+    {
+        auto delegate = std::make_shared<RecordingScheduler>();
+        delegate->failFirst = false;
+        delegate->failCommit = true;
+        delegate->commitErrorCode =
+            static_cast<int>(bcos::scheduler::SchedulerError::UnknownError);
+        OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+        delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+        auto request = makeRequest(pair, *delegate);
+        BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.newPayload(request, 4)),
+            bcos::engine::OpExecutionInternalError);
+    }
+
+    // The one code that may answer INVALID: OpConsensusRejected → Invalid status.
+    {
+        auto delegate = std::make_shared<RecordingScheduler>();
+        delegate->failFirst = false;
+        delegate->failCommit = true;
+        delegate->commitErrorCode =
+            static_cast<int>(bcos::scheduler::SchedulerError::OpConsensusRejected);
+        OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+        delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+        auto request = makeRequest(pair, *delegate);
+        auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
+        BOOST_REQUIRE_EQUAL(static_cast<int>(status.status),
+            static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    }
+}
+
+/// A failed reset must fail closed: the build model assumes reset executed
+/// its documented effect before executeBlock runs, so a reset error is an internal error,
+/// never a silently-ignored proceed.
+BOOST_AUTO_TEST_CASE(op_reset_failure_is_internal_error)
+{
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    delegate->failReset = true;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3)),
+        bcos::engine::OpExecutionInternalError);
+}
+
 BOOST_AUTO_TEST_CASE(op_getpayload_v4_v5_serve_the_built_payload)
 {
     auto delegate = std::make_shared<RecordingScheduler>();
