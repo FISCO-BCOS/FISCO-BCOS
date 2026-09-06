@@ -2544,4 +2544,64 @@ BOOST_AUTO_TEST_CASE(adoptRejectsHashMismatchWhenCommitmentsMatch)
         err->errorMessage().find("executed header hash does not match") != std::string::npos);
 }
 
+/// Pins the OpScheduler half of the delegate-concurrency rationale (OpEngineService.h):
+/// a commitBlock whose pending was dropped by a reset reports
+/// SchedulerError::UnknownError ("Unexpected empty results!") — never OpConsensusRejected.
+/// mapDelegateError answers -32603 for the former and consensus-INVALID only for the
+/// latter, so a change to this code would silently flip a concurrent-reset commit from
+/// "internal error, sequencer retries" into "consensus INVALID for a valid payload".
+BOOST_AUTO_TEST_CASE(CommitAfterResetReportsUnknownErrorNotConsensusRejected)
+{
+    Fixture f;
+    auto depTx = makeDeposit();
+    bcos::bytes depEnv = encodeDepositEnvelope(depTx);
+    auto header = makeHeader();
+
+    auto viewA = f.multiLayerStorage.fork();
+    viewA.newMutable();
+    bcos::evm::engine::OpExecuteBlockResult resultA =
+        runExecutionProbe(f, viewA, *header, {depEnv});
+    BOOST_REQUIRE_EQUAL(resultA.receipts.size(), 1U);
+    fillAnnouncedHeader(header, resultA);
+
+    auto block = f.blockFactory->createBlock();
+    block->setBlockHeader(header);
+    auto depFiscoTx = buildFiscoTx(depEnv, f.hashImpl);
+    BOOST_REQUIRE(depFiscoTx != nullptr);
+    block->appendTransaction(depFiscoTx);
+
+    bcos::Error::Ptr execErr;
+    bcos::protocol::BlockHeader::Ptr executedHeader;
+    bool called = false;
+    f.scheduler->executeBlock(
+        block, /*verify=*/true, [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr h, bool) {
+            called = true;
+            execErr = std::move(e);
+            executedHeader = std::move(h);
+        });
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE_MESSAGE(
+        execErr == nullptr, "executeBlock failed: " << (execErr ? execErr->errorMessage() : ""));
+    BOOST_REQUIRE(executedHeader != nullptr);
+
+    // Drop the pending the way a concurrent reset would (reset takes all three mutexes and
+    // discards any uncommitted pending block).
+    f.scheduler->reset([](bcos::Error::Ptr) {});
+
+    bcos::Error::Ptr commitErr;
+    called = false;
+    f.scheduler->commitBlock(
+        executedHeader, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) {
+            called = true;
+            commitErr = std::move(e);
+        });
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE(commitErr != nullptr);
+    BOOST_CHECK_EQUAL(commitErr->errorCode(),
+        static_cast<int>(bcos::scheduler::SchedulerError::UnknownError));
+    BOOST_CHECK_NE(commitErr->errorCode(),
+        static_cast<int>(bcos::scheduler::SchedulerError::OpConsensusRejected));
+    BOOST_CHECK(commitErr->errorMessage().find("Unexpected empty results") != std::string::npos);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
