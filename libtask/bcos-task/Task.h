@@ -16,6 +16,7 @@
 
 #pragma once
 #include "bcos-utilities/Exceptions.h"
+#include <atomic>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <coroutine>
@@ -123,6 +124,85 @@ public:
     
 private:
     std::coroutine_handle<promise_type> m_handle;
+};
+
+//only used in coroutine function body to get the handle of the coroutine
+#define GET_HANDLE co_await GetHandleAwaitable
+
+struct GetHandleAwaitable
+{
+    std::coroutine_handle<> m_handle;
+
+    constexpr bool await_ready() noexcept { return false; }
+    constexpr bool await_suspend(std::coroutine_handle<> handle) noexcept
+    {
+        m_handle = handle;
+        return false;
+    }
+    constexpr std::coroutine_handle<> await_resume() noexcept
+    {
+        return m_handle;
+    }
+};
+
+template <typename... Resp>
+struct GetResultAwaitable
+{
+    struct Result
+    {
+        enum class State : uint8_t
+        {
+            INIT,
+            SUSPENDED,
+            DONE,
+        };
+
+        std::tuple<Resp...> data;
+        std::atomic<State> state = State::INIT;
+        std::coroutine_handle<> handle;
+    };
+
+    explicit GetResultAwaitable(Result& result) : m_result(result) {}
+
+    bool await_ready() noexcept
+    {
+        // Fast path: the result was completed before the coroutine reached this co_await
+        // (e.g. an ack arrived while the coroutine was still waiting on the write). Skip the
+        // suspension entirely and let await_resume read the already-completed data.
+        return m_result.state.load(std::memory_order_acquire) == Result::State::DONE;
+    }
+    bool await_suspend(std::coroutine_handle<> handle) noexcept
+    {
+        m_result.handle = handle;
+        typename Result::State expected = Result::State::INIT;
+        if (m_result.state.compare_exchange_strong(expected, Result::State::SUSPENDED,
+                std::memory_order_acq_rel, std::memory_order_acquire))
+        {
+            return true;
+        }
+        // The completion won the race (state already DONE): do not suspend, await_resume reads
+        // the data inline.
+        return false;
+    }
+    std::tuple<Resp...> await_resume() noexcept
+    {
+        return std::move(m_result.data);
+    }
+
+    static void complete(Result& result, Resp... resp)
+    {
+        result.data = std::make_tuple(std::move(resp)...);
+        typename Result::State expected = Result::State::INIT;
+        if (result.state.compare_exchange_strong(expected, Result::State::DONE,
+                std::memory_order_acq_rel, std::memory_order_acquire))
+        {
+            return;
+        }
+        result.handle.resume();
+    }
+
+private:
+    Result& m_result;
 };
 
 template <class TaskType>

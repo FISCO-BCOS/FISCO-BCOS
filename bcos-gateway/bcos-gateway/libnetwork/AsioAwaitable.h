@@ -143,7 +143,7 @@ struct AsioAwaitable
     std::tuple<Results...> m_result;
 
     constexpr bool await_ready() const noexcept { return false; }
-    std::coroutine_handle<> await_suspend(std::coroutine_handle<> handle)
+    bool await_suspend(std::coroutine_handle<> handle)
     {
         try
         {
@@ -151,28 +151,18 @@ struct AsioAwaitable
             // runs m_initiate. Returning its handle is a symmetric transfer — the compiler
             // suspends the awaiting coroutine first, then resumes the bridge, so the awaiting
             // frame is always suspended when m_initiate runs.
-            auto task = [this](auto completion) mutable -> task::TaskPure {
-                try
-                {
-                    completion.active();
-                    m_initiate(std::move(completion));
-                }
-                catch (...)
-                {
-                    // initiate threw after arming: the completion's destructor already ran the
-                    // rescue (abort + resume). Swallow here to avoid terminate.
-                }
-                co_return;
-            }(detail::AsioCompletion<Results...>(&m_result, handle));
-            return task.getHandle();
+            auto completion = detail::AsioCompletion<Results...>(&m_result, handle);
         }
         catch (...)
         {
             // Bridge-frame construction failed (bad_alloc): returning our own handle resumes the
             // awaiting coroutine immediately (equivalent to not suspending) with an aborted result.
             m_result = detail::makeOperationAbortedResult<Results...>();
-            return handle;
+            return false;
         }
+        completion.active();
+        m_initiate(std::move(completion));
+        return true;
     }
 
     std::tuple<Results...> await_resume()
