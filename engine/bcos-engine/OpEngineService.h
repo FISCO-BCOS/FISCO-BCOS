@@ -1,6 +1,20 @@
 /**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpEngineService.h
+ * @brief Side-by-side OP Engine API service (template on mempool / global state / scheduler)
  */
 
 #pragma once
@@ -89,7 +103,7 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
     bcos::bytes const& env, bcos::crypto::HashType const& txHash);
 }  // namespace engine_common::op
 
-namespace op_detail
+namespace detail
 {
 template <class ArtifactsMap>
 bcos::protocol::BlockHeader::Ptr findBuiltHeader(
@@ -104,7 +118,7 @@ bcos::protocol::BlockHeader::Ptr findBuiltHeader(
     }
     return nullptr;
 }
-}  // namespace op_detail
+}  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
 class OpEngineService
@@ -132,7 +146,8 @@ public:
     {
         if (!m_blockFactory)
         {
-            BOOST_THROW_EXCEPTION(std::invalid_argument{"blockFactory must not be null"});
+            BOOST_THROW_EXCEPTION(
+                InvalidEngineConfig{} << bcos::errinfo_comment{"blockFactory must not be null"});
         }
     }
     ~OpEngineService() = default;
@@ -247,6 +262,14 @@ private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     int64_t m_blockTxCountLimit;
     std::uint32_t m_maxEngineVersion;
+    /// Block-commit delegate. CONTRACT: executeBlock/commitBlock must invoke the
+    /// completion callback synchronously, before the call returns — this service
+    /// reads the captured error immediately after the call and answers VALID on a
+    /// null error (answering before the durable write would mask a failed commit).
+    /// BaselineScheduler satisfies this (task::wait runs the coroutine to
+    /// completion, callback inside it); the legacy chain's SchedulerImpl does NOT
+    /// (its commitBlock returns while blockExecutive->asyncCommit is still in
+    /// flight) — do not wire it here.
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
     std::shared_ptr<DACaps> m_daCaps;
     bool m_allowSynthesizedL1Attributes;

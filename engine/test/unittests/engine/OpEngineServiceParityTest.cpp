@@ -1,5 +1,21 @@
-// FISCO BCOS
-// SPDX-License-Identifier: Apache-2.0
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpEngineServiceParityTest.cpp
+ * @brief OP Engine API parity tests (service-level FCU/getPayload/newPayload vs the legacy impl)
+ */
 //
 // Matrix: S5 — OpEngineService wired on release-3.18.0 (single transactions[i].raw carrier).
 // Full dual parity vs EngineServiceImpl OP mode / GoldenSample e2e is deferred (no Impl
@@ -474,19 +490,11 @@ bcos::engine::NewPayloadRequest makeValidIsthmusNewPayload(
     payload.extraData = bcos::fromHex("00000000fa00000006");
     request.parentBeaconBlockRoot = bcos::h256{};
     auto const txRoot =
-        EngineOpScheduler::computeTxRoot(bcos::engine::op_detail::rawEnvelopes(payload));
+        EngineOpScheduler::computeTxRoot(bcos::engine::detail::rawEnvelopes(payload));
     auto header = bcos::engine::engine_common::op::rebuildOpEthHeader(
         blockFactory.blockHeaderFactory(), payload, txRoot, *request.parentBeaconBlockRoot);
     payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
     return request;
-}
-
-void checkStatusParity(
-    bcos::engine::PayloadStatus const& left, bcos::engine::PayloadStatus const& right)
-{
-    BOOST_CHECK_EQUAL(static_cast<int>(left.status), static_cast<int>(right.status));
-    BOOST_CHECK(left.latestValidHash == right.latestValidHash);
-    BOOST_CHECK(left.validationError == right.validationError);
 }
 
 template <typename Exception>
@@ -750,7 +758,7 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
     std::optional<std::thread> writer;
     {
         auto shared = tracker.lockShared();
-        initialHeader = bcos::engine::op_detail::findBuiltHeader(shared, artifacts, targetHash);
+        initialHeader = bcos::engine::detail::findBuiltHeader(shared, artifacts, targetHash);
         BOOST_REQUIRE(initialHeader);
         BOOST_CHECK_EQUAL(initialHeader->number(), kTargetNumber);
 
@@ -792,7 +800,7 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
 
     {
         auto shared = tracker.lockShared();
-        auto stableHeader = bcos::engine::op_detail::findBuiltHeader(shared, artifacts, targetHash);
+        auto stableHeader = bcos::engine::detail::findBuiltHeader(shared, artifacts, targetHash);
         BOOST_REQUIRE(stableHeader);
         BOOST_CHECK_EQUAL(stableHeader->number(), kTargetNumber);
         BOOST_CHECK_EQUAL(stableHeader.get(), initialHeader.get());
@@ -1194,7 +1202,7 @@ BOOST_AUTO_TEST_CASE(op_newpayload_undecodable_envelope_is_short_invalid)
     request.executionPayload.transactions.push_back(std::move(garbage));
     request.executionPayload.baseFeePerGas = bcos::engine::calcOpBaseFee(*parentHeader, false);
     auto const txRoot = EngineOpScheduler::computeTxRoot(
-        bcos::engine::op_detail::rawEnvelopes(request.executionPayload));
+        bcos::engine::detail::rawEnvelopes(request.executionPayload));
     auto header =
         bcos::engine::engine_common::op::rebuildOpEthHeader(pair.blockFactory->blockHeaderFactory(),
             request.executionPayload, txRoot, *request.parentBeaconBlockRoot);
@@ -1244,6 +1252,60 @@ BOOST_AUTO_TEST_CASE(op_fcu_getpayload_newpayload_roundtrip)
     BOOST_REQUIRE(pair.service.lastExecutedHeader());
 }
 
+BOOST_AUTO_TEST_CASE(op_newpayload_failure_keeps_last_executed_header)
+{
+    // runOpNewPayloadSteps must not reset m_lastExecutedHeader on entry.
+    // A duplicate newPayload arriving while another one is mid-flight used to clear a
+    // header the concurrent success had just published; with assign-only-on-success
+    // the previous payload's header survives any failed run.
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto built = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(built.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(built.payloadId.has_value());
+
+    auto payload = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 3));
+    BOOST_REQUIRE(payload);
+
+    bcos::engine::NewPayloadRequest request;
+    request.executionPayload = payload->executionPayload;
+    request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    request.expectedBlobVersionedHashes = {};
+    auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    auto const published = pair.service.lastExecutedHeader();
+    BOOST_REQUIRE(published);
+
+    // A failing submission (tampered blockHash) must leave the published header intact.
+    bcos::engine::NewPayloadRequest bad = request;
+    bad.executionPayload.blockHash =
+        bcos::h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    auto badStatus = bcos::task::syncWait(pair.service.newPayload(bad, 4));
+    BOOST_CHECK_EQUAL(static_cast<int>(badStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(badStatus.validationError.has_value());
+    BOOST_CHECK(badStatus.validationError->find("blockHash does not match") != std::string::npos);
+
+    auto after = pair.service.lastExecutedHeader();
+    BOOST_REQUIRE(after);
+    BOOST_CHECK(after.get() == published.get());
+}
+
 BOOST_AUTO_TEST_CASE(op_newpayload_occupied_nontip_height_is_syncing)
 {
     // Matrix: A2 — height N already has hash A, payload is hash B, tip is past N.
@@ -1271,7 +1333,7 @@ BOOST_AUTO_TEST_CASE(op_newpayload_occupied_nontip_height_is_syncing)
     auto request = makeValidIsthmusNewPayload(*pair.blockFactory, parent, 1);
     request.executionPayload.baseFeePerGas = bcos::engine::calcOpBaseFee(*parentHeader, false);
     auto const txRoot = EngineOpScheduler::computeTxRoot(
-        bcos::engine::op_detail::rawEnvelopes(request.executionPayload));
+        bcos::engine::detail::rawEnvelopes(request.executionPayload));
     auto header =
         bcos::engine::engine_common::op::rebuildOpEthHeader(pair.blockFactory->blockHeaderFactory(),
             request.executionPayload, txRoot, *request.parentBeaconBlockRoot);
@@ -1351,7 +1413,7 @@ BOOST_AUTO_TEST_CASE(op_newpayload_rejects_executed_withdrawals_root_mismatch)
     auto request = makeValidIsthmusNewPayload(*pair.blockFactory, parent, 1);
     request.executionPayload.baseFeePerGas = bcos::engine::calcOpBaseFee(*parentHeader, false);
     auto const txRoot = EngineOpScheduler::computeTxRoot(
-        bcos::engine::op_detail::rawEnvelopes(request.executionPayload));
+        bcos::engine::detail::rawEnvelopes(request.executionPayload));
     auto header =
         bcos::engine::engine_common::op::rebuildOpEthHeader(pair.blockFactory->blockHeaderFactory(),
             request.executionPayload, txRoot, *request.parentBeaconBlockRoot);

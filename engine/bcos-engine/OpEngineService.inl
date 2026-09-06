@@ -1,6 +1,20 @@
 /**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpEngineService.inl
+ * @brief OP Engine API service implementation (payload build, execute, commit)
  */
 
 #pragma once
@@ -11,7 +25,7 @@
 namespace bcos::engine
 {
 
-namespace op_detail
+namespace detail
 {
 /// release ExecutionPayload keeps a single carrier: `transactions[i].raw`.
 inline auto rawEnvelopes(ExecutionPayload const& payload)
@@ -21,10 +35,21 @@ inline auto rawEnvelopes(ExecutionPayload const& payload)
                [](EngineTransaction const& tx) -> bytes const& { return tx.raw; });
 }
 
+/// True when the OpExecutionInternalError carries the OpPayloadUndecodable tag:
+/// a payload-content fault (an envelope the CL submitted cannot be decoded),
+/// not a node-internal fault. Single predicate for both answer shapes — the FCU
+/// path maps it to an Invalid FCU status, the newPayload path to an Invalid
+/// PayloadStatus; any OTHER OpExecutionInternalError must keep propagating as
+/// -32603, never be flattened into a consensus INVALID.
+inline bool isUndecodablePayloadFault(OpExecutionInternalError const& error)
+{
+    return boost::get_error_info<OpPayloadUndecodable>(error) != nullptr;
+}
+
 inline std::optional<ForkchoiceUpdatedResult> fcuInvalidIfUndecodable(
     OpExecutionInternalError const& error)
 {
-    if (boost::get_error_info<OpPayloadUndecodable>(error) == nullptr)
+    if (!isUndecodablePayloadFault(error))
     {
         return std::nullopt;
     }
@@ -34,7 +59,7 @@ inline std::optional<ForkchoiceUpdatedResult> fcuInvalidIfUndecodable(
         .payloadId = std::nullopt,
     };
 }
-}  // namespace op_detail
+}  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
 task::Task<ForkchoiceUpdatedResult>
@@ -385,7 +410,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         payload = assemblePayload(std::move(candidateEnvelopes));
 
         const auto transactionsRoot =
-            SchedulerType::computeTxRoot(op_detail::rawEnvelopes(payload));
+            SchedulerType::computeTxRoot(detail::rawEnvelopes(payload));
         auto provisionalHeader = engine_common::op::rebuildOpEthHeader(
             m_blockFactory->blockHeaderFactory(), payload, transactionsRoot, parentBeaconBlockRoot);
         bcos::protocol::Block::Ptr block;
@@ -395,7 +420,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         }
         catch (const OpExecutionInternalError& e)
         {
-            if (auto invalid = op_detail::fcuInvalidIfUndecodable(e))
+            if (auto invalid = detail::fcuInvalidIfUndecodable(e))
             {
                 co_return *invalid;
             }
@@ -454,7 +479,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     }
     auto finalHeader =
         engine_common::op::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(), payload,
-            SchedulerType::computeTxRoot(op_detail::rawEnvelopes(payload)), parentBeaconBlockRoot);
+            SchedulerType::computeTxRoot(detail::rawEnvelopes(payload)), parentBeaconBlockRoot);
     payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
 
     bcos::protocol::Block::Ptr finalBlock;
@@ -464,7 +489,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     }
     catch (const OpExecutionInternalError& e)
     {
-        if (auto invalid = op_detail::fcuInvalidIfUndecodable(e))
+        if (auto invalid = detail::fcuInvalidIfUndecodable(e))
         {
             co_return *invalid;
         }
@@ -553,13 +578,14 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
 }
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
-task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
-    SchedulerType>::runOpNewPayloadSteps(const NewPayloadRequest& request)
+    task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
+        SchedulerType>::runOpNewPayloadSteps(const NewPayloadRequest& request)
 {
-    {
-        std::lock_guard lock(m_lastExecutedHeaderMutex);
-        m_lastExecutedHeader.reset();
-    }
+    // No reset of m_lastExecutedHeader here: a duplicate newPayload
+    // arriving while another one is mid-flight must not clear a header the
+    // concurrent success just published. Assignment happens only on the success
+    // paths, so a failed run simply leaves the previous payload's header — the
+    // "last executed" semantics the accessor documents.
     auto const& payload = request.executionPayload;
 
     if (auto validationError =
@@ -569,7 +595,7 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
         co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError);
     }
 
-    const auto transactionsRoot = SchedulerType::computeTxRoot(op_detail::rawEnvelopes(payload));
+    const auto transactionsRoot = SchedulerType::computeTxRoot(detail::rawEnvelopes(payload));
     const auto ethHeader =
         engine_common::op::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(), payload,
             transactionsRoot, *request.parentBeaconBlockRoot);
@@ -583,7 +609,7 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
         bcos::protocol::BlockHeader::Ptr builtHeader;
         {
             auto shared = m_tracker.lockShared();
-            builtHeader = op_detail::findBuiltHeader(shared, m_artifacts, payload.blockHash);
+            builtHeader = detail::findBuiltHeader(shared, m_artifacts, payload.blockHash);
         }
         if (builtHeader)
         {
@@ -722,8 +748,15 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
     {
         block = buildOpBlock(payload, ethHeader);
     }
-    catch (const OpExecutionInternalError&)
+    catch (const OpExecutionInternalError& e)
     {
+        // Same tag discipline as the two FCU build sites: only the
+        // tagged payload-content fault maps to a consensus INVALID; any other
+        // OpExecutionInternalError must keep propagating as -32603.
+        if (!detail::isUndecodablePayloadFault(e))
+        {
+            throw;
+        }
         // Stable Engine API string only (finding CG). FCU already returns this
         // exact phrase via fcuInvalidIfUndecodable; dump Boost diagnostics in logs,
         // not in validationError.
@@ -778,7 +811,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpBloc
     auto block = m_blockFactory->createBlock();
     block->setBlockHeader(std::move(header));
     auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-    for (auto const& env : op_detail::rawEnvelopes(payload))
+    for (auto const& env : detail::rawEnvelopes(payload))
     {
         const auto txHash = hashImpl.hash(env);
         auto tarsTx = engine_common::op::opEnvelopeToTars(env, txHash);

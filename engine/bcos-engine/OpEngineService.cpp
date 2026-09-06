@@ -1,6 +1,20 @@
 /**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpEngineService.cpp
+ * @brief OP Engine API service validators (OP payload-attribute and newPayload-request validation)
  */
 
 #include "OpEngineService.h"
@@ -15,8 +29,7 @@ namespace bcos::engine::engine_common::op
 {
 namespace
 {
-constexpr std::size_t c_hashBytes = 32;
-constexpr char const* kOpMaxBlockGasLimitMessage =
+constexpr char const* c_opMaxBlockGasLimitMessage =
     "gasLimit exceeds the maximum block gas limit (2^63-1)";
 
 constexpr bool gasLimitExceedsOpCap(std::uint64_t gasLimit) noexcept
@@ -102,7 +115,7 @@ std::optional<std::string> validateOpPayloadAttributes(
     // that newPayload then refuses (op-geth defers the cap to VerifyHeader).
     if (gasLimitExceedsOpCap(*payloadAttributes.gasLimit))
     {
-        return std::string(kOpMaxBlockGasLimitMessage);
+        return std::string(c_opMaxBlockGasLimitMessage);
     }
     if (!payloadAttributes.eip1559Params.has_value())
     {
@@ -190,7 +203,7 @@ std::optional<std::string> validateOpNewPayloadRequest(
     }
     if (gasLimitExceedsOpCap(*narrowU256ToU64(payload.gasLimit)))
     {
-        return std::string(kOpMaxBlockGasLimitMessage);
+        return std::string(c_opMaxBlockGasLimitMessage);
     }
     {
         const auto& extra = payload.extraData;
