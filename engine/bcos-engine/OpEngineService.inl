@@ -213,8 +213,13 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
 {
     // Same policy as EthEngineService (option B): deterministic derivePayloadId, not a
     // process-local sequence counter. Reuse validate's decoded forced txs (finding AE).
-    auto payloadIdOpt = engine_common::derivePayloadId(
-        payloadAttributes, forkchoiceState.headBlockHash, version, decodedForcedTxs);
+    // The id's version byte is the PAYLOAD SHAPE version (V3/V4-method → PayloadV3),
+    // matching both the cache entry's version below and upstream: op-geth's
+    // ForkchoiceUpdatedV3/V4 build the same PayloadV3 shape, so the same content under
+    // either method must derive the same id (GetPayloadV4 accepts only PayloadV3 ids).
+    auto payloadIdOpt = engine_common::derivePayloadId(payloadAttributes,
+        forkchoiceState.headBlockHash, engine_common::payloadShapeVersion(version),
+        decodedForcedTxs);
     if (!payloadIdOpt.has_value())
     {
         co_return ForkchoiceUpdatedResult{
@@ -349,7 +354,10 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         candidateTransactions.reserve(candidateEnvelopes.size());
         for (auto& env : candidateEnvelopes)
         {
-            candidateTransactions.push_back(EngineTransaction{.raw = env, .decoded = nullptr});
+            // Move: env is a non-const ref into the by-value candidates vector, consumed
+            // here; the candidate bytes become the payload's single carrier unchanged.
+            candidateTransactions.push_back(
+                EngineTransaction{.raw = std::move(env), .decoded = nullptr});
         }
         ExecutionPayload candidate{
             .logsBloom = Bloom{},
