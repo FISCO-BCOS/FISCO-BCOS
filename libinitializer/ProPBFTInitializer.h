@@ -20,7 +20,6 @@
  */
 #pragma once
 #include "libinitializer/PBFTInitializer.h"
-#include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
@@ -41,7 +40,7 @@ public:
         bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::storage::StorageInterface::Ptr _storage,
-        std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
+        bcos::front::FrontService::Ptr _frontService,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
         bcos::IOServicePool::Ptr _ioServicePool);
 

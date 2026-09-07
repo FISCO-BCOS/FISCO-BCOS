@@ -51,7 +51,7 @@ public:
     GroupNodeInfo::Ptr getGroupNodeInfoList(const std::string& _groupID);
 
     bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService,
+        bcos::protocol::NodeType _nodeType, bcos::front::FrontService::Ptr _frontService,
         bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo);
     bool unregisterNode(const std::string& _groupID, std::string const& _nodeID);
     // for multi-group support

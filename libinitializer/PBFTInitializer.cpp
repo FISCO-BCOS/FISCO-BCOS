@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #include "PBFTInitializer.h"
+#include <bcos-front/FrontService.h>
 #include "Common.h"
 #include <bcos-framework/election/FailOverTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -62,7 +63,7 @@ PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchT
     bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::storage::StorageInterface::Ptr _storage,
-    std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
+    std::shared_ptr<bcos::front::FrontService> _frontService,
     bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
     bcos::IOServicePool::Ptr _ioServicePool)
   : m_nodeArchType(_nodeArchType),

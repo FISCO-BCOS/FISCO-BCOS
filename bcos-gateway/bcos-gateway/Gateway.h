@@ -20,7 +20,6 @@
 
 #pragma once
 
-#include "bcos-framework/front/FrontServiceInterface.h"
 #include "bcos-framework/gateway/GatewayInterface.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-gateway/Common.h"
@@ -122,7 +121,7 @@ public:
     bcos::amop::AMOPImpl::Ptr amop();
 
     bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService,
+        bcos::protocol::NodeType _nodeType, bcos::front::FrontService::Ptr _frontService,
         bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo) override;
 
     virtual bool unregisterNode(const std::string& _groupID, std::string const& _nodeID);

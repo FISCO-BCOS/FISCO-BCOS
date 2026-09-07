@@ -4,7 +4,6 @@
 #include "bcos-lightnode/Log.h"
 #include <legacy/concepts/bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
-#include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>

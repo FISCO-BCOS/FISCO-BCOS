@@ -333,7 +333,7 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNod
         return;
     }
 
-    frontService->frontService()->onReceiveMessage(_groupID, _srcNodeID, _payload,
+    onReceiveMessage(frontService->frontService(), _groupID, _srcNodeID, _payload,
         [_groupID, _srcNodeID, _dstNodeID, _errorRespFunc](Error::Ptr _error) {
             if (_errorRespFunc)
             {
@@ -662,7 +662,7 @@ bcos::amop::AMOPImpl::Ptr bcos::gateway::Gateway::amop()
 }
 bool bcos::gateway::Gateway::registerNode(const std::string& _groupID,
     bcos::crypto::NodeIDPtr _nodeID, bcos::protocol::NodeType _nodeType,
-    bcos::front::FrontServiceInterface::Ptr _frontService,
+    bcos::front::FrontService::Ptr _frontService,
     bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
 {
     return m_gatewayNodeManager->registerNode(

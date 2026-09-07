@@ -19,7 +19,7 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-tool/NodeConfig.h>
 #include <memory>
@@ -67,7 +67,7 @@ public:
     virtual void start();
     virtual void stop();
 
-    bcos::front::FrontServiceInterface::Ptr front();
+    std::shared_ptr<bcos::front::FrontService> front();
     bcos::crypto::KeyFactory::Ptr keyFactory();
 
 protected:

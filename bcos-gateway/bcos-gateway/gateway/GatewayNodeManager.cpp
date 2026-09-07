@@ -157,7 +157,7 @@ void GatewayNodeManager::stop()
 }
 
 bool GatewayNodeManager::registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-    bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService,
+    bcos::protocol::NodeType _nodeType, bcos::front::FrontService::Ptr _frontService,
     bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
 {
     auto ret =
@@ -472,7 +472,7 @@ void GatewayNodeManager::syncLatestNodeIDList()
                                << LOG_KV("nodeCount", groupNodeInfos->nodeIDList().size());
         for (const auto& entry : localNodeEntryPoints)
         {
-            entry.second->frontService()->onReceiveGroupNodeInfo(
+            onReceiveGroupNodeInfo(entry.second->frontService(),
                 groupID, groupNodeInfos, [](Error::Ptr _error) {
                     if (!_error)
                     {

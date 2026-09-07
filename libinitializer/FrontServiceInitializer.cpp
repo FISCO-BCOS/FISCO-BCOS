@@ -269,7 +269,7 @@ bcos::crypto::KeyFactory::Ptr FrontServiceInitializer::keyFactory()
 {
     return m_protocolInitializer->keyFactory();
 }
-bcos::front::FrontServiceInterface::Ptr FrontServiceInitializer::front()
+std::shared_ptr<bcos::front::FrontService> FrontServiceInitializer::front()
 {
     return m_front;
 }

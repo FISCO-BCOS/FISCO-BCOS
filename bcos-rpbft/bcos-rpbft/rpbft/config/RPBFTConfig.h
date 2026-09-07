@@ -37,7 +37,7 @@ public:
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
-        std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
+        std::shared_ptr<bcos::front::FrontService> _frontService,
         StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage,
         bcos::protocol::BlockFactory::Ptr _blockFactory)
       : PBFTConfig(_ioService, std::move(_cryptoSuite), std::move(_keyPair),

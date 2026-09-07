@@ -6,7 +6,7 @@
 #include "FrontServiceInfo.h"
 
 bcos::gateway::FrontServiceInfo::FrontServiceInfo(std::string _nodeID,
-    bcos::front::FrontServiceInterface::Ptr _frontService, bcos::protocol::NodeType _type,
+    FrontServiceHandle _frontService, bcos::protocol::NodeType _type,
     bcostars::FrontServicePrx _frontServicePrx)
   : m_nodeID(std::move(_nodeID)),
     m_nodeType(_type),
@@ -14,7 +14,7 @@ bcos::gateway::FrontServiceInfo::FrontServiceInfo(std::string _nodeID,
     m_frontServicePrx(std::move(_frontServicePrx))
 {}
 
-bcos::front::FrontServiceInterface::Ptr bcos::gateway::FrontServiceInfo::frontService()
+bcos::gateway::FrontServiceHandle const& bcos::gateway::FrontServiceInfo::frontService() const
 {
     return m_frontService;
 }

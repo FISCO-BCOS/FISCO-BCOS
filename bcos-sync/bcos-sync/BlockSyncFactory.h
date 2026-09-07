@@ -33,7 +33,7 @@ public:
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
         bcos::ledger::LedgerInterface::Ptr _ledger, bcos::txpool::TxPoolInterface::Ptr _txpool,
-        bcos::front::FrontServiceInterface::Ptr _frontService,
+        std::shared_ptr<bcos::front::FrontService> _frontService,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::consensus::ConsensusInterface::Ptr _consensus,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
@@ -50,7 +50,7 @@ private:
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
-    bcos::front::FrontServiceInterface::Ptr m_frontService;
+    std::shared_ptr<bcos::front::FrontService> m_frontService;
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::consensus::ConsensusInterface::Ptr m_consensus;
     bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;

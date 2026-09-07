@@ -19,6 +19,7 @@
  * @date 2021-05-11
  */
 #include "bcos-txpool/sync/TransactionSync.h"
+#include <bcos-front/FrontService.h>
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/sync/utilities/Common.h"
 #include <bcos-framework/protocol/CommonError.h>
@@ -574,7 +575,7 @@ void TransactionSync::onEmptyTxs()
         static_cast<uint32_t>(TxsSyncPacketType::TxsStatusPacket), HashList());
     auto packetData = txsStatus->encode();
     task::wait([](decltype(packetData) packetData,
-                   bcos::front::FrontServiceInterface::Ptr front) -> task::Task<void> {
+                   bcos::front::FrontService::Ptr front) -> task::Task<void> {
         co_await front->broadcastMessage(
             bcos::protocol::NodeType::CONSENSUS_NODE | bcos::protocol::NodeType::OBSERVER_NODE,
             ModuleID::TxsSync, ::ranges::views::single(ref(*packetData)));

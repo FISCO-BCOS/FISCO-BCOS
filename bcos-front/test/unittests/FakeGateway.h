@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-front/FrontService.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/asio.hpp>
@@ -36,8 +36,8 @@ class FakeGateway : public gateway::GatewayInterface,
 public:
     virtual ~FakeGateway() {}
 
-    std::weak_ptr<FrontServiceInterface> m_frontService;
-    void setFrontService(std::shared_ptr<FrontServiceInterface> _frontService)
+    std::weak_ptr<FrontService> m_frontService;
+    void setFrontService(FrontService::Ptr _frontService)
     {
         m_frontService = _frontService;
     }

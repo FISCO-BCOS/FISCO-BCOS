@@ -19,6 +19,7 @@
  * @date 2021-05-10
  */
 #include "TxPool.h"
+#include <bcos-front/FrontService.h>
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-ledger/LedgerMethods.h"
@@ -213,7 +214,7 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
             auto owned = std::make_shared<bcos::bytes>(_data.begin(), _data.end());
             for (const auto& node : (*selectedNode))
             {
-                task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, int _moduleID,
+                task::wait([](bcos::front::FrontService::Ptr _frontService, int _moduleID,
                                bcos::crypto::NodeIDPtr _nodeID,
                                std::shared_ptr<bcos::bytes> _owned) -> task::Task<void> {
                     auto result = co_await _frontService->sendMessageByNodeID(_moduleID,
@@ -670,7 +671,7 @@ void TxPool::init()
 void TxPool::initSendResponseHandler()
 {
     // set the sendResponse callback
-    std::weak_ptr<bcos::front::FrontServiceInterface> weakFrontService =
+    std::weak_ptr<bcos::front::FrontService> weakFrontService =
         m_transactionSync->config()->frontService();
     m_sendResponseHandler = [weakFrontService](std::string const& _id, int _moduleID,
                                 NodeIDPtr _dstNode, bytesConstRef _data) {

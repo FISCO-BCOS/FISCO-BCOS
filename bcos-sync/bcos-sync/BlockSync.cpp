@@ -19,6 +19,7 @@
  * @date 2021-05-24
  */
 #include "bcos-sync/BlockSync.h"
+#include <bcos-front/FrontService.h>
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
@@ -124,7 +125,7 @@ void BlockSync::enableAsMaster(bool _masterNode)
 void BlockSync::initSendResponseHandler()
 {
     // set the sendResponse callback
-    std::weak_ptr<bcos::front::FrontServiceInterface> weakFrontService = m_config->frontService();
+    std::weak_ptr<bcos::front::FrontService> weakFrontService = m_config->frontService();
     m_sendResponseHandler = [weakFrontService](std::string const& _id, int _moduleID,
                                 NodeIDPtr _dstNode, bytesConstRef _data) {
         try
@@ -1008,7 +1009,7 @@ void BlockSync::broadcastSyncStatus()
     if (m_allowFreeNode)
     {
         task::wait([](decltype(encodedData) encodedData,
-                       bcos::front::FrontServiceInterface::Ptr front) -> task::Task<void> {
+                       bcos::front::FrontService::Ptr front) -> task::Task<void> {
             try
             {
                 co_await front->broadcastMessage(
