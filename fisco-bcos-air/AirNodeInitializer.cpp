@@ -115,6 +115,12 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     if (nodeConfig->engineDrivenBlockProduction() || nodeConfig->enableSingleNodeConsensus())
     {
         nodeService->setMemPool(m_nodeInitializer->memPoolInitializer()->memPool());
+        // Admission travels with the pool it admits into. The context is the only thing the
+        // [executor] eest_replay_mode switch decides -- which column of the routing table the
+        // RPC entry reads, never which checks exist.
+        nodeService->setAdmissionValidator(m_nodeInitializer->memPoolValidator(),
+            nodeConfig->eestReplayMode() ? bcos::txvalidator::AdmissionContext::EESTReplay :
+                                           bcos::txvalidator::AdmissionContext::PoolAdmission);
     }
 
     // create rpc

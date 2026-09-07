@@ -141,6 +141,18 @@ public:
             // EngineService not needed for existing RPC tests; pass nullptr as stub.
             nullptr);
 
+        // Admission for the mempool path, the way AirNodeInitializer wires it: same snapshot the
+        // txpool reads, no BCOS pool nonce checker (this path carries Web3 transactions only),
+        // and nothing is a system transaction here. A case that wants the EESTReplay column
+        // calls setAdmissionValidator again with it.
+        m_admissionValidator = std::make_shared<bcos::txvalidator::TxValidator>(
+            cryptoSuite, m_ledger, m_ledgerConfigState, /*txPoolNonceChecker=*/nullptr,
+            std::make_shared<bcos::txvalidator::Web3NonceChecker>(m_ledger),
+            [](bcos::protocol::Transaction const&) { return false; }, groupId, chainId);
+        m_admissionValidator->setScheduler(scheduler);
+        nodeService->setAdmissionValidator(
+            m_admissionValidator, bcos::txvalidator::AdmissionContext::PoolAdmission);
+
 
         groupInfo = std::make_shared<group::GroupInfo>();
         auto chainNode = std::make_shared<group::ChainNodeInfo>();
@@ -173,6 +185,7 @@ public:
     /// The published chain configuration admission judges against; a case that needs a different
     /// chain id or base fee republishes through it.
     bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
+    std::shared_ptr<bcos::txvalidator::TxValidator> m_admissionValidator;
     BlockFactory::Ptr m_blockFactory;
 
     rpc::NodeService::Ptr nodeService;
