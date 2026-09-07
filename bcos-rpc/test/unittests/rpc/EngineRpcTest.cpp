@@ -24,8 +24,11 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <memory>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
+#include <chrono>
+#include <memory>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -56,7 +59,11 @@ public:
         std::optional<engine::NewPayloadRequest> capturedNewPayloadRequest;
         std::optional<std::uint32_t> capturedNewPayloadVersion;
         bool throwUnknownPayload = false;
+        bool throwInvalidPayloadAttributes = false;
         bool throwUnsupportedFork = false;
+        bool throwInvalidForkchoiceState = false;
+        std::atomic<bool> hangNewPayload{false};
+        std::atomic<bool> enteredNewPayload{false};
     };
     std::shared_ptr<State> m_state = std::make_shared<State>();
 
@@ -74,9 +81,17 @@ public:
     {
         m_state->capturedForkchoiceState = forkchoiceState;
         m_state->capturedForkchoiceVersion = static_cast<int>(version);
+        if (m_state->throwInvalidPayloadAttributes)
+        {
+            BOOST_THROW_EXCEPTION(engine::InvalidPayloadAttributes{});
+        }
         if (m_state->throwUnsupportedFork)
         {
             BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
+        }
+        if (m_state->throwInvalidForkchoiceState)
+        {
+            BOOST_THROW_EXCEPTION(engine::InvalidForkchoiceState{});
         }
         co_return m_state->forkchoiceUpdatedResult;
     }
@@ -96,8 +111,21 @@ public:
     task::Task<engine::PayloadStatus> newPayload(
         const engine::NewPayloadRequest& request, std::uint32_t version)
     {
+        m_state->enteredNewPayload.store(true);
+        while (m_state->hangNewPayload.load())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
         m_state->capturedNewPayloadRequest = request;
         m_state->capturedNewPayloadVersion = version;
+        if (m_state->throwInvalidPayloadAttributes)
+        {
+            BOOST_THROW_EXCEPTION(engine::InvalidPayloadAttributes{});
+        }
+        if (m_state->throwUnsupportedFork)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
+        }
         co_return m_state->forkchoiceUpdatedResult.payloadStatus;
     }
 
@@ -190,6 +218,65 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV2)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 2);
 }
 
+// UnsupportedFork maps to -38005, not -32603.
+BOOST_AUTO_TEST_CASE(forkchoiceUpdatedWithAttrsUnsupportedForkMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedFork = true;
+
+    Json::Value params(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    params.append(fc);
+    Json::Value attrs;
+    attrs["timestamp"] = "0x1";
+    attrs["prevRandao"] = "0x4444444444444444444444444444444444444444444444444444444444444444";
+    attrs["suggestedFeeRecipient"] = "0x5555555555555555555555555555555555555555";
+    params.append(attrs);
+
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV2, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
+// InvalidPayloadAttributes -> -38003, UnsupportedFork -> -38005, InvalidForkchoiceState -> -38002.
+BOOST_AUTO_TEST_CASE(forkchoiceUpdatedTypedFailuresMapToSpecErrorCodes)
+{
+    Json::Value params(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    params.append(fc);
+    Json::Value attrs;
+    attrs["timestamp"] = "0x1";
+    attrs["prevRandao"] = "0x4444444444444444444444444444444444444444444444444444444444444444";
+    attrs["suggestedFeeRecipient"] = "0x5555555555555555555555555555555555555555";
+    params.append(attrs);
+
+    auto expectCode = [&](Json::Value params, int code) {
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
+            [code](JsonRpcException const& e) { return e.code() == code; });
+    };
+
+    mockService.m_state->throwInvalidPayloadAttributes = true;
+    expectCode(params, EngineError::InvalidPayloadAttributes);
+
+    mockService.m_state->throwInvalidPayloadAttributes = false;
+    mockService.m_state->throwUnsupportedFork = true;
+    expectCode(params, EngineError::UnsupportedFork);
+
+    mockService.m_state->throwUnsupportedFork = false;
+    mockService.m_state->throwInvalidForkchoiceState = true;
+    // The state-only shape (no attributes) exercises the same catch ladder.
+    Json::Value stateOnly(Json::arrayValue);
+    stateOnly.append(fc);
+    expectCode(stateOnly, EngineError::InvalidForkchoiceState);
+}
+
+
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
 {
     Json::Value params(Json::arrayValue);
@@ -216,9 +303,6 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 3);
 }
 
-// The one method version this node really does not implement: the service-layer forkchoice
-// window tops out at V3 (isForkchoiceVersionSupported), so V4 answers -38005 without
-// reaching the engine service.
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
 {
     Json::Value params(Json::arrayValue);
@@ -433,6 +517,18 @@ Json::Value makeV1ExecutionPayloadJson()
 }
 }  // namespace
 
+BOOST_AUTO_TEST_CASE(newPayloadUnsupportedForkMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedFork = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append(makeV1ExecutionPayloadJson());
+
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV1, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
 BOOST_AUTO_TEST_CASE(newPayloadV1)
 {
     Json::Value params(Json::arrayValue);
@@ -564,6 +660,71 @@ BOOST_AUTO_TEST_CASE(newPayloadV4)
     BOOST_CHECK(capturedReq.expectedBlobVersionedHashes.empty());
     BOOST_REQUIRE(capturedReq.executionRequests.has_value());
     BOOST_CHECK(capturedReq.executionRequests->empty());
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV4BusyReturnsSyncing)
+{
+    mockService.m_state->hangNewPayload.store(true);
+    mockService.m_state->enteredNewPayload.store(false);
+
+    Json::Value params(Json::arrayValue);
+    params.append(makeV4ExecutionPayloadJson());
+    params.append(Json::Value(Json::arrayValue));
+    params.append(c_beaconRootHex);
+    params.append(Json::Value(Json::arrayValue));
+
+    Json::Value firstResponse;
+    std::thread first([&] { CALL_ENGINE(newPayloadV4, params, firstResponse); });
+
+    auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!mockService.m_state->enteredNewPayload.load() &&
+           std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    BOOST_REQUIRE_MESSAGE(mockService.m_state->enteredNewPayload.load(),
+        "first newPayloadV4 never entered the engine service");
+
+    Json::Value busyResponse;
+    CALL_ENGINE(newPayloadV4, params, busyResponse);
+    BOOST_REQUIRE(busyResponse.isMember("result"));
+    BOOST_CHECK_EQUAL(busyResponse["result"]["status"].asString(), "SYNCING");
+    BOOST_CHECK(!busyResponse["result"].isMember("latestValidHash"));
+
+    mockService.m_state->hangNewPayload.store(false);
+    first.join();
+    BOOST_REQUIRE(firstResponse.isMember("result"));
+    BOOST_CHECK_EQUAL(firstResponse["result"]["status"].asString(), "VALID");
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV4TypedVersionGateMapsToSpecErrorCode)
+{
+    Json::Value params(Json::arrayValue);
+    params.append(makeV4ExecutionPayloadJson());
+    params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes (empty)
+    params.append(c_beaconRootHex);                // parentBeaconBlockRoot
+    params.append(Json::Value(Json::arrayValue));  // executionRequests (empty)
+
+    mockService.m_state->throwUnsupportedFork = true;
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV4InvalidPayloadAttributesMapsTo38003)
+{
+    Json::Value params(Json::arrayValue);
+    params.append(makeV4ExecutionPayloadJson());
+    params.append(Json::Value(Json::arrayValue));
+    params.append(c_beaconRootHex);
+    params.append(Json::Value(Json::arrayValue));
+
+    mockService.m_state->throwInvalidPayloadAttributes = true;
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return e.code() == EngineError::InvalidPayloadAttributes;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadV4MissingParams)

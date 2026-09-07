@@ -51,18 +51,16 @@ public:
 
     /**
      * @brief: get connected peers
-     * @return void
+     * @return {error, localGatewayInfo, peerGatewayInfos}: error is nullptr on success
      */
-    void asyncGetPeers(
-        std::function<void(Error::Ptr, GatewayInfo::Ptr, GatewayInfosPtr)> _onGetPeers) override;
+    task::Task<std::tuple<Error::Ptr, GatewayInfo::Ptr, GatewayInfosPtr>> getPeers() override;
     /**
      * @brief: get nodeIDs from gateway
      * @param _groupID:
-     * @param _onGetGroupNodeInfo: get nodeIDs callback
-     * @return void
+     * @return {error, groupNodeInfo}: error is nullptr on success
      */
-    void asyncGetGroupNodeInfo(
-        const std::string& _groupID, GetGroupNodeInfoFunc _onGetGroupNodeInfo) override;
+    task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo(
+        const std::string& _groupID) override;
     /**
      * @brief: send message to multiple nodes
      * @param _groupID: groupID
@@ -110,9 +108,9 @@ public:
         bcos::group::GroupInfo::Ptr, std::function<void(Error::Ptr&&)>) override;
 
     /// for AMOP
-    void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc) override;
-    void asyncSendBroadcastMessageByTopic(
+    task::Task<std::tuple<Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
+        const std::string& _topic, bcos::bytesConstRef _data) override;
+    task::Task<void> sendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override;
 
     void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,

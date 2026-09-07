@@ -632,7 +632,7 @@ BOOST_AUTO_TEST_CASE(GasLimitOverBlockBudgetIsBlockError)
     evmone::state::StateDiff diff;
     BOOST_CHECK_THROW(runDeposit(ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234,
                           /*blockGasLeft=*/50000, kOpTestReceiptFactory, diff),
-        std::runtime_error);
+        OpDepositGasLimitReached);
 }
 
 // D-04 边界（红队 F-6）：恰等于块剩余 gas 必须接受——">=" 作弊在此暴露
@@ -683,6 +683,31 @@ BOOST_AUTO_TEST_CASE(FailedCreateDepositStillBumpsNonceAndDeploysNothing)
     BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 6u);
     BOOST_CHECK_EQUAL(ts.at(kFrom).balance, intx::uint256{7});
     BOOST_CHECK_EQUAL(ts.count(evmone::state::compute_create_address(kFrom, 5)), 0u);
+}
+
+// Mint wraps mod 2^256 (op-geth AddBalance).
+BOOST_AUTO_TEST_CASE(MintAdditionWrapsLikeOpGethUint256Add)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kFrom] = {.nonce = 0, .balance = ~intx::uint256{0}, .storage = {}, .code = {}};
+    test::TestBlockHashes hashes;
+    DepositTx dep{.source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = kFrom,
+        .mint = intx::uint256{2},
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = false,
+        .data = {}};
+    evmone::state::StateDiff diff;
+    const auto r = runDeposit(ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000,
+        kOpTestReceiptFactory, diff);
+    bcos::evm::applyStateDiffStrict(ts, diff);
+
+    BOOST_CHECK_EQUAL(r->status(), 0);
+    BOOST_CHECK_EQUAL(ts.at(kFrom).balance, intx::uint256{1});
+    BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 1u);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -71,11 +71,10 @@ public:
     bcos::rpc::JsonRpcImpl_2_0::Ptr jsonRpcImpl() const { return m_jsonRpcImpl; }
     bcos::event::EventSub::Ptr eventSub() const { return m_eventSub; }
 
-    void asyncNotifyAMOPMessage(int16_t _type, std::string const& _topic,
-        bytesConstRef _requestData,
-        std::function<void(Error::Ptr&& _error, bytesPointer _responseData)> _callback) override
+    task::Task<std::tuple<Error::Ptr, bytesPointer>> notifyAMOPMessage(
+        int16_t _type, std::string const& _topic, bytesConstRef _requestData) override
     {
-        m_amopClient->asyncNotifyAMOPMessage(_type, _topic, _requestData, _callback);
+        co_return co_await m_amopClient->notifyAMOPMessage(_type, _topic, _requestData);
     }
 
     void setClientID(std::string const& _clientID)

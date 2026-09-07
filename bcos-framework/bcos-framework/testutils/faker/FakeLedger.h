@@ -128,7 +128,10 @@ public:
         FakeLedger* m_ledger;
     };
     using Ptr = std::shared_ptr<FakeLedger>;
-    FakeLedger() = default;
+    // m_ledgerConfig must exist even here: BOTH branches of asyncGetSystemConfigByKey read
+    // m_ledgerConfig->blockNumber(), so a default-constructed FakeLedger used only for system
+    // config -- no block factory, no chain -- would dereference null.
+    FakeLedger() : m_ledgerConfig(std::make_shared<LedgerConfig>()) {}
     FakeLedger(BlockFactory::Ptr _blockFactory, size_t _blockNumber, size_t _txsSize, size_t,
         std::vector<bytes> _sealerList)
       : m_blockFactory(std::move(_blockFactory)),

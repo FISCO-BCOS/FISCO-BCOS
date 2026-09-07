@@ -103,6 +103,14 @@ public:
         bcos::crypto::HashType announcedBlockHash;
     };
 
+    /// verify=false probe retained for adoptProbeAsPending.
+    struct ProbeSlot
+    {
+        ViewType view;  // forkCommitted()+newMutable execution view
+        bcos::evm::engine::OpExecuteBlockResult result;  // commitments + receipts
+        protocol::BlockHeader::Ptr executedHeader;       // commitment-filled header
+    };
+
     // ---- SchedulerInterface overrides ----
 
     /// Engine newPayload drives this; PBFT/sync do not.
@@ -110,21 +118,34 @@ public:
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
             callback) override
     {
-        // Capturing lambda would hold this/block/cb in the closure, which task::wait destroys at
-        // the end of this full-expression; a coroutine that genuinely suspends would then read a
-        // freed closure (BaselineScheduler-tpp.h uses this parameter form for the same reason).
-        task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
-                       std::function<void(
-                           bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
-                           callback) -> task::Task<void> {
+        // Parameter-form task so a genuine suspend does not read a destroyed capturing
+        // lambda (BaselineScheduler-tpp.h). syncWait: EngineServiceImpl treats execute
+        // as finished when this returns (task::wait is fire-and-forget).
+        task::syncWait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
+                           std::function<void(
+                               bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
+                               callback) -> task::Task<void> {
             std::apply(callback, co_await self->coExecuteBlock(std::move(block), verify));
         }(this, std::move(block), verify, std::move(callback)));
+    }
+
+    /// Adopt the retained verify=false probe as the pending block without re-executing.
+    void adoptProbeAsPending(bcos::protocol::Block::Ptr block,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
+            callback) override
+    {
+        task::syncWait([](decltype(this) self, bcos::protocol::Block::Ptr block,
+                           std::function<void(
+                               bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
+                               callback) -> task::Task<void> {
+            std::apply(callback, co_await self->coAdoptProbe(std::move(block)));
+        }(this, std::move(block), std::move(callback)));
     }
 
     void commitBlock(bcos::protocol::BlockHeader::Ptr header,
         std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback) override
     {
-        task::wait(
+        task::syncWait(
             [](decltype(this) self, bcos::protocol::BlockHeader::Ptr header,
                 std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback)
                 -> task::Task<void> {
@@ -154,6 +175,8 @@ public:
             // lastCommitted is set. Restore the watermark to the committed tip.
             m_lastExecutedBlockNumber.store(m_lastCommittedBlockNumber.load());
         }
+        // Always drop a leftover probe; verify=false does not populate m_pending.
+        m_lastProbe.reset();
         callback(nullptr);
     }
 
@@ -435,12 +458,10 @@ private:
 
             // One execute at a time. Also take m_commitMutex so pushView / popFrontStorage
             // cannot race mergeBackStorage (reset() already takes all three). NOTE: these
-            // std::unique_lock objects span the co_awaits below, which is safe ONLY while the
-            // whole task::wait chain runs synchronously to completion on the calling thread
-            // (bcos::task's symmetric transfer: Wait.h starts an AsyncTask and returns at the
-            // first real suspension). If a future awaitable genuinely suspends, the closure
-            // fix above (parameter-form task::wait) is not enough here — the locks must be
-            // narrowed or replaced with a coroutine-aware lock.
+            // std::unique_lock objects span the co_awaits below. executeBlock/commitBlock
+            // now use task::syncWait, so the EngineServiceImpl caller does not proceed
+            // until this task finishes. If a future awaitable resumes on another thread,
+            // these locks must be narrowed or replaced with a coroutine-aware lock.
             std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
             if (!executeLock.owns_lock())
             {
@@ -456,6 +477,13 @@ private:
                 OP_SCHEDULER_LOG(INFO) << message;
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr, false};
+            }
+
+            // Clear any stale slot before executing a probe: a failed probe must not leave
+            // the previous build's retained view behind (covers the ledgerGas re-probe too).
+            if (!verify)
+            {
+                m_lastProbe.reset();
             }
 
             // One pending slot: refuse another height, replace only verify=true at this height.
@@ -557,9 +585,8 @@ private:
 
             auto ledgerConfig = co_await loadLedgerConfig(view, number);
 
-            // Persist trie nodes only on verify=true + feature_l2_ethereum_compat.
+            // Persist trie nodes on L2-compat even for verify=false; adopt reuses this view.
             bool const persistTrieNodes =
-                verify &&
                 ledgerConfig->features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
             auto outcome =
                 co_await execute(view, *blockHeader, transactions, *ledgerConfig, persistTrieNodes);
@@ -597,6 +624,12 @@ private:
                         outcome.announcedBlockHash, executedHeader, true};
                 }
                 m_lastExecutedBlockNumber.store(number);
+                m_lastProbe.reset();
+            }
+            else
+            {
+                // Keep the probe so adoptProbeAsPending can push this view.
+                m_lastProbe = ProbeSlot{std::move(view), std::move(outcome.result), executedHeader};
             }
 
             co_return {nullptr, std::move(executedHeader), sysBlock};
@@ -606,12 +639,152 @@ private:
             auto message =
                 fmt::format("Execute block failed! {}", boost::diagnostic_information(e));
             OP_SCHEDULER_LOG(ERROR) << message;
+            auto error = BCOS_ERROR_PTR(classifyException(std::current_exception()), message);
+            attachOpRejectInfo(*error, std::current_exception());
+            co_return {std::move(error), nullptr, false};
+        }
+        catch (...)
+        {
+            auto message = std::string{"Execute block failed! ("} +
+                           describeException(std::current_exception()) + ")";
+            OP_SCHEDULER_LOG(ERROR) << message;
+            auto error =
+                BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message);
+            attachOpRejectInfo(*error, std::current_exception());
+            co_return {std::move(error), nullptr, false};
+        }
+    }
+
+    task::Task<std::tuple<Error::Ptr, protocol::BlockHeader::Ptr, bool>> coAdoptProbe(
+        protocol::Block::Ptr block)
+    {
+        try
+        {
+            auto blockHeader = block->blockHeader();
+            auto const number = blockHeader->number();
+            OP_SCHEDULER_LOG(INFO) << "Adopt probe: " << number;
+
+            // Same double-lock as coExecuteBlock: pushView must not race mergeBackStorage.
+            std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
+            if (!executeLock.owns_lock())
+            {
+                auto message = std::string{"Another block is executing!"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr, false};
+            }
+            std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
+            if (!commitLock.owns_lock())
+            {
+                auto message = std::string{"Another block is committing!"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr, false};
+            }
+            if (!m_lastProbe)
+            {
+                auto message = std::string{"adoptProbeAsPending: no retained probe"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
+                    nullptr, false};
+            }
+            if (m_lastProbe->executedHeader->number() != number)
+            {
+                auto message = fmt::format(
+                    "adoptProbeAsPending: retained probe is at height {}, "
+                    "adopt input is at height {}",
+                    m_lastProbe->executedHeader->number(), number);
+                OP_SCHEDULER_LOG(INFO) << message;
+                m_lastProbe.reset();
+                co_return {
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
+                    nullptr, false};
+            }
+
+            auto const lastExecuted = m_lastExecutedBlockNumber.load();
+            auto const lastCommitted = m_lastCommittedBlockNumber.load();
+            if (number > 0 && number == lastCommitted)
+            {
+                auto message =
+                    std::string{"adoptProbeAsPending: block is already the committed tip"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                m_lastProbe.reset();
+                co_return {
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
+                    nullptr, false};
+            }
+            if (lastExecuted != -1 && number - lastExecuted != 1)
+            {
+                auto message = fmt::format(
+                    "Discontinuous adopt! expect: {} input: {}", lastExecuted + 1, number);
+                OP_SCHEDULER_LOG(INFO) << message;
+                m_lastProbe.reset();
+                co_return {
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
+                    nullptr, false};
+            }
+            {
+                std::lock_guard<std::mutex> lock(m_pendingMutex);
+                if (m_pending)
+                {
+                    auto message =
+                        fmt::format("adoptProbeAsPending: unexpected live pending block at {}",
+                            m_pending->executedHeader->number());
+                    OP_SCHEDULER_LOG(INFO) << message;
+                    m_lastProbe.reset();
+                    co_return {
+                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                        nullptr, false};
+                }
+            }
+
+            namespace engine = bcos::evm::engine;
+            if (auto mismatch =
+                    engine::mismatchedFieldOf(headerCommitments(*m_lastProbe->executedHeader),
+                        headerCommitments(*blockHeader)))
+            {
+                auto message =
+                    fmt::format("adoptProbeAsPending: commitment mismatch on field {}", *mismatch);
+                OP_SCHEDULER_LOG(INFO) << message;
+                m_lastProbe.reset();
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
+                    nullptr, false};
+            }
+            auto const announcedBlockHash =
+                bcos::protocol::EthBlockHeader::computeHash(*blockHeader);
+            auto const probeHash =
+                bcos::protocol::EthBlockHeader::computeHash(*m_lastProbe->executedHeader);
+            if (probeHash != announcedBlockHash)
+            {
+                auto message = std::string{
+                    "adoptProbeAsPending: executed header hash does not match the announced hash"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                m_lastProbe.reset();
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
+                    nullptr, false};
+            }
+            m_multiLayerStorage->pushView(std::move(m_lastProbe->view));
+            auto executedHeader = m_lastProbe->executedHeader;
+            {
+                std::lock_guard<std::mutex> lock(m_pendingMutex);
+                m_pending = PendingBlock{std::move(block), std::move(m_lastProbe->result),
+                    announcedBlockHash, executedHeader, true};
+            }
+            m_lastExecutedBlockNumber.store(number);
+            m_lastProbe.reset();
+            OP_SCHEDULER_LOG(INFO) << "Adopted probe as pending: " << number;
+            co_return {nullptr, std::move(executedHeader), false};
+        }
+        catch (std::exception& e)
+        {
+            auto message = fmt::format("Adopt probe failed! {}", boost::diagnostic_information(e));
+            OP_SCHEDULER_LOG(ERROR) << message;
             co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
                 nullptr, false};
         }
         catch (...)
         {
-            auto message = std::string{"Execute block failed! ("} +
+            auto message = std::string{"Adopt probe failed! ("} +
                            describeException(std::current_exception()) + ")";
             OP_SCHEDULER_LOG(ERROR) << message;
             co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
@@ -795,7 +968,10 @@ private:
             {
                 auto const& raw = rawTxBytes[i];
                 if (raw.empty())  // empty envelope: raw[0] would be out of bounds
-                    throw bcos::evm::OpConsensusError("OpScheduler: empty envelope");
+                {
+                    throw bcos::evm::OpConsensusError(
+                        "OpScheduler: empty envelope", transactions[i]->hash());
+                }
                 auto const typeByte = raw[0];
                 if (op::classifyTxType(typeByte) == static_cast<uint8_t>(op::kDepositTxType))
                 {
@@ -807,15 +983,19 @@ private:
                     catch (const OpTxValidationFailed& e)
                     {
                         throw bcos::evm::OpConsensusError(
-                            std::string("OpScheduler: malformed deposit: ") + e.what());
+                            std::string("OpScheduler: malformed deposit: ") + e.what(),
+                            transactions[i]->hash());
                     }
                 }
                 // Reject blob (0x03) and 0x7d type bytes.
                 else if (typeByte < 0xc0 && typeByte != 0x01 && typeByte != 0x02 &&
                          typeByte != 0x04)
+                {
                     throw bcos::evm::OpConsensusError(
                         fmt::format("OpScheduler: unsupported tx type byte 0x{:02x}",
-                            static_cast<unsigned>(typeByte)));
+                            static_cast<unsigned>(typeByte)),
+                        transactions[i]->hash());
+                }
             }
 
             bcos::ledger::LedgerConfig execLedgerConfig;
@@ -1102,6 +1282,34 @@ private:
         ledgerConfig->setBlockNumber(header->number());
         ledgerConfig->setTimestamp(header->timestamp());
         co_return ledgerConfig;
+    }
+
+    /// Recover culprit / capacity tags via exception_ptr. The surrounding catch sites
+    /// only see std::exception (catch (std::exception&) / catch (...)); rethrow from the
+    /// exception_ptr to recover OpConsensusError and its structured fields.
+    static void attachOpRejectInfo(Error& error, std::exception_ptr eptr)
+    {
+        if (!eptr)
+        {
+            return;
+        }
+        try
+        {
+            std::rethrow_exception(std::move(eptr));
+        }
+        catch (const bcos::evm::OpConsensusError& opErr)
+        {
+            if (opErr.txHash.has_value())
+            {
+                error << bcos::engine::OpCulpritTxHash(*opErr.txHash);
+            }
+            if (opErr.capacity)
+            {
+                error << bcos::engine::OpRejectIsCapacity{true};
+            }
+        }
+        catch (...)
+        {}
     }
 
 public:
@@ -1395,6 +1603,7 @@ private:
     std::atomic<int64_t> m_lastCommittedBlockNumber{-1};
     std::mutex m_pendingMutex;
     std::optional<PendingBlock> m_pending;
+    std::optional<ProbeSlot> m_lastProbe;
 };
 
 

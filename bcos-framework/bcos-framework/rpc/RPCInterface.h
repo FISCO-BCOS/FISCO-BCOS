@@ -21,7 +21,9 @@
 
 #include "bcos-framework/multigroup/GroupInfo.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include <bcos-task/Task.h>
 #include <bcos-utilities/Error.h>
+#include <tuple>
 
 namespace bcos
 {
@@ -67,11 +69,13 @@ public:
      * @brief receive the amop message from the gateway
      *
      * @param _requestData the AMOP data
-     * @param _callback the callback
+     * @return {error, responseData}: error is nullptr on success
+     * @note coroutine: _topic is passed by reference and the coroutine frame holds the reference
+     *       (not a copy) across suspensions — the caller must keep it alive until the returned
+     *       task completes (e.g. own it in a task::wait frame); do not pass a temporary.
      */
-    virtual void asyncNotifyAMOPMessage(int16_t _type, std::string const& _topic,
-        bytesConstRef _requestData,
-        std::function<void(Error::Ptr&& _error, bytesPointer _responseData)> _callback) = 0;
+    virtual task::Task<std::tuple<Error::Ptr, bytesPointer>> notifyAMOPMessage(
+        int16_t _type, std::string const& _topic, bytesConstRef _requestData) = 0;
 
     // the gateway notify the rpc to re-subscribe the topic when the gateway set-up
     virtual void asyncNotifySubscribeTopic(

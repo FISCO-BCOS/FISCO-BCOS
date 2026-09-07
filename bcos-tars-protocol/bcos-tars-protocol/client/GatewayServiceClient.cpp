@@ -140,58 +140,97 @@ bcos::task::Task<bcos::Error::Ptr> bcostars::GatewayServiceClient::sendMessageBy
         std::move(buffer), std::make_shared<SendAwaitable::CompletionState>()};
     co_return co_await awaitable;
 }
-void bcostars::GatewayServiceClient::asyncGetPeers(std::function<void(
-        bcos::Error::Ptr, bcos::gateway::GatewayInfo::Ptr, bcos::gateway::GatewayInfosPtr)>
-        _callback)
+bcos::task::Task<std::tuple<bcos::Error::Ptr, bcos::gateway::GatewayInfo::Ptr,
+    bcos::gateway::GatewayInfosPtr>>
+bcostars::GatewayServiceClient::getPeers()
 {
-    class Callback : public bcostars::GatewayServicePrxCallback
+    struct GetPeersAwaitable
     {
-    public:
-        Callback(std::function<void(
-                bcos::Error::Ptr, bcos::gateway::GatewayInfo::Ptr, bcos::gateway::GatewayInfosPtr)>
-                callback)
-          : m_callback(callback)
-        {}
-
-        void callback_asyncGetPeers(const bcostars::Error& ret,
-            const bcostars::GatewayInfo& _localInfo,
-            const std::vector<bcostars::GatewayInfo>& _peers) override
+        struct CompletionState
         {
-            s_tarsTimeoutCount.store(0);
-            auto localGatewayInfo = fromTarsGatewayInfo(_localInfo);
-            auto peersGatewayInfos = std::make_shared<bcos::gateway::GatewayInfos>();
-            for (auto const& peerNodeInfo : _peers)
+            std::atomic<bool> completed{false};
+            std::coroutine_handle<> handle;
+            bcos::Error::Ptr error;
+            bcos::gateway::GatewayInfo::Ptr localInfo;
+            bcos::gateway::GatewayInfosPtr peers;
+        };
+
+        class Callback : public bcostars::GatewayServicePrxCallback
+        {
+        public:
+            explicit Callback(std::shared_ptr<CompletionState> state) : m_state(std::move(state))
+            {}
+
+            void callback_asyncGetPeers(const bcostars::Error& ret,
+                const bcostars::GatewayInfo& _localInfo,
+                const std::vector<bcostars::GatewayInfo>& _peers) override
             {
-                peersGatewayInfos->emplace_back(fromTarsGatewayInfo(peerNodeInfo));
+                s_tarsTimeoutCount.store(0);
+                auto localGatewayInfo = fromTarsGatewayInfo(_localInfo);
+                auto peersGatewayInfos = std::make_shared<bcos::gateway::GatewayInfos>();
+                for (auto const& peerNodeInfo : _peers)
+                {
+                    peersGatewayInfos->emplace_back(fromTarsGatewayInfo(peerNodeInfo));
+                }
+                complete(toBcosError(ret), std::move(localGatewayInfo),
+                    std::move(peersGatewayInfos));
             }
-            m_callback(toBcosError(ret), localGatewayInfo, peersGatewayInfos);
-        }
-        void callback_asyncGetPeers_exception(tars::Int32 ret) override
+            void callback_asyncGetPeers_exception(tars::Int32 ret) override
+            {
+                s_tarsTimeoutCount++;
+                complete(toBcosError(ret), nullptr, nullptr);
+            }
+
+        private:
+            void complete(bcos::Error::Ptr error, bcos::gateway::GatewayInfo::Ptr localInfo,
+                bcos::gateway::GatewayInfosPtr peers)
+            {
+                if (!m_state->completed.exchange(true))
+                {
+                    m_state->error = std::move(error);
+                    m_state->localInfo = std::move(localInfo);
+                    m_state->peers = std::move(peers);
+                    m_state->handle.resume();
+                }
+            }
+            std::shared_ptr<CompletionState> m_state;
+        };
+
+        GatewayServiceClient* m_self;
+        std::shared_ptr<CompletionState> m_state;
+
+        constexpr static bool await_ready() noexcept { return false; }
+
+        // see SendAwaitable::await_suspend for why this returns false on a synchronous
+        // connection-check failure
+        bool await_suspend(std::coroutine_handle<> _handle)
         {
-            s_tarsTimeoutCount++;
-            m_callback(toBcosError(ret), nullptr, nullptr);
+            m_state->handle = _handle;
+            auto state = m_state;
+            auto shouldBlockCall = m_self->shouldStopCall();
+            auto ret = checkConnection(m_self->c_moduleName, "asyncGetPeers", m_self->m_prx,
+                [state](bcos::Error::Ptr _error) { state->error = std::move(_error); },
+                shouldBlockCall);
+            if (!ret && shouldBlockCall)
+            {
+                return false;
+            }
+            m_self->m_prx->async_asyncGetPeers(new Callback(state));
+            return true;
         }
 
-    private:
-        std::function<void(
-            bcos::Error::Ptr, bcos::gateway::GatewayInfo::Ptr, bcos::gateway::GatewayInfosPtr)>
-            m_callback;
+        std::tuple<bcos::Error::Ptr, bcos::gateway::GatewayInfo::Ptr,
+            bcos::gateway::GatewayInfosPtr>
+        await_resume()
+        {
+            return std::make_tuple(
+                std::move(m_state->error), std::move(m_state->localInfo),
+                std::move(m_state->peers));
+        }
     };
-    auto shouldBlockCall = shouldStopCall();
-    auto ret = checkConnection(
-        c_moduleName, "asyncGetPeers", m_prx,
-        [_callback](bcos::Error::Ptr _error) {
-            if (_callback)
-            {
-                _callback(std::move(_error), nullptr, nullptr);
-            }
-        },
-        shouldBlockCall);
-    if (!ret && shouldBlockCall)
-    {
-        return;
-    }
-    m_prx->async_asyncGetPeers(new Callback(_callback));
+
+    GetPeersAwaitable awaitable{this, std::make_shared<GetPeersAwaitable::CompletionState>()};
+    co_return co_await awaitable;
 }
 bcos::task::Task<void> bcostars::GatewayServiceClient::broadcastMessage(uint16_t type,
     std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
@@ -210,49 +249,87 @@ bcos::task::Task<void> bcostars::GatewayServiceClient::broadcastMessage(uint16_t
         std::vector<char>(srcNodeIDBytes.begin(), srcNodeIDBytes.end()),
         std::vector<char>(data.begin(), data.end()));
 };
-void bcostars::GatewayServiceClient::asyncGetGroupNodeInfo(
-    const std::string& _groupID, bcos::gateway::GetGroupNodeInfoFunc _onGetGroupNodeInfo)
+bcos::task::Task<std::tuple<bcos::Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>>
+bcostars::GatewayServiceClient::getGroupNodeInfo(const std::string& _groupID)
 {
-    class Callback : public GatewayServicePrxCallback
+    struct GetGroupNodeInfoAwaitable
     {
-    public:
-        Callback(
-            bcos::gateway::GetGroupNodeInfoFunc callback, bcos::crypto::KeyFactory::Ptr keyFactory)
-          : m_callback(callback), m_keyFactory(keyFactory)
-        {}
-        void callback_asyncGetGroupNodeInfo(
-            const bcostars::Error& ret, const GroupNodeInfo& groupNodeInfo) override
+        struct CompletionState
         {
-            s_tarsTimeoutCount.store(0);
-            auto bcosGroupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>(
-                [m_groupNodeInfo = groupNodeInfo]() mutable { return &m_groupNodeInfo; });
-            m_callback(toBcosError(ret), bcosGroupNodeInfo);
-        }
-        void callback_asyncGetGroupNodeInfo_exception(tars::Int32 ret) override
+            std::atomic<bool> completed{false};
+            std::coroutine_handle<> handle;
+            bcos::Error::Ptr error;
+            bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo;
+        };
+
+        class Callback : public bcostars::GatewayServicePrxCallback
         {
-            s_tarsTimeoutCount++;
-            m_callback(toBcosError(ret), nullptr);
+        public:
+            explicit Callback(std::shared_ptr<CompletionState> state) : m_state(std::move(state))
+            {}
+
+            void callback_asyncGetGroupNodeInfo(
+                const bcostars::Error& ret, const bcostars::GroupNodeInfo& groupNodeInfo) override
+            {
+                s_tarsTimeoutCount.store(0);
+                auto bcosGroupNodeInfo =
+                    std::make_shared<bcostars::protocol::GroupNodeInfoImpl>(
+                        [m_groupNodeInfo = groupNodeInfo]() mutable { return &m_groupNodeInfo; });
+                complete(toBcosError(ret), std::move(bcosGroupNodeInfo));
+            }
+            void callback_asyncGetGroupNodeInfo_exception(tars::Int32 ret) override
+            {
+                s_tarsTimeoutCount++;
+                complete(toBcosError(ret), nullptr);
+            }
+
+        private:
+            void complete(bcos::Error::Ptr error, bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo)
+            {
+                if (!m_state->completed.exchange(true))
+                {
+                    m_state->error = std::move(error);
+                    m_state->groupNodeInfo = std::move(groupNodeInfo);
+                    m_state->handle.resume();
+                }
+            }
+            std::shared_ptr<CompletionState> m_state;
+        };
+
+        GatewayServiceClient* m_self;
+        std::string m_groupID;
+        std::shared_ptr<CompletionState> m_state;
+
+        constexpr static bool await_ready() noexcept { return false; }
+
+        // see SendAwaitable::await_suspend for why this returns false on a synchronous
+        // connection-check failure
+        bool await_suspend(std::coroutine_handle<> _handle)
+        {
+            m_state->handle = _handle;
+            auto state = m_state;
+            auto shouldBlockCall = m_self->shouldStopCall();
+            auto ret = checkConnection(m_self->c_moduleName, "asyncGetGroupNodeInfo",
+                m_self->m_prx,
+                [state](bcos::Error::Ptr _error) { state->error = std::move(_error); },
+                shouldBlockCall);
+            if (!ret && shouldBlockCall)
+            {
+                return false;
+            }
+            m_self->m_prx->async_asyncGetGroupNodeInfo(new Callback(state), m_groupID);
+            return true;
         }
 
-    private:
-        bcos::gateway::GetGroupNodeInfoFunc m_callback;
-        bcos::crypto::KeyFactory::Ptr m_keyFactory;
+        std::tuple<bcos::Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr> await_resume()
+        {
+            return std::make_tuple(std::move(m_state->error), std::move(m_state->groupNodeInfo));
+        }
     };
-    auto shouldBlockCall = shouldStopCall();
-    auto ret = checkConnection(
-        c_moduleName, "asyncGetGroupNodeInfo", m_prx,
-        [_onGetGroupNodeInfo](bcos::Error::Ptr _error) {
-            if (_onGetGroupNodeInfo)
-            {
-                _onGetGroupNodeInfo(_error, nullptr);
-            }
-        },
-        shouldBlockCall);
-    if (!ret && shouldBlockCall)
-    {
-        return;
-    }
-    m_prx->async_asyncGetGroupNodeInfo(new Callback(_onGetGroupNodeInfo, m_keyFactory), _groupID);
+
+    GetGroupNodeInfoAwaitable awaitable{
+        this, _groupID, std::make_shared<GetGroupNodeInfoAwaitable::CompletionState>()};
+    co_return co_await awaitable;
 }
 void bcostars::GatewayServiceClient::asyncNotifyGroupInfo(
     bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(bcos::Error::Ptr&&)> _callback)
@@ -301,52 +378,100 @@ void bcostars::GatewayServiceClient::asyncNotifyGroupInfo(
         prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
     }
 }
-void bcostars::GatewayServiceClient::asyncSendMessageByTopic(const std::string& _topic,
-    bcos::bytesConstRef _data,
-    std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesConstRef)> _respFunc)
+bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>>
+bcostars::GatewayServiceClient::sendMessageByTopic(
+    const std::string& _topic, bcos::bytesConstRef _data)
 {
-    class Callback : public bcostars::GatewayServicePrxCallback
+    struct SendTopicAwaitable
     {
-    public:
-        Callback(std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesConstRef)> callback)
-          : m_callback(callback)
-        {}
-        void callback_asyncSendMessageByTopic(const bcostars::Error& ret, tars::Int32 _type,
-            const std::vector<tars::Char>& _responseData) override
+        struct CompletionState
         {
-            s_tarsTimeoutCount.store(0);
-            auto data = bcos::bytesConstRef(
-                reinterpret_cast<const bcos::byte*>(_responseData.data()), _responseData.size());
-            m_callback(toBcosError(ret), _type, data);
-        }
-        void callback_asyncSendMessageByTopic_exception(tars::Int32 ret) override
+            std::atomic<bool> completed{false};
+            std::coroutine_handle<> handle;
+            bcos::Error::Ptr error;
+            int16_t type = 0;
+            bcos::bytes data;
+        };
+
+        class Callback : public bcostars::GatewayServicePrxCallback
         {
-            s_tarsTimeoutCount++;
-            m_callback(toBcosError(ret), 0, {});
+        public:
+            explicit Callback(std::shared_ptr<CompletionState> state) : m_state(std::move(state))
+            {}
+
+            void callback_asyncSendMessageByTopic(const bcostars::Error& ret, tars::Int32 _type,
+                const std::vector<tars::Char>& _responseData) override
+            {
+                s_tarsTimeoutCount.store(0);
+                complete(toBcosError(ret), static_cast<int16_t>(_type),
+                    bcos::bytes(_responseData.begin(), _responseData.end()));
+            }
+            void callback_asyncSendMessageByTopic_exception(tars::Int32 ret) override
+            {
+                s_tarsTimeoutCount++;
+                complete(toBcosError(ret), 0, {});
+            }
+
+        private:
+            void complete(bcos::Error::Ptr error, int16_t type, bcos::bytes data)
+            {
+                if (!m_state->completed.exchange(true))
+                {
+                    m_state->error = std::move(error);
+                    m_state->type = type;
+                    m_state->data = std::move(data);
+                    m_state->handle.resume();
+                }
+            }
+            std::shared_ptr<CompletionState> m_state;
+        };
+
+        GatewayServiceClient* m_self;
+        std::string m_topic;
+        std::shared_ptr<std::vector<char>> m_buffer;
+        std::shared_ptr<CompletionState> m_state;
+
+        constexpr static bool await_ready() noexcept { return false; }
+
+        // see SendAwaitable::await_suspend for why this returns false on a synchronous
+        // connection-check failure
+        bool await_suspend(std::coroutine_handle<> _handle)
+        {
+            m_state->handle = _handle;
+            auto state = m_state;
+            auto buffer = m_buffer;
+            auto shouldBlockCall = m_self->shouldStopCall();
+            auto ret = checkConnection(m_self->c_moduleName, "asyncSendMessageByTopic",
+                m_self->m_prx,
+                [state, buffer](bcos::Error::Ptr _error) {
+                    state->error = std::move(_error);
+                    (void)buffer;
+                },
+                shouldBlockCall);
+            if (!ret && shouldBlockCall)
+            {
+                return false;
+            }
+            m_self->m_prx->tars_set_timeout(m_self->c_amopTimeout)
+                ->async_asyncSendMessageByTopic(new Callback(state), m_topic, *buffer);
+            return true;
         }
 
-    private:
-        std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesConstRef)> m_callback;
+        std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes> await_resume()
+        {
+            return std::make_tuple(
+                std::move(m_state->error), m_state->type, std::move(m_state->data));
+        }
     };
-    auto shouldBlockCall = shouldStopCall();
-    auto ret = checkConnection(
-        c_moduleName, "asyncSendMessageByTopic", m_prx,
-        [_respFunc](bcos::Error::Ptr _error) {
-            if (_respFunc)
-            {
-                _respFunc(std::move(_error), 0, {});
-            }
-        },
-        shouldBlockCall);
-    if (!ret && shouldBlockCall)
-    {
-        return;
-    }
-    std::vector<tars::Char> tarsRequestData(_data.begin(), _data.end());
-    m_prx->tars_set_timeout(c_amopTimeout)
-        ->async_asyncSendMessageByTopic(new Callback(_respFunc), _topic, tarsRequestData);
+
+    // copy the payload into an owned buffer before the RPC — the caller's bytesConstRef is not
+    // guaranteed to outlive the request
+    auto buffer = std::make_shared<std::vector<char>>(_data.begin(), _data.end());
+    SendTopicAwaitable awaitable{
+        this, _topic, std::move(buffer), std::make_shared<SendTopicAwaitable::CompletionState>()};
+    co_return co_await awaitable;
 }
-void bcostars::GatewayServiceClient::asyncSendBroadcastMessageByTopic(
+bcos::task::Task<void> bcostars::GatewayServiceClient::sendBroadcastMessageByTopic(
     const std::string& _topic, bcos::bytesConstRef _data)
 {
     auto shouldBlockCall = shouldStopCall();
@@ -354,10 +479,12 @@ void bcostars::GatewayServiceClient::asyncSendBroadcastMessageByTopic(
         c_moduleName, "asyncSendBroadcastMessageByTopic", m_prx, nullptr, shouldBlockCall);
     if (!ret && shouldBlockCall)
     {
-        return;
+        co_return;
     }
-    std::vector<tars::Char> tarsRequestData(_data.begin(), _data.end());
+    // fire-and-forget: copy the payload into an owned buffer and send without a callback
+    std::vector<char> tarsRequestData(_data.begin(), _data.end());
     m_prx->async_asyncSendBroadcastMessageByTopic(nullptr, _topic, tarsRequestData);
+    co_return;
 }
 void bcostars::GatewayServiceClient::asyncSubscribeTopic(std::string const& _clientID,
     std::string const& _topicInfo, std::function<void(bcos::Error::Ptr&&)> _callback)

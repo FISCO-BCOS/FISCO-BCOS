@@ -20,18 +20,17 @@ namespace bcos::test
 {
 namespace
 {
-// FakeGateWayWrapper::asyncGetPeers has an empty body (never calls back), which
-// would hang getPeers/getGroupPeers. Override it to call back with an error so
-// the handlers run their dispatch + error branch without needing valid
+// FakeGateWayWrapper::getPeers returns an empty (nullptr) result by default. Override it to
+// return an error so the handlers run their dispatch + error branch without needing valid
 // GatewayInfo (which the success path would serialize).
 class ErrorGateway : public FakeGateWayWrapper
 {
 public:
-    void asyncGetPeers(
-        std::function<void(Error::Ptr, gateway::GatewayInfo::Ptr, gateway::GatewayInfosPtr)>
-            _callback) override
+    bcos::task::Task<std::tuple<Error::Ptr, gateway::GatewayInfo::Ptr, gateway::GatewayInfosPtr>>
+    getPeers() override
     {
-        _callback(BCOS_ERROR_PTR(-1, "no peers in test"), nullptr, nullptr);
+        co_return std::make_tuple(BCOS_ERROR_PTR(-1, "no peers in test"),
+            gateway::GatewayInfo::Ptr(nullptr), gateway::GatewayInfosPtr(nullptr));
     }
 };
 

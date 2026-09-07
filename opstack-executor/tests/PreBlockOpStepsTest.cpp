@@ -257,6 +257,18 @@ BOOST_AUTO_TEST_CASE(JovianRejectsBadSelector)
     BOOST_CHECK_THROW(f.run(op::jovianConfig(), {kDepositEnvelope}, {dep}), OpConsensusError);
 }
 
+BOOST_AUTO_TEST_CASE(AcceptsFirstDepositThatIsNotL1Attributes)
+{
+    // First tx must be a deposit; it does not have to be the L1-attributes deposit.
+    Fixture f;
+    auto dep = depositWithData(l1AttributesData(op::IsthmusL1AttributesLen));
+    dep.from = evmc::address{};
+    dep.to = evmc::address{};
+    BOOST_REQUIRE(!op::isL1AttributesTx(dep));
+    BOOST_CHECK_NO_THROW(f.run(op::isthmusConfig(), {kDepositEnvelope}, {dep}));
+    BOOST_CHECK(f.hashes.has_value());
+}
+
 BOOST_AUTO_TEST_CASE(IsthmusAcceptsAndLeavesScalarEmpty)
 {
     Fixture f;

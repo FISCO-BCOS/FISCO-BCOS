@@ -4,12 +4,14 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
+#include <array>
 #include <bcos-evm/eth/state/state.hpp>
 #include <cstdint>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
 #include <limits>
 #include <optional>
+#include <stdexcept>
 #include <system_error>
 #include <variant>
 
@@ -229,12 +231,56 @@ struct DepositTx
 /// OP 0x7E deposit transaction/receipt type (EIP-2718 typed envelope prefix).
 constexpr auto kDepositTxType = static_cast<evmone::state::Transaction::Type>(0x7e);
 
+// L1-attributes calldata: Isthmus 176B (0x098999be), Jovian 178B (0x3db6be2b).
+inline constexpr std::size_t IsthmusL1AttributesLen = 176;
+inline constexpr std::size_t JovianL1AttributesLen = 178;
+inline constexpr std::array<uint8_t, 4> IsthmusL1AttributesSelector = {0x09, 0x89, 0x99, 0xbe};
+inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6, 0xbe, 0x2b};
+/// Gas limit used when synthesizing the L1-attributes deposit.
+inline constexpr int64_t c_l1InfoDepositGas = 1'000'000;
+
+/// L1 block fields for synthesizing the L1-attributes deposit.
+/// All-zero number/time/blockHash is the unset snapshot sentinel.
+/// All-zero baseFeeScalar or batcherHash means SystemConfig was not supplied.
+struct L1BlockInfo
+{
+    uint64_t number = 0;
+    uint64_t time = 0;
+    intx::uint256 baseFee{0};
+    evmc::bytes32 blockHash{};
+    uint64_t sequenceNumber = 0;
+    intx::uint256 blobBaseFee{0};
+    uint32_t baseFeeScalar = 0;
+    uint32_t blobBaseFeeScalar = 0;
+    evmc::bytes32 batcherHash{};
+    uint32_t operatorFeeScalar = 0;
+    uint64_t operatorFeeConstant = 0;
+};
+
+[[nodiscard]] inline bool isUnsetL1BlockInfo(L1BlockInfo const& info) noexcept
+{
+    return info.number == 0 && info.time == 0 && evmc::is_zero(info.blockHash);
+}
+
+[[nodiscard]] inline bool isUnsetSystemConfig(L1BlockInfo const& info) noexcept
+{
+    return info.baseFeeScalar == 0 || evmc::is_zero(info.batcherHash);
+}
+
+/// Deposit gas_limit exceeds remaining block gas (op-geth ErrGasLimitReached). Distinct
+/// from executor_v1::opstack::OpBlockGasPoolFull (prepare-time normal-tx pool full).
+struct OpDepositGasLimitReached : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
 /// Execute one 0x7E deposit: skip buyGas; add balance when mint has a value; still deduct
 /// intrinsic + the EIP-7623 floor; both failure paths retain the mint and force-increment the
-/// nonce; is_system_tx==true throws std::runtime_error (block-level error). gas_limit exceeding
-/// blockGasLeft throws std::runtime_error (op-geth ErrGasLimitReached, block-level error).
-/// Returns a bcos::protocol::TransactionReceipt::Ptr with the deposit_nonce/receipt_version
-/// carried via setOpStackMeta; the state diff is returned through `outStateDiff`.
+/// nonce; is_system_tx==true throws std::runtime_error (block-level error); gas_limit
+/// exceeding blockGasLeft throws OpDepositGasLimitReached (op-geth ErrGasLimitReached,
+/// block-level error). Returns a bcos::protocol::TransactionReceipt::Ptr
+/// with the deposit_nonce/receipt_version carried via setOpStackMeta; the state diff is
+/// returned through `outStateDiff`.
 bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     const DepositTx& dep, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,

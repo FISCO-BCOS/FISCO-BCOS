@@ -251,25 +251,26 @@ void FrontService::start()
     // try to getNodeIDs from gateway
     auto self = std::weak_ptr<FrontService>(
         std::static_pointer_cast<FrontService>(shared_from_this()));
-    m_gatewayInterface->asyncGetGroupNodeInfo(m_groupID,
-        [self](const Error::Ptr& _error, const bcos::gateway::GroupNodeInfo::Ptr& _groupNodeInfo) {
-            if (_error)
-            {
-                FRONT_LOG(ERROR) << LOG_BADGE("start") << LOG_DESC("asyncGetGroupNodeInfo failed")
-                                 << LOG_KV("code", _error->errorCode())
-                                 << LOG_KV("message", _error->errorMessage());
-                return;
-            }
+    task::wait([](std::weak_ptr<FrontService> self,
+                   bcos::gateway::GatewayInterface::Ptr gateway,
+                   std::string groupID) -> bcos::task::Task<void> {
+        auto [error, groupNodeInfo] = co_await gateway->getGroupNodeInfo(groupID);
+        if (error)
+        {
+            FRONT_LOG(ERROR) << LOG_BADGE("start") << LOG_DESC("asyncGetGroupNodeInfo failed")
+                             << LOG_KV("code", error->errorCode())
+                             << LOG_KV("message", error->errorMessage());
+            co_return;
+        }
+        auto frontService = self.lock();
+        if (frontService && groupNodeInfo)
+        {
             FRONT_LOG(INFO) << LOG_BADGE("start") << LOG_DESC("asyncGetGroupNodeInfo callback")
-                            << LOG_KV("node size",
-                                   _groupNodeInfo ? _groupNodeInfo->nodeIDList().size() : 0);
-            auto frontService = self.lock();
-            if (frontService)
-            {
-                frontService->onReceiveGroupNodeInfo(
-                    frontService->groupID(), _groupNodeInfo, nullptr);
-            }
-        });
+                            << LOG_KV("node size", groupNodeInfo->nodeIDList().size());
+            frontService->onReceiveGroupNodeInfo(
+                frontService->groupID(), groupNodeInfo, nullptr);
+        }
+    }(self, m_gatewayInterface, m_groupID));
 
     FRONT_LOG(INFO) << LOG_DESC("start") << LOG_KV("nodeID", m_nodeID->hex())
                     << LOG_KV("groupID", m_groupID);

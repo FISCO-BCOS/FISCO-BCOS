@@ -49,7 +49,8 @@ BOOST_AUTO_TEST_CASE(poolAdmissionColumnIsExact)
     constexpr auto legacy = Check::TypeGate | Check::ToFieldFormat | Check::Signature |
                             Check::MaxGasLimit | Check::FeeCapVsBaseFee | Check::ChainId |
                             Check::SenderIsEOA | Check::NonceNotMax | Check::Web3NonceWindow |
-                            Check::InitCodeSize | Check::Balance | Check::IntrinsicGas;
+                            Check::InitCodeSize | Check::Balance | Check::IntrinsicGas |
+                            Check::Web3PoolNonce;
     BOOST_CHECK(checkSet(TxKind::Web3Legacy, AdmissionContext::PoolAdmission) == legacy);
     BOOST_CHECK(checkSet(TxKind::Web3AccessList, AdmissionContext::PoolAdmission) ==
                 (legacy | Check::TypeByRevision));
@@ -184,6 +185,43 @@ BOOST_AUTO_TEST_CASE(checkOrderCoversEveryReachableCheckExactlyOnce)
     BOOST_CHECK((reachable & ~ordered) == Check::None);
 }
 
+// The three stages partition the order: every check sits in exactly one, and back to back they
+// are c_checkOrder. What each stage may read is decided by its position, so the membership
+// facts verify() relies on are pinned here rather than assumed.
+BOOST_AUTO_TEST_CASE(stagesPartitionTheEvaluationOrder)
+{
+    BOOST_CHECK_EQUAL(
+        c_gateOrder.size() + c_stateOrder.size() + c_poolOrder.size(), c_checkOrder.size());
+    Check gate = Check::None;
+    for (auto check : c_gateOrder)
+    {
+        gate = gate | check;
+    }
+    BOOST_CHECK((gate & c_stateStage) == Check::None);
+    BOOST_CHECK((gate & c_poolStage) == Check::None);
+    BOOST_CHECK((c_stateStage & c_poolStage) == Check::None);
+
+    // Every check that needs the ACCOUNT lives in the state stage: that is what lets verify()
+    // read it once, before the stage, and only when the set contains one of them.
+    BOOST_CHECK((c_accountStateDependent & ~c_stateStage) == Check::None);
+    // Sender-dependent is the wider set: it also covers the pool rule keyed on (sender, nonce),
+    // which needs the recovered address but no account read. Both live after the gate, since the
+    // sender does not exist until the signature check has run.
+    BOOST_CHECK(contains(c_senderDependent, Check::Web3PoolNonce));
+    BOOST_CHECK(!contains(c_accountStateDependent, Check::Web3PoolNonce));
+    BOOST_CHECK((c_senderDependent & ~(c_stateStage | c_poolStage)) == Check::None);
+    // A BCOS transaction has no state-stage check in any context, so it never reads the chain;
+    // a Web3 proposal has state-stage checks but no sender-dependent one, so it reads the chain
+    // view and not the account.
+    for (auto context : kContexts)
+    {
+        BOOST_CHECK((checkSet(TxKind::Bcos, context) & c_stateStage) == Check::None);
+    }
+    const auto proposal = checkSet(TxKind::Web3DynamicFee, AdmissionContext::ProposalVerification);
+    BOOST_CHECK((proposal & c_stateStage) != Check::None);
+    BOOST_CHECK((proposal & c_senderDependent) == Check::None);
+}
+
 // TypeGate must be first: for a refused envelope type nothing else is meaningful, and the type
 // gate is what turns a blob or deposit arriving over P2P into a rejection.
 BOOST_AUTO_TEST_CASE(typeGateIsEvaluatedFirstAndSignatureBeforeAccountState)
@@ -194,8 +232,8 @@ BOOST_AUTO_TEST_CASE(typeGateIsEvaluatedFirstAndSignatureBeforeAccountState)
         return std::distance(c_checkOrder.begin(), std::ranges::find(c_checkOrder, target));
     };
     const auto signature = indexOf(Check::Signature);
-    for (auto dependent :
-        {Check::SenderIsEOA, Check::NonceNotMax, Check::Web3NonceWindow, Check::Balance})
+    for (auto dependent : {Check::SenderIsEOA, Check::NonceNotMax, Check::Web3NonceWindow,
+             Check::Balance, Check::Web3PoolNonce})
     {
         BOOST_CHECK_MESSAGE(
             signature < indexOf(dependent), "sender-dependent check ordered before Signature");
@@ -255,11 +293,11 @@ BOOST_AUTO_TEST_CASE(proposalVerificationKeepsProtocolInvariants)
 
     // The same table read the other way: what comes off, per kind, is exactly the node-local
     // set and nothing else. Balance depends on where in the block a transaction sits;
-    // SenderIsEOA and NonceNotMax are execution-enforced account reads; Web3NonceWindow and
-    // BcosPoolNonce consult node-local caches on which two honest nodes can disagree -- and on
-    // this path a disagreement is a view change, not a dropped transaction.
+    // SenderIsEOA and NonceNotMax are execution-enforced account reads; Web3NonceWindow and the
+    // two pending-nonce rules consult node-local state on which two honest nodes can disagree --
+    // and on this path a disagreement is a view change, not a dropped transaction.
     constexpr auto nodeLocal = Check::Balance | Check::SenderIsEOA | Check::NonceNotMax |
-                               Check::Web3NonceWindow | Check::BcosPoolNonce;
+                               Check::Web3NonceWindow | Check::BcosPoolNonce | Check::Web3PoolNonce;
     for (auto kind : kKinds)
     {
         const auto pool = checkSet(kind, AdmissionContext::PoolAdmission);

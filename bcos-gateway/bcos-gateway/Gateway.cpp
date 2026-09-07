@@ -89,13 +89,8 @@ void Gateway::stop()
     GATEWAY_LOG(INFO) << LOG_DESC("stop end.");
 }
 
-void Gateway::asyncGetPeers(
-    std::function<void(Error::Ptr, GatewayInfo::Ptr, GatewayInfosPtr)> _onGetPeers)
+bcos::task::Task<std::tuple<Error::Ptr, GatewayInfo::Ptr, GatewayInfosPtr>> Gateway::getPeers()
 {
-    if (!_onGetPeers)
-    {
-        return;
-    }
     auto sessionInfos = m_p2pInterface->sessionInfos();
     auto peersNodeIDList = m_gatewayNodeManager->peersRouterTable()->getAllPeers();
     GatewayInfosPtr peerGatewayInfos = std::make_shared<GatewayInfos>();
@@ -122,20 +117,19 @@ void Gateway::asyncGetPeers(
     auto localGatewayInfo = std::make_shared<GatewayInfo>(localP2pInfo);
     auto localNodeInfo = m_gatewayNodeManager->localRouterTable()->nodeListInfo();
     localGatewayInfo->setNodeIDInfo(std::move(localNodeInfo));
-    _onGetPeers(nullptr, localGatewayInfo, peerGatewayInfos);
+    co_return std::make_tuple(nullptr, std::move(localGatewayInfo), std::move(peerGatewayInfos));
 }
 
 /**
  * @brief: get nodeIDs from gateway
  * @param _groupID:
- * @param _onGetGroupNodeInfo: get nodeIDs callback
- * @return void
+ * @return {error, groupNodeInfo}: error is nullptr on success
  */
-void Gateway::asyncGetGroupNodeInfo(
-    const std::string& _groupID, GetGroupNodeInfoFunc _onGetGroupNodeInfo)
+bcos::task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>>
+Gateway::getGroupNodeInfo(const std::string& _groupID)
 {
     auto groupNodeInfo = m_gatewayNodeManager->getGroupNodeInfoList(_groupID);
-    _onGetGroupNodeInfo(nullptr, groupNodeInfo);
+    co_return std::make_tuple(nullptr, std::move(groupNodeInfo));
 }
 
 
@@ -623,24 +617,24 @@ bcos::gateway::GatewayNodeManager::Ptr bcos::gateway::Gateway::gatewayNodeManage
 {
     return m_gatewayNodeManager;
 }
-void bcos::gateway::Gateway::asyncSendMessageByTopic(const std::string& _topic,
-    bcos::bytesConstRef _data,
-    std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc)
+bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>>
+bcos::gateway::Gateway::sendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data)
 {
     if (m_amop)
     {
-        m_amop->asyncSendMessageByTopic(_topic, _data, std::move(_respFunc));
-        return;
+        co_return co_await m_amop->sendMessageByTopic(_topic, _data);
     }
-    _respFunc(BCOS_ERROR_PTR(-1, "AMOP is not initialized"), 0, {});
+    co_return std::make_tuple(BCOS_ERROR_PTR(-1, "AMOP is not initialized"), (int16_t)0,
+        bcos::bytes{});
 }
-void bcos::gateway::Gateway::asyncSendBroadcastMessageByTopic(
+bcos::task::Task<void> bcos::gateway::Gateway::sendBroadcastMessageByTopic(
     const std::string& _topic, bcos::bytesConstRef _data)
 {
     if (m_amop)
     {
-        m_amop->asyncSendBroadcastMessageByTopic(_topic, _data);
+        co_await m_amop->sendBroadcastMessageByTopic(_topic, _data);
     }
+    co_return;
 }
 void bcos::gateway::Gateway::asyncSubscribeTopic(std::string const& _clientID,
     std::string const& _topicInfo, std::function<void(Error::Ptr&&)> _callback)

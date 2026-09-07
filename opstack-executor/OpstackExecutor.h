@@ -243,6 +243,8 @@ namespace bcos::executor_v1::opstack
 DERIVE_BCOS_EXCEPTION(OpEvmcRevisionNotConfigured);
 DERIVE_BCOS_EXCEPTION(OpForkRevisionMismatch);
 DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
+/// Block gas pool cannot fit the transaction (skip this build, do not evict).
+DERIVE_BCOS_EXCEPTION(OpBlockGasPoolFull);
 
 using bcos::evm::evmstate::SharedErrorSlot;  // Storage2State.h
 
@@ -912,16 +914,17 @@ public:
                     call ? std::optional<uint64_t>{} : std::optional<uint64_t>(m_ctx->chainId),
                     &*m_blockInfo, call);
             }
+            catch (const OpBlockGasPoolFull& e)
+            {
+                throw bcos::evm::OpConsensusError(
+                    std::string("OpScheduler: block gas pool full: ") + e.what(),
+                    transaction.hash(), /*capacity=*/true);
+            }
             catch (const OpTxValidationFailed& e)
             {
-                // The offending tx's hash rides in a structured member (bcos::Error carries a
-                // string only across the delegate boundary): the engine's OP build loop reads
-                // e.txHash to evict the culprit from the pool instead of failing every
-                // subsequent build — never parse the message text.
-                bcos::evm::OpConsensusError err(
-                    std::string("OpScheduler: normal tx validation failed: ") + e.what());
-                err.txHash = transaction.hash();
-                throw err;
+                throw bcos::evm::OpConsensusError(
+                    std::string("OpScheduler: normal tx validation failed: ") + e.what(),
+                    transaction.hash());
             }
             // Only after a successful prepare: a rejected normal tx must not flip the
             // deposit-after-non-deposit warn path for a later deposit in the same block.
@@ -1122,15 +1125,19 @@ public:
             props = co_await m_prepare(stateView, blockHeader, transaction, ledgerConfig, fee,
                 blockGasLeft, call ? std::optional<uint64_t>{} : chainId, &blockInfo, call);
         }
+        catch (const OpBlockGasPoolFull& e)
+        {
+            // Same conversion as ExecuteContext::prepare: on the block path a full pool is a
+            // capacity fault (keep the transaction), not a poisoned-tx reject.
+            throw bcos::evm::OpConsensusError(
+                std::string("OpScheduler: block gas pool full: ") + e.what(), transaction.hash(),
+                /*capacity=*/true);
+        }
         catch (const OpTxValidationFailed& e)
         {
-            // Mirror the ExecuteContext::prepare catch: the offending tx's hash rides in a
-            // structured member so the engine's OP build loop can evict the culprit by hash —
-            // never parse the message text.
-            bcos::evm::OpConsensusError err(
-                std::string("OpScheduler: normal tx validation failed: ") + e.what());
-            err.txHash = transaction.hash();
-            throw err;
+            throw bcos::evm::OpConsensusError(
+                std::string("OpScheduler: normal tx validation failed: ") + e.what(),
+                transaction.hash());
         }
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(stateView, blockHeader, transaction, ledgerConfig, props,
@@ -1251,6 +1258,12 @@ private:
         catch (const OpForkRevisionMismatch&)
         {
             throw;
+        }
+        catch (const bcos::evm::opstack::OpDepositGasLimitReached& e)
+        {
+            bcos::evm::OpConsensusError err("OpScheduler: " + what + " failed: " + e.what());
+            err.capacity = true;
+            throw err;
         }
         catch (const std::exception& e)
         {
@@ -1384,6 +1397,13 @@ private:
                                     blockGasLeft);
         if (auto const* err = std::get_if<std::error_code>(&validated))
         {
+            // On the block path, a full gas pool is a capacity fault, not a poisoned tx.
+            // eth_call / estimateGas keep GAS_LIMIT_REACHED as ordinary validation.
+            if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED) && !call)
+            {
+                BOOST_THROW_EXCEPTION(
+                    OpBlockGasPoolFull{} << bcos::errinfo_comment(err->message()));
+            }
             // DEBUG not WARNING: this path is reachable from unauthenticated eth_call /
             // estimateGas, where any caller can trigger validation failures at will — a
             // WARNING here would be a log-amplification vector.

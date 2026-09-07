@@ -55,89 +55,50 @@ public:
 
     task::Task<crypto::NodeIDPtr> randomSelectNode()
     {
-        struct Awaitable
+        auto [error, localGatewayInfo, peers] = co_await m_gateway->getPeers();
+        if (error)
         {
-            Awaitable(bcos::gateway::GatewayInterface::Ptr& gateway, std::string& groupID,
-                std::mt19937& rng)
-              : m_gateway(gateway), m_groupID(groupID), m_rng(rng)
-            {}
+            BOOST_THROW_EXCEPTION(*error);
+        }
 
-            constexpr bool await_ready() const noexcept { return false; }
-            void await_suspend(std::coroutine_handle<> handle)
+        std::string nodeID;
+        if (!peers->empty())
+        {
+            std::set<std::string> nodeIDs;
+            for (const auto& peerGatewayInfo : *peers)
             {
-                bcos::concepts::getRef(m_gateway).asyncGetPeers(
-                    [this, m_handle = handle](Error::Ptr error, const gateway::GatewayInfo::Ptr&,
-                        const gateway::GatewayInfosPtr& peerGatewayInfos) mutable {
-                        if (error)
-                        {
-                            m_error = std::move(error);
-                        }
-                        else
-                        {
-                            if (!peerGatewayInfos->empty())
-                            {
-                                std::set<std::string> nodeIDs;
-                                for (const auto& peerGatewayInfo : *peerGatewayInfos)
-                                {
-                                    auto nodeIDInfo = peerGatewayInfo->nodeIDInfo();
-                                    auto nodeInfo = nodeIDInfo.find(m_groupID);
+                auto nodeIDInfo = peerGatewayInfo->nodeIDInfo();
+                auto nodeInfo = nodeIDInfo.find(m_groupID);
 
-                                    if (nodeInfo != nodeIDInfo.end() && !nodeInfo->second.empty())
-                                    {
-                                        for (auto& it : nodeInfo->second)
-                                        {
-                                            if (it.second ==
-                                                    bcos::protocol::NodeType::CONSENSUS_NODE ||
-                                                it.second ==
-                                                    bcos::protocol::NodeType::OBSERVER_NODE)
-                                            {
-                                                nodeIDs.insert(it.first);
-                                                LIGHTNODE_LOG(TRACE)
-                                                    << LOG_KV("NodeID:", it.first)
-                                                    << LOG_KV("nodeType:", it.second);
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (!nodeIDs.empty())
-                                {
-                                    std::uniform_int_distribution<size_t> distribution{
-                                        0U, nodeIDs.size() - 1};
-                                    auto nodeIDIt = nodeIDs.begin();
-                                    auto step = distribution(m_rng);
-                                    for (size_t i = 0; i < step; ++i)
-                                    {
-                                        ++nodeIDIt;
-                                    }
-
-                                    m_nodeID = *nodeIDIt;
-                                }
-                            }
-                        }
-
-                        m_handle.resume();
-                    });
-            }
-            void await_resume()
-            {
-                if (m_error)
+                if (nodeInfo != nodeIDInfo.end() && !nodeInfo->second.empty())
                 {
-                    BOOST_THROW_EXCEPTION(*(m_error));
+                    for (auto& it : nodeInfo->second)
+                    {
+                        if (it.second == bcos::protocol::NodeType::CONSENSUS_NODE ||
+                            it.second == bcos::protocol::NodeType::OBSERVER_NODE)
+                        {
+                            nodeIDs.insert(it.first);
+                            LIGHTNODE_LOG(TRACE)
+                                << LOG_KV("NodeID:", it.first)
+                                << LOG_KV("nodeType:", it.second);
+                        }
+                    }
                 }
             }
 
-            bcos::gateway::GatewayInterface::Ptr& m_gateway;
-            std::string& m_groupID;
-            std::mt19937& m_rng;
+            if (!nodeIDs.empty())
+            {
+                std::uniform_int_distribution<size_t> distribution{0U, nodeIDs.size() - 1};
+                auto nodeIDIt = nodeIDs.begin();
+                auto step = distribution(m_rng);
+                for (size_t i = 0; i < step; ++i)
+                {
+                    ++nodeIDIt;
+                }
 
-            Error::Ptr m_error;
-            std::string m_nodeID;
-        };
-
-        auto awaitable = Awaitable(m_gateway, m_groupID, m_rng);
-        co_await awaitable;
-        auto& nodeID = awaitable.m_nodeID;
+                nodeID = *nodeIDIt;
+            }
+        }
 
         if (nodeID.empty())
         {
@@ -156,75 +117,42 @@ public:
 
     task::Task<bcos::crypto::NodeIDs> getAllNodeID()
     {
-        struct Awaitable
+        auto [error, localGatewayInfo, peers] = co_await m_gateway->getPeers();
+        if (error)
         {
-            Awaitable(bcos::gateway::GatewayInterface::Ptr& gateway, std::string& groupID)
-              : m_gateway(gateway), m_groupID(groupID)
-            {}
+            BOOST_THROW_EXCEPTION(*error);
+        }
 
-            constexpr bool await_ready() const noexcept { return false; }
-            void await_suspend(std::coroutine_handle<> handle)
+        std::set<std::string> nodeIDList;
+        if (!peers->empty())
+        {
+            std::set<std::string> nodeIDs;
+            for (const auto& peerGatewayInfo : *peers)
             {
-                bcos::concepts::getRef(m_gateway).asyncGetPeers(
-                    [this, m_handle = handle](Error::Ptr error, const gateway::GatewayInfo::Ptr&,
-                        const gateway::GatewayInfosPtr& peerGatewayInfos) mutable {
-                        if (error)
-                        {
-                            m_error = std::move(error);
-                        }
-                        else
-                        {
-                            if (!peerGatewayInfos->empty())
-                            {
-                                std::set<std::string> nodeIDs;
-                                for (const auto& peerGatewayInfo : *peerGatewayInfos)
-                                {
-                                    auto nodeIDInfo = peerGatewayInfo->nodeIDInfo();
-                                    auto nodeInfo = nodeIDInfo.find(m_groupID);
+                auto nodeIDInfo = peerGatewayInfo->nodeIDInfo();
+                auto nodeInfo = nodeIDInfo.find(m_groupID);
 
-                                    if (nodeInfo != nodeIDInfo.end() && !nodeInfo->second.empty())
-                                    {
-                                        for (auto& it : nodeInfo->second)
-                                        {
-                                            if (it.second ==
-                                                    bcos::protocol::NodeType::CONSENSUS_NODE ||
-                                                it.second ==
-                                                    bcos::protocol::NodeType::OBSERVER_NODE)
-                                            {
-                                                nodeIDs.insert(it.first);
-                                                LIGHTNODE_LOG(TRACE)
-                                                    << LOG_KV("NodeID:", it.first)
-                                                    << LOG_KV("nodeType:", it.second);
-                                            }
-                                        }
-                                    }
-                                }
-                                if (!nodeIDs.empty())
-                                {
-                                    m_nodeIDList = std::move(nodeIDs);
-                                }
-                            }
-                        }
-                        m_handle.resume();
-                    });
-            }
-            void await_resume()
-            {
-                if (m_error)
+                if (nodeInfo != nodeIDInfo.end() && !nodeInfo->second.empty())
                 {
-                    BOOST_THROW_EXCEPTION(*(m_error));
+                    for (auto& it : nodeInfo->second)
+                    {
+                        if (it.second == bcos::protocol::NodeType::CONSENSUS_NODE ||
+                            it.second == bcos::protocol::NodeType::OBSERVER_NODE)
+                        {
+                            nodeIDs.insert(it.first);
+                            LIGHTNODE_LOG(TRACE)
+                                << LOG_KV("NodeID:", it.first)
+                                << LOG_KV("nodeType:", it.second);
+                        }
+                    }
                 }
             }
-            bcos::gateway::GatewayInterface::Ptr& m_gateway;
-            std::string& m_groupID;
+            if (!nodeIDs.empty())
+            {
+                nodeIDList = std::move(nodeIDs);
+            }
+        }
 
-            Error::Ptr m_error;
-            std::set<std::string> m_nodeIDList;
-        };
-
-        auto awaitable = Awaitable(m_gateway, m_groupID);
-        co_await awaitable;
-        auto& nodeIDList = awaitable.m_nodeIDList;
         LIGHTNODE_LOG(DEBUG) << LOG_KV("nodeIDList size", nodeIDList.size());
         bcos::crypto::NodeIDs nodeIDs;
         for (const auto& nodeID : nodeIDList)

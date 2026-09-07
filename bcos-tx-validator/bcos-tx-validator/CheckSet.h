@@ -26,13 +26,14 @@
 namespace bcos::txvalidator
 {
 
-/// Routing key. Decided from the SIGNED envelope's first byte during normalization, never from
-/// the tars mirror -- a peer can set the mirror kind to 0 and a legacy-keyed check set would
-/// then skip the fee-market rules a 1559 envelope is subject to.
+/// Routing key. Decided from the SIGNED envelope's first byte -- by kindOf() in TxValidator.cpp,
+/// once normalization has authenticated that envelope -- never from the tars mirror: a peer can
+/// set the mirror kind to 0 and a legacy-keyed check set would then skip the fee-market rules a
+/// 1559 envelope is subject to.
 ///
 /// The enumerator values are NOT EIP-2718 type bytes (Web3AccessList is 2 here and 0x01 on the
-/// wire). A TxKind is produced only by kindOf() in TxValidator.cpp, which dispatches on the
-/// decoded envelope; casting a type byte to this enum is always wrong.
+/// wire). kindOf() is the only producer, dispatching on the decoded envelope; casting a type
+/// byte to this enum is always wrong.
 enum class TxKind : uint8_t
 {
     Bcos,            ///< outer tars type == BCOSTransaction; no EIP-2718 envelope
@@ -68,9 +69,10 @@ enum class AdmissionContext : uint8_t
 /// eth_sendRawTransaction would be treated as pre-verified and skip signature, EOA, nonce and
 /// balance checks.
 ///
-/// The verified/not-verified STATE is read only inside the Signature check itself, where
-/// Transaction::verify() short-circuits on `if (!tainted()) return;`. That makes the check
-/// idempotent, so no "already verified" flag has to be threaded through any call chain.
+/// No "already verified" state is consulted at all. The Signature check re-taints the
+/// transaction (clearSenderAndHash) before Transaction::verify(), so recovery runs on every call
+/// and no flag has to be threaded through any call chain. The cost, one recovery per transaction
+/// on the sync path, is what the pool-side validator this replaces paid too.
 enum class SignaturePolicy : uint8_t
 {
     Required,
@@ -106,6 +108,10 @@ enum class Check : uint32_t
     /// The nonce is already COMMITTED inside the block-limit window, or blockLimit itself is out
     /// of range (LedgerNonceChecker::checkNonce). Chain state.
     BcosLedgerNonce = 1U << 18,
+    /// The (sender, nonce) pair is already held by a PENDING Web3 transaction in this node's
+    /// pool (Web3NonceChecker::existsMemoryNonce). The Web3 counterpart of BcosPoolNonce, and
+    /// node-local in the same way -- but keyed on the SENDER, which BcosPoolNonce is not.
+    Web3PoolNonce = 1U << 19,
 };
 
 constexpr Check operator|(Check lhs, Check rhs) noexcept
@@ -125,25 +131,36 @@ constexpr bool contains(Check set, Check item) noexcept
     return (set & item) != Check::None;
 }
 
-/// The single evaluation order. The bitmask expresses membership only; this array decides which
-/// code a transaction violating several rules reports -- and EEST fixtures assert specific error
-/// codes, so that has to be deterministic.
+/// The evaluation order, in three stages. The bitmask expresses membership only; the order
+/// decides which code a transaction violating several rules reports -- and EEST fixtures assert
+/// specific error codes, so that has to be deterministic.
 ///
-/// Follows evmone's validate_transaction (bcos-evm/bcos-evm/eth/state/state.cpp, mirrored by
-/// ethereum-executor/EthereumTransition.h), with the FISCO-only items slotted in. evmone
-/// validates the type-specific block BEFORE the shared fee rules -- for a 7702 envelope that is
-/// "to present" and "authorization list non-empty" ahead of the tip/fee-cap comparison -- so a
-/// transaction violating both reports the same first error here as it would at execution.
-/// TypeGate goes first (nothing else is meaningful for an envelope type that is refused
-/// outright), ToFieldFormat and Signature next (without a recovered sender the account-state
-/// checks cannot run), ChainId ahead of the account reads (one config read is cheaper than an
-/// account read), and the two BCOS nonce checks last, pool set before ledger, as the pool-side
-/// validator ran them.
-inline constexpr std::array c_checkOrder{
+/// A check belongs to the stage whose inputs it reads, and verify() fetches a stage's inputs
+/// once, before that stage's first check, never per check:
+///
+///   gate  -- reads the transaction alone. FISCO's own pre-checks: a refused envelope type, a
+///            malformed `to`, a bad signature or a foreign group/chain id is rejected without a
+///            single read, which is what keeps unauthenticated P2P input cheap to refuse.
+///   state -- evmone's validate_transaction (bcos-evm/bcos-evm/eth/state/state.cpp, mirrored by
+///            ethereum-executor/EthereumTransition.h), in ITS order, judged against one chain
+///            view -- a configuration snapshot plus the fee and chain-id keys -- and, only when
+///            the set contains an account-state check, one account read. evmone validates the
+///            type-specific block BEFORE the shared fee rules -- for a 7702 envelope that is "to
+///            present" and "authorization list non-empty" ahead of the tip/fee-cap comparison --
+///            so a transaction violating both reports the same first error here as at execution.
+///   pool  -- the BCOS nonce checkers, pool set before ledger, as the pool-side validator ran
+///            them. Reads the pool, not the chain.
+///
+/// Per (kind, context) this yields exactly the reads the table implies: a BCOS transaction
+/// reads nothing, a Web3 proposal reads the chain view, a Web3 admission reads the chain view
+/// and the account.
+inline constexpr std::array c_gateOrder{
     Check::TypeGate,
     Check::ToFieldFormat,
     Check::Signature,
     Check::BcosGroupChainId,
+};
+inline constexpr std::array c_stateOrder{
     Check::TypeByRevision,
     Check::SetCodeHasTo,
     Check::AuthListNonEmpty,
@@ -157,9 +174,67 @@ inline constexpr std::array c_checkOrder{
     Check::InitCodeSize,
     Check::Balance,
     Check::IntrinsicGas,
+};
+inline constexpr std::array c_poolOrder{
+    Check::Web3PoolNonce,
     Check::BcosPoolNonce,
     Check::BcosLedgerNonce,
 };
+
+namespace detail
+{
+template <std::size_t... N>
+constexpr std::array<Check, (N + ...)> concat(std::array<Check, N> const&... stages)
+{
+    std::array<Check, (N + ...)> out{};
+    std::size_t index = 0;
+    auto append = [&](auto const& stage) {
+        for (auto check : stage)
+        {
+            out.at(index) = check;
+            ++index;
+        }
+    };
+    (append(stages), ...);
+    return out;
+}
+
+template <std::size_t N>
+constexpr Check unionOf(std::array<Check, N> const& stage)
+{
+    Check out = Check::None;
+    for (auto check : stage)
+    {
+        out = out | check;
+    }
+    return out;
+}
+
+/// Position of @p check in @p stage, or the stage's size when absent. For static_asserts that
+/// pin one check's place relative to another's within a stage.
+template <std::size_t N>
+constexpr std::size_t indexOf(std::array<Check, N> const& stage, Check check)
+{
+    std::size_t index = 0;
+    for (auto entry : stage)
+    {
+        if (entry == check)
+        {
+            return index;
+        }
+        ++index;
+    }
+    return index;
+}
+}  // namespace detail
+
+/// The single evaluation order: the three stages back to back.
+inline constexpr std::array c_checkOrder = detail::concat(c_gateOrder, c_stateOrder, c_poolOrder);
+
+/// Membership masks of the stages that read something, so verify() can ask "does this set need
+/// the chain view / the pool" as one expression over the table.
+inline constexpr Check c_stateStage = detail::unionOf(c_stateOrder);
+inline constexpr Check c_poolStage = detail::unionOf(c_poolOrder);
 
 /// Checks that cannot run without a recovered sender, and must therefore be skipped when
 /// signature verification is switched off.
@@ -170,14 +245,28 @@ inline constexpr std::array c_checkOrder{
 /// committed window, and checkBlockLimit reads only _tx.blockLimit(). None touches the sender,
 /// so including them would make SignaturePolicy::Disabled silently switch off BCOS replay
 /// protection as a side effect.
-inline constexpr Check c_senderDependent =
+///
+/// Checks that need the account's own state -- balance, nonce, code. Membership decides whether
+/// verify() performs that read, so a check that merely keys on the sender address must NOT be
+/// listed here or it would drag a storage read onto its path.
+inline constexpr Check c_accountStateDependent =
     Check::SenderIsEOA | Check::NonceNotMax | Check::Web3NonceWindow | Check::Balance;
 
+/// Web3PoolNonce IS sender-dependent, and that is the difference between the two pool rules: its
+/// key is the PAIR (sender, nonce), where BcosPoolNonce's is a nonce value alone. Run with an
+/// unrecovered sender it would file every pending Web3 transaction under the empty string, and
+/// one sender's nonce would then refuse another's. It needs the address, not the account, so it
+/// is here and not above -- which is why the two sets are stated separately: verify() asks one
+/// question to decide what to switch off without a sender, and the other to decide whether to
+/// read the account at all.
+inline constexpr Check c_senderDependent = c_accountStateDependent | Check::Web3PoolNonce;
+
 /// Checks shared by every Web3 kind.
-inline constexpr Check c_web3Common =
-    Check::TypeGate | Check::ToFieldFormat | Check::Signature | Check::MaxGasLimit |
-    Check::FeeCapVsBaseFee | Check::ChainId | Check::SenderIsEOA | Check::NonceNotMax |
-    Check::Web3NonceWindow | Check::InitCodeSize | Check::Balance | Check::IntrinsicGas;
+inline constexpr Check c_web3Common = Check::TypeGate | Check::ToFieldFormat | Check::Signature |
+                                      Check::MaxGasLimit | Check::FeeCapVsBaseFee | Check::ChainId |
+                                      Check::SenderIsEOA | Check::NonceNotMax |
+                                      Check::Web3NonceWindow | Check::InitCodeSize |
+                                      Check::Balance | Check::IntrinsicGas | Check::Web3PoolNonce;
 
 /// The check set for @p kind under PoolAdmission. The other two contexts are derived from this
 /// one rather than written out separately, so the columns cannot drift apart.
@@ -218,6 +307,9 @@ constexpr Check checkSet(TxKind kind, AdmissionContext context) noexcept
     case AdmissionContext::PoolAdmission:
         return base;
     case AdmissionContext::EESTReplay:
+        // Web3PoolNonce stays: a fixture whose transactions are all distinct never meets it, and
+        // one that does repeat a (sender, nonce) would be refused by the pool's reservation
+        // anyway, with the same status. Dropping it would let no additional fixture through.
         return base & ~(Check::Balance | Check::Web3NonceWindow);
     case AdmissionContext::ProposalVerification:
         // Everything a leader could violate stays ON. These are protocol invariants: their
@@ -253,15 +345,16 @@ constexpr Check checkSet(TxKind kind, AdmissionContext context) noexcept
         //   costs no safety: execution compares the nonce for exact equality, which is strictly
         //   stronger than a [n, n+600000] window.
         //
-        //   BcosPoolNonce -- the set it consults is this node's PENDING transactions, the same
-        //   class of node-local state as that cache. A leader's transactions are legitimately
-        //   absent from it, and two honest nodes' pools differ by whatever each has admitted
-        //   and not yet sealed, so a hit here is not something every honest node agrees on.
-        //   The pool-side validator already skipped it on this path
-        //   (checkTransaction(tx, onlyCheckLedgerNonce = true)). BcosLedgerNonce, the
-        //   committed-nonce and blockLimit half, is chain state and stays.
+        //   BcosPoolNonce and Web3PoolNonce -- the set each consults is this node's PENDING
+        //   transactions, the same class of node-local state as that cache. A leader's
+        //   transactions are legitimately absent from it, and two honest nodes' pools differ by
+        //   whatever each has admitted and not yet sealed, so a hit here is not something every
+        //   honest node agrees on. The pool-side validator already skipped both on this path
+        //   (checkTransaction(tx, onlyCheckLedgerNonce = true) -- the same flag that switches
+        //   its Web3 memory-nonce lookup off). BcosLedgerNonce, the committed-nonce and
+        //   blockLimit half, is chain state and stays.
         return base & ~(Check::Balance | Check::SenderIsEOA | Check::NonceNotMax |
-                          Check::Web3NonceWindow | Check::BcosPoolNonce);
+                          Check::Web3NonceWindow | Check::BcosPoolNonce | Check::Web3PoolNonce);
     }
     // See poolAdmissionCheckSet: unreachable for a real AdmissionContext, closed for anything
     // else.

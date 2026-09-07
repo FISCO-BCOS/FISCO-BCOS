@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief test for AMOPImpl::asyncSendMessageByTopic retry path
+ * @brief test for AMOPImpl::sendMessageByTopic retry path
  * @file AMOPSendMessagePathTest.cpp
  */
 
@@ -28,6 +28,7 @@
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 
+#include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <algorithm>
@@ -109,13 +110,12 @@ struct AMOPSendFixture
     void send(std::string const& _topic, SendResult& _result)
     {
         bcos::bytes data = {'h', 'e', 'l', 'l', 'o'};
-        amop->asyncSendMessageByTopic(_topic, ref(data),
-            [&_result](bcos::Error::Ptr&& _error, int16_t _type, bytesConstRef _responseData) {
-                _result.called = true;
-                _result.error = std::move(_error);
-                _result.packetType = _type;
-                _result.responseData = bcos::bytes(_responseData.begin(), _responseData.end());
-            });
+        auto [error, packetType, responseData] =
+            bcos::task::syncWait(amop->sendMessageByTopic(_topic, ref(data)));
+        _result.called = true;
+        _result.error = std::move(error);
+        _result.packetType = packetType;
+        _result.responseData = std::move(responseData);
     }
 
     Mock<P2PInterface> networkMock;
