@@ -18,7 +18,7 @@
  *        into a real RocksDBStorage2<StateKey, ..., StateKeyResolver, ...>) read back by raw
  *        h256 through the adapter, both directly and through the type-erased
  *        AnyStorage<h256, bytes> handle makeMPTNodeReader() hands to NodeService.
- * @file TestMPTNodeReadStorage.cpp
+ * @file MPTNodeReadStorageTest.cpp
  */
 
 #include "bcos-framework/storage2/AnyStorage.h"
@@ -26,9 +26,8 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-ledger/mpt/MPTNodeReadStorage.h>
 #include <bcos-ledger/mpt/PathKey.h>
-#include <bcos-storage/KeyPrefixes.h>
-#include <bcos-storage/MPTNodeReadStorage.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
 #include <boost/filesystem.hpp>
@@ -93,7 +92,7 @@ struct TestMPTNodeReadStorageFixture
         .position = bytes{0x0c}};
 };
 
-BOOST_FIXTURE_TEST_SUITE(TestMPTNodeReadStorage, TestMPTNodeReadStorageFixture)
+BOOST_FIXTURE_TEST_SUITE(MPTNodeReadStorageSuite, TestMPTNodeReadStorageFixture)
 
 // Ordinary state write path in, adapter read by position out; a position never written reads
 // back as nullopt — the exact miss shape generateProof's proofWalk keys its rootMissing /
@@ -105,7 +104,7 @@ BOOST_AUTO_TEST_CASE(readOneRoundTripAndMiss)
         co_await writeNodeRow(storage, positionA, nodeRlpA());
         co_await writeNodeRow(storage, positionB, nodeRlpB());
 
-        storage2::MPTNodeReadStorage reader(storage);
+        ledger::mpt::MPTNodeReadStorage reader(storage);
         auto valueA = co_await reader.readOne(positionA);
         BOOST_REQUIRE(valueA.has_value());
         BOOST_CHECK(*valueA == nodeRlpA());
@@ -130,7 +129,7 @@ BOOST_AUTO_TEST_CASE(readSomeKeepsOrderAndGaps)
         co_await writeNodeRow(storage, positionA, nodeRlpA());
         co_await writeNodeRow(storage, positionB, nodeRlpB());
 
-        storage2::MPTNodeReadStorage reader(storage);
+        ledger::mpt::MPTNodeReadStorage reader(storage);
         std::vector<ledger::mpt::PathKey> keys{positionA, positionMissing, positionB};
         auto values = co_await storage2::readSome(reader, keys);
         BOOST_REQUIRE_EQUAL(values.size(), 3U);
@@ -151,7 +150,7 @@ BOOST_AUTO_TEST_CASE(anyStorageHandleOwnsItsAdapter)
         StateRocksDB storage(*rocksDB, StateKeyResolver{}, StateValueResolver{});
         co_await writeNodeRow(storage, positionA, nodeRlpA());
 
-        auto reader = storage2::makeMPTNodeReader(storage);
+        auto reader = ledger::mpt::makeMPTNodeReader(storage);
         BOOST_REQUIRE(reader != nullptr);
         auto value = co_await reader->readOne(positionA);
         BOOST_REQUIRE(value.has_value());
@@ -169,7 +168,7 @@ BOOST_AUTO_TEST_CASE(mutationsThrowReadsSurvive)
     StateRocksDB storage(*rocksDB, StateKeyResolver{}, StateValueResolver{});
     task::syncWait(writeNodeRow(storage, positionA, nodeRlpA()));
 
-    auto reader = storage2::makeMPTNodeReader(storage);
+    auto reader = ledger::mpt::makeMPTNodeReader(storage);
     BOOST_CHECK_THROW(task::syncWait(reader->writeOne(positionB, nodeRlpB())), std::logic_error);
     BOOST_CHECK_THROW(task::syncWait(reader->removeOne(positionA)), std::logic_error);
     BOOST_CHECK_THROW(task::syncWait(reader->range()), std::logic_error);

@@ -21,10 +21,10 @@
  */
 #pragma once
 
+#include "PathKey.h"
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/Storage.h>
-#include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -36,7 +36,7 @@
 #include <utility>
 #include <vector>
 
-namespace bcos::storage2
+namespace bcos::ledger::mpt
 {
 
 /// The read-side sibling of the scheduler's ViewNodeStorage (MPTNodeStorage.h): where that
@@ -57,15 +57,14 @@ template <class Storage>
 class MPTNodeReadStorage
 {
 public:
-    using Key = bcos::ledger::mpt::PathKey;
+    using Key = PathKey;
     using Value = bcos::bytes;
 
     explicit MPTNodeReadStorage(Storage& storage) : m_storage(std::addressof(storage)) {}
 
-    task::Task<std::optional<bcos::bytes>> readOne(Key key)
+    bcos::task::Task<std::optional<bcos::bytes>> readOne(Key key)
     {
-        auto entry =
-            co_await storage2::readOne(*m_storage, bcos::ledger::mpt::pathNodeStateKey(key));
+        auto entry = co_await bcos::storage2::readOne(*m_storage, pathNodeStateKey(key));
         if (!entry)
         {
             co_return std::nullopt;
@@ -74,12 +73,13 @@ public:
         co_return bcos::bytes(raw.begin(), raw.end());
     }
 
-    task::Task<std::vector<std::optional<bcos::bytes>>> readSome(::ranges::input_range auto keys)
+    bcos::task::Task<std::vector<std::optional<bcos::bytes>>> readSome(
+        ::ranges::input_range auto keys)
     {
         // One batched read: a proof walk resolves whole node paths at a time.
-        auto entries = co_await storage2::readSome(*m_storage,
-            keys | ::ranges::views::transform(
-                       [](auto const& key) { return bcos::ledger::mpt::pathNodeStateKey(key); }));
+        auto entries = co_await bcos::storage2::readSome(*m_storage,
+            keys |
+                ::ranges::views::transform([](auto const& key) { return pathNodeStateKey(key); }));
 
         std::vector<std::optional<bcos::bytes>> values;
         values.reserve(entries.size());
@@ -103,8 +103,8 @@ public:
     /// every other storage error.
     struct NoIterator
     {
-        task::Task<
-            std::optional<std::pair<bcos::ledger::mpt::PathKey, StorageValueType<bcos::bytes>>>>
+        bcos::task::Task<
+            std::optional<std::pair<PathKey, bcos::storage2::StorageValueType<bcos::bytes>>>>
         next()
         {
             throwReadOnly();
@@ -112,27 +112,27 @@ public:
         }
     };
 
-    task::Task<void> writeOne(Key /*key*/, bcos::bytes /*value*/)
+    bcos::task::Task<void> writeOne(Key /*key*/, bcos::bytes /*value*/)
     {
         throwReadOnly();
         co_return;
     }
-    task::Task<void> writeSome(::ranges::input_range auto /*keyValues*/)
+    bcos::task::Task<void> writeSome(::ranges::input_range auto /*keyValues*/)
     {
         throwReadOnly();
         co_return;
     }
-    task::Task<void> removeOne(Key /*key*/, auto&&... /*tags*/)
+    bcos::task::Task<void> removeOne(Key /*key*/, auto&&... /*tags*/)
     {
         throwReadOnly();
         co_return;
     }
-    task::Task<void> removeSome(::ranges::input_range auto /*keys*/, auto&&... /*tags*/)
+    bcos::task::Task<void> removeSome(::ranges::input_range auto /*keys*/, auto&&... /*tags*/)
     {
         throwReadOnly();
         co_return;
     }
-    task::Task<NoIterator> range(auto&&... /*args*/)
+    bcos::task::Task<NoIterator> range(auto&&... /*args*/)
     {
         throwReadOnly();
         co_return NoIterator{};
@@ -153,13 +153,13 @@ private:
 /// one lifetime. The only borrowed piece is @p storage itself (production: the state
 /// backend, owned by the Initializer), which must outlive the returned handle.
 template <class Storage>
-[[nodiscard]] std::shared_ptr<AnyStorage<bcos::ledger::mpt::PathKey, bcos::bytes>>
-makeMPTNodeReader(Storage& storage)
+[[nodiscard]] std::shared_ptr<bcos::storage2::AnyStorage<PathKey, bcos::bytes>> makeMPTNodeReader(
+    Storage& storage)
 {
     struct OwningReader
     {
         MPTNodeReadStorage<Storage> adapter;
-        std::optional<AnyStorage<bcos::ledger::mpt::PathKey, bcos::bytes>> erased;
+        std::optional<bcos::storage2::AnyStorage<PathKey, bcos::bytes>> erased;
 
         explicit OwningReader(Storage& storage) : adapter(storage) { erased.emplace(adapter); }
     };
@@ -167,4 +167,4 @@ makeMPTNodeReader(Storage& storage)
     return {owner, std::addressof(*owner->erased)};
 }
 
-}  // namespace bcos::storage2
+}  // namespace bcos::ledger::mpt

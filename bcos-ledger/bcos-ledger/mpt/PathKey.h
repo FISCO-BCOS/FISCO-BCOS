@@ -26,9 +26,43 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <string_view>
 
 namespace bcos::ledger::mpt
 {
+
+/// The two state TABLES trie-node rows live in. A node row is an ordinary state row whose row key
+/// is the node's POSITION in its trie, so its physical key in the default ColumnFamily is the
+/// StateKey serialization "<table>" ':' "<key>":
+///
+///   "/mptp/a:" + compactPath(position)
+///   "/mptp/s:" + 32 raw owner bytes + compactPath(position)
+///
+/// The trie kind rides on the table name rather than a tag inside the row key. That keeps every
+/// node row's row key unambiguously decodable (an owner is fixed-width, a position is not, so a
+/// single shared table could not tell the two apart), and it makes one account's whole storage
+/// trie a contiguous "/mptp/s:<owner>" key range.
+///
+/// Neither name contains ':', so the first ':' of every node row's physical key sits at a fixed
+/// index — the same one for both tables, since they are the same length — and
+/// StateKeyResolver::decode's split-at-first-colon reconstruction is exact for every row key,
+/// including positions and owners that contain 0x3A (':') bytes.
+///
+/// Do NOT write these literals anywhere else — build keys with pathNodeStateKey below; the
+/// physical form is produced and parsed solely by StateKeyResolver.
+inline constexpr std::string_view kMPTAccountTable = "/mptp/a";
+inline constexpr std::string_view kMPTStorageTable = "/mptp/s";
+
+static_assert(kMPTAccountTable.find(':') == std::string_view::npos &&
+                  kMPTStorageTable.find(':') == std::string_view::npos,
+    "an MPT node table name must not contain ':' — StateKeyResolver splits a physical key at its "
+    "FIRST colon, so a colon in the table name would decode node rows to a corrupted "
+    "table/key split");
+static_assert(kMPTAccountTable.size() == kMPTStorageTable.size(),
+    "the two MPT node table names must be the same length, so the ':' StateKeyResolver inserts "
+    "sits at the same offset for both");
+static_assert(kMPTAccountTable != kMPTStorageTable,
+    "the account and storage node tables must be distinct namespaces");
 
 /// Which FAMILY of trie a node belongs to. The chain has exactly one account trie and one storage
 /// trie per contract account, so this plus TrieScope::owner names a single trie (spec §8.1).

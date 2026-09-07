@@ -40,7 +40,6 @@
 #include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-ledger/mpt/StorageValueCodec.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
-#include "bcos-storage/KeyPrefixes.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
@@ -100,7 +99,7 @@ size_t backendNodeCount(MWBackendStorage& backend)
         {
             auto&& [key, value] = *keyValue;
             if (auto const table = StateKeyView{key}.m_table;
-                table == storage2::kMPTAccountTable || table == storage2::kMPTStorageTable)
+                table == ledger::mpt::kMPTAccountTable || table == ledger::mpt::kMPTStorageTable)
             {
                 ++count;
             }
@@ -807,8 +806,8 @@ BOOST_AUTO_TEST_CASE(genesisBlockPublishesNoExecuteTimeHeader)
 BOOST_AUTO_TEST_CASE(strayMptRowIsNotAnAccount)
 {
     namespace mpt = bcos::ledger::mpt;
-    BOOST_CHECK(!mpt::parseAccountTable(storage2::kMPTAccountTable).has_value());
-    BOOST_CHECK(!mpt::parseAccountTable(storage2::kMPTStorageTable).has_value());
+    BOOST_CHECK(!mpt::parseAccountTable(mpt::kMPTAccountTable).has_value());
+    BOOST_CHECK(!mpt::parseAccountTable(mpt::kMPTStorageTable).has_value());
 
     useScenarioA(500);
     auto const addressA = makeAddress(0xC9);
@@ -818,7 +817,7 @@ BOOST_AUTO_TEST_CASE(strayMptRowIsNotAnAccount)
     strayHash.data()[0] = 0x5A;
     std::string const strayKey(reinterpret_cast<char const*>(strayHash.data()), h256::SIZE);
     plan[501] = {{mpt::accountTableName(addressA), "balance", "10"},
-        {std::string(storage2::kMPTAccountTable), strayKey, "not-a-real-node"}};
+        {std::string(ledger::mpt::kMPTAccountTable), strayKey, "not-a-real-node"}};
 
     auto header500 = executeOneBlock(500);  // XOR
     commitOneBlock(header500);

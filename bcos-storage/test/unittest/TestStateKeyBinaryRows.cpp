@@ -17,9 +17,9 @@
  *        position-keyed row in the default ColumnFamily has. Pins the two facts such rows
  *        depend on: StateKeyResolver splits a physical key at its FIRST colon (so a table name
  *        must carry one and the row key may contain any byte, 0x3A included), and
- *        RocksDBStorage2 exposes the DB it writes through. The MPT node row is the in-tree
- *        example; its own layout is proven in bcos-ledger (MPTNodeRowLayoutTest.cpp), which is
- *        where the table names are defined.
+ *        RocksDBStorage2 exposes the DB it writes through. This file names no table of any
+ *        other module: a trie node row is one instance of the shape, and its own layout is
+ *        proven by the ledger module, next to where its table names are defined.
  * @file TestStateKeyBinaryRows.cpp
  * @author: kyonRay
  * @date: 2026-05-12
@@ -96,11 +96,11 @@ BOOST_AUTO_TEST_CASE(RocksDBAccessorExposed)
         // rocksDB() must reference the same underlying DB instance
         BOOST_CHECK_EQUAL(&storage.rocksDB(), rawPtr);
 
-        // Demonstrate writing and reading a node row's physical key via rocksDB()
-        std::string mptKey = resolverPhysicalKey(
-            pathNodeStateKey(PathKey{.scope = TrieScope::storage(h256::generateRandomFixedBytes()),
-                .position = bytes{0x01, 0x02}}));
-        std::string mptValue = "mpt_node_data";
+        // Demonstrate writing and reading a binary-row-key physical key via rocksDB()
+        auto const rowKey = h256::generateRandomFixedBytes();
+        std::string mptKey = resolverPhysicalKey(executor_v1::StateKey{kBinaryRowTable,
+            std::string_view(reinterpret_cast<char const*>(rowKey.data()), h256::SIZE)});
+        std::string mptValue = "binary_row_data";
 
         ::rocksdb::WriteOptions wo;
         auto putStatus =

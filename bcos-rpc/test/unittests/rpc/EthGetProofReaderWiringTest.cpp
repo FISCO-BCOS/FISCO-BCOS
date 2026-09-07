@@ -27,11 +27,10 @@
 #include <bcos-ledger/mpt/Account.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
+#include <bcos-ledger/mpt/MPTNodeReadStorage.h>
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
-#include <bcos-storage/KeyPrefixes.h>
-#include <bcos-storage/MPTNodeReadStorage.h>
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
@@ -72,7 +71,7 @@ public:
             changes[key] = value;
         }
         return task::syncWait([&]() -> task::Task<bcos::h256> {
-            storage2::MPTNodeReadStorage reader(m_stateRows);
+            mpt::MPTNodeReadStorage reader(m_stateRows);
             auto result = co_await mpt::commitTrie(reader, scope, mpt::emptyRootHash(), changes);
             for (auto const& [position, rlp] : result.upserts)
             {
@@ -103,7 +102,7 @@ public:
 
     /// The production wiring shape (AirNodeInitializer): the AnyStorage handle owns its
     /// adapter; only m_stateRows (the Initializer-owned backend stand-in) is borrowed.
-    void wireReader() { nodeService->setMPTNodeReader(storage2::makeMPTNodeReader(m_stateRows)); }
+    void wireReader() { nodeService->setMPTNodeReader(mpt::makeMPTNodeReader(m_stateRows)); }
 
     Json::Value request(std::string const& req)
     {

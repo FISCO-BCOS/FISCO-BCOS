@@ -23,7 +23,6 @@
 #include <bcos-ledger/mpt/NodeDecoder.h>
 #include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-ledger/mpt/TrieNode.h>
-#include <bcos-storage/KeyPrefixes.h>
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
@@ -104,7 +103,7 @@ BOOST_AUTO_TEST_CASE(EmptyPositionEncodesToTheRootKey)
     BOOST_CHECK(compactPath(bcos::bytesConstRef{}) == bcos::bytes({0x00}));
     BOOST_CHECK(decodeCompactPath(bcos::ref(compactPath(bcos::bytesConstRef{}))).empty());
     BOOST_CHECK(physicalKey(pathNodeStateKey(accountRootPathKey())) ==
-                std::string{storage2::kMPTAccountTable} + ":" + std::string(1, '\0'));
+                std::string{ledger::mpt::kMPTAccountTable} + ":" + std::string(1, '\0'));
 }
 
 // For every NON-empty position, compactPath must agree byte for byte with the repository's
@@ -183,7 +182,7 @@ BOOST_AUTO_TEST_CASE(BothTablesShareTheColonOffset)
         pathNodeStateKey(PathKey{.scope = TrieScope::storage(owner), .position = nibbles("a7c")});
 
     BOOST_CHECK_EQUAL(physicalKey(accountKey).find(':'), physicalKey(storageKey).find(':'));
-    BOOST_CHECK_EQUAL(physicalKey(accountKey).find(':'), storage2::kMPTAccountTable.size());
+    BOOST_CHECK_EQUAL(physicalKey(accountKey).find(':'), ledger::mpt::kMPTAccountTable.size());
 
     executor_v1::StateKeyView const storageView{storageKey};
     BOOST_REQUIRE_GE(storageView.m_key.size(), bcos::h256::SIZE);
@@ -224,7 +223,7 @@ BOOST_AUTO_TEST_CASE(ForeignTableIsNotANodeRow)
 BOOST_AUTO_TEST_CASE(TruncatedStorageRowKeyThrows)
 {
     BOOST_CHECK_THROW(
-        parsePathNodeStateKey(executor_v1::StateKey{storage2::kMPTStorageTable, "short"}),
+        parsePathNodeStateKey(executor_v1::StateKey{ledger::mpt::kMPTStorageTable, "short"}),
         MPTDecodeError);
 }
 

@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ------------------------------------------------------------------------------
-list(APPEND SOURCES "TestRocksDBStorage.cpp" "TestRocksDBStorage2.cpp" "TestKeyPrefixes.cpp" "TestMPTNodeKey.cpp" "TestMPTNodeReadStorage.cpp" "main.cpp")
+list(APPEND SOURCES "TestRocksDBStorage.cpp" "TestRocksDBStorage2.cpp" "TestStateKeyBinaryRows.cpp" "main.cpp")
 # cmake settings
 set(TEST_BINARY_NAME test-storage)
 
@@ -25,10 +25,7 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../src)
 find_package(Boost REQUIRED unit_test_framework log)
 find_package(fmt REQUIRED)
 
-# ledger: MPTNodeReadStorage.h keys its rows with ledger::mpt::PathKey (bcos-ledger/mpt/PathKey.h),
-# the single definition of the trie-node row layout. The storage library itself stays free of it —
-# only this test instantiates the header.
-target_link_libraries(${TEST_BINARY_NAME} PUBLIC storage ledger Boost::unit_test_framework Boost::log fmt::fmt)
+target_link_libraries(${TEST_BINARY_NAME} PUBLIC storage Boost::unit_test_framework Boost::log fmt::fmt)
 set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 include(SearchTestCases)

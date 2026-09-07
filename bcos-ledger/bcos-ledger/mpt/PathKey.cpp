@@ -21,7 +21,6 @@
 #include "Errors.h"
 #include "HexPrefix.h"
 #include "Nibble.h"
-#include "bcos-storage/KeyPrefixes.h"
 #include <boost/throw_exception.hpp>
 #include <string>
 #include <string_view>
@@ -37,7 +36,7 @@ constexpr bcos::byte HP_ODD_FLAG = 0b0001'0000U;
 
 std::string_view tableOf(TrieKind kind)
 {
-    return kind == TrieKind::Account ? storage2::kMPTAccountTable : storage2::kMPTStorageTable;
+    return kind == TrieKind::Account ? kMPTAccountTable : kMPTStorageTable;
 }
 }  // namespace
 
@@ -100,11 +99,11 @@ std::optional<PathKey> parsePathNodeStateKey(executor_v1::StateKey const& key)
 {
     executor_v1::StateKeyView const view{key};
     TrieKind kind{};
-    if (view.m_table == storage2::kMPTAccountTable)
+    if (view.m_table == kMPTAccountTable)
     {
         kind = TrieKind::Account;
     }
-    else if (view.m_table == storage2::kMPTStorageTable)
+    else if (view.m_table == kMPTStorageTable)
     {
         kind = TrieKind::Storage;
     }

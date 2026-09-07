@@ -56,7 +56,6 @@
 #include "bcos-ledger/mpt/StorageValueCodec.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-storage/CheckpointRocksDBStorage.h"
-#include "bcos-storage/KeyPrefixes.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-storage/StateKVResolver.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
@@ -381,7 +380,8 @@ public:
             {
                 auto&& [key, value] = *keyValue;
                 if (auto const table = executor_v1::StateKeyView{key}.m_table;
-                    table == storage2::kMPTAccountTable || table == storage2::kMPTStorageTable)
+                    table == ledger::mpt::kMPTAccountTable ||
+                    table == ledger::mpt::kMPTStorageTable)
                 {
                     ++count;
                 }

@@ -126,7 +126,7 @@ public:
     /// never be pointed at a plane where a node lookup would degrade into a table scan.
     using MPTNodeReader = bcos::storage2::AnyStorage<bcos::ledger::mpt::PathKey, bcos::bytes>;
 
-    /// The handle owns its key-translating adapter (storage2::makeMPTNodeReader), but the
+    /// The handle owns its key-translating adapter (ledger::mpt::makeMPTNodeReader), but the
     /// storage underneath it is borrowed — owned by the Initializer, which must outlive this
     /// NodeService. AIR wires it in AirNodeInitializer (Initializer::mptNodeReader over the
     /// committed state backend); a tars-built NodeService has no local storage, leaves it

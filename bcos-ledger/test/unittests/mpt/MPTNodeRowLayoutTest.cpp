@@ -20,7 +20,7 @@
  *        helper), and those physical bytes decode back to the same StateKey via the
  *        resolver's split-at-first-colon reconstruction — the two facts the scheduler's
  *        view-riding node plane (ViewNodeStorage) and every raw-DB node reader depend on.
- * @file TestMPTNodeKey.cpp
+ * @file MPTNodeRowLayoutTest.cpp
  */
 
 #include "bcos-framework/storage2/MemoryStorage.h"
@@ -29,7 +29,6 @@
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-ledger/mpt/PathKey.h>
-#include <bcos-storage/KeyPrefixes.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
 #include <boost/filesystem.hpp>
@@ -101,7 +100,81 @@ struct TestMPTNodeKeyFixture
     std::unique_ptr<::rocksdb::DB> rocksDB;
 };
 
-BOOST_FIXTURE_TEST_SUITE(TestMPTNodeKey, TestMPTNodeKeyFixture)
+
+namespace
+{
+/// The physical bytes StateKeyResolver::encode emits for a StateKey — the single authority every
+/// on-disk key goes through (RocksDBStorage2's write path).
+std::string resolverPhysicalKey(StateKey const& stateKey)
+{
+    std::string out;
+    StateKeyResolver::encode(stateKey, [&](bcos::bytesConstRef view) {
+        out.append(reinterpret_cast<char const*>(view.data()), view.size());
+    });
+    return out;
+}
+}  // namespace
+
+BOOST_FIXTURE_TEST_SUITE(MPTNodeRowLayoutSuite, TestMPTNodeKeyFixture)
+
+BOOST_AUTO_TEST_CASE(NodeRowPhysicalForm)
+{
+    // A storage node at position "a7c" of the trie owned by a recognisable 32-byte owner.
+    bcos::h256 owner;
+    for (unsigned i = 0; i < 32; ++i)
+    {
+        owner[i] = static_cast<byte>(i + 1);
+    }
+    bcos::ledger::mpt::PathKey const storageNode{
+        .scope = bcos::ledger::mpt::TrieScope::storage(owner), .position = bytes{0x0a, 0x07, 0x0c}};
+
+    std::string key = resolverPhysicalKey(bcos::ledger::mpt::pathNodeStateKey(storageNode));
+
+    // "<table>" ':' "<owner 32B>" "<compactPath>" — the compact path of an odd-length position
+    // is one header byte plus one packed byte.
+    BOOST_CHECK_EQUAL(key.size(), bcos::ledger::mpt::kMPTStorageTable.size() + 1 + 32 + 2);
+    BOOST_CHECK_EQUAL(key.substr(0, bcos::ledger::mpt::kMPTStorageTable.size() + 1), "/mptp/s:");
+    for (unsigned i = 0; i < 32; ++i)
+    {
+        BOOST_CHECK_EQUAL(
+            static_cast<uint8_t>(key[bcos::ledger::mpt::kMPTStorageTable.size() + 1 + i]),
+            owner[i]);
+    }
+
+    // The account table shares the layout minus the owner, and puts its ':' at the same offset.
+    bcos::ledger::mpt::PathKey const accountNode{
+        .scope = bcos::ledger::mpt::TrieScope::account(), .position = bytes{0x0a, 0x07, 0x0c}};
+    std::string accountKey = resolverPhysicalKey(bcos::ledger::mpt::pathNodeStateKey(accountNode));
+    BOOST_CHECK_EQUAL(
+        accountKey.substr(0, bcos::ledger::mpt::kMPTAccountTable.size() + 1), "/mptp/a:");
+    BOOST_CHECK_EQUAL(accountKey.find(':'), key.find(':'));
+    BOOST_CHECK_EQUAL(accountKey.size(), bcos::ledger::mpt::kMPTAccountTable.size() + 1 + 2);
+
+    // The physical bytes ARE the StateKey's own flat buffer — encode adds nothing.
+    auto stateKey = bcos::ledger::mpt::pathNodeStateKey(storageNode);
+    BOOST_CHECK_EQUAL(std::string_view(stateKey.data(), stateKey.size()), key);
+}
+
+BOOST_AUTO_TEST_CASE(NodeRowResolverRoundTrip)
+{
+    // An owner containing a raw ':' (0x3a) — legal in a row key, and the case the
+    // split-at-FIRST-colon rule exists for.
+    bcos::h256 owner = h256::generateRandomFixedBytes();
+    owner[0] = static_cast<byte>(':');
+    bcos::ledger::mpt::PathKey const original{.scope = bcos::ledger::mpt::TrieScope::storage(owner),
+        .position = bytes{0x09, 0x0c, 0x00, 0x0f}};
+    std::string physical = resolverPhysicalKey(bcos::ledger::mpt::pathNodeStateKey(original));
+
+    // decode is the inverse of encode, and the row key parses back into the same position.
+    auto decoded = StateKeyResolver::decode(std::string_view(physical));
+    BOOST_CHECK(decoded == bcos::ledger::mpt::pathNodeStateKey(original));
+    StateKeyView const view{decoded};
+    BOOST_CHECK_EQUAL(view.m_table, bcos::ledger::mpt::kMPTStorageTable);
+    auto const parsed = bcos::ledger::mpt::parsePathNodeStateKey(decoded);
+    BOOST_REQUIRE(parsed.has_value());
+    BOOST_CHECK(*parsed == original);
+}
+
 
 // The physical form is StateKey-NATIVE: a full-CF scan can hand the raw bytes to the
 // resolver's single-string StateKey constructor and get the node table + the row key back,
@@ -111,14 +184,14 @@ BOOST_AUTO_TEST_CASE(physicalFormIsStateKeyNative)
     auto const hash = colonRiddledHash();
     auto const physicalKey = physicalNodeKey(hash);
 
-    BOOST_CHECK_EQUAL(physicalKey.size(), storage2::kMPTStorageTable.size() + 1 + 32 + 2);
-    BOOST_CHECK_EQUAL(physicalKey.find(':'), storage2::kMPTStorageTable.size());
+    BOOST_CHECK_EQUAL(physicalKey.size(), bcos::ledger::mpt::kMPTStorageTable.size() + 1 + 32 + 2);
+    BOOST_CHECK_EQUAL(physicalKey.find(':'), bcos::ledger::mpt::kMPTStorageTable.size());
 
     // The resolver's decode (single-string StateKey constructor, split at the first colon)
     // reconstructs the node table + the row key exactly — colons in the owner and all.
     auto const decoded = StateKeyResolver::decode(std::string_view(physicalKey));
     StateKeyView const view{decoded};
-    BOOST_CHECK_EQUAL(view.m_table, storage2::kMPTStorageTable);
+    BOOST_CHECK_EQUAL(view.m_table, bcos::ledger::mpt::kMPTStorageTable);
     BOOST_CHECK(decoded == bcos::ledger::mpt::pathNodeStateKey(nodePosition(hash)));
     auto const parsed = bcos::ledger::mpt::parsePathNodeStateKey(decoded);
     BOOST_REQUIRE(parsed.has_value());

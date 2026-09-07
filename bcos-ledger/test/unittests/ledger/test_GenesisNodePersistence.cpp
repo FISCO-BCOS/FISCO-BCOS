@@ -40,7 +40,6 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
-#include <bcos-storage/KeyPrefixes.h>
 #include <bcos-table/src/StateStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
@@ -126,7 +125,7 @@ size_t countMPTRows(storage::StateStorage& storage)
     // read-modify-write (intermittent undercounts, e.g. once the TBB pool is warm on CI).
     std::atomic<size_t> count{0};
     storage.parallelTraverse(false, [&](std::string_view table, std::string_view, auto const&) {
-        if (table == storage2::kMPTAccountTable || table == storage2::kMPTStorageTable)
+        if (table == ledger::mpt::kMPTAccountTable || table == ledger::mpt::kMPTStorageTable)
         {
             ++count;
         }
