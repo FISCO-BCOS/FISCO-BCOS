@@ -62,7 +62,7 @@ TopicManager::Ptr AMOPImpl::topicManager()
 
 AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     bcos::amop::AMOPMessageFactory::Ptr _messageFactory, AMOPRequestFactory::Ptr _requestFactory,
-    P2PInterface::Ptr _network, P2pID const& _p2pNodeID,
+    Service::Ptr _network, P2pID const& _p2pNodeID,
     boost::asio::io_context& _ioContext,
     bcos::IOServicePool::Ptr _ioServicePool)
   : m_topicManager(_topicManager),
@@ -103,7 +103,7 @@ void AMOPImpl::broadcastTopicSeq()
     // value message held by shared_ptr: broadcastMessageToAll fans out one coroutine per peer and
     // each task keeps the message alive (zero-copy: the payload rides as a view). All state is
     // passed as coroutine parameters so it is copied into the frame and stays alive.
-    task::wait([](P2PInterface::Ptr _network, bcos::bytes _payload) -> task::Task<void> {
+    task::wait([](Service::Ptr _network, bcos::bytes _payload) -> task::Task<void> {
         auto message = std::static_pointer_cast<P2PMessage>(
             _network->messageFactory()->buildMessage());
         message->setPacketType(GatewayMessageType::AMOPMessageType);
@@ -137,7 +137,7 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
         // fire-and-forget through the coroutine fast path: the message is built in the frame and
         // the payload is moved into it (the caller's buffer does not outlive the deferred send);
         // an unreachable peer is an expected, recoverable state.
-        task::wait([](P2PInterface::Ptr _network, uint16_t _type, P2pID _nodeID,
+        task::wait([](Service::Ptr _network, uint16_t _type, P2pID _nodeID,
                        bcos::bytes _payload) -> task::Task<void> {
             auto message = std::static_pointer_cast<P2PMessage>(
                 _network->messageFactory()->buildMessage());
@@ -222,7 +222,7 @@ void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::P
         // fire-and-forget through the coroutine fast path: the message is built in the frame and
         // the payload is moved into it (the caller's buffer does not outlive the deferred send);
         // a send failure is logged here (the old async callback only logged errors too).
-        task::wait([](P2PInterface::Ptr _network, uint16_t _type, P2pID _nodeID,
+        task::wait([](Service::Ptr _network, uint16_t _type, P2pID _nodeID,
                        bcos::bytes _payload) -> task::Task<void> {
             auto message = std::static_pointer_cast<P2PMessage>(
                 _network->messageFactory()->buildMessage());

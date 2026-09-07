@@ -18,7 +18,7 @@
  * @author: octopus
  * @date 2021-06-21
  */
-#include "bcos-gateway/libamop/AirTopicManager.h"
+#include "bcos-gateway/libamop/TopicManager.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 
 #include <boost/test/unit_test.hpp>
@@ -30,7 +30,7 @@ BOOST_FIXTURE_TEST_SUITE(TopicManagerTest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(test_initTopicManager)
 {
-    auto topicManager = std::make_shared<LocalTopicManager>("", nullptr);
+    auto topicManager = std::make_shared<TopicManager>("", nullptr, /*_localMode=*/true);
     {
         auto jsonValue = topicManager->queryTopicsSubByClient();
 
@@ -54,7 +54,7 @@ BOOST_AUTO_TEST_CASE(test_initTopicManager)
 
 BOOST_AUTO_TEST_CASE(test_parseTopicItemsJson)
 {
-    auto topicManager = std::make_shared<LocalTopicManager>("", nullptr);
+    auto topicManager = std::make_shared<TopicManager>("", nullptr, /*_localMode=*/true);
     {
         uint32_t topicSeq;
         TopicItems topicItems;
@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(test_parseTopicItemsJson)
 
 BOOST_AUTO_TEST_CASE(test_subTopics)
 {
-    auto topicManager = std::make_shared<LocalTopicManager>("", nullptr);
+    auto topicManager = std::make_shared<TopicManager>("", nullptr, /*_localMode=*/true);
 
     std::string clientID = "client";
     {

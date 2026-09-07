@@ -190,7 +190,7 @@ bcos::task::Task<Message::Ptr> P2PSession::fastSendP2PMessage(
     // the p2p message version must match the negotiated protocol version of this session: the
     // encodeHeaderImpl of P2PMessageV2 only encodes the ttl/src/dst routing fields for version > V0,
     // so sending with the default (V0) version would silently drop the V2 routing fields and break
-    // multi-hop forwarding through ServiceV2 router tables
+    // multi-hop forwarding through the RIP router tables
     message.setVersion((uint16_t)m_protocolInfo->version());
     co_return co_await m_session->fastSendMessage(message, std::move(payloads), options);
 }
