@@ -362,7 +362,12 @@ private:
         {
             co_return std::nullopt;
         }
-        Trie<NodeStorage> const trie{m_nodeStorage.get(),
+        // HasherT, not the default: the slot key below is transformed with HasherT, and a walk
+        // that verified nodes with a different hash would follow one algorithm's path through
+        // another algorithm's trie — dead-ending, and reporting the slot ABSENT rather than
+        // refusing. The leaf walk above (MPTReadView<NodeStorage, HasherT>) forwards it for the
+        // same reason.
+        Trie<NodeStorage, HasherT> const trie{m_nodeStorage.get(),
             TrieScope::storage(accountKeyHash(m_address)), account->storageRoot};
         // The hasher-injection form, per StorageValueCodec.h's hot-path convention: this is the
         // per-SLOAD path of a historical call, and the convenience overload builds a fresh

@@ -276,6 +276,14 @@ private:
     /// One hash context for the whole object rather than one per get(): a walk verifies every
     /// node it reads, and constructing an OpenSSL context per read was the bulk of a point
     /// query's non-I/O cost. mutable because get() is const and hashing mutates the context.
+    ///
+    /// That makes a Trie STATEFUL, which its const-looking interface does not advertise: get()
+    /// is no longer reentrant on one object, so ONE Trie belongs to ONE coroutine. Two
+    /// concurrent get() calls on the same instance interleave into the same digest context and
+    /// produce garbage hashes — which surface as MPTInvariantViolation, i.e. as corruption
+    /// reports about a store that is fine. Tries are cheap; construct one per walk rather than
+    /// sharing one. (Every caller in tree already does: MPTReadView and MPTAccount build one per
+    /// read, and the RPC endpoints build one per request.)
     mutable HasherT m_hasher;
 };
 }  // namespace bcos::ledger::mpt

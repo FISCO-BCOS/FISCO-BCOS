@@ -23,10 +23,12 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
+#include <bcos-ledger/mpt/MPTAccount.h>
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Nibble.h>
 #include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-ledger/mpt/Proof.h>
+#include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-ledger/mpt/Trie.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
@@ -262,6 +264,68 @@ BOOST_AUTO_TEST_CASE(NodeVerificationFollowsTheInstantiatedHasher)
         holdsTrieRoot<NodeStorage, SM3>(storage, TrieScope::account(), root)));
     MPTReadView<NodeStorage, SM3> const sm3View(storage, root);
     BOOST_CHECK_THROW(bcos::task::syncWait(sm3View.readAccount(addr)), MPTHistoryUnavailable);
+
+    // MPTAccount drives its OWN trie walks — the account leaf, then that account's storage trie
+    // — so it has to forward the hasher to BOTH. The storage walk is where a half-threaded
+    // version hides, and reaching it takes some care: the leaf walk runs first, so under a
+    // mismatched hasher it refuses before the storage walk is ever entered, and a naive test
+    // passes for the wrong reason.
+    //
+    // So this isolates the storage walk. The store below is deliberately IMPOSSIBLE on a real
+    // chain: an account trie SM3 can walk, holding a leaf whose storageRoot is a keccak-built
+    // storage trie. The account trie is a single leaf, so its only row is at position "" and the
+    // walk verifies nothing but that row — hand it the SM3 digest of those same bytes as the
+    // state root and the leaf resolves under SM3. Everything after that is the storage walk,
+    // alone.
+    //
+    // A storage walk that defaults to keccak then passes root verification (the storage trie IS
+    // keccak-built) and dead-ends on an SM3 slot path — reporting the slot ABSENT, which a caller
+    // reads as a legitimate zero. That is the one wrong answer indistinguishable from a right
+    // one, and it is why the assertion below is "throws", not "returns something else".
+    {
+        NodeStorage mixed;
+        FlatBackendStorage flat;
+        auto const contract = makeAddress(0x33);
+        bcos::h256 const slot{};
+        bcos::h256 slotValue{};
+        slotValue.data()[bcos::h256::SIZE - 1] = 0x2a;
+
+        auto const storageRoot = seedTrieFlushed(mixed, emptyRootHash(),
+            {{slotKeyHash(slot), encodeStorageValue(slotValue.ref())}},
+            TrieScope::storage(accountKeyHash(contract)))
+                                     .root;
+        Account contractAccount;
+        contractAccount.nonce = 1;
+        contractAccount.storageRoot = storageRoot;
+        auto const keccakRoot = seedTrieFlushed(
+            mixed, emptyRootHash(), {{accountKeyHash(contract), contractAccount.encode()}})
+                                    .root;
+
+        // Same bytes at position "", a different digest: the state root an SM3 walk accepts.
+        auto const rootRow =
+            bcos::task::syncWait(bcos::storage2::readOne(mixed, accountRootPathKey()));
+        BOOST_REQUIRE(rootRow.has_value());
+        SM3 sm3;
+        bcos::h256 sm3Root;
+        bcos::crypto::hasher::hash(sm3, bcos::ref(*rootRow), sm3Root);
+        BOOST_REQUIRE(sm3Root != keccakRoot);
+
+        // Positive anchor: the keccak instantiation reads the slot back through both walks.
+        MPTAccount<FlatBackendStorage, NodeStorage, FlatBackendStorage> keccakAccount{
+            flat, mixed, flat, contract, /*binaryAddress*/ false};
+        auto const keccakRead = bcos::task::syncWait(
+            keccakAccount.storage(bcos::ledger::account::toEvmcBytes32(slot), keccakRoot));
+        BOOST_CHECK_EQUAL(bcos::ledger::account::toH256(keccakRead), slotValue);
+
+        // SM3 gets past the leaf (by construction) and must then REFUSE on the storage trie.
+        MPTAccount<FlatBackendStorage, NodeStorage, FlatBackendStorage, SM3> sm3Account{
+            flat, mixed, flat, contract, /*binaryAddress*/ false};
+        BOOST_REQUIRE_MESSAGE(bcos::task::syncWait(sm3Account.exists(sm3Root)),
+            "the SM3 leaf walk must succeed, or this case would not reach the storage walk");
+        BOOST_CHECK_THROW(bcos::task::syncWait(sm3Account.storage(
+                              bcos::ledger::account::toEvmcBytes32(slot), sm3Root)),
+            MPTHistoryUnavailable);
+    }
 
     // ...and no proof is produced: the walk reports the root as unavailable rather than
     // assembling one from nodes it never verified.

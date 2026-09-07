@@ -16,8 +16,9 @@
  * @brief Physical-layout proof for MPT node rows as ORDINARY state rows: an Entry keyed
  *        pathNodeStateKey(position) written through a real RocksDBStorage2<StateKey, ...,
  *        StateKeyResolver, ...> lands under the literal "/mptp/s:<owner><compactPath>" key
- *        (constructed INDEPENDENTLY in this TU — KeyPrefixes.h exports no physical-key
- *        helper), and those physical bytes decode back to the same StateKey via the
+ *        (constructed INDEPENDENTLY in this TU — PathKey.h exports the table names and the
+ *        position codec, but no physical-key helper: StateKeyResolver is the sole authority
+ *        for that), and those physical bytes decode back to the same StateKey via the
  *        resolver's split-at-first-colon reconstruction — the two facts the scheduler's
  *        view-riding node plane (ViewNodeStorage) and every raw-DB node reader depend on.
  * @file MPTNodeRowLayoutTest.cpp
