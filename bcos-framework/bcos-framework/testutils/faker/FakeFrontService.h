@@ -366,12 +366,17 @@ public:
         // worker threads, so there is no live race here. The guard is pure defense: a test that
         // holds a frontService() handle and sends after fixture destruction gets a no-op instead
         // of a null-deref.
+        Error::Ptr error;
         if (m_fakeGateWay)
         {
+            // the fake gateway invokes the callback synchronously; forward its error so the
+            // fake honours the same contract as the real sendResponse
             m_fakeGateWay->asyncSendResponse(
-                _id, _moduleId, _nodeID, _responseData, [](Error::Ptr) {});
+                _id, _moduleId, _nodeID, _responseData, [&error](Error::Ptr _error) {
+                    error = std::move(_error);
+                });
         }
-        co_return nullptr;
+        co_return error;
     }
 
     bcos::task::Task<SendResult> sendMessageByNodeID(int _moduleId,

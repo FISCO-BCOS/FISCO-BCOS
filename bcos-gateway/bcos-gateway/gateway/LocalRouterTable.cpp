@@ -312,7 +312,7 @@ bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _grou
 
 
 // send message to the local nodes
-task::Task<bcos::Error::Ptr> LocalRouterTable::sendMessage(const std::string& _groupID,
+task::Task<bcos::Error::Ptr> LocalRouterTable::sendMessage(std::string _groupID,
     NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bytesConstRef _payload)
 {
     auto frontServiceInfo = getFrontService(_groupID, _dstNodeID);

@@ -61,7 +61,7 @@ public:
     bool broadcastMsg(uint16_t _nodeType, const std::string& _groupID, uint16_t _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, std::shared_ptr<P2PMessage> _msg) const;
 
-    task::Task<bcos::Error::Ptr> sendMessage(const std::string& _groupID,
+    task::Task<bcos::Error::Ptr> sendMessage(std::string _groupID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
         bytesConstRef _payload);
 
