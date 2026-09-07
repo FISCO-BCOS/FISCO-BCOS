@@ -45,6 +45,7 @@
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
+#include "bcos-utilities/Exceptions.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
@@ -107,6 +108,12 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
     std::string const& _configFilePath, std::string const& _genesisFile,
     std::string const& _privateKeyPath, const std::string& _logPath)
 {
+#ifdef ONLY_CPP_SDK
+    // tars clients are excluded from ONLY_CPP_SDK builds; pro-mode nodes are never built there
+    BOOST_THROW_EXCEPTION(
+        InvalidParameter() << errinfo_comment(
+            "initMicroServiceNode is unavailable in ONLY_CPP_SDK builds"));
+#else
     initConfig(_configFilePath, _genesisFile, _privateKeyPath, false);
     // get gateway client
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
@@ -123,6 +130,7 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
     auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
         gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
     init(_nodeArchType, _configFilePath, _genesisFile, gateWay, false, _logPath);
+#endif
 }
 
 void Initializer::initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
