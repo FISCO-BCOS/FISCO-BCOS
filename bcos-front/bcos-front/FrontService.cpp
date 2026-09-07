@@ -123,17 +123,13 @@ std::shared_ptr<boost::asio::io_context> FrontService::ioService() const
     return m_ioService;
 }
 
-void FrontService::setIoService(std::shared_ptr<boost::asio::io_context> _ioService)
-{
-    m_ioService = std::move(_ioService);
-}
-
 void FrontService::setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
 {
     m_ioServicePool = std::move(_ioServicePool);
-    // FIB-185: (re)create the serial send strand over the pool the factory injects. This always
-    // runs before start() (FrontServiceFactory calls it in buildFrontService), and enqueueSend()
-    // only fires once m_run is true, so m_sendStrand is set before the first send.
+    m_ioService = m_ioServicePool->getIOService();
+    // FIB-185: (re)create the serial send strand over the injected pool. This always runs before
+    // start(), and enqueueSend() only fires once m_run is true, so m_sendStrand is set before the
+    // first send.
     m_sendStrand = std::make_unique<bcos::Strand>(m_ioServicePool);
 }
 
@@ -404,14 +400,13 @@ std::string FrontService::registerCallback(
     if (_timeout > 0)
     {
         // create new timer to handle timeout
-        auto timeoutHandler = std::make_shared<boost::asio::steady_timer>(
-            *m_ioService, std::chrono::milliseconds(_timeout));
+        auto& timeoutHandler =
+            callback->timeoutHandler.emplace(*m_ioService, std::chrono::milliseconds(_timeout));
 
-        callback->timeoutHandler = timeoutHandler;
         auto frontServiceWeakPtr = std::weak_ptr<FrontService>(
             std::static_pointer_cast<FrontService>(shared_from_this()));
         // callback->startTime = utcSteadyTime();
-        timeoutHandler->async_wait(
+        timeoutHandler.async_wait(
             [frontServiceWeakPtr, _nodeID, uuid](const boost::system::error_code& e) {
                 auto frontService = frontServiceWeakPtr.lock();
                 if (frontService)
@@ -601,9 +596,9 @@ void FrontService::enqueueSend(std::function<void()> _sendTask)
     // on the pool's threads (the same threading model as the old single-drainer, minus the
     // hand-rolled CAS / lost-wakeup bookkeeping).
     //
-    // PRECONDITION: FrontService must be owned by a shared_ptr (FrontServiceFactory is the only
-    // construction site and uses make_shared); stack-allocating one would make weak_from_this()
-    // empty and the send would never run.
+    // PRECONDITION: FrontService must be owned by a shared_ptr (all construction sites use
+    // make_shared); stack-allocating one would make weak_from_this() empty and the send would
+    // never run.
     //
     // Hold the FrontService via weak_from_this, NOT a raw `this` and NOT shared_ptr: the shared
     // IOServicePool is owned outside and cannot be joined, so a posted task can outlive

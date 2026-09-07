@@ -21,7 +21,7 @@
 #include "bcos-crypto/signature/key/KeyFactoryImpl.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
-#include "bcos-front/FrontServiceFactory.h"
+#include "bcos-front/FrontService.h"
 #include "bcos-gateway/Gateway.h"
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
@@ -120,12 +120,12 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     auto nodeID =
         keyFactory->createKey(bytesConstRef((bcos::byte*)strNodeID.data(), strNodeID.size()));
 
-    auto frontServiceFactory = std::make_shared<bcos::front::FrontServiceFactory>();
     auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "gwNodeTest");
-    frontServiceFactory->setGatewayInterface(std::make_shared<FakeGateway>());
-    frontServiceFactory->setIOServicePool(ioServicePool);
-
-    auto frontService = frontServiceFactory->buildFrontService(groupID, nodeID);
+    auto frontService = std::make_shared<bcos::front::FrontService>();
+    frontService->setGroupID(groupID);
+    frontService->setNodeID(nodeID);
+    frontService->setIOServicePool(ioServicePool);
+    frontService->setGatewayInterface(std::make_shared<FakeGateway>());
 
     bool r = false;
     auto seq = gatewayNodeManager->statusSeq();

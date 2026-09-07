@@ -28,7 +28,7 @@
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-front/FrontServiceFactory.h>
+#include <bcos-front/FrontService.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
 #include <utility>
 
@@ -44,12 +44,11 @@ FrontServiceInitializer::FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _no
     m_gateWay(std::move(_gateWay)),
     m_ioServicePool(std::move(_ioServicePool))
 {
-    auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
-    frontServiceFactory->setGatewayInterface(m_gateWay);
-    frontServiceFactory->setIOServicePool(m_ioServicePool);
-
-    m_front = frontServiceFactory->buildFrontService(
-        m_nodeConfig->groupId(), m_protocolInitializer->keyPair()->publicKey());
+    m_front = std::make_shared<FrontService>();
+    m_front->setGroupID(m_nodeConfig->groupId());
+    m_front->setNodeID(m_protocolInitializer->keyPair()->publicKey());
+    m_front->setIOServicePool(m_ioServicePool);
+    m_front->setGatewayInterface(m_gateWay);
 }
 
 void FrontServiceInitializer::start()

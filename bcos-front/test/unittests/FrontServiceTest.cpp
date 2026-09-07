@@ -26,7 +26,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-front/FrontService.h>
-#include <bcos-front/FrontServiceFactory.h>
+#include <bcos-front/FrontService.h>
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
@@ -57,10 +57,11 @@ std::shared_ptr<FrontService> buildFrontService()
     auto srcNodeID = createKey(g_srcNodeID);
     auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "frontTest");
 
-    auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
-    frontServiceFactory->setGatewayInterface(gateway);
-    frontServiceFactory->setIOServicePool(ioServicePool);
-    auto frontService = frontServiceFactory->buildFrontService(g_groupID, srcNodeID);
+    auto frontService = std::make_shared<FrontService>();
+    frontService->setGroupID(g_groupID);
+    frontService->setNodeID(srcNodeID);
+    frontService->setIOServicePool(ioServicePool);
+    frontService->setGatewayInterface(gateway);
     frontService->start();
 
     gateway->setFrontService(frontService);
