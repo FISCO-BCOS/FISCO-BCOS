@@ -250,32 +250,33 @@ public:
         windowEntry.set(encodeWatermark(static_cast<uint64_t>(m_pruneWindow)));
         out.rows.emplace_back(windowKey(), std::move(windowEntry));
 
-        // Per-hash net reference movement. buildAndCollect tallies refCountDeltas through
-        // mergeNodeDelta; a delta that left it empty (hand-built, a build run with
-        // trackRefCounts=false — a combination production avoids via needsRefCountDeltas — or a
-        // future producer) falls back to the set reading: +1 per newNodes hash, −1 per
-        // obsoleted/intraBlock hash. The set reading cannot see byte-identical re-emits
-        // (mergeTrie reports them only in TrieMergeResult::reemittedNodes, which the layer does
-        // not carry), so it over-counts no-net-change rebuilds — production deltas always carry
-        // refCountDeltas.
-        std::unordered_map<bcos::h256, int64_t> const& netDeltas = delta.refCountDeltas;
-        std::unordered_map<bcos::h256, int64_t> derived;
-        if (netDeltas.empty())
+        // Per-hash net reference movement, tallied by buildAndCollect through mergeNodeDelta.
+        // A delta that changed nodes but carries an EMPTY refCountDeltas means the tally was
+        // never kept (a build run with trackRefCounts=false — production avoids this via
+        // needsRefCountDeltas — or a future producer). The set reading this would fall back to
+        // (+1 per newNodes hash, −1 per obsoleted/intraBlock hash) cannot see duplicate
+        // emissions: content-addressed nodes shared across this block's tries are created once
+        // per referencing trie but appear once in the deduplicated newNodes map, so creations
+        // would be under-counted and a later obsoletion would delete a node another trie still
+        // references (MPTDeltaLayer::refCountDeltas' comment). Fail-safe, same convention as
+        // the corrupted-refcount-row handling below: skip ALL pruning work for this block — no
+        // counting, no queue rows, no deletions; a leak, never a live-node deletion. The
+        // metadata rows above still land so the startup guard keeps tracking the head. A fully
+        // empty delta is the normal empty block and passes through silently.
+        if (delta.refCountDeltas.empty() &&
+            (!delta.newNodes.empty() || !delta.obsoletedNodes.empty() ||
+                !delta.intraBlockObsoleted.empty()))
         {
-            for (auto const& hash : delta.newNodes | std::views::keys)
-            {
-                ++derived[hash];
-            }
-            for (auto const& hash : delta.obsoletedNodes)
-            {
-                --derived[hash];
-            }
-            for (auto const& hash : delta.intraBlockObsoleted)
-            {
-                --derived[hash];
-            }
+            MPT_PRUNER_LOG(ERROR)
+                << "MPT pruning: block carries node changes but no refCountDeltas tally — "
+                   "pruning skipped for this block (suspect the producer ran without "
+                   "trackRefCounts; check the observer's needsRefCountDeltas wiring)"
+                << LOG_KV("block", blockNumber) << LOG_KV("newNodes", delta.newNodes.size())
+                << LOG_KV("obsoleted", delta.obsoletedNodes.size())
+                << LOG_KV("intraBlock", delta.intraBlockObsoleted.size());
+            co_return out;
         }
-        auto const& movements = netDeltas.empty() ? derived : netDeltas;
+        std::unordered_map<bcos::h256, int64_t> const& movements = delta.refCountDeltas;
 
         // The post-block refcount of every touched hash: the overlay the deletion re-check
         // below consults FIRST, so a node this very block revived (0→>0) reads as alive even

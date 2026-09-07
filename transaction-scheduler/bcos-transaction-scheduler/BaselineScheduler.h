@@ -17,6 +17,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <oneapi/tbb/task_group.h>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -139,11 +140,15 @@ private:
 
     /// Post-commit hook over each MPT block's node delta — the pathdb pruning seam
     /// (CommitObserver.h). Defaults to the no-op observer; replaced via setMPTCommitObserver.
-    /// Written at wiring time (setMPTCommitObserver) and reset to the no-op observer under
-    /// m_commitMutex at stop() time (resetMPTCommitObserver); read on the commit path, which
-    /// runs under m_commitMutex from beginning to end.
-    std::shared_ptr<ledger::mpt::CommitObserver> m_mptCommitObserver =
-        std::make_shared<ledger::mpt::NoopCommitObserver>();
+    /// Written at wiring time (setMPTCommitObserver) and reset to the no-op observer at stop()
+    /// time (resetMPTCommitObserver); read on BOTH the execute path (buildMPTStateRoot's
+    /// needsRefCountDeltas query, under m_executeMutex) and the commit path (under
+    /// m_commitMutex) — the atomic shared_ptr makes the unsynchronized reads safe against the
+    /// stop()-time reset (a load() yields a valid snapshot; the previous observer stays alive
+    /// in the reader's copy).
+    std::atomic<std::shared_ptr<ledger::mpt::CommitObserver>> m_mptCommitObserver{
+        std::shared_ptr<ledger::mpt::CommitObserver>(
+            std::make_shared<ledger::mpt::NoopCommitObserver>())};
 
     /**
      * Build the block's Ethereum MPT state root over the execute view — the view whose top
@@ -296,10 +301,11 @@ public:
 
 
     /// Restore the no-op observer. stop() calls this under a BLOCKING m_commitMutex lock, so it
-    /// returns only after any in-flight commit — the only code that ever dereferences the
-    /// observer, and it does so while holding the same mutex — has finished. Afterwards every
-    /// commit goes through the no-op observer, so the pruning backend behind a previous
-    /// observer can be torn down safely.
+    /// returns only after any in-flight commit — the commit path is the only code that ever
+    /// calls observer methods with side effects, and it does so while holding the same mutex —
+    /// has finished. The execute path's needsRefCountDeltas() query goes through the atomic
+    /// shared_ptr and is side-effect-free. Afterwards every commit goes through the no-op
+    /// observer, so the pruning backend behind a previous observer can be torn down safely.
     void resetMPTCommitObserver();
 
 

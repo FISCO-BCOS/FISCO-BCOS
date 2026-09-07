@@ -60,7 +60,7 @@
     ; feature_mpt_state_root activation block. Accepted values: -1 or [1, 10000000].
     ;mpt_prune_window=-1
     ; max expired node rows deleted per committed block (a backlog drains over
-    ; subsequent blocks)
+    ; subsequent blocks). Accepted values: [1, 100000].
     ;mpt_prune_batch_size=1000
 
 [txpool]

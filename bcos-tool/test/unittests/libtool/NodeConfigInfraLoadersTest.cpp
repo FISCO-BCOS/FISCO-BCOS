@@ -73,6 +73,36 @@ BOOST_AUTO_TEST_CASE(storageConfigDefaultsAndTikv)
 }
 
 
+BOOST_AUTO_TEST_CASE(storageConfigMptPruneValidation)
+{
+    // mpt_prune_window: -1 (disabled) or [1, 10000000]; anything else throws.
+    LoaderProbe windowOk;
+    BOOST_CHECK_NO_THROW(windowOk.loadStorageConfig(fromIni("[storage]\nmpt_prune_window=128\n")));
+    BOOST_CHECK_EQUAL(windowOk.mptPruneWindow(), 128);
+    for (auto const* bad : {"mpt_prune_window=0\n", "mpt_prune_window=-2\n",
+             "mpt_prune_window=10000001\n"})
+    {
+        LoaderProbe probe;
+        BOOST_CHECK_THROW(probe.loadStorageConfig(fromIni(std::string("[storage]\n") + bad)),
+            bcos::tool::InvalidConfig);
+    }
+
+    // mpt_prune_batch_size: [1, 100000]; 0 would stall the delete queue, a huge value lets one
+    // block's commit delete without bound.
+    LoaderProbe batchOk;
+    BOOST_CHECK_NO_THROW(
+        batchOk.loadStorageConfig(fromIni("[storage]\nmpt_prune_batch_size=500\n")));
+    BOOST_CHECK_EQUAL(batchOk.mptPruneBatchSize(), 500);
+    for (auto const* bad : {"mpt_prune_batch_size=0\n", "mpt_prune_batch_size=-1\n",
+             "mpt_prune_batch_size=100001\n"})
+    {
+        LoaderProbe probe;
+        BOOST_CHECK_THROW(probe.loadStorageConfig(fromIni(std::string("[storage]\n") + bad)),
+            bcos::tool::InvalidConfig);
+    }
+}
+
+
 BOOST_AUTO_TEST_CASE(failOverConfigDisabledAndError)
 {
     LoaderProbe a;  // disabled → early return

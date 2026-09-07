@@ -233,6 +233,28 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     co_return HistoricalMptContext{stateRoot, fullTrie};
 }
 
+/// Run a historical MPT walk (@p walk), mapping a missing INTERNAL node to the same -32004 the
+/// root-presence probe answers with: resolveHistoricalMptContext checks only the root row, and
+/// on the pruning window boundary an internal node can be gone while the root still resolves —
+/// the trie walk then throws MPTInvariantViolation (Proof.h / Trie.h), which would otherwise
+/// surface as a generic internal error. Only the historical read paths below use this: an
+/// MPTInvariantViolation on a write/execution path is a genuine storage inconsistency and must
+/// keep surfacing as-is.
+template <typename T>
+task::Task<T> mapPrunedMptWalk(task::Task<T> walk, bcos::protocol::BlockNumber blockNumber,
+    bcos::protocol::BlockNumber head, std::int64_t mptPruneWindow)
+{
+    try
+    {
+        co_return co_await std::move(walk);
+    }
+    catch (bcos::ledger::mpt::MPTInvariantViolation const&)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
+            stateRootMissingMessage(blockNumber, head, mptPruneWindow)));
+    }
+}
+
 task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value& response)
 {
     // params: address(DATA), blockNumber(QTY|TAG)
@@ -280,8 +302,10 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
         auto const ctx = co_await resolveHistoricalMptContext(
             *ledger, blockNumber, head, mptReader, m_nodeService->mptPruneWindow());
         bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
-        auto const account = co_await view.readAccount(
-            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+        auto const account = co_await mapPrunedMptWalk(
+            view.readAccount(
+                bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight}),
+            blockNumber, head, m_nodeService->mptPruneWindow());
         if (account)
         {
             balance = account->balance;
@@ -439,8 +463,10 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     bcos::u256 value = 0;
     {
         bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
-        auto const account = co_await view.readAccount(
-            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+        auto const account = co_await mapPrunedMptWalk(
+            view.readAccount(
+                bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight}),
+            blockNumber, head, m_nodeService->mptPruneWindow());
         if (!account)
         {
             if (!ctx.fullTrie) [[unlikely]]
@@ -460,8 +486,9 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
             if (account->storageRoot != bcos::ledger::mpt::emptyRootHash())
             {
                 bcos::ledger::mpt::Trie trie{*mptReader, account->storageRoot};
-                if (auto const slot =
-                        co_await trie.get(bcos::ledger::mpt::slotKeyHash(positionBytes)))
+                if (auto const slot = co_await mapPrunedMptWalk(
+                        trie.get(bcos::ledger::mpt::slotKeyHash(positionBytes)), blockNumber,
+                        head, m_nodeService->mptPruneWindow()))
                 {
                     value = bcos::ledger::mpt::decodeStorageValue(bcos::ref(*slot));
                     slotInTrie = true;
@@ -545,8 +572,10 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
         auto const ctx = co_await resolveHistoricalMptContext(
             *ledger, blockNumber, head, mptReader, m_nodeService->mptPruneWindow());
         bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
-        auto const account = co_await view.readAccount(
-            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+        auto const account = co_await mapPrunedMptWalk(
+            view.readAccount(
+                bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight}),
+            blockNumber, head, m_nodeService->mptPruneWindow());
         if (account)
         {
             nonce = account->nonce;
@@ -695,8 +724,10 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
         auto const ctx = co_await resolveHistoricalMptContext(
             *ledger, blockNumber, head, mptReader, m_nodeService->mptPruneWindow());
         bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
-        auto const account = co_await view.readAccount(
-            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+        auto const account = co_await mapPrunedMptWalk(
+            view.readAccount(
+                bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight}),
+            blockNumber, head, m_nodeService->mptPruneWindow());
         if (account)
         {
             if (account->codeHash != bcos::ledger::mpt::emptyCodeHash())
@@ -1408,8 +1439,10 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     auto const fullTrie = co_await ledger::getFeature(
         *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber);
 
-    auto result = co_await ledger::mpt::generateProof(
-        *mptReader, stateRoot, address, std::span<h256 const>(slots), fullTrie);
+    auto result = co_await mapPrunedMptWalk(
+        ledger::mpt::generateProof(
+            *mptReader, stateRoot, address, std::span<h256 const>(slots), fullTrie),
+        blockNumber, head, m_nodeService->mptPruneWindow());
     if (auto const* errorCode = std::get_if<ledger::mpt::ProofErrorCode>(&result))
     {
         auto const message = (*errorCode == ledger::mpt::ProofErrorCode::AccountNotInMPT) ?

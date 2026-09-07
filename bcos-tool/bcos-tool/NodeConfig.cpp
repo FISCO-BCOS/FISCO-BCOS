@@ -1747,6 +1747,15 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                                   "[1, 10000000], got " +
                                   std::to_string(m_mptPruneWindow)));
     }
+    // Per-block cap on expired-node deletions: 0 would stall the delete queue forever (a silent
+    // leak against the disk-bounding purpose), a huge value lets one block's commit scan and
+    // delete without bound. Fail loudly instead.
+    if (m_mptPruneBatchSize < 1 || m_mptPruneBatchSize > 100'000)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[storage].mpt_prune_batch_size must be in [1, 100000], got " +
+                                  std::to_string(m_mptPruneBatchSize)));
+    }
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");

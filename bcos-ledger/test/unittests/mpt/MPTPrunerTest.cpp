@@ -291,8 +291,13 @@ BOOST_AUTO_TEST_CASE(DefaultObserverHookReturnsNoRows)
     BOOST_CHECK(batch.deletions.empty());
 }
 
-BOOST_AUTO_TEST_CASE(NewNodesCreateRefCountRowsAndWatermark)
+BOOST_AUTO_TEST_CASE(UncountedDeltaSkipsPruningFailSafe)
 {
+    // A delta that changed nodes but carries no refCountDeltas tally (a build run with
+    // trackRefCounts=false, or a hand-built delta): the set reading would under-count
+    // content-addressed nodes shared across the block's tries (newNodes deduplicates duplicate
+    // emissions), so the pruner fail-safes — no counting, no queue rows, no deletions. Only the
+    // metadata rows still land, so the startup guard keeps tracking the head.
     PruneBackend backend;
     BackendNodeStorage nodes(backend);
     MPTPruner<PruneBackend> pruner(backend, /*pruneWindow=*/5);
@@ -301,21 +306,48 @@ BOOST_AUTO_TEST_CASE(NewNodesCreateRefCountRowsAndWatermark)
     auto const h2 = makeHash(0x02);
     MPTDeltaLayer delta;
     delta.newNodes[h1] = bcos::bytes{0x11};
-    delta.newNodes[h2] = bcos::bytes{0x22};
+    delta.obsoletedNodes.insert(h2);
 
-    // Hand-built delta: refCountDeltas is empty, so the set-based fallback (+1 per newNodes
-    // hash) is what runs here.
     auto batch = bcos::task::syncWait(pruner.coPreparePruneRows(7, delta));
-    // 2 refcount rows + the watermark row + the window fingerprint row; no queue rows, nothing
-    // expired to delete.
-    BOOST_CHECK_EQUAL(batch.rows.size(), 4U);
+    // The watermark row + the window fingerprint row only; nothing counted, queued or deleted.
+    BOOST_CHECK_EQUAL(batch.rows.size(), 2U);
     BOOST_CHECK(batch.deletions.empty());
     bcos::task::syncWait(bcos::storage2::writeSome(backend, std::move(batch.rows)));
 
-    BOOST_CHECK((readRefCountRow(backend, h1) == PruneRefCount{.count = 1}));
-    BOOST_CHECK((readRefCountRow(backend, h2) == PruneRefCount{.count = 1}));
+    BOOST_CHECK(!readRefCountRow(backend, h1).has_value());
+    BOOST_CHECK(!readRefCountRow(backend, h2).has_value());
     BOOST_REQUIRE(readWatermarkRow(backend).has_value());
     BOOST_CHECK_EQUAL(*readWatermarkRow(backend), 7U);
+    BOOST_CHECK_EQUAL(countRowsInTable(backend, kPruneQueueTable), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(EmptyDeltaPassesSilently)
+{
+    // A fully empty delta is the normal empty block, not the uncounted-delta case: no ERROR,
+    // metadata rows land, and the delete queue is still consumed up to this block.
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    MPTPruner<PruneBackend> pruner(backend, /*pruneWindow=*/2);
+    auto const h1 = makeHash(0x01);
+
+    // Counted history: created at block 1, obsoleted at block 2 → deadline 4.
+    MPTDeltaLayer delta1;
+    delta1.refCountDeltas[h1] = 1;
+    delta1.newNodes[h1] = bcos::bytes{0x11};
+    commitPruneBlock(backend, pruner, 1, delta1);
+    bcos::task::syncWait(nodes.writeOne(h1, bcos::bytes{0x11}));
+    MPTDeltaLayer delta2;
+    delta2.refCountDeltas[h1] = -1;
+    delta2.obsoletedNodes.insert(h1);
+    commitPruneBlock(backend, pruner, 2, delta2);
+    BOOST_REQUIRE_EQUAL(countRowsInTable(backend, kPruneQueueTable), 1U);
+
+    // Empty blocks still consume the matured deletion.
+    auto batch = bcos::task::syncWait(pruner.coPreparePruneRows(3, MPTDeltaLayer{}));
+    BOOST_CHECK_EQUAL(batch.rows.size(), 2U);
+    BOOST_CHECK(batch.deletions.empty());  // not yet due
+    runEmptyBlocks(backend, pruner, 4, 4);
+    BOOST_CHECK(!nodeRowExists(backend, h1));
     BOOST_CHECK_EQUAL(countRowsInTable(backend, kPruneQueueTable), 0U);
 }
 
@@ -327,10 +359,12 @@ BOOST_AUTO_TEST_CASE(ObsoletionToZeroQueuesDeletion)
     auto const h1 = makeHash(0x01);
 
     MPTDeltaLayer delta1;
+    delta1.refCountDeltas[h1] = 1;
     delta1.newNodes[h1] = bcos::bytes{0x11};
     commitPruneBlock(backend, pruner, 1, delta1);
 
     MPTDeltaLayer delta2;
+    delta2.refCountDeltas[h1] = -1;
     delta2.obsoletedNodes.insert(h1);
     commitPruneBlock(backend, pruner, 2, delta2);
 
@@ -352,12 +386,14 @@ BOOST_AUTO_TEST_CASE(SharedRefCountSurvivesSingleObsoletion)
     for (bcos::protocol::BlockNumber block = 1; block <= 2; ++block)
     {
         MPTDeltaLayer delta;
+        delta.refCountDeltas[h1] = 1;
         delta.newNodes[h1] = bcos::bytes{0x11};
         commitPruneBlock(backend, pruner, block, delta);
     }
     BOOST_CHECK((readRefCountRow(backend, h1) == PruneRefCount{.count = 2}));
 
     MPTDeltaLayer delta3;
+    delta3.refCountDeltas[h1] = -1;
     delta3.obsoletedNodes.insert(h1);
     commitPruneBlock(backend, pruner, 3, delta3);
 
@@ -375,16 +411,19 @@ BOOST_AUTO_TEST_CASE(RevivalRevokesPendingDeleteAndStaleQueueRowIsCleaned)
 
     // Block 1: created. Block 2: obsoleted → queued at 7. The node row sits on disk.
     MPTDeltaLayer delta1;
+    delta1.refCountDeltas[h1] = 1;
     delta1.newNodes[h1] = bcos::bytes{0x11};
     commitPruneBlock(backend, pruner, 1, delta1);
     bcos::task::syncWait(nodes.writeOne(h1, bcos::bytes{0x11}));
     MPTDeltaLayer delta2;
+    delta2.refCountDeltas[h1] = -1;
     delta2.obsoletedNodes.insert(h1);
     commitPruneBlock(backend, pruner, 2, delta2);
     BOOST_CHECK_EQUAL(countRowsInTable(backend, kPruneQueueTable), 1U);
 
     // Block 3: re-created before its deletion ran → count 1, schedule revoked.
     MPTDeltaLayer delta3;
+    delta3.refCountDeltas[h1] = 1;
     delta3.newNodes[h1] = bcos::bytes{0x11};
     commitPruneBlock(backend, pruner, 3, delta3);
     BOOST_CHECK((readRefCountRow(backend, h1) == PruneRefCount{.count = 1}));
@@ -410,10 +449,12 @@ BOOST_AUTO_TEST_CASE(RevivalAtExpiryBlockIsNotDeleted)
 
     // Block 1: created (node row on disk). Block 2: obsoleted → queued at 4.
     MPTDeltaLayer delta1;
+    delta1.refCountDeltas[h1] = 1;
     delta1.newNodes[h1] = bcos::bytes{0x11};
     commitPruneBlock(backend, pruner, 1, delta1);
     bcos::task::syncWait(nodes.writeOne(h1, bcos::bytes{0x11}));
     MPTDeltaLayer delta2;
+    delta2.refCountDeltas[h1] = -1;
     delta2.obsoletedNodes.insert(h1);
     commitPruneBlock(backend, pruner, 2, delta2);
     BOOST_REQUIRE((readRefCountRow(backend, h1) == PruneRefCount{.count = 0, .pendingDeleteAt = 4}));
@@ -422,6 +463,7 @@ BOOST_AUTO_TEST_CASE(RevivalAtExpiryBlockIsNotDeleted)
     // Block 4 — the expiry block itself — re-creates the node (0→1, schedule revoked). The
     // expired queue row IS consumed this block: the re-check must see the revival.
     MPTDeltaLayer delta4;
+    delta4.refCountDeltas[h1] = 1;
     delta4.newNodes[h1] = bcos::bytes{0x11};
     commitPruneBlock(backend, pruner, 4, delta4);
 
@@ -440,6 +482,7 @@ BOOST_AUTO_TEST_CASE(UntrackedObsoletionSaturatesAtZeroAndQueues)
     bcos::task::syncWait(nodes.writeOne(h1, bcos::bytes{0x11}));
 
     MPTDeltaLayer delta;
+    delta.refCountDeltas[h1] = -1;
     delta.obsoletedNodes.insert(h1);
     commitPruneBlock(backend, pruner, 4, delta);
 
@@ -464,12 +507,14 @@ BOOST_AUTO_TEST_CASE(IntraBlockObsoletionNetsToZero)
     auto const h1 = makeHash(0x01);
 
     MPTDeltaLayer delta1;
+    delta1.refCountDeltas[h1] = 1;
     delta1.newNodes[h1] = bcos::bytes{0x11};
     commitPruneBlock(backend, pruner, 1, delta1);
 
     // Produced AND obsoleted within block 2, with a prior count of 1: +1 −1 nets to 0 and the
     // node stays counted — it is referenced by the new version.
     MPTDeltaLayer delta2;
+    delta2.refCountDeltas[h1] = 0;
     delta2.newNodes[h1] = bcos::bytes{0x11};
     delta2.intraBlockObsoleted.insert(h1);
     commitPruneBlock(backend, pruner, 2, delta2);
@@ -481,6 +526,7 @@ BOOST_AUTO_TEST_CASE(IntraBlockObsoletionNetsToZero)
     // obsoletion.
     auto const h2 = makeHash(0x02);
     MPTDeltaLayer delta3;
+    delta3.refCountDeltas[h2] = 0;
     delta3.newNodes[h2] = bcos::bytes{0x22};
     delta3.intraBlockObsoleted.insert(h2);
     commitPruneBlock(backend, pruner, 3, delta3);
@@ -722,6 +768,7 @@ BOOST_AUTO_TEST_CASE(StartupGuardAcceptsMatchingWatermark)
     {
         MPTPruner<PruneBackend> pruner(backend, 5);
         MPTDeltaLayer delta1;
+        delta1.refCountDeltas[makeHash(0x01)] = 1;
         delta1.newNodes[makeHash(0x01)] = bcos::bytes{0x11};
         commitPruneBlock(backend, pruner, 1, delta1);
         commitPruneBlock(backend, pruner, 2, MPTDeltaLayer{});
@@ -897,8 +944,9 @@ BOOST_AUTO_TEST_CASE(TombstoneObsoletionCountedManually)
     auto const storageRoot = makeHash(0x77);
     bcos::task::syncWait(nodes.writeOne(storageRoot, bcos::bytes{0xAA}));
 
-    // The storage trie's own build counted its root at creation (+1 via the set fallback).
+    // The storage trie's own build counted its root at creation (+1 tallied by the build).
     MPTDeltaLayer delta1;
+    delta1.refCountDeltas[storageRoot] = 1;
     delta1.newNodes[storageRoot] = bcos::bytes{0xAA};
     commitPruneBlock(backend, pruner, 1, delta1);
     BOOST_CHECK((readRefCountRow(backend, storageRoot) == PruneRefCount{.count = 1}));
@@ -998,6 +1046,8 @@ BOOST_AUTO_TEST_CASE(CorruptRefCountRowIsSkippedNotFatal)
         bcos::storage2::writeOne(backend, pruneRefKey(hBad), std::move(badEntry)));
 
     MPTDeltaLayer delta;
+    delta.refCountDeltas[hBad] = 1;
+    delta.refCountDeltas[hGood] = 1;
     delta.newNodes[hBad] = bcos::bytes{0xBB};
     delta.newNodes[hGood] = bcos::bytes{0xCC};
     BOOST_CHECK_NO_THROW(commitPruneBlock(backend, pruner, 1, delta));
@@ -1027,10 +1077,12 @@ BOOST_AUTO_TEST_CASE(CorruptQueueRowIsCleanedUp)
 
     // A legitimately expiring node: created at block 1, obsoleted at block 2 → deadline 4.
     MPTDeltaLayer delta1;
+    delta1.refCountDeltas[h1] = 1;
     delta1.newNodes[h1] = bcos::bytes{0x11};
     commitPruneBlock(backend, pruner, 1, delta1);
     bcos::task::syncWait(nodes.writeOne(h1, bcos::bytes{0x11}));
     MPTDeltaLayer delta2;
+    delta2.refCountDeltas[h1] = -1;
     delta2.obsoletedNodes.insert(h1);
     commitPruneBlock(backend, pruner, 2, delta2);
     BOOST_REQUIRE_EQUAL(countRowsInTable(backend, kPruneQueueTable), 1U);
@@ -1068,10 +1120,12 @@ BOOST_AUTO_TEST_CASE(CorruptRefCountAtRecheckBlocksDeletion)
     auto const h1 = makeHash(0x01);
 
     MPTDeltaLayer delta1;
+    delta1.refCountDeltas[h1] = 1;
     delta1.newNodes[h1] = bcos::bytes{0x11};
     commitPruneBlock(backend, pruner, 1, delta1);
     bcos::task::syncWait(nodes.writeOne(h1, bcos::bytes{0x11}));
     MPTDeltaLayer delta2;
+    delta2.refCountDeltas[h1] = -1;
     delta2.obsoletedNodes.insert(h1);
     commitPruneBlock(backend, pruner, 2, delta2);
     BOOST_REQUIRE(
