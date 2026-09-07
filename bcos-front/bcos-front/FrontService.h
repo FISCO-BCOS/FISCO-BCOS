@@ -27,6 +27,7 @@
 #include <boost/asio.hpp>
 #include <atomic>
 #include <functional>
+#include <optional>
 #include <utility>
 
 namespace bcos::front
@@ -146,7 +147,6 @@ public:
     void setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface);
 
     std::shared_ptr<boost::asio::io_context> ioService() const;
-    void setIoService(std::shared_ptr<boost::asio::io_context> _ioService);
     void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool);
 
     // register message _dispatcher for module
@@ -175,7 +175,7 @@ public:
         using Ptr = std::shared_ptr<Callback>;
         uint64_t startTime = utcSteadyTime();
         CallbackFunc callbackFunc;
-        std::shared_ptr<boost::asio::steady_timer> timeoutHandler;
+        std::optional<boost::asio::steady_timer> timeoutHandler;
     };
     // lock m_callback
     mutable bcos::Mutex x_callback;
@@ -190,12 +190,12 @@ public:
     void addCallback(const std::string& _uuid, Callback::Ptr callback);
 
 protected:
-    virtual void handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoad,
+    void handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoad,
         std::string const& _uuid, int _moduleID, bcos::crypto::NodeIDPtr _nodeID);
     void notifyGroupNodeInfo(
         const std::string& _groupID, const bcos::gateway::GroupNodeInfo::Ptr& _groupNodeInfo);
 
-    virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
+    void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
     // FIB-185: hand a send task to the serial send strand and return immediately; tasks run FIFO
     // on the shared IOServicePool (serialized, never concurrently), so no caller thread runs the
