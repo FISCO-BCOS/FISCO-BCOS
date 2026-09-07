@@ -23,20 +23,19 @@
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libamop/TopicManager.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
-#include <fakeit.hpp>
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
-using namespace fakeit;
 using namespace bcos;
 using namespace bcos::test;
 using namespace bcos::amop;
@@ -73,6 +72,28 @@ struct SendResult
     int16_t packetType = 0;
     bcos::bytes responseData;
 };
+
+// Hand-written fake replacing the former FakeIt Mock<P2PInterface>: every node is reachable, and
+// sendMessageByNodeID is scripted per test through m_sendHook (which records the attempt and the
+// Options, and may throw NetworkException to simulate a send failure).
+class FakeNetworkService : public Service
+{
+public:
+    FakeNetworkService() : Service(P2PInfo())
+    {
+        setMessageFactory(std::make_shared<P2PMessageFactoryV2>());
+    }
+
+    bool isReachable(P2pID const&) const override { return true; }
+
+    task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage&,
+        ::ranges::any_view<bytesConstRef>, Options options) override
+    {
+        co_return m_sendHook ? m_sendHook(nodeID, options) : Message::Ptr{};
+    }
+
+    std::function<Message::Ptr(P2pID const&, Options)> m_sendHook;
+};
 }  // namespace
 
 BOOST_FIXTURE_TEST_SUITE(AMOPSendMessagePathTest, TestPromptFixture)
@@ -81,15 +102,6 @@ struct AMOPSendFixture
 {
     AMOPSendFixture()
     {
-        // AMOPImpl registers an AMOP message handler in its constructor
-        When(Method(networkMock, registerHandlerByMsgType)).AlwaysReturn(true);
-        // TopicManager::queryNodeIDsByTopic only returns reachable nodes
-        When(Method(networkMock, isReachable)).AlwaysReturn(true);
-        When(Method(networkMock, messageFactory)).AlwaysDo([]() -> std::shared_ptr<MessageFactory> {
-            return std::make_shared<P2PMessageFactoryV2>();
-        });
-
-        network = P2PInterface::Ptr(&networkMock.get(), [](P2PInterface*) {});
         topicManager = std::make_shared<TopicManager>("amopSendPathTest", network);
         ioServicePool = std::make_shared<bcos::IOServicePool>(1, "amopSendPathTest");
         amop = std::make_shared<AMOPImpl>(topicManager, std::make_shared<AMOPMessageFactory>(),
@@ -118,10 +130,9 @@ struct AMOPSendFixture
         _result.responseData = std::move(responseData);
     }
 
-    Mock<P2PInterface> networkMock;
+    std::shared_ptr<FakeNetworkService> network = std::make_shared<FakeNetworkService>();
     boost::asio::io_context ioContext;
     bcos::IOServicePool::Ptr ioServicePool;
-    P2PInterface::Ptr network;
     TopicManager::Ptr topicManager;
     std::shared_ptr<AMOPImpl> amop;
     P2pID localNodeID = std::string(128, 'f');
@@ -140,8 +151,8 @@ BOOST_AUTO_TEST_CASE(test_emptyCandidateList)
     BOOST_CHECK(result.error != nullptr);
     BOOST_CHECK_EQUAL(result.error->errorCode(), CommonError::NotFoundPeerByTopicSendMsg);
     BOOST_CHECK_EQUAL(result.packetType, 0);
+    // sendMessageByNodeID never invoked
     BOOST_CHECK(fixture.attempts->empty());
-    Verify(Method(fixture.networkMock, sendMessageByNodeID)).Never();
 }
 
 // every candidate throws NetworkException: all are tried once, terminal AMOPSendMsgFailed
@@ -153,16 +164,10 @@ BOOST_AUTO_TEST_CASE(test_allCandidatesFail)
     fixture.subscribeTopic("topic_all_fail", nodeIDs);
 
     auto attempts = fixture.attempts;
-    When(Method(fixture.networkMock, sendMessageByNodeID))
-        .AlwaysDo([attempts](P2pID nodeID, P2PMessage&, ::ranges::any_view<bytesConstRef>,
-                      Options) -> task::Task<Message::Ptr> {
-            attempts->push_back(nodeID);
-            if (!nodeID.empty())
-            {
-                throw NetworkException(-1, "mock network failure");
-            }
-            co_return Message::Ptr{};
-        });
+    fixture.network->m_sendHook = [attempts](P2pID const& nodeID, Options) -> Message::Ptr {
+        attempts->push_back(nodeID);
+        throw NetworkException(-1, "fake network failure");
+    };
 
     SendResult result;
     fixture.send("topic_all_fail", result);
@@ -196,16 +201,15 @@ BOOST_AUTO_TEST_CASE(test_retrySucceedsAfterNetworkException)
     auto expectedPayload = encodeAMOPResponse(c_responseStatus, c_responseData);
 
     auto attempts = fixture.attempts;
-    When(Method(fixture.networkMock, sendMessageByNodeID))
-        .AlwaysDo([attempts, expectedPayload](P2pID nodeID, P2PMessage&,
-                      ::ranges::any_view<bytesConstRef>, Options) -> task::Task<Message::Ptr> {
-            attempts->push_back(nodeID);
-            if (attempts->size() == 1)
-            {
-                throw NetworkException(-1, "mock network failure");
-            }
-            co_return buildP2PResponse(expectedPayload);
-        });
+    fixture.network->m_sendHook =
+        [attempts, expectedPayload](P2pID const& nodeID, Options) -> Message::Ptr {
+        attempts->push_back(nodeID);
+        if (attempts->size() == 1)
+        {
+            throw NetworkException(-1, "fake network failure");
+        }
+        return buildP2PResponse(expectedPayload);
+    };
 
     SendResult result;
     fixture.send("topic_retry_success", result);
@@ -235,16 +239,15 @@ BOOST_AUTO_TEST_CASE(test_nullResponseRetriesNextNode)
 
     auto expectedPayload = encodeAMOPResponse(0, "ok");
     auto attempts = fixture.attempts;
-    When(Method(fixture.networkMock, sendMessageByNodeID))
-        .AlwaysDo([attempts, expectedPayload](P2pID nodeID, P2PMessage&,
-                      ::ranges::any_view<bytesConstRef>, Options) -> task::Task<Message::Ptr> {
-            attempts->push_back(nodeID);
-            if (attempts->size() == 1)
-            {
-                co_return Message::Ptr{};
-            }
-            co_return buildP2PResponse(expectedPayload);
-        });
+    fixture.network->m_sendHook =
+        [attempts, expectedPayload](P2pID const& nodeID, Options) -> Message::Ptr {
+        attempts->push_back(nodeID);
+        if (attempts->size() == 1)
+        {
+            return Message::Ptr{};
+        }
+        return buildP2PResponse(expectedPayload);
+    };
 
     SendResult result;
     fixture.send("topic_null_response", result);
@@ -268,13 +271,11 @@ BOOST_AUTO_TEST_CASE(test_malformedAMOPResponseFailsWithoutRetry)
     fixture.subscribeTopic("topic_malformed_response", nodeIDs);
 
     auto attempts = fixture.attempts;
-    When(Method(fixture.networkMock, sendMessageByNodeID))
-        .AlwaysDo([attempts](P2pID nodeID, P2PMessage&, ::ranges::any_view<bytesConstRef>,
-                      Options) -> task::Task<Message::Ptr> {
-            attempts->push_back(nodeID);
-            // AMOPMessage::decode needs at least the 6-byte header
-            co_return buildP2PResponse(bcos::bytes{0x1, 0x2, 0x3});
-        });
+    fixture.network->m_sendHook = [attempts](P2pID const& nodeID, Options) -> Message::Ptr {
+        attempts->push_back(nodeID);
+        // AMOPMessage::decode needs at least the 6-byte header
+        return buildP2PResponse(bcos::bytes{0x1, 0x2, 0x3});
+    };
 
     SendResult result;
     fixture.send("topic_malformed_response", result);
@@ -299,13 +300,11 @@ BOOST_AUTO_TEST_CASE(test_sendUsesFiniteResponseTimeout)
 
     auto expectedPayload = encodeAMOPResponse(0, "ok");
     auto observedOptions = std::make_shared<std::vector<Options>>();
-    When(Method(fixture.networkMock, sendMessageByNodeID))
-        .AlwaysDo([observedOptions, expectedPayload](P2pID, P2PMessage&,
-                      ::ranges::any_view<bytesConstRef>, Options options)
-                      -> task::Task<Message::Ptr> {
-            observedOptions->push_back(options);
-            co_return buildP2PResponse(expectedPayload);
-        });
+    fixture.network->m_sendHook =
+        [observedOptions, expectedPayload](P2pID const&, Options options) -> Message::Ptr {
+        observedOptions->push_back(options);
+        return buildP2PResponse(expectedPayload);
+    };
 
     SendResult result;
     fixture.send("topic_finite_timeout", result);

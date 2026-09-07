@@ -23,8 +23,8 @@
 #include "PeersRouterTable.h"
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/Timer.h"
 #include <oneapi/tbb/concurrent_hash_map.h>
@@ -35,24 +35,27 @@ class GatewayNodeManager
 {
 public:
     using Ptr = std::shared_ptr<GatewayNodeManager>;
+    // _enableNodeAliveDetection selects the former ProGatewayNodeManager behaviour (pro/tars
+    // deployment without a failover entry point): a periodic timer erases the unreachable nodes
+    // from the local router table, since tars needs at least 1min to refresh endpoint info.
     GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
-        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface,
-        boost::asio::io_context& _ioContext);
-    virtual ~GatewayNodeManager();
+        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, Service::Ptr _p2pInterface,
+        boost::asio::io_context& _ioContext, bool _enableNodeAliveDetection = false);
+    ~GatewayNodeManager();
 
-    virtual void start();
-    virtual void stop();
+    void start();
+    void stop();
 
     void onRemoveNodeIDs(const P2pID& _p2pID);
 
     GroupNodeInfo::Ptr getGroupNodeInfoList(const std::string& _groupID);
 
-    virtual bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+    bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
         bcos::protocol::NodeType _nodeType, bcos::front::FrontService::Ptr _frontService,
         bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo);
-    virtual bool unregisterNode(const std::string& _groupID, std::string const& _nodeID);
+    bool unregisterNode(const std::string& _groupID, std::string const& _nodeID);
     // for multi-group support
-    virtual bool updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo);
+    bool updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
     LocalRouterTable::Ptr localRouterTable();
     PeersRouterTable::Ptr peersRouterTable();
@@ -64,31 +67,35 @@ public:
 protected:
     // for ut
     GatewayNodeManager(std::string const& _uuid,
-        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface);
+        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, Service::Ptr _p2pInterface);
 
     uint32_t increaseSeq();
     bool statusChanged(std::string const& _p2pNodeID, uint32_t _seq);
     uint32_t statusSeq();
     // Note: must broadcast the status seq periodically ensure that the seq can be synced to
     // restarted or re-connected nodes
-    virtual void broadcastStatusSeq();
+    void broadcastStatusSeq();
 
-    virtual void onReceiveStatusSeq(
+    void onReceiveStatusSeq(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
-    virtual void onRequestNodeStatus(
+    void onRequestNodeStatus(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
-    virtual void onReceiveNodeStatus(
+    void onReceiveNodeStatus(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
-    virtual bytesPointer generateNodeStatus();
-    virtual void syncLatestNodeIDList();
+    bytesPointer generateNodeStatus();
+    void syncLatestNodeIDList();
 
-    virtual void updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status);
+    void updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status);
+
+private:
+    // node-alive detection (the former ProGatewayNodeManager)
+    void detectNodeAlive();
 
 protected:
     P2pID m_p2pNodeID;
     std::string m_uuid;
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
-    P2PInterface::Ptr m_p2pInterface;
+    Service::Ptr m_p2pInterface;
     // statusSeq
     std::atomic<uint32_t> m_statusSeq{1};
     tbb::concurrent_hash_map<std::string, uint32_t> m_p2pID2Seq;
@@ -104,5 +111,11 @@ protected:
     // promptly on the first drop, while a persistent bulk-disconnect is bounded to ~one sync per
     // period instead of one full node-list broadcast to every front per dropped session.
     std::atomic_bool m_nodeIDListDirty{false};
+
+    // node-alive detector, only created when _enableNodeAliveDetection (pro/tars mode)
+    std::shared_ptr<Timer> m_nodeAliveDetector;
+    // Note: since tars need at-least 1min to update the endpoint info, we schedule detectNodeAlive
+    // every 1min
+    uint64_t c_tarsAdminRefreshTimeInterval = 30 * 1000;
 };
 }  // namespace bcos::gateway

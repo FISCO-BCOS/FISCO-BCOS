@@ -24,7 +24,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
-#include <bcos-gateway/libamop/AirTopicManager.h>
+#include <bcos-gateway/libamop/TopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
@@ -126,9 +126,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_rpc = rpcFactory.buildLocalRpc(groupInfo, nodeService);
     if (gateway->amop())
     {
-        auto topicManager = std::dynamic_pointer_cast<bcos::amop::LocalTopicManager>(
-            gateway->amop()->topicManager());
-        topicManager->setLocalClient(m_rpc);
+        gateway->amop()->topicManager()->setLocalClient(m_rpc);
     }
     m_nodeInitializer->initNotificationHandlers(m_rpc);
 

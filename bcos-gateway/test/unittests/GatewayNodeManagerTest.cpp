@@ -42,7 +42,7 @@ public:
     {
         m_keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     }
-    ~FakeGatewayNodeManager() override {}
+    ~FakeGatewayNodeManager() {}
 
     bool statusChanged(std::string const& _p2pNodeID, uint32_t _seq)
     {
@@ -50,8 +50,8 @@ public:
     }
     uint32_t statusSeq() { return GatewayNodeManager::statusSeq(); }
 
-    bytesPointer generateNodeStatus() override { return GatewayNodeManager::generateNodeStatus(); }
-    void updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status) override
+    bytesPointer generateNodeStatus() { return GatewayNodeManager::generateNodeStatus(); }
+    void updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status)
     {
         return GatewayNodeManager::updatePeerStatus(_p2pID, _status);
     }
@@ -62,8 +62,8 @@ public:
             accessor->second = _seq;
         }
     }
-    void start() override {}
-    void stop() override {}
+    void start() {}
+    void stop() {}
 };
 
 inline GatewayNodeStatus::Ptr createGatewayNodeStatus(

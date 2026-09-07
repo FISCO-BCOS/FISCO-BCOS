@@ -34,7 +34,7 @@
 
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
-#include "bcos-gateway/libp2p/ServiceV2.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -53,28 +53,23 @@ namespace
 // directly (mutableP2pInfo avoids setP2PInfo, which dereferences the session's socket) so the
 // router entry's dstNode (p2pID) and dstNodeInfo (p2pInfo.rawP2pID) agree -- avoiding the
 // empty-p2pInfo state a real session never produces.
-class FakeSessionVB : public P2PSession
+P2PSession::Ptr makeFakeSessionVB(std::string _id)
 {
-public:
-    explicit FakeSessionVB(std::string _id) : m_id(std::move(_id))
-    {
-        auto info = mutableP2pInfo();
-        info->rawP2pID = m_id;
-        info->p2pID = m_id;
-    }
-    P2pID p2pID() override { return m_id; }
-    std::string printP2pID() override { return m_id; }
-    std::string m_id;
-};
+    auto session = std::make_shared<P2PSession>();
+    auto info = session->mutableP2pInfo();
+    info->rawP2pID = _id;
+    info->p2pID = std::move(_id);
+    return session;
+}
 
 // Counts broadcastRouterSeq() (overriding away the real broadcast) and exposes the protected
 // membership handlers so the test can drive them directly.
-class CountingServiceV2 : public ServiceV2
+class CountingService : public Service
 {
 public:
-    // ServiceV2 borrows an external io_context now; the test owns it and passes it in.
-    CountingServiceV2(P2PInfo const& _info, boost::asio::io_context& _ioContext)
-      : ServiceV2(_info, _ioContext)
+    // RIP-router mode borrows an external io_context now; the test owns it and passes it in.
+    CountingService(P2PInfo const& _info, boost::asio::io_context& _ioContext)
+      : Service(_info, _ioContext)
     {}
     void broadcastRouterSeq() override { ++m_broadcastCount; }
     void callOnNewSession(P2PSession::Ptr _session) { onNewSession(std::move(_session)); }
@@ -89,7 +84,7 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
     selfInfo.rawP2pID = "selfRawP2pID";
     selfInfo.p2pID = "selfP2pID";
     boost::asio::io_context ioContext;
-    auto service = std::make_shared<CountingServiceV2>(selfInfo, ioContext);
+    auto service = std::make_shared<CountingService>(selfInfo, ioContext);
 
     // A connect/disconnect flood drives many membership changes in quick succession. On the pre-fix
     // code each one called broadcastRouterSeq() -> one broadcast per change (the gossip storm). The
@@ -97,10 +92,10 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
     // until the m_routerTimer flush, which is not running in this unit test, so the dirty flag
     // stays set.
     constexpr int kChurn = 8;
-    std::vector<std::shared_ptr<FakeSessionVB>> peers;
+    std::vector<P2PSession::Ptr> peers;
     for (int i = 0; i < kChurn; ++i)
     {
-        auto peer = std::make_shared<FakeSessionVB>("peer-" + std::to_string(i));
+        auto peer = makeFakeSessionVB("peer-" + std::to_string(i));
         peers.push_back(peer);
         service->callOnNewSession(peer);
     }

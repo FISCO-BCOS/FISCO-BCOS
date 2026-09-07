@@ -52,7 +52,7 @@ int main(int argc, char** argv)
 
     GatewayFactory gatewayFactory(nodeConfig->chainId(), "localClient", nullptr);
     auto gateway = gatewayFactory.buildGateway(configFilePath, true, nullptr, "localClient");
-    auto service = std::dynamic_pointer_cast<Service>(gateway->p2pInterface());
+    auto service = gateway->p2pInterface();
 
     gateway->start();
 

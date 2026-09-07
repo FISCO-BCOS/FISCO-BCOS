@@ -113,10 +113,10 @@ public:
         const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
 
 protected:
-    virtual bcos::amop::AMOPImpl::Ptr buildAMOP(
-        bcos::gateway::P2PInterface::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID);
-    virtual bcos::amop::AMOPImpl::Ptr buildLocalAMOP(
-        bcos::gateway::P2PInterface::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID);
+    bcos::amop::AMOPImpl::Ptr buildAMOP(
+        bcos::gateway::Service::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID);
+    bcos::amop::AMOPImpl::Ptr buildLocalAMOP(
+        bcos::gateway::Service::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID);
 
     void registerAMOPHandlers(
         std::shared_ptr<Service> const& service, bcos::amop::TopicManager::Ptr const& topicManager);

@@ -9,14 +9,17 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/Overloaded.h"
 #include "bcos-utilities/Timer.h"
+#include <bcos-task/Task.h>
 #include <oneapi/tbb/concurrent_queue.h>
 #include <boost/asio/buffer.hpp>
 #include <boost/container/small_vector.hpp>
 #include <boost/heap/priority_queue.hpp>
+#include <range/v3/view/any_view.hpp>
 #include <atomic>
 #include <cstddef>
 #include <functional>

@@ -21,7 +21,7 @@
 
 #include "bcos-framework/rpc/RPCInterface.h"
 #include "bcos-gateway/libamop/Common.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/Common.h"
 #include <servant/Application.h>
 #include <shared_mutex>
@@ -30,15 +30,19 @@ namespace bcos
 {
 namespace amop
 {
+// The single concrete topic manager. _localMode selects the former LocalTopicManager (Air)
+// behaviour: topics are served by the in-process local RPC client set via setLocalClient, and
+// start() does not notify tars RPC endpoints.
 class TopicManager : public std::enable_shared_from_this<TopicManager>
 {
 public:
     using Ptr = std::shared_ptr<TopicManager>;
-    TopicManager(std::string const& _rpcServiceName, bcos::gateway::P2PInterface::Ptr _network);
-    virtual ~TopicManager();
+    TopicManager(std::string const& _rpcServiceName, bcos::gateway::Service::Ptr _network,
+        bool _localMode = false);
+    ~TopicManager();
 
-    virtual void start();
-    virtual void stop();
+    void start();
+    void stop();
 
     uint32_t topicSeq() const;
     uint32_t incTopicSeq();
@@ -130,10 +134,13 @@ public:
      */
     void queryClientsByTopic(const std::string& _topic, std::vector<std::string>& _clients);
 
-    virtual bcos::rpc::RPCInterface::Ptr createAndGetServiceByClient(std::string const& _clientID);
+    bcos::rpc::RPCInterface::Ptr createAndGetServiceByClient(std::string const& _clientID);
+
+    // local (Air) mode: the in-process RPC client that serves all topics
+    void setLocalClient(bcos::rpc::RPCInterface::Ptr _rpc) { m_localClient = std::move(_rpc); }
 
 protected:
-    virtual void notifyRpcToSubscribeTopics();
+    void notifyRpcToSubscribeTopics();
 
     // m_client2TopicItems lock
     mutable std::shared_mutex x_clientTopics;
@@ -156,7 +163,11 @@ protected:
     mutable SharedMutex x_clientInfo;
 
     std::string m_rpcServiceName;
-    bcos::gateway::P2PInterface::Ptr m_network;
+    bcos::gateway::Service::Ptr m_network;
+
+    // local (Air) mode
+    bool m_localMode = false;
+    bcos::rpc::RPCInterface::Ptr m_localClient;
 };
 }  // namespace amop
 }  // namespace bcos

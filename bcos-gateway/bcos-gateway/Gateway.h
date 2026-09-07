@@ -39,7 +39,7 @@ class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gat
 {
 public:
     using Ptr = std::shared_ptr<Gateway>;
-    Gateway(GatewayConfig::Ptr _gatewayConfig, P2PInterface::Ptr _p2pInterface,
+    Gateway(GatewayConfig::Ptr _gatewayConfig, Service::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
         ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter,
         std::string _gatewayServiceName = "localGateway");
@@ -97,7 +97,7 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
         std::shared_ptr<P2PMessage> _msg, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
-    P2PInterface::Ptr p2pInterface() const;
+    Service::Ptr p2pInterface() const;
     GatewayNodeManager::Ptr gatewayNodeManager();
     /**
      * @brief receive the latest group information notification from the GroupManagerInterface
@@ -150,8 +150,8 @@ protected:
 private:
     std::string m_gatewayServiceName;
     GatewayConfig::Ptr m_gatewayConfig;
-    // p2p service interface
-    P2PInterface::Ptr m_p2pInterface;
+    // p2p service
+    Service::Ptr m_p2pInterface;
     // GatewayNodeManager
     GatewayNodeManager::Ptr m_gatewayNodeManager;
     bcos::amop::AMOPImpl::Ptr m_amop;
