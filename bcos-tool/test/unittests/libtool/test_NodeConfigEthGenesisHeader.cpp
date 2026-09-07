@@ -192,56 +192,6 @@ BOOST_AUTO_TEST_CASE(OptionalFieldsMayBeOmitted)
     // fork-gated keys. Each omission must parse cleanly and surface as a
     // nullopt optional, so the ledger's RLP re-encoding leaves the field out.
     const std::set<std::string> kOptionalKeys = {
-        "base_fee_per_gas",
-        "withdrawals_root",
-        "blob_gas_used",
-        "excess_blob_gas",
-        "parent_beacon_block_root",
-        "requests_hash",
-    };
-    for (auto const& [key, value] : kEthHeaderFields)
-    {
-        if (kOptionalKeys.count(key) == 0)
-        {
-            continue;
-        }
-        auto cfg = makeEthNodeConfig();
-        cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection(key))));
-        auto const& header = cfg->genesisConfig().m_ethGenesisHeader;
-        BOOST_REQUIRE(header.has_value());
-        if (key == "base_fee_per_gas")
-        {
-            BOOST_CHECK(!header->m_baseFeePerGas.has_value());
-        }
-        else if (key == "withdrawals_root")
-        {
-            BOOST_CHECK(!header->m_withdrawalsRoot.has_value());
-        }
-        else if (key == "blob_gas_used")
-        {
-            BOOST_CHECK(!header->m_blobGasUsed.has_value());
-        }
-        else if (key == "excess_blob_gas")
-        {
-            BOOST_CHECK(!header->m_excessBlobGas.has_value());
-        }
-        else if (key == "parent_beacon_block_root")
-        {
-            BOOST_CHECK(!header->m_parentBeaconBlockRoot.has_value());
-        }
-        else if (key == "requests_hash")
-        {
-            BOOST_CHECK(!header->m_requestsHash.has_value());
-        }
-    }
-}
-
-BOOST_AUTO_TEST_CASE(OptionalFieldsMayBeOmitted)
-{
-    // A pre-Cancun chain (e.g. Sepolia's London-era genesis) omits the
-    // fork-gated keys. Each omission must parse cleanly and surface as a
-    // nullopt optional, so the ledger's RLP re-encoding leaves the field out.
-    const std::set<std::string> kOptionalKeys = {
         "base_fee_per_gas", "withdrawals_root", "blob_gas_used",
         "excess_blob_gas", "parent_beacon_block_root", "requests_hash",
     };
