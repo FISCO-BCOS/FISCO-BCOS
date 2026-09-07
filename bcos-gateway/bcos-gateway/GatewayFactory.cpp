@@ -881,7 +881,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         {
             auto gatewayRateLimiterWeakPtr =
                 std::weak_ptr<ratelimiter::GatewayRateLimiter>(gatewayRateLimiter);
-            service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](SessionFace& _session,
+            service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](Session& _session,
                                                  const Message& _msg,
                                                  uint32_t _wireLength) -> std::optional<bcos::Error> {
                 auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
@@ -911,7 +911,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 return {};
             });
 
-            service->setOnMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
+            service->setOnMessageHandler([gatewayRateLimiterWeakPtr](std::shared_ptr<Session> _session,
                                              Message::Ptr _message) -> std::optional<bcos::Error> {
                 auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
                 if (!gatewayRateLimiter)

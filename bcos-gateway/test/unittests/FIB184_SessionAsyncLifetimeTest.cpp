@@ -66,17 +66,16 @@ public:
     FakeASIO_Lifetime()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
     {}
-    ~FakeASIO_Lifetime() noexcept override = default;
 
     // Compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): the read loop
     // is launched with this policy (startWithPolicy<FakeASIO_Lifetime::ReadPolicy>) so every
     // read parks its completion in a manually-fired slot.
     struct ReadPolicy
     {
-        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketFace>& /*socket*/,
+        static void invoke(ASIOInterface* asio, const std::shared_ptr<Socket>& /*socket*/,
             ba::mutable_buffer /*buffers*/, ReadCompletion completion)
         {
-            dynamic_cast<FakeASIO_Lifetime*>(asio)->parkRead(std::move(completion));
+            static_cast<FakeASIO_Lifetime*>(asio)->parkRead(std::move(completion));
         }
     };
 
@@ -125,35 +124,22 @@ public:
     void stopNetwork() { m_run = false; }
 };
 
-// A socket backed by a real SSL stream so drop()/closeSocket() can call sslref() safely; close()
-// only flips the connected flag (the underlying TCP socket is never opened).
-class FakeSocket_Lifetime : public SocketFace
+// Socket is a concrete class now, so the tests drive the real thing: a Socket whose SSL stream
+// sits on a connected loopback TCP pair (the acceptor side closes at scope exit), so
+// drop()/closeSocket() can call sslref() safely and close() really disconnects it.
+struct FakeSocket_Lifetime
 {
-public:
+    std::shared_ptr<ba::io_context> ioContext = std::make_shared<ba::io_context>();
+    ba::ssl::context sslContext{ba::ssl::context::tlsv12};
+    std::shared_ptr<Socket> socket = std::make_shared<Socket>(ioContext, sslContext, NodeIPEndpoint());
+
     FakeSocket_Lifetime()
-      : m_ioContext(std::make_shared<ba::io_context>()),
-        m_sslContext(ba::ssl::context::tlsv12),
-        m_sslSocket(std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*m_ioContext, m_sslContext))
-    {}
-    ~FakeSocket_Lifetime() override = default;
-
-    bool isConnected() const override { return m_connected; }
-    void close() override { m_connected = false; }
-    bi::tcp::endpoint remoteEndpoint(boost::system::error_code) override { return {}; }
-    bi::tcp::endpoint localEndpoint(boost::system::error_code) override { return {}; }
-    bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint) override {}
-    ba::io_context& ioService() override { return *m_ioContext; }
-
-    bool m_connected{true};
-
-private:
-    std::shared_ptr<ba::io_context> m_ioContext;
-    ba::ssl::context m_sslContext;
-    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
-    NodeIPEndpoint m_nodeIPEndpoint;
+    {
+        bi::tcp::acceptor acceptor(*ioContext, bi::tcp::endpoint(bi::tcp::v4(), 0));
+        socket->ref().connect(acceptor.local_endpoint());
+        bi::tcp::socket serverSocket(*ioContext);
+        acceptor.accept(serverSocket);
+    }
 };
 
 // The regression: an in-flight async read must keep the Session alive after every external strong
@@ -170,9 +156,9 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
 
     std::weak_ptr<Session> weakSession;
     {
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 1024, true);
+        auto session = std::make_shared<Session>(fakeSocket->socket, *fakeHost, 1024, true);
         session->setMessageFactory(messageFactory);
-        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
+        session->setMessageHandler([](NetworkException, Session::Ptr, Message::Ptr) {});
         weakSession = session;
 
         // startWithPolicy() arms the first read synchronously (the old code used to defer the
@@ -195,9 +181,9 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
     //      shutdown here).
     //   2. the teardown notification, posted to Host::m_teardownPool -- a dedicated executor this
     //      test drains with a sentinel below.
-    fakeSocket->m_connected = false;
+    fakeSocket->socket->close();
     fakeAsio->fireReadHandler(boost::asio::error::eof, 0);
-    fakeSocket->ioService().poll();
+    fakeSocket->ioContext->poll();
 
     // Piece 2 is why the release cannot be asserted the instant fireReadHandler returns: the
     // notification lambda captures weak_from_this() but calls lock() on the teardown thread, so
@@ -241,10 +227,10 @@ BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
     auto fakeHost =
         std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr, messageFactory);
 
-    auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 1024, true);
+    auto session = std::make_shared<Session>(fakeSocket->socket, *fakeHost, 1024, true);
     session->setMessageFactory(messageFactory);
-    session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
-    BOOST_REQUIRE(fakeSocket->isConnected());
+    session->setMessageHandler([](NetworkException, Session::Ptr, Message::Ptr) {});
+    BOOST_REQUIRE(fakeSocket->socket->isConnected());
 
     // Host::stop() has already joined the io_context threads: the socket's io_context will never
     // run again, so a posted teardown would be dead code.
@@ -253,13 +239,13 @@ BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
     // The socket's io_context is deliberately never run in this test.
     session->drop(DisconnectReason::ClientQuit);
 
-    BOOST_CHECK_MESSAGE(!fakeSocket->isConnected(),
+    BOOST_CHECK_MESSAGE(!fakeSocket->socket->isConnected(),
         "FIB-184: with the network down (io_context threads joined), drop() must close the socket "
         "inline; a teardown posted to the dead io_context would never run");
 
     // Drain the shutdown handlers closeSocket() queued (they hold the socket, not the session) so
     // the fake io_context tears down cleanly.
-    fakeSocket->ioService().poll();
+    fakeSocket->ioContext->poll();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

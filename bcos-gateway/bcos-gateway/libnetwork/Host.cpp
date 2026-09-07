@@ -19,7 +19,7 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libnetwork/SocketFace.h"
+#include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-utilities/IOServicePool.h"
 #include <bcos-task/Wait.h>
 #include <boost/algorithm/string/case_conv.hpp>
@@ -276,7 +276,7 @@ task::Task<void> Host::acceptLoop()
 }
 
 task::Task<void> Host::serverHandshake(
-    std::shared_ptr<SocketFace> socket, std::shared_ptr<void> handshakeGuard)
+    std::shared_ptr<Socket> socket, std::shared_ptr<void> handshakeGuard)
 {
     auto self = shared_from_this();
     // The handshakeGuard owns the reserved FIB-186 admission slot; it is destroyed exactly when
@@ -567,7 +567,7 @@ void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
  * @param socket: socket related to the endpoint of the connected client
  */
 void Host::handshakeServer(const boost::system::error_code& error,
-    std::shared_ptr<std::string> endpointPublicKey, std::shared_ptr<SocketFace> socket)
+    std::shared_ptr<std::string> endpointPublicKey, std::shared_ptr<Socket> socket)
 {
     if (error)
     {
@@ -727,8 +727,8 @@ struct SessionSlotGuard
 };
 }  // namespace
 
-void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>)
+void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<Socket> const& socket,
+    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)>)
 {
     auto weakHost = weak_from_this();
 
@@ -748,7 +748,7 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
         return;
     }
 
-    std::shared_ptr<SessionFace> session =
+    std::shared_ptr<Session> session =
         m_sessionFactory->createSession(*this, socket, m_messageFactory, m_sessionCallbackManager);
     // Bind a slot-release guard to the session; the slot is freed when the session is destroyed.
     session->setLifetimeGuard(std::make_shared<SessionSlotGuard>(weakHost, remoteAddress));
@@ -797,7 +797,7 @@ void Host::start()
  * @param _nodeIPEndpoint : the endpoint of the connected server
  */
 void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)> callback)
+    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)> callback)
 {
     if (!m_run)
     {
@@ -815,15 +815,15 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         }
     }
 
-    std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(false, _nodeIPEndpoint);
+    std::shared_ptr<Socket> socket = m_asioInterface->newSocket(false, _nodeIPEndpoint);
     // fire-and-forget: the coroutine frame owns the connect/handshake chain (and the strong Host
     // reference) until it completes — the old nested-lambda chain did the same via captures.
     task::wait(clientConnect(std::move(socket), _nodeIPEndpoint, std::move(callback)));
 }
 
-task::Task<void> Host::clientConnect(std::shared_ptr<SocketFace> socket,
+task::Task<void> Host::clientConnect(std::shared_ptr<Socket> socket,
     NodeIPEndpoint _nodeIPEndpoint,
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)> callback)
+    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)> callback)
 {
     auto self = shared_from_this();
     try
@@ -924,8 +924,8 @@ task::Task<void> Host::clientConnect(std::shared_ptr<SocketFace> socket,
  * @param _nodeIPEndpoint : endpoint of the server to connect
  */
 void Host::handshakeClient(const boost::system::error_code& error,
-    std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string> endpointPublicKey,
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)> callback,
+    std::shared_ptr<Socket> socket, std::shared_ptr<std::string> endpointPublicKey,
+    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)> callback,
     NodeIPEndpoint _nodeIPEndpoint)
 {
     erasePendingConns(_nodeIPEndpoint);
@@ -1084,13 +1084,13 @@ void bcos::gateway::Host::setHostPort(std::string host, uint16_t port)
     m_listenHost = std::move(host);
     m_listenPort = port;
 }
-std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)>
 bcos::gateway::Host::connectionHandler() const
 {
     return m_connectionHandler;
 }
 void bcos::gateway::Host::setConnectionHandler(
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)>
         connectionHandler)
 {
     m_connectionHandler = std::move(connectionHandler);

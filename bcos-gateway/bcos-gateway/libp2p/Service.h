@@ -21,6 +21,7 @@
 namespace bcos::gateway
 {
 class Host;
+class Session;
 class P2PMessage;
 class Gateway;
 
@@ -40,13 +41,13 @@ public:
     P2pID id() const override;
 
     virtual void onConnect(
-        NetworkException e, P2PInfo const& p2pInfo, std::shared_ptr<SessionFace> session);
+        NetworkException e, P2PInfo const& p2pInfo, std::shared_ptr<Session> session);
     virtual void onDisconnect(NetworkException e, P2PSession::Ptr p2pSession);
-    virtual void onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
+    virtual void onMessage(NetworkException e, std::shared_ptr<Session> session, Message::Ptr message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
     virtual std::optional<bcos::Error> onBeforeMessage(
-        SessionFace& _session, const Message& _message, uint32_t _wireLength);
+        Session& _session, const Message& _message, uint32_t _wireLength);
 
     virtual void registerUnreachableHandler(std::function<void(std::string)> /*unused*/);
 
@@ -95,7 +96,7 @@ public:
     std::shared_ptr<bcos::crypto::KeyFactory> keyFactory();
 
     void setKeyFactory(std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory);
-    void updateStaticNodes(std::shared_ptr<SocketFace> const& _s, P2pID const& nodeId);
+    void updateStaticNodes(std::shared_ptr<Socket> const& _s, P2pID const& nodeId);
 
     void registerDisconnectHandler(std::function<void(NetworkException, P2PSession::Ptr)> _handler);
 
@@ -106,7 +107,7 @@ public:
     }
 
     void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t)> _handler);
+        Session&, const Message&, uint32_t)> _handler);
 
     bool registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler) override;
 
@@ -115,7 +116,7 @@ public:
     void eraseHandlerByMsgType(uint16_t _type) override;
 
     void setOnMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> _handler);
+        std::function<std::optional<bcos::Error>(std::shared_ptr<Session>, Message::Ptr)> _handler);
 
     void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable) override;
     void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable) override;
@@ -176,8 +177,8 @@ protected:
     std::vector<std::function<void(P2PSession::Ptr)>> m_deleteSessionHandlers;
 
     std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
-    std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> m_onMessageHandler;
+        Session&, const Message&, uint32_t)> m_beforeMessageHandler;
+    std::function<std::optional<bcos::Error>(std::shared_ptr<Session>, Message::Ptr)> m_onMessageHandler;
 };
 
 }  // namespace bcos::gateway

@@ -6,8 +6,9 @@
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
-#include "bcos-gateway/libnetwork/Common.h"      // for SocketFace
-#include "bcos-gateway/libnetwork/SocketFace.h"  // for SocketFace
+#include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"  // for SessionCallbackFunc...
 #include "bcos-gateway/libp2p/P2PMessage.h"
@@ -70,7 +71,7 @@ void Service::start()
 
         auto self = std::weak_ptr<Service>(shared_from_this());
         m_host->setConnectionHandler([self](NetworkException e, P2PInfo const& p2pInfo,
-                                         std::shared_ptr<SessionFace> session) {
+                                         std::shared_ptr<Session> session) {
             auto service = self.lock();
             if (service)
             {
@@ -188,7 +189,7 @@ void Service::heartBeat()
 }
 
 /// update the staticNodes
-void Service::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, P2pID const& nodeID)
+void Service::updateStaticNodes(std::shared_ptr<Socket> const& _s, P2pID const& nodeID)
 {
     NodeIPEndpoint endpoint(_s->nodeIPEndpoint());
     std::unique_lock nodeLock(x_nodes);
@@ -210,7 +211,7 @@ void Service::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, P2pID con
 }
 
 void Service::onConnect(
-    NetworkException e, P2PInfo const& p2pInfo, std::shared_ptr<SessionFace> session)
+    NetworkException e, P2PInfo const& p2pInfo, std::shared_ptr<Session> session)
 {
     P2pID p2pID = p2pInfo.rawP2pID;
     std::string peer = "unknown";
@@ -254,7 +255,7 @@ void Service::onConnect(
             p2pSessionWeakPtr);
     });
     p2pSession->session()->setBeforeMessageHandler(
-        [this](SessionFace& session, const Message& message, uint32_t wireLength) {
+        [this](Session& session, const Message& message, uint32_t wireLength) {
             return onBeforeMessage(session, message, wireLength);
         });
 
@@ -370,7 +371,7 @@ void Service::sendRespMessageBySession(
 }
 
 std::optional<bcos::Error> Service::onBeforeMessage(
-    SessionFace& _session, const Message& _message, uint32_t _wireLength)
+    Session& _session, const Message& _message, uint32_t _wireLength)
 {
     if (m_beforeMessageHandler)
     {
@@ -380,7 +381,7 @@ std::optional<bcos::Error> Service::onBeforeMessage(
     return std::nullopt;
 }
 
-void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
+void Service::onMessage(NetworkException e, Session::Ptr session, Message::Ptr message,
     std::weak_ptr<P2PSession> p2pSessionWeakPtr)
 {
     auto p2pSession = p2pSessionWeakPtr.lock();
@@ -873,12 +874,12 @@ void bcos::gateway::Service::eraseHandlerByMsgType(uint16_t _type)
     m_msgHandlers.at(_type) = nullptr;
 }
 void bcos::gateway::Service::setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
-    SessionFace&, const Message&, uint32_t)> _handler)
+    Session&, const Message&, uint32_t)> _handler)
 {
     m_beforeMessageHandler = std::move(_handler);
 }
 void bcos::gateway::Service::setOnMessageHandler(
-    std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> _handler)
+    std::function<std::optional<bcos::Error>(Session::Ptr, Message::Ptr)> _handler)
 {
     m_onMessageHandler = std::move(_handler);
 }

@@ -29,17 +29,22 @@
  * the pre-fix code (the rejection escapes) and GREEN after (caught inside the coroutine).
  */
 
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
-#include "bcos-gateway/libnetwork/SessionFace.h"
-#include "bcos-gateway/libnetwork/SocketFace.h"
+#include "bcos-gateway/libnetwork/ASIOInterface.h"
+#include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
+#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
+#include <chrono>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -58,31 +63,15 @@ public:
     void sendProtocol(P2PSession::Ptr _session) { asyncSendProtocol(std::move(_session)); }
 };
 
-// A SessionFace whose fastSendMessage rejects synchronously — the same way Session::
-// fastSendMessage throws NetworkException for a rate-limit / oversize rejection before any
-// suspension. P2PSession::fastSendP2PMessage therefore throws synchronously out of the co_await,
-// which (pre-fix) escaped task::wait inside Service::asyncSendProtocol.
-class RejectingSession : public SessionFace
+// Host with the network marked up, so a Session on it becomes/stays active.
+class ProbeHost : public bcos::gateway::Host
 {
 public:
-    void start() override {}
-    void disconnect(DisconnectReason) override {}
-    task::Task<Message::Ptr> fastSendMessage(const Message& /*header*/,
-        ::ranges::any_view<bytesConstRef> /*payloads*/, Options /*options*/) override
+    ProbeHost(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface)
+      : Host(std::move(_hash), std::move(_asioInterface), nullptr, nullptr)
     {
-        BOOST_THROW_EXCEPTION(NetworkException(-1, "outgoing bandwidth overflow"));
-        co_return nullptr;
+        m_run = true;
     }
-    std::shared_ptr<SocketFace> socket() override { return nullptr; }
-    void setMessageHandler(
-        std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)>) override
-    {}
-    void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t)>) override
-    {}
-    NodeIPEndpoint nodeIPEndpoint() const override { return {}; }
-    bool active() const override { return true; }
-    std::size_t writeQueueSize() override { return 0; }
 };
 }  // namespace
 
@@ -100,8 +89,39 @@ BOOST_AUTO_TEST_CASE(AsyncSendProtocolDoesNotEscapeSendRejection)
     auto service = std::make_shared<ProbeService>(selfInfo);
     service->setMessageFactory(std::make_shared<P2PMessageFactoryV2>());
 
+    // Session is a concrete class now, so the rejecting session is the REAL Session with a
+    // rejecting beforeMessageHandler: its fastSendMessage throws NetworkException synchronously
+    // for a rate-limit / oversize rejection before any suspension — the same throw the old
+    // RejectingSession fake hardcoded. P2PSession::fastSendP2PMessage therefore throws
+    // synchronously out of the co_await, which (pre-fix) escaped task::wait inside
+    // Service::asyncSendProtocol.
+    auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    auto asioInterface = std::make_shared<ASIOInterface>(
+        std::make_shared<bcos::IOServicePool>(1, "AsyncSendProtocolThrowEscape"), "0.0.0.0", 0);
+    auto host = std::make_shared<ProbeHost>(hashImpl, asioInterface);
+
+    // A real Socket on a connected loopback TCP pair; the acceptor side closes at scope exit, so
+    // the read armed by start() completes with an error once the io_context runs (teardown below).
+    auto io = std::make_shared<boost::asio::io_context>();
+    boost::asio::ssl::context sslContext(boost::asio::ssl::context::tlsv12);
+    auto socket = std::make_shared<Socket>(io, sslContext, NodeIPEndpoint());
+    {
+        boost::asio::ip::tcp::acceptor acceptor(
+            *io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 0));
+        socket->ref().connect(acceptor.local_endpoint());
+        boost::asio::ip::tcp::socket serverSocket(*io);
+        acceptor.accept(serverSocket);
+    }
+
+    auto session = std::make_shared<Session>(socket, *host, 1024, true);
+    session->setBeforeMessageHandler(
+        [](Session&, const Message&, uint32_t) -> std::optional<bcos::Error> {
+            return bcos::Error::buildError("", -1, "outgoing bandwidth overflow");
+        });
+    session->start();
+
     auto p2pSession = std::make_shared<P2PSession>();
-    p2pSession->setSession(std::make_shared<RejectingSession>());
+    p2pSession->setSession(session);
     p2pSession->setService(service);
     p2pSession->setProtocolInfo(
         g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::GatewayService));
@@ -111,6 +131,16 @@ BOOST_AUTO_TEST_CASE(AsyncSendProtocolDoesNotEscapeSendRejection)
     // coroutine and logged — a failed handshake is a recoverable per-session failure and the
     // session registration in onConnect must proceed.
     BOOST_CHECK_NO_THROW(service->sendProtocol(p2pSession));
+
+    // Teardown: run the socket's io_context so the armed read completes (the peer closed at
+    // setup), the read loop drops the session and the deferred closeSocket runs; then stop.
+    std::thread ioThread([io] { io->run(); });
+    for (int i = 0; i < 200 && session->active(); ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    io->stop();
+    ioThread.join();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

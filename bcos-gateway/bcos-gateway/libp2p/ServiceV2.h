@@ -41,7 +41,7 @@ public:
     void start() override;
     void stop() override;
 
-    void onMessage(NetworkException _error, SessionFace::Ptr session, Message::Ptr message,
+    void onMessage(NetworkException _error, std::shared_ptr<Session> session, Message::Ptr message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr) override;
     void sendRespMessageBySession(
         bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;

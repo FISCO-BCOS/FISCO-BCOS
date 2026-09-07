@@ -1,5 +1,5 @@
 /**
- * @brief: inteface for boost::asio(for unittest)
+ * @brief: boost::asio wrapper (see ASIOInterface.h)
  *
  * @file AsioInterface.cpp
  * @author: bxq2011hust
@@ -130,9 +130,9 @@ boost::asio::steady_timer ASIOInterface::newAcceptorTimer(uint32_t timeout)
         m_acceptor.get_executor(), std::chrono::milliseconds(timeout));
 }
 
-std::shared_ptr<SocketFace> ASIOInterface::newSocket(bool _server, NodeIPEndpoint nodeIPEndpoint)
+std::shared_ptr<Socket> ASIOInterface::newSocket(bool _server, NodeIPEndpoint nodeIPEndpoint)
 {
-    std::shared_ptr<SocketFace> socket = std::make_shared<Socket>(m_ioServicePool->getIOService(),
+    std::shared_ptr<Socket> socket = std::make_shared<Socket>(m_ioServicePool->getIOService(),
         _server ? *m_srvContext : *m_clientContext, nodeIPEndpoint);
     return socket;
 }
@@ -143,7 +143,7 @@ bi::tcp::acceptor* ASIOInterface::acceptor()
 }
 
 void ASIOInterface::setVerifyCallback(
-    const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/)
+    const std::shared_ptr<Socket>& socket, VerifyCallback callback, bool /*unused*/)
 {
     socket->sslref().set_verify_callback(std::move(callback));
 }

@@ -19,7 +19,7 @@ namespace bcos::gateway
 {
 // Read-policy seam (compile-time): identical lifecycle to start(), but the read loop is compiled
 // against an explicit ReadPolicy so read-loop test fakes can inject a policy that parks/controls
-// read completions (see ASIOInterface::awaitableReadSome). Production call sites use the virtual
+// read completions (see ASIOInterface::awaitableReadSome). Production call sites use
 // start() (the default policy), which delegates here with ASIOInterface::DefaultReadPolicy — this
 // template adds no runtime cost in production. Tests instantiate it with a fake policy, e.g.
 // session->startWithPolicy<FakeASIO::ReadPolicy>().

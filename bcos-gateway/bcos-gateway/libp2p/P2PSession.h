@@ -7,10 +7,11 @@
 
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/SessionFace.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
+#include <bcos-task/Task.h>
 #include <boost/asio/steady_timer.hpp>
 #include <memory>
+#include <range/v3/view/any_view.hpp>
 #include <utility>
 
 
@@ -18,6 +19,7 @@ namespace bcos::gateway
 {
 class P2PMessage;
 class Service;
+class Session;
 
 class P2PSession : public std::enable_shared_from_this<P2PSession>
 {
@@ -33,8 +35,8 @@ public:
     virtual bool active();
     virtual void heartBeat();
 
-    virtual SessionFace::Ptr session();
-    virtual void setSession(std::shared_ptr<SessionFace> session);
+    virtual std::shared_ptr<Session> session();
+    virtual void setSession(std::shared_ptr<Session> session);
 
     virtual P2pID p2pID();
     virtual std::string printP2pID();
@@ -54,7 +56,7 @@ public:
         P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
 
 private:
-    SessionFace::Ptr m_session;
+    std::shared_ptr<Session> m_session;
     /// gateway p2p info
     std::shared_ptr<P2PInfo> m_p2pInfo;
     std::weak_ptr<Service> m_service;
