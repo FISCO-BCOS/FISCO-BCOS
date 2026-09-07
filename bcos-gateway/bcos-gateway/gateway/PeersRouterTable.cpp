@@ -248,7 +248,7 @@ void PeersRouterTable::updateGatewayInfo(P2pID const& _p2pNodeID, GatewayNodeSta
     auto [it, inserted] = m_gatewayInfos.emplace(_status->uuid(), GatewayStatus::Ptr{});
     if (inserted)
     {
-        it->second = m_gatewayStatusFactory->createGatewayInfo(_status->uuid());
+        it->second = std::make_shared<GatewayStatus>(_status->uuid());
     }
     gatewayStatus = it->second;
 

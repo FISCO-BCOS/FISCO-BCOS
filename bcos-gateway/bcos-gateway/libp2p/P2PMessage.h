@@ -61,8 +61,6 @@ public:
     P2PMessageOptions& operator=(const P2PMessageOptions&) = default;
     P2PMessageOptions& operator=(P2PMessageOptions&&) = default;
 
-    virtual ~P2PMessageOptions() = default;
-
     /// The maximum gateway transport protocol supported groupID length  65535
     constexpr static size_t MAX_GROUPID_LENGTH = 65535;
     /// The maximum gateway transport protocol supported nodeID length  65535

@@ -20,7 +20,7 @@
 #pragma once
 #include "Service.h"
 #include "bcos-utilities/Timer.h"
-#include "router/RouterTableInterface.h"
+#include "router/RouterTableImpl.h"
 
 #include <boost/asio/io_context.hpp>
 
@@ -30,8 +30,7 @@ class ServiceV2 : public Service
 {
 public:
     using Ptr = std::shared_ptr<ServiceV2>;
-    ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTableFactory,
-        boost::asio::io_context& _ioContext);
+    ServiceV2(P2PInfo const& _p2pInfo, boost::asio::io_context& _ioContext);
     ServiceV2() = delete;
     ServiceV2(const ServiceV2&) = delete;
     ServiceV2(ServiceV2&&) = delete;
@@ -79,7 +78,7 @@ protected:
     virtual void onReceivePeersRouterTable(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     virtual void joinRouterTable(
-        std::shared_ptr<P2PSession> _session, RouterTableInterface::Ptr _routerTable);
+        std::shared_ptr<P2PSession> _session, RouterTable::Ptr _routerTable);
     virtual void onReceiveRouterTableRequest(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     virtual void broadcastRouterSeq();
@@ -110,8 +109,7 @@ private:
     // delivery pool. See markRouterSeqChanged().
     std::atomic_bool m_routerSeqDirty{false};
 
-    RouterTableFactory::Ptr m_routerTableFactory;
-    RouterTableInterface::Ptr m_routerTable;
+    RouterTable::Ptr m_routerTable;
 
     std::map<std::string, uint32_t> m_node2Seq;
     mutable SharedMutex x_node2Seq;

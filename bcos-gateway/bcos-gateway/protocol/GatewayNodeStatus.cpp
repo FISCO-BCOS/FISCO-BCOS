@@ -58,16 +58,6 @@ std::vector<GroupNodeInfo::Ptr> const& GatewayNodeStatus::groupNodeInfos() const
     return m_groupNodeInfos;
 }
 
-GatewayNodeStatus::Ptr GatewayNodeStatusFactory::createGatewayNodeStatus()
-{
-    return std::make_shared<GatewayNodeStatus>();
-}
-
-GroupNodeInfo::Ptr GatewayNodeStatusFactory::createGroupNodeInfo()
-{
-    return std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
-}
-
 bytesPointer GatewayNodeStatus::encode()
 {
     // append groupInfos to m_tarsStatus

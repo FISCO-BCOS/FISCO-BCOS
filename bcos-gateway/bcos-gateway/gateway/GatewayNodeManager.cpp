@@ -57,8 +57,7 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid,
   : m_uuid(_uuid),
     m_keyFactory(_keyFactory),
     m_localRouterTable(std::make_shared<LocalRouterTable>(_keyFactory)),
-    m_peersRouterTable(std::make_shared<PeersRouterTable>(_uuid, _keyFactory, _p2pInterface)),
-    m_gatewayNodeStatusFactory(std::make_shared<GatewayNodeStatusFactory>())
+    m_peersRouterTable(std::make_shared<PeersRouterTable>(_uuid, _keyFactory, _p2pInterface))
 {}
 
 uint32_t GatewayNodeManager::increaseSeq()
@@ -236,7 +235,7 @@ void GatewayNodeManager::onReceiveNodeStatus(
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
-    auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
+    auto gatewayNodeStatus = std::make_shared<GatewayNodeStatus>();
     gatewayNodeStatus->decode(bytesConstRef(_msg->payload().data(), _msg->payload().size()));
     auto const& from = (!_msg->srcP2PNodeID().empty()) ? _msg->srcP2PNodeID() : _session->p2pID();
 
@@ -321,14 +320,14 @@ void GatewayNodeManager::onRequestNodeStatus(
 
 bytesPointer GatewayNodeManager::generateNodeStatus()
 {
-    auto nodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
+    auto nodeStatus = std::make_shared<GatewayNodeStatus>();
     nodeStatus->setUUID(m_uuid);
     nodeStatus->setSeq(statusSeq());
     auto nodeList = m_localRouterTable->nodeList();
     std::vector<GroupNodeInfo::Ptr> groupNodeInfos;
     for (auto const& it : nodeList)
     {
-        auto groupNodeInfo = m_gatewayNodeStatusFactory->createGroupNodeInfo();
+        auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
         groupNodeInfo->setGroupID(it.first);
         // get nodeID and type
         std::vector<std::string> nodeIDList;
@@ -459,7 +458,7 @@ void GatewayNodeManager::syncLatestNodeIDList()
 
 GroupNodeInfo::Ptr GatewayNodeManager::getGroupNodeInfoList(const std::string& _groupID)
 {
-    auto groupNodeInfo = m_gatewayNodeStatusFactory->createGroupNodeInfo();
+    auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
     groupNodeInfo->setGroupID(_groupID);
 
     m_localRouterTable->getGroupNodeInfoList(groupNodeInfo, _groupID);

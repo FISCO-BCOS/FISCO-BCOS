@@ -35,7 +35,6 @@
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/ServiceV2.h"
-#include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -74,9 +73,8 @@ class CountingServiceV2 : public ServiceV2
 {
 public:
     // ServiceV2 borrows an external io_context now; the test owns it and passes it in.
-    CountingServiceV2(
-        P2PInfo const& _info, RouterTableFactory::Ptr _factory, boost::asio::io_context& _ioContext)
-      : ServiceV2(_info, std::move(_factory), _ioContext)
+    CountingServiceV2(P2PInfo const& _info, boost::asio::io_context& _ioContext)
+      : ServiceV2(_info, _ioContext)
     {}
     void broadcastRouterSeq() override { ++m_broadcastCount; }
     void callOnNewSession(P2PSession::Ptr _session) { onNewSession(std::move(_session)); }
@@ -90,9 +88,8 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
     P2PInfo selfInfo;
     selfInfo.rawP2pID = "selfRawP2pID";
     selfInfo.p2pID = "selfP2pID";
-    auto factory = std::make_shared<RouterTableFactoryImpl>();
     boost::asio::io_context ioContext;
-    auto service = std::make_shared<CountingServiceV2>(selfInfo, factory, ioContext);
+    auto service = std::make_shared<CountingServiceV2>(selfInfo, ioContext);
 
     // A connect/disconnect flood drives many membership changes in quick succession. On the pre-fix
     // code each one called broadcastRouterSeq() -> one broadcast per change (the gossip storm). The

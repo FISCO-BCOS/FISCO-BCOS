@@ -23,7 +23,6 @@
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libp2p/ServiceV2.h"
-#include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
 #include "bcos-tars-protocol/protocol/GroupInfoCodecImpl.h"
@@ -732,9 +731,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     Service::Ptr service = nullptr;
     if (enableRIPProtocol)
     {
-        auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
-        service = std::make_shared<ServiceV2>(
-            selfInfo, routerTableFactory, *ioServicePool->getIOService());
+        service = std::make_shared<ServiceV2>(selfInfo, *ioServicePool->getIOService());
     }
     else
     {
