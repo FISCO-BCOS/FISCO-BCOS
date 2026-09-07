@@ -1671,7 +1671,8 @@ std::string Initializer::getBlockDBPath(bool _airVersion) const
            c_fileSeparator + blockDBPath;
 }
 
-std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer::mptNodeReader()
+std::shared_ptr<bcos::storage2::AnyStorage<bcos::ledger::mpt::PathKey, bcos::bytes>>
+Initializer::mptNodeReader()
 {
     if (!m_globalStateStorageInitializer)
     {

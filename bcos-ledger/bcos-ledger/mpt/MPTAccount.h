@@ -23,6 +23,7 @@
 #include "Constants.h"
 #include "Errors.h"
 #include "MPTReadView.h"
+#include "PathKey.h"
 #include "StorageValueCodec.h"
 #include "Trie.h"
 #include <bcos-concepts/ByteBuffer.h>
@@ -103,11 +104,13 @@ concept HistoricalStorageContext = requires(Storage& storage) {
 /// /271/363) keeps that trivially true, and the cache costs nothing there because it is per-object.
 ///
 /// @tparam Storage        the flat KV the inherited EVMAccount behaviour reads and writes.
-/// @tparam NodeStorage    resolves trie node hashes (the concept MPTReadView eats).
+/// @tparam NodeStorage    resolves trie node POSITIONS (the concept MPTReadView eats). Because a
+///                        position holds only the current version, a rooted read whose root is not
+///                        the tip throws MPTHistoryUnavailable (Errors.h) instead of answering —
+///                        restoring those reads is the trie-node history index's job.
 /// @tparam BackendStorage flat store holding s_code_binary (hash-addressed, so its rows are
 ///                        valid for any historical block, spec §4.5).
-template <class Storage, bcos::storage2::ReadableStorage<bcos::h256> NodeStorage,
-    class BackendStorage>
+template <class Storage, bcos::storage2::ReadableStorage<PathKey> NodeStorage, class BackendStorage>
 class MPTAccount : public bcos::ledger::account::EVMAccount<Storage>
 {
 private:
@@ -355,7 +358,8 @@ private:
         {
             co_return std::nullopt;
         }
-        Trie<NodeStorage> const trie{m_nodeStorage.get(), account->storageRoot};
+        Trie<NodeStorage> const trie{m_nodeStorage.get(),
+            TrieScope::storage(accountKeyHash(m_address)), account->storageRoot};
         // The hasher-injection form, per StorageValueCodec.h's hot-path convention: this is the
         // per-SLOAD path of a historical call, and the convenience overload builds a fresh
         // OpenSSL context every time. Constructed on first use rather than held by value, so the

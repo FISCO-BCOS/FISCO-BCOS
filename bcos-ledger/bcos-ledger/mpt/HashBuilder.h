@@ -40,12 +40,18 @@
 namespace bcos::ledger::mpt
 {
 
-/// Result of a stateless trie build: the 32-byte root plus the hash-keyed RLP encodings of every
-/// node that must be persisted (the hash-kind nodes produced during the build).
+/// Result of a stateless trie build: the 32-byte root plus every node that must be persisted,
+/// keyed by its POSITION — the nibbles consumed walking to it from this trie's root (spec A.1).
+/// Only hash-kind nodes appear; a node whose RLP is under 32 bytes is inlined into its parent and
+/// owns no row. The root's position is the empty nibble string, and it is always present, even
+/// when the root node itself encodes to fewer than 32 bytes.
+///
+/// The raw-key builds below (the block header's transaction / receipt / withdrawal tries) fill
+/// this the same way, but nothing persists them, so their positions are never used as row keys.
 struct TrieBuildResult
 {
     bcos::h256 root;
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
+    std::map<bcos::bytes, bcos::bytes> newNodes;
 };
 
 /// Stateless, reentrant entry point: build one canonical MPT from an ordered keyHash -> value map
@@ -120,15 +126,19 @@ TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::byt
 ///
 /// Two build paths, selected by the prior root:
 ///  - priorRoot == emptyRootHash(): from-empty build over the stateless computeTrieRootFromSorted
-///    core (deletes resolve to no-ops); obsoletedNodes is empty by construction.
+///    core (deletes resolve to no-ops). Every produced position is an upsert and every preimage is
+///    "nothing was here": an empty prior root means this trie holds no rows — a trie emptied by a
+///    previous block had every one of its positions deleted then (mergeTrie's emptied case reads,
+///    and therefore deletes, all of them), and a storage trie whose account has no leaf never had
+///    any.
 ///  - otherwise: path-level incremental rebuild via mergeTrie() (spec §5.3 path 1) — only nodes
 ///    on changed key paths are read through @p storage; untouched subtrees are re-referenced by
-///    hash, unread. A missing referenced node throws MPTInvariantViolation.
+///    hash, unread. A missing referenced node, or one whose bytes disagree with the hash its
+///    parent records, throws MPTInvariantViolation.
 ///
-/// commitTrie only READS @p storage. Flushing result.newNodes is the caller's job (MPTBuilder
-/// batches one writeSome per block) — a per-commit flush here would turn N per-account commits
-/// into N storage round-trips and would write nodes a later commit of the same block may already
-/// obsolete.
+/// commitTrie only READS @p storage. Applying the returned diff is the caller's job (MPTBuilder
+/// batches one flush per block) — a per-commit flush here would turn N per-account commits into N
+/// storage round-trips.
 ///
 /// Keccak-pinned: the from-empty stateless core is not yet hasher-parameterized, so a non-keccak
 /// instantiation would silently mix hash functions between the two paths.
@@ -137,21 +147,21 @@ TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::byt
 /// storageRoot/codeHash together with this function; doing a subset silently mixes hash
 /// functions, which is exactly the failure this pinning exists to prevent.
 ///
-/// [[nodiscard]] on purpose: the result carries newNodes, which only exist in memory until the
-/// caller passes them to flushTrieNodes. Dropping the return value loses the block's nodes with
-/// no diagnostic — the new root would reference nodes that were never written.
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
-[[nodiscard]] bcos::task::Task<TrieMergeResult> commitTrie(Storage& storage, bcos::h256 priorRoot,
-    std::map<bcos::h256, std::optional<bcos::bytes>> const& changes)
+/// [[nodiscard]] on purpose: the result carries the block's node rows, which only exist in memory
+/// until the caller applies them. Dropping the return value loses them with no diagnostic — the
+/// new root would reference nodes that were never written.
+template <bcos::storage2::ReadableStorage<PathKey> Storage>
+[[nodiscard]] bcos::task::Task<PathMergeResult> commitTrie(Storage& storage, TrieScope scope,
+    bcos::h256 priorRoot, std::map<bcos::h256, std::optional<bcos::bytes>> const& changes)
 {
     if (changes.empty())
     {
-        co_return TrieMergeResult{.root = priorRoot, .newNodes = {}, .obsoletedNodes = {}};
+        co_return PathMergeResult{.root = priorRoot};
     }
     if (priorRoot != emptyRootHash())
     {
         bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-        co_return co_await mergeTrie(storage, priorRoot, changes, hasher);
+        co_return co_await mergeTrie(storage, std::move(scope), priorRoot, changes, hasher);
     }
 
     // From-empty: deletes are no-ops; the map's survivors stay sorted.
@@ -165,22 +175,38 @@ template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
         }
     }
     auto built = computeTrieRootFromSorted(survivors);
-    co_return TrieMergeResult{
-        .root = built.root, .newNodes = std::move(built.newNodes), .obsoletedNodes = {}};
+    PathMergeResult result{.root = built.root};
+    for (auto& [position, raw] : built.newNodes)
+    {
+        PathKey key{.scope = scope, .position = position};
+        result.preimages.emplace(key, std::nullopt);
+        result.upserts.emplace(std::move(key), std::move(raw));
+    }
+    co_return result;
 }
 
-/// Batch-write @p nodes — any input range of (hash → raw RLP) pairs — into @p storage in one
+/// Batch-write @p nodes — any input range of (PathKey → raw RLP) pairs — into @p storage in one
 /// writeSome round-trip, the flush counterpart of commitTrie for the caller that owns node
-/// persistence (MPTBuilder flushes its aggregated MPTDeltaLayer.newNodes once per block; tests
-/// flush per build). @p nodes is read through a reference view — elements are copied into
-/// storage, never moved from: the caller's delta must stay intact for the commit flow and
-/// CommitObserver.
-template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
+/// persistence (MPTBuilder flushes its aggregated PathDiff.upserts once per block; tests flush per
+/// build). @p nodes is read through a reference view — elements are copied into storage, never
+/// moved from: the caller's diff must stay intact for the commit flow and CommitObserver.
+template <bcos::storage2::ReadWriteStorage<PathKey, bcos::bytes> Storage>
 bcos::task::Task<void> flushTrieNodes(Storage& storage, ::ranges::input_range auto const& nodes)
 {
     co_await bcos::storage2::writeSome(
         storage, nodes | ::ranges::views::transform(
                              [](auto const& node) { return std::tie(node.first, node.second); }));
+}
+
+/// The delete counterpart of flushTrieNodes: remove the rows at @p positions — any input range of
+/// PathKeys — in one round-trip. Removing a position that holds no row is harmless; removing one
+/// that still holds a live node punches a hole in the trie, which is why PathDiff.deletes only
+/// ever names positions the build actually read.
+template <bcos::storage2::ReadWriteStorage<PathKey, bcos::bytes> Storage>
+bcos::task::Task<void> removeTrieNodes(
+    Storage& storage, ::ranges::input_range auto const& positions)
+{
+    co_await bcos::storage2::removeSome(storage, positions);
 }
 
 }  // namespace bcos::ledger::mpt

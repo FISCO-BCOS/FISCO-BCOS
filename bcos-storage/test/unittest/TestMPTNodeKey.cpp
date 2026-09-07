@@ -14,8 +14,8 @@
  *  limitations under the License.
  *
  * @brief Physical-layout proof for MPT node rows as ORDINARY state rows: an Entry keyed
- *        mptNodeStateKey(hash) written through a real RocksDBStorage2<StateKey, ...,
- *        StateKeyResolver, ...> lands under the literal 38-byte "/mpt/:<digest>" key
+ *        pathNodeStateKey(position) written through a real RocksDBStorage2<StateKey, ...,
+ *        StateKeyResolver, ...> lands under the literal "/mptp/s:<owner><compactPath>" key
  *        (constructed INDEPENDENTLY in this TU — KeyPrefixes.h exports no physical-key
  *        helper), and those physical bytes decode back to the same StateKey via the
  *        resolver's split-at-first-colon reconstruction — the two facts the scheduler's
@@ -28,6 +28,7 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-storage/KeyPrefixes.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
@@ -42,9 +43,9 @@ using namespace bcos::executor_v1;
 
 namespace
 {
-// A digest deliberately RIDDLED with 0x3A (':') bytes: the layout's decode contract is that
-// the first ':' of the 38-byte physical key always sits at index 5 (the "/mpt/" table has
-// none), so colons inside the digest must not confuse the split.
+// An OWNER deliberately RIDDLED with 0x3A (':') bytes: the layout's decode contract is that
+// the first ':' of a node row's physical key always sits right after the table name (neither
+// node table contains one), so colons inside the row key must not confuse the split.
 h256 colonRiddledHash()
 {
     h256 hash;
@@ -61,13 +62,22 @@ bytes sampleNodeRlp()
     return bytes{0xC5, 0x84, 0xDE, 0xAD, 0xBE, 0xEF};
 }
 
-// The literal 38-byte physical key, built here by hand ON PURPOSE: the proof compares what
-// the resolver-backed storage stack actually writes against bytes constructed with zero
-// shared code (the production encode authority is StateKeyResolver alone).
+/// The node position this proof writes: two nibbles, so its compact path is one header byte
+/// (even parity) plus one packed byte.
+bcos::ledger::mpt::PathKey nodePosition(h256 const& owner)
+{
+    return {.scope = bcos::ledger::mpt::TrieScope::storage(owner), .position = bytes{0x09, 0x0c}};
+}
+
+// The literal physical key, built here by hand ON PURPOSE: the proof compares what the
+// resolver-backed storage stack actually writes against bytes constructed with zero shared
+// code (the production encode authority is StateKeyResolver alone).
 std::string physicalNodeKey(h256 const& hash)
 {
-    std::string key = "/mpt/:";
+    std::string key = "/mptp/s:";
     key.append(reinterpret_cast<char const*>(hash.data()), h256::SIZE);
+    key.push_back('\x00');  // compactPath header: even nibble count
+    key.push_back('\x9c');  // the two nibbles, packed
     return key;
 }
 }  // namespace
@@ -93,25 +103,26 @@ struct TestMPTNodeKeyFixture
 
 BOOST_FIXTURE_TEST_SUITE(TestMPTNodeKey, TestMPTNodeKeyFixture)
 
-// The physical form is StateKey-NATIVE: a full-CF scan can hand the raw 38 bytes to the
-// resolver's single-string StateKey constructor and get table "/mpt/" + the raw digest
-// back, because the first ':' is always the table separator at index 5.
+// The physical form is StateKey-NATIVE: a full-CF scan can hand the raw bytes to the
+// resolver's single-string StateKey constructor and get the node table + the row key back,
+// because the first ':' is always the table separator right after the table name.
 BOOST_AUTO_TEST_CASE(physicalFormIsStateKeyNative)
 {
     auto const hash = colonRiddledHash();
     auto const physicalKey = physicalNodeKey(hash);
 
-    BOOST_CHECK_EQUAL(physicalKey.size(), storage2::kMPTKeyLength);  // 38
-    BOOST_CHECK_EQUAL(physicalKey.find(':'), 5U);                    // table separator
+    BOOST_CHECK_EQUAL(physicalKey.size(), storage2::kMPTStorageTable.size() + 1 + 32 + 2);
+    BOOST_CHECK_EQUAL(physicalKey.find(':'), storage2::kMPTStorageTable.size());
 
     // The resolver's decode (single-string StateKey constructor, split at the first colon)
-    // reconstructs table "/mpt/" + the raw digest exactly — colons in the digest and all.
+    // reconstructs the node table + the row key exactly — colons in the owner and all.
     auto const decoded = StateKeyResolver::decode(std::string_view(physicalKey));
     StateKeyView const view{decoded};
-    BOOST_CHECK_EQUAL(view.m_table, storage2::kMPTTable);
-    BOOST_CHECK_EQUAL(
-        view.m_key, std::string_view(reinterpret_cast<char const*>(hash.data()), h256::SIZE));
-    BOOST_CHECK(decoded == storage2::mptNodeStateKey(hash));
+    BOOST_CHECK_EQUAL(view.m_table, storage2::kMPTStorageTable);
+    BOOST_CHECK(decoded == bcos::ledger::mpt::pathNodeStateKey(nodePosition(hash)));
+    auto const parsed = bcos::ledger::mpt::parsePathNodeStateKey(decoded);
+    BOOST_REQUIRE(parsed.has_value());
+    BOOST_CHECK(*parsed == nodePosition(hash));
 }
 
 // End-to-end physical-key proof over a real RocksDB, through the same code path commit
@@ -137,13 +148,13 @@ BOOST_AUTO_TEST_CASE(mergeLandsUnderPhysicalKey)
             mutableLayer, StateKey{"/apps/test", "balance"}, std::move(flatEntry));
         storage::Entry nodeEntry;
         nodeEntry.set(bytes(nodeRlp));
-        co_await storage2::writeOne(
-            mutableLayer, storage2::mptNodeStateKey(hash), std::move(nodeEntry));
+        co_await storage2::writeOne(mutableLayer,
+            bcos::ledger::mpt::pathNodeStateKey(nodePosition(hash)), std::move(nodeEntry));
 
         // One merge = one WriteBatch = one rocksdb Write (RocksDBStorage2::merge).
         co_await storage.merge(mutableLayer);
 
-        // Raw Get with the literal 38-byte key: proves the on-disk layout, not just the
+        // Raw Get with the literal physical key: proves the on-disk layout, not just the
         // resolver round-trip.
         std::string rawValue;
         auto status =
@@ -163,7 +174,8 @@ BOOST_AUTO_TEST_CASE(mergeLandsUnderPhysicalKey)
         BOOST_CHECK_EQUAL(std::string(flatBack->get()), "flat-value");
 
         // And the ordinary StateKey read path resolves the node row.
-        auto nodeBack = co_await storage2::readOne(storage, storage2::mptNodeStateKey(hash));
+        auto nodeBack = co_await storage2::readOne(
+            storage, bcos::ledger::mpt::pathNodeStateKey(nodePosition(hash)));
         BOOST_REQUIRE(nodeBack);
         auto nodeBackView = nodeBack->get();
         bytes const nodeBackBytes(nodeBackView.begin(), nodeBackView.end());

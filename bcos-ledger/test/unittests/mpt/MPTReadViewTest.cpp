@@ -41,7 +41,7 @@ BOOST_AUTO_TEST_SUITE(MPTReadViewSuite)
 // storage is fine).
 BOOST_AUTO_TEST_CASE(HasAccountFalseOnEmptyRoot)
 {
-    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+    bcos::ledger::mpt::test::NodeMemoryStorage storage;
     MPTReadView view(storage, emptyRootHash());
 
     bcos::Address const a = makeAddress(0xab);
@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(HasAccountFalseOnEmptyRoot)
 // The decoded fields must match what was encoded.
 BOOST_AUTO_TEST_CASE(HasAccountTrueAfterCommit)
 {
-    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+    bcos::ledger::mpt::test::NodeMemoryStorage storage;
     bcos::Address const a = makeAddress(0xab);
 
     Account acc;
@@ -84,21 +84,21 @@ BOOST_AUTO_TEST_CASE(ReadThroughSeparateStorage)
     bcos::Address const a = makeAddress(0xab);
 
     // Build the trie into storageA and capture every node it produced.
-    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storageA;
+    bcos::ledger::mpt::test::NodeMemoryStorage storageA;
     Account acc;
     acc.nonce = 7;
     acc.balance = 4242;
     auto result = seedTrieFlushed(storageA, emptyRootHash(), {{accountKeyHash(a), acc.encode()}});
     auto const root = result.root;
 
-    auto const nodes = std::move(result.newNodes);
+    auto const nodes = std::move(result.upserts);
     BOOST_REQUIRE(!nodes.empty());
 
     // Load the drained nodes into a fresh, independent storage.
-    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storageB;
-    for (auto const& [hash, raw] : nodes)
+    bcos::ledger::mpt::test::NodeMemoryStorage storageB;
+    for (auto const& [pathKey, raw] : nodes)
     {
-        bcos::task::syncWait(bcos::storage2::writeOne(storageB, hash, raw));
+        bcos::task::syncWait(bcos::storage2::writeOne(storageB, pathKey, raw));
     }
 
     // Reads over storageB resolve the same account.

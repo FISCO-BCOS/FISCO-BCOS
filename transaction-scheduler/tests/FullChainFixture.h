@@ -358,11 +358,11 @@ public:
         return block->blockHeader();
     }
 
-    /// One trie-node row from the RocksDB backend under its ordinary "/mpt/" StateKey.
-    std::optional<bytes> backendNode(h256 const& hash)
+    /// One trie-node row from the RocksDB backend under its ordinary path-addressed StateKey.
+    std::optional<bytes> backendNode(ledger::mpt::PathKey const& position)
     {
         auto entry = task::syncWait(storage2::readOne(
-            m_multiLayerStorage.latestBackend(), storage2::mptNodeStateKey(hash)));
+            m_multiLayerStorage.latestBackend(), ledger::mpt::pathNodeStateKey(position)));
         if (!entry)
         {
             return std::nullopt;
@@ -371,7 +371,7 @@ public:
         return bytes(raw.begin(), raw.end());
     }
 
-    /// Count of committed "/mpt/" rows in the RocksDB backend.
+    /// Count of committed trie-node rows in the RocksDB backend (both node tables).
     size_t backendNodeCount()
     {
         return task::syncWait([this]() -> task::Task<size_t> {
@@ -380,7 +380,8 @@ public:
             while (auto keyValue = co_await iterator.next())
             {
                 auto&& [key, value] = *keyValue;
-                if (executor_v1::StateKeyView{key}.m_table == storage2::kMPTTable)
+                if (auto const table = executor_v1::StateKeyView{key}.m_table;
+                    table == storage2::kMPTAccountTable || table == storage2::kMPTStorageTable)
                 {
                     ++count;
                 }
@@ -428,10 +429,11 @@ public:
         {
             accountChanges[mpt::accountKeyHash(address)] = account.encode();
         }
-        storage2::memory_storage::MemoryStorage<h256, bytes, storage2::memory_storage::ORDERED>
+        storage2::memory_storage::MemoryStorage<mpt::PathKey, bytes,
+            storage2::memory_storage::ORDERED>
             scratch;
-        auto merged =
-            task::syncWait(mpt::commitTrie(scratch, mpt::emptyRootHash(), accountChanges));
+        auto merged = task::syncWait(mpt::commitTrie(
+            scratch, mpt::TrieScope::account(), mpt::emptyRootHash(), accountChanges));
         return merged.root;
     }
 
@@ -445,9 +447,12 @@ public:
             changes[mpt::slotKeyHash(slot)] =
                 mpt::encodeStorageValue(bytesConstRef(rawValue.data(), rawValue.size()));
         }
-        storage2::memory_storage::MemoryStorage<h256, bytes, storage2::memory_storage::ORDERED>
+        // The oracle only needs the ROOT, so any scope names a fresh, empty scratch trie.
+        storage2::memory_storage::MemoryStorage<mpt::PathKey, bytes,
+            storage2::memory_storage::ORDERED>
             scratch;
-        auto merged = task::syncWait(mpt::commitTrie(scratch, mpt::emptyRootHash(), changes));
+        auto merged = task::syncWait(
+            mpt::commitTrie(scratch, mpt::TrieScope::account(), mpt::emptyRootHash(), changes));
         return merged.root;
     }
 

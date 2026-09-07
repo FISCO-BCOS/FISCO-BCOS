@@ -15,7 +15,7 @@
  *
  * @file test_GenesisNodePersistence.cpp
  * @brief L2 (scenario B) genesis trie-node persistence: buildGenesisBlock must write every
- *        account-trie and storage-sub-trie node as a "/mpt/" state row, so the block-1
+ *        account-trie and storage-sub-trie node as a path-addressed state row, so the block-1
  *        incremental MPT build (buildAndCollect over the genesis root) can read its parents.
  */
 #include "../mpt/TestHelpers.h"
@@ -33,6 +33,7 @@
 #include "bcos-ledger/mpt/HashBuilder.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-ledger/mpt/NodeDecoder.h"
+#include "bcos-ledger/mpt/PathKey.h"
 #include "bcos-ledger/mpt/StorageValueCodec.h"
 #include "bcos-ledger/mpt/TrieNode.h"
 #include "bcos-task/Wait.h"
@@ -43,10 +44,13 @@
 #include <bcos-table/src/StateStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <atomic>
 #include <memory>
 #include <set>
 #include <string>
+#include <utility>
+#include <vector>
 
 using namespace bcos;
 using namespace bcos::ledger;
@@ -114,7 +118,7 @@ Alloc eoaAlloc()
         .storage = {}};
 }
 
-// Count the persisted "/mpt/" rows in the test storage.
+// Count the persisted trie-node rows in the test storage (both node tables).
 size_t countMPTRows(storage::StateStorage& storage)
 {
     // parallelTraverse runs its callback from multiple TBB worker threads (one per bucket
@@ -122,7 +126,7 @@ size_t countMPTRows(storage::StateStorage& storage)
     // read-modify-write (intermittent undercounts, e.g. once the TBB pool is warm on CI).
     std::atomic<size_t> count{0};
     storage.parallelTraverse(false, [&](std::string_view table, std::string_view, auto const&) {
-        if (table == storage2::kMPTTable)
+        if (table == storage2::kMPTAccountTable || table == storage2::kMPTStorageTable)
         {
             ++count;
         }
@@ -131,36 +135,52 @@ size_t countMPTRows(storage::StateStorage& storage)
     return count.load();
 }
 
-// Read one persisted trie-node row; REQUIRE it exists and its content hashes back to @p hash.
-task::Task<bcos::bytes> readNodeRowChecked(storage::StorageInterface& storage, h256 hash)
+// Read one persisted trie-node row BY POSITION; REQUIRE it exists and its content hashes back to
+// the digest the parent (or the block header, for a root) recorded for it.
+task::Task<bcos::bytes> readNodeRowChecked(
+    storage::StorageInterface& storage, ledger::mpt::PathKey const& key, h256 expected)
 {
-    auto entry = co_await storage2::readOne(storage, storage2::mptNodeStateKey(hash));
-    BOOST_REQUIRE_MESSAGE(
-        entry.has_value(), "missing genesis trie node row for hash " + hash.hex());
+    auto entry = co_await storage2::readOne(storage, ledger::mpt::pathNodeStateKey(key));
+    BOOST_REQUIRE_MESSAGE(entry.has_value(),
+        "missing genesis trie node row at position 0x" + bcos::toHex(key.position));
     auto raw = entry->get();
     bcos::bytes rlp(raw.begin(), raw.end());
-    BOOST_CHECK_EQUAL(crypto::keccak256Hash(bcos::ref(rlp)).hex(), hash.hex());
+    BOOST_CHECK_EQUAL(crypto::keccak256Hash(bcos::ref(rlp)).hex(), expected.hex());
     co_return rlp;
 }
 
-task::Task<void> walkNodeHash(storage::StorageInterface& storage, h256 hash, bool accountTrie,
-    std::set<h256>& visited, size_t& storageTrieNodes);
+task::Task<void> walkNodeAt(storage::StorageInterface& storage, ledger::mpt::PathKey key,
+    h256 expected, std::set<ledger::mpt::PathKey>& visited, size_t& storageTrieNodes);
 
-// Walk one decoded node's children (inline children recurse in-memory; hash children go
-// back through the stored rows).
+// Walk one decoded node's children (inline children recurse in-memory; hash children go back
+// through the stored rows, addressed by the child's position — parent position plus the nibbles
+// the step consumes, spec A.1).
 task::Task<void> walkDecoded(storage::StorageInterface& storage, ledger::mpt::TrieNode const& node,
-    bool accountTrie, std::set<h256>& visited, size_t& storageTrieNodes)
+    ledger::mpt::PathKey const& position, std::set<ledger::mpt::PathKey>& visited,
+    size_t& storageTrieNodes)
 {
     namespace mpt = ledger::mpt;
+    auto childKey = [&](bcos::bytesConstRef consumed) {
+        mpt::PathKey out{.scope = position.scope, .position = position.position};
+        out.position.insert(out.position.end(), consumed.begin(), consumed.end());
+        return out;
+    };
     if (auto const* leaf = std::get_if<mpt::LeafNode>(&node))
     {
-        if (accountTrie)
+        if (position.scope.kind == mpt::TrieKind::Account)
         {
             auto account = mpt::Account::decode(bcos::ref(leaf->value));
             if (account.storageRoot != mpt::emptyRootHash())
             {
-                co_await walkNodeHash(
-                    storage, account.storageRoot, false, visited, storageTrieNodes);
+                // The owner falls out of the walk itself: the position walked to this leaf,
+                // concatenated with the leaf's suffix, IS the account's trie key (spec §8.3).
+                auto ownerNibbles = position.position;
+                ownerNibbles.insert(
+                    ownerNibbles.end(), leaf->keyNibbles.begin(), leaf->keyNibbles.end());
+                auto ownerBytes = mpt::nibblesToBytes(bcos::ref(ownerNibbles));
+                h256 const owner{bcos::ref(ownerBytes)};
+                co_await walkNodeAt(storage, mpt::storageRootPathKey(owner), account.storageRoot,
+                    visited, storageTrieNodes);
             }
         }
         co_return;
@@ -171,66 +191,72 @@ task::Task<void> walkDecoded(storage::StorageInterface& storage, ledger::mpt::Tr
             ext->child.front() == mpt::RLP_HASH_REF_PREFIX)
         {
             auto childHash = h256(bcos::bytesConstRef(ext->child.data() + 1, h256::SIZE));
-            co_await walkNodeHash(storage, childHash, accountTrie, visited, storageTrieNodes);
+            co_await walkNodeAt(storage, childKey(bcos::ref(ext->sharedNibbles)), childHash,
+                visited, storageTrieNodes);
         }
         else
         {
             auto child = mpt::decodeNode(bcos::ref(ext->child));
-            co_await walkDecoded(storage, child, accountTrie, visited, storageTrieNodes);
+            co_await walkDecoded(
+                storage, child, childKey(bcos::ref(ext->sharedNibbles)), visited, storageTrieNodes);
         }
         co_return;
     }
     if (auto const* branch = std::get_if<mpt::BranchNode>(&node))
     {
-        for (auto const& ref : branch->children)
+        for (size_t nibble = 0; nibble < mpt::NIBBLE_RANGE; ++nibble)
         {
+            auto const& ref = branch->children[nibble];
             if (ref.isAbsent())
             {
                 continue;
             }
+            bcos::bytes const consumed{static_cast<bcos::byte>(nibble)};
             if (ref.kind() == mpt::NodeRef::Kind::Hash)
             {
-                co_await walkNodeHash(storage, ref.hash(), accountTrie, visited, storageTrieNodes);
+                co_await walkNodeAt(
+                    storage, childKey(bcos::ref(consumed)), ref.hash(), visited, storageTrieNodes);
             }
             else
             {
                 auto child = mpt::decodeNode(ref.inlineRef());
-                co_await walkDecoded(storage, child, accountTrie, visited, storageTrieNodes);
+                co_await walkDecoded(
+                    storage, child, childKey(bcos::ref(consumed)), visited, storageTrieNodes);
             }
         }
     }
     co_return;
 }
 
-task::Task<void> walkNodeHash(storage::StorageInterface& storage, h256 hash, bool accountTrie,
-    std::set<h256>& visited, size_t& storageTrieNodes)
+task::Task<void> walkNodeAt(storage::StorageInterface& storage, ledger::mpt::PathKey key,
+    h256 expected, std::set<ledger::mpt::PathKey>& visited, size_t& storageTrieNodes)
 {
-    if (!visited.insert(hash).second)
+    if (!visited.insert(key).second)
     {
         co_return;
     }
-    if (!accountTrie)
+    if (key.scope.kind == ledger::mpt::TrieKind::Storage)
     {
         ++storageTrieNodes;
     }
-    auto rlp = co_await readNodeRowChecked(storage, hash);
+    auto rlp = co_await readNodeRowChecked(storage, key, expected);
     auto node = ledger::mpt::decodeNode(bcos::ref(rlp));
-    co_await walkDecoded(storage, node, accountTrie, visited, storageTrieNodes);
+    co_await walkDecoded(storage, node, key, visited, storageTrieNodes);
 }
 
-// storage2 node-storage adapter over the ledger's StorageInterface: the same "/mpt/" rows
+// storage2 node-storage adapter over the ledger's StateStorage: the same path-addressed rows
 // ViewNodeStorage (transaction-scheduler) reads at block 1, expressed over the test storage.
 class LedgerNodeStorage
 {
 public:
-    using Key = h256;
+    using Key = ledger::mpt::PathKey;
     using Value = bcos::bytes;
 
-    explicit LedgerNodeStorage(storage::StorageInterface& backend) : m_backend(&backend) {}
+    explicit LedgerNodeStorage(storage::StateStorage& backend) : m_backend(&backend) {}
 
-    task::Task<std::optional<bcos::bytes>> readOne(h256 key)
+    task::Task<std::optional<bcos::bytes>> readOne(Key key)
     {
-        auto entry = co_await storage2::readOne(*m_backend, storage2::mptNodeStateKey(key));
+        auto entry = co_await storage2::readOne(*m_backend, ledger::mpt::pathNodeStateKey(key));
         if (!entry)
         {
             co_return std::nullopt;
@@ -249,11 +275,12 @@ public:
         co_return values;
     }
 
-    task::Task<void> writeOne(h256 key, bcos::bytes value)
+    task::Task<void> writeOne(Key key, bcos::bytes value)
     {
         storage::Entry entry;
         entry.set(std::move(value));
-        co_await storage2::writeOne(*m_backend, storage2::mptNodeStateKey(key), std::move(entry));
+        co_await storage2::writeOne(
+            *m_backend, ledger::mpt::pathNodeStateKey(key), std::move(entry));
     }
 
     task::Task<void> writeSome(::ranges::input_range auto keyValues)
@@ -265,8 +292,65 @@ public:
         }
     }
 
+    task::Task<void> removeOne(Key key)
+    {
+        // StateStorage expresses deletion as a DELETED-status entry rather than a removeOne.
+        storage::Entry entry;
+        entry.setStatus(storage::Entry::DELETED);
+        co_await storage2::writeOne(
+            *m_backend, ledger::mpt::pathNodeStateKey(key), std::move(entry));
+    }
+
+    task::Task<void> removeSome(::ranges::input_range auto keys)
+    {
+        for (auto const& key : keys)
+        {
+            co_await removeOne(key);
+        }
+    }
+
+    /// Seek range over the node rows. StateStorage has no ordered iterator, so this snapshots
+    /// every node row through parallelTraverse and sorts — fine for a genesis-sized fixture, and
+    /// it gives buildAndCollect's storage-trie drop the same view a real ordered store would.
+    struct Iterator
+    {
+        std::vector<std::pair<Key, bcos::bytes>> rows;
+        size_t index = 0;
+
+        task::Task<std::optional<std::tuple<Key, storage2::StorageValueType<bcos::bytes>>>> next()
+        {
+            if (index >= rows.size())
+            {
+                co_return std::nullopt;
+            }
+            auto& [key, value] = rows[index++];
+            co_return std::make_tuple(key, storage2::StorageValueType<bcos::bytes>{value});
+        }
+    };
+
+    task::Task<Iterator> range(storage2::RANGE_SEEK_TYPE /*unused*/, Key const& start)
+    {
+        Iterator iterator;
+        m_backend->parallelTraverse(false, [&](std::string_view table, std::string_view rowKey,
+                                               auto const& entry) {
+            executor_v1::StateKey const stateKey{table, rowKey};
+            if (auto parsed = ledger::mpt::parsePathNodeStateKey(stateKey))
+            {
+                auto raw = entry.get();
+                iterator.rows.emplace_back(std::move(*parsed), bcos::bytes(raw.begin(), raw.end()));
+            }
+            return true;
+        });
+        std::sort(iterator.rows.begin(), iterator.rows.end(),
+            [](auto const& lhs, auto const& rhs) { return lhs.first < rhs.first; });
+        iterator.rows.erase(iterator.rows.begin(),
+            std::lower_bound(iterator.rows.begin(), iterator.rows.end(), start,
+                [](auto const& row, Key const& key) { return row.first < key; }));
+        co_return iterator;
+    }
+
 private:
-    storage::StorageInterface* m_backend;
+    storage::StateStorage* m_backend;
 };
 
 }  // namespace
@@ -298,9 +382,10 @@ BOOST_AUTO_TEST_CASE(L2GenesisPersistsAllTrieNodes)
         BOOST_REQUIRE_NE(root, h256{});
         BOOST_REQUIRE_NE(root, ledger::mpt::emptyRootHash());
 
-        std::set<h256> visited;
+        std::set<ledger::mpt::PathKey> visited;
         size_t storageTrieNodes = 0;
-        co_await walkNodeHash(*storage, root, true, visited, storageTrieNodes);
+        co_await walkNodeAt(
+            *storage, ledger::mpt::accountRootPathKey(), root, visited, storageTrieNodes);
 
         // The contract's storage sub-trie must be persisted too: block 1 reads its parent
         // nodes when the account's slots change.

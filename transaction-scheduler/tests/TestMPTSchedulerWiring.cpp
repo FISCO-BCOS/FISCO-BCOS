@@ -71,15 +71,17 @@ using namespace bcos::scheduler_v1;
 
 using MWMutableStorage = bcos::test::sharedmock::SharedMutableStorage;
 // The backend is behaviourally a stock flat MemoryStorage: with trie nodes as ordinary
-// "/mpt/" StateKey rows there is nothing MPT-specific left for a backend to implement.
+// path-addressed StateKey rows there is nothing MPT-specific left for a backend to implement.
 using MWBackendStorage = bcos::test::sharedmock::SharedBackendStorage;
 using MWCheckpointBackend = bcos::test::sharedmock::SharedCheckpointBackend;
 using MWMultiLayerStorage = bcos::test::sharedmock::SharedMultiLayerStorage;
 
 /// Read one trie-node row from the backend under its ordinary StateKey.
-std::optional<bytes> backendNode(MWBackendStorage& backend, h256 const& hash)
+std::optional<bytes> backendNode(
+    MWBackendStorage& backend, bcos::ledger::mpt::PathKey const& position)
 {
-    auto entry = task::syncWait(storage2::readOne(backend, storage2::mptNodeStateKey(hash)));
+    auto entry =
+        task::syncWait(storage2::readOne(backend, bcos::ledger::mpt::pathNodeStateKey(position)));
     if (!entry)
     {
         return std::nullopt;
@@ -88,7 +90,7 @@ std::optional<bytes> backendNode(MWBackendStorage& backend, h256 const& hash)
     return bytes(raw.begin(), raw.end());
 }
 
-/// Count the backend rows living in the "/mpt/" table (committed trie nodes).
+/// Count the backend rows living in the two node tables (committed trie nodes).
 size_t backendNodeCount(MWBackendStorage& backend)
 {
     return task::syncWait([&]() -> task::Task<size_t> {
@@ -97,7 +99,8 @@ size_t backendNodeCount(MWBackendStorage& backend)
         while (auto keyValue = co_await iterator.next())
         {
             auto&& [key, value] = *keyValue;
-            if (StateKeyView{key}.m_table == storage2::kMPTTable)
+            if (auto const table = StateKeyView{key}.m_table;
+                table == storage2::kMPTAccountTable || table == storage2::kMPTStorageTable)
             {
                 ++count;
             }
@@ -139,18 +142,18 @@ struct MWProbeObserver : public bcos::ledger::mpt::CommitObserver
         h256 stateRoot;
         size_t newNodeCount{};
         bool allNodesInBackendAtCallback{};
-        bcos::ledger::mpt::MPTDeltaLayer delta;  // copy for post-hoc assertions
+        bcos::ledger::mpt::PathDiff delta;  // copy for post-hoc assertions
     };
     MWBackendStorage* m_backend{};
     std::vector<Record> m_records;
 
     void onCommit(
-        protocol::BlockNumber blockNumber, bcos::ledger::mpt::MPTDeltaLayer const& delta) override
+        protocol::BlockNumber blockNumber, bcos::ledger::mpt::PathDiff const& delta) override
     {
         bool allVisible = true;
-        for (auto const& [hash, rlp] : delta.newNodes)
+        for (auto const& [position, rlp] : delta.upserts)
         {
-            auto stored = backendNode(*m_backend, hash);
+            auto stored = backendNode(*m_backend, position);
             if (!stored || *stored != rlp)
             {
                 allVisible = false;
@@ -159,7 +162,7 @@ struct MWProbeObserver : public bcos::ledger::mpt::CommitObserver
         }
         m_records.push_back({.blockNumber = blockNumber,
             .stateRoot = delta.stateRoot,
-            .newNodeCount = delta.newNodes.size(),
+            .newNodeCount = delta.upserts.size(),
             .allNodesInBackendAtCallback = allVisible,
             .delta = delta});
     }
@@ -356,9 +359,9 @@ public:
         {
             accountChanges[mpt::accountKeyHash(address)] = account.encode();
         }
-        memory_storage::MemoryStorage<h256, bytes, memory_storage::ORDERED> scratch;
-        auto merged =
-            task::syncWait(mpt::commitTrie(scratch, mpt::emptyRootHash(), accountChanges));
+        memory_storage::MemoryStorage<mpt::PathKey, bytes, memory_storage::ORDERED> scratch;
+        auto merged = task::syncWait(mpt::commitTrie(
+            scratch, mpt::TrieScope::account(), mpt::emptyRootHash(), accountChanges));
         return merged.root;
     }
 
@@ -371,8 +374,10 @@ public:
             changes[mpt::slotKeyHash(slot)] =
                 mpt::encodeStorageValue(bytesConstRef(rawValue.data(), rawValue.size()));
         }
-        memory_storage::MemoryStorage<h256, bytes, memory_storage::ORDERED> scratch;
-        auto merged = task::syncWait(mpt::commitTrie(scratch, mpt::emptyRootHash(), changes));
+        // Only the ROOT is wanted here, so any scope names a fresh, empty scratch trie.
+        memory_storage::MemoryStorage<mpt::PathKey, bytes, memory_storage::ORDERED> scratch;
+        auto merged = task::syncWait(
+            mpt::commitTrie(scratch, mpt::TrieScope::account(), mpt::emptyRootHash(), changes));
         return merged.root;
     }
 
@@ -607,11 +612,12 @@ BOOST_AUTO_TEST_CASE(commitAtomicityAndObserverTiming)
     BOOST_CHECK_GT(record.newNodeCount, 0);
     BOOST_CHECK(record.allNodesInBackendAtCallback);  // fired AFTER the nodes landed
 
-    // Post-hoc: every delta node readable from the backend under its digest, bytes equal.
-    for (auto const& [hash, rlp] : record.delta.newNodes)
+    // Post-hoc: every upserted node readable from the backend at its position, bytes equal.
+    for (auto const& [position, rlp] : record.delta.upserts)
     {
-        auto stored = backendNode(backendStorage, hash);
-        BOOST_REQUIRE_MESSAGE(stored.has_value(), "node missing from backend: " + hash.hex());
+        auto stored = backendNode(backendStorage, position);
+        BOOST_REQUIRE_MESSAGE(stored.has_value(),
+            "node missing from backend at position 0x" + bcos::toHex(position.position));
         BOOST_CHECK(*stored == rlp);
     }
 }
@@ -709,19 +715,17 @@ BOOST_AUTO_TEST_CASE(viewNodeStorageBatchReadWrite)
     view.newMutable();
     ViewNodeStorage<MWMultiLayerStorage::ViewType> nodeStorage(view);
 
-    h256 hashA;
-    hashA[0] = 0xA1;
-    h256 hashB;
-    hashB[0] = 0xB2;
-    h256 absent;
-    absent[0] = 0xC3;
+    namespace mpt = bcos::ledger::mpt;
+    mpt::PathKey const positionA{.scope = mpt::TrieScope::account(), .position = bytes{0x0a}};
+    mpt::PathKey const positionB{.scope = mpt::TrieScope::account(), .position = bytes{0x0b}};
+    mpt::PathKey const absent{.scope = mpt::TrieScope::storage(h256{}), .position = bytes{0x0c}};
 
-    std::vector<std::pair<h256, bytes>> nodes{
-        {hashA, bytes{0x01, 0x02}}, {hashB, bytes{0x03, 0x04, 0x05}}};
+    std::vector<std::pair<mpt::PathKey, bytes>> nodes{
+        {positionA, bytes{0x01, 0x02}}, {positionB, bytes{0x03, 0x04, 0x05}}};
     task::syncWait(nodeStorage.writeSome(nodes));
 
-    // Written through the batch path, readable as ordinary "/mpt/" rows of the mutable layer.
-    auto storedA = task::syncWait(storage2::readOne(view, storage2::mptNodeStateKey(hashA)));
+    // Written through the batch path, readable as ordinary node rows of the mutable layer.
+    auto storedA = task::syncWait(storage2::readOne(view, mpt::pathNodeStateKey(positionA)));
     BOOST_REQUIRE(storedA);
     BOOST_CHECK_EQUAL(storedA->get(), std::string("\x01\x02", 2));
 
@@ -730,7 +734,8 @@ BOOST_AUTO_TEST_CASE(viewNodeStorageBatchReadWrite)
     BOOST_CHECK_EQUAL(nodes[0].second.size(), 2U);
     BOOST_CHECK_EQUAL(nodes[1].second.size(), 3U);
 
-    auto values = task::syncWait(nodeStorage.readSome(std::vector<h256>{hashB, absent, hashA}));
+    auto values = task::syncWait(
+        nodeStorage.readSome(std::vector<mpt::PathKey>{positionB, absent, positionA}));
     BOOST_REQUIRE_EQUAL(values.size(), 3U);
     BOOST_REQUIRE(values[0]);
     BOOST_CHECK_EQUAL_COLLECTIONS(
@@ -802,7 +807,8 @@ BOOST_AUTO_TEST_CASE(genesisBlockPublishesNoExecuteTimeHeader)
 BOOST_AUTO_TEST_CASE(strayMptRowIsNotAnAccount)
 {
     namespace mpt = bcos::ledger::mpt;
-    BOOST_CHECK(!mpt::parseAccountTable(storage2::kMPTTable).has_value());
+    BOOST_CHECK(!mpt::parseAccountTable(storage2::kMPTAccountTable).has_value());
+    BOOST_CHECK(!mpt::parseAccountTable(storage2::kMPTStorageTable).has_value());
 
     useScenarioA(500);
     auto const addressA = makeAddress(0xC9);
@@ -812,7 +818,7 @@ BOOST_AUTO_TEST_CASE(strayMptRowIsNotAnAccount)
     strayHash.data()[0] = 0x5A;
     std::string const strayKey(reinterpret_cast<char const*>(strayHash.data()), h256::SIZE);
     plan[501] = {{mpt::accountTableName(addressA), "balance", "10"},
-        {std::string(storage2::kMPTTable), strayKey, "not-a-real-node"}};
+        {std::string(storage2::kMPTAccountTable), strayKey, "not-a-real-node"}};
 
     auto header500 = executeOneBlock(500);  // XOR
     commitOneBlock(header500);

@@ -59,11 +59,12 @@ public:
         BOOST_TEST(web3JsonRpc != nullptr);
     }
 
-    /// Commit @p entries into the trie whose nodes live as "/mpt/" STATE ROWS: parent nodes
-    /// are read through the very adapter under test, and the produced nodes are flushed back
-    /// through the ordinary state write path (Entry keyed mptNodeStateKey) — write side and
-    /// read side meet only at the row layout, exactly like scheduler-commit vs rpc-read.
-    bcos::h256 commitIntoStateRows(std::map<bcos::h256, bcos::bytes> const& entries)
+    /// Commit @p entries into the trie whose nodes live as path-addressed STATE ROWS: parent
+    /// nodes are read through the very adapter under test, and the produced rows are written
+    /// back through the ordinary state write path (Entry keyed pathNodeStateKey) — write side
+    /// and read side meet only at the row layout, exactly like scheduler-commit vs rpc-read.
+    bcos::h256 commitIntoStateRows(
+        mpt::TrieScope const& scope, std::map<bcos::h256, bcos::bytes> const& entries)
     {
         std::map<bcos::h256, std::optional<bcos::bytes>> changes;
         for (auto const& [key, value] : entries)
@@ -72,13 +73,13 @@ public:
         }
         return task::syncWait([&]() -> task::Task<bcos::h256> {
             storage2::MPTNodeReadStorage reader(m_stateRows);
-            auto result = co_await mpt::commitTrie(reader, mpt::emptyRootHash(), changes);
-            for (auto const& [hash, rlp] : result.newNodes)
+            auto result = co_await mpt::commitTrie(reader, scope, mpt::emptyRootHash(), changes);
+            for (auto const& [position, rlp] : result.upserts)
             {
                 storage::Entry entry;
                 entry.set(bcos::bytes(rlp));
                 co_await storage2::writeOne(
-                    m_stateRows, storage2::mptNodeStateKey(hash), std::move(entry));
+                    m_stateRows, mpt::pathNodeStateKey(position), std::move(entry));
             }
             co_return result.root;
         }());
@@ -86,14 +87,16 @@ public:
 
     void buildTrie()
     {
-        auto const storageRoot = commitIntoStateRows(
-            {{mpt::slotKeyHash(slotA), valueA}, {mpt::slotKeyHash(slotB), valueB}});
+        auto const storageRoot =
+            commitIntoStateRows(mpt::TrieScope::storage(mpt::accountKeyHash(address)),
+                {{mpt::slotKeyHash(slotA), valueA}, {mpt::slotKeyHash(slotB), valueB}});
 
         mpt::Account account;
         account.nonce = 7;
         account.balance = 1000;
         account.storageRoot = storageRoot;
-        stateRoot = commitIntoStateRows({{mpt::accountKeyHash(address), account.encode()}});
+        stateRoot = commitIntoStateRows(
+            mpt::TrieScope::account(), {{mpt::accountKeyHash(address), account.encode()}});
 
         m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
     }
@@ -107,8 +110,9 @@ public:
         Json::Value value;
         Json::Reader reader;
         std::promise<bcos::bytes> promise;
-        web3JsonRpc->onRPCRequest(
-            req, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+        web3JsonRpc->onRPCRequest(req, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
         auto jsonBytes = promise.get_future().get();
         std::string_view json((char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
         reader.parse(json.begin(), json.end(), value);

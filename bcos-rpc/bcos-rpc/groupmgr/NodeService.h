@@ -33,6 +33,7 @@
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <bcos-tx-validator/CheckSet.h>
 #include <bcos-utilities/Common.h>
@@ -117,13 +118,13 @@ public:
     }
     txvalidator::AdmissionContext admissionContext() const noexcept { return m_admissionContext; }
 
-    /// Type-erased read handle over the MPT node storage for eth_getProof (M8.3): key = node
-    /// hash, value = the node's raw RLP encoding, physically stored as ordinary state rows —
-    /// StateKey{"/mpt/", <32 raw digest bytes>}, i.e. "/mpt/:" + digest = 38 bytes in the
-    /// default column family. Build those keys ONLY with bcos-storage
-    /// KeyPrefixes.h::mptNodeStateKey; the physical form is produced and parsed solely by
-    /// StateKeyResolver.
-    using MPTNodeReader = bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>;
+    /// Type-erased read handle over the MPT node storage for eth_getProof (M8.3): key = the
+    /// node's POSITION in its trie, value = its raw RLP encoding, physically stored as ordinary
+    /// state rows in the two node tables. Build those keys ONLY with
+    /// ledger::mpt::pathNodeStateKey; the physical form is produced and parsed solely by
+    /// StateKeyResolver. Type-erased over PathKey rather than over StateKey so a reader can
+    /// never be pointed at a plane where a node lookup would degrade into a table scan.
+    using MPTNodeReader = bcos::storage2::AnyStorage<bcos::ledger::mpt::PathKey, bcos::bytes>;
 
     /// The handle owns its key-translating adapter (storage2::makeMPTNodeReader), but the
     /// storage underneath it is borrowed — owned by the Initializer, which must outlive this

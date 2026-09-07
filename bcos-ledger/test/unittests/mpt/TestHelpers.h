@@ -32,6 +32,7 @@
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Nibble.h>
 #include <bcos-ledger/mpt/NodeEncoder.h>
+#include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-ledger/mpt/TrieNode.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
@@ -41,10 +42,12 @@
 #include <memory>
 #include <optional>
 #include <random>
+#include <set>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace bcos::ledger::mpt::test
@@ -64,30 +67,74 @@ inline std::mt19937 seededRng(uint32_t s)
     return std::mt19937{s};
 }
 
-/// Synchronous test wrapper around commitTrie(): commit @p changes over @p priorRoot AND flush
-/// the produced nodes into @p storage. Production flushes once per block from the aggregated
-/// MPTDeltaLayer; tests flush per build so readback (Trie / MPTReadView) works immediately.
+/// The node store the MPT tests run against: path-addressed rows, ORDERED so a prefix scan over
+/// one trie's positions works the way it does through the production view.
+using NodeMemoryStorage = bcos::storage2::memory_storage::MemoryStorage<PathKey, bcos::bytes,
+    bcos::storage2::memory_storage::ORDERED>;
+
+/// Synchronous test wrapper around commitTrie(): commit @p changes over @p priorRoot AND apply
+/// the resulting row diff to @p storage. Production applies one diff per block from the
+/// aggregated PathDiff; tests apply per build so readback (Trie / MPTReadView) works immediately.
+///
+/// @p scope comes LAST and defaults to the account trie — the opposite of commitTrie's own
+/// argument order, so that the many account-trie call sites read as they always did and only a
+/// storage-trie seed has to name its owner.
 template <typename Storage>
-TrieMergeResult commitTrieFlushed(Storage& storage, bcos::h256 priorRoot,
-    std::map<bcos::h256, std::optional<bcos::bytes>> const& changes)
+PathMergeResult commitTrieFlushed(Storage& storage, bcos::h256 priorRoot,
+    std::map<bcos::h256, std::optional<bcos::bytes>> const& changes,
+    TrieScope scope = TrieScope::account())
 {
-    auto result = bcos::task::syncWait(commitTrie(storage, priorRoot, changes));
-    bcos::task::syncWait(flushTrieNodes(storage, result.newNodes));
+    auto result = bcos::task::syncWait(commitTrie(storage, std::move(scope), priorRoot, changes));
+    bcos::task::syncWait(flushTrieNodes(storage, result.upserts));
+    bcos::task::syncWait(removeTrieNodes(storage, result.deletes));
     return result;
 }
 
 /// commitTrieFlushed over insert-only entries (no deletes) — the common baseline-building shape.
 /// A distinct name, not an overload: a braced-init-list argument could match either map type.
 template <typename Storage>
-TrieMergeResult seedTrieFlushed(
-    Storage& storage, bcos::h256 priorRoot, std::map<bcos::h256, bcos::bytes> const& entries)
+PathMergeResult seedTrieFlushed(Storage& storage, bcos::h256 priorRoot,
+    std::map<bcos::h256, bcos::bytes> const& entries, TrieScope scope = TrieScope::account())
 {
     std::map<bcos::h256, std::optional<bcos::bytes>> changes;
     for (auto const& [key, value] : entries)
     {
         changes[key] = value;
     }
-    return commitTrieFlushed(storage, priorRoot, changes);
+    return commitTrieFlushed(storage, priorRoot, changes, std::move(scope));
+}
+
+/// Every LIVE node row of one trie, position → raw RLP, read by prefix scan. The scan is the
+/// enumeration path a verifier or migration tool would use (spec A.0), and it stops at the first
+/// row belonging to another trie.
+template <typename Storage>
+std::map<bcos::bytes, bcos::bytes> scanTrieNodes(Storage& storage, TrieScope const& scope)
+{
+    return bcos::task::syncWait(
+        [](Storage& storage,
+            TrieScope const& scope) -> bcos::task::Task<std::map<bcos::bytes, bcos::bytes>> {
+            std::map<bcos::bytes, bcos::bytes> out;
+            auto iterator = co_await bcos::storage2::range(
+                storage, bcos::storage2::RANGE_SEEK, PathKey{.scope = scope, .position = {}});
+            while (true)
+            {
+                auto keyValue = co_await iterator.next();
+                if (!keyValue)
+                {
+                    break;
+                }
+                auto const& [key, value] = *keyValue;
+                if (!(key.scope == scope))
+                {
+                    break;
+                }
+                if (auto const* raw = std::get_if<bcos::bytes>(std::addressof(value)))
+                {
+                    out.emplace(key.position, *raw);
+                }
+            }
+            co_return out;
+        }(storage, scope));
 }
 
 // ---------------------------------------------------------------------------

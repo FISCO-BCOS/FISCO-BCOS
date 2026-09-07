@@ -14,7 +14,8 @@
  *  limitations under the License.
  *
  * @file TrieMerge.h
- * @brief Path-level incremental MPT rebuild on a non-empty prior root (spec §5.3 path 1, §5.4)
+ * @brief Path-level incremental MPT rebuild on a non-empty prior root, emitting by POSITION
+ *        (spec §5.3 path 1, §5.4; pathdb spec §9 and appendix A)
  */
 #pragma once
 
@@ -23,6 +24,9 @@
 #include "Nibble.h"
 #include "NodeDecoder.h"
 #include "NodeEncoder.h"
+#include "PathDiff.h"
+#include "PathKey.h"
+#include "Trie.h"  // detail::loadNodeBytesAt — the one verified node read both sides share
 #include "TrieNode.h"
 // AnyHasher.h defines the free bcos::crypto::hasher::hash(); OpenSSLHasher.h only defines the
 // hasher type. Both are reachable via NodeEncoder.h, but keep them explicit — a unity build can
@@ -37,21 +41,21 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <unordered_map>
-#include <unordered_set>
+#include <set>
+#include <utility>
 #include <variant>
 
 namespace bcos::ledger::mpt
 {
 
-/// Result of one incremental rebuild: the new 32-byte root, the hash-keyed RLP encodings of every
-/// node emitted for the new trie version, and the hashes of prior-version nodes this rebuild
-/// replaced (a ledger for future pruning — nothing is deleted from storage here).
-struct TrieMergeResult
+/// Result of one rebuild of ONE trie: the new 32-byte root plus the row-level changes that make
+/// the store hold it. Positions, not hashes — see PathDiff.h for what each field promises.
+struct PathMergeResult
 {
     bcos::h256 root;
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
-    std::unordered_set<bcos::h256> obsoletedNodes;
+    std::map<PathKey, bcos::bytes> upserts;
+    std::set<PathKey> deletes;
+    std::map<PathKey, std::optional<bcos::bytes>> preimages;
 };
 
 namespace detail
@@ -64,24 +68,41 @@ namespace detail
 // node on several dirty paths is read from storage exactly once — subsequent keys traverse the
 // overlay. Untouched siblings stay as clean NodeRefs and are spliced back by hash, unread.
 //
-// The whole rebuild runs in four phases (see mergeTrie at the bottom of this header):
+// The rebuild runs in three phases (see mergeTrie at the bottom of this header):
 //   1. apply every change to the overlay (mergeInsert / mergeErase, resolving lazily);
 //   2. classify the overlay root: emptied trie / nothing-changed short-circuit / re-emit;
-//   3. re-encode only in-memory nodes bottom-up (emitNode), splicing clean refs verbatim;
-//   4. settle obsoletion by end-subtraction: resolvedHashes − re-emitted identical hashes.
+//   3. re-encode only in-memory nodes bottom-up (emitNode), splicing clean refs verbatim, and
+//      settle the row changes.
+//
+// EVERY node carries its POSITION — the nibbles consumed walking to it from this trie's root
+// (spec A.1: branch child i is at P||i, extension child at P||shared). The position is what the
+// row is keyed by, so it is threaded through resolve and emit alike; the tree-shape logic in
+// phase 1 is untouched by path addressing and reads exactly as it did before.
 //
 // I/O contract: reads = nodes on changed key paths (each at most once) + one unavoidable probe
 // per branch collapse (mergeNormalize); everything else is spliced back by hash, unread. This
-// header only READS storage — flushing newNodes is commitTrie's caller's job (MPTBuilder
-// batches one flushTrieNodes per block).
+// header only READS storage — applying the resulting diff is commitTrie's caller's job
+// (MPTBuilder batches one flush per block).
 //
-// Two bookkeeping fields drive correctness of the obsoletion ledger:
-//   - MergeContext::resolvedHashes records every hash-addressed node loaded from the prior
-//     version. Recording is NOT a verdict: a resolved node only becomes obsolete if the new
-//     version does not re-emit its identical encoding (phase 4), or is explicitly un-recorded
-//     when a collapse keeps it referenced un-rebuilt (mergeNormalize).
-//   - MutableNode::dirty distinguishes "resolved to look at" from "actually modified". Erase
-//     misses leave nodes clean, which is what makes the phase-2 short-circuit sound.
+// How the row changes fall out (phase 3):
+//   - upserts   = every position re-emitted as a hash-kind node. Overwriting a position IS the
+//                 whole statement; there is nothing to reference-count.
+//   - deletes   = positions this rebuild READ minus positions it re-emitted. Everything in it is
+//                 provably a row that existed (we read it) and provably has no node any more (the
+//                 rebuild did not put one back), which is what makes the four delete sources of
+//                 spec A.6 fall out of one subtraction: a branch collapse absorbing its survivor
+//                 (A.6-1), an extension merging with its child (A.6-2) and a node shrinking below
+//                 the 32-byte inline threshold (A.6-3) all read the node and then fail to re-emit
+//                 it. (A.6-4, a whole storage trie disappearing, is not one trie's rebuild and is
+//                 handled by MPTBuilder.) The survivor-subtree-never-moves theorem (spec A.5) is
+//                 what makes this sound: an untouched subtree keeps its positions, so a position
+//                 we never read cannot have become vacant.
+//   - preimages = the bytes each touched position held before, captured at resolve time (spec §9:
+//                 the resolved set is exactly the overwritten set, so this costs one copy and no
+//                 extra I/O). A position that had no row records nullopt (spec A.7).
+//
+// MutableNode::dirty distinguishes "resolved to look at" from "actually modified". Erase misses
+// leave nodes clean, which is what makes the phase-2 short-circuit sound.
 
 struct MutableNode;
 using MutableChild = std::variant<std::monostate,  // absent
@@ -112,6 +133,26 @@ struct MutableNode
     /// (see mergeNormalize) — that shortcut is only sound while dirty == false.
     bool dirty = false;
 };
+
+/// The position of a child reached by consuming @p consumed nibbles from the node at @p parent
+/// (spec A.1). One helper for both shapes: a branch consumes a single nibble, an extension its
+/// whole shared prefix.
+inline bcos::bytes childPosition(bcos::bytes const& parent, bcos::bytesConstRef consumed)
+{
+    bcos::bytes out;
+    out.reserve(parent.size() + consumed.size());
+    out.insert(out.end(), parent.begin(), parent.end());
+    out.insert(out.end(), consumed.begin(), consumed.end());
+    return out;
+}
+inline bcos::bytes childPosition(bcos::bytes const& parent, bcos::byte nibble)
+{
+    bcos::bytes out;
+    out.reserve(parent.size() + 1);
+    out.insert(out.end(), parent.begin(), parent.end());
+    out.push_back(nibble);
+    return out;
+}
 
 // Parse an ExtensionNode.child raw encoding (33-byte 0xa0||hash string, or an inline node's
 // complete RLP) into a NodeRef. Inverse of refToRawBytes below.
@@ -193,27 +234,39 @@ inline std::unique_ptr<MutableNode> liftNode(TrieNode decoded, std::optional<bco
     return out;
 }
 
-// Shared per-merge state: storage to resolve prior-version nodes from, and the set of hashes
-// resolved so far. Obsoletion is settled at the end (see mergeTrie), not per resolve.
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
+// Shared per-merge state: which trie is being rebuilt, the storage to resolve its prior-version
+// nodes from, and the read ledger the row changes are settled against (see the phase notes above).
+template <bcos::storage2::ReadableStorage<PathKey> Storage, bcos::crypto::hasher::Hasher HasherT>
 struct MergeContext
 {
     std::reference_wrapper<Storage> storage;
-    std::unordered_set<bcos::h256> resolvedHashes;
+    TrieScope scope;
+    /// The hasher used both to verify what a position hands back and to encode the new version —
+    /// one function, so a mismatch can only mean the data disagrees, never the algorithm.
+    std::reference_wrapper<HasherT> hasher;
+    /// Positions whose rows were read from the prior version.
+    std::set<bcos::bytes> resolvedPositions;
+    /// What each of those positions held: the preimages of spec §9, free at resolve time.
+    std::map<bcos::bytes, bcos::bytes> priorBytes;
 };
 
-// Ensure @p slot holds an in-memory node, loading and decoding the prior-version node when the
-// slot is a clean hash/inline reference. Absent slots are the caller's case to handle.
+// Ensure @p slot holds an in-memory node, loading and decoding the prior-version node at
+// @p position when the slot is a clean hash/inline reference. Absent slots are the caller's case.
 //
 // This is the ONLY place the algorithm reads storage. Three cases:
 //   - already boxed: return it — zero I/O. Because the resolve below REPLACES the slot with the
 //     decoded node, the second key crossing this node in the same batch lands here (memoize).
-//   - hash ref: readOne + decode; a miss throws (a trie referencing a missing node is storage
-//     corruption, same rule as Trie::get). The hash goes into ctx.resolvedHashes — that is
-//     bookkeeping, not an obsoletion verdict (settled in mergeTrie phase 4).
-//   - inline ref: decode the embedded bytes; no hash of its own, never enters the ledger.
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
-bcos::task::Task<MutableNode*> mergeResolve(MergeContext<Storage>& ctx, MutableChild& slot)
+//   - hash ref: read the row at @p position and verify keccak(bytes) against the hash the PARENT
+//     recorded (loadNodeBytesAt). A miss or a mismatch throws — a trie whose stored node
+//     contradicts its own parent is corruption, same rule as Trie::get. The position is recorded
+//     with its prior bytes: that is the read ledger phase 3 subtracts against, and the preimage.
+//   - inline ref: decode the embedded bytes. An inline child has NO row of its own, so it enters
+//     neither ledger — which is also why the inline threshold (spec A.6-3) needs no special case:
+//     a node that grows past 32 bytes simply starts being emitted, and one that shrinks below it
+//     was read at its position and is not re-emitted, so the subtraction deletes its row.
+template <bcos::storage2::ReadableStorage<PathKey> Storage, bcos::crypto::hasher::Hasher HasherT>
+bcos::task::Task<MutableNode*> mergeResolve(
+    MergeContext<Storage, HasherT>& ctx, MutableChild& slot, bcos::bytes const& position)
 {
     if (auto* boxed = std::get_if<std::unique_ptr<MutableNode>>(&slot))
     {
@@ -225,16 +278,12 @@ bcos::task::Task<MutableNode*> mergeResolve(MergeContext<Storage>& ctx, MutableC
     if (ref.kind() == NodeRef::Kind::Hash)
     {
         bcos::h256 const refHash = ref.hash();
-        auto raw = co_await bcos::storage2::readOne(ctx.storage.get(), refHash);
-        if (!raw)
-        {
-            BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                      "mergeTrie: missing node hash; storage lacks a referenced "
-                                      "node"));
-        }
-        ctx.resolvedHashes.insert(refHash);
+        auto raw = co_await loadNodeBytesAt(ctx.storage.get(),
+            PathKey{.scope = ctx.scope, .position = position}, refHash, ctx.hasher.get());
+        ctx.resolvedPositions.insert(position);
+        ctx.priorBytes.insert_or_assign(position, raw);
         origin = refHash;
-        decoded = decodeNode(bcos::ref(*raw));
+        decoded = decodeNode(bcos::ref(raw));
     }
     else
     {
@@ -254,9 +303,9 @@ inline std::unique_ptr<MutableNode> makeLeaf(bcos::bytesConstRef suffix, bcos::b
     return out;
 }
 
-// Insert (path → value) into the subtree at @p slot; @p path holds the key's not-yet-consumed
-// nibbles (each recursion level strips what it matched). Textbook MPT insert, one case per
-// node shape:
+// Insert (path → value) into the subtree at @p slot, which sits at @p position; @p path holds the
+// key's not-yet-consumed nibbles (each recursion level strips what it matched). Textbook MPT
+// insert, one case per node shape:
 //   - absent slot            → new leaf carrying the whole remaining path;
 //   - leaf, same key         → overwrite the value in place;
 //   - leaf, diverging key    → fork into a branch at the divergence nibble (wrapped in an
@@ -266,9 +315,13 @@ inline std::unique_ptr<MutableNode> makeLeaf(bcos::bytesConstRef suffix, bcos::b
 //                              its clean child reference — that subtree is re-parented, unread;
 //   - branch                 → route by the next nibble and recurse.
 // Every node on the way down is marked dirty: an insert always rebuilds its path.
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
-bcos::task::Task<void> mergeInsert(
-    MergeContext<Storage>& ctx, MutableChild& slot, bcos::bytesConstRef path, bcos::bytes value)
+//
+// No insert case produces a delete (spec A.5 case A): the nodes a fork creates land on positions
+// that were VACANT — the old leaf sinks to P||suffix-prefix, which the extension above it used to
+// skip over — and the position it vacated is immediately occupied by the new extension/branch.
+template <bcos::storage2::ReadableStorage<PathKey> Storage, bcos::crypto::hasher::Hasher HasherT>
+bcos::task::Task<void> mergeInsert(MergeContext<Storage, HasherT>& ctx, MutableChild& slot,
+    bcos::bytes const& position, bcos::bytesConstRef path, bcos::bytes value)
 {
     if (std::holds_alternative<std::monostate>(slot))
     {
@@ -284,7 +337,7 @@ bcos::task::Task<void> mergeInsert(
         slot = std::move(leaf);
         co_return;
     }
-    MutableNode* node = co_await mergeResolve(ctx, slot);
+    MutableNode* node = co_await mergeResolve(ctx, slot, position);
     node->dirty = true;  // every insert modifies this subtree
 
     if (auto* leaf = std::get_if<MutableLeaf>(&node->node))
@@ -318,7 +371,7 @@ bcos::task::Task<void> mergeInsert(
             node->node = MutableExtension{
                 .shared = bcos::bytes(path.data(), path.data() + cpl), .child = std::move(boxed)};
         }
-        node->originHash.reset();  // structure changed; origin accounting stays in resolvedHashes
+        node->originHash.reset();  // structure changed; the read ledger already recorded it
         co_return;
     }
 
@@ -327,7 +380,9 @@ bcos::task::Task<void> mergeInsert(
         size_t const cpl = commonPrefixLen(bcos::ref(ext->shared), path);
         if (cpl == ext->shared.size())
         {
-            co_await mergeInsert(ctx, ext->child, path.getCroppedData(cpl), std::move(value));
+            auto const below = childPosition(position, bcos::ref(ext->shared));
+            co_await mergeInsert(
+                ctx, ext->child, below, path.getCroppedData(cpl), std::move(value));
             co_return;
         }
         if (cpl == path.size())  // path exhausted inside the shared prefix: length mismatch
@@ -336,7 +391,9 @@ bcos::task::Task<void> mergeInsert(
                                       "mergeTrie: key length mismatch at an extension"));
         }
         // Split the extension at the divergence point. The untouched tail keeps its clean child
-        // reference — nothing below is loaded.
+        // reference — nothing below is loaded, and (spec A.5 case A) that subtree's root stays at
+        // the very same position: the nibbles above it are redistributed between the new
+        // extension, branch and inner extension, never dropped.
         MutableBranch fork;
         bcos::byte const extNibble = ext->shared[cpl];
         if (cpl + 1 == ext->shared.size())
@@ -374,7 +431,9 @@ bcos::task::Task<void> mergeInsert(
         BOOST_THROW_EXCEPTION(MPTInvariantViolation{}
                               << bcos::errinfo_comment("mergeTrie: path exhausted at a branch"));
     }
-    co_await mergeInsert(ctx, branch.children[path[0]], path.getCroppedData(1), std::move(value));
+    auto const below = childPosition(position, path[0]);
+    co_await mergeInsert(
+        ctx, branch.children[path[0]], below, path.getCroppedData(1), std::move(value));
     co_return;
 }
 
@@ -386,19 +445,26 @@ bcos::task::Task<void> mergeInsert(
 //     or extension(shared+shared2). A child that is a branch, or still a clean ref, stays put.
 //   - a branch left with a single child → that child prefixed with its nibble. The survivor must
 //     be resolved once to learn its shape — the one unavoidable read of an unmodified node in
-//     the whole algorithm. Survivor leaf/extension get merged (their standalone prior encoding
-//     is superseded → they stay in resolvedHashes and obsolete correctly). A survivor BRANCH is
-//     not rebuilt at all, only re-parented under a one-nibble extension:
+//     the whole algorithm. Survivor leaf/extension get merged, so nothing is emitted at their
+//     position any more and the phase-3 subtraction deletes that row (spec A.6-1/-2). A survivor
+//     BRANCH is not rebuilt at all, only re-parented under a one-nibble extension:
 //       · resolved just now and never modified (originHash && !dirty) → keep it referenced by
-//         its prior hash and ERASE it from resolvedHashes — its encoding stays live, it must
-//         not be obsoleted. The dirty guard is essential: a branch modified earlier in this
-//         batch has diverged from originHash, reverting to the hash would drop those edits.
+//         its prior hash and UN-RECORD its position: its row stays live and must not be
+//         subtracted into deletes. The dirty guard is essential: a branch modified earlier in
+//         this batch has diverged from originHash, reverting to the hash would drop those edits.
 //       · otherwise (dirty, or inline-decoded with no hash) → keep the boxed node; the emit
 //         phase re-encodes it.
+//
+// In every collapse the survivor SUBTREE keeps its positions (spec A.5's theorem): the extension
+// absorbs the eliminated nibble into its own `shared`, so position arithmetic below it is
+// unchanged and not one of those rows has to move. That is what makes deleting an account cost
+// a handful of rows instead of a re-key of everything under it.
+//
 // present == 0 is unreachable: an emptied subtree propagates as monostate in mergeErase, so the
 // parent collapses there — a zero-child branch here means the invariants are already broken.
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
-bcos::task::Task<void> mergeNormalize(MergeContext<Storage>& ctx, MutableNode& node)
+template <bcos::storage2::ReadableStorage<PathKey> Storage, bcos::crypto::hasher::Hasher HasherT>
+bcos::task::Task<void> mergeNormalize(
+    MergeContext<Storage, HasherT>& ctx, MutableNode& node, bcos::bytes const& position)
 {
     if (auto* ext = std::get_if<MutableExtension>(&node.node))
     {
@@ -452,7 +518,9 @@ bcos::task::Task<void> mergeNormalize(MergeContext<Storage>& ctx, MutableNode& n
     }
 
     // One survivor: absorb it. Resolving is unavoidable — its shape decides the merged form.
-    MutableNode* survivor = co_await mergeResolve(ctx, branch->children[lastNibble]);
+    auto const survivorPosition = childPosition(position, static_cast<bcos::byte>(lastNibble));
+    MutableNode* survivor =
+        co_await mergeResolve(ctx, branch->children[lastNibble], survivorPosition);
     if (auto* childLeaf = std::get_if<MutableLeaf>(&survivor->node))
     {
         bcos::bytes suffix;
@@ -476,9 +544,11 @@ bcos::task::Task<void> mergeNormalize(MergeContext<Storage>& ctx, MutableNode& n
         auto& boxed = std::get<std::unique_ptr<MutableNode>>(survivorSlot);
         if (boxed->originHash.has_value() && !boxed->dirty)
         {
-            // Resolved only to learn its shape, never modified: its prior encoding stays live
-            // under the new extension. Un-account the resolve and keep the hash reference.
-            ctx.resolvedHashes.erase(*boxed->originHash);
+            // Resolved only to learn its shape, never modified: its prior encoding stays live at
+            // the same position under the new extension. Un-record the read so the phase-3
+            // subtraction does not mistake "not re-emitted" for "no longer there" — the ONE case
+            // where a position we read keeps a node we do not write.
+            ctx.resolvedPositions.erase(survivorPosition);
             NodeRef const keep = NodeRef::fromHash(*boxed->originHash);
             node.node = MutableExtension{.shared = bcos::bytes{static_cast<bcos::byte>(lastNibble)},
                 .child = MutableChild{keep}};
@@ -500,21 +570,22 @@ enum class EraseOutcome : uint8_t
     Deleted
 };
 
-// Erase @p path from the subtree at @p slot. Unlike mergeInsert, nodes are NOT marked dirty on
-// the way down — only on the unwind of a confirmed Deleted. A miss (leaf mismatch, extension
-// prefix divergence, absent branch child) leaves every resolved node clean, which is what lets
-// mergeTrie's phase-2 short-circuit return the prior root untouched when a whole batch turns
-// out to be no-ops. On Deleted the slot becomes monostate; an extension whose only subtree
-// vanished propagates the monostate up, otherwise mergeNormalize repairs the degenerate shape.
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
-bcos::task::Task<EraseOutcome> mergeErase(
-    MergeContext<Storage>& ctx, MutableChild& slot, bcos::bytesConstRef path)
+// Erase @p path from the subtree at @p slot, which sits at @p position. Unlike mergeInsert, nodes
+// are NOT marked dirty on the way down — only on the unwind of a confirmed Deleted. A miss (leaf
+// mismatch, extension prefix divergence, absent branch child) leaves every resolved node clean,
+// which is what lets mergeTrie's phase-2 short-circuit return the prior root untouched when a
+// whole batch turns out to be no-ops. On Deleted the slot becomes monostate; an extension whose
+// only subtree vanished propagates the monostate up, otherwise mergeNormalize repairs the
+// degenerate shape.
+template <bcos::storage2::ReadableStorage<PathKey> Storage, bcos::crypto::hasher::Hasher HasherT>
+bcos::task::Task<EraseOutcome> mergeErase(MergeContext<Storage, HasherT>& ctx, MutableChild& slot,
+    bcos::bytes const& position, bcos::bytesConstRef path)
 {
     if (std::holds_alternative<std::monostate>(slot))
     {
         co_return EraseOutcome::NotFound;
     }
-    MutableNode* node = co_await mergeResolve(ctx, slot);
+    MutableNode* node = co_await mergeResolve(ctx, slot, position);
 
     if (auto* leaf = std::get_if<MutableLeaf>(&node->node))
     {
@@ -534,8 +605,9 @@ bcos::task::Task<EraseOutcome> mergeErase(
         {
             co_return EraseOutcome::NotFound;
         }
+        auto const below = childPosition(position, bcos::ref(ext->shared));
         auto outcome =
-            co_await mergeErase(ctx, ext->child, path.getCroppedData(ext->shared.size()));
+            co_await mergeErase(ctx, ext->child, below, path.getCroppedData(ext->shared.size()));
         if (outcome == EraseOutcome::Deleted)
         {
             node->dirty = true;
@@ -545,7 +617,7 @@ bcos::task::Task<EraseOutcome> mergeErase(
             }
             else
             {
-                co_await mergeNormalize(ctx, *node);
+                co_await mergeNormalize(ctx, *node, position);
             }
         }
         co_return outcome;
@@ -557,19 +629,23 @@ bcos::task::Task<EraseOutcome> mergeErase(
         BOOST_THROW_EXCEPTION(MPTInvariantViolation{}
                               << bcos::errinfo_comment("mergeTrie: path exhausted at a branch"));
     }
-    auto outcome = co_await mergeErase(ctx, branch.children[path[0]], path.getCroppedData(1));
+    auto const below = childPosition(position, path[0]);
+    auto outcome =
+        co_await mergeErase(ctx, branch.children[path[0]], below, path.getCroppedData(1));
     if (outcome == EraseOutcome::Deleted)
     {
         node->dirty = true;
-        co_await mergeNormalize(ctx, *node);
+        co_await mergeNormalize(ctx, *node, position);
     }
     co_return outcome;
 }
 
 // ── Emit ───────────────────────────────────────────────────────────────────────────────────────
 
-// Encode the overlay bottom-up. Clean references splice back verbatim; only in-memory nodes are
-// re-encoded (and recorded into newNodes when their encoding is hash-kind).
+// Encode the overlay bottom-up, carrying each node's POSITION down by the three rules of spec A.1.
+// Clean references splice back verbatim; only in-memory nodes are re-encoded (and recorded into
+// newNodes, keyed by position, when their encoding is hash-kind — an encoding under 32 bytes is
+// inlined into its parent and owns no row).
 // The hasher is injected (NodeEncoder's convention): generic over the Hasher concept — keccak256
 // on Ethereum-compatible chains, SM3 on guomi ones — owned by the caller and reused across every
 // emit of this merge; never constructed down here.
@@ -577,48 +653,52 @@ template <bcos::crypto::hasher::Hasher HasherT>
 struct EmitContext
 {
     HasherT& hasher;
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
+    std::map<bcos::bytes, bcos::bytes> newNodes;  ///< position → raw RLP
 
-    NodeRef emit(TrieNode const& node)
+    NodeRef emit(bcos::bytes position, TrieNode const& node)
     {
         auto [raw, ref] = NodeEncoder<HasherT>::encodeAndRef(node, hasher);
         if (ref.kind() == NodeRef::Kind::Hash)
         {
-            newNodes.emplace(ref.hash(), std::move(raw));
+            newNodes.insert_or_assign(std::move(position), std::move(raw));
         }
         return ref;
     }
 };
 
 template <bcos::crypto::hasher::Hasher HasherT>
-NodeRef emitNode(EmitContext<HasherT>& ctx, MutableNode& node);  // NOLINT(misc-no-recursion)
+NodeRef emitNode(EmitContext<HasherT>& ctx, MutableNode& node,  // NOLINT(misc-no-recursion)
+    bcos::bytes const& position);
 
 // The last link of the zero-I/O guarantee: a slot still holding a clean NodeRef is returned
-// verbatim — that whole prior-version subtree is never read, hashed, or re-written. Only boxed
+// verbatim — that whole prior-version subtree is never read, hashed, or re-written, and (spec
+// A.5) it stays exactly where it was, so not one of its rows needs touching. Only boxed
 // (resolved) nodes recurse into emitNode. Absent (monostate) slots are the branch loop's case.
 template <bcos::crypto::hasher::Hasher HasherT>
-NodeRef emitChild(EmitContext<HasherT>& ctx, MutableChild& child)
+NodeRef emitChild(EmitContext<HasherT>& ctx, MutableChild& child, bcos::bytes const& position)
 {
     if (auto* ref = std::get_if<NodeRef>(&child))
     {
         return *ref;
     }
-    return emitNode(ctx, *std::get<std::unique_ptr<MutableNode>>(child));
+    return emitNode(ctx, *std::get<std::unique_ptr<MutableNode>>(child), position);
 }
 
 template <bcos::crypto::hasher::Hasher HasherT>
-NodeRef emitNode(EmitContext<HasherT>& ctx, MutableNode& node)  // NOLINT(misc-no-recursion)
+NodeRef emitNode(EmitContext<HasherT>& ctx, MutableNode& node,  // NOLINT(misc-no-recursion)
+    bcos::bytes const& position)
 {
     if (auto* leaf = std::get_if<MutableLeaf>(&node.node))
     {
-        return ctx.emit(TrieNode{
-            LeafNode{.keyNibbles = std::move(leaf->suffix), .value = std::move(leaf->value)}});
+        return ctx.emit(position, TrieNode{LeafNode{.keyNibbles = std::move(leaf->suffix),
+                                      .value = std::move(leaf->value)}});
     }
     if (auto* ext = std::get_if<MutableExtension>(&node.node))
     {
-        NodeRef const childRef = emitChild(ctx, ext->child);
-        return ctx.emit(TrieNode{ExtensionNode{
-            .sharedNibbles = std::move(ext->shared), .child = refToRawBytes(childRef)}});
+        NodeRef const childRef =
+            emitChild(ctx, ext->child, childPosition(position, bcos::ref(ext->shared)));
+        return ctx.emit(position, TrieNode{ExtensionNode{.sharedNibbles = std::move(ext->shared),
+                                      .child = refToRawBytes(childRef)}});
     }
     auto& branch = std::get<MutableBranch>(node.node);
     BranchNode out;
@@ -626,34 +706,43 @@ NodeRef emitNode(EmitContext<HasherT>& ctx, MutableNode& node)  // NOLINT(misc-n
     {
         if (!std::holds_alternative<std::monostate>(branch.children[i]))
         {
-            out.children[i] = emitChild(ctx, branch.children[i]);
+            out.children[i] = emitChild(
+                ctx, branch.children[i], childPosition(position, static_cast<bcos::byte>(i)));
         }
     }
-    return ctx.emit(TrieNode{std::move(out)});
+    return ctx.emit(position, TrieNode{std::move(out)});
 }
 
 }  // namespace detail
 
-/// Incrementally rebuild the trie rooted at @p priorRoot by applying @p changes (value = put,
-/// nullopt = delete; deleting an absent key is a no-op). Only nodes on changed paths are read
-/// from @p storage; untouched subtrees are re-referenced by hash without being loaded (the
-/// PrefixSet-style path-level increment of spec §5.3 path 1 step 2).
+/// Incrementally rebuild the trie @p scope rooted at @p priorRoot by applying @p changes
+/// (value = put, nullopt = delete; deleting an absent key is a no-op). Only nodes on changed paths
+/// are read from @p storage; untouched subtrees are re-referenced by hash without being loaded
+/// (the PrefixSet-style path-level increment of spec §5.3 path 1 step 2).
 ///
-/// newNodes holds every node emitted for the new version (a no-net-change subtree re-emits its
-/// identical encoding — harmless). obsoletedNodes = nodes of the prior version that the new root
-/// no longer references: exactly the resolved-and-replaced set minus re-emitted identical hashes.
-/// Storage is only read; commitTrie's caller owns flushing newNodes (flushTrieNodes) — and owns
-/// @p hasher, reused across every node emission of this merge (and across merges, if the caller
-/// keeps it around). @p hasher is any type satisfying the Hasher concept (keccak256, SM3, ...);
-/// it is single-threaded state, same contract as NodeEncoder's injection overload.
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage, bcos::crypto::hasher::Hasher HasherT>
-bcos::task::Task<TrieMergeResult> mergeTrie(Storage& storage, bcos::h256 priorRoot,
+/// The returned diff is row-level and complete for this trie: upserts are the positions the new
+/// version occupies with new bytes, deletes the positions it no longer occupies, preimages what
+/// each of those held before. Storage is only READ — applying the diff is commitTrie's caller's
+/// job — and so is @p hasher, reused across every node emission and every read verification of
+/// this merge. @p hasher is any type satisfying the Hasher concept (keccak256, SM3, ...); it is
+/// single-threaded state, same contract as NodeEncoder's injection overload.
+///
+/// @throws MPTInvariantViolation when a node the prior version references is missing from
+///         @p storage or its bytes disagree with the hash its parent recorded.
+template <bcos::storage2::ReadableStorage<PathKey> Storage, bcos::crypto::hasher::Hasher HasherT>
+bcos::task::Task<PathMergeResult> mergeTrie(Storage& storage, TrieScope scope, bcos::h256 priorRoot,
     std::map<bcos::h256, std::optional<bcos::bytes>> const& changes, HasherT& hasher)
 {
-    detail::MergeContext<Storage> ctx{.storage = storage, .resolvedHashes = {}};
+    detail::MergeContext<Storage, HasherT> ctx{.storage = storage,
+        .scope = std::move(scope),
+        .hasher = hasher,
+        .resolvedPositions = {},
+        .priorBytes = {}};
 
-    // The overlay root starts as a clean reference to the prior root node; nothing is read yet.
+    // The overlay root starts as a clean reference to the prior root node at position "";
+    // nothing is read yet.
     detail::MutableChild root{NodeRef::fromHash(priorRoot)};
+    bcos::bytes const rootPosition;
 
     // Phase 1 — apply. std::map iteration = h256 lexicographic = 64-nibble path order, so keys
     // sharing a prefix arrive consecutively and hit the overlay's memoized nodes. The concrete
@@ -664,30 +753,33 @@ bcos::task::Task<TrieMergeResult> mergeTrie(Storage& storage, bcos::h256 priorRo
         auto const path = bytesToNibbles(keyHash.ref());
         if (valueOpt.has_value())
         {
-            co_await detail::mergeInsert(ctx, root, bcos::ref(path), *valueOpt);
+            co_await detail::mergeInsert(ctx, root, rootPosition, bcos::ref(path), *valueOpt);
         }
         else
         {
             // The outcome is deliberately ignored: deleting an absent key is a legal no-op.
-            co_await detail::mergeErase(ctx, root, bcos::ref(path));
+            co_await detail::mergeErase(ctx, root, rootPosition, bcos::ref(path));
         }
     }
 
     // Phase 2 — classify the overlay root; phase 3 (emit) only runs for the last case.
-    TrieMergeResult result;
+    PathMergeResult result;
+    std::map<bcos::bytes, bcos::bytes> newNodes;
     if (std::holds_alternative<std::monostate>(root))
     {
-        // The deletes emptied the whole trie. Nothing to emit; every resolved node (including
-        // the prior root) falls through to phase 4 and obsoletes. The sentinel is HasherT's
-        // empty root — plain emptyRootHash() would silently pick the keccak default.
+        // The deletes emptied the whole trie. Nothing to emit; every position we read falls
+        // through to the subtraction below and is deleted — and that is exactly the whole trie,
+        // because emptying it required erasing every leaf, and every internal node lies on some
+        // leaf's path. The sentinel is HasherT's empty root — plain emptyRootHash() would
+        // silently pick the keccak default.
         result.root = emptyRootHash<HasherT>();
     }
     else if (std::holds_alternative<NodeRef>(root) ||
              !std::get<std::unique_ptr<detail::MutableNode>>(root)->dirty)
     {
         // Nothing changed (every change was a miss): the prior version stands as-is. Return
-        // BEFORE phase 4 — nodes resolved along missed paths were not replaced, and without a
-        // re-emit to subtract against, the end-subtraction would wrongly obsolete them all.
+        // BEFORE the subtraction — nodes resolved along missed paths were not replaced, and with
+        // no re-emit to subtract against every one of them would be wrongly deleted.
         result.root = priorRoot;
         co_return result;
     }
@@ -695,10 +787,11 @@ bcos::task::Task<TrieMergeResult> mergeTrie(Storage& storage, bcos::h256 priorRo
     {
         // Phase 3 — re-encode the overlay bottom-up; clean subtrees splice back by hash.
         detail::EmitContext<HasherT> emitCtx{.hasher = hasher, .newNodes = {}};
-        NodeRef const rootRef =
-            detail::emitNode(emitCtx, *std::get<std::unique_ptr<detail::MutableNode>>(root));
-        // A trie root is ALWAYS addressed by a 32-byte hash, even when the top node encodes
-        // to fewer than 32 bytes (same rule as computeTrieRoot).
+        NodeRef const rootRef = detail::emitNode(
+            emitCtx, *std::get<std::unique_ptr<detail::MutableNode>>(root), rootPosition);
+        // A trie root is ALWAYS addressed by a 32-byte hash, even when the top node encodes to
+        // fewer than 32 bytes (same rule as computeTrieRoot) — and it always occupies position
+        // "", which is the fixed entry point every reader starts from.
         if (rootRef.kind() == NodeRef::Kind::Hash)
         {
             result.root = rootRef.hash();
@@ -706,23 +799,31 @@ bcos::task::Task<TrieMergeResult> mergeTrie(Storage& storage, bcos::h256 priorRo
         else
         {
             bcos::crypto::hasher::hash(emitCtx.hasher, rootRef.inlineRef(), result.root);
-            emitCtx.newNodes.emplace(result.root, rootRef.inlineRef().toBytes());
+            emitCtx.newNodes.insert_or_assign(rootPosition, rootRef.inlineRef().toBytes());
         }
-        result.newNodes = std::move(emitCtx.newNodes);
+        newNodes = std::move(emitCtx.newNodes);
     }
 
-    // Phase 4 — settle obsoletion by end-subtraction: every prior-version node we resolved was
-    // rebuilt or absorbed — unless the rebuild re-emitted the identical encoding (same keccak,
-    // so it shows up in newNodes), in which case it is still live in the new version. This one
-    // subtraction covers every "changed but ended up equal" corner (no-op puts, miss paths)
-    // without any per-splice old-vs-new comparison; the collapse-survivor case was already
-    // un-recorded in mergeNormalize.
-    for (auto const& hash : ctx.resolvedHashes)
+    // Settle the rows (see the phase notes at the top of detail): a position we read and did not
+    // re-emit no longer holds a node.
+    for (auto& [position, raw] : newNodes)
     {
-        if (!result.newNodes.contains(hash))
+        auto prior = ctx.priorBytes.find(position);
+        result.preimages.emplace(PathKey{.scope = ctx.scope, .position = position},
+            prior == ctx.priorBytes.end() ? std::nullopt :
+                                            std::optional<bcos::bytes>{prior->second});
+        result.upserts.emplace(PathKey{.scope = ctx.scope, .position = position}, std::move(raw));
+    }
+    for (auto const& position : ctx.resolvedPositions)
+    {
+        if (newNodes.contains(position))
         {
-            result.obsoletedNodes.insert(hash);
+            continue;
         }
+        PathKey key{.scope = ctx.scope, .position = position};
+        // Every resolved position has prior bytes by construction (mergeResolve records both).
+        result.preimages.emplace(key, ctx.priorBytes.at(position));
+        result.deletes.emplace(std::move(key));
     }
     co_return result;
 }

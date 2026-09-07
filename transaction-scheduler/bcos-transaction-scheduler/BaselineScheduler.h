@@ -13,7 +13,8 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
-#include "bcos-ledger/mpt/MPTDeltaLayer.h"
+#include "bcos-ledger/mpt/PathDiff.h"
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <oneapi/tbb/task_group.h>
@@ -30,7 +31,6 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::protocol
 {
@@ -132,7 +132,7 @@ private:
         /// (MPTNodeStorage.h), and the NEXT block reads its parent root from the published
         /// header row, not from here (buildMPTStateRoot), so this field is not a channel any
         /// consensus-path data flows through.
-        std::optional<ledger::mpt::MPTDeltaLayer> m_mptDelta;
+        std::optional<ledger::mpt::PathDiff> m_mptDelta;
     };
     std::deque<std::shared_ptr<ExecuteResult>> m_results;
     std::mutex m_resultsMutex;
@@ -172,9 +172,8 @@ private:
      * (account trie + storage sub-tries, computeGenesisStateTrie) as "/mpt/" state rows on
      * first init of an L2 chain, so block 1's incremental build reads its parents here.
      */
-    task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRoot(
-        typename MultiLayerStorage::ViewType& view, protocol::BlockHeader const& blockHeader,
-        ledger::LedgerConfig const& ledgerConfig);
+    task::Task<ledger::mpt::PathDiff> buildMPTStateRoot(typename MultiLayerStorage::ViewType& view,
+        protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig);
 
 
     /**

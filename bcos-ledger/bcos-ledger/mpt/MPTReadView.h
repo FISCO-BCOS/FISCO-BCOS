@@ -20,6 +20,7 @@
 
 #include "Account.h"
 #include "Constants.h"
+#include "PathKey.h"
 #include "Trie.h"
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Task.h>
@@ -36,11 +37,15 @@ namespace bcos::ledger::mpt
 /// transform, so it lives here as a shared free function.
 bcos::h256 accountKeyHash(bcos::Address const& addr);
 
-/// Read-only view of account state at a fixed MPT root. Walks the trie over any @p Storage
-/// satisfying storage2::ReadableStorage<h256> — the storage layer (a MemoryStorage cache, a
-/// RocksDBStorage2, or a layered MultiLayerStorage) resolves each node hash, so a fresh process can
-/// serve reads straight from its node store with no separate backend. Holds no mutable state.
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
+/// Read-only view of account state at a fixed MPT root. Walks the ACCOUNT trie over any
+/// @p Storage satisfying storage2::ReadableStorage<PathKey> — the storage layer (a MemoryStorage
+/// cache, a RocksDBStorage2, or a layered MultiLayerStorage) resolves each node's position, so a
+/// fresh process can serve reads straight from its node store with no separate backend. Holds no
+/// mutable state.
+///
+/// @throws MPTHistoryUnavailable when @p root is not the version the node store currently holds:
+/// positions carry one version, so an older root has no bytes to read (see Errors.h).
+template <bcos::storage2::ReadableStorage<PathKey> Storage>
 class MPTReadView
 {
 public:
@@ -59,7 +64,7 @@ public:
             co_return std::nullopt;
         }
 
-        Trie<Storage> trie(m_storage.get(), m_root);
+        Trie<Storage> trie(m_storage.get(), TrieScope::account(), m_root);
         auto leaf = co_await trie.get(accountKeyHash(addr));
         if (!leaf)
         {

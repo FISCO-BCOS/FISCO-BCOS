@@ -84,9 +84,10 @@ public:
         BOOST_TEST(web3JsonRpc != nullptr);
     }
 
-    /// Commit @p entries into the trie whose nodes live as "/mpt/" STATE ROWS (same helper
-    /// as EthGetProofReaderWiringTest).
-    bcos::h256 commitIntoStateRows(std::map<bcos::h256, bcos::bytes> const& entries)
+    /// Commit @p entries into the trie whose nodes live as path-addressed STATE ROWS (same
+    /// helper as EthGetProofReaderWiringTest).
+    bcos::h256 commitIntoStateRows(
+        mpt::TrieScope const& scope, std::map<bcos::h256, bcos::bytes> const& entries)
     {
         std::map<bcos::h256, std::optional<bcos::bytes>> changes;
         for (auto const& [key, value] : entries)
@@ -95,13 +96,13 @@ public:
         }
         return task::syncWait([&]() -> task::Task<bcos::h256> {
             storage2::MPTNodeReadStorage reader(m_stateRows);
-            auto result = co_await mpt::commitTrie(reader, mpt::emptyRootHash(), changes);
-            for (auto const& [hash, rlp] : result.newNodes)
+            auto result = co_await mpt::commitTrie(reader, scope, mpt::emptyRootHash(), changes);
+            for (auto const& [position, rlp] : result.upserts)
             {
                 storage::Entry entry;
                 entry.set(bcos::bytes(rlp));
                 co_await storage2::writeOne(
-                    m_stateRows, storage2::mptNodeStateKey(hash), std::move(entry));
+                    m_stateRows, mpt::pathNodeStateKey(position), std::move(entry));
             }
             co_return result.root;
         }());
@@ -109,14 +110,16 @@ public:
 
     void buildTrie()
     {
-        auto const storageRoot = commitIntoStateRows(
-            {{mpt::slotKeyHash(slotA), valueA}, {mpt::slotKeyHash(slotB), valueB}});
+        auto const storageRoot =
+            commitIntoStateRows(mpt::TrieScope::storage(mpt::accountKeyHash(address)),
+                {{mpt::slotKeyHash(slotA), valueA}, {mpt::slotKeyHash(slotB), valueB}});
 
         mpt::Account account;
         account.nonce = 7;
         account.balance = 1000;
         account.storageRoot = storageRoot;
-        stateRoot = commitIntoStateRows({{mpt::accountKeyHash(address), account.encode()}});
+        stateRoot = commitIntoStateRows(
+            mpt::TrieScope::account(), {{mpt::accountKeyHash(address), account.encode()}});
     }
 
     /// Build a state trie whose account leaf has a non-zero nonce/balance but an EMPTY storage
@@ -128,7 +131,8 @@ public:
         account.nonce = 7;
         account.balance = 1000;
         // storageRoot stays default (emptyRootHash()).
-        stateRoot = commitIntoStateRows({{mpt::accountKeyHash(address), account.encode()}});
+        stateRoot = commitIntoStateRows(
+            mpt::TrieScope::account(), {{mpt::accountKeyHash(address), account.encode()}});
     }
 
     /// The production wiring shape (AirNodeInitializer): the AnyStorage handle owns its
@@ -149,8 +153,8 @@ public:
         storage::Entry entry;
         entry.set(bcos::bytes(value32));
         task::syncWait(storage2::writeOne(m_latestState,
-            executor_v1::StateKey{std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) +
-                                      address.hex(),
+            executor_v1::StateKey{
+                std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) + address.hex(),
                 std::string{reinterpret_cast<char const*>(slot.ref().data()), h256::SIZE}},
             std::move(entry)));
     }
@@ -346,15 +350,16 @@ BOOST_AUTO_TEST_CASE(HistoricalDormantAccountScenarioAErrors)
     m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
 
     std::string const dormant = "0x00000000000000000000000000000000000000cc";
-    for (auto const& [method, resp] : {std::make_pair("eth_getStorageAt", getStorageAt(dormant, "0x1", "0x1")),
-             std::make_pair("eth_getBalance", getBalance(dormant, "0x1")),
-             std::make_pair("eth_getTransactionCount", getTransactionCount(dormant, "0x1")),
-             std::make_pair("eth_getCode", getCode(dormant, "0x1"))})
+    for (auto const& [method, resp] :
+        {std::make_pair("eth_getStorageAt", getStorageAt(dormant, "0x1", "0x1")),
+            std::make_pair("eth_getBalance", getBalance(dormant, "0x1")),
+            std::make_pair("eth_getTransactionCount", getTransactionCount(dormant, "0x1")),
+            std::make_pair("eth_getCode", getCode(dormant, "0x1"))})
     {
         BOOST_REQUIRE_MESSAGE(resp.isMember("error"), method);
         BOOST_CHECK_MESSAGE(resp["error"]["code"].asInt() == -32004, method);
-        BOOST_CHECK_MESSAGE(resp["error"]["message"].asString().find("Account not in trie") !=
-                                std::string::npos,
+        BOOST_CHECK_MESSAGE(
+            resp["error"]["message"].asString().find("Account not in trie") != std::string::npos,
             method);
     }
 }
@@ -433,8 +438,9 @@ BOOST_AUTO_TEST_CASE(HistoricalWithoutMptReaderReturns32603)
     BOOST_CHECK(resp["error"]["message"].asString().find("MPT not enabled") != std::string::npos);
 }
 
-// Historical state, root absent from MPT node rows (block predates MPT activation):
-// -32004 with the missing-root message.
+// Historical state, a root the node store does not hold — because the block predates MPT
+// activation, or because a later block superseded it (a position keeps one version):
+// -32004 with the unavailable-root message.
 BOOST_AUTO_TEST_CASE(HistoricalMissingRootReturns32004)
 {
     buildTrie();
@@ -444,8 +450,8 @@ BOOST_AUTO_TEST_CASE(HistoricalMissingRootReturns32004)
     auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
-    BOOST_CHECK(resp["error"]["message"].asString().find("not in MPT node storage") !=
-                std::string::npos);
+    BOOST_CHECK(resp["error"]["message"].asString().find(
+                    "not the version held by MPT node storage") != std::string::npos);
 }
 
 // Historical state, empty root, scenario B (round-2 Finding K): the empty root is a legal
@@ -485,8 +491,8 @@ BOOST_AUTO_TEST_CASE(HistoricalEmptyRootScenarioADormantAccountErrors)
     {
         BOOST_REQUIRE_MESSAGE(resp.isMember("error"), method);
         BOOST_CHECK_MESSAGE(resp["error"]["code"].asInt() == -32004, method);
-        BOOST_CHECK_MESSAGE(resp["error"]["message"].asString().find("Account not in trie") !=
-                                std::string::npos,
+        BOOST_CHECK_MESSAGE(
+            resp["error"]["message"].asString().find("Account not in trie") != std::string::npos,
             method);
     }
 }
@@ -514,8 +520,7 @@ BOOST_AUTO_TEST_CASE(OverwidePositionReturnsInvalidParams)
     auto resp = getStorageAt(address.hexPrefixed(), overwide, "latest");
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
-    BOOST_CHECK(resp["error"]["message"].asString().find("storage position") !=
-                std::string::npos);
+    BOOST_CHECK(resp["error"]["message"].asString().find("storage position") != std::string::npos);
 }
 
 // blockTag semantics: the default depths are 0 — PBFT commits are final, so safe/finalized
@@ -620,7 +625,8 @@ BOOST_AUTO_TEST_CASE(HistoricalCodeFromMPT)
 
     mpt::Account account;
     account.codeHash = codeHash;
-    stateRoot = commitIntoStateRows({{mpt::accountKeyHash(address), account.encode()}});
+    stateRoot = commitIntoStateRows(
+        mpt::TrieScope::account(), {{mpt::accountKeyHash(address), account.encode()}});
 
     // s_code_binary row (content-addressed, readable at any block height).
     auto const stateStorage = m_ledger->getStateStorage();

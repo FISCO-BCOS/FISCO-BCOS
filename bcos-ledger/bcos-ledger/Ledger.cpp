@@ -71,13 +71,13 @@
 #include <exception>
 #include <future>
 #include <iterator>
+#include <list>
 #include <memory>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/view/chunk.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/take.hpp>
 #include <utility>
-#include <list>
 
 using namespace bcos;
 using namespace bcos::ledger;
@@ -1641,8 +1641,7 @@ static void verifyL2FeatureFlagsSlot(
         // slot = keccak256(utf8("feature_flags") || be32(101))
         bcos::bytes slotInput;
         slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
-        slotInput.insert(
-            slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
+        slotInput.insert(slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
         bcos::bytes baseSlotBytes(32, 0);
         baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
         slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());
@@ -2285,7 +2284,7 @@ bool Ledger::buildGenesisBlock(
 
         // Scenario B (L2): block 1 builds the MPT incrementally on top of the genesis state
         // root (buildAndCollect with the genesis root as parent) and reads the parent trie
-        // through "/mpt/" state rows, so every genesis trie node — account trie plus each
+        // through path-addressed state rows, so every genesis trie node — account trie plus each
         // account's storage sub-trie — must be persisted here, on the same storage the alloc
         // flat rows above just went to. A missing node aborts block-1 execution loudly
         // (MPTInvariantViolation). Non-MPT chains never read these rows and get none; scenario
@@ -2293,12 +2292,12 @@ bool Ledger::buildGenesisBlock(
         // emptyRootHash() and needs no genesis nodes either.
         if (l2EthereumCompat)
         {
-            for (auto& [nodeHash, nodeRlp] : ethStateTrie.nodes)
+            for (auto& [pathKey, nodeRlp] : ethStateTrie.nodes)
             {
                 Entry nodeEntry;
                 nodeEntry.set(std::move(nodeRlp));
                 co_await storage2::writeOne(
-                    *m_stateStorage, storage2::mptNodeStateKey(nodeHash), std::move(nodeEntry));
+                    *m_stateStorage, mpt::pathNodeStateKey(pathKey), std::move(nodeEntry));
             }
         }
 

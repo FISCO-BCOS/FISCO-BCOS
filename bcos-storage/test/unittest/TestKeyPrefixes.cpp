@@ -13,13 +13,15 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief Unit tests for KeyPrefixes.h: the "/mpt/" node-row key layout, with
- *        StateKeyResolver as the ONLY physical encode/decode authority (KeyPrefixes.h
- *        deliberately exports no physical-key helpers of its own).
+ * @brief Unit tests for the path-addressed node-row key layout (KeyPrefixes.h's two tables +
+ *        ledger::mpt::pathNodeStateKey), with StateKeyResolver as the ONLY physical
+ *        encode/decode authority (KeyPrefixes.h deliberately exports no physical-key helpers
+ *        of its own).
  * @file TestKeyPrefixes.cpp
  * @author: kyonRay
  * @date: 2026-05-12
  */
+#include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-storage/KeyPrefixes.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
@@ -34,6 +36,9 @@
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::storage2::rocksdb;
+using bcos::ledger::mpt::PathKey;
+using bcos::ledger::mpt::pathNodeStateKey;
+using bcos::ledger::mpt::TrieScope;
 
 namespace
 {
@@ -53,54 +58,65 @@ BOOST_AUTO_TEST_SUITE(KeyPrefixesSuite)
 
 BOOST_AUTO_TEST_CASE(NodeRowPhysicalForm)
 {
-    h256 hash;
-    // Fill with a recognisable pattern
+    // A storage node at position "a7c" of the trie owned by a recognisable 32-byte owner.
+    h256 owner;
     for (unsigned i = 0; i < 32; ++i)
     {
-        hash[i] = static_cast<byte>(i + 1);
+        owner[i] = static_cast<byte>(i + 1);
     }
+    PathKey const storageNode{
+        .scope = TrieScope::storage(owner), .position = bytes{0x0a, 0x07, 0x0c}};
 
-    std::string key = resolverPhysicalKey(mptNodeStateKey(hash));
+    std::string key = resolverPhysicalKey(pathNodeStateKey(storageNode));
 
-    // Must be exactly 38 bytes: 5 (table) + 1 (':') + 32 (hash)
-    BOOST_CHECK_EQUAL(key.size(), kMPTKeyLength);
-    BOOST_CHECK_EQUAL(key.size(), 38U);
-
-    // Must start with the "/mpt/:" StateKey serialization prefix
-    BOOST_CHECK_EQUAL(key.substr(0, 6), "/mpt/:");
-
-    // Last 32 bytes must match the raw hash bytes
+    // "<table>" ':' "<owner 32B>" "<compactPath>" — the compact path of an odd-length position
+    // is one header byte plus one packed byte.
+    BOOST_CHECK_EQUAL(key.size(), kMPTStorageTable.size() + 1 + 32 + 2);
+    BOOST_CHECK_EQUAL(key.substr(0, kMPTStorageTable.size() + 1), "/mptp/s:");
     for (unsigned i = 0; i < 32; ++i)
     {
-        BOOST_CHECK_EQUAL(static_cast<uint8_t>(key[6 + i]), hash[i]);
+        BOOST_CHECK_EQUAL(static_cast<uint8_t>(key[kMPTStorageTable.size() + 1 + i]), owner[i]);
     }
+
+    // The account table shares the layout minus the owner, and puts its ':' at the same offset.
+    PathKey const accountNode{.scope = TrieScope::account(), .position = bytes{0x0a, 0x07, 0x0c}};
+    std::string accountKey = resolverPhysicalKey(pathNodeStateKey(accountNode));
+    BOOST_CHECK_EQUAL(accountKey.substr(0, kMPTAccountTable.size() + 1), "/mptp/a:");
+    BOOST_CHECK_EQUAL(accountKey.find(':'), key.find(':'));
+    BOOST_CHECK_EQUAL(accountKey.size(), kMPTAccountTable.size() + 1 + 2);
 
     // The physical bytes ARE the StateKey's own flat buffer — encode adds nothing.
-    auto stateKey = mptNodeStateKey(hash);
+    auto stateKey = pathNodeStateKey(storageNode);
     BOOST_CHECK_EQUAL(std::string_view(stateKey.data(), stateKey.size()), key);
 }
 
 BOOST_AUTO_TEST_CASE(NodeRowResolverRoundTrip)
 {
-    h256 original = h256::generateRandomFixedBytes();
-    std::string physical = resolverPhysicalKey(mptNodeStateKey(original));
+    // An owner containing a raw ':' (0x3a) — legal in a row key, and the case the
+    // split-at-FIRST-colon rule exists for.
+    h256 owner = h256::generateRandomFixedBytes();
+    owner[0] = static_cast<byte>(':');
+    PathKey const original{
+        .scope = TrieScope::storage(owner), .position = bytes{0x09, 0x0c, 0x00, 0x0f}};
+    std::string physical = resolverPhysicalKey(pathNodeStateKey(original));
 
-    // decode is the inverse of encode: same StateKey, table "/mpt/", key = the raw digest.
+    // decode is the inverse of encode, and the row key parses back into the same position.
     auto decoded = StateKeyResolver::decode(std::string_view(physical));
-    BOOST_CHECK(decoded == mptNodeStateKey(original));
+    BOOST_CHECK(decoded == pathNodeStateKey(original));
     executor_v1::StateKeyView const view{decoded};
-    BOOST_CHECK_EQUAL(view.m_table, kMPTTable);
-    BOOST_CHECK_EQUAL(
-        view.m_key, std::string_view(reinterpret_cast<char const*>(original.data()), h256::SIZE));
+    BOOST_CHECK_EQUAL(view.m_table, kMPTStorageTable);
+    auto const parsed = bcos::ledger::mpt::parsePathNodeStateKey(decoded);
+    BOOST_REQUIRE(parsed.has_value());
+    BOOST_CHECK(*parsed == original);
 }
 
 BOOST_AUTO_TEST_CASE(RetiredColonFreeLayoutIsNotAStateKey)
 {
-    // The RETIRED 37-byte layout ("/mpt/" + raw digest, no ':') cannot even be decoded as a
-    // StateKey when the digest contains no 0x3A byte — the reason the layout moved to
-    // "/mpt/:". (A digest WITH a 0x3A would decode, but to a corrupted table/key split.)
+    // The RETIRED colon-free layout ("/mptp/a" + row key, no ':') cannot even be decoded as a
+    // StateKey when the row key contains no 0x3A byte — the reason every table name is followed
+    // by ':'. (A row key WITH a 0x3A would decode, but to a corrupted table/key split.)
     std::string legacy(37, '\0');
-    legacy.replace(0, 5, "/mpt/");
+    legacy.replace(0, kMPTAccountTable.size(), kMPTAccountTable);
     BOOST_CHECK_THROW(
         StateKeyResolver::decode(std::string_view(legacy)), executor_v1::NoTableSpliterError);
 }
@@ -131,9 +147,10 @@ BOOST_AUTO_TEST_CASE(RocksDBAccessorExposed)
         // rocksDB() must reference the same underlying DB instance
         BOOST_CHECK_EQUAL(&storage.rocksDB(), rawPtr);
 
-        // Demonstrate writing and reading a "/mpt/:<hash>" key via rocksDB()
-        h256 hash = h256::generateRandomFixedBytes();
-        std::string mptKey = resolverPhysicalKey(mptNodeStateKey(hash));
+        // Demonstrate writing and reading a node row's physical key via rocksDB()
+        std::string mptKey = resolverPhysicalKey(
+            pathNodeStateKey(PathKey{.scope = TrieScope::storage(h256::generateRandomFixedBytes()),
+                .position = bytes{0x01, 0x02}}));
         std::string mptValue = "mpt_node_data";
 
         ::rocksdb::WriteOptions wo;
