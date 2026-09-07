@@ -595,8 +595,10 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
         return;
     }
 
-    task::wait([callback = std::move(_onGetBlock)](decltype(*this)& self,
-                   bcos::protocol::BlockNumber blockNumber, int32_t blockFlag) -> task::Task<void> {
+    task::wait([](decltype(*this)& self, bcos::protocol::BlockNumber blockNumber,
+                   int32_t blockFlag,
+                   std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> callback)
+                   -> task::Task<void> {
         try
         {
             // Delegate the block assembly to the shared two-storage getBlockData
@@ -644,7 +646,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                          "Get block failed with errors!", e),
                 nullptr);
         }
-    }(*this, _blockNumber, _blockFlag));
+    }(*this, _blockNumber, _blockFlag, std::move(_onGetBlock)));
 }
 
 void Ledger::asyncGetBlockNumber(
@@ -692,8 +694,9 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
         return;
     }
 
-    task::wait([callback = std::move(_onGetBlock)](decltype(*this)& self,
-                   bcos::protocol::BlockNumber blockNumber) -> task::Task<void> {
+    task::wait([](decltype(*this)& self, bcos::protocol::BlockNumber blockNumber,
+                   std::function<void(Error::Ptr, bcos::crypto::HashType)> callback)
+                   -> task::Task<void> {
         try
         {
             // Delegate the SYS_NUMBER_2_HASH read to the shared storage2 free function;
@@ -719,7 +722,7 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
                          LedgerError::GetStorageError, "GetBlockHashByNumber failed", e),
                 bcos::crypto::HashType());
         }
-    }(*this, _blockNumber));
+    }(*this, _blockNumber, std::move(_onGetBlock)));
 }
 
 void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
@@ -727,8 +730,9 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
 {
     LEDGER_LOG(TRACE) << "GetBlockNumberByHash request" << LOG_KV("hash", _blockHash.hex());
 
-    task::wait([callback = std::move(_onGetBlock)](decltype(*this)& self,
-                   crypto::HashType blockHash) -> task::Task<void> {
+    task::wait([](decltype(*this)& self, crypto::HashType blockHash,
+                   std::function<void(Error::Ptr, bcos::protocol::BlockNumber)> callback)
+                   -> task::Task<void> {
         try
         {
             // Delegate the SYS_HASH_2_NUMBER read to the shared storage2 free function;
@@ -760,7 +764,7 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
                          LedgerError::GetStorageError, "GetBlockNumberByHash failed", e),
                 -1);
         }
-    }(*this, _blockHash));
+    }(*this, _blockHash, std::move(_onGetBlock)));
 }
 
 void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _withProof,
@@ -982,8 +986,9 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
 {
     LEDGER_LOG(TRACE) << "GetSystemConfigByKey request" << LOG_KV("key", _key);
 
-    task::wait([callback = std::move(_onGetConfig)](decltype(*this)& self,
-                   std::string key) -> task::Task<void> {
+    task::wait([](decltype(*this)& self, std::string key,
+                   std::function<void(Error::Ptr, std::string, bcos::protocol::BlockNumber)>
+                       callback) -> task::Task<void> {
         try
         {
             // Delegate the SYS_CONFIG read to the shared storage2 free function. The
@@ -1028,7 +1033,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
             callback(
                 BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "error", e), "", -1);
         }
-    }(*this, std::string(_key)));
+    }(*this, std::string(_key), std::move(_onGetConfig)));
 }
 
 void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t _offset,
