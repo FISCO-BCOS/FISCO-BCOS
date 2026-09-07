@@ -142,5 +142,4 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
 endif()
 
-# OpEngineServiceParityTest lives in engine/test (S5). S6 t8n corpus: op-stack-e2e-tests
-# (see tools/.ci/provision_t8n_corpus.sh; CI symlinks into opstack-executor/tests/t8n).
+# OpEngineServiceParityTest lives in engine/test (S5). GoldenSample/t8n e2e remains deferred.

@@ -14,8 +14,7 @@
  *  limitations under the License.
  *
  * @file OpEngineServiceExecParityTest.cpp
- * @brief OP Engine API execution-parity tests against the op-geth t8n golden corpus
- *        (FISCO-BCOS/op-stack-e2e-tests, symlinked at opstack-executor/tests/t8n)
+ * @brief OP Engine API execution-parity tests against the pinned op-geth t8n golden corpus
  */
 //
 // Matrix: S6 — OpEngineService × golden (op-geth) execution parity on release-3.18.0.
@@ -46,11 +45,11 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <engine/bcos-engine/OpEngineService.inl>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
-#include <engine/bcos-engine/OpEngineService.inl>
 
 #include <algorithm>
 #include <filesystem>
@@ -323,8 +322,8 @@ void runGoldenVector(std::string const& id)
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
-    registerGoldenParentHeader(
-        fixture->multiLayerStorage, fixture->blockFactory, sample.vector["env"], sample.jovian);
+    registerGoldenParentHeader(fixture->multiLayerStorage, fixture->blockFactory,
+        sample.vector["env"], sample.jovian);
 
     auto params = w6test::makeParamsJson(sample);
     auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
@@ -350,8 +349,8 @@ void runInvalidFieldParity(std::string const& vectorId, std::string const& corru
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
-    registerGoldenParentHeader(
-        fixture->multiLayerStorage, fixture->blockFactory, sample.vector["env"], sample.jovian);
+    registerGoldenParentHeader(fixture->multiLayerStorage, fixture->blockFactory,
+        sample.vector["env"], sample.jovian);
 
     auto params = w6test::makeParamsJson(sample);
     if (corruptField == "stateRoot")
@@ -389,14 +388,19 @@ void runInvalidFieldParity(std::string const& vectorId, std::string const& corru
 
 }  // namespace op_engine_exec_parity
 
-#define SKIP_IF_NO_T8N_CORPUS()                                    \
-    do                                                             \
-    {                                                              \
-        if (!w6test::enterT8nCorpusTest())                         \
-        {                                                          \
-            BOOST_TEST_MESSAGE("skipping S6: t8n corpus missing"); \
-            return;                                                \
-        }                                                          \
+#define SKIP_IF_NO_T8N_CORPUS()                                                              \
+    do                                                                                       \
+    {                                                                                        \
+        if (!w6test::t8nCorpusAvailable())                                                   \
+        {                                                                                    \
+            if (w6test::t8nCorpusRequired())                                                 \
+            {                                                                                \
+                BOOST_FAIL("S6 t8n corpus required in CI but missing at " OP_T8N_VECTORS_DIR \
+                           " / " OP_T8N_GOLDEN_ENGINE_DIR);                                  \
+            }                                                                                \
+            BOOST_TEST_MESSAGE("skipping S6: t8n corpus missing");                           \
+            return;                                                                          \
+        }                                                                                    \
     } while (0)
 
 BOOST_AUTO_TEST_SUITE(OpEngineServiceExecParityTest)
