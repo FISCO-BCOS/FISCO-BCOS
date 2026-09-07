@@ -25,6 +25,11 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/asio/io_context.hpp>
 
+namespace bcos::front
+{
+class FrontService;
+}
+
 namespace bcos::txpool
 {
 class TxPoolFactory
@@ -34,7 +39,7 @@ public:
     TxPoolFactory(bcos::crypto::NodeIDPtr _nodeId, bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
         bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::front::FrontServiceInterface::Ptr _frontService,
+        std::shared_ptr<bcos::front::FrontService> _frontService,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger, std::string _groupId,
         std::string _chainId, int64_t _blockLimit, size_t _txpoolLimit,
         bool checkTransactionSignature);
@@ -52,7 +57,7 @@ private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    bcos::front::FrontServiceInterface::Ptr m_frontService;
+    std::shared_ptr<bcos::front::FrontService> m_frontService;
     std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;
     std::string m_groupId;
     std::string m_chainId;

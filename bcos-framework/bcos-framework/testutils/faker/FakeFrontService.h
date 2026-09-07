@@ -23,10 +23,10 @@
 #include <utility>
 
 #include "../../consensus/ConsensusInterface.h"
-#include "../../front/FrontServiceInterface.h"
 #include "../../sync/BlockSyncInterface.h"
 #include "../../txpool/TxPoolInterface.h"
 #include "bcos-framework/gateway/GatewayInterface.h"
+#include "bcos-front/FrontService.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/TxPool.h"
@@ -302,7 +302,11 @@ public:
     FakeGateWay::Ptr m_gateWay = nullptr;
 };
 
-class FakeFrontService : public FrontServiceInterface
+// Inherits the concrete FrontService (not an interface) but re-implements every send/receive
+// entry point against the scripted in-process FakeGateWay: payloads are delivered raw (no
+// FrontMessage header), broadcast loops over the fixture-managed node list, and per-node send
+// counters are kept for test assertions.
+class FakeFrontService : public FrontService
 {
 public:
     using Ptr = std::shared_ptr<FakeFrontService>;
@@ -377,6 +381,32 @@ public:
                 });
         }
         co_return error;
+    }
+
+    // The production FrontService dispatches owned-payload sends onto its serial send strand
+    // (FIB-185); the fake has no gateway session lock to contend, so it bridges to the coroutine
+    // send on the caller thread (the pre-refactor default behaviour).
+    void broadcastMessageByOwnedPayload(
+        uint16_t type, int moduleID, bytesPointer payload) override
+    {
+        bcos::task::wait([](FakeFrontService::Ptr self, uint16_t _type, int _moduleID,
+                             bytesPointer _payload) -> bcos::task::Task<void> {
+            co_await self->broadcastMessage(
+                _type, _moduleID, ::ranges::views::single(bcos::ref(*_payload)));
+        }(std::static_pointer_cast<FakeFrontService>(shared_from_this()), type, moduleID,
+            std::move(payload)));
+    }
+
+    void sendMessageByNodeIDByOwnedPayload(
+        int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload) override
+    {
+        bcos::task::wait([](FakeFrontService::Ptr self, int _moduleID,
+                             bcos::crypto::NodeIDPtr _nodeId,
+                             bytesPointer _payload) -> bcos::task::Task<void> {
+            co_await self->sendMessageByNodeID(_moduleID, std::move(_nodeId),
+                ::ranges::views::single(bcos::ref(*_payload)), 0);
+        }(std::static_pointer_cast<FakeFrontService>(shared_from_this()), moduleID,
+            std::move(nodeID), std::move(payload)));
     }
 
     bcos::task::Task<SendResult> sendMessageByNodeID(int _moduleId,

@@ -293,8 +293,8 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNod
     task::wait([](FrontServiceInfo::Ptr _frontServiceInfo, std::string _groupID,
                    NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, std::shared_ptr<P2PMessage> _msg,
                    ErrorRespFunc _errorRespFunc) -> task::Task<void> {
-        auto error = co_await _frontServiceInfo->frontService()->onReceiveMessage(
-            _groupID, _srcNodeID, _msg->payload());
+        auto error = co_await onReceiveMessage(
+            _frontServiceInfo->frontService(), _groupID, _srcNodeID, _msg->payload());
         if (_errorRespFunc)
         {
             _errorRespFunc(error);
@@ -623,7 +623,7 @@ bcos::amop::AMOPImpl::Ptr bcos::gateway::Gateway::amop()
 }
 bool bcos::gateway::Gateway::registerNode(const std::string& _groupID,
     bcos::crypto::NodeIDPtr _nodeID, bcos::protocol::NodeType _nodeType,
-    bcos::front::FrontServiceInterface::Ptr _frontService,
+    bcos::front::FrontService::Ptr _frontService,
     bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
 {
     return m_gatewayNodeManager->registerNode(

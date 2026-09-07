@@ -245,8 +245,7 @@ void FrontService::start()
     m_run = true;
 
     // try to getNodeIDs from gateway
-    auto self = std::weak_ptr<FrontService>(
-        std::static_pointer_cast<FrontService>(shared_from_this()));
+    auto self = std::weak_ptr<FrontService>(shared_from_this());
     task::wait([](std::weak_ptr<FrontService> self,
                    bcos::gateway::GatewayInterface::Ptr gateway,
                    std::string groupID) -> bcos::task::Task<void> {
@@ -396,8 +395,7 @@ std::string FrontService::registerCallback(
         auto& timeoutHandler =
             callback->timeoutHandler.emplace(*m_ioService, std::chrono::milliseconds(_timeout));
 
-        auto frontServiceWeakPtr = std::weak_ptr<FrontService>(
-            std::static_pointer_cast<FrontService>(shared_from_this()));
+        auto frontServiceWeakPtr = std::weak_ptr<FrontService>(shared_from_this());
         // callback->startTime = utcSteadyTime();
         timeoutHandler.async_wait(
             [frontServiceWeakPtr, _nodeID, uuid](const boost::system::error_code& e) {
@@ -483,7 +481,7 @@ void FrontService::sendMessageByNodeIDByOwnedPayload(
     // gateway-session-lock-acquiring send on its own thread. The owned payload is captured by the
     // launched coroutine -> the message body is sent as a view (zero-copy).
     enqueueSend([this, moduleID, nodeID = std::move(nodeID), payload = std::move(payload)]() {
-        auto self = std::static_pointer_cast<FrontService>(shared_from_this());
+        auto self = shared_from_this();
         task::wait(
             [](FrontService::Ptr _self, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
                 bytesPointer _payload) -> task::Task<void> {
@@ -612,7 +610,7 @@ void FrontService::enqueueSend(std::function<void()> _sendTask)
     // for the send and no-ops once it is gone. (A shared_ptr capture would also form a cycle:
     // FrontService -> Strand -> queued task -> FrontService.)
     m_sendStrand->post([weak = weak_from_this(), task = std::move(_sendTask)]() mutable {
-        if (auto self = std::static_pointer_cast<FrontService>(weak.lock()))
+        if (auto self = weak.lock())
         {
             // this task no longer occupies queue space; decrement before running so the counter
             // reflects queued depth while a blocking gateway send is in flight
@@ -646,7 +644,7 @@ task::Task<Error::Ptr> FrontService::onReceiveGroupNodeInfo(
     auto self = weak_from_this();
     dispatchTo(
         *m_ioServicePool, [self, _groupID, _groupNodeInfo = std::move(_groupNodeInfo)]() mutable {
-            if (auto frontService = std::static_pointer_cast<FrontService>(self.lock()))
+            if (auto frontService = self.lock())
             {
                 frontService->notifyGroupNodeInfo(_groupID, _groupNodeInfo);
             }
@@ -720,8 +718,7 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
     {
         return;
     }
-    auto frontServiceWeakPtr = std::weak_ptr<FrontService>(
-        std::static_pointer_cast<FrontService>(shared_from_this()));
+    auto frontServiceWeakPtr = std::weak_ptr<FrontService>(shared_from_this());
     auto respFunc = [frontServiceWeakPtr, _moduleID, _nodeID, _uuid](bytesConstRef _data) {
         // the module hands us a transient view: copy it into the detached coroutine frame so the
         // fire-and-forget response send never dangles

@@ -45,7 +45,7 @@ public:
     std::vector<FrontServiceInfo::Ptr> getGroupFrontServiceList(const std::string& _groupID) const;
     void getGroupNodeInfoList(GroupNodeInfo::Ptr _groupNodeInfo, const std::string& _groupID) const;
     bool insertNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::protocol::NodeType _type, bcos::front::FrontServiceInterface::Ptr _frontService,
+        bcos::protocol::NodeType _type, bcos::front::FrontService::Ptr _frontService,
         bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo);
     bool removeNode(const std::string& _groupID, std::string const& _nodeID);
 

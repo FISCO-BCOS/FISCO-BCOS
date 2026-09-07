@@ -23,13 +23,17 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/sync/SyncConfig.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+
+namespace bcos::front
+{
+class FrontService;
+}
 
 namespace bcos::sync
 {
@@ -40,7 +44,7 @@ public:
     BlockSyncConfig(bcos::crypto::PublicPtr _nodeId, bcos::ledger::LedgerInterface::Ptr _ledger,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
-        bcos::front::FrontServiceInterface::Ptr _frontService,
+        std::shared_ptr<bcos::front::FrontService> _frontService,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::consensus::ConsensusInterface::Ptr _consensus, BlockSyncMsgFactory::Ptr _msgFactory,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
@@ -64,7 +68,7 @@ public:
 
     bcos::ledger::LedgerInterface::Ptr ledger() { return m_ledger; }
     bcos::protocol::BlockFactory::Ptr blockFactory() { return m_blockFactory; }
-    bcos::front::FrontServiceInterface::Ptr frontService() { return m_frontService; }
+    std::shared_ptr<bcos::front::FrontService> frontService() { return m_frontService; }
     bcos::scheduler::SchedulerInterface::Ptr scheduler() { return m_scheduler; }
     bcos::consensus::ConsensusInterface::Ptr consensus() { return m_consensus; }
     bcos::tool::NodeTimeMaintenance::Ptr nodeTimeMaintenance() { return m_nodeTimeMaintenance; }
@@ -185,7 +189,7 @@ private:
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
-    bcos::front::FrontServiceInterface::Ptr m_frontService;
+    std::shared_ptr<bcos::front::FrontService> m_frontService;
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::consensus::ConsensusInterface::Ptr m_consensus;
     BlockSyncMsgFactory::Ptr m_msgFactory;

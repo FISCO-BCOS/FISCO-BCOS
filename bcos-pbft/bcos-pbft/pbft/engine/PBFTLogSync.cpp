@@ -19,6 +19,7 @@
  * @date 2021-04-28
  */
 #include "PBFTLogSync.h"
+#include <bcos-front/FrontService.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Wait.h>

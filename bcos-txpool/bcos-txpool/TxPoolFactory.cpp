@@ -34,7 +34,7 @@ using namespace bcos::protocol;
 
 TxPoolFactory::TxPoolFactory(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite,
     TransactionSubmitResultFactory::Ptr _txResultFactory, BlockFactory::Ptr _blockFactory,
-    bcos::front::FrontServiceInterface::Ptr _frontService,
+    std::shared_ptr<bcos::front::FrontService> _frontService,
     bcos::ledger::LedgerInterface::Ptr _ledger, std::string _groupId, std::string _chainId,
     int64_t _blockLimit, size_t _txpoolLimit, bool checkTransactionSignature)
   : m_nodeId(std::move(_nodeId)),

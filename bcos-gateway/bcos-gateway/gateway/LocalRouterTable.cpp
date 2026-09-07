@@ -125,7 +125,7 @@ std::map<std::string, std::map<std::string, uint32_t>> LocalRouterTable::nodeLis
  * @param _frontService: FrontService
  */
 bool LocalRouterTable::insertNode(const std::string& _groupID, NodeIDPtr _nodeID,
-    bcos::protocol::NodeType _type, FrontServiceInterface::Ptr _frontService,
+    bcos::protocol::NodeType _type, FrontService::Ptr _frontService,
     bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
 {
     auto nodeIDStr = _nodeID->hex();
@@ -141,8 +141,8 @@ bool LocalRouterTable::insertNode(const std::string& _groupID, NodeIDPtr _nodeID
             return false;
         }
     }
-    auto frontServiceInfo =
-        std::make_shared<FrontServiceInfo>(nodeIDStr, _frontService, _type, nullptr);
+    auto frontServiceInfo = std::make_shared<FrontServiceInfo>(
+        nodeIDStr, FrontServiceHandle(std::move(_frontService)), _type, nullptr);
     frontServiceInfo->setProtocolInfo(_protocolInfo);
     UpgradeGuard ul(l);
     m_nodeList[_groupID][nodeIDStr] = frontServiceInfo;
@@ -215,8 +215,8 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
         auto frontClient = std::make_shared<bcostars::FrontServiceClient>(frontPrx, m_keyFactory);
 
         UpgradeGuard ul(l);
-        auto frontServiceInfo = std::make_shared<FrontServiceInfo>(
-            nodeInfo->nodeID(), frontClient, nodeInfo->nodeType(), frontPrx);
+        auto frontServiceInfo = std::make_shared<FrontServiceInfo>(nodeInfo->nodeID(),
+            FrontServiceHandle(std::move(frontClient)), nodeInfo->nodeType(), frontPrx);
         frontServiceInfo->setProtocolInfo(nodeInfo->nodeProtocol());
         m_nodeList[groupID][nodeID] = frontServiceInfo;
         ROUTER_LOG(INFO) << LOG_DESC("updateGroupNodeInfos: insert frontService for the node")
@@ -285,18 +285,18 @@ bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _grou
         {
             continue;
         }
-        auto frontService = it->frontService();
+        auto const& frontService = it->frontService();
         const auto& dstNodeID = it->nodeID();
         ROUTER_LOG(TRACE) << LOG_BADGE(
                                  "LocalRouterTable: dispatcher broadcast-type message to node")
                           << LOG_KV("type", _nodeType) << LOG_KV("groupID", _groupID)
                           << LOG_KV("moduleID", _moduleID) << LOG_KV("payloadSize", payloadSize)
                           << LOG_KV("dst", dstNodeID);
-        task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _groupID,
+        task::wait([](FrontServiceHandle _frontService, std::string _groupID,
                        uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<P2PMessage> _msg,
                        std::string _dstNodeID) -> task::Task<void> {
             auto error =
-                co_await _frontService->onReceiveMessage(_groupID, _srcNodeID, _msg->payload());
+                co_await onReceiveMessage(_frontService, _groupID, _srcNodeID, _msg->payload());
             if (error)
             {
                 GATEWAY_LOG(ERROR) << LOG_DESC("ROUTER_LOG error") << LOG_KV("groupID", _groupID)
@@ -322,6 +322,6 @@ task::Task<bcos::Error::Ptr> LocalRouterTable::sendMessage(std::string _groupID,
             "could not find a gateway to send this message, groupID:" + _groupID +
                 " ,dstNodeID:" + _dstNodeID->hex());
     }
-    co_return co_await frontServiceInfo->frontService()->onReceiveMessage(
-        _groupID, std::move(_srcNodeID), _payload);
+    co_return co_await onReceiveMessage(
+        frontServiceInfo->frontService(), std::move(_groupID), std::move(_srcNodeID), _payload);
 }

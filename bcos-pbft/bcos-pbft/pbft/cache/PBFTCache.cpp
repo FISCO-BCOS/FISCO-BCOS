@@ -19,6 +19,7 @@
  * @date 2021-04-23
  */
 #include "PBFTCache.h"
+#include <bcos-front/FrontService.h>
 
 using namespace bcos;
 using namespace bcos::consensus;

@@ -22,9 +22,9 @@
 #include "libinitializer/ProtocolInitializer.h"
 #include <boost/asio/io_context.hpp>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-front/FrontService.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -47,7 +47,7 @@ public:
     using Ptr = std::shared_ptr<TxPoolInitializer>;
     TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         ProtocolInitializer::Ptr _protocolInitializer,
-        bcos::front::FrontServiceInterface::Ptr _frontService,
+        bcos::front::FrontService::Ptr _frontService,
         bcos::ledger::LedgerInterface::Ptr _ledger,
         boost::asio::io_context& _ioContext,
         bcos::IOServicePool::Ptr _ioServicePool);
@@ -65,7 +65,7 @@ public:
 private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     ProtocolInitializer::Ptr m_protocolInitializer;
-    bcos::front::FrontServiceInterface::Ptr m_frontService;
+    bcos::front::FrontService::Ptr m_frontService;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
 
     std::shared_ptr<bcos::txpool::TxPoolFactory> m_txpoolFactory;

@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "GatewayTypeDef.h"
-#include "bcos-framework/front/FrontServiceInterface.h"
+#include "bcos-framework/gateway/GroupNodeInfo.h"
 #include "bcos-framework/multigroup/GroupInfo.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
@@ -31,6 +31,11 @@
 #include <memory>
 #include <range/v3/view/any_view.hpp>
 #include <tuple>
+
+namespace bcos::front
+{
+class FrontService;
+}
 
 namespace bcos
 {
@@ -141,7 +146,7 @@ public:
 
     // for the air-mode node
     virtual bool registerNode(const std::string&, bcos::crypto::NodeIDPtr, bcos::protocol::NodeType,
-        bcos::front::FrontServiceInterface::Ptr, bcos::protocol::ProtocolInfo::ConstPtr)
+        std::shared_ptr<bcos::front::FrontService>, bcos::protocol::ProtocolInfo::ConstPtr)
     {
         return true;
     }

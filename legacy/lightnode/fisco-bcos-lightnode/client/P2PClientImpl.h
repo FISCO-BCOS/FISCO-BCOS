@@ -8,6 +8,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-front/FrontService.h>
 #include <bcos-task/Task.h>
 #include <range/v3/view/single.hpp>
 #include <random>
@@ -19,7 +20,7 @@ DERIVE_BCOS_EXCEPTION(NoNodeAvailable);
 class P2PClientImpl
 {
 public:
-    P2PClientImpl(bcos::front::FrontServiceInterface::Ptr front,
+    P2PClientImpl(bcos::front::FrontService::Ptr front,
         bcos::gateway::GatewayInterface::Ptr gateway, bcos::crypto::KeyFactoryImpl::Ptr keyFactory,
         std::string groupID)
       : m_front(std::move(front)),
@@ -173,7 +174,7 @@ public:
     }
 
 private:
-    bcos::front::FrontServiceInterface::Ptr m_front;
+    bcos::front::FrontService::Ptr m_front;
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     bcos::crypto::KeyFactoryImpl::Ptr m_keyFactory;
     std::string m_groupID;
