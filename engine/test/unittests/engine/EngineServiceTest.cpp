@@ -258,9 +258,22 @@ struct StubScheduler
 {
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
+        const protocol::BlockHeader&, ::ranges::input_range auto&& transactions,
+        const ledger::LedgerConfig&)
     {
-        co_return {};
+        // One receipt per executed transaction — the real scheduler contract, and the v2
+        // receipts-root assembly (computeEthereumRoots) types each receipt by the
+        // transaction at the same index, so the counts must agree.
+        Keccak256 hasher;
+        std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        for (auto const& transaction : transactions)
+        {
+            (void)transaction;
+            auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+            receipt->calculateHash(hasher);
+            receipts.push_back(std::move(receipt));
+        }
+        co_return receipts;
     }
 };
 
@@ -270,17 +283,15 @@ struct BloomScheduler
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
         const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
     {
-        Bloom bloom1{};
-        bloom1[255] = static_cast<bcos::byte>(0x01);
-        Bloom bloom2{};
-        bloom2[255] = static_cast<bcos::byte>(0x02);
-
+        // Two receipts, one log each with distinct addresses. The v2 root assembly
+        // (computeEthereumRoots) recomputes every receipt's bloom from its log entries, so
+        // the bloom signal must come from the logs, not from a preset bloom field.
         Keccak256 hasher;
         auto receipt1 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-        receipt1->setLogsBloom({bloom1.data(), bloom1.size()});
+        receipt1->setLogEntries({protocol::LogEntry(bytes(20, 0x11), {}, {})});
         receipt1->calculateHash(hasher);
         auto receipt2 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-        receipt2->setLogsBloom({bloom2.data(), bloom2.size()});
+        receipt2->setLogEntries({protocol::LogEntry(bytes(20, 0x22), {}, {})});
         receipt2->calculateHash(hasher);
 
         co_return std::vector<protocol::TransactionReceipt::Ptr>{receipt1, receipt2};
@@ -1263,6 +1274,12 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     auto tx = makeWeb3Tx(sender, 0);
     memPool.add(std::vector{tx});
     globalStateStorageFixture.setNonce(sender, "0");
+    // BloomScheduler always returns TWO receipts, so the payload must execute two
+    // transactions — the v2 receipts-root assembly types each receipt by the executed
+    // transaction at the same index, and a shorter transaction list is out-of-bounds.
+    // Same sender, nonce 1: seal picks the gapless prefix (nonce 0, 1).
+    auto tx2 = makeWeb3Tx(sender, 1);
+    memPool.add(std::vector{tx2});
     auto payloadAttributes = makePayloadAttributesV2();
 
     BloomScheduler bloomScheduler;
@@ -1278,13 +1295,16 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
 
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
 
-    // Verify bloom aggregation: bloom1[255]=0x01 | bloom2[255]=0x02 = 0x03
-    BOOST_CHECK_EQUAL(static_cast<int>(payload->executionPayload.logsBloom[255]), 0x03);
-    // Other bytes remain zero (only the last byte was set in both blooms)
-    for (size_t i = 0; i < 255; ++i)
-    {
-        BOOST_CHECK_EQUAL(static_cast<int>(payload->executionPayload.logsBloom[i]), 0);
-    }
+    // The v2 assembly recomputes each receipt's bloom from its log entries
+    // (computeEthereumRoots) and ORs them into the block-level bloom. Recompute the
+    // expectation from the same two logs the BloomScheduler planted.
+    auto expected =
+        bcos::getLogsBloom(std::vector{protocol::LogEntry(bytes(20, 0x11), {}, {})});
+    bcos::orBloom(expected,
+        bcos::getLogsBloom(std::vector{protocol::LogEntry(bytes(20, 0x22), {}, {})}));
+    // Non-trivial: the planted logs must actually set bloom bits.
+    BOOST_CHECK(expected != Bloom{});
+    BOOST_CHECK(payload->executionPayload.logsBloom == expected);
 }
 
 // ---- B4: Karst method surface (forkchoiceUpdatedV3 -> getPayloadV5 -> newPayloadV4) ----

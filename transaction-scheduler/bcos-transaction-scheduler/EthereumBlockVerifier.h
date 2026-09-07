@@ -34,15 +34,14 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/EthTrieRoots.h"
-#include "bcos-ledger/mpt/MPTBuilder.h"
+#include "bcos-ledger/mpt/EthereumBlockRoots.h"
+#include "bcos-ledger/mpt/StateRoots.h"
 #include "bcos-rlp-protocol/EthBlockHeader.h"
-#include "bcos-rlp-protocol/EthReceipt.h"
 #include "bcos-rlp-protocol/EthWithdrawal.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include "MPTNodeStorage.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include <evmc/evmc.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -237,13 +236,9 @@ inline void fillExecutionLedgerConfig(protocol::EthBlockHeaderData const& ethHea
 }
 
 /// The deterministic post-execution block values that must match the header.
-struct EthereumBlockComputation
-{
-    crypto::HashType txsRoot;
-    crypto::HashType receiptsRoot;
-    u256 gasUsed;
-    Bloom logsBloom;
-};
+/// The definition lives in bcos-ledger/mpt/EthereumBlockRoots.h, shared with the Engine
+/// API block builder (EngineServiceImpl::buildPayload).
+using EthereumBlockComputation = ledger::mpt::EthereumBlockComputation;
 
 // PoW (pre-merge) block reward: 2 ETH per block (Constantinople+), plus 1/32 ETH
 // per included uncle for the coinbase, and (uncle.number + 8 - block.number) * 2
@@ -335,18 +330,14 @@ public:
     {}
 
     /// MPT state root over the executed view's Ethereum world state, built incrementally
-    /// from the parent block's state root. Accounts and their storage sub-tries enter the
-    /// trie; ledger metadata (SYS_* rows) never does.
+    /// from the parent block's state root. Forwards to the shared implementation
+    /// (ledger::mpt::computeMptStateRoot, bcos-ledger/mpt/StateRoots.h) that the Engine API
+    /// block builder also uses.
     template <class ViewType>
     static task::Task<crypto::HashType> computeMptStateRoot(ViewType& view,
         crypto::HashType const& parentStateRoot, ledger::LedgerConfig const& ledgerConfig)
     {
-        ViewNodeStorage<ViewType> nodeStorage(view);
-        bool const l2Mode =
-            ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
-        auto delta =
-            co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode);
-        co_return delta.stateRoot;
+        return ledger::mpt::computeMptStateRoot(view, parentStateRoot, ledgerConfig);
     }
     /// Execute `ethHeader` (child of `parentHeader`) with the given raw EIP-2718
     /// transactions, verify the deterministic roots + state root against the header,
@@ -590,88 +581,15 @@ public:
 
     /// Execute the block and compute the deterministic roots, without committing.
     /// Exposed for the Engine API external-payload path that needs the computation
-    /// before deciding to commit.
+    /// before deciding to commit. Forwards to the shared implementation
+    /// (ledger::mpt::computeEthereumRoots, bcos-ledger/mpt/EthereumBlockRoots.h) that the
+    /// Engine API block builder (buildPayload) also uses.
     static task::Task<EthereumBlockComputation> computeEthereumRoots(
         std::vector<protocol::TransactionReceipt::Ptr>& receipts,
         ::ranges::input_range auto const& transactions,
-        std::vector<bcos::bytes> const& rawTransactions)
+        ::ranges::input_range auto const& rawTransactions)
     {
-        EthereumBlockComputation computation;
-        const bool ethereumRoots = true;  // v2 executor only
-
-        // Step 2e-0: per-receipt cumulativeGasUsed + logsBloom.
-        u256 cumulativeGasUsed;
-        for (auto& receipt : receipts)
-        {
-            if (!receipt)
-            {
-                BOOST_THROW_EXCEPTION(
-                    std::runtime_error{"EthereumBlockVerifier: null receipt returned by scheduler"});
-            }
-            auto logBloom = bcos::getLogsBloom(receipt->logEntries());
-            receipt->setLogsBloom({logBloom.data(), logBloom.size()});
-            cumulativeGasUsed += receipt->gasUsed();
-            receipt->setCumulativeGasUsed(cumulativeGasUsed.str());
-        }
-
-        // txsRoot over the raw EIP-2718 encodings (index-keyed trie).
-        std::vector<bcos::bytesConstRef> txRaws;
-        txRaws.reserve(rawTransactions.size());
-        for (auto const& raw : rawTransactions)
-        {
-            txRaws.emplace_back(bcos::ref(raw));
-        }
-        computation.txsRoot = ledger::mpt::calculateTransactionsRoot(txRaws);
-
-        // receiptsRoot over EthReceipt RLP, typed by the executed transaction at the
-        // same index.
-        std::vector<uint8_t> txTypes;
-        txTypes.reserve(transactions.size());
-        for (auto const& transaction : transactions)
-        {
-            txTypes.push_back(transaction.web3TypedTxKind());
-        }
-        std::vector<bcos::bytes> receiptRlps;
-        receiptRlps.reserve(receipts.size());
-        size_t index = 0;
-        for (auto const& receipt : receipts)
-        {
-            protocol::EthReceiptData eth;
-            if (auto err =
-                    protocol::toEthReceiptData(*receipt, txTypes[index], eth);
-                err != nullptr)
-            {
-                BOOST_THROW_EXCEPTION(
-                    std::runtime_error("toEthReceiptData: " + err->errorMessage()));
-            }
-            bcos::bytes encoded;
-            protocol::EthReceipt ethReceipt(std::move(eth));
-            ethReceipt.rlpEncode(encoded);
-            receiptRlps.push_back(std::move(encoded));
-            ++index;
-        }
-        std::vector<bcos::bytesConstRef> refs;
-        refs.reserve(receiptRlps.size());
-        for (auto const& rlp : receiptRlps)
-        {
-            refs.emplace_back(bcos::ref(rlp));
-        }
-        computation.receiptsRoot = ledger::mpt::calculateReceiptsRoot(refs);
-
-        // gasUsed + block-level bloom.
-        u256 totalGasUsed;
-        Bloom logsBloom{};
-        for (auto const& receipt : receipts)
-        {
-            totalGasUsed += receipt->gasUsed();
-            if (!receipt->logsBloom().empty())
-            {
-                bcos::orBloom(logsBloom, receipt->logsBloom());
-            }
-        }
-        computation.gasUsed = totalGasUsed;
-        computation.logsBloom = logsBloom;
-        co_return computation;
+        return ledger::mpt::computeEthereumRoots(receipts, transactions, rawTransactions);
     }
 
     /// Compare the computed values against the external header's commitments.

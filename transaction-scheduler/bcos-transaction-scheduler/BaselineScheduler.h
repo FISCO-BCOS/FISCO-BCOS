@@ -2,7 +2,6 @@
 
 #include "BaselineSchedulerMPTHelpers.h"
 #include "HistoricalCallStorage.h"
-#include "MPTNodeStorage.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-executor/src/Common.h"
@@ -29,7 +28,9 @@
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/EthTrieRoots.h"
+#include "bcos-ledger/mpt/EthereumBlockRoots.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
+#include "bcos-ledger/mpt/StateRoots.h"
 #include "bcos-rlp-protocol/EthReceipt.h"
 #include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
 #include "bcos-task/TBBWait.h"
@@ -90,6 +91,8 @@ std::chrono::milliseconds::rep current();
 
 /**
  * Calculates the state root of the given storage using the specified hash implementation.
+ * The implementation (the legacy XOR fold) lives in bcos-ledger/mpt/StateRoots.h as
+ * ledger::mpt::computeLegacyStateRoot, shared with the Engine API block builder.
  *
  * @param storage The storage to calculate the state root for.
  * @param hashImpl The hash implementation to use for the calculation.
@@ -98,42 +101,7 @@ std::chrono::milliseconds::rep current();
 task::Task<h256> calculateStateRoot(auto& storage, uint32_t blockVersion,
     crypto::Hash const& hashImpl, ledger::Features const& features)
 {
-    auto range = co_await storage2::range(storage);
-    storage::Entry deletedEntry;
-    deletedEntry.setStatus(storage::Entry::DELETED);
-
-    // Wrap once outside the parallel pipeline so the optional copy is paid only once,
-    // not per entry.
-    const std::optional<ledger::Features> featuresOpt(features);
-
-    h256 totalHash;
-    using KeyValueType = task::AwaitableReturnType<decltype(range.next())>;
-    tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
-        tbb::make_filter<void, KeyValueType>(tbb::filter_mode::serial_in_order,
-            [&](tbb::flow_control& control) -> KeyValueType {
-                if (auto keyValue = task::tbb::syncWait(range.next()))
-                {
-                    return keyValue;
-                }
-                control.stop();
-                return {};
-            }) &
-            tbb::make_filter<KeyValueType, h256>(tbb::filter_mode::parallel,
-                [&](KeyValueType keyValue) -> h256 {
-                    auto& [key, value] = *keyValue;
-                    executor_v1::StateKeyView view(key);
-                    auto [tableName, keyName] = view.get();
-
-                    const storage::Entry* entry = nullptr;
-                    if (entry = std::get_if<storage::Entry>(std::addressof(value)); !entry)
-                    {
-                        entry = std::addressof(deletedEntry);
-                    }
-                    return entry->hash(tableName, keyName, hashImpl, blockVersion, featuresOpt);
-                }) &
-            tbb::make_filter<h256, void>(
-                tbb::filter_mode::serial_out_of_order, [&](h256 hash) { totalHash ^= hash; }));
-    co_return totalHash;
+    return ledger::mpt::computeLegacyStateRoot(storage, blockVersion, hashImpl, features);
 }
 
 h256 calculateReceiptRoot(
@@ -161,48 +129,11 @@ h256 calculateReceiptRoot(
 /// BaselineScheduler.cpp (block is a concrete protocol::Block). Empty block -> emptyRootHash().
 h256 calculateEthereumTransactionRoot(protocol::Block const& block);
 
-/// Ethereum receipts trie root (receiptsRoot) for executor_version >= 2 chains, computed AFTER
-/// finishExecute's receipt-processing phase (it reads cumulativeGasUsed + logsBloom, which that
-/// phase fills). Each receipt is converted via EthReceipt::toEthReceiptData (status remapped to
-/// EIP-658 0/1) and committed to the receipts trie; `transactions` is parallel to `receipts` by
-/// index and supplies the EIP-2718 type per receipt. Empty -> emptyRootHash().
-template <::ranges::range ReceiptsRange, ::ranges::input_range TransactionsRange>
-h256 calculateEthereumReceiptRoot(
-    ReceiptsRange&& receipts, TransactionsRange&& transactions)
-{
-    std::vector<bcos::bytes> receiptRlps;
-    std::vector<uint8_t> txTypes;
-    for (auto const& transaction : transactions)
-    {
-        txTypes.push_back(transaction->web3TypedTxKind());
-    }
-
-    size_t index = 0;
-    for (auto const& receipt : receipts)
-    {
-        protocol::EthReceiptData eth;
-        if (auto err =
-                protocol::toEthReceiptData(*receipt, txTypes[index], eth);
-            err != nullptr)
-        {
-            BOOST_THROW_EXCEPTION(
-                std::runtime_error("toEthReceiptData: " + err->errorMessage()));
-        }
-        bcos::bytes encoded;
-        protocol::EthReceipt ethReceipt(std::move(eth));
-        ethReceipt.rlpEncode(encoded);
-        receiptRlps.push_back(std::move(encoded));
-        ++index;
-    }
-
-    std::vector<bcos::bytesConstRef> refs;
-    refs.reserve(receiptRlps.size());
-    for (auto const& rlp : receiptRlps)
-    {
-        refs.emplace_back(bcos::ref(rlp));
-    }
-    return ledger::mpt::calculateReceiptsRoot(refs);
-}
+/// The Ethereum receipts trie root (receiptsRoot) for executor_version >= 2 chains is
+/// ledger::mpt::calculateEthereumReceiptsRoot (bcos-ledger/mpt/EthereumBlockRoots.h), shared
+/// with EthereumBlockVerifier and EngineServiceImpl::buildPayload. It must be computed AFTER
+/// finishExecute's receipt-processing phase (it reads cumulativeGasUsed + logsBloom, which
+/// that phase fills). Empty -> emptyRootHash().
 
 /**
  * @brief Finishes the execution of a transaction and updates the block header and block.
@@ -279,7 +210,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     // processing branch above fills — so it is computed strictly AFTER that branch. The legacy
     // Merkle arm is unaffected by the move (receipt->hash() is cached by the executor and the
     // finishExecute mutations never clear dataHash), keeping legacy output identical.
-    receiptRoot = ethereumRoots ? calculateEthereumReceiptRoot(receipts, transactions) :
+    receiptRoot = ethereumRoots ? ledger::mpt::calculateEthereumReceiptsRoot(receipts, transactions) :
                                   calculateReceiptRoot(receipts, block, hashImpl);
 
     newBlockHeader.setGasUsed(totalGasUsed);
@@ -435,8 +366,11 @@ private:
         // else: scenario-A activation boundary (parent committed an XOR root) — empty trie.
 
         // Node reads resolve through the full view (parent nodes live in the pending layers /
-        // backend); node writes land in this block's own mutable layer (MPTNodeStorage.h).
-        ViewNodeStorage<typename MultiLayerStorage::ViewType> nodeStorage(view);
+        // backend); node writes land in this block's own mutable layer
+        // (bcos-ledger/mpt/ViewNodeStorage.h). The delta itself (not just the root) rides in
+        // ExecuteResult for the CommitObserver, so this calls buildAndCollect directly rather
+        // than the root-only ledger::mpt::computeMptStateRoot.
+        ledger::mpt::ViewNodeStorage<typename MultiLayerStorage::ViewType> nodeStorage(view);
         bool const l2Mode =
             ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
         co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode);
