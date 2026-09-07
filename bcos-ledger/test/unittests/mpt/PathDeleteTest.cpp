@@ -29,6 +29,7 @@
 #include <bcos-ledger/mpt/NodeDecoder.h>
 #include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
+#include <bcos-ledger/mpt/Trie.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -289,6 +290,68 @@ BOOST_AUTO_TEST_CASE(DestroyedAccountDropsItsWholeStorageTrie)
     auto const stored = bcos::task::syncWait(readView.readAccount(bystander));
     BOOST_REQUIRE(stored.has_value());
     BOOST_CHECK(stored->storageRoot == bystanderRoot);
+}
+
+// ── The survivor's SUBTREE, not just the survivor ───────────────────────────────────────────────
+//
+// mergeNormalize's third arm keeps an unmodified surviving BRANCH by reverting its slot to a hash
+// reference — nothing under it is re-emitted, because nothing under it changed. The read ledger
+// has to be un-recorded for that whole subtree, not only for the survivor's own position: a
+// position resolved BELOW the survivor earlier in the same batch is equally "read and not
+// re-emitted", and deleting it punches a hole into a subtree the survivor's unchanged hash still
+// vouches for.
+//
+// The batch that gets there needs no exotic input: an erase MISS that happens to descend into the
+// survivor, followed by an erase that collapses the parent onto it. Change order is std::map
+// order, i.e. key order, so which of the two comes first is decided by the keys themselves.
+BOOST_AUTO_TEST_CASE(BranchCollapseKeepsTheSurvivorsWholeSubtree)
+{
+    NodeStorage storage;
+    // Root branch: nibble 0 -> a BRANCH (two leaves under it), nibble f -> a lone leaf.
+    auto const keyA = keyWithPrefix({0x00, 0x00}, 0xAA);  // leaf at "00"
+    auto const keyB = keyWithPrefix({0x00, 0x01}, 0xBB);  // leaf at "01"
+    auto const lone = keyWithPrefix({0x0f}, 0xCC);        // leaf at "f"
+    bcos::bytes const payload(40, 0x5a);
+
+    auto const seeded = seedTrieFlushed(
+        storage, emptyRootHash(), {{keyA, payload}, {keyB, payload}, {lone, payload}});
+    BOOST_REQUIRE(livePositions(storage) ==
+                  (std::set<bcos::bytes>{POSITION_ROOT, bcos::bytes{0x00}, bcos::bytes{0x00, 0x00},
+                      bcos::bytes{0x00, 0x01}, bcos::bytes{0x0f}}));
+
+    // One block, two changes. The miss sorts FIRST (it shares keyA's leading 0x00 byte, the lone
+    // key starts 0x0f), so it resolves "", "0" and "00" while leaving every node clean; then the
+    // real erase collapses the root onto the surviving branch at "0".
+    auto const miss = keyWithPrefix({0x00, 0x00}, 0xDD);  // same path as keyA, different leaf
+    BOOST_REQUIRE(miss < lone);
+    auto const collapsed = commitTrieFlushed(
+        storage, seeded.root, ChangeMap{{miss, std::nullopt}, {lone, std::nullopt}});
+
+    // Only the lone leaf's position goes. "00" was read on the miss path and is still live under
+    // the survivor's unchanged hash.
+    BOOST_CHECK(deletedPositions(collapsed) == std::set<bcos::bytes>{bcos::bytes{0x0f}});
+    BOOST_CHECK(livePositions(storage) == (std::set<bcos::bytes>{POSITION_ROOT, bcos::bytes{0x00},
+                                              bcos::bytes{0x00, 0x00}, bcos::bytes{0x00, 0x01}}));
+    BOOST_CHECK(collapsed.root == computeTrieRoot({{keyA, payload}, {keyB, payload}}).root);
+    BOOST_CHECK(scanTrieNodes(storage, TrieScope::account()) ==
+                computeTrieRoot({{keyA, payload}, {keyB, payload}}).newNodes);
+    // A position kept out of `deletes` must not be archived as if it had gone.
+    for (auto const& [key, prior] : collapsed.preimages)
+    {
+        BOOST_CHECK_MESSAGE(collapsed.upserts.contains(key) || collapsed.deletes.contains(key),
+            "preimage for position 0x" << bcos::toHex(key.position)
+                                       << " that is neither written nor deleted");
+    }
+
+    // The whole trie still reads: the hole this guards against only shows up on the NEXT read.
+    Trie<NodeStorage> const trie(storage, TrieScope::account(), collapsed.root);
+    for (auto const& key : {keyA, keyB})
+    {
+        auto const leaf = bcos::task::syncWait(trie.get(key));
+        BOOST_REQUIRE_MESSAGE(leaf.has_value(), "key unreadable after the collapse");
+        BOOST_CHECK(*leaf == payload);
+    }
+    BOOST_CHECK(!bcos::task::syncWait(trie.get(lone)).has_value());
 }
 
 // ── G4: the asymmetry ───────────────────────────────────────────────────────────────────────────

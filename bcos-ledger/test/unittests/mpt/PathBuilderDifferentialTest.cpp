@@ -28,10 +28,12 @@
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
+#include <bcos-ledger/mpt/Trie.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <map>
 #include <random>
 #include <set>
@@ -174,6 +176,27 @@ void writeSlotRow(FlatStateView& view, bcos::Address const& address, bcos::h256 
 {
     writeFlatRow(view, accountSlotKey(address, slot),
         makeEntry(std::string_view{reinterpret_cast<char const*>(value.data()), bcos::h256::SIZE}));
+}
+
+/// The lowest slot index >= @p from whose slotKeyHash begins with @p prefixNibbles.
+///
+/// Trie SHAPE is a function of keccak, so a test that needs a particular shape has to search for
+/// keys that produce it. A one-byte prefix is one in 256, so this returns in microseconds.
+bcos::h256 slotWithHashPrefix(
+    std::vector<bcos::byte> const& prefixNibbles, size_t from, size_t& found)
+{
+    for (size_t index = from; index < from + 100000; ++index)
+    {
+        auto const slot = slotAt(index);
+        auto const nibbles = bytesToNibbles(slotKeyHash(slot).ref());
+        if (std::equal(prefixNibbles.begin(), prefixNibbles.end(), nibbles.begin()))
+        {
+            found = index;
+            return slot;
+        }
+    }
+    BOOST_FAIL("no slot found with the requested hash prefix");
+    return {};
 }
 
 void writeCodeHashRow(FlatStateView& view, bcos::Address const& address, bcos::h256 const& codeHash)
@@ -389,6 +412,107 @@ BOOST_AUTO_TEST_CASE(TwoHundredRandomBlocksStayIdenticalToAFromEmptyBuild)
     BOOST_CHECK_MESSAGE(model.size() < ACCOUNT_COUNT,
         "no account was destroyed over the whole run: the tombstone path went untested");
     BOOST_CHECK(everSeenOwners.size() == ACCOUNT_COUNT);
+}
+
+// ── The shape the random workload cannot reach ─────────────────────────────────────────────────
+//
+// A branch collapsing onto a surviving BRANCH, after an erase MISS already descended into that
+// survivor, is the one delete shape whose bookkeeping is special (TrieMerge's mergeNormalize
+// hands the survivor back to disk by hash, so nothing under it is re-emitted). Random slot writes
+// over fixed keys never produce it — the shape needs three specific keccak prefixes and a
+// specific change ORDER — so the judge above cannot guard it, and it is built here by hand and
+// fed through exactly the same row-equality oracle.
+//
+// The trie: one account's storage, three slots whose hashes begin 00 / 01 / f. That makes a root
+// branch with two children, the one at nibble 0 being itself a branch. The block then writes ZERO
+// to a fourth slot that never existed and whose hash also begins 00 (the executor's shape for
+// "slot cleared" — it reaches the builder as a delete of an absent key, i.e. a MISS that resolves
+// the survivor and its leaf) and ZERO to the slot at nibble f (the real delete that collapses the
+// root onto the survivor). Change order is slotKeyHash order, so the miss goes first.
+BOOST_AUTO_TEST_CASE(CollapseOntoASurvivingBranchAfterAMissKeepsItsSubtree)
+{
+    NodeStorage nodeStorage;
+    FlatBackendStorage flatBackend;
+    auto const address = makeAddress(0x5b);
+    auto const owner = accountKeyHash(address);
+    auto const scope = TrieScope::storage(owner);
+
+    size_t cursor = 0;
+    auto const slot00 = slotWithHashPrefix({0x00, 0x00}, 0, cursor);
+    auto const slot01 = slotWithHashPrefix({0x00, 0x01}, cursor + 1, cursor);
+    auto const slotF = slotWithHashPrefix({0x0f}, cursor + 1, cursor);
+    auto const slotMiss = slotWithHashPrefix({0x00, 0x00}, cursor + 1, cursor);
+    BOOST_REQUIRE(slotKeyHash(slotMiss) != slotKeyHash(slot00));
+    BOOST_REQUIRE(slotKeyHash(slotMiss) < slotKeyHash(slotF));  // the miss is applied first
+
+    // Block 1: the account and its three slots.
+    Model model;
+    auto& account = model[address];
+    account.nonce = bcos::u256(1);
+    account.balance = bcos::u256(500);
+    account.codeHash = makeHash(0x7c);
+    bcos::h256 parentRoot;
+    {
+        auto view = makeFlatView(flatBackend);
+        writeFlatRow(
+            view, accountFieldKey(address, ROW_NONCE), makeEntry(account.nonce.str({}, {})));
+        writeFlatRow(
+            view, accountFieldKey(address, ROW_BALANCE), makeEntry(account.balance.str({}, {})));
+        writeCodeHashRow(view, address, account.codeHash);
+        for (auto const& slot : {slot00, slot01, slotF})
+        {
+            bcos::h256 value{};
+            value.data()[0] = 0x11;
+            value.data()[bcos::h256::SIZE - 1] = slot.data()[bcos::h256::SIZE - 1];
+            account.slots[slot] = value;
+            writeSlotRow(view, address, slot, value);
+        }
+        auto output = bcos::task::syncWait(
+            buildAndCollect(nodeStorage, emptyRootHash(), view, /*l2Mode=*/false));
+        applyDeltaToBackend(view, flatBackend);
+        parentRoot = output.stateRoot;
+    }
+
+    // The shape this case exists for: root branch, a branch below nibble 0, a lone leaf at f.
+    auto const seededRows = scanTrieNodes(nodeStorage, scope);
+    BOOST_REQUIRE_MESSAGE(
+        seededRows.contains(bcos::bytes{}) && seededRows.contains(bcos::bytes{0x00}) &&
+            seededRows.contains(bcos::bytes{0x00, 0x00}) &&
+            seededRows.contains(bcos::bytes{0x00, 0x01}) && seededRows.contains(bcos::bytes{0x0f}),
+        "the seeded storage trie does not have the branch-under-nibble-0 shape");
+
+    // Block 2: zero the never-written slot (a miss into the survivor) and zero the lone slot.
+    {
+        auto view = makeFlatView(flatBackend);
+        writeSlotRow(view, address, slotMiss, bcos::h256{});
+        writeSlotRow(view, address, slotF, bcos::h256{});
+        account.slots.erase(slotF);
+        auto output =
+            bcos::task::syncWait(buildAndCollect(nodeStorage, parentRoot, view, /*l2Mode=*/false));
+        applyDeltaToBackend(view, flatBackend);
+
+        auto const oracle = buildOracle(model);
+        BOOST_CHECK(output.stateRoot == oracle.root);
+        // THE assertion: the survivor's subtree is still on disk, whole. A state root alone would
+        // not notice — the root is computed from the survivor's unchanged hash, so it matches even
+        // when the rows beneath it have been deleted.
+        BOOST_CHECK(scanTrieNodes(nodeStorage, scope) == oracle.rows.at(scope));
+        BOOST_CHECK(scanTrieNodes(nodeStorage, TrieScope::account()) ==
+                    oracle.rows.at(TrieScope::account()));
+
+        // ...and the reads that would hit the hole actually run.
+        MPTReadView<NodeStorage> readView(nodeStorage, output.stateRoot);
+        auto const stored = bcos::task::syncWait(readView.readAccount(address));
+        BOOST_REQUIRE(stored.has_value());
+        Trie<NodeStorage> const trie(nodeStorage, scope, stored->storageRoot);
+        for (auto const& [slot, value] : model.at(address).slots)
+        {
+            auto const leaf = bcos::task::syncWait(trie.get(slotKeyHash(slot)));
+            BOOST_REQUIRE_MESSAGE(leaf.has_value(), "slot unreadable after the collapse");
+            BOOST_CHECK(*leaf == encodeStorageValue(value.ref()));
+        }
+        BOOST_CHECK(!bcos::task::syncWait(trie.get(slotKeyHash(slotF))).has_value());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

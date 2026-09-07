@@ -38,6 +38,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <optional>
@@ -96,7 +97,10 @@ namespace detail
 //                 it. (A.6-4, a whole storage trie disappearing, is not one trie's rebuild and is
 //                 handled by MPTBuilder.) The survivor-subtree-never-moves theorem (spec A.5) is
 //                 what makes this sound: an untouched subtree keeps its positions, so a position
-//                 we never read cannot have become vacant.
+//                 we never read cannot have become vacant. The mirror of that — a position we DID
+//                 read that keeps its node anyway — happens in exactly one place, mergeNormalize's
+//                 clean-branch-survivor arm, which un-records the survivor's whole subtree
+//                 (unrecordSubtree).
 //   - preimages = the bytes each touched position held before, captured at resolve time (spec §9:
 //                 the resolved set is exactly the overwritten set, so this costs one copy and no
 //                 extra I/O). A position that had no row records nullopt (spec A.7).
@@ -249,6 +253,33 @@ struct MergeContext
     /// What each of those positions held: the preimages of spec §9, free at resolve time.
     std::map<bcos::bytes, bcos::bytes> priorBytes;
 };
+
+/// Forget every read this rebuild made at or below @p position — the subtree is going back to
+/// disk exactly as it came off it, so none of it may reach the phase-3 subtraction.
+///
+/// A position IS its own prefix, so `position` itself goes too. Positions are ordered nibble
+/// strings, which makes a subtree a CONTIGUOUS range: every position having @p position as a
+/// prefix sorts at or after it, and the first position that does not have it as a prefix ends
+/// the range. So one lower_bound and a walk covers it — no tree traversal, and no chance of
+/// missing a descendant that was resolved several keys earlier in the batch.
+///
+/// The prior bytes go with the positions: settle only reads priorBytes for positions that end up
+/// in upserts or deletes, so leaving them would be harmless, but a read ledger and its payload
+/// that can disagree is a trap for the next person.
+template <bcos::storage2::ReadableStorage<PathKey> Storage, bcos::crypto::hasher::Hasher HasherT>
+void unrecordSubtree(MergeContext<Storage, HasherT>& ctx, bcos::bytes const& position)
+{
+    auto isBelow = [&position](bcos::bytes const& candidate) {
+        return candidate.size() >= position.size() &&
+               std::equal(position.begin(), position.end(), candidate.begin());
+    };
+    for (auto it = ctx.resolvedPositions.lower_bound(position);
+        it != ctx.resolvedPositions.end() && isBelow(*it);)
+    {
+        ctx.priorBytes.erase(*it);
+        it = ctx.resolvedPositions.erase(it);
+    }
+}
 
 // Ensure @p slot holds an in-memory node, loading and decoding the prior-version node at
 // @p position when the slot is a clean hash/inline reference. Absent slots are the caller's case.
@@ -449,7 +480,7 @@ bcos::task::Task<void> mergeInsert(MergeContext<Storage, HasherT>& ctx, MutableC
 //     position any more and the phase-3 subtraction deletes that row (spec A.6-1/-2). A survivor
 //     BRANCH is not rebuilt at all, only re-parented under a one-nibble extension:
 //       · resolved just now and never modified (originHash && !dirty) → keep it referenced by
-//         its prior hash and UN-RECORD its position: its row stays live and must not be
+//         its prior hash and UN-RECORD its whole subtree: those rows stay live and must not be
 //         subtracted into deletes. The dirty guard is essential: a branch modified earlier in
 //         this batch has diverged from originHash, reverting to the hash would drop those edits.
 //       · otherwise (dirty, or inline-decoded with no hash) → keep the boxed node; the emit
@@ -545,10 +576,16 @@ bcos::task::Task<void> mergeNormalize(
         if (boxed->originHash.has_value() && !boxed->dirty)
         {
             // Resolved only to learn its shape, never modified: its prior encoding stays live at
-            // the same position under the new extension. Un-record the read so the phase-3
-            // subtraction does not mistake "not re-emitted" for "no longer there" — the ONE case
-            // where a position we read keeps a node we do not write.
-            ctx.resolvedPositions.erase(survivorPosition);
+            // the same position under the new extension. Reverting the slot to a hash reference
+            // discards the boxed node, so NOTHING in that subtree is re-emitted — which makes the
+            // whole subtree the ONE case where positions we read keep nodes we do not write, and
+            // un-recording only the survivor's own position would subtract the rest into deletes.
+            //
+            // dirty == false is what licenses this: any change at or below a node marks it dirty
+            // on the way down (mergeInsert) or on the unwind of a confirmed delete (mergeErase),
+            // so a clean survivor is byte-identical on disk all the way down and every one of its
+            // descendants is still exactly where the survivor's unchanged hash says it is.
+            unrecordSubtree(ctx, survivorPosition);
             NodeRef const keep = NodeRef::fromHash(*boxed->originHash);
             node.node = MutableExtension{.shared = bcos::bytes{static_cast<bcos::byte>(lastNibble)},
                 .child = MutableChild{keep}};
