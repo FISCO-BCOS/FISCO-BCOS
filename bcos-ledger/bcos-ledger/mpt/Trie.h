@@ -122,7 +122,11 @@ bcos::task::Task<bcos::bytes> loadRootBytesAt(
 ///
 /// The EMPTY root is not stored (an empty trie has no nodes), so callers that treat it as a legal
 /// "no accounts" root must short-circuit before asking.
-template <bcos::storage2::ReadableStorage<PathKey> Storage>
+/// @tparam HasherT the hash the chain's tries were BUILT with — the digest this compares against
+/// @p expectedRoot. Defaults to keccak256, so no call site churns; an SM3 deployment names it and
+/// gets an SM3 comparison (see the @todo in HashBuilder.h for what else has to move with it).
+template <bcos::storage2::ReadableStorage<PathKey> Storage,
+    bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 bcos::task::Task<bool> holdsTrieRoot(
     Storage& storage, TrieScope const& scope, bcos::h256 const& expectedRoot)
 {
@@ -131,7 +135,7 @@ bcos::task::Task<bool> holdsTrieRoot(
     {
         co_return false;
     }
-    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+    HasherT hasher;
     co_return detail::nodeDigest(hasher, bcos::ref(*raw)) == expectedRoot;
 }
 
@@ -140,9 +144,16 @@ bcos::task::Task<bool> holdsTrieRoot(
 /// next row key from the key being looked up (spec A.1), never from the bytes it just read, and
 /// uses the hash it read only to verify what the position hands back.
 ///
+/// @tparam HasherT the hash the trie was BUILT with — used to verify every node this walk reads.
+/// Defaults to keccak256. It MUST be the same hasher the caller uses for its key transform
+/// (accountKeyHash / slotKeyHash): mixing them would locate nodes by one algorithm's paths and
+/// verify them against another's digests, which fails as corruption at best and, where the walk
+/// dead-ends first, silently reports absence.
+///
 /// @throws MPTHistoryUnavailable when @p root is not the version the store currently holds,
 ///         MPTInvariantViolation when a node the trie itself references is missing or corrupt.
-template <bcos::storage2::ReadableStorage<PathKey> Storage>
+template <bcos::storage2::ReadableStorage<PathKey> Storage,
+    bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 class Trie
 {
 public:
@@ -154,17 +165,16 @@ public:
 
     bcos::task::Task<std::optional<bcos::bytes>> get(bcos::h256 const& keyHash) const
     {
-        if (m_root == emptyRootHash())
+        if (m_root == emptyRootHash<HasherT>())
         {
             co_return std::nullopt;
         }
 
         bcos::bytes const path = bytesToNibbles(keyHash.ref());  // 64 nibbles
         size_t pos = 0;                                          // nibbles consumed so far
-        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
 
         // The entry point is a FIXED key (position "" of this scope), not the root hash.
-        auto rootRaw = co_await detail::loadRootBytesAt(m_storage.get(), m_scope, m_root, hasher);
+        auto rootRaw = co_await detail::loadRootBytesAt(m_storage.get(), m_scope, m_root, m_hasher);
         TrieNode node = decodeNode(bcos::ref(rootRaw));
         while (true)
         {
@@ -211,7 +221,7 @@ public:
                     auto next = co_await detail::loadNodeBytesAt(m_storage.get(),
                         PathKey{.scope = m_scope,
                             .position = bcos::bytes(path.begin(), path.begin() + pos)},
-                        childHash, hasher);
+                        childHash, m_hasher);
                     TrieNode decoded = decodeNode(bcos::ref(next));
                     node = std::move(decoded);
                 }
@@ -244,7 +254,7 @@ public:
                 auto next = co_await detail::loadNodeBytesAt(m_storage.get(),
                     PathKey{.scope = m_scope,
                         .position = bcos::bytes(path.begin(), path.begin() + pos)},
-                    child.hash(), hasher);
+                    child.hash(), m_hasher);
                 TrieNode decoded = decodeNode(bcos::ref(next));
                 node = std::move(decoded);
             }
@@ -263,5 +273,9 @@ private:
     std::reference_wrapper<Storage> m_storage;
     TrieScope m_scope;
     bcos::h256 m_root;
+    /// One hash context for the whole object rather than one per get(): a walk verifies every
+    /// node it reads, and constructing an OpenSSL context per read was the bulk of a point
+    /// query's non-I/O cost. mutable because get() is const and hashing mutates the context.
+    mutable HasherT m_hasher;
 };
 }  // namespace bcos::ledger::mpt

@@ -416,6 +416,11 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 /// Account's default storageRoot/codeHash all hard-code keccak256. An SM3 deployment has to
 /// parameterize every one of them together; doing a subset silently mixes hash functions.
 ///
+/// The READ side is already parameterized and defaults to keccak (Trie, MPTReadView, MPTAccount,
+/// proofWalk, holdsTrieRoot), so an SM3 chain needs those named too — but naming them alone,
+/// without the builders above, would verify SM3-built nodes against keccak digests. They move
+/// together or not at all.
+///
 /// @tparam Storage the trie-node storage (storage2 ReadWriteStorage over PathKey → RLP bytes):
 /// commitTrie merge-reads prior-version nodes through it, and the block's aggregated upserts and
 /// deletes are batch-applied to it once at the end. A tombstoned account additionally seek-scans

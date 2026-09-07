@@ -17,6 +17,7 @@
  * @brief Position addresses, hash verifies: what happens when the two disagree (pathdb spec §8.3)
  */
 #include "TestHelpers.h"
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-ledger/mpt/Account.h>
 #include <bcos-ledger/mpt/Constants.h>
@@ -224,6 +225,54 @@ BOOST_AUTO_TEST_CASE(IdenticalTriesDoNotShareRowsAcrossOwners)
     BOOST_CHECK(scanTrieNodes(storage, TrieScope::storage(ownerB)) == rowsB);
     Trie<NodeStorage> const trieB(storage, TrieScope::storage(ownerB), rootB);
     BOOST_CHECK(bcos::task::syncWait(trieB.get(keyAtNibble(0x01, 0xAA))).has_value());
+}
+
+// The read path verifies with ITS OWN HasherT, not with a hard-coded keccak. That matters
+// because the hash a walk uses for verification and the hash a caller uses for the key transform
+// must be the same algorithm: mixing them means locating nodes along one algorithm's paths and
+// checking them against another's digests. A keccak trie read through a non-keccak instantiation
+// must therefore REFUSE at the very first node, and a proof over it must not be produced at all.
+//
+// The discriminator is that refusal. If node verification were pinned to keccak while HasherT
+// only drove the key transform, the walk below would succeed against the keccak trie and
+// generateProof would hand back a proof whose slot path was computed with a different hash —
+// the silently-wrong-proof shape, which no root comparison catches.
+BOOST_AUTO_TEST_CASE(NodeVerificationFollowsTheInstantiatedHasher)
+{
+    using SM3 = bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher;
+
+    NodeStorage storage;
+    auto const addr = makeAddress(0x11);
+    Account account;
+    account.nonce = 3;
+    account.balance = 99;
+    // Built with the default (keccak) hasher, like every trie this chain produces today.
+    auto const root = seedStateTrieFlushed(storage, {{addr, account}});
+
+    // Keccak reads it.
+    Trie<NodeStorage> const keccakTrie(storage, TrieScope::account(), root);
+    BOOST_CHECK(bcos::task::syncWait(keccakTrie.get(accountKeyHash(addr))).has_value());
+    BOOST_CHECK(bcos::task::syncWait(holdsTrieRoot(storage, TrieScope::account(), root)));
+
+    // SM3 does not: the bytes at position "" do not hash to `root` under SM3.
+    Trie<NodeStorage, SM3> const sm3Trie(storage, TrieScope::account(), root);
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(sm3Trie.get(accountKeyHash(addr))), MPTHistoryUnavailable);
+    BOOST_CHECK(!bcos::task::syncWait(
+        holdsTrieRoot<NodeStorage, SM3>(storage, TrieScope::account(), root)));
+    MPTReadView<NodeStorage, SM3> const sm3View(storage, root);
+    BOOST_CHECK_THROW(bcos::task::syncWait(sm3View.readAccount(addr)), MPTHistoryUnavailable);
+
+    // ...and no proof is produced: the walk reports the root as unavailable rather than
+    // assembling one from nodes it never verified.
+    auto const sm3Proof = bcos::task::syncWait(
+        generateProof<NodeStorage, SM3>(storage, root, addr, std::span<bcos::h256 const>{}));
+    BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(sm3Proof));
+    BOOST_CHECK(std::get<ProofErrorCode>(sm3Proof) == ProofErrorCode::BlockNotCommitted);
+    // Positive anchor: the keccak instantiation over the same trie DOES produce one.
+    auto const keccakProof =
+        bcos::task::syncWait(generateProof(storage, root, addr, std::span<bcos::h256 const>{}));
+    BOOST_CHECK(std::holds_alternative<EIP1186Proof>(keccakProof));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

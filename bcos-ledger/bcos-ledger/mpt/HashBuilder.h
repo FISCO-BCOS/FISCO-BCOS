@@ -147,6 +147,11 @@ TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::byt
 /// storageRoot/codeHash together with this function; doing a subset silently mixes hash
 /// functions, which is exactly the failure this pinning exists to prevent.
 ///
+/// The READ side is already parameterized and defaults to keccak (Trie, MPTReadView, MPTAccount,
+/// proofWalk, holdsTrieRoot), so an SM3 chain needs those named too — but naming them alone,
+/// without the builders above, would verify SM3-built nodes against keccak digests. They move
+/// together or not at all.
+///
 /// [[nodiscard]] on purpose: the result carries the block's node rows, which only exist in memory
 /// until the caller applies them. Dropping the return value loses them with no diagnostic — the
 /// new root would reference nodes that were never written.

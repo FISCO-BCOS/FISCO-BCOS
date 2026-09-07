@@ -104,13 +104,17 @@ concept HistoricalStorageContext = requires(Storage& storage) {
 /// /271/363) keeps that trivially true, and the cache costs nothing there because it is per-object.
 ///
 /// @tparam Storage        the flat KV the inherited EVMAccount behaviour reads and writes.
+/// @tparam HasherT        the hash the chain's tries were built with — used for the slot-key
+///                        transform AND for verifying every node the rooted reads resolve, which
+///                        must be the same algorithm. keccak256 by default.
 /// @tparam NodeStorage    resolves trie node POSITIONS (the concept MPTReadView eats). Because a
 ///                        position holds only the current version, a rooted read whose root is not
 ///                        the tip throws MPTHistoryUnavailable (Errors.h) instead of answering —
 ///                        restoring those reads is the trie-node history index's job.
 /// @tparam BackendStorage flat store holding s_code_binary (hash-addressed, so its rows are
 ///                        valid for any historical block, spec §4.5).
-template <class Storage, bcos::storage2::ReadableStorage<PathKey> NodeStorage, class BackendStorage>
+template <class Storage, bcos::storage2::ReadableStorage<PathKey> NodeStorage, class BackendStorage,
+    bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 class MPTAccount : public bcos::ledger::account::EVMAccount<Storage>
 {
 private:
@@ -341,7 +345,7 @@ private:
         {
             co_return m_cachedLeaf;
         }
-        MPTReadView<NodeStorage> const view{m_nodeStorage.get(), stateRoot};
+        MPTReadView<NodeStorage, HasherT> const view{m_nodeStorage.get(), stateRoot};
         auto account = co_await view.readAccount(m_address);
         m_cachedLeafRoot = stateRoot;
         m_cachedLeaf = account;
@@ -354,7 +358,7 @@ private:
         bcos::h256 const& stateRoot, bcos::h256 const& slot)
     {
         auto const account = co_await readLeaf(stateRoot);
-        if (!account || account->storageRoot == emptyRootHash())
+        if (!account || account->storageRoot == emptyRootHash<HasherT>())
         {
             co_return std::nullopt;
         }
@@ -383,7 +387,7 @@ private:
     std::optional<bcos::h256> m_cachedLeafRoot;
     std::optional<Account> m_cachedLeaf;
     /// Reused slot-key hash context, built on the first rooted slot read (see readTrieSlot).
-    std::optional<bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher> m_hasher;
+    std::optional<HasherT> m_hasher;
 };
 
 }  // namespace bcos::ledger::mpt

@@ -114,14 +114,17 @@ struct ProofWalk
 /// A root that the store does not currently hold reports rootMissing rather than throwing: to a
 /// caller it is the same request-level outcome as an unknown root always was, and generateProof
 /// maps it to ProofErrorCode::BlockNotCommitted.
+/// @p hasher is the caller's — the SAME context generateProof uses for its slot-key transform.
+/// Constructing one here instead would pin node verification to keccak while the key transform
+/// followed HasherT, so an SM3 instantiation would look up nodes along SM3 paths and reject them
+/// against keccak digests.
 /// @throws MPTInvariantViolation when a non-root referenced node is missing or its bytes disagree
 /// with the hash its parent records.
-template <bcos::storage2::ReadableStorage<PathKey> Storage>
+template <bcos::storage2::ReadableStorage<PathKey> Storage, bcos::crypto::hasher::Hasher HasherT>
 bcos::task::Task<ProofWalk> proofWalk(
-    Storage& storage, TrieScope const& scope, bcos::h256 root, bcos::bytes path)
+    Storage& storage, TrieScope const& scope, bcos::h256 root, bcos::bytes path, HasherT& hasher)
 {
     ProofWalk out;
-    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
     try
     {
         out.nodes.push_back(co_await loadRootBytesAt(storage, scope, root, hasher));
@@ -260,14 +263,17 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
     bcos::h256 stateRoot, bcos::Address address, std::span<bcos::h256 const> slots,
     bool fullTrie = true)
 {
-    if (stateRoot == emptyRootHash())
+    if (stateRoot == emptyRootHash<HasherT>())
     {
         co_return ProofErrorCode::AccountNotInMPT;  // empty trie holds no accounts
     }
 
+    // ONE hash context for this whole proof: the account and slot key transforms, and the
+    // verification of every node either walk reads.
+    HasherT hasher;
     auto const addressKeyHash = accountKeyHash(address);
     auto accountWalk = co_await detail::proofWalk(
-        storage, TrieScope::account(), stateRoot, bytesToNibbles(addressKeyHash.ref()));
+        storage, TrieScope::account(), stateRoot, bytesToNibbles(addressKeyHash.ref()), hasher);
     if (accountWalk.rootMissing)
     {
         co_return ProofErrorCode::BlockNotCommitted;
@@ -287,19 +293,18 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
     out.accountProof = std::move(accountWalk.nodes);
 
     out.storageProof.reserve(slots.size());
-    HasherT hasher;  // one hash context, reused for every requested slot's key transform
     for (auto const& slot : slots)
     {
         StorageProof entry;
         entry.key = slot;
-        if (account.storageRoot != emptyRootHash())
+        if (account.storageRoot != emptyRootHash<HasherT>())
         {
             auto const slotHash = slotKeyHash(slot, hasher);
             // The storage trie is found by its OWNER — the account key the walk above just
             // consumed — with storageRoot demoted to the checksum that proves the root row is the
             // one the leaf commits to (spec §8.3).
             auto slotWalk = co_await detail::proofWalk(storage, TrieScope::storage(addressKeyHash),
-                account.storageRoot, bytesToNibbles(slotHash.ref()));
+                account.storageRoot, bytesToNibbles(slotHash.ref()), hasher);
             if (slotWalk.rootMissing)
             {
                 // A committed account leaf references this root; its absence is corruption, not a
