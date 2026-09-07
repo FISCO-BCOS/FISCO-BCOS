@@ -21,6 +21,7 @@
 #include "HistoryTestHelpers.h"
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/history/HistoryRowCodec.h>
 #include <bcos-ledger/mpt/history/HistoryTables.h>
 #include <bcos-ledger/mpt/history/ReverseHistoryStore.h>
@@ -52,7 +53,7 @@ std::string seededKey(int index)
 }
 
 /// Seed one block with kSeededKeyCount changes, sharded.
-void seedBlock(HistoryMemStorage& storage, bcos::protocol::BlockNumber block)
+void seedBlock(auto& storage, bcos::protocol::BlockNumber block)
 {
     Diff diff;
     for (int index = 0; index < kSeededKeyCount; ++index)
@@ -64,14 +65,26 @@ void seedBlock(HistoryMemStorage& storage, bcos::protocol::BlockNumber block)
 
 /// Delete an index row behind the store's back, to stand in for a crash midway through an
 /// interrupted deferred expiry.
-void deleteIndexRow(
-    HistoryMemStorage& storage, bcos::protocol::BlockNumber block, std::string_view key)
+void deleteIndexRow(auto& storage, bcos::protocol::BlockNumber block, std::string_view key)
 {
     auto keyBytes = makeBytes(key);
     bcos::task::syncWait(bcos::storage2::removeOne(
         storage, bcos::executor_v1::StateKey{kStateHistory.index, indexRowKey(keyBytes, block)}));
 }
 }  // namespace
+
+// The replay and idempotence cases below run twice, once per deletion model, because the two
+// models are not interchangeable for this component and production uses the harder one.
+//
+//   HistoryMemStorage            ORDERED                      removeSome ERASES the row
+//   HistoryLogicalDeleteStorage  ORDERED|LOGICAL_DELETION      removeSome leaves a sentinel the
+//                                                              iterator still yields
+//
+// G3 puts expiry on the block's mutable layer, and that layer is the second kind:
+// GlobalStateMutableStorage is MemoryStorage<StateKey, StateValue, ORDERED | LOGICAL_DELETION>
+// (libinitializer/GlobalStateStorageInitializer.h:15-19). So on the real thing an expired block's
+// own manifest shards come back on the next sweep, and "expire twice" only stays a no-op because
+// scanManifest is told to skip them.
 
 /// After expiry the block leaves nothing behind in either table (spec B.5).
 BOOST_AUTO_TEST_CASE(expireRemovesIndexAndManifest)
@@ -94,9 +107,10 @@ BOOST_AUTO_TEST_CASE(expireRemovesIndexAndManifest)
 /// Interruption point one: some index rows are already gone, the manifest is still there. The
 /// manifest is what makes this recoverable — it still lists every key, so the replay re-issues
 /// the whole set and the already-deleted ones are no-ops.
-BOOST_AUTO_TEST_CASE(replayAfterPartialIndexDeletion)
+template <class Storage>
+void checkReplayAfterPartialIndexDeletion()
 {
-    HistoryMemStorage storage;
+    Storage storage;
     seedBlock(storage, 10);
     for (int index = 0; index < kSeededKeyCount / 2; ++index)
     {
@@ -111,12 +125,18 @@ BOOST_AUTO_TEST_CASE(replayAfterPartialIndexDeletion)
     BOOST_CHECK(rowsOfTable(storage, kStateHistory.index).empty());
     BOOST_CHECK(rowsOfTable(storage, kStateHistory.manifest).empty());
 }
+BOOST_AUTO_TEST_CASE(replayAfterPartialIndexDeletion)
+{
+    checkReplayAfterPartialIndexDeletion<HistoryMemStorage>();
+    checkReplayAfterPartialIndexDeletion<HistoryLogicalDeleteStorage>();
+}
 
 /// Interruption point two: every index row is gone but the manifest survives — the state a crash
 /// leaves when expiry is deferred and the manifest is deleted last. The replay finishes the job.
-BOOST_AUTO_TEST_CASE(replayAfterIndexDeletedButManifestKept)
+template <class Storage>
+void checkReplayAfterIndexDeletedButManifestKept()
 {
-    HistoryMemStorage storage;
+    Storage storage;
     seedBlock(storage, 10);
     for (int index = 0; index < kSeededKeyCount; ++index)
     {
@@ -130,16 +150,22 @@ BOOST_AUTO_TEST_CASE(replayAfterIndexDeletedButManifestKept)
     BOOST_CHECK_EQUAL(report.manifestShardsDeleted, 4);
     BOOST_CHECK(rowsOfTable(storage, kStateHistory.manifest).empty());
 }
+BOOST_AUTO_TEST_CASE(replayAfterIndexDeletedButManifestKept)
+{
+    checkReplayAfterIndexDeletedButManifestKept<HistoryMemStorage>();
+    checkReplayAfterIndexDeletedButManifestKept<HistoryLogicalDeleteStorage>();
+}
 
 /// Whichever point it resumes from, expiry converges on the same final state, and running it
 /// again on an already-expired block does nothing at all.
-BOOST_AUTO_TEST_CASE(expireIsIdempotent)
+template <class Storage>
+void checkExpireIsIdempotent()
 {
-    HistoryMemStorage clean;
+    Storage clean;
     seedBlock(clean, 10);
     expireBlock(clean, 10);
 
-    HistoryMemStorage interrupted;
+    Storage interrupted;
     seedBlock(interrupted, 10);
     deleteIndexRow(interrupted, 10, seededKey(0));
     deleteIndexRow(interrupted, 10, seededKey(3));
@@ -156,6 +182,37 @@ BOOST_AUTO_TEST_CASE(expireIsIdempotent)
     BOOST_CHECK_EQUAL(second.manifestShardsDeleted, 0);
     BOOST_CHECK(rowsOfTable(clean, kStateHistory.index).empty());
     BOOST_CHECK(rowsOfTable(clean, kStateHistory.manifest).empty());
+}
+BOOST_AUTO_TEST_CASE(expireIsIdempotent)
+{
+    checkExpireIsIdempotent<HistoryMemStorage>();
+    checkExpireIsIdempotent<HistoryLogicalDeleteStorage>();
+}
+
+/// On the mutable layer an expired shard is still a row, carrying a deletion sentinel. expire()
+/// reads that as "already done" and skips it; keysOfBlock() reads the same row as "part of this
+/// block's key list is unreadable" and throws, because rollback and the B.10 audits cannot use a
+/// short list. The two readings are the point of the DeletedShardPolicy parameter, so both are
+/// pinned here — the sentinel is what production leaves behind, not a contrived state.
+BOOST_AUTO_TEST_CASE(expiredShardIsSkippedByExpireAndRejectedByKeysOfBlock)
+{
+    HistoryLogicalDeleteStorage storage;
+    seedBlock(storage, 10);
+    expireBlock(storage, 10);
+
+    // The shard rows are still present as sentinels; nothing live is left.
+    BOOST_CHECK(rowsOfTable(storage, kStateHistory.index).empty());
+    BOOST_CHECK(rowsOfTable(storage, kStateHistory.manifest).empty());
+
+    auto second = expireBlock(storage, 10);
+    BOOST_CHECK_EQUAL(second.keyCount, 0);
+    BOOST_CHECK_EQUAL(second.manifestShardsDeleted, 0);
+
+    BOOST_CHECK_THROW(keysOfBlock(storage, 10), MPTInvariantViolation);
+
+    // A block that was never written has no shard rows at all, so keysOfBlock is empty rather
+    // than throwing — the throw is about an unreadable shard, not about a missing block.
+    BOOST_CHECK(keysOfBlock(storage, 11).empty());
 }
 
 /// G4, the asymmetry that matters: leaving a row behind is a wasted byte, deleting one row too

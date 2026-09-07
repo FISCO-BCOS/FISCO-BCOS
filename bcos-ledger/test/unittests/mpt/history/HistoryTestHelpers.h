@@ -134,7 +134,7 @@ private:
 /// The suites assert on this directly: the layout is a byte-exact promise (spec B.2), so the
 /// tests read the bytes rather than only the accessors that produced them.
 inline std::vector<std::pair<std::string, std::string>> rowsOfTable(
-    HistoryMemStorage& storage, std::string_view table)
+    auto& storage, std::string_view table)
 {
     return bcos::task::syncWait(
         [&]() -> bcos::task::Task<std::vector<std::pair<std::string, std::string>>> {

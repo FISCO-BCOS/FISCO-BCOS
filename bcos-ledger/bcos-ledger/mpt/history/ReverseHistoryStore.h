@@ -30,6 +30,7 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <span>
 #include <string>
@@ -259,13 +260,23 @@ public:
         co_return decodeIndexValue(entry->get());
     }
 
-    /// Every key block @p block changed, read off that block's manifest. Empty when the block has
-    /// been expired, or when it changed nothing. Used by rollback and by the B.10 audits.
+    /// Every key block @p block changed, read off that block's manifest. Used by rollback and by
+    /// the B.10 audits, both of which need the list to be COMPLETE.
+    ///
+    /// Empty when the block changed nothing, and empty on a plane where the block's manifest rows
+    /// are physically gone — the backend after a merge, for instance.
+    ///
+    /// @throws MPTInvariantViolation when a shard row is present but carries a deletion sentinel
+    ///         rather than bytes. That is what an expiry looks like on the mutable layer, whose
+    ///         removeSome marks rather than erases (MemoryStorage LOGICAL_DELETION, the mode
+    ///         GlobalStateMutableStorage runs in). The keys such a shard listed are unreadable, so
+    ///         a caller that needs the complete list must not be handed a short one (G6). Callers
+    ///         wanting the expiry-tolerant reading use expire(), which skips those shards.
     template <SeekableStateStorage Storage>
     static task::Task<std::vector<bcos::bytes>> keysOfBlock(
         Storage& backend, protocol::BlockNumber block)
     {
-        auto scan = co_await scanManifest(backend, block);
+        auto scan = co_await scanManifest(backend, block, DeletedShardPolicy::Reject);
         co_return std::move(scan.keys);
     }
 
@@ -279,11 +290,21 @@ public:
     /// leaves the manifest, so re-running finds the same key list and re-issues deletes that are
     /// no-ops for the rows already gone. Deleting the manifest first would strand the surviving
     /// index rows permanently — nothing else records which keys the block touched.
+    ///
+    /// Idempotent on every storage, including the one G3 puts it on. The production mutable layer
+    /// is MemoryStorage with LOGICAL_DELETION (GlobalStateStorageInitializer.h:15-19), where a
+    /// removed row stays in the container as a deletion sentinel and the iterator still yields
+    /// it; so a second expire() of the same block sees its own shards coming back as sentinels.
+    /// It skips them instead of failing, and that is sound rather than merely convenient: the
+    /// index-then-manifest order above means a shard can only be deleted after the index rows of
+    /// every key it listed were deleted, so a skipped shard has nothing left to clean up.
+    /// keysOfBlock() takes the opposite reading of the same row, because a short key list would
+    /// silently break rollback.
     template <SeekableStateStorage ReadStorage, WritableStateStorage WriteStorage>
     static task::Task<ExpireReport> expire(
         ReadStorage& backend, WriteStorage& mutableLayer, protocol::BlockNumber block)
     {
-        auto scan = co_await scanManifest(backend, block);
+        auto scan = co_await scanManifest(backend, block, DeletedShardPolicy::Skip);
 
         ExpireReport report{.keyCount = scan.keys.size(),
             .indexDeletesIssued = scan.keys.size(),
@@ -312,6 +333,23 @@ private:
     {
         std::vector<bcos::bytes> keys;
         std::vector<executor_v1::StateKey> manifestKeys;
+    };
+
+    /// What a manifest sweep does with a shard row that is present but carries a deletion
+    /// sentinel instead of bytes — the shape an expired shard has on a logical-deletion layer.
+    /// The row is the same; the two callers need opposite readings of it, so the choice is a
+    /// parameter rather than a rule baked into the sweep.
+    enum class DeletedShardPolicy : uint8_t
+    {
+        /// The caller needs the block's complete key list (rollback, the B.10 audits). A deleted
+        /// shard makes part of that list unreadable, so fail loud instead of returning a short
+        /// one (G6).
+        Reject,
+        /// The caller only re-issues deletes (expire). A shard is deleted only after the index
+        /// rows of every key it listed were deleted — B.5's index-then-manifest order — so a
+        /// deleted shard has nothing left to clean up and skipping it is what makes a replay a
+        /// no-op rather than an error.
+        Skip,
     };
 
     /// spec B.3, first two lines. Kept as its own function so the one call site above can be
@@ -377,9 +415,12 @@ private:
     /// Walk the manifest shards of one block, in shard order, collecting both the keys they list
     /// and the row keys of the shards themselves. Stops at the first row that is not a manifest
     /// row of this block — the iterator runs on into the rest of the table and then into other
-    /// tables, so the loop, not the seek, defines the range.
+    /// tables, so the loop, not the seek, defines the range. A shard carrying a deletion sentinel
+    /// is not such a boundary: it is skipped or rejected per @p deletedShards, and the walk goes
+    /// on either way, because live shards can follow a deleted one.
     template <SeekableStateStorage Storage>
-    static task::Task<ManifestScan> scanManifest(Storage& backend, protocol::BlockNumber block)
+    static task::Task<ManifestScan> scanManifest(
+        Storage& backend, protocol::BlockNumber block, DeletedShardPolicy deletedShards)
     {
         ManifestScan scan;
         executor_v1::StateKey seekKey{Tables.manifest, manifestRowKey(block, 0)};
@@ -402,13 +443,14 @@ private:
             auto const* entry = detail::asStateValue(rowValue);
             if (entry == nullptr)
             {
-                // A deleted shard among live ones: a partially-applied expiry that a replay will
-                // finish. Skipping it would silently drop the keys it listed, so stop here and
-                // let the caller see the inconsistency (G6).
+                if (deletedShards == DeletedShardPolicy::Skip)
+                {
+                    continue;
+                }
                 BOOST_THROW_EXCEPTION(
                     MPTInvariantViolation() << bcos::errinfo_comment(
-                        "history manifest shard is deleted while the block's manifest is still "
-                        "being read"));
+                        "history manifest shard is deleted; the keys it listed cannot be "
+                        "recovered from this storage layer"));
             }
             scan.manifestKeys.emplace_back(rowKeyView);
             for (auto& key : decodeManifestShard(entry->get()))
