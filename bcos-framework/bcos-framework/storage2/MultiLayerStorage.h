@@ -598,6 +598,39 @@ public:
         }
     }
 
+private:
+    /// Shared merge body of mergeBackStorage / mergeToBackends — the only difference
+    /// between the two is whether a queued layer participates in the merge.
+    /// Private on purpose (finding R1): every other public mutator on this class
+    /// self-locks; this body performs an unlocked storage2::merge into the backends,
+    /// so exposing it would let a caller race mergeBackStorage on m_latestBackend.
+    /// mergeBackStorage/mergeToBackends hold m_mergeMutex around the call.
+    task::Task<void> mergeIntoBackends(auto&... storages)
+    {
+        if constexpr (withCacheStorage)
+        {
+            tbb::parallel_invoke(
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                        ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
+                    task::tbb::syncWait(storage2::merge(m_latestBackend, storages...));
+                },
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                        ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
+                    task::tbb::syncWait(storage2::merge(m_cacheStorage.get(), storages...));
+                });
+        }
+        else
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
+            co_await storage2::merge(m_latestBackend, storages...);
+        }
+        co_return;
+    }
+
+public:
     task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage(auto&... extraStorages)
     {
         std::unique_lock mergeLock(m_mergeMutex);
@@ -610,33 +643,23 @@ public:
         auto& backStorage = *backStoragePtr;
         listLock.unlock();
 
-        if constexpr (withCacheStorage)
-        {
-            tbb::parallel_invoke(
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                        ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-                    task::tbb::syncWait(
-                        storage2::merge(m_latestBackend, backStorage, extraStorages...));
-                },
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                        ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
-                    task::tbb::syncWait(
-                        storage2::merge(m_cacheStorage.get(), backStorage, extraStorages...));
-                });
-        }
-        else
-        {
-            ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-            co_await storage2::merge(m_latestBackend, backStorage, extraStorages...);
-        }
+        co_await mergeIntoBackends(backStorage, extraStorages...);
 
         listLock.lock();
         m_storages.pop_back();
 
         co_return backStoragePtr;
+    }
+
+    /// Merge the given storages into the latest backend (and the cache storage when
+    /// enabled) WITHOUT taking a queued layer — mergeBackStorage's counterpart for a
+    /// committer whose queued layer was already drained by someone else (mergeBackStorage
+    /// throws NotExistsImmutableStorageError on an empty deque; this helper never touches
+    /// the deque).
+    task::Task<void> mergeToBackends(auto&... fromStorage)
+    {
+        std::unique_lock mergeLock(m_mergeMutex);
+        co_await mergeIntoBackends(fromStorage...);
     }
 
     auto fork(CheckpointName const& blockhash)
