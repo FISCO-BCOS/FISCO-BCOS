@@ -141,14 +141,21 @@ private:
     /// Post-commit hook over each MPT block's node delta — the pathdb pruning seam
     /// (CommitObserver.h). Defaults to the no-op observer; replaced via setMPTCommitObserver.
     /// Written at wiring time (setMPTCommitObserver) and reset to the no-op observer at stop()
-    /// time (resetMPTCommitObserver); read on BOTH the execute path (buildMPTStateRoot's
-    /// needsRefCountDeltas query, under m_executeMutex) and the commit path (under
-    /// m_commitMutex) — the atomic shared_ptr makes the unsynchronized reads safe against the
-    /// stop()-time reset (a load() yields a valid snapshot; the previous observer stays alive
-    /// in the reader's copy).
-    std::atomic<std::shared_ptr<ledger::mpt::CommitObserver>> m_mptCommitObserver{
-        std::shared_ptr<ledger::mpt::CommitObserver>(
-            std::make_shared<ledger::mpt::NoopCommitObserver>())};
+    /// time (resetMPTCommitObserver, under a BLOCKING m_commitMutex lock); read only on the
+    /// commit path, which runs under m_commitMutex from beginning to end. The execute path
+    /// never dereferences the pointer: buildMPTStateRoot's needsRefCountDeltas query reads the
+    /// m_trackRefCounts snapshot below instead (needsRefCountDeltas() is a constant per
+    /// observer, so caching it loses nothing). std::atomic<std::shared_ptr> would be the
+    /// direct answer but libc++ (Apple Clang) still lacks the C++20 specialization.
+    std::shared_ptr<ledger::mpt::CommitObserver> m_mptCommitObserver =
+        std::make_shared<ledger::mpt::NoopCommitObserver>();
+
+    /// Copy of m_mptCommitObserver->needsRefCountDeltas(), maintained by set/reset alongside
+    /// the pointer. Read on the execute path (under m_executeMutex); written at wiring time
+    /// (before block flow starts) and under m_commitMutex at stop() time, so the atomic makes
+    /// the stop()-time store safe against an in-flight execute. A stale read only flips the
+    /// tally off one block early or late — the delta's consumers never read it either way.
+    std::atomic<bool> m_trackRefCounts{false};
 
     /**
      * Build the block's Ethereum MPT state root over the execute view — the view whose top
@@ -302,10 +309,10 @@ public:
 
     /// Restore the no-op observer. stop() calls this under a BLOCKING m_commitMutex lock, so it
     /// returns only after any in-flight commit — the commit path is the only code that ever
-    /// calls observer methods with side effects, and it does so while holding the same mutex —
-    /// has finished. The execute path's needsRefCountDeltas() query goes through the atomic
-    /// shared_ptr and is side-effect-free. Afterwards every commit goes through the no-op
-    /// observer, so the pruning backend behind a previous observer can be torn down safely.
+    /// dereferences the observer, and it does so while holding the same mutex — has finished.
+    /// The execute path's tally gate reads the atomic m_trackRefCounts flag instead of the
+    /// pointer, so it stays safe against this store. Afterwards every commit goes through the
+    /// no-op observer, so the pruning backend behind a previous observer can be torn down safely.
     void resetMPTCommitObserver();
 
 

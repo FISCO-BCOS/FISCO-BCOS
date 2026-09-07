@@ -265,11 +265,11 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::buildMPTS
         ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
     // Skip the per-hash refCountDeltas tally when the commit observer does not count references
     // (NoopCommitObserver — pruning not configured): the delta's consumers then never read the
-    // map, and the execute path pays nothing for it. m_mptCommitObserver is an atomic
-    // shared_ptr, so this read stays well-defined even against resetMPTCommitObserver's
-    // stop()-time store.
+    // map, and the execute path pays nothing for it. The execute path reads the cached
+    // m_trackRefCounts flag rather than the observer pointer, so it needs no synchronization
+    // against resetMPTCommitObserver's stop()-time write beyond the atomic flag itself.
     co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode,
-        m_mptCommitObserver.load()->needsRefCountDeltas());
+        m_trackRefCounts.load(std::memory_order_relaxed));
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
@@ -655,9 +655,10 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // batch, so a node without pruning configured pays nothing here — and pays nothing on the
         // execute path either: buildMPTStateRoot skips the refCountDeltas tally unless the
         // observer's needsRefCountDeltas() says it counts references.
-        // The observer is loaded ONCE per commit so coPreparePruneRows and onCommit below see
-        // the same observer even if stop()'s reset lands mid-commit.
-        auto const commitObserver = m_mptCommitObserver.load();
+        // The observer is read ONCE per commit so coPreparePruneRows and onCommit below see
+        // the same observer even if stop()'s reset lands mid-commit (impossible today — the
+        // reset holds m_commitMutex, which this coroutine holds — but cheap insurance).
+        auto const commitObserver = m_mptCommitObserver;
         if (result->m_mptDelta)
         {
             auto pruneRows = co_await commitObserver->coPreparePruneRows(
@@ -1006,10 +1007,11 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::
     // Blocking lock, unlike coCommitBlock's try_to_lock: wait out any in-flight commit so
     // that once this returns, no thread will ever dereference the previous observer from the
     // commit path again (the commit path reads m_mptCommitObserver only while holding
-    // m_commitMutex; the execute path's needsRefCountDeltas() query goes through the atomic
-    // and is side-effect-free).
+    // m_commitMutex). The execute path never dereferences the pointer — it reads the atomic
+    // m_trackRefCounts flag, whose stale value is harmless either way.
     std::unique_lock commitLock(m_commitMutex);
-    m_mptCommitObserver.store(std::make_shared<ledger::mpt::NoopCommitObserver>());
+    m_mptCommitObserver = std::make_shared<ledger::mpt::NoopCommitObserver>();
+    m_trackRefCounts.store(false, std::memory_order_relaxed);
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
@@ -1035,7 +1037,9 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setM
 {
     if (observer)
     {
-        m_mptCommitObserver.store(std::move(observer));
+        // Wiring-time only, before block flow starts — no mutex needed here.
+        m_trackRefCounts.store(observer->needsRefCountDeltas(), std::memory_order_relaxed);
+        m_mptCommitObserver = std::move(observer);
     }
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
