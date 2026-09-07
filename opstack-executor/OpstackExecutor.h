@@ -305,10 +305,108 @@ namespace engine = bcos::evm::engine;
     return std::nullopt;  // list (not an integer)
 }
 
+/// Decode the envelope's accessList item (EIP-2930 shape: [[address20, [keys32...]], ...]) and
+/// require element-wise equality with the mirror the executor will run. Shared by the two bind
+/// call sites below so both block paths reject the same divergence with the same message.
+[[nodiscard]] inline std::optional<std::string> bindEnvelopeAccessList(
+    bcos::bytesConstRef listPayload, bool isList, evmone::state::AccessList const& mirror)
+{
+    namespace rlp = bcos::codec::rlp;
+    if (!isList)
+        return "accessList field is an RLP string";
+    bcos::bytesRef walker(
+        const_cast<bcos::byte*>(listPayload.data()), listPayload.size());
+    size_t envEntries = 0;
+    while (!walker.empty())
+    {
+        auto [entryErr, entryHeader] = rlp::decodeHeader(walker);
+        if (entryErr || !entryHeader.isList || entryHeader.payloadLength > walker.size())
+            return "accessList entry is malformed";
+        bcos::bytesRef entry = walker.getCroppedData(0, entryHeader.payloadLength);
+        walker = walker.getCroppedData(entryHeader.payloadLength);
+
+        auto [addrErr, addrHeader] = rlp::decodeHeader(entry);
+        // decodeHeader does not bound the payload against the remaining view (every other
+        // call site re-checks explicitly); a 20-declaring header on a shorter tail would
+        // otherwise memcpy past the buffer below.
+        if (addrErr || addrHeader.isList || addrHeader.payloadLength != sizeof(evmc_address) ||
+            addrHeader.payloadLength > entry.size())
+            return "accessList address is malformed";
+        evmc::address addr{};
+        std::memcpy(addr.bytes, entry.data(), sizeof(addr.bytes));
+        entry = entry.getCroppedData(addrHeader.payloadLength);
+
+        auto [keysErr, keysHeader] = rlp::decodeHeader(entry);
+        if (keysErr || !keysHeader.isList || keysHeader.payloadLength > entry.size())
+            return "accessList storageKeys is malformed";
+        bcos::bytesRef keys = entry.getCroppedData(0, keysHeader.payloadLength);
+        std::vector<evmc::bytes32> storageKeys;
+        while (!keys.empty())
+        {
+            auto [keyErr, keyHeader] = rlp::decodeHeader(keys);
+            if (keyErr || keyHeader.isList ||
+                keyHeader.payloadLength != sizeof(evmc::bytes32) ||
+                keyHeader.payloadLength > keys.size())
+                return "accessList storage key is malformed";
+            evmc::bytes32 key{};
+            std::memcpy(key.bytes, keys.data(), sizeof(key.bytes));
+            storageKeys.push_back(key);
+            keys = keys.getCroppedData(keyHeader.payloadLength);
+        }
+        if (envEntries >= mirror.size() || mirror[envEntries].first != addr ||
+            mirror[envEntries].second.size() != storageKeys.size())
+            return "accessList is not bound to the signed envelope";
+        for (size_t i = 0; i < storageKeys.size(); ++i)
+        {
+            if (mirror[envEntries].second[i] != storageKeys[i])
+                return "accessList mismatch";
+        }
+        ++envEntries;
+    }
+    if (envEntries != mirror.size())
+        return "accessList is not bound to the signed envelope";
+    return std::nullopt;
+}
+
+/// Decode the envelope's blobVersionedHashes item (list of 32-byte strings) and require
+/// element-wise equality with the mirror.
+[[nodiscard]] inline std::optional<std::string> bindEnvelopeBlobHashes(
+    bcos::bytesConstRef listPayload, bool isList, std::vector<evmc::bytes32> const& mirror)
+{
+    namespace rlp = bcos::codec::rlp;
+    if (!isList)
+        return "blobVersionedHashes field is an RLP string";
+    bcos::bytesRef walker(
+        const_cast<bcos::byte*>(listPayload.data()), listPayload.size());
+    size_t count = 0;
+    while (!walker.empty())
+    {
+        auto [hashErr, hashHeader] = rlp::decodeHeader(walker);
+        if (hashErr || hashHeader.isList ||
+            hashHeader.payloadLength != sizeof(evmc::bytes32) ||
+            hashHeader.payloadLength > walker.size())
+            return "blobVersionedHashes entry is malformed";
+        evmc::bytes32 hash{};
+        std::memcpy(hash.bytes, walker.data(), sizeof(hash.bytes));
+        if (count >= mirror.size() || mirror[count] != hash)
+            return "blobVersionedHashes is not bound to the signed envelope";
+        ++count;
+        walker = walker.getCroppedData(hashHeader.payloadLength);
+    }
+    if (count != mirror.size())
+        return "blobVersionedHashes is not bound to the signed envelope";
+    return std::nullopt;
+}
+
 /// (legacy = bare list; typed 0x01..0x04 = type byte + list, field order per EIP-2718/2930/1559).
-/// BOUND COVERAGE: type byte, nonce, gasLimit, to, value, data. NOT bound: sender (needs
-/// ecrecover), the fee fields, accessList, blobVersionedHashes, authorizationList — part-5
-/// wiring must close those before this gate is the sole trust boundary.
+/// BOUND COVERAGE: type byte, nonce, gasLimit, to, value, data, and FULL element-wise binds of
+/// accessList (0x01 idx 7, 0x02/0x03/0x04 idx 8) and blobVersionedHashes (0x03 idx 10; 0x02 only
+/// when the 4844-in-1559 extension is present, i.e. >= 14 items — below that idx 10 is the
+/// signature). The envelope's own lists are decoded and compared against the mirror: a mirror
+/// stripped against a non-empty envelope list no longer passes (it would execute the signed
+/// envelope without its warm slots / blob accounting), and a non-empty mirror list must echo the
+/// envelope exactly. Empty == empty stays legal. Fee fields and sender (ecrecover) stay unbound
+/// until part-5, as does the authorizationList (same posture as before).
 /// The envelope-bytes core below is shared by the per-tx path (m_prepare) and the block path
 /// (processOpBlock). Unbound fields are not trusted as a signature: the block path rejects
 /// a missing sender and a non-empty authorizationList until ecrecover lands in part-5.
@@ -354,11 +452,22 @@ namespace engine = bcos::evm::engine;
     std::optional<bcos::bytesRef> nonceItem, gasItem, valueItem;
     std::optional<size_t> noncePlen, gasPlen, valuePlen;
     std::optional<bcos::bytesRef> toPayload, dataPayload;
+    std::optional<bcos::bytesRef> accessListPayload, blobPayload;
     bool nonceIsList = false;
     bool gasIsList = false;
     bool valueIsList = false;
     bool toIsList = false;
     bool dataIsList = false;
+    bool accessListIsList = false;
+    bool blobIsList = false;
+    // Bind field indices: accessList at 7 (0x01) / 8 (0x02/0x03/0x04); 0x7e deposits and
+    // legacy carry no accessList field. blobVersionedHashes candidate at 10 (0x02/0x03 —
+    // only consumed for 0x03, or 0x02 with the 4844 extension).
+    constexpr size_t c_noField = std::numeric_limits<size_t>::max();
+    size_t const accessListIdx = !typed || envelopeKind == 0x7e ?
+                                     c_noField :
+                                     (envelopeKind == 0x01 ? 7 : 8);
+    size_t const blobIdx = envelopeKind == 0x02 || envelopeKind == 0x03 ? 10 : c_noField;
     size_t idx = 0;
     while (!walker.empty())
     {
@@ -397,10 +506,24 @@ namespace engine = bcos::evm::engine;
             dataPayload = payload;
             dataIsList = itemHeader.isList;
         }
+        if (idx == accessListIdx)
+        {
+            accessListPayload = payload;
+            accessListIsList = itemHeader.isList;
+        }
+        if (idx == blobIdx)
+        {
+            blobPayload = payload;
+            blobIsList = itemHeader.isList;
+        }
         walker = walker.getCroppedData(itemHeader.payloadLength);
         ++idx;
     }
-    if (!nonceItem || !gasItem || !valueItem || !toPayload || !dataPayload)
+    if (!nonceItem || !gasItem || !valueItem || !toPayload || !dataPayload ||
+        (typed && envelopeKind != 0x7e && !accessListPayload) ||
+        // A type-0x03 envelope must carry blobVersionedHashes (idx 10): without this arm a
+        // 9/10-item 0x03 passed the guard and dereferenced a disengaged blobPayload below.
+        (typed && envelopeKind == 0x03 && !blobPayload))
         return "envelope has fewer fields than the type requires";
 
     // nonce (uint64). rlp::decode rejects over-wide payloads (UnexpectedLength); the plen
@@ -474,6 +597,36 @@ namespace engine = bcos::evm::engine;
         if (mirrorData.size() != dataPayload->size() ||
             !std::equal(mirrorData.begin(), mirrorData.end(), dataPayload->begin()))
             return "data mismatch";
+    }
+    // Full accessList / blobVersionedHashes bind: decode the envelope's own lists and require
+    // element-wise equality with the mirror (both directions — a mirror stripped against a
+    // non-empty envelope list previously passed and executed the signed envelope without its
+    // warm slots / blob accounting, and a non-empty mirror list was blanket-rejected even when
+    // it faithfully echoed the envelope). Empty == empty stays legal. Shapes without the field
+    // (legacy, 0x7e deposits) still reject a non-empty mirror list.
+    if (accessListPayload)
+    {
+        if (auto err = bindEnvelopeAccessList(*accessListPayload, accessListIsList,
+                evmTx.access_list))
+            return err;
+    }
+    else if (!evmTx.access_list.empty())
+    {
+        return "accessList is not bound to the signed envelope";
+    }
+    // blobVersionedHashes: 0x03 always has the field; 0x02 only with the 4844 extension
+    // (>= 14 items — below that idx 10 is the signature and must not be read). 0x01/0x04
+    // have no blob fields at all.
+    bool const blobFieldsPresent =
+        envelopeKind == 0x03 || (envelopeKind == 0x02 && idx >= 14);
+    if (blobFieldsPresent)
+    {
+        if (auto err = bindEnvelopeBlobHashes(*blobPayload, blobIsList, evmTx.blob_hashes))
+            return err;
+    }
+    else if (!evmTx.blob_hashes.empty())
+    {
+        return "blobVersionedHashes is not bound to the signed envelope";
     }
     return std::nullopt;
 }
@@ -935,7 +1088,11 @@ public:
             requireBlockContext();
             // A missing block-hashes source on the block path would silently degrade BLOCKHASH
             // to zeros (NullBlockHashes is the documented eth_call/standalone fallback) — fail
-            // loud instead of executing a deterministic-but-wrong state transition.
+            // loud instead of executing a deterministic-but-wrong state transition. Node-wiring
+            // fault: thrown WITHOUT the per-tx txHash tag — a set txHash marks a
+            // pool-evictable culprit, and evicting one innocent tx per retry cannot fix an
+            // unwired RecentBlockHashes source. The sibling free-function checks below already
+            // throw the 1-arg form for the same fault class.
             if (m_ctx->blockHashes == nullptr && !call)
                 throw bcos::evm::OpConsensusError(
                     "OpstackExecutor: block execution requires wired RecentBlockHashes");
@@ -1315,12 +1472,11 @@ private:
         auto evmTx = eth::toEvmoneTransaction(transaction);
         // TRUST BOUNDARY (envelope↔mirror gate, below): the execution fields come from the tars
         // mirror, so they are bound against the signed envelope by
-        // envelopeExecutionFieldsMismatch — type byte, nonce, gasLimit, to, value, data are
-        // fail-closed (OpConsensusError) on both the scheduler and block paths. NOT bound at
-        // this head: sender (needs ecrecover), the fee fields, accessList, blobVersionedHashes,
-        // authorizationList. The block path (chainId.has_value()) additionally rejects a
-        // zero sender and a non-empty authorizationList; ecrecover of sender/auth signers is
-        // part-5. Do not read this gate as "no execution path trusts an unbound mirror".
+        // envelopeExecutionFieldsMismatch — type byte, nonce, gasLimit, to, value, data, and
+        // full element-wise binds of accessList / blobVersionedHashes are fail-closed
+        // (OpConsensusError) on both the scheduler and block paths. NOT bound at this head:
+        // sender (needs ecrecover), the fee fields, and the authorizationList (still
+        // reject-if-non-empty). ecrecover of sender/auth signers is part-5.
         // eth_call (call=true) simulates without fee constraints — op-geth's eth_call does
         // not enforce max_gas_price >= base_fee. A pricing-less call (e.g. the RPC default
         // 2 gwei cap) would fail MAX_FEE_PER_GAS_TOO_LOW once the OP base fee exceeds it, so
@@ -1340,11 +1496,11 @@ private:
         {
             if (auto missing = blockPathZeroSender(evmTx.sender))
             {
-                throw bcos::evm::OpConsensusError("op block: " + *missing);
+                throw bcos::evm::OpConsensusError("op block: " + *missing, transaction.hash());
             }
             if (auto gate = envelopeChainIdMismatch(transaction, *chainId))
             {
-                throw bcos::evm::OpConsensusError("op block: " + *gate);
+                throw bcos::evm::OpConsensusError("op block: " + *gate, transaction.hash());
             }
             // Fail-closed mirror↔envelope cross-check: execution fields (nonce/gasLimit/
             // to/value/data) must match the SIGNED envelope, never the forgeable mirror. Runs
@@ -1353,11 +1509,12 @@ private:
             if (auto mismatch = envelopeExecutionFieldsMismatch(transaction, evmTx))
             {
                 throw bcos::evm::OpConsensusError(
-                    "op block: tx execution fields diverge from the signed envelope: " + *mismatch);
+                    "op block: tx execution fields diverge from the signed envelope: " + *mismatch,
+                    transaction.hash());
             }
             if (auto unbound = blockPathUnboundAuthorizationList(evmTx))
             {
-                throw bcos::evm::OpConsensusError("op block: " + *unbound);
+                throw bcos::evm::OpConsensusError("op block: " + *unbound, transaction.hash());
             }
         }
         auto envRef = transaction.extraTransactionBytes();

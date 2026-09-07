@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/protocol/BlockHeader.h>
@@ -126,6 +127,16 @@ inline bool forkchoiceHashIsCanonical(
 /// Forced DA overflow is still not INVALID (OP deposits are undroppable).
 inline constexpr std::size_t c_maxForcedTxCount = 16384;
 inline constexpr std::size_t c_maxForcedTxBytes = 8 * 1024 * 1024;
+
+/// Consensus header constants shared by the Eth and OP header builders
+/// (finalizeEthBlockHeader / rebuildOpEthHeader + applyOpHeaderConstants). Both stamp
+/// keccak256(rlp(header))-critical values, so the literals must live in exactly one place.
+/// The empty-requests hash is single-sourced cross-layer too: its hex lives in the
+/// framework (c_emptyRequestsHashHex) because the OP block seal stamps the same value.
+inline const bcos::h256 c_emptyOmmersHash{
+    std::string{"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}};
+inline const bcos::h64 c_posNonce{std::string{"0x0000000000000000"}};
+inline const bcos::h256 c_emptyRequestsHash{std::string{c_emptyRequestsHashHex}};
 
 /// Decoded byte count of a hex string, matching `fromHex` (optional 0x, odd nibble pads).
 /// Used to reject over-ceiling forced txs before allocating the decoded buffer (finding BY).
