@@ -254,6 +254,10 @@ using EthereumBlockComputation = ledger::mpt::EthereumBlockComputation;
 // ETH / 8 for each uncle's miner (geth's accumulateRewards).
 inline constexpr u256 kPoWBlockReward{2000000000000000000ull};  // 2 * 10^18 wei
 
+// EIP-4844: blob gas per blob (2**17). Mirrors GAS_PER_BLOB in
+// ethereum-executor/EVMSupport.h and kGasPerBlob in devp2p's HeaderValidator.h.
+inline constexpr u256 kBlobGasPerBlob{131072};
+
 /// Accumulate PoW block rewards (coinbase + uncles) into `view`, exactly like
 /// geth's `accumulateRewards`. Only meaningful for pre-merge (PoW) blocks; PoS
 /// blocks pay no rewards (the CL handles them via withdrawals).
@@ -301,9 +305,21 @@ task::Task<void> accumulatePoWBlockRewards(ViewType& view,
                                    err->errorMessage()});
         }
         auto const& uncleHeader = uncle.data();
-        u256 uncleReward = (u256(static_cast<uint64_t>(uncleHeader.number)) + 8 -
-                              u256(static_cast<uint64_t>(ethHeader.number))) *
-                           kPoWBlockReward / 8;
+        // Depth bounds before any reward arithmetic (geth's accumulateRewards relies
+        // on verifyUncles having enforced them): the uncle must be strictly older than
+        // the block and within 8 blocks of depth. Compute in SIGNED arithmetic — the
+        // reward formula below runs on u256 (unsigned), so an out-of-range uncle would
+        // otherwise underflow into an astronomical reward.
+        auto const depth = ethHeader.number - uncleHeader.number;
+        if (uncleHeader.number >= ethHeader.number || depth > 8)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{
+                "EthereumBlockVerifier: uncle number out of the valid depth range (uncle " +
+                std::to_string(uncleHeader.number) + ", block " +
+                std::to_string(ethHeader.number) + ")"});
+        }
+        u256 uncleReward =
+            u256(static_cast<uint64_t>(8 - depth)) * kPoWBlockReward / 8;
         co_await addBalance(uncleHeader.coinbase, uncleReward);
         coinbaseReward += kPoWBlockReward / 32;
     }
@@ -586,7 +602,7 @@ public:
         // 7. Verify against the header.
         if (auto error =
                 verifyAgainstHeader(ethHeader, computation, result.stateRoot, rawWithdrawals,
-                    rawUncles);
+                    rawUncles, transactions);
             error.has_value())
         {
             co_return co_await fail(std::move(*error));
@@ -662,7 +678,8 @@ public:
         protocol::EthBlockHeaderData const& ethHeader, EthereumBlockComputation const& computation,
         crypto::HashType const& stateRoot,
         std::optional<std::vector<bcos::bytes>> const& rawWithdrawals,
-        std::vector<bcos::bytes> const& rawUncles)
+        std::vector<bcos::bytes> const& rawUncles,
+        std::vector<protocol::Transaction::Ptr> const& transactions)
     {
         if (computation.txsRoot != ethHeader.txsRoot)
         {
@@ -699,6 +716,27 @@ public:
         {
             return "uncleHash mismatch (computed over " + std::to_string(rawUncles.size()) +
                    " uncles, header=" + ethHeader.uncleHash.hex() + ")";
+        }
+        // EIP-4844 blob gas commitment (Cancun+): blobGasUsed must equal
+        // GAS_PER_BLOB (131072) times the block's total blob count. Count BLOB
+        // HASHES, not transactions — one type-3 transaction can carry several
+        // blobs (geth recomputes the same value in block.BlobGasUsed()).
+        u256 computedBlobGas = 0;
+        for (auto const& transaction : transactions)
+        {
+            computedBlobGas += kBlobGasPerBlob * transaction->blobVersionedHashes().size();
+        }
+        if (ethHeader.blobGasUsed.has_value())
+        {
+            if (*ethHeader.blobGasUsed != computedBlobGas)
+            {
+                return "blobGasUsed mismatch (computed=" + computedBlobGas.str() +
+                       " from blob transactions, header=" + ethHeader.blobGasUsed->str() + ")";
+            }
+        }
+        else if (computedBlobGas != 0)
+        {
+            return "block carries blob transactions but the header has no blobGasUsed";
         }
         if (ethHeader.withdrawalsHash.has_value())
         {

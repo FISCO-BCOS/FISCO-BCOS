@@ -41,7 +41,6 @@
 #include "bcos-ledger/mpt/EthereumBlockRoots.h"
 #include "bcos-ledger/mpt/MPTFeatureGates.h"
 #include "bcos-ledger/mpt/StateRoots.h"
-#include "bcos-rlp-protocol/EthReceipt.h"
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"

@@ -23,6 +23,7 @@
 #include <bcos-devp2p/sync/BlockExchange.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <limits>
 #include <stdexcept>
 #include <thread>
 
@@ -180,7 +181,13 @@ BOOST_AUTO_TEST_CASE(downloadChainWithPoSValidation)
         auto established = client.connect();
 
         // Anchor = block 0's header; download blocks 1..4 with PoS checks.
-        sync::BlockExchange exchange(1, chain[0].header);
+        // The fake headers carry no Shanghai/Cancun fields, so keep those forks
+        // inactive (UINT64_MAX = never) and exercise the PoS/London rules only.
+        sync::ChainConfig config;
+        config.shanghaiTime = std::numeric_limits<uint64_t>::max();
+        config.cancunTime = std::numeric_limits<uint64_t>::max();
+        config.pragueTime = std::numeric_limits<uint64_t>::max();
+        sync::BlockExchange exchange(1, chain[0].header, config);
         exchange.downloadRange(established.session, chain.size() - 1,
             [&](sync::Block const& block) { downloaded.push_back(block); });
 
@@ -238,7 +245,11 @@ BOOST_AUTO_TEST_CASE(posValidationRejectsBadBaseFee)
         rlpx::RlpxClient client(std::move(clientKey), clientConfig);
         auto established = client.connect();
 
-        sync::BlockExchange exchange(1, chain[0].header);
+        sync::ChainConfig config;
+        config.shanghaiTime = std::numeric_limits<uint64_t>::max();
+        config.cancunTime = std::numeric_limits<uint64_t>::max();
+        config.pragueTime = std::numeric_limits<uint64_t>::max();
+        sync::BlockExchange exchange(1, chain[0].header, config);
         BOOST_CHECK_THROW(
             exchange.downloadRange(established.session, chain.size() - 1,
                 [](sync::Block const&) {}),

@@ -357,6 +357,15 @@ private:
         using std::runtime_error::runtime_error;
     };
 
+    /// Shutdown cancellation: thrown by the per-block download callback when stop()
+    /// cleared m_running, so downloadRange(UINT64_MAX) unwinds immediately instead of
+    /// streaming blocks until the peer's tip (which would hang the join in stop()).
+    /// Caught at the per-bootnode catch site — a normal shutdown, not a sync failure.
+    struct SyncCancelled : public std::runtime_error
+    {
+        using std::runtime_error::runtime_error;
+    };
+
     /// Read a 32-byte secp256k1 private key from _path: hex text with an optional
     /// 0x prefix, surrounding whitespace ignored. Every failure names the file.
     static bcos::bytes readNodeKeyFile(std::string const& _path)
@@ -612,7 +621,12 @@ private:
                             [&](bcos::devp2p::sync::Block const& block) {
                                 if (!m_running.load())
                                 {
-                                    return;
+                                    // stop() cleared m_running: throw past downloadRange
+                                    // (whose remaining > 0 loop has no cancel mechanism)
+                                    // so the join in stop() does not wait for the
+                                    // peer's tip. Caught below as a normal shutdown.
+                                    BOOST_THROW_EXCEPTION(
+                                        SyncCancelled("EL sync: cancelled by stop()"));
                                 }
                                 // Operator-pinned finalized checkpoint: the block that
                                 // CROSSES the checkpoint height must carry the pinned
@@ -660,6 +674,12 @@ private:
                                     << LOG_KV("stateRoot",
                                         result.stateRoot.hex().substr(0, 18));
                             });
+                    }
+                    catch (SyncCancelled const&)
+                    {
+                        // stop() requested shutdown mid-download: leave the sync loop
+                        // quietly (a normal shutdown, not a sync failure).
+                        return;
                     }
                     catch (FatalSyncError const& e)
                     {

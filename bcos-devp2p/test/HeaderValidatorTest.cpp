@@ -48,6 +48,8 @@ PoSPair makeValidPair()
     parent.gasLimit = 30000000;
     parent.gasUsed = 21000;
     parent.baseFee = u256(1000000000);
+    parent.blobGasUsed = u256(0);
+    parent.excessBlobGas = u256(0);
 
     auto& child = p.child;
     child.number = 2;
@@ -57,6 +59,12 @@ PoSPair makeValidPair()
     child.gasLimit = 30000000;
     child.gasUsed = 21000;
     child.baseFee = computeNextBaseFee(parent);  // 875175000 (golden)
+    // Shanghai/Cancun fields are mandatory once those forks are active (the
+    // default config activates every fork from genesis).
+    child.withdrawalsHash = h256{};
+    child.blobGasUsed = u256(0);
+    child.excessBlobGas = computeNextExcessBlobGas(parent, kCancunBlobSchedule);  // 0
+    child.parentBeaconRoot = h256{};
 
     p.config.chainId = 1;  // London active from genesis (londonTime = 0)
     return p;
@@ -105,6 +113,56 @@ BOOST_AUTO_TEST_CASE(rejectsNonZeroDifficulty)
     auto result = validateHeaderPoS(p.child, p.parent, p.config);
     BOOST_CHECK(!result.valid);
     BOOST_CHECK(result.error.find("difficulty") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(rejectsNonZeroPoSNonce)
+{
+    auto p = makeValidPair();
+    p.child.nonce = h64{0x01};
+    auto result = validateHeaderPoS(p.child, p.parent, p.config);
+    BOOST_CHECK(!result.valid);
+    BOOST_CHECK(result.error.find("nonce") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(rejectsMissingWithdrawalsHashWhenShanghaiActive)
+{
+    auto p = makeValidPair();
+    p.child.withdrawalsHash.reset();
+    auto result = validateHeaderPoS(p.child, p.parent, p.config);
+    BOOST_CHECK(!result.valid);
+    BOOST_CHECK(result.error.find("withdrawalsHash") != std::string::npos);
+
+    // Pre-Shanghai the field is genuinely absent: not an error.
+    auto p2 = makeValidPair();
+    p2.config.shanghaiTime = 1600000002;  // activates after the child block
+    p2.config.cancunTime = 1600000002;
+    p2.child.withdrawalsHash.reset();
+    p2.child.blobGasUsed.reset();
+    p2.child.excessBlobGas.reset();
+    p2.child.parentBeaconRoot.reset();
+    auto ok = validateHeaderPoS(p2.child, p2.parent, p2.config);
+    BOOST_CHECK(ok.valid);
+}
+
+BOOST_AUTO_TEST_CASE(rejectsMissingBlobFieldsWhenCancunActive)
+{
+    auto p = makeValidPair();
+    p.child.blobGasUsed.reset();
+    auto result = validateHeaderPoS(p.child, p.parent, p.config);
+    BOOST_CHECK(!result.valid);
+    BOOST_CHECK(result.error.find("blobGasUsed") != std::string::npos);
+
+    auto p2 = makeValidPair();
+    p2.child.excessBlobGas.reset();
+    auto bad2 = validateHeaderPoS(p2.child, p2.parent, p2.config);
+    BOOST_CHECK(!bad2.valid);
+    BOOST_CHECK(bad2.error.find("excessBlobGas") != std::string::npos);
+
+    auto p3 = makeValidPair();
+    p3.child.parentBeaconRoot.reset();
+    auto bad3 = validateHeaderPoS(p3.child, p3.parent, p3.config);
+    BOOST_CHECK(!bad3.valid);
+    BOOST_CHECK(bad3.error.find("parentBeaconBlockRoot") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(rejectsOmmers)

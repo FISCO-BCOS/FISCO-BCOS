@@ -15,7 +15,8 @@
  *
  * @file HeaderValidator.h
  * @brief Ethereum PoS header validation (EIP-1559 base fee, EIP-4844 blob gas,
- *        gas-limit bounds, difficulty/uncle/extra-data rules).
+ *        gas-limit bounds, difficulty/nonce/uncle/extra-data rules, fork-gated
+ *        field presence for Shanghai/Cancun).
  * @date 2026/8/18
  */
 #pragma once
@@ -198,6 +199,35 @@ inline std::optional<std::string> validateBlobGas(
     }
     return std::nullopt;
 }
+
+// Fork-gated field presence (geth's VerifyHeader fails closed: a header that is
+// missing a field its active fork requires is INVALID, not "skipped"). London's
+// baseFee presence is checked in validateBaseFee; this covers Shanghai/Cancun.
+inline std::optional<std::string> validateForkFieldPresence(
+    bcos::protocol::EthBlockHeaderData const& _header, ChainConfig const& _config)
+{
+    if (isForkActive(_config.shanghaiTime, _header.timestamp) &&
+        !_header.withdrawalsHash.has_value())
+    {
+        return "missing withdrawalsHash (Shanghai active)";
+    }
+    if (isForkActive(_config.cancunTime, _header.timestamp))
+    {
+        if (!_header.blobGasUsed.has_value())
+        {
+            return "missing blobGasUsed (Cancun active)";
+        }
+        if (!_header.excessBlobGas.has_value())
+        {
+            return "missing excessBlobGas (Cancun active)";
+        }
+        if (!_header.parentBeaconRoot.has_value())
+        {
+            return "missing parentBeaconBlockRoot (Cancun active)";
+        }
+    }
+    return std::nullopt;
+}
 }  // namespace detail
 
 // Validate `_header` against its parent per Ethereum consensus rules.
@@ -213,10 +243,14 @@ inline HeaderValidationResult validateHeaderPoS(
                      static_cast<uint64_t>(_header.number) >= _config.mergeBlock;
     if (pos)
     {
-        // PoS: difficulty must be zero and no ommers.
+        // PoS: difficulty must be zero, the nonce must be all-zero and no ommers.
         if (_header.difficulty != 0)
         {
             return {false, "PoS difficulty must be zero"};
+        }
+        if (_header.nonce != bcos::h64{})
+        {
+            return {false, "PoS nonce must be zero"};
         }
         if (_header.uncleHash != emptyOmmersHash())
         {
@@ -268,6 +302,11 @@ inline HeaderValidationResult validateHeaderPoS(
         return {false, *err};
     }
     if (auto err = detail::validateBlobGas(_header, _parent, _config))
+    {
+        return {false, *err};
+    }
+    // Shanghai/Cancun fork-gated field presence (fail-closed).
+    if (auto err = detail::validateForkFieldPresence(_header, _config))
     {
         return {false, *err};
     }
