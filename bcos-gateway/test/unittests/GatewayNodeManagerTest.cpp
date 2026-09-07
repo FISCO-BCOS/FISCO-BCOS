@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-front/FrontService.h"
 #include "bcos-gateway/Gateway.h"
+#include "bcos-gateway/gateway/GatewayHandle.h"
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
@@ -125,7 +126,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     frontService->setGroupID(groupID);
     frontService->setNodeID(nodeID);
     frontService->setIOServicePool(ioServicePool);
-    frontService->setGatewayInterface(std::make_shared<FakeGateway>());
+    frontService->setGateway(makeFrontServiceGateway(std::make_shared<FakeGateway>()));
 
     bool r = false;
     auto seq = gatewayNodeManager->statusSeq();

@@ -20,8 +20,8 @@
 
 #pragma once
 #include <bcos-framework/front/FrontServiceTypeDef.h>
-#include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/gateway/GroupNodeInfo.h>
+#include <bcos-front/FrontServiceGateway.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
@@ -162,11 +162,11 @@ public:
     std::string groupID() const;
     void setGroupID(const std::string& _groupID);
 
-    std::shared_ptr<gateway::GatewayInterface> gatewayInterface();
-
     virtual bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const;
 
-    void setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface);
+    // Bind the gateway the front sends through (see FrontServiceGateway.h); called once by the
+    // assembly side before start().
+    void setGateway(FrontServiceGateway _gateway);
 
     std::shared_ptr<boost::asio::io_context> ioService() const;
     void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool);
@@ -241,8 +241,8 @@ private:
     std::atomic<size_t> m_pendingSendCount{0};
     // timer
     std::shared_ptr<boost::asio::io_context> m_ioService;
-    /// gateway interface
-    std::shared_ptr<bcos::gateway::GatewayInterface> m_gatewayInterface;
+    /// gateway send entry points (bound via setGateway)
+    FrontServiceGateway m_gateway;
 
     std::unordered_map<int,
         std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>>

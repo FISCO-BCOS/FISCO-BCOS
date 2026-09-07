@@ -20,22 +20,36 @@
 
 #pragma once
 
-#include "bcos-framework/gateway/GatewayInterface.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
+#include "bcos-framework/gateway/GroupNodeInfo.h"
+#include "bcos-framework/multigroup/GroupInfo.h"
 #include "bcos-framework/protocol/CommonError.h"
+#include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
+#include "bcos-task/Task.h"
 #include "bcos-utilities/BoostLog.h"
 #include "filter/ReadOnlyFilter.h"
 #include <range/v3/range/concepts.hpp>
+#include <range/v3/view/any_view.hpp>
 
 
 namespace bcos::gateway
 {
-class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gateway>
+// The single in-process gateway implementation; the remote (pro-mode) counterpart is
+// bcostars::GatewayServiceClient, and consumers hold the statically-dispatched GatewayHandle
+// (bcos-gateway/gateway/GatewayHandle.h) over the two.
+//
+// The methods marked virtual stay virtual ONLY for the test fakes that inherit this class
+// (bcos::test::FakeGateWayWrapper in bcos-framework/testutils, FakeGateway in
+// bcos-front/test/unittests and in bcos-gateway/test/unittests/GatewayNodeManagerTest.cpp); the
+// default-constructed protected Gateway() ctor exists for the same reason. Production dispatch
+// never goes through the vtable.
+class Gateway : public std::enable_shared_from_this<Gateway>
 {
 public:
     using Ptr = std::shared_ptr<Gateway>;
@@ -43,23 +57,26 @@ public:
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
         ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter,
         std::string _gatewayServiceName = "localGateway");
-    ~Gateway() override;
+    virtual ~Gateway();
 
-    void start() override;
-    void stop() override;
+    virtual void start();
+    virtual void stop();
 
     /**
      * @brief: get connected peers
      * @return {error, localGatewayInfo, peerGatewayInfos}: error is nullptr on success
      */
-    task::Task<std::tuple<Error::Ptr, GatewayInfo::Ptr, GatewayInfosPtr>> getPeers() override;
+    virtual task::Task<std::tuple<Error::Ptr, GatewayInfo::Ptr, GatewayInfosPtr>> getPeers();
     /**
      * @brief: get nodeIDs from gateway
      * @param _groupID:
      * @return {error, groupNodeInfo}: error is nullptr on success
+     * @note coroutine: _groupID is passed by reference and the coroutine frame holds the
+     *       reference (not a copy) across suspensions — the caller must keep it alive until the
+     *       returned task completes (e.g. own it in a task::wait frame); do not pass a temporary.
      */
-    task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo(
-        const std::string& _groupID) override;
+    virtual task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo(
+        const std::string& _groupID);
     /**
      * @brief: send message to multiple nodes
      * @param _groupID: groupID
@@ -69,9 +86,9 @@ public:
      * @param _payload: message payload
      * @return void
      */
-    task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
+    virtual task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID,
-        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override;
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads);
 
     /**
      * @brief: (coroutine, zero-copy) send message to a single node with retry across candidate
@@ -79,9 +96,9 @@ public:
      *         the co_await; the coroutine resumes with nullptr on success or an Error::Ptr
      *         describing the failure.
      */
-    task::Task<Error::Ptr> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
+    virtual task::Task<Error::Ptr> sendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads) override;
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads);
 
     /**
      * @brief: receive p2p message
@@ -104,26 +121,27 @@ public:
      *
      * @param _groupInfo the latest group information
      */
-    void asyncNotifyGroupInfo(
-        bcos::group::GroupInfo::Ptr, std::function<void(Error::Ptr&&)>) override;
+    virtual void asyncNotifyGroupInfo(
+        bcos::group::GroupInfo::Ptr, std::function<void(Error::Ptr&&)>);
 
     /// for AMOP
-    task::Task<std::tuple<Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
-        const std::string& _topic, bcos::bytesConstRef _data) override;
-    task::Task<void> sendBroadcastMessageByTopic(
-        const std::string& _topic, bcos::bytesConstRef _data) override;
+    virtual task::Task<std::tuple<Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
+        const std::string& _topic, bcos::bytesConstRef _data);
+    virtual task::Task<void> sendBroadcastMessageByTopic(
+        const std::string& _topic, bcos::bytesConstRef _data);
 
-    void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
-        std::function<void(Error::Ptr&&)> _callback) override;
+    virtual void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
+        std::function<void(Error::Ptr&&)> _callback);
 
-    void asyncRemoveTopic(std::string const& _clientID, std::vector<std::string> const& _topicList,
-        std::function<void(Error::Ptr&&)> _callback) override;
+    virtual void asyncRemoveTopic(std::string const& _clientID,
+        std::vector<std::string> const& _topicList,
+        std::function<void(Error::Ptr&&)> _callback);
 
     bcos::amop::AMOPImpl::Ptr amop();
 
-    bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+    virtual bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
         bcos::protocol::NodeType _nodeType, bcos::front::FrontService::Ptr _frontService,
-        bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo) override;
+        bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo);
 
     virtual bool unregisterNode(const std::string& _groupID, std::string const& _nodeID);
 

@@ -20,8 +20,8 @@
  */
 #pragma once
 #include "libinitializer/PBFTInitializer.h"
-#include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/rpc/RPCInterface.h>
+#include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
@@ -62,7 +62,8 @@ private:
     std::shared_ptr<bcos::Timer> m_timer;
     uint64_t m_timerSchedulerInterval = 3000;
 
-    bcos::gateway::GatewayInterface::Ptr m_gateway;
+    // pro-mode only: the remote gateway-service tars client (group-info notifications)
+    bcostars::GatewayServiceClient::Ptr m_gateway;
     bcos::rpc::RPCInterface::Ptr m_rpc;
     bool m_running = false;
 };

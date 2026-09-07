@@ -142,7 +142,7 @@ bcostars::GatewayInitializer::~GatewayInitializer()
 {
     stop();
 }
-bcos::gateway::GatewayInterface::Ptr bcostars::GatewayInitializer::gateway()
+bcos::gateway::Gateway::Ptr bcostars::GatewayInitializer::gateway()
 {
     return m_gateway;
 }

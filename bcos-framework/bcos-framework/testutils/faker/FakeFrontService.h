@@ -25,8 +25,8 @@
 #include "../../consensus/ConsensusInterface.h"
 #include "../../sync/BlockSyncInterface.h"
 #include "../../txpool/TxPoolInterface.h"
-#include "bcos-framework/gateway/GatewayInterface.h"
 #include "bcos-front/FrontService.h"
+#include "bcos-gateway/Gateway.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/TxPool.h"
@@ -213,7 +213,11 @@ public:
     CryptoSuite::Ptr m_cryptoSuite;
 };
 
-class FakeGateWayWrapper : public bcos::gateway::GatewayInterface
+// Inherits the concrete gateway::Gateway (not an interface) via its protected default ctor — the
+// overrides below re-implement the send/query entry points against the scripted in-process
+// FakeGateWay; Gateway's methods stay virtual precisely so this fake (and the front/gateway test
+// fakes) can override them. Registered into consumers as gateway::Gateway::Ptr / GatewayHandle.
+class FakeGateWayWrapper : public bcos::gateway::Gateway
 {
 public:
     using Ptr = std::shared_ptr<FakeGateWayWrapper>;

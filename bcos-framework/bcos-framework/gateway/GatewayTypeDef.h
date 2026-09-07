@@ -21,13 +21,17 @@
 #pragma once
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Error.h>
 #include <boost/asio/ip/tcp.hpp>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <utility>
 
 namespace bcos::gateway
 {
+using ErrorRespFunc = std::function<void(Error::Ptr)>;
+
 constexpr static size_t HASH_NODEID_MAX_SIZE = 33;
 /// For RSA public key, the prefix length is 18 in hex, used for print log graciously
 constexpr static size_t RSA_PUBLIC_KEY_PREFIX = 18;

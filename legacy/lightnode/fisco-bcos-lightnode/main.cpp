@@ -32,6 +32,7 @@
 #include "client/TransactionPoolClientImpl.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-gateway/gateway/GatewayHandle.h>
 #include <bcos-ledger/Ledger.h>
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/tars/Block.h>
@@ -246,8 +247,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     front->setGroupID(nodeConfig->groupId());
     front->setNodeID(protocolInitializer.keyPair()->publicKey());
     front->setIOServicePool(ioServicePool);
-    front->setIoService(ioServicePool->getIOService());
-    front->setGatewayInterface(gateway);
+    front->setGateway(bcos::gateway::makeFrontServiceGateway(gateway));
     front->registerModuleMessageDispatcher(bcos::protocol::BlockSync,
         [](const bcos::crypto::NodeIDPtr&, const std::string&, bcos::bytesConstRef) {});
     front->registerModuleMessageDispatcher(bcos::protocol::AMOP,

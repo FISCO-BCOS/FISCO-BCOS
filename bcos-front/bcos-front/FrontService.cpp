@@ -102,20 +102,15 @@ void FrontService::setGroupID(const std::string& _groupID)
     m_groupID = _groupID;
 }
 
-std::shared_ptr<gateway::GatewayInterface> FrontService::gatewayInterface()
-{
-    return m_gatewayInterface;
-}
-
 bcos::gateway::GroupNodeInfo::Ptr FrontService::groupNodeInfo() const
 {
     Guard guard(x_groupNodeInfo);
     return m_groupNodeInfo;
 }
 
-void FrontService::setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface)
+void FrontService::setGateway(FrontServiceGateway _gateway)
 {
-    m_gatewayInterface = std::move(_gatewayInterface);
+    m_gateway = std::move(_gateway);
 }
 
 std::shared_ptr<boost::asio::io_context> FrontService::ioService() const
@@ -212,10 +207,11 @@ void FrontService::checkParams()
             InvalidParameter() << errinfo_comment(" FrontService nodeID is uninitialized"));
     }
 
-    if (!m_gatewayInterface)
+    if (!m_gateway.getGroupNodeInfo || !m_gateway.broadcastMessage ||
+        !m_gateway.sendMessageByNodeID)
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
-                                  " FrontService gatewayInterface is uninitialized"));
+                                  " FrontService gateway is uninitialized"));
     }
 
     if (!m_ioService)
@@ -246,10 +242,9 @@ void FrontService::start()
 
     // try to getNodeIDs from gateway
     auto self = std::weak_ptr<FrontService>(shared_from_this());
-    task::wait([](std::weak_ptr<FrontService> self,
-                   bcos::gateway::GatewayInterface::Ptr gateway,
+    task::wait([](std::weak_ptr<FrontService> self, FrontServiceGateway gateway,
                    std::string groupID) -> bcos::task::Task<void> {
-        auto [error, groupNodeInfo] = co_await gateway->getGroupNodeInfo(groupID);
+        auto [error, groupNodeInfo] = co_await gateway.getGroupNodeInfo(groupID);
         if (error)
         {
             FRONT_LOG(ERROR) << LOG_BADGE("start") << LOG_DESC("getGroupNodeInfo failed")
@@ -264,7 +259,7 @@ void FrontService::start()
                             << LOG_KV("node size", groupNodeInfo->nodeIDList().size());
             co_await frontService->onReceiveGroupNodeInfo(frontService->groupID(), groupNodeInfo);
         }
-    }(self, m_gatewayInterface, m_groupID));
+    }(self, m_gateway, m_groupID));
 
     FRONT_LOG(INFO) << LOG_DESC("start") << LOG_KV("nodeID", m_nodeID->hex())
                     << LOG_KV("groupID", m_groupID);
@@ -430,7 +425,7 @@ task::Task<Error::Ptr> FrontService::sendResponse(std::string _id, int _moduleID
     bytes header;
     message.encodeHeader(header);
 
-    co_return co_await m_gatewayInterface->sendMessageByNodeID(m_groupID, _moduleID, m_nodeID,
+    co_return co_await m_gateway.sendMessageByNodeID(m_groupID, _moduleID, m_nodeID,
         std::move(_nodeID),
         ::ranges::views::concat(::ranges::views::single(bcos::ref(std::as_const(header))),
             ::ranges::views::single(_data)));
@@ -446,7 +441,7 @@ task::Task<void> FrontService::broadcastMessage(
     bytes header;
     message.encodeHeader(header);
 
-    co_await m_gatewayInterface->broadcastMessage(type, m_groupID, moduleID, *m_nodeID,
+    co_await m_gateway.broadcastMessage(type, m_groupID, moduleID, *m_nodeID,
         ::ranges::views::concat(
             ::ranges::views::single(bcos::ref(std::as_const(header))), std::move(payloads)));
 }
@@ -463,13 +458,13 @@ void FrontService::broadcastMessageByOwnedPayload(
         message.setModuleID(moduleID);
         auto header = std::make_shared<bytes>();
         message.encodeHeader(*header);
-        task::wait([](gateway::GatewayInterface::Ptr gateway, uint16_t msgType, std::string groupID,
+        task::wait([](FrontServiceGateway gateway, uint16_t msgType, std::string groupID,
                        int module, bcos::crypto::NodeIDPtr srcNodeID, std::shared_ptr<bytes> hdr,
                        bytesPointer body) -> task::Task<void> {
-            co_await gateway->broadcastMessage(msgType, groupID, module, *srcNodeID,
+            co_await gateway.broadcastMessage(msgType, groupID, module, *srcNodeID,
                 ::ranges::views::concat(::ranges::views::single(bcos::ref(*hdr)),
                     ::ranges::views::single(bcos::ref(*body))));
-        }(m_gatewayInterface, type, m_groupID, moduleID, m_nodeID, header, payload));
+        }(m_gateway, type, m_groupID, moduleID, m_nodeID, header, payload));
     });
 }
 
@@ -528,7 +523,7 @@ bcos::task::Task<SendResult> FrontService::sendMessageByNodeID(
     message.encodeHeader(header);
 
     auto nodeID = _nodeID;  // keep a copy for the gateway-error path below
-    auto gatewayError = co_await m_gatewayInterface->sendMessageByNodeID(m_groupID, _moduleID,
+    auto gatewayError = co_await m_gateway.sendMessageByNodeID(m_groupID, _moduleID,
         m_nodeID, std::move(_nodeID),
         ::ranges::views::concat(
             ::ranges::views::single(bcos::ref(std::as_const(header))), std::move(_payloads)));

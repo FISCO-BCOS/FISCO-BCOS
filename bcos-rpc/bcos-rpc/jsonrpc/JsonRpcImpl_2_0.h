@@ -21,7 +21,7 @@
 
 #pragma once
 #include "bcos-boostssl/websocket/WsService.h"
-#include "bcos-framework/gateway/GatewayInterface.h"
+#include "bcos-gateway/gateway/GatewayHandle.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rpc/filter/FilterSystem.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
@@ -37,7 +37,7 @@ class JsonRpcImpl_2_0 : public JsonRpcInterface,
 public:
     using Ptr = std::shared_ptr<JsonRpcImpl_2_0>;
     JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
-        bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
+        bcos::gateway::GatewayHandle _gateway,
         std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem,
         bytes forceSender);
     ~JsonRpcImpl_2_0() override = default;
@@ -181,7 +181,7 @@ protected:
     int m_sendTxTimeout = -1;
 
     GroupManager::Ptr m_groupManager;
-    bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;
+    bcos::gateway::GatewayHandle m_gateway;
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
     FilterSystem::Ptr m_filterSystem;
 

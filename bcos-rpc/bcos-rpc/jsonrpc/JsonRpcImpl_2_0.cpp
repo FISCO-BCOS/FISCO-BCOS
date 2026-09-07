@@ -54,11 +54,11 @@ using namespace boost::iterators;
 using namespace boost::archive::iterators;
 
 JsonRpcImpl_2_0::JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
-    bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
+    bcos::gateway::GatewayHandle _gateway,
     std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem,
     bytes forceSender)
   : m_groupManager(std::move(_groupManager)),
-    m_gatewayInterface(std::move(_gatewayInterface)),
+    m_gateway(std::move(_gateway)),
     m_wsService(std::move(_wsService)),
     m_filterSystem(std::move(filterSystem)),
     m_forceSender(std::move(forceSender))
@@ -1230,8 +1230,8 @@ void JsonRpcImpl_2_0::getPeers(RespFunc _respFunc)
     RPC_IMPL_LOG(TRACE) << LOG_DESC("getPeers");
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
     task::wait([](std::weak_ptr<JsonRpcImpl_2_0> self, RespFunc m_respFunc,
-                   bcos::gateway::GatewayInterface::Ptr gateway) -> task::Task<void> {
-        auto [error, localP2pInfo, peersInfo] = co_await gateway->getPeers();
+                   bcos::gateway::GatewayHandle gateway) -> task::Task<void> {
+        auto [error, localP2pInfo, peersInfo] = co_await bcos::gateway::getPeers(gateway);
         auto rpc = self.lock();
         if (!rpc)
         {
@@ -1250,7 +1250,7 @@ void JsonRpcImpl_2_0::getPeers(RespFunc _respFunc)
         }
 
         m_respFunc(error, jResp);
-    }(self, std::move(_respFunc), m_gatewayInterface));
+    }(self, std::move(_respFunc), m_gateway));
 }
 
 NodeService::Ptr JsonRpcImpl_2_0::getNodeService(
@@ -1432,8 +1432,8 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
 {
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
     task::wait([](std::weak_ptr<JsonRpcImpl_2_0> self, RespFunc respFunc, std::string group,
-                   bcos::gateway::GatewayInterface::Ptr gateway) -> task::Task<void> {
-        auto [error, localP2pInfo, peersInfo] = co_await gateway->getPeers();
+                   bcos::gateway::GatewayHandle gateway) -> task::Task<void> {
+        auto [error, localP2pInfo, peersInfo] = co_await bcos::gateway::getPeers(gateway);
         Json::Value jResp(Json::arrayValue);
         if (error)
         {
@@ -1450,7 +1450,7 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
         }
         rpc->getGroupPeers(jResp, std::string_view(group), localP2pInfo, peersInfo);
         respFunc(error, jResp);
-    }(self, std::move(_respFunc), std::string(_groupID), m_gatewayInterface));
+    }(self, std::move(_respFunc), std::string(_groupID), m_gateway));
 }
 
 void JsonRpcImpl_2_0::newBlockFilter(std::string_view _groupID, RespFunc _respFunc)

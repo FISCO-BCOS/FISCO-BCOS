@@ -27,6 +27,7 @@
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-front/FrontService.h>
+#include <bcos-gateway/gateway/GatewayHandle.h>
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
@@ -51,9 +52,12 @@ bcos::crypto::NodeIDPtr createKey(const std::string& _strNodeID)
     return nodeID;
 }
 
-std::shared_ptr<FrontService> buildFrontService()
+std::shared_ptr<FrontService> buildFrontService(std::shared_ptr<FakeGateway> gateway = nullptr)
 {
-    auto gateway = std::make_shared<FakeGateway>();
+    if (!gateway)
+    {
+        gateway = std::make_shared<FakeGateway>();
+    }
     auto srcNodeID = createKey(g_srcNodeID);
     auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "frontTest");
 
@@ -61,7 +65,7 @@ std::shared_ptr<FrontService> buildFrontService()
     frontService->setGroupID(g_groupID);
     frontService->setNodeID(srcNodeID);
     frontService->setIOServicePool(ioServicePool);
-    frontService->setGatewayInterface(gateway);
+    frontService->setGateway(bcos::gateway::makeFrontServiceGateway(gateway));
     frontService->start();
 
     gateway->setFrontService(frontService);
@@ -76,7 +80,6 @@ BOOST_AUTO_TEST_CASE(testFrontService_buildFrontService)
     auto frontService = buildFrontService();
     BOOST_CHECK_EQUAL(frontService->groupID(), g_groupID);
     // BOOST_CHECK_EQUAL(frontService->nodeID()->hex(), g_srcNodeID);
-    BOOST_CHECK(frontService->gatewayInterface());
     BOOST_CHECK(frontService->ioService());
     BOOST_CHECK(frontService->callback().empty());
     BOOST_CHECK(frontService->moduleID2MessageDispatcher().empty());
@@ -108,7 +111,6 @@ BOOST_AUTO_TEST_CASE(testFrontService_onReceiveMessage_decodeFailed)
 BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_fireAndForget)
 {
     auto frontService = buildFrontService();
-    auto gateway = std::static_pointer_cast<FakeGateway>(frontService->gatewayInterface());
 
     auto dstNodeID = createKey(g_dstNodeID_0);
     std::string data(1000, 'x');
@@ -141,8 +143,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_fireAndForget_propagat
     // Round-8 review: the fire-and-forget branch (_timeout == 0) previously returned SendResult{}
     // even when the gateway send failed, so the TARS fire-and-forget reply always encoded SUCCESS.
     // The gateway failure must now be propagated in SendResult::error.
-    auto frontService = buildFrontService();
-    auto gateway = std::static_pointer_cast<FakeGateway>(frontService->gatewayInterface());
+    auto gateway = std::make_shared<FakeGateway>();
+    auto frontService = buildFrontService(gateway);
     gateway->setSendError(BCOS_ERROR_PTR(12345, "gateway send failed"));
 
     auto dstNodeID = createKey(g_dstNodeID_0);
@@ -265,7 +267,6 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_timeout)
 BOOST_AUTO_TEST_CASE(testFrontService_asyncSendBroadcastMessage)
 {
     auto frontService = buildFrontService();
-    auto gateway = std::static_pointer_cast<FakeGateway>(frontService->gatewayInterface());
 
     auto dstNodeID = createKey(g_srcNodeID);
     std::string data(1000, 'x');
@@ -385,7 +386,6 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine_withResponse
 BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_toNode)
 {
     auto frontService = buildFrontService();
-    auto gateway = std::static_pointer_cast<FakeGateway>(frontService->gatewayInterface());
 
     auto dstNodeID = createKey(g_dstNodeID_0);
     std::string data(1000, 'x');
@@ -415,7 +415,6 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_toNode)
 BOOST_AUTO_TEST_CASE(testFrontService_loopTimeout)
 {
     auto frontService = buildFrontService();
-    auto gateway = std::static_pointer_cast<FakeGateway>(frontService->gatewayInterface());
 
     int moduleID = 12345;
     auto dstNodeID = createKey(g_dstNodeID_0);

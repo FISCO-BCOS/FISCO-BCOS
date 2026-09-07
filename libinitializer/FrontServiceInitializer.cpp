@@ -24,7 +24,6 @@
 #include "bcos-task/Wait.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
-#include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
@@ -38,17 +37,16 @@ using namespace bcos::front;
 
 FrontServiceInitializer::FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     bcos::initializer::ProtocolInitializer::Ptr _protocolInitializer,
-    bcos::gateway::GatewayInterface::Ptr _gateWay, bcos::IOServicePool::Ptr _ioServicePool)
+    bcos::gateway::GatewayHandle _gateWay, bcos::IOServicePool::Ptr _ioServicePool)
   : m_nodeConfig(std::move(_nodeConfig)),
     m_protocolInitializer(std::move(_protocolInitializer)),
-    m_gateWay(std::move(_gateWay)),
     m_ioServicePool(std::move(_ioServicePool))
 {
     m_front = std::make_shared<FrontService>();
     m_front->setGroupID(m_nodeConfig->groupId());
     m_front->setNodeID(m_protocolInitializer->keyPair()->publicKey());
     m_front->setIOServicePool(m_ioServicePool);
-    m_front->setGatewayInterface(m_gateWay);
+    m_front->setGateway(bcos::gateway::makeFrontServiceGateway(std::move(_gateWay)));
 }
 
 void FrontServiceInitializer::start()
