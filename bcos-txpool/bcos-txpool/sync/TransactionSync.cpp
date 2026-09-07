@@ -556,7 +556,7 @@ void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
     auto packetData = txsStatus->encode();
     auto packetSize = packetData->size();
     // owned payload -> zero-copy through the front/gateway coroutine fast path
-    m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+    m_config->frontService()->sendMessageByNodeIDByOwnedPayload(
         ModuleID::TxsSync, _fromNode, std::move(packetData));
     SYNC_LOG(DEBUG) << LOG_DESC("onPeerTxsStatus: receive empty txsStatus and responseTxsStatus")
                     << LOG_KV("to", _fromNode->shortHex()) << LOG_KV("txsSize", txsHash->size())

@@ -107,17 +107,21 @@ void PBFTEngine::initSendResponseHandler()
             {
                 return;
             }
-            frontService->asyncSendResponse(
-                _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
-                    if (_error)
-                    {
-                        PBFT_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                                        << LOG_KV("module", std::to_string(_moduleID))
-                                        << LOG_KV("dst", _dstNode->shortHex())
-                                        << LOG_KV("code", _error->errorCode())
-                                        << LOG_KV("msg", _error->errorMessage());
-                    }
-                });
+            // fire-and-forget: the coroutine parameters own the payload copy so nothing
+            // dangles after task::wait detaches
+            task::wait([](FrontServiceInterface::Ptr _frontService, std::string _id, int _moduleID,
+                           NodeIDPtr _dstNode, bcos::bytes _payload) -> task::Task<void> {
+                auto error = co_await _frontService->sendResponse(
+                    _id, _moduleID, _dstNode, bcos::ref(_payload));
+                if (error)
+                {
+                    PBFT_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                                    << LOG_KV("module", std::to_string(_moduleID))
+                                    << LOG_KV("dst", _dstNode->shortHex())
+                                    << LOG_KV("code", error->errorCode())
+                                    << LOG_KV("msg", error->errorMessage());
+                }
+            }(frontService, _id, _moduleID, _dstNode, _data.toBytes()));
         }
         catch (std::exception const& e)
         {
@@ -330,7 +334,7 @@ void PBFTEngine::onProposalApplySuccess(
     auto encodedData = m_config->codec()->encode(checkPointMsg);
     // only broadcast message to the consensus nodes
     // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
-    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+    m_config->frontService()->broadcastMessageByOwnedPayload(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
     auto startT = utcTime();
     auto recordT = utcTime();
@@ -482,7 +486,7 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
                    << LOG_KV("encode(ms)", encodeEnd - encodeStart)
                    << LOG_KV("asyncSend(ms)", utcTime() - encodeEnd);
     // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
-    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+    m_config->frontService()->broadcastMessageByOwnedPayload(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
 
     // handle the pre-prepare packet
@@ -1337,7 +1341,7 @@ void PBFTEngine::broadcastPrepareMsg(PBFTMessageInterface::Ptr const& _prePrepar
                    << LOG_KV("index", _prePrepareMsg->index());
     // only broadcast to the consensus nodes
     // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
-    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+    m_config->frontService()->broadcastMessageByOwnedPayload(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
     // try to precommit the message
     m_cacheProcessor->checkAndPreCommit();
@@ -1485,7 +1489,7 @@ void PBFTEngine::sendViewChange(bcos::crypto::NodeIDPtr _dstNode)
     // FIB-185: send off the m_mutex critical section via the owned-payload point-to-point entry
     // (the gateway session-lock acquire runs on the front's send queue, not on the consensus
     // worker)
-    m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+    m_config->frontService()->sendMessageByNodeIDByOwnedPayload(
         ModuleID::PBFT, std::move(_dstNode), std::move(encodedData));
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);
@@ -1507,7 +1511,7 @@ void PBFTEngine::sendRecoverResponse(bcos::crypto::NodeIDPtr _dstNode)
     auto encodedData = m_config->codec()->encode(response);
     // FIB-185: send off the m_mutex critical section via the owned-payload point-to-point entry
     // (copy _dstNode; it is logged below). The gateway send runs on the front's send queue.
-    m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+    m_config->frontService()->sendMessageByNodeIDByOwnedPayload(
         ModuleID::PBFT, _dstNode, std::move(encodedData));
     PBFT_LOG(DEBUG) << LOG_DESC("sendRecoverResponse") << LOG_KV("peer", _dstNode->shortHex())
                     << m_config->printCurrentState();
@@ -1522,13 +1526,13 @@ void PBFTEngine::broadcastViewChangeReq()
     PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq)
                    << LOG_KV("packetSize", encodedData->size());
     // FIB-185: this runs under m_mutex (onTimeout -> triggerTimeout holds it). Hand the owned
-    // payload to FrontService::asyncBroadcastMessageByOwnedPayload, which enqueues the gateway send
+    // payload to FrontService::broadcastMessageByOwnedPayload, which enqueues the gateway send
     // onto its serial send queue and returns immediately -- the gateway-session-lock-acquiring send
     // no longer runs on the consensus worker while m_mutex is held (the coupling that wedged
     // consensus under session-teardown churn is decoupled at the FrontService layer), and the owned
     // payload is forwarded without copying. The view-change cache mutations below stay under the
     // lock, unchanged.
-    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+    m_config->frontService()->broadcastMessageByOwnedPayload(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
 
     // collect the viewchangeReq

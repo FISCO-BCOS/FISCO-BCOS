@@ -681,17 +681,22 @@ void TxPool::initSendResponseHandler()
             {
                 return;
             }
-            frontService->asyncSendResponse(
-                _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
-                    if (_error)
-                    {
-                        TXPOOL_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                                          << LOG_KV("module", std::to_string(_moduleID))
-                                          << LOG_KV("dst", _dstNode->shortHex())
-                                          << LOG_KV("code", _error->errorCode())
-                                          << LOG_KV("msg", _error->errorMessage());
-                    }
-                });
+            // fire-and-forget: the coroutine parameters own the payload copy so nothing
+            // dangles after task::wait detaches
+            task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _id,
+                           int _moduleID, NodeIDPtr _dstNode,
+                           bcos::bytes _payload) -> task::Task<void> {
+                auto error = co_await _frontService->sendResponse(
+                    _id, _moduleID, _dstNode, bcos::ref(_payload));
+                if (error)
+                {
+                    TXPOOL_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                                      << LOG_KV("module", std::to_string(_moduleID))
+                                      << LOG_KV("dst", _dstNode->shortHex())
+                                      << LOG_KV("code", error->errorCode())
+                                      << LOG_KV("msg", error->errorMessage());
+                }
+            }(frontService, _id, _moduleID, _dstNode, _data.toBytes()));
         }
         catch (std::exception const& e)
         {

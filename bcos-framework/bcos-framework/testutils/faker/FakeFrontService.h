@@ -314,17 +314,24 @@ public:
     void start() override {}
     void stop() override {}
 
-    void asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _func) override { _func(nullptr, m_groupInfo); }
+    task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo()
+        override
+    {
+        co_return std::make_tuple(Error::Ptr(nullptr), m_groupInfo);
+    }
 
     bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const override { return m_groupInfo; }
     // for gateway: useless here
-    void onReceiveGroupNodeInfo(
-        const std::string&, bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc) override
-    {}
+    task::Task<Error::Ptr> onReceiveGroupNodeInfo(
+        std::string, bcos::gateway::GroupNodeInfo::Ptr) override
+    {
+        co_return nullptr;
+    }
     // for gateway: useless here
-    void onReceiveMessage(
-        const std::string&, const NodeIDPtr&, bytesConstRef, ReceiveMsgFunc) override
-    {}
+    task::Task<Error::Ptr> onReceiveMessage(std::string, NodeIDPtr, bytesConstRef) override
+    {
+        co_return nullptr;
+    }
     bcos::task::Task<void> broadcastMessage(
         uint16_t type, int moduleID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override
@@ -347,22 +354,29 @@ public:
     }
 
     // useless for sync/pbft/txpool
-    void onReceiveBroadcastMessage(
-        const std::string&, NodeIDPtr, bytesConstRef, ReceiveMsgFunc) override
-    {}
+    task::Task<Error::Ptr> onReceiveBroadcastMessage(std::string, NodeIDPtr, bytesConstRef) override
+    {
+        co_return nullptr;
+    }
 
-    void asyncSendResponse(const std::string& _id, int _moduleId, bcos::crypto::NodeIDPtr _nodeID,
-        bytesConstRef _responseData, ReceiveMsgFunc _responseCallback) override
+    task::Task<Error::Ptr> sendResponse(std::string _id, int _moduleId,
+        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _responseData) override
     {
         // m_fakeGateWay is only nulled by ~SyncFixture() teardown, after stop() has joined all
         // worker threads, so there is no live race here. The guard is pure defense: a test that
         // holds a frontService() handle and sends after fixture destruction gets a no-op instead
         // of a null-deref.
+        Error::Ptr error;
         if (m_fakeGateWay)
         {
-            return m_fakeGateWay->asyncSendResponse(
-                _id, _moduleId, _nodeID, _responseData, _responseCallback);
+            // the fake gateway invokes the callback synchronously; forward its error so the
+            // fake honours the same contract as the real sendResponse
+            m_fakeGateWay->asyncSendResponse(
+                _id, _moduleId, _nodeID, _responseData, [&error](Error::Ptr _error) {
+                    error = std::move(_error);
+                });
         }
+        co_return error;
     }
 
     bcos::task::Task<SendResult> sendMessageByNodeID(int _moduleId,

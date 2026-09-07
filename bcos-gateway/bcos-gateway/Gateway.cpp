@@ -149,73 +149,13 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
         {
             buffer.insert(buffer.end(), data.begin(), data.end());
         }
-        // Local delivery is asynchronous (the front's onReceiveMessage completes the callback);
-        // bridge it to the co_await so the delivery result is delivered as the return value.
-        struct LocalSendAwaitable
-        {
-            struct State
-            {
-                std::atomic<bool> done{false};
-                std::coroutine_handle<> handle;
-                Error::Ptr error;
-            };
-
-            LocalRouterTable* m_table;
-            std::string m_groupID;
-            bcos::crypto::NodeIDPtr m_srcNodeID;
-            bcos::crypto::NodeIDPtr m_dstNodeID;
-            std::shared_ptr<bcos::bytes> m_buffer;
-            std::shared_ptr<State> m_state;
-            // the io pool used to complete the coroutine OFF the caller's stack: the completion
-            // callback may run synchronously on the caller's own io thread (IOServicePool::dispatch
-            // executes inline when the current thread already belongs to the pool), and resuming
-            // the suspended coroutine from inside its own await_suspend is the exact hazard
-            // send()/drop() avoid by posting (FIB-185).
-            std::shared_ptr<ASIOInterface> m_asioInterface;
-
-            bool await_ready() const noexcept { return false; }
-            void await_suspend(std::coroutine_handle<> h)
-            {
-                m_state->handle = h;
-                auto state = m_state;
-                auto buffer = m_buffer;
-                auto asioInterface = m_asioInterface;
-                bool accepted = m_table->sendMessage(m_groupID, m_srcNodeID, m_dstNodeID,
-                    bcos::ref(*buffer),
-                    [state, buffer, asioInterface](Error::Ptr _error) {
-                        // completes exactly once; the buffer is kept alive until after the resume
-                        // (the borrowed front may still be reading it). Post the resume off this
-                        // stack — the callback may run inline on the caller's io thread.
-                        if (!state->done.exchange(true))
-                        {
-                            state->error = std::move(_error);
-                            (void)buffer;
-                            asioInterface->post([state]() { state->handle.resume(); });
-                        }
-                    });
-                if (!accepted)
-                {
-                    // the destination front is not hosted locally: fail immediately
-                    if (!state->done.exchange(true))
-                    {
-                        state->error = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceSendMsg,
-                            "could not find a gateway to send this message, groupID:" + m_groupID +
-                                " ,dstNodeID:" + m_dstNodeID->hex());
-                        asioInterface->post([state]() { state->handle.resume(); });
-                    }
-                }
-            }
-            Error::Ptr await_resume() { return std::move(m_state->error); }
-        };
         GATEWAY_LOG(DEBUG) << LOG_DESC("local delivery of sendMessageByNodeID")
                            << LOG_KV("groupID", _groupID)
                            << LOG_KV("srcNodeID", _srcNodeID->hex())
                            << LOG_KV("dstNodeID", _dstNodeID->hex());
-        co_return co_await LocalSendAwaitable{
-            m_gatewayNodeManager->localRouterTable().get(), _groupID, std::move(_srcNodeID),
-            std::move(_dstNodeID), std::make_shared<bcos::bytes>(std::move(buffer)),
-            std::make_shared<LocalSendAwaitable::State>(),
-            m_p2pInterface->host()->asioInterface()};
+        // the joined buffer lives in this frame, so the view stays valid across the co_await
+        co_return co_await m_gatewayNodeManager->localRouterTable()->sendMessage(
+            _groupID, std::move(_srcNodeID), std::move(_dstNodeID), bcos::ref(buffer));
     }
 
     // zero-copy: the message (header/options only) and the payload views both live in this frame
@@ -261,6 +201,21 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
             if (respCode == bcos::protocol::CommonError::SUCCESS)
             {
                 co_return nullptr;
+            }
+            if (respCode == bcos::protocol::CommonError::MessageDecodeFailed)
+            {
+                // a receiver-side decode rejection is a property of the bytes, not of the route:
+                // re-sending the identical payload to another gateway cannot succeed, and
+                // reporting GatewaySendMsgFailed here would misdirect the diagnosis. Return the
+                // real code the destination front produced (Round-3 review finding).
+                GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
+                                   << LOG_KV("p2pid", printShortP2pID(p2pID))
+                                   << LOG_KV("moduleID", _moduleID)
+                                   << LOG_KV("message",
+                                          "destination front failed to decode the message, "
+                                          "terminal");
+                co_return BCOS_ERROR_PTR(bcos::protocol::CommonError::MessageDecodeFailed,
+                    "the destination front failed to decode the message");
             }
             GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
                                << LOG_KV("p2pid", printShortP2pID(p2pID))
@@ -309,7 +264,7 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
  * @return void
  */
 void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNodeID,
-    NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc)
+    NodeIDPtr _dstNodeID, std::shared_ptr<P2PMessage> _msg, ErrorRespFunc _errorRespFunc)
 {
     auto frontService =
         m_gatewayNodeManager->localRouterTable()->getFrontService(_groupID, _dstNodeID);
@@ -333,19 +288,25 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNod
         return;
     }
 
-    frontService->frontService()->onReceiveMessage(_groupID, _srcNodeID, _payload,
-        [_groupID, _srcNodeID, _dstNodeID, _errorRespFunc](Error::Ptr _error) {
-            if (_errorRespFunc)
-            {
-                _errorRespFunc(_error);
-            }
-            GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveP2PMessage callback")
-                               << LOG_KV("groupID", _groupID)
-                               << LOG_KV("srcNodeID", _srcNodeID->hex())
-                               << LOG_KV("dstNodeID", _dstNodeID->hex())
-                               << LOG_KV("code", (_error ? _error->errorCode() : 0))
-                               << LOG_KV("msg", (_error ? _error->errorMessage() : ""));
-        });
+    // zero-copy: the owning P2PMessage is held by this coroutine frame for the whole (possibly
+    // deferred) dispatch, so the payload view into it stays valid until the task completes
+    task::wait([](FrontServiceInfo::Ptr _frontServiceInfo, std::string _groupID,
+                   NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, std::shared_ptr<P2PMessage> _msg,
+                   ErrorRespFunc _errorRespFunc) -> task::Task<void> {
+        auto error = co_await _frontServiceInfo->frontService()->onReceiveMessage(
+            _groupID, _srcNodeID, _msg->payload());
+        if (_errorRespFunc)
+        {
+            _errorRespFunc(error);
+        }
+        GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveP2PMessage callback")
+                           << LOG_KV("groupID", _groupID)
+                           << LOG_KV("srcNodeID", _srcNodeID->hex())
+                           << LOG_KV("dstNodeID", _dstNodeID->hex())
+                           << LOG_KV("code", (error ? error->errorCode() : 0))
+                           << LOG_KV("msg", (error ? error->errorMessage() : ""));
+    }(frontService, _groupID, _srcNodeID, _dstNodeID, std::move(_msg),
+        std::move(_errorRespFunc)));
 }
 
 bool Gateway::checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
@@ -458,7 +419,7 @@ void Gateway::onReceiveP2PMessage(
     auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(srcNodeID);
     auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(dstNodeIDs[0]);
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());
-    onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, payload,
+    onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, _msg,
         [groupID, moduleID, srcNodeIDPtr, dstNodeIDPtr, _session, _msg, gateway](
             Error::Ptr _error) {
             auto gatewayPtr = gateway.lock();
@@ -546,8 +507,8 @@ void Gateway::onReceiveBroadcastMessage(
         m_gatewayNodeManager->keyFactory()->createKey((_msg->options().srcNodeID()));
 
     auto type = _msg->ext();
-    m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, moduleID,
-        srcNodeIDPtr, bytesConstRef(_msg->payload().data(), _msg->payload().size()));
+    m_gatewayNodeManager->localRouterTable()->broadcastMsg(
+        type, groupID, moduleID, srcNodeIDPtr, _msg);
 }
 
 void bcos::gateway::Gateway::enableReadOnlyMode()

@@ -52,15 +52,15 @@ bcos::task::Task<bcos::Error::Ptr> bcos::front::test::FakeGateway::sendMessageBy
     {
         co_return m_sendError;
     }
+    Error::Ptr error = nullptr;
     if (auto frontService = m_frontService.lock())
     {
-        frontService->onReceiveMessage(
-            _groupID, _dstNodeID, bcos::ref(buffer), bcos::gateway::ErrorRespFunc());
+        error = co_await frontService->onReceiveMessage(_groupID, _dstNodeID, bcos::ref(buffer));
     }
 
     FRONT_LOG(DEBUG) << "[FakeGateway] sendMessageByNodeID" << LOG_KV("groupID", _groupID)
                      << LOG_KV("nodeID", _srcNodeID->hex()) << LOG_KV("nodeID", _dstNodeID->hex());
-    co_return nullptr;
+    co_return error;
 }
 bcos::task::Task<void> bcos::front::test::FakeGateway::broadcastMessage(uint16_t type,
     std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
@@ -71,8 +71,14 @@ bcos::task::Task<void> bcos::front::test::FakeGateway::broadcastMessage(uint16_t
         const_cast<bcos::crypto::NodeID*>(std::addressof(srcNodeID)), [](auto* ptr) {});
     if (auto frontService = m_frontService.lock())
     {
-        frontService->onReceiveBroadcastMessage(
-            std::string{groupID}, nodeIDPtr, ref(data), ErrorRespFunc());
+        auto error = co_await frontService->onReceiveBroadcastMessage(
+            std::string{groupID}, nodeIDPtr, ref(data));
+        if (error)
+        {
+            FRONT_LOG(WARNING) << "onReceiveBroadcastMessage error"
+                               << LOG_KV("code", error->errorCode())
+                               << LOG_KV("msg", error->errorMessage());
+        }
     }
     FRONT_LOG(DEBUG) << "asyncSendBroadcastMessage" << LOG_KV("groupID", groupID);
     co_return;
