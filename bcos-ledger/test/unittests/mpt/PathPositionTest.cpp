@@ -1,0 +1,231 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file PathPositionTest.cpp
+ * @brief Position addresses, hash verifies: what happens when the two disagree (pathdb spec §8.3)
+ */
+#include "TestHelpers.h"
+#include <bcos-framework/storage2/Storage.h>
+#include <bcos-ledger/mpt/Account.h>
+#include <bcos-ledger/mpt/Constants.h>
+#include <bcos-ledger/mpt/Errors.h>
+#include <bcos-ledger/mpt/HashBuilder.h>
+#include <bcos-ledger/mpt/MPTReadView.h>
+#include <bcos-ledger/mpt/Nibble.h>
+#include <bcos-ledger/mpt/PathKey.h>
+#include <bcos-ledger/mpt/Proof.h>
+#include <bcos-ledger/mpt/Trie.h>
+#include <bcos-task/Wait.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <boost/test/unit_test.hpp>
+#include <map>
+#include <optional>
+#include <span>
+#include <variant>
+
+namespace bcos::ledger::mpt::test
+{
+
+BOOST_AUTO_TEST_SUITE(PathPositionSuite)
+
+namespace
+{
+using NodeStorage = bcos::ledger::mpt::test::NodeMemoryStorage;
+
+/// An h256 whose first nibble is @p firstNibble and whose last byte is @p tail.
+bcos::h256 keyAtNibble(bcos::byte firstNibble, bcos::byte tail)
+{
+    bcos::h256 out{};
+    out.data()[0] = static_cast<bcos::byte>(firstNibble << NIBBLE_BITS);
+    out.data()[bcos::h256::SIZE - 1] = tail;
+    return out;
+}
+}  // namespace
+
+// A branch's child hash is no longer an address — but it is still a commitment. Put the RIGHT
+// node at the WRONG position (swap two siblings) and the walk must refuse it: the bytes it finds
+// where the path says to look do not hash to what the parent recorded.
+BOOST_AUTO_TEST_CASE(ChildAtTheWrongPositionFailsVerification)
+{
+    NodeStorage storage;
+    auto const keyA = keyAtNibble(0x01, 0xAA);
+    auto const keyB = keyAtNibble(0x02, 0xBB);
+    bcos::bytes const valueA(40, 0x11);
+    bcos::bytes const valueB(40, 0x22);
+    auto const root =
+        seedTrieFlushed(storage, emptyRootHash(), {{keyA, valueA}, {keyB, valueB}}).root;
+
+    PathKey const positionA{.scope = TrieScope::account(), .position = bcos::bytes{0x01}};
+    PathKey const positionB{.scope = TrieScope::account(), .position = bcos::bytes{0x02}};
+    auto const nodeA = bcos::task::syncWait(bcos::storage2::readOne(storage, positionA));
+    auto const nodeB = bcos::task::syncWait(bcos::storage2::readOne(storage, positionB));
+    BOOST_REQUIRE(nodeA.has_value() && nodeB.has_value());
+    BOOST_REQUIRE(*nodeA != *nodeB);
+
+    // Both nodes are genuine trie nodes of THIS trie — only their positions are swapped.
+    bcos::task::syncWait(bcos::storage2::writeOne(storage, positionA, *nodeB));
+    bcos::task::syncWait(bcos::storage2::writeOne(storage, positionB, *nodeA));
+
+    Trie<NodeStorage> trie(storage, TrieScope::account(), root);
+    BOOST_CHECK_THROW(bcos::task::syncWait(trie.get(keyA)), MPTInvariantViolation);
+    BOOST_CHECK_THROW(bcos::task::syncWait(trie.get(keyB)), MPTInvariantViolation);
+}
+
+// Same failure through the proof walk: a proof must never be assembled from bytes that do not
+// hash to what the path they were fetched along committed to.
+BOOST_AUTO_TEST_CASE(ProofWalkRejectsAMisplacedNode)
+{
+    NodeStorage storage;
+    auto const addrA = makeAddress(0x11);
+    auto const addrB = makeAddress(0x22);
+    Account accountA;
+    accountA.nonce = 1;
+    accountA.balance = 1000;
+    Account accountB;
+    accountB.nonce = 2;
+    accountB.balance = 2000;
+    auto const root = seedStateTrieFlushed(storage, {{addrA, accountA}, {addrB, accountB}});
+
+    // Find the two account leaves' positions by walking the account keys one nibble at a time
+    // until a row exists there.
+    auto positionForKey = [&](bcos::h256 const& keyHash) {
+        auto const nibbles = bytesToNibbles(keyHash.ref());
+        for (size_t length = nibbles.size(); length > 0; --length)
+        {
+            PathKey candidate{.scope = TrieScope::account(),
+                .position = bcos::bytes(
+                    nibbles.begin(), nibbles.begin() + static_cast<std::ptrdiff_t>(length))};
+            if (bcos::task::syncWait(bcos::storage2::readOne(storage, candidate)))
+            {
+                return candidate;
+            }
+        }
+        BOOST_FAIL("no row on the account's path");
+        return PathKey{};
+    };
+    auto const leafA = positionForKey(accountKeyHash(addrA));
+    auto const leafB = positionForKey(accountKeyHash(addrB));
+    BOOST_REQUIRE(!(leafA == leafB));
+
+    auto const nodeA = bcos::task::syncWait(bcos::storage2::readOne(storage, leafA));
+    auto const nodeB = bcos::task::syncWait(bcos::storage2::readOne(storage, leafB));
+    BOOST_REQUIRE(nodeA.has_value() && nodeB.has_value());
+    bcos::task::syncWait(bcos::storage2::writeOne(storage, leafA, *nodeB));
+    bcos::task::syncWait(bcos::storage2::writeOne(storage, leafB, *nodeA));
+
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(generateProof(storage, root, addrA, std::span<bcos::h256 const>{})),
+        MPTInvariantViolation);
+}
+
+// A trie root is found at a FIXED key, so "wrong root" and "wrong version" are the same
+// question, and the answer must not be silence. Reading at a root the store does not hold is
+// MPTHistoryUnavailable, never a fabricated absence.
+BOOST_AUTO_TEST_CASE(UnknownRootIsReportedNotAnswered)
+{
+    NodeStorage storage;
+    auto const key = keyAtNibble(0x01, 0xAA);
+    auto const root =
+        seedTrieFlushed(storage, emptyRootHash(), {{key, bcos::bytes(40, 0x11)}}).root;
+
+    Trie<NodeStorage> const stranger(storage, TrieScope::account(), makeHash(0xDD));
+    BOOST_CHECK_THROW(bcos::task::syncWait(stranger.get(key)), MPTHistoryUnavailable);
+
+    // An owner with no storage trie at all: nothing at position "" either.
+    Trie<NodeStorage> const noSuchTrie(storage, TrieScope::storage(makeHash(0xEE)), makeHash(0xEE));
+    BOOST_CHECK_THROW(bcos::task::syncWait(noSuchTrie.get(key)), MPTHistoryUnavailable);
+
+    // The real root still reads, so the throws above are about the ROOT and not the store.
+    Trie<NodeStorage> const real(storage, TrieScope::account(), root);
+    BOOST_CHECK(bcos::task::syncWait(real.get(key)).has_value());
+    BOOST_CHECK(bcos::task::syncWait(holdsTrieRoot(storage, TrieScope::account(), root)));
+    BOOST_CHECK(
+        !bcos::task::syncWait(holdsTrieRoot(storage, TrieScope::account(), makeHash(0xDD))));
+}
+
+// A position holds ONE version. Once block N+1 has rewritten the root, block N's root is not a
+// thing the store can answer about — and it says so instead of serving today's state.
+//
+// HistoryUnavailableUntilPathIndex: PR-C's trie-node history index restores this read; when it
+// lands, this case becomes "the old root still reads, from the index".
+BOOST_AUTO_TEST_CASE(SupersededRootThrowsHistoryUnavailableUntilPathIndex)
+{
+    NodeStorage storage;
+    auto const keyA = keyAtNibble(0x01, 0xAA);
+    auto const keyB = keyAtNibble(0x02, 0xBB);
+    auto const rootN =
+        seedTrieFlushed(storage, emptyRootHash(), {{keyA, bcos::bytes(40, 0x11)}}).root;
+    auto const rootN1 = seedTrieFlushed(storage, rootN, {{keyB, bcos::bytes(40, 0x22)}}).root;
+    BOOST_REQUIRE(rootN != rootN1);
+
+    Trie<NodeStorage> const tip(storage, TrieScope::account(), rootN1);
+    BOOST_CHECK(bcos::task::syncWait(tip.get(keyA)).has_value());
+
+    Trie<NodeStorage> const historical(storage, TrieScope::account(), rootN);
+    BOOST_CHECK_THROW(bcos::task::syncWait(historical.get(keyA)), MPTHistoryUnavailable);
+
+    // MPTReadView and the root probe agree with the trie walk.
+    MPTReadView<NodeStorage> const view(storage, rootN);
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(view.readAccount(makeAddress(0x11))), MPTHistoryUnavailable);
+    BOOST_CHECK(!bcos::task::syncWait(holdsTrieRoot(storage, TrieScope::account(), rootN)));
+
+    // The proof path reports it as a request-level outcome rather than throwing, which is the
+    // shape eth_getProof already had for an unknown root.
+    auto const proof = bcos::task::syncWait(
+        generateProof(storage, rootN, makeAddress(0x11), std::span<bcos::h256 const>{}));
+    BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(proof));
+    BOOST_CHECK(std::get<ProofErrorCode>(proof) == ProofErrorCode::BlockNotCommitted);
+}
+
+// Two accounts with byte-identical storage tries get their own rows. Deleting one owner's rows
+// cannot reach the other's — the property that makes A.6's fourth delete source safe, and the
+// one a content-addressed store could not offer.
+BOOST_AUTO_TEST_CASE(IdenticalTriesDoNotShareRowsAcrossOwners)
+{
+    NodeStorage storage;
+    auto const ownerA = makeHash(0xA1);
+    auto const ownerB = makeHash(0xB2);
+    std::map<bcos::h256, bcos::bytes> const entries{
+        {keyAtNibble(0x01, 0xAA), bcos::bytes(40, 0x11)},
+        {keyAtNibble(0x02, 0xBB), bcos::bytes(40, 0x22)}};
+
+    auto const rootA =
+        seedTrieFlushed(storage, emptyRootHash(), entries, TrieScope::storage(ownerA)).root;
+    auto const rootB =
+        seedTrieFlushed(storage, emptyRootHash(), entries, TrieScope::storage(ownerB)).root;
+    BOOST_CHECK(rootA == rootB);  // identical content, identical root
+
+    auto const rowsA = scanTrieNodes(storage, TrieScope::storage(ownerA));
+    auto const rowsB = scanTrieNodes(storage, TrieScope::storage(ownerB));
+    BOOST_CHECK(rowsA == rowsB);  // ...and identical bytes at identical positions
+    BOOST_CHECK(!rowsA.empty());
+
+    // Yet the rows are distinct: removing every one of A's leaves B's intact.
+    for (auto const& [position, raw] : rowsA)
+    {
+        bcos::task::syncWait(bcos::storage2::removeOne(
+            storage, PathKey{.scope = TrieScope::storage(ownerA), .position = position}));
+    }
+    BOOST_CHECK(scanTrieNodes(storage, TrieScope::storage(ownerA)).empty());
+    BOOST_CHECK(scanTrieNodes(storage, TrieScope::storage(ownerB)) == rowsB);
+    Trie<NodeStorage> const trieB(storage, TrieScope::storage(ownerB), rootB);
+    BOOST_CHECK(bcos::task::syncWait(trieB.get(keyAtNibble(0x01, 0xAA))).has_value());
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+}  // namespace bcos::ledger::mpt::test
