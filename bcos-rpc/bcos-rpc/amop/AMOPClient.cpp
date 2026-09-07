@@ -132,13 +132,13 @@ void AMOPClient::onRecvAMOPRequest(
         return;
     }
     auto self = std::weak_ptr<AMOPClient>(shared_from_this());
-    task::wait([](std::weak_ptr<AMOPClient> self, bcos::gateway::GatewayInterface::Ptr gateway,
+    task::wait([](std::weak_ptr<AMOPClient> self, bcos::gateway::GatewayHandle gateway,
                    std::string topic, std::shared_ptr<boostssl::ws::WsMessage> msgPtr,
                    std::shared_ptr<WsSession> session, std::string seq) -> bcos::task::Task<void> {
         try
         {
-            auto [error, packetType, responseData] = co_await gateway->sendMessageByTopic(
-                topic, bytesConstRef(msgPtr->payload().data(), msgPtr->payload().size()));
+            auto [error, packetType, responseData] = co_await bcos::gateway::sendMessageByTopic(
+                gateway, topic, bytesConstRef(msgPtr->payload().data(), msgPtr->payload().size()));
             auto amopClient = self.lock();
             if (!amopClient)
             {
@@ -245,9 +245,9 @@ void AMOPClient::onRecvAMOPBroadcast(boostssl::ws::WsMessage _msg, std::shared_p
     // broadcast messsage to sdks connected to other nodes
     // copy the payload: task::wait is fire-and-forget, the coroutine may outlive this
     // function scope, so the payload must be owned by the coroutine itself
-    task::wait([](bcos::gateway::GatewayInterface::Ptr gateway, std::string topic,
+    task::wait([](bcos::gateway::GatewayHandle gateway, std::string topic,
                    bcos::bytes payload) -> bcos::task::Task<void> {
-        co_await gateway->sendBroadcastMessageByTopic(topic, bcos::ref(payload));
+        co_await bcos::gateway::sendBroadcastMessageByTopic(gateway, topic, bcos::ref(payload));
     }(m_gateway, amopReq->topic(),
         bcos::bytes(_msg.payload().begin(), _msg.payload().end())));
     AMOP_CLIENT_LOG(DEBUG) << LOG_BADGE("onRecvAMOPBroadcast") << LOG_KV("seq", seq)
@@ -286,7 +286,7 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, bytesPointer>> AMOPClient::sendMes
             m_state->handle = _handle;
             auto state = m_state;
             auto seq = m_msg.seq();
-            m_session->asyncSendMessage(m_msg, Options(30000),
+            m_session->asyncSendMessage(m_msg, bcos::boostssl::ws::Options(30000),
                 [state, seq, topic = m_topic](bcos::Error::Ptr _error,
                     bcos::boostssl::ws::WsMessage _responseMsg, std::shared_ptr<WsSession>) {
                     if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
@@ -383,7 +383,7 @@ void AMOPClient::broadcastAMOPMessage(
     auto sessions = querySessionsByTopic(_topic);
     for (auto const& session : sessions)
     {
-        session.second->asyncSendMessage(_msg, Options(30000));
+        session.second->asyncSendMessage(_msg, bcos::boostssl::ws::Options(30000));
     }
 }
 std::shared_ptr<WsSession> AMOPClient::randomChooseSession(std::string const& _topic)
@@ -450,10 +450,21 @@ void AMOPClient::onClientDisconnect(std::shared_ptr<WsSession> _session)
 
 std::vector<tars::EndpointInfo> AMOPClient::getActiveGatewayEndPoints()
 {
-    auto gatewayClient = std::dynamic_pointer_cast<bcostars::GatewayServiceClient>(m_gateway);
-
-    auto endPoints = tarsProxyAvailableEndPoints(gatewayClient->prx());
-    return std::vector<tars::EndpointInfo>(endPoints.begin(), endPoints.end());
+    // pro mode: the handle holds the gateway-service tars client; ask its proxy for the active
+    // endpoints. The local in-process gateway (air mode) has no proxy endpoints — the AirAMOPClient
+    // overrides never reach this path, but return empty instead of crashing if one ever did.
+    return bcos::gateway::visitGateway(m_gateway, [](auto const& _gateway) {
+        using GatewayT = std::decay_t<decltype(*_gateway)>;
+        if constexpr (std::is_same_v<GatewayT, bcostars::GatewayServiceClient>)
+        {
+            auto endPoints = tarsProxyAvailableEndPoints(_gateway->prx());
+            return std::vector<tars::EndpointInfo>(endPoints.begin(), endPoints.end());
+        }
+        else
+        {
+            return std::vector<tars::EndpointInfo>();
+        }
+    });
 }
 
 void AMOPClient::subscribeTopicToAllNodes()

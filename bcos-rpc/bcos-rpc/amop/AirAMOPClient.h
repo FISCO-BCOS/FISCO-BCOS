@@ -33,7 +33,7 @@ public:
     AirAMOPClient(boost::asio::io_context& _ioService,
         std::shared_ptr<boostssl::ws::WsService> _wsService,
         std::shared_ptr<bcos::protocol::AMOPRequestFactory> _requestFactory,
-        bcos::gateway::GatewayInterface::Ptr _gateway)
+        bcos::gateway::GatewayHandle _gateway)
       : AMOPClient(_ioService, std::move(_wsService), std::move(_requestFactory),
             std::move(_gateway), "localGateway")
     {}
@@ -55,7 +55,8 @@ protected:
         auto topicInfo = generateTopicInfo();
         AMOP_CLIENT_LOG(INFO) << LOG_DESC("subscribeTopicToAllNodes")
                               << LOG_KV("topicInfo", topicInfo);
-        m_gateway->asyncSubscribeTopic(m_clientID, topicInfo, [](Error::Ptr&& _error) {
+        bcos::gateway::asyncSubscribeTopic(m_gateway, m_clientID, topicInfo,
+            [](Error::Ptr&& _error) {
             if (_error)
             {
                 BCOS_LOG(WARNING) << LOG_DESC("asyncSubScribeTopic error")
@@ -67,8 +68,8 @@ protected:
 
     void removeTopicFromAllNodes(std::vector<std::string> const& _topicsToRemove) override
     {
-        m_gateway->asyncRemoveTopic(
-            m_clientID, _topicsToRemove, [_topicsToRemove](Error::Ptr&& _error) {
+        bcos::gateway::asyncRemoveTopic(
+            m_gateway, m_clientID, _topicsToRemove, [_topicsToRemove](Error::Ptr&& _error) {
                 BCOS_LOG(INFO) << LOG_DESC("asyncRemoveTopic")
                                << LOG_KV("removedSize", _topicsToRemove.size())
                                << LOG_KV("code", _error ? _error->errorCode() : 0)

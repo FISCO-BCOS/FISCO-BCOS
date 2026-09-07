@@ -20,6 +20,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-front/FrontService.h>
+#include <bcos-gateway/gateway/GatewayHandle.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -87,7 +88,7 @@ std::shared_ptr<FrontService> buildFrontServiceWith(std::shared_ptr<BlockingGate
     // The shared IOServicePool is what enqueueSend's drainer runs on, which is exactly what this
     // test exercises.
     front->setIOServicePool(std::make_shared<bcos::IOServicePool>(2, "fib185Test"));
-    front->setGatewayInterface(std::move(_gateway));
+    front->setGateway(bcos::gateway::makeFrontServiceGateway(std::move(_gateway)));
     front->start();
     return front;
 }

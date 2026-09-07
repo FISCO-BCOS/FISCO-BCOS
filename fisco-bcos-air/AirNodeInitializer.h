@@ -23,8 +23,8 @@
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/EthereumSyncInitializer.h"
 #include "libinitializer/Initializer.h"
-#include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/rpc/RPCInterface.h>
+#include <bcos-gateway/Gateway.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <utility>
 
@@ -53,7 +53,7 @@ public:
 
 protected:
     virtual void initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
-        bcos::gateway::GatewayInterface::Ptr _gateway)
+        bcos::gateway::Gateway::Ptr _gateway)
     {
         m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
         m_nodeInitializer->initAirNode(
@@ -64,7 +64,8 @@ private:
     BoostLogInitializer::Ptr m_logInitializer;
     bcos::initializer::Initializer::Ptr m_nodeInitializer;
 
-    bcos::gateway::GatewayInterface::Ptr m_gateway;
+    // air mode always builds the in-process gateway
+    bcos::gateway::Gateway::Ptr m_gateway;
     bcos::rpc::RPCInterface::Ptr m_rpc;
 
     std::optional<rpc::RPCApplication> m_tarsApplication;

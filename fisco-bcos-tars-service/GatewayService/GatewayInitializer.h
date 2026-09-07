@@ -22,9 +22,9 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/election/LeaderEntryPointInterface.h>
-#include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/multigroup/ChainNodeInfoFactory.h>
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
+#include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-utilities/IOServicePool.h>
 
@@ -43,7 +43,7 @@ public:
     virtual void start();
     virtual void stop();
 
-    bcos::gateway::GatewayInterface::Ptr gateway();
+    bcos::gateway::Gateway::Ptr gateway();
     bcos::group::ChainNodeInfoFactory::Ptr chainNodeInfoFactory();
     bcos::group::GroupInfoFactory::Ptr groupInfoFactory();
 
@@ -57,7 +57,7 @@ private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     bcos::group::GroupInfoFactory::Ptr m_groupInfoFactory;
     bcos::group::ChainNodeInfoFactory::Ptr m_chainNodeInfoFactory;
-    bcos::gateway::GatewayInterface::Ptr m_gateway;
+    bcos::gateway::Gateway::Ptr m_gateway;
     std::atomic_bool m_running = {false};
     bcos::IOServicePool::Ptr m_ioServicePool;
 

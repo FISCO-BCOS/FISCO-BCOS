@@ -21,7 +21,7 @@
 #include "FrontServiceInfo.h"
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
-#include "bcos-framework/gateway/GatewayInterface.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-framework/multigroup/GroupInfo.h"
 #include <memory>
 namespace bcos

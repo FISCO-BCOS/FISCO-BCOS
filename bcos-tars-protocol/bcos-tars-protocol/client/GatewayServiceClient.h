@@ -22,7 +22,10 @@
 
 #include "bcos-tars-protocol/tars/GatewayService.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-framework/gateway/GatewayTypeDef.h>
+#include <bcos-framework/gateway/GroupNodeInfo.h>
+#include <bcos-framework/multigroup/GroupInfo.h>
+#include <bcos-task/Task.h>
 #include <range/v3/view/any_view.hpp>
 #include <string>
 #include <bcos-utilities/BoostLog.h>
@@ -31,52 +34,60 @@
 #define GATEWAYCLIENT_BADGE "[GATEWAYCLIENT]"
 namespace bcostars
 {
-class GatewayServiceClient : public bcos::gateway::GatewayInterface
+// Standalone concrete client for the remote (pro/max-mode) gateway-service; the local
+// counterpart is bcos::gateway::Gateway and consumers hold the statically-dispatched
+// bcos::gateway::GatewayHandle over the two (bcos-gateway/gateway/GatewayHandle.h). Method
+// signatures mirror Gateway's exactly so the variant dispatch compiles against both.
+class GatewayServiceClient
 {
 public:
+    using Ptr = std::shared_ptr<GatewayServiceClient>;
+
     GatewayServiceClient(bcostars::GatewayServicePrx _prx, std::string const& _serviceName,
         bcos::crypto::KeyFactory::Ptr _keyFactory);
     GatewayServiceClient(bcostars::GatewayServicePrx _prx, std::string const& _serviceName);
-    ~GatewayServiceClient() override;
+    ~GatewayServiceClient();
 
     void setKeyFactory(bcos::crypto::KeyFactory::Ptr keyFactory);
 
     bcos::task::Task<std::tuple<bcos::Error::Ptr, bcos::gateway::GatewayInfo::Ptr,
         bcos::gateway::GatewayInfosPtr>>
-    getPeers() override;
+    getPeers();
 
     // (coroutine) send message to a single node by awaiting the gateway-service RPC
     bcos::task::Task<bcos::Error::Ptr> sendMessageByNodeID(const std::string& _groupID,
         int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> _payloads) override;
+        ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> _payloads);
 
     bcos::task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID,
-        ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads) override;
+        ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads);
 
     bcos::task::Task<std::tuple<bcos::Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>>
-    getGroupNodeInfo(const std::string& _groupID) override;
+    getGroupNodeInfo(const std::string& _groupID);
 
     void asyncNotifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo,
-        std::function<void(bcos::Error::Ptr&&)> _callback) override;
+        std::function<void(bcos::Error::Ptr&&)> _callback);
 
     bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
-        const std::string& _topic, bcos::bytesConstRef _data) override;
+        const std::string& _topic, bcos::bytesConstRef _data);
 
     bcos::task::Task<void> sendBroadcastMessageByTopic(
-        const std::string& _topic, bcos::bytesConstRef _data) override;
+        const std::string& _topic, bcos::bytesConstRef _data);
 
     void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
-        std::function<void(bcos::Error::Ptr&&)> _callback) override;
+        std::function<void(bcos::Error::Ptr&&)> _callback);
 
     void asyncRemoveTopic(std::string const& _clientID, std::vector<std::string> const& _topicList,
-        std::function<void(bcos::Error::Ptr&&)> _callback) override;
+        std::function<void(bcos::Error::Ptr&&)> _callback);
 
     bcostars::GatewayServicePrx prx();
 
-protected:
-    void start() override;
-    void stop() override;
+    // no-ops: the client has no local lifecycle (kept callable through GatewayHandle)
+    void start();
+    void stop();
+
+private:
     static bool shouldStopCall();
 
 private:

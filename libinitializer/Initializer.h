@@ -32,6 +32,7 @@
 #include "tools/archive-tool/ArchiveService.h"
 #endif
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
+#include <bcos-gateway/gateway/GatewayHandle.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -50,10 +51,6 @@ class Slice;
 
 namespace bcos
 {
-namespace gateway
-{
-class GatewayInterface;
-}
 namespace scheduler
 {
 class SchedulerInterface;
@@ -132,7 +129,7 @@ public:
     }
 
     void initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
-        std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, const std::string& _logPath);
+        bcos::gateway::GatewayHandle _gateway, const std::string& _logPath);
     void initMicroServiceNode(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
         std::string const& _privateKeyPath, const std::string& _logPath);
@@ -141,7 +138,7 @@ public:
 
     virtual void init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
-        std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, bool _airVersion,
+        bcos::gateway::GatewayHandle _gateway, bool _airVersion,
         const std::string& _logPath);
 
     virtual void initConfig(std::string const& _configFilePath, std::string const& _genesisFile,

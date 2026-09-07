@@ -30,7 +30,7 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 find_package(Boost REQUIRED unit_test_framework)
 find_package(FakeIt CONFIG REQUIRED)
 
-target_link_libraries(${TEST_BINARY_NAME} txpool ledger bcos-crypto protocol-tars Boost::unit_test_framework FakeIt::FakeIt-boost)
+target_link_libraries(${TEST_BINARY_NAME} txpool ledger gateway bcos-crypto protocol-tars Boost::unit_test_framework FakeIt::FakeIt-boost)
 target_link_libraries(${DEMO_BINARY_NAME} txpool ledger bcos-crypto protocol-tars Boost::unit_test_framework)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # FIB-167: keep TxPoolStorageTest standalone. It transitively pulls

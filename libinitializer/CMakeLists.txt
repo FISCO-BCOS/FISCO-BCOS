@@ -35,7 +35,7 @@ add_library(init
 )
 target_link_libraries(init PUBLIC
     protocol_init
-    tool front
+    tool front gateway
     txpool
     mempool
     single-consensus

@@ -20,6 +20,7 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
+#include <bcos-gateway/gateway/GatewayHandle.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-tool/NodeConfig.h>
 #include <memory>
@@ -38,10 +39,6 @@ namespace txpool
 {
 class TxPoolInterface;
 }
-namespace gateway
-{
-class GatewayInterface;
-}
 namespace front
 {
 class FrontService;
@@ -57,7 +54,7 @@ public:
     using Ptr = std::shared_ptr<FrontServiceInitializer>;
     FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         std::shared_ptr<bcos::initializer::ProtocolInitializer> _protocolInitializer,
-        std::shared_ptr<bcos::gateway::GatewayInterface> _gateWay,
+        bcos::gateway::GatewayHandle _gateWay,
         bcos::IOServicePool::Ptr _ioServicePool);
     virtual ~FrontServiceInitializer() { stop(); }
 
@@ -78,7 +75,6 @@ protected:
 private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     std::shared_ptr<bcos::initializer::ProtocolInitializer> m_protocolInitializer;
-    std::shared_ptr<bcos::gateway::GatewayInterface> m_gateWay;
     bcos::IOServicePool::Ptr m_ioServicePool;
 
     std::shared_ptr<bcos::front::FrontService> m_front;

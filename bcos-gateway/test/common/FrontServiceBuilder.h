@@ -24,6 +24,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-front/FrontService.h"
 #include "bcos-gateway/GatewayFactory.h"
+#include "bcos-gateway/gateway/GatewayHandle.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/uuid/uuid.hpp>
@@ -51,7 +52,7 @@ inline std::shared_ptr<bcos::front::FrontService> buildFrontService(
     frontService->setGroupID(_groupID);
     frontService->setNodeID(nodeIDPtr);
     frontService->setIOServicePool(ioServicePool);
-    frontService->setGatewayInterface(gateway);
+    frontService->setGateway(bcos::gateway::makeFrontServiceGateway(gateway));
     // register front service to gateway
     gateway->gatewayNodeManager()->registerNode(
         _groupID, nodeIDPtr, bcos::protocol::NodeType::CONSENSUS_NODE, frontService, nullptr);

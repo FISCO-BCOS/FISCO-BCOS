@@ -23,8 +23,8 @@
 #include "bcos-boostssl/websocket/WsConfig.h"
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-framework/election/LeaderEntryPointInterface.h"
-#include "bcos-framework/gateway/GatewayInterface.h"
 #include "bcos-framework/security/KeyEncryptInterface.h"
+#include "bcos-gateway/gateway/GatewayHandle.h"
 #include "bcos-rpc/Rpc.h"
 #include "bcos-rpc/amop/AMOPClient.h"
 #include "bcos-rpc/event/EventSub.h"
@@ -51,7 +51,7 @@ class RpcFactory : public std::enable_shared_from_this<RpcFactory>
 {
 public:
     using Ptr = std::shared_ptr<RpcFactory>;
-    RpcFactory(std::string _chainID, bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
+    RpcFactory(std::string _chainID, bcos::gateway::GatewayHandle _gateway,
         bcos::crypto::KeyFactory::Ptr _keyFactory,
         bcos::security::KeyEncryptInterface::Ptr _dataEncrypt = nullptr);
     virtual ~RpcFactory() = default;
@@ -107,7 +107,7 @@ protected:
 
 private:
     std::string m_chainID;
-    bcos::gateway::GatewayInterface::Ptr m_gateway;
+    bcos::gateway::GatewayHandle m_gateway;
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     bcos::security::KeyEncryptInterface::Ptr m_dataEncrypt;

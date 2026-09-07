@@ -53,10 +53,10 @@ using namespace bcos::boostssl::ws;
 using namespace bcos::protocol;
 using namespace bcos::security;
 
-RpcFactory::RpcFactory(std::string _chainID, GatewayInterface::Ptr _gatewayInterface,
+RpcFactory::RpcFactory(std::string _chainID, GatewayHandle _gateway,
     KeyFactory::Ptr _keyFactory, bcos::security::KeyEncryptInterface::Ptr _dataEncrypt)
   : m_chainID(std::move(_chainID)),
-    m_gateway(std::move(_gatewayInterface)),
+    m_gateway(std::move(_gateway)),
     m_keyFactory(std::move(_keyFactory)),
     m_dataEncrypt(std::move(_dataEncrypt))
 {}
