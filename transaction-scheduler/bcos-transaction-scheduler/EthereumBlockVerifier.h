@@ -17,12 +17,15 @@
  * @brief External Ethereum block verification core: executes an incoming block
  *        (from devp2p sync or the Engine API) against the local state, checks
  *        the deterministic roots (txsRoot/receiptsRoot/gasUsed/logsBloom), the
- *        withdrawals root and the state root, then commits the block + ledger
- *        rows atomically (FIB-104 prewriteBlockToBuffer pattern).
+ *        uncle (ommers) hash, the withdrawals root and the state root, then
+ *        commits the block + ledger rows atomically (FIB-104 prewriteBlockToBuffer
+ *        pattern).
  * @date 2026/8/18
  */
 #pragma once
 
+#include "bcos-codec/rlp/RLPEncode.h"
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/Block.h"
@@ -58,15 +61,20 @@ namespace bcos::scheduler_v1
 {
 
 // Timestamp-based Ethereum fork schedule (Sepolia / Holesky / Mainnet PoS chains).
-// A zero timestamp means the fork is active from genesis.
+// A zero timestamp means the fork is active from genesis; the DEFAULT is
+// UINT64_MAX = "never active", so a default-constructed (or partially filled) schedule
+// can never accidentally activate every fork — callers that mean "active from genesis"
+// must set the field to 0 explicitly. (The production path goes through NodeConfig,
+// which maps missing keys to UINT64_MAX, matching this default.)
 struct EvmcForkTimestamps
 {
-    uint64_t londonTime{0};    // EIP-1559
-    uint64_t parisTime{0};     // The Merge (PoS)
-    uint64_t shanghaiTime{0};  // EIP-4895 withdrawals
-    uint64_t cancunTime{0};    // EIP-4844 blobs
-    uint64_t pragueTime{0};    // EIP-7702 etc.
-    uint64_t osakaTime{0};
+    static constexpr uint64_t kForkDisabled = std::numeric_limits<uint64_t>::max();
+    uint64_t londonTime{kForkDisabled};    // EIP-1559
+    uint64_t parisTime{kForkDisabled};     // The Merge (PoS)
+    uint64_t shanghaiTime{kForkDisabled};  // EIP-4895 withdrawals
+    uint64_t cancunTime{kForkDisabled};    // EIP-4844 blobs
+    uint64_t pragueTime{kForkDisabled};    // EIP-7702 etc.
+    uint64_t osakaTime{kForkDisabled};
 };
 
 inline constexpr uint64_t kSecondsToMilliseconds = 1000;
@@ -75,7 +83,8 @@ inline constexpr size_t kChainIdBytes = 8;
 
 /// The EVMC revision active for a block with the given timestamp. A zero fork
 /// timestamp means "active from genesis" (consistent with HeaderValidator's
-/// isForkActive semantics).
+/// isForkActive semantics); an unset field (the UINT64_MAX default) means the fork
+/// never activates.
 ///
 /// Paris (the Merge) is special: geth activates it at paris_time OR as soon as
 /// the chain's Terminal Total Difficulty has been reached — a PoW-configured
@@ -283,7 +292,13 @@ task::Task<void> accumulatePoWBlockRewards(ViewType& view,
         protocol::EthBlockHeader uncle;
         if (auto err = uncle.rlpDecode(bcos::bytesConstRef(uncleRlp.data(), uncleRlp.size())))
         {
-            continue;  // malformed uncle: skip (a real block never carries one)
+            // A malformed uncle must not be silently skipped: its inclusion reward is
+            // part of the world state, so skipping it would compute a wrong state root
+            // silently. Throwing here makes the block invalid (the verifyAndCommit
+            // caller turns the exception into an invalid-block result).
+            BOOST_THROW_EXCEPTION(
+                std::runtime_error{"EthereumBlockVerifier: malformed uncle header RLP: " +
+                                   err->errorMessage()});
         }
         auto const& uncleHeader = uncle.data();
         u256 uncleReward = (u256(static_cast<uint64_t>(uncleHeader.number)) + 8 -
@@ -293,6 +308,28 @@ task::Task<void> accumulatePoWBlockRewards(ViewType& view,
         coinbaseReward += kPoWBlockReward / 32;
     }
     co_await addBalance(ethHeader.coinbase, coinbaseReward);
+}
+
+/// keccak256(rlp(uncles)) — the header's uncleHash (ommers) commitment. Each rawUncles
+/// element is a COMPLETE RLP item (the uncle header's own RLP), so the list encoding is
+/// their plain concatenation under a single list header. The empty list encodes to 0xc0,
+/// whose keccak256 is the canonical empty-ommers hash
+/// 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347 — the value every
+/// PoS header carries, so comparing this against the header's uncleHash also enforces
+/// "PoS blocks must have no uncles" with no extra rule.
+inline crypto::HashType calculateUnclesHash(std::vector<bcos::bytes> const& rawUncles)
+{
+    bcos::bytes payload;
+    for (auto const& uncle : rawUncles)
+    {
+        payload.insert(payload.end(), uncle.begin(), uncle.end());
+    }
+    bcos::bytes encoded;
+    encoded.reserve(payload.size() + 8);
+    bcos::codec::rlp::encodeHeader(
+        encoded, bcos::codec::rlp::Header{.isList = true, .payloadLength = payload.size()});
+    encoded.insert(encoded.end(), payload.begin(), payload.end());
+    return bcos::crypto::keccak256Hash(bcos::bytesConstRef(encoded.data(), encoded.size()));
 }
 
 struct EthereumBlockVerificationResult
@@ -508,7 +545,22 @@ public:
         if (mergeBlock > 0 && static_cast<uint64_t>(ethHeader.number) < mergeBlock &&
             ethHeader.difficulty != 0)
         {
-            co_await accumulatePoWBlockRewards(view, ethHeader, rawUncles, ledgerConfig);
+            // A malformed uncle throws (its reward is part of the world state, so it
+            // cannot be skipped) — the block is invalid, not partially rewarded.
+            std::exception_ptr rewardsFailure;
+            try
+            {
+                co_await accumulatePoWBlockRewards(view, ethHeader, rawUncles, ledgerConfig);
+            }
+            catch (...)
+            {
+                rewardsFailure = std::current_exception();
+            }
+            if (rewardsFailure)
+            {
+                co_return co_await fail(
+                    "EthereumBlockVerifier: uncle header RLP decode failed");
+            }
         }
 
         // 5. Fill cumulativeGasUsed + logsBloom (v2) and compute the deterministic roots.
@@ -532,48 +584,61 @@ public:
         result.stateRoot = stateRoot;
 
         // 7. Verify against the header.
-        if (auto error = verifyAgainstHeader(ethHeader, computation, result.stateRoot, rawWithdrawals);
+        if (auto error =
+                verifyAgainstHeader(ethHeader, computation, result.stateRoot, rawWithdrawals,
+                    rawUncles);
             error.has_value())
         {
             co_return co_await fail(std::move(*error));
         }
 
         // 8. Commit: FIB-104 pattern — push the executed view, then merge the ledger
-        //    prewrite buffer atomically.
+        //    prewrite buffer atomically. If anything after the push throws, roll the
+        //    pushed view back (popFrontStorage) so a dirty layer never stays on the
+        //    storage stack to pollute later sync rounds — the same rollback pattern
+        //    BaselineScheduler::coExecuteBlock uses around pushView.
         globalStateStorage.pushView(std::move(view));
-        typename GlobalStateStorage::MutableStorage prewriteStorage;
-        auto block = m_blockFactory.get().createBlock();
-        // The execution header carries no Tars dataHash; prewriteBlockToBuffer
-        // needs header->hash() to write SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER.
-        // For an Ethereum header the canonical block hash is keccak256(rlp(header)),
-        // which is exactly the value verified against the chain — inject it so the
-        // ledger metadata (and the resume point) are written with the real hash.
-        //
-        // NOTE: BlockImpl::setBlockHeader COPIES the header's inner data, so the
-        // RLP hash must be set on blockHeader BEFORE it is copied into the block.
+        try
         {
-            bcos::bytes headerRlp;
-            bcos::codec::rlp::encode(headerRlp, ethHeader);
-            blockHeader->setRLPHash(bcos::crypto::keccak256Hash(
-                bcos::bytesConstRef(headerRlp.data(), headerRlp.size())));
+            typename GlobalStateStorage::MutableStorage prewriteStorage;
+            auto block = m_blockFactory.get().createBlock();
+            // The execution header carries no Tars dataHash; prewriteBlockToBuffer
+            // needs header->hash() to write SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER.
+            // For an Ethereum header the canonical block hash is keccak256(rlp(header)),
+            // which is exactly the value verified against the chain — inject it so the
+            // ledger metadata (and the resume point) are written with the real hash.
+            //
+            // NOTE: BlockImpl::setBlockHeader COPIES the header's inner data, so the
+            // RLP hash must be set on blockHeader BEFORE it is copied into the block.
+            {
+                bcos::bytes headerRlp;
+                bcos::codec::rlp::encode(headerRlp, ethHeader);
+                blockHeader->setRLPHash(bcos::crypto::keccak256Hash(
+                    bcos::bytesConstRef(headerRlp.data(), headerRlp.size())));
+            }
+            block->setBlockHeader(blockHeader);
+            auto const& bloom = computation.logsBloom;
+            block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+            for (auto const& tx : transactions)
+            {
+                block->appendTransaction(tx);
+            }
+            for (auto const& receipt : receipts)
+            {
+                block->appendReceipt(receipt);
+            }
+            auto blockTxs = std::make_shared<protocol::ConstTransactions>(
+                transactions | ::ranges::views::transform([](auto const& transaction) {
+                    return protocol::Transaction::ConstPtr(transaction);
+                }) | ::ranges::to<std::vector>());
+            co_await ledger::prewriteBlockToBuffer(ledger, blockTxs, block, prewriteStorage);
+            co_await globalStateStorage.mergeBackStorage(prewriteStorage);
         }
-        block->setBlockHeader(blockHeader);
-        auto const& bloom = computation.logsBloom;
-        block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
-        for (auto const& tx : transactions)
+        catch (...)
         {
-            block->appendTransaction(tx);
+            globalStateStorage.popFrontStorage();
+            throw;
         }
-        for (auto const& receipt : receipts)
-        {
-            block->appendReceipt(receipt);
-        }
-        auto blockTxs = std::make_shared<protocol::ConstTransactions>(
-            transactions | ::ranges::views::transform([](auto const& transaction) {
-                return protocol::Transaction::ConstPtr(transaction);
-            }) | ::ranges::to<std::vector>());
-        co_await ledger::prewriteBlockToBuffer(ledger, blockTxs, block, prewriteStorage);
-        co_await globalStateStorage.mergeBackStorage(prewriteStorage);
 
         result.valid = true;
         co_return std::move(result);
@@ -596,7 +661,8 @@ public:
     static std::optional<std::string> verifyAgainstHeader(
         protocol::EthBlockHeaderData const& ethHeader, EthereumBlockComputation const& computation,
         crypto::HashType const& stateRoot,
-        std::optional<std::vector<bcos::bytes>> const& rawWithdrawals)
+        std::optional<std::vector<bcos::bytes>> const& rawWithdrawals,
+        std::vector<bcos::bytes> const& rawUncles)
     {
         if (computation.txsRoot != ethHeader.txsRoot)
         {
@@ -624,6 +690,15 @@ public:
         {
             return "stateRoot mismatch (computed=" + stateRoot.hex() +
                    " header=" + ethHeader.stateRoot.hex() + ")";
+        }
+        // Uncle (ommers) hash: keccak256(rlp(uncles)) must match the header's uncleHash.
+        // An empty uncle list hashes to the canonical empty-ommers hash 0x1dcc4de8...,
+        // which is exactly what every PoS header carries — so this one comparison also
+        // rejects a PoS block that attaches uncles, without a separate rule.
+        if (calculateUnclesHash(rawUncles) != ethHeader.uncleHash)
+        {
+            return "uncleHash mismatch (computed over " + std::to_string(rawUncles.size()) +
+                   " uncles, header=" + ethHeader.uncleHash.hex() + ")";
         }
         if (ethHeader.withdrawalsHash.has_value())
         {

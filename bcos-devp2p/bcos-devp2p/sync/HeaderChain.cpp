@@ -20,6 +20,7 @@
 #include "HeaderChain.h"
 
 #include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <stdexcept>
 
@@ -58,9 +59,9 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
     request.skip = 0;
     request.reverse = false;
     auto requestRlp = eth::encodeGetBlockHeaders(request);
-    std::cerr << "[HeaderChain] sent GetBlockHeaders id=" << request.requestId
-              << " origin=" << request.originNumber << " amount=" << _amount
-              << " rlp=" << bcos::toHexStringWithPrefix(requestRlp) << std::endl;
+    BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain")
+                    << "sent GetBlockHeaders id=" << request.requestId
+                    << " origin=" << request.originNumber << " amount=" << _amount;
     _session.sendMessage(
         rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)),
             std::move(requestRlp)});
@@ -72,15 +73,16 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
     while (true)
     {
         auto response = _session.recvMessage();
-        std::cerr << "[HeaderChain] recv msg id=" << static_cast<int>(response.id)
-                  << " size=" << response.data.size()
-                  << " data=" << bcos::toHexStringWithPrefix(response.data).substr(0, 200)
-                  << std::endl;
+        BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain")
+                        << "recv msg id=" << static_cast<int>(response.id)
+                        << " size=" << response.data.size() << " data="
+                        << bcos::toHexStringWithPrefix(bytesConstRef(response.data.data(),
+                               std::min<size_t>(response.data.size(), 100)));
         if (response.id == rlpx::baseMsg::Ping)
         {
             // RLPx base protocol: Ping (id 0x02) is answered with Pong (id 0x03).
             _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, {}});
-            std::cerr << "[HeaderChain] answered Ping with Pong" << std::endl;
+            BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain") << "answered Ping with Pong";
             continue;
         }
         if (response.id == rlpx::baseMsg::Pong)
@@ -121,6 +123,10 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
         if (headers.requestId != request.requestId)
         {
             throw std::runtime_error("HeaderChain: request id mismatch");
+        }
+        if (headers.headers.size() > request.amount)
+        {
+            throw std::runtime_error("HeaderChain: peer returned more headers than requested");
         }
 
         out.reserve(headers.headers.size());

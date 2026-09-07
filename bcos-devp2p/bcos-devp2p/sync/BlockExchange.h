@@ -87,6 +87,11 @@ public:
             // `processed` is >= 1 (the first requestBodies returned at least one
             // body) and <= headers.size().
             m_headerChain.advance(processed, headers[processed - 1]);
+            if (processed > remaining)
+            {
+                throw std::runtime_error(
+                    "BlockExchange: peer returned more blocks than requested");
+            }
             remaining -= processed;
         }
     }

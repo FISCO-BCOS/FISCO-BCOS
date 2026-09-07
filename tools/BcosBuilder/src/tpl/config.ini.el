@@ -24,12 +24,28 @@
     listen_ip=0.0.0.0
     listen_port=30303
     ; geth-style bootnodes file (a JSON array of enode:// strings); see bootnodes.json
+    ;
+    ; TRUST MODEL: the bootnodes list is the trust root for chain data. The node
+    ; commits the chain the bootnodes serve as long as it is internally consistent
+    ; (parent-hash linkage + re-executed state roots); pre-merge PoW difficulty /
+    ; total difficulty are NOT verified, and there is no consensus-layer finality
+    ; feed. Configure ONLY bootnodes you trust, and consider pinning
+    ; finalized_checkpoint below. A full checkpoint/finality mechanism is a known
+    ; limitation and tracked as follow-up work.
     bootnodes_file=./bootnodes.json
-    ; secp256k1 node identity (hex or PEM). Empty = derive deterministically.
+    ; secp256k1 node identity: a file holding the 32-byte private key as hex
+    ; (optional 0x prefix). Empty = auto-generate a persistent key on first start
+    ; (node.rlpx.key next to the FISCO node key) and reuse it on restart.
     ; A stable key is strongly recommended so bootnodes can authenticate us.
     node_key_file=
     ; max blocks requested per batch
     max_batch_size=192
+    ; optional operator-pinned finalized checkpoint, "<number>:<0xHASH>": the
+    ; committed block at <number> must carry <0xHASH>; on a mismatch the sync loop
+    ; stops with a fatal error (the bootnodes serve a wrong fork). Take the value
+    ; from a trusted source (e.g. a block explorer or your own archive node).
+    ; Empty = no checkpoint.
+    ; finalized_checkpoint=9200000:0x...
 
 [chain]
     ; use SM crypto or not — EL mode is always plain secp256k1/keccak

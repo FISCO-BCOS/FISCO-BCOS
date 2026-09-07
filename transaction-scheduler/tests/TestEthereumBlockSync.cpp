@@ -447,6 +447,9 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
         };
 
         scheduler_v1::EvmcForkTimestamps forks;
+        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.shanghaiTime = 0;
         forks.cancunTime = std::numeric_limits<uint64_t>::max();
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
         forks.osakaTime = std::numeric_limits<uint64_t>::max();
@@ -649,6 +652,9 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
             return rawToTx.at(raw);
         };
         scheduler_v1::EvmcForkTimestamps forks;
+        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.shanghaiTime = 0;
         forks.cancunTime = std::numeric_limits<uint64_t>::max();
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
         forks.osakaTime = std::numeric_limits<uint64_t>::max();

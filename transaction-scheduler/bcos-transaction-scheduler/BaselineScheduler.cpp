@@ -1,6 +1,8 @@
 #include "BaselineScheduler.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-ledger/mpt/EthTrieRoots.h"
+#include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <range/v3/iterator/operations.hpp>

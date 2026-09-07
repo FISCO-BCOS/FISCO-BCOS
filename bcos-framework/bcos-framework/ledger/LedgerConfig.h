@@ -282,6 +282,15 @@ inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 /// without depending on libinitializer; libinitializer/MultiVersionScheduler.h keeps a
 /// scheduler_v1-scoped alias for the same value. Versions >= this all select the v2
 /// executor (setVersion saturates), leaving room above 2 for a future executor.
+///
+/// PRE-RELEASE SEMANTICS: executor_version = 2 was introduced mid-branch (2026-08) and is
+/// NOT part of any upstream release — upstream releases have no v2. The version gates
+/// consensus-critical behaviour (Ethereum trie roots for txsRoot/receiptsRoot/stateRoot,
+/// the system-address migration to /apps/), and its exact rules may still change between
+/// commits; no cross-commit compatibility is guaranteed for a chain that ran v2 on a
+/// pre-release binary. Before any formal release ships with v2 selectable, this gate must
+/// be re-hung on a proper feature flag / activation block height (Features::Flag) instead
+/// of a bare version compare.
 inline constexpr int ETHEREUM_EXECUTOR_VERSION = 2;
 
 /// The executor version that selects the OP-Stack OpSchedulerSeam (op composition root).

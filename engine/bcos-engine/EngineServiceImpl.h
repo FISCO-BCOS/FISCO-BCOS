@@ -982,8 +982,9 @@ private:
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
 
         // Ethereum-compatible roots (executor_version >= 2): txsRoot/receiptsRoot commit to
-        // the transaction / receipt tries and empty blocks get emptyRootHash(); legacy
-        // executors keep the Merkle roots and the zero empty-root behaviour.
+        // the transaction / receipt tries; legacy executors keep the Merkle roots. Empty
+        // blocks get emptyRootHash() on BOTH paths (validateHeader rejects a zero
+        // receiptsRoot/txsRoot — see the empty-block branch below).
         const bool ethereumRoots =
             ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION;
 
@@ -1008,18 +1009,17 @@ private:
             emptyHeader->setExtraData(std::move(extraData));
             emptyHeader->setStateRoot(co_await calculateStateRoot(
                 view, nextBlockNumber, emptyHeader->version(), ledgerConfig));
-            // An empty block's transaction/receipt tries: for the Ethereum executor (v2)
-            // these are the canonical empty-trie root, not the all-zero hash (validateHeader
-            // rejects a zero receiptsRoot/txsRoot); legacy executors keep the zero behaviour.
-            emptyHeader->setReceiptsRoot(
-                ethereumRoots ? bcos::ledger::mpt::emptyRootHash() : h256{});
-            emptyHeader->setTxsRoot(ethereumRoots ? bcos::ledger::mpt::emptyRootHash() : h256{});
+            // An empty block's transaction/receipt tries are the canonical empty-trie root, not
+            // the all-zero hash: finalizeEthBlockHeader always goes through
+            // EthBlockHeader::calculateRLPHash -> validateHeader, which rejects a zero
+            // receiptsRoot/txsRoot — this holds for legacy executors too.
+            emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
+            emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setGasUsed(0);
             detail::finalizeEthBlockHeader(*emptyHeader, executionPayload,
                 payloadAttributes.parentBeaconBlockRoot, forkVersion);
             executionPayload.stateRoot = emptyHeader->stateRoot();
-            executionPayload.receiptsRoot =
-                ethereumRoots ? bcos::ledger::mpt::emptyRootHash() : h256{};
+            executionPayload.receiptsRoot = bcos::ledger::mpt::emptyRootHash();
             executionPayload.gasUsed = 0;
             executionPayload.blockHash = emptyHeader->hash();
             co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
@@ -1182,9 +1182,10 @@ private:
     ///    buildMPTStateRoot and EthereumBlockVerifier use, so a locally built block commits
     ///    the same root scheme a re-executing/verifying node computes. The new trie nodes
     ///    land in the view's top mutable layer and are committed by newPayload's
-    ///    pushView + mergeBackStorage together with the flat state. The parent root mirrors
-    ///    buildMPTStateRoot's transition rule: a parent that still committed a legacy root
-    ///    (mid-chain activation boundary) starts the build from the empty trie.
+    ///    pushView + mergeBackStorage together with the flat state. The parent root comes
+    ///    from the shared ledger::mpt::parentStateRootFor (StateRoots.h) — the same rule
+    ///    BaselineScheduler::buildMPTStateRoot uses: a parent that still committed a legacy
+    ///    root (mid-chain activation boundary) starts the build from the empty trie.
     ///  - legacy (non-MPT) chains: the canonical XOR fold (ledger::mpt::
     ///    computeLegacyStateRoot, shared with BaselineScheduler). Engine API chains are
     ///    v2/L2 in production, so this branch only serves legacy test configurations.
@@ -1199,13 +1200,8 @@ private:
         // Fail loud on the unsupported raw_address + MPT flag combination (same guard
         // BaselineScheduler runs inside its MPT branch).
         ledger::mpt::rejectRawAddressWithMPT(ledgerConfig.features(), blockNumber);
-        h256 parentStateRoot = ledger::mpt::emptyRootHash();
-        if (blockNumber > 0 && ledger::mpt::shouldBuildMPT(ledgerConfig.features(), blockNumber - 1))
-        {
-            auto parentBlock = co_await ledger::getBlockData(
-                view, blockNumber - 1, ledger::HEADER, *m_blockFactory);
-            parentStateRoot = parentBlock->blockHeader()->stateRoot();
-        }
+        h256 parentStateRoot = co_await ledger::mpt::parentStateRootFor(
+            view, ledgerConfig.features(), blockNumber, *m_blockFactory);
         co_return co_await ledger::mpt::computeMptStateRoot(view, parentStateRoot, ledgerConfig);
     }
 

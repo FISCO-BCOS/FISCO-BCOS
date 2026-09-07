@@ -194,19 +194,15 @@ BOOST_FIXTURE_TEST_CASE(loadSepoliaGenesisVerifyEmptyBlock, ESSFixture)
             allocs.push_back(std::move(a));
         }
         ledger::Features features;
-        auto trie = co_await ledger::importEthereumGenesisState(
+        auto genesisStateRoot = co_await ledger::importEthereumGenesisState(
             backendStorage, allocs, *cryptoSuite->hashImpl(), features);
 
-        // 2. The computed root MUST be the canonical Sepolia genesis state root.
-        BOOST_CHECK_EQUAL(trie.root.hex(), std::string(kSepoliaStateRoot));
-        BOOST_CHECK(trie.nodes.size() >= 15u);
-        // The trie nodes must be persisted as "/mpt/" rows.
-        for (auto const& [nodeHash, nodeRlp] : trie.nodes)
-        {
-            auto nodeEntry = co_await storage2::readOne(
-                backendStorage, storage2::mptNodeStateKey(nodeHash));
-            BOOST_CHECK(nodeEntry.has_value());
-        }
+        // 2. The computed root MUST be the canonical Sepolia genesis state root,
+        //    and the root node must be persisted as a "/mpt/" row.
+        BOOST_CHECK_EQUAL(genesisStateRoot.hex(), std::string(kSepoliaStateRoot));
+        auto rootNodeEntry = co_await storage2::readOne(
+            backendStorage, storage2::mptNodeStateKey(genesisStateRoot));
+        BOOST_CHECK(rootNodeEntry.has_value());
 
         // 3. Genesis bookkeeping: block-0 hash mapping + height + v2 system config.
         auto genesisHash = crypto::HashType(
@@ -238,7 +234,7 @@ BOOST_FIXTURE_TEST_CASE(loadSepoliaGenesisVerifyEmptyBlock, ESSFixture)
         parentHeader.gasLimit = 30000000;
         parentHeader.gasUsed = 0;
         parentHeader.baseFee = u256(1000000000);
-        parentHeader.stateRoot = trie.root;
+        parentHeader.stateRoot = genesisStateRoot;
         parentHeader.txsRoot = ledger::mpt::emptyRootHash();
         parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
 
@@ -252,7 +248,7 @@ BOOST_FIXTURE_TEST_CASE(loadSepoliaGenesisVerifyEmptyBlock, ESSFixture)
         ethHeader.gasLimit = 30000000;
         ethHeader.gasUsed = 0;
         ethHeader.baseFee = bcos::devp2p::sync::computeNextBaseFee(parentHeader);
-        ethHeader.stateRoot = trie.root;  // empty block -> state root unchanged
+        ethHeader.stateRoot = genesisStateRoot;  // empty block -> state root unchanged
         ethHeader.txsRoot = ledger::mpt::emptyRootHash();
         ethHeader.receiptsRoot = ledger::mpt::emptyRootHash();
         ethHeader.prevRandao = bcos::h256{};
@@ -273,6 +269,9 @@ BOOST_FIXTURE_TEST_CASE(loadSepoliaGenesisVerifyEmptyBlock, ESSFixture)
                 std::runtime_error{"legacy state-root fold must not run for executor v2"});
         };
         scheduler_v1::EvmcForkTimestamps forks;
+        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.shanghaiTime = 0;
         forks.cancunTime = std::numeric_limits<uint64_t>::max();
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
         forks.osakaTime = std::numeric_limits<uint64_t>::max();
@@ -313,9 +312,9 @@ BOOST_FIXTURE_TEST_CASE(sepoliaBlock1PoWRewardStateRoot, ESSFixture)
             allocs.push_back(std::move(a));
         }
         ledger::Features features;
-        auto trie = co_await ledger::importEthereumGenesisState(
+        auto genesisStateRoot = co_await ledger::importEthereumGenesisState(
             backendStorage, allocs, *cryptoSuite->hashImpl(), features);
-        BOOST_CHECK_EQUAL(trie.root.hex(), std::string(kSepoliaStateRoot));
+        BOOST_CHECK_EQUAL(genesisStateRoot.hex(), std::string(kSepoliaStateRoot));
 
         // 2. PoW block-1 reward: +2 ETH to the block-1 coinbase.
         ledger::LedgerConfig ledgerConfig;
@@ -333,7 +332,7 @@ BOOST_FIXTURE_TEST_CASE(sepoliaBlock1PoWRewardStateRoot, ESSFixture)
 
         // 3. The resulting state root must be the canonical Sepolia block-1 root.
         auto block1Root = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            computeMptStateRoot(view, trie.root, ledgerConfig);
+            computeMptStateRoot(view, genesisStateRoot, ledgerConfig);
         crypto::HashType expectedBlock1Root(
             bytesConstRef(reinterpret_cast<const bcos::byte*>(
                               "\xc9\x1d\x4e\xcd\x59\xdc\xe3\x06\x7d\x34\x0b\x3a\xad\xfc\x05\x42"

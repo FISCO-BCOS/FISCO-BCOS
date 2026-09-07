@@ -480,3 +480,17 @@ public:
 };
 
 }  // namespace bcos::test::fullchain
+
+// Explicitly instantiated once per test binary (SharedBaselineSchedulerInst.cpp in
+// test-transaction-scheduler, unittests/rpc/FullChainFixtureInst.cpp in test-bcos-rpc)
+// so each consumer TU — the MPT genesis / L1-upgrade / smoke tests — parses only the
+// declaration header instead of instantiating the whole scheduler.
+//
+// Consumer-binary checklist: any test binary that includes this header links against
+// the specialization below WITHOUT instantiating it, so it MUST contain an explicit
+// instantiation TU — copy either of the two listed above (they are identical modulo
+// the header paths). A binary that forgets fails at link time with undefined
+// references to BaselineScheduler<FC...> members.
+extern template class bcos::scheduler_v1::BaselineScheduler<
+    bcos::test::fullchain::FCMultiLayerStorage, bcos::test::fullchain::FCExecutor,
+    bcos::test::fullchain::FCWritingScheduler, bcos::ledger::Ledger>;

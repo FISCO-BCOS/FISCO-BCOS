@@ -19,12 +19,17 @@
  *        - computeMptStateRoot: the real Ethereum world-state MPT root (moved from
  *          EthereumBlockVerifier::computeMptStateRoot);
  *        - computeLegacyStateRoot: the legacy XOR fold for non-MPT chains (moved from
- *          scheduler_v1::calculateStateRoot in BaselineScheduler.h).
+ *          scheduler_v1::calculateStateRoot in BaselineScheduler.h);
+ *        - parentStateRootFor: the parent-root selection rule every incremental MPT
+ *          build starts from (moved from the identical copies in
+ *          BaselineScheduler::buildMPTStateRoot and EngineServiceImpl::calculateStateRoot).
  */
 #pragma once
 
 #include "MPTBuilder.h"
+#include "MPTFeatureGates.h"
 #include "ViewNodeStorage.h"
+#include <bcos-ledger/LedgerMethods.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -58,6 +63,29 @@ task::Task<crypto::HashType> computeMptStateRoot(ViewType& view,
         ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
     auto delta = co_await buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode);
     co_return delta.stateRoot;
+}
+
+/// The parent state root an incremental MPT build starts from. Shared by every MPT
+/// producer (BaselineScheduler::buildMPTStateRoot, EngineServiceImpl::calculateStateRoot)
+/// so all of them apply the SAME transition rule: block N's build starts from block N-1's
+/// HEADER state root when the parent itself committed an MPT root (shouldBuildMPT), and
+/// from the empty trie otherwise — genesis, or the scenario-A activation boundary where
+/// the parent committed a legacy XOR root (mid-chain activation commits only to state
+/// written after the flip; see buildMPTStateRoot's doc comment). A missing parent header
+/// under an MPT parent throws NotFoundBlockHeader (getBlockData, LedgerMethods.h) — never
+/// a silent empty-trie rebuild.
+template <class ViewType>
+task::Task<h256> parentStateRootFor(ViewType& view, ledger::Features const& features,
+    protocol::BlockNumber blockNumber, protocol::BlockFactory& blockFactory)
+{
+    h256 parentStateRoot = emptyRootHash();
+    if (blockNumber > 0 && shouldBuildMPT(features, blockNumber - 1))
+    {
+        auto parentBlock =
+            co_await ledger::getBlockData(view, blockNumber - 1, ledger::HEADER, blockFactory);
+        parentStateRoot = parentBlock->blockHeader()->stateRoot();
+    }
+    co_return parentStateRoot;
 }
 
 /// The legacy state root: an XOR fold over the per-entry hashes of the storage delta.

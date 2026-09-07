@@ -82,19 +82,20 @@ BOOST_AUTO_TEST_CASE(baseFeeGoldenVector)
 
 BOOST_AUTO_TEST_CASE(excessBlobGasGoldenVectors)
 {
-    // Verified against an independent Python computation (EIP-4844).
+    // Verified against an independent Python computation (EIP-4844, Cancun
+    // schedule: target 3 blobs per block).
     auto parent = makeValidPair().parent;
     parent.excessBlobGas = u256(0);
     parent.blobGasUsed = u256(2 * kGasPerBlob);  // 262144
-    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent), u256(0));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kCancunBlobSchedule), u256(0));
 
     parent.excessBlobGas = u256(200000);
     parent.blobGasUsed = u256(2 * kGasPerBlob);
-    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent), u256(68928));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kCancunBlobSchedule), u256(68928));
 
     parent.excessBlobGas = u256(0);
     parent.blobGasUsed = u256(0);
-    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent), u256(0));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kCancunBlobSchedule), u256(0));
 }
 
 BOOST_AUTO_TEST_CASE(rejectsNonZeroDifficulty)
@@ -167,6 +168,22 @@ BOOST_AUTO_TEST_CASE(rejectsGasLimitDeltaTooLarge)
     BOOST_CHECK(ok.valid);
 }
 
+BOOST_AUTO_TEST_CASE(rejectsGasLimitDeltaAtBound)
+{
+    // floor(30000000 / 1024) = 29296; the yellow paper and geth VerifyGaslimit
+    // reject a delta >= the bound.
+    auto p = makeValidPair();
+    p.child.gasLimit = 30000000 + 29296;
+    auto result = validateHeaderPoS(p.child, p.parent, p.config);
+    BOOST_CHECK(!result.valid);
+    BOOST_CHECK(result.error.find("gasLimit") != std::string::npos);
+
+    auto p2 = makeValidPair();
+    p2.child.gasLimit = 30000000 + 29295;
+    auto ok = validateHeaderPoS(p2.child, p2.parent, p2.config);
+    BOOST_CHECK(ok.valid);
+}
+
 BOOST_AUTO_TEST_CASE(rejectsGasUsedAboveLimit)
 {
     auto p = makeValidPair();
@@ -214,11 +231,13 @@ BOOST_AUTO_TEST_CASE(londonActivationBlockUsesInitialBaseFee)
 
 BOOST_AUTO_TEST_CASE(excessBlobGasValidation)
 {
-    // Parent with blob gas; child recomputes correctly.
+    // Parent with blob gas; child recomputes correctly. Prague activates after
+    // the child, so the Cancun schedule (target 3) applies.
     auto p = makeValidPair();
+    p.config.pragueTime = 1600000002;
     p.parent.excessBlobGas = u256(200000);
     p.parent.blobGasUsed = u256(2 * kGasPerBlob);
-    p.child.excessBlobGas = computeNextExcessBlobGas(p.parent);  // 68928
+    p.child.excessBlobGas = computeNextExcessBlobGas(p.parent, kCancunBlobSchedule);  // 68928
     auto result = validateHeaderPoS(p.child, p.parent, p.config);
     BOOST_CHECK(result.valid);
 
@@ -239,9 +258,59 @@ BOOST_AUTO_TEST_CASE(rejectsInvalidBlobGasUsed)
     BOOST_CHECK(result.error.find("blobGasUsed") != std::string::npos);
 
     auto p2 = makeValidPair();
-    p2.child.blobGasUsed = u256(kMaxBlobGasPerBlock + 1);
+    p2.child.blobGasUsed = u256(kCancunBlobSchedule.maxBlobGas + 1);
     auto bad = validateHeaderPoS(p2.child, p2.parent, p2.config);
     BOOST_CHECK(!bad.valid);
+}
+
+BOOST_AUTO_TEST_CASE(pragueBlobScheduleRaisesBlobLimits)
+{
+    // Prague (EIP-7691): target 6 / max 9 blobs per block.
+    auto p = makeValidPair();
+    p.config.cancunTime = 0;            // Cancun from genesis
+    p.config.pragueTime = 1600000001;   // the child activates Prague
+    p.parent.excessBlobGas = u256(0);
+    p.parent.blobGasUsed = u256(0);
+    p.child.excessBlobGas = u256(0);
+    p.child.blobGasUsed = u256(7 * kGasPerBlob);  // 7 blobs: over the Cancun max
+    auto result = validateHeaderPoS(p.child, p.parent, p.config);
+    BOOST_CHECK(result.valid);
+
+    auto p2 = p;
+    p2.child.blobGasUsed = u256(10 * kGasPerBlob);  // 10 blobs: over the Prague max
+    auto bad = validateHeaderPoS(p2.child, p2.parent, p2.config);
+    BOOST_CHECK(!bad.valid);
+    BOOST_CHECK(bad.error.find("blobGasUsed") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(pragueExcessBlobGasRecomputation)
+{
+    // 5 blobs used: over the Cancun target (3), under the Prague target (6).
+    auto parent = makeValidPair().parent;
+    parent.excessBlobGas = u256(0);
+    parent.blobGasUsed = u256(5 * kGasPerBlob);
+    BOOST_CHECK_EQUAL(
+        computeNextExcessBlobGas(parent, kCancunBlobSchedule), u256(2 * kGasPerBlob));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kPragueBlobSchedule), u256(0));
+
+    // The validator picks the schedule by the child header timestamp.
+    auto p = makeValidPair();
+    p.config.pragueTime = 1600000002;  // still Cancun at the child block
+    p.parent.excessBlobGas = u256(0);
+    p.parent.blobGasUsed = u256(5 * kGasPerBlob);
+    p.child.excessBlobGas = u256(2 * kGasPerBlob);
+    p.child.blobGasUsed = u256(0);
+    auto cancun = validateHeaderPoS(p.child, p.parent, p.config);
+    BOOST_CHECK(cancun.valid);
+
+    auto p2 = makeValidPair();
+    p2.config.pragueTime = 1600000001;  // the child activates Prague
+    p2.parent.excessBlobGas = u256(0);
+    p2.parent.blobGasUsed = u256(5 * kGasPerBlob);
+    p2.child.excessBlobGas = u256(0);
+    p2.child.blobGasUsed = u256(0);
+    auto prague = validateHeaderPoS(p2.child, p2.parent, p2.config);
+    BOOST_CHECK(prague.valid);
 }
 
 BOOST_AUTO_TEST_CASE(cancunActivationBlockResetsExcess)

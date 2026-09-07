@@ -2,6 +2,14 @@
 ; FISCO-BCOS Ethereum L1 EL-mode genesis configuration (config.genesis)
 ; Used with [ethereum] mode=el in config.ini. Values below are the REAL Sepolia
 ; genesis (chain id 11155111) — the node verifies blocks from this anchor.
+;
+; TRUST MODEL: the node commits the chain its bootnodes serve as long as it is
+; internally consistent (parent-hash linkage + re-executed state roots); PoW
+; difficulty / total difficulty are NOT verified and there is no consensus-layer
+; finality feed. The [ethereum] bootnodes_file in config.ini is therefore the
+; trust root — configure only trusted bootnodes, and consider the
+; finalized_checkpoint setting there. A full checkpoint/finality mechanism is a
+; known limitation (follow-up work).
 ; ============================================================================
 
 [chain]
@@ -39,6 +47,14 @@
     ; Paris (The Merge). Set 1661128380 on Sepolia (PoW phase until 2022-08-22);
     ; omit on pure-PoS chains (Holesky) for 0 = active from genesis.
     paris_time=1661128380
+    ; The merge (terminal total difficulty) BLOCK NUMBER — the chain's only
+    ; block-based fork. Blocks below it follow PoW header rules (non-zero
+    ; difficulty, ommers allowed); from it onward PoS rules apply. It also feeds
+    ; the EIP-2124 fork-id handshake. Sepolia: 1735371 (the default when this key
+    ; is absent). merge_block=0 means the chain is PoS from genesis (pure-PoS
+    ; chains like Holesky). Non-Sepolia chains MUST set their own value here —
+    ; otherwise they silently inherit Sepolia's.
+    merge_block=1735371
     shanghai_time=1677557088
     cancun_time=1706655072
     prague_time=1741159776

@@ -34,9 +34,18 @@ constexpr uint64_t kElasticityMultiplier = 2;
 constexpr uint64_t kBaseFeeMaxChangeDenominator = 8;
 constexpr u256 kInitialBaseFee{1000000000};  // 1 gwei
 constexpr uint64_t kMaxExtraDataSize = 32;
-constexpr uint64_t kGasPerBlob = 1U << 17;             // 131072
-constexpr uint64_t kTargetBlobGasPerBlock = 3 * kGasPerBlob;  // 393216
-constexpr uint64_t kMaxBlobGasPerBlock = 6 * kGasPerBlob;     // 786432
+constexpr uint64_t kGasPerBlob = 1U << 17;  // 131072
+
+// EIP-7840 blob schedule (target/max blob gas per block) per fork. Keep in sync
+// with CANCUN_BLOB_PARAMS / PRAGUE_BLOB_PARAMS in
+// ethereum-executor/EthereumTransition.h.
+struct BlobSchedule
+{
+    uint64_t targetBlobGas;
+    uint64_t maxBlobGas;
+};
+constexpr BlobSchedule kCancunBlobSchedule{3 * kGasPerBlob, 6 * kGasPerBlob};
+constexpr BlobSchedule kPragueBlobSchedule{6 * kGasPerBlob, 9 * kGasPerBlob};
 
 // Minimal chain configuration for header validation (timestamp-based forks).
 struct ChainConfig
@@ -78,6 +87,19 @@ inline bool isForkActive(uint64_t _forkTime, int64_t _timestamp)
     return _forkTime == 0 || static_cast<uint64_t>(_timestamp) >= _forkTime;
 }
 
+// EIP-7840: the blob schedule in effect for the block at `_timestamp`.
+// TODO: Osaka (EIP-7918) also changes the excess-blob-gas update rule (base-fee
+// floor); add an osakaTime field to ChainConfig and branch here once the
+// initializer can supply the Osaka activation time.
+inline BlobSchedule blobScheduleFor(ChainConfig const& _config, int64_t _timestamp)
+{
+    if (isForkActive(_config.pragueTime, _timestamp))
+    {
+        return kPragueBlobSchedule;
+    }
+    return kCancunBlobSchedule;
+}
+
 // EIP-1559: the base fee of the next block (the block after `_parent`).
 inline u256 computeNextBaseFee(bcos::protocol::EthBlockHeaderData const& _parent)
 {
@@ -98,13 +120,15 @@ inline u256 computeNextBaseFee(bcos::protocol::EthBlockHeaderData const& _parent
     return expected > delta ? expected - delta : 0;
 }
 
-// EIP-4844: the excess blob gas of the next block (the block after `_parent`).
-inline u256 computeNextExcessBlobGas(bcos::protocol::EthBlockHeaderData const& _parent)
+// EIP-4844: the excess blob gas of the next block (the block after `_parent`),
+// under the blob schedule active at that block.
+inline u256 computeNextExcessBlobGas(
+    bcos::protocol::EthBlockHeaderData const& _parent, BlobSchedule const& _schedule)
 {
     u256 parentExcess = _parent.excessBlobGas.value_or(0);
     u256 parentBlobGasUsed = _parent.blobGasUsed.value_or(0);
     u256 total = parentBlobGasUsed + parentExcess;
-    return total > kTargetBlobGasPerBlock ? total - kTargetBlobGasPerBlock : 0;
+    return total > _schedule.targetBlobGas ? total - _schedule.targetBlobGas : 0;
 }
 
 namespace detail
@@ -144,9 +168,10 @@ inline std::optional<std::string> validateBlobGas(
     bcos::protocol::EthBlockHeaderData const& _header,
     bcos::protocol::EthBlockHeaderData const& _parent, ChainConfig const& _config)
 {
+    auto const schedule = blobScheduleFor(_config, _header.timestamp);
     if (_header.blobGasUsed.has_value())
     {
-        if (*_header.blobGasUsed > kMaxBlobGasPerBlock ||
+        if (*_header.blobGasUsed > schedule.maxBlobGas ||
             *_header.blobGasUsed % kGasPerBlob != 0)
         {
             return "invalid blobGasUsed";
@@ -166,7 +191,7 @@ inline std::optional<std::string> validateBlobGas(
                 return "excessBlobGas must be zero at Cancun activation";
             }
         }
-        else if (*_header.excessBlobGas != computeNextExcessBlobGas(_parent))
+        else if (*_header.excessBlobGas != computeNextExcessBlobGas(_parent, schedule))
         {
             return "excessBlobGas does not match the EIP-4844 recomputation";
         }
@@ -220,7 +245,7 @@ inline HeaderValidationResult validateHeaderPoS(
     {
         return {false, "timestamp must be strictly greater than the parent"};
     }
-    // Gas limit bounds: >= MIN_GAS_LIMIT and |Δ| <= parent / 1024.
+    // Gas limit bounds: >= MIN_GAS_LIMIT and |Δ| < parent / 1024.
     if (_header.gasLimit < kMinGasLimit)
     {
         return {false, "gasLimit below the 5000 minimum"};
@@ -228,7 +253,7 @@ inline HeaderValidationResult validateHeaderPoS(
     u256 parentGasLimit = _parent.gasLimit;
     u256 delta = _header.gasLimit > parentGasLimit ? _header.gasLimit - parentGasLimit :
                                                      parentGasLimit - _header.gasLimit;
-    if (delta > parentGasLimit / kGasLimitBoundDivisor)
+    if (delta >= parentGasLimit / kGasLimitBoundDivisor)
     {
         return {false, "gasLimit differs from the parent by more than 1/1024"};
     }

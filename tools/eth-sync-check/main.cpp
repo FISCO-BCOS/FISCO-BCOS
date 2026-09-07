@@ -21,6 +21,7 @@
  *        blob gas), and the withdrawals trie root.
  *
  *        Usage: eth-sync-check --rpc <url> [--rpc2 <url>] --start <number> --count <n>
+ *               [--merge-block <n>]   (override the merge/TTD block; default Sepolia 1735371)
  *        Usage: eth-sync-check --verify-tx <blockNumber> [--rpc <url>]
  *        Usage: eth-sync-check --genesis <file> [--expect <root>]
  *        Usage: eth-sync-check --genesis-ini <config.genesis> [--expect <root>]
@@ -194,6 +195,10 @@ ChainConfig sepoliaConfig()
     config.shanghaiTime = 1677557088;
     config.cancunTime = 1706655072;
     config.pragueTime = 1741159776;
+    // The Merge (terminal total difficulty) block: blocks below it are PoW
+    // (non-zero difficulty, ommers allowed); from it onward PoS rules apply.
+    // Without this the PoS field checks misjudge every pre-merge block.
+    config.mergeBlock = 1735371;
     return config;
 }
 
@@ -514,6 +519,7 @@ int main(int argc, char** argv)
     std::optional<std::string> expectRoot;
     std::optional<int64_t> verifyTxBlock;
     std::optional<std::string> rawTxHex;
+    std::optional<uint64_t> mergeBlockOverride;
     for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
@@ -552,6 +558,10 @@ int main(int argc, char** argv)
         else if (arg == "--raw-tx" && i + 1 < argc)
         {
             rawTxHex = argv[++i];
+        }
+        else if (arg == "--merge-block" && i + 1 < argc)
+        {
+            mergeBlockOverride = static_cast<uint64_t>(std::stoull(argv[++i]));
         }
     }
     if (genesisPath)
@@ -596,6 +606,10 @@ int main(int argc, char** argv)
     }
 
     auto config = sepoliaConfig();
+    if (mergeBlockOverride)
+    {
+        config.mergeBlock = *mergeBlockOverride;
+    }
     std::optional<protocol::EthBlockHeaderData> prev;
     for (int64_t i = start; i < start + count; ++i)
     {

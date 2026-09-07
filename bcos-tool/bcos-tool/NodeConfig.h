@@ -45,6 +45,10 @@ public:
     constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
     constexpr static ssize_t DEFAULT_MAX_SEAL_TIME_MS = 600000;
     constexpr static ssize_t DEFAULT_PIPELINE_SIZE = 50;
+    // Ethereum EL mode: the merge (terminal total difficulty) block — the chain's
+    // only block-based fork. Sepolia's value is the default; 0 means the chain is
+    // PoS from genesis (pure-PoS chains like Holesky).
+    constexpr static uint64_t DEFAULT_ETHEREUM_MERGE_BLOCK = 1735371;
 
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig();
@@ -235,8 +239,9 @@ public:
     uint16_t ethereumListenPort() const;
     // path to the bootnodes file (enode:// list, geth-style); default ./bootnodes.json
     const std::string& ethereumBootnodesFile() const;
-    // path to the secp256k1 node private key (PEM/hex), default empty => derive/load
-    // from the node's own key material
+    // path to a file holding the 32-byte secp256k1 node private key (hex, optional
+    // 0x prefix); empty => auto-generate a persistent key next to the FISCO node key
+    // on first start (conf/node.rlpx.key) so the RLPx identity survives restarts
     const std::string& ethereumNodeKeyFile() const;
     uint32_t ethereumMaxBatchSize() const;
     uint64_t ethereumChainId() const;
@@ -251,6 +256,20 @@ public:
     uint64_t ethereumForkOsakaTime() const;
     uint64_t ethereumForkBpo1Time() const;
     uint64_t ethereumForkBpo2Time() const;
+    // The merge (TTD) block number ([fork_timestamps].merge_block in config.genesis):
+    // blocks below it follow PoW header rules (non-zero difficulty, ommers allowed),
+    // from it onward PoS rules. 0 = PoS from genesis. Defaults to Sepolia's 1735371
+    // when the key is absent.
+    uint64_t ethereumMergeBlock() const;
+    // Optional operator-pinned finalized checkpoint ([ethereum].finalized_checkpoint in
+    // config.ini, "<number>:<0xHASH>"): the committed block at `number` must carry
+    // `hash` — a mismatch means the bootnodes serve a wrong fork and is fatal.
+    struct EthereumFinalizedCheckpoint
+    {
+        uint64_t number = 0;
+        bcos::crypto::HashType hash;
+    };
+    std::optional<EthereumFinalizedCheckpoint> const& ethereumFinalizedCheckpoint() const;
 
     // the gateway configurations
     const std::string& p2pListenIP() const;
@@ -593,6 +612,8 @@ private:
     std::string m_ethereumBootnodesFile = "./bootnodes.json";
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;
+    uint64_t m_ethereumMergeBlock = DEFAULT_ETHEREUM_MERGE_BLOCK;
+    std::optional<EthereumFinalizedCheckpoint> m_ethereumFinalizedCheckpoint;
     // The EL-mode chain id, validated and pinned from config.genesis's [web3] chain_id
     // (validateL2Invariants) when the genesis declares EL mode. 0 = unset: a read
     // outside EL mode is obviously invalid rather than silently Ethereum mainnet.

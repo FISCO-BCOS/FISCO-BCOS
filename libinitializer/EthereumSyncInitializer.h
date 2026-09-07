@@ -41,11 +41,19 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"  // complete type for shared_ptr upcast in decodeRaw()
 #include "bcos-task/Wait.h"
 #include "ethereum-executor/EthereumExecutor.h"
+#include <bcos-utilities/DataConvertUtility.h>
+#include <boost/algorithm/string/trim.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <memory>
+#include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -60,9 +68,6 @@ namespace bcos::initializer
 class EthereumSyncInitializer
 {
 public:
-    // Sepolia's merge (terminal total difficulty) block — the only block-based EL
-    // fork on Sepolia; all later forks are timestamp-based. Used by computeForkId().
-    static constexpr uint64_t c_sepoliaMergeBlock = 1735371;
     // _globalStateStorage: production MultiLayerStorage (GlobalStateStorage).
     EthereumSyncInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         bcos::ledger::LedgerInterface::Ptr _ledger,
@@ -117,13 +122,21 @@ public:
         }
     }
 
-    /// Start the background sync loop. No-op if already started.
+    /// Start the background sync loop. No-op if already started. Throws if the node
+    /// key cannot be loaded/persisted (a misconfigured identity must fail startup,
+    /// not kill the sync thread later); on a throw nothing has started.
     void start()
     {
+        if (m_running.load())
+        {
+            return;
+        }
+        auto localKey = loadNodeKey();
         if (m_running.exchange(true))
         {
             return;
         }
+        m_localKey = std::move(localKey);
         INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: starting self-sync loop")
                               << LOG_KV("bootnodes", m_nodeConfig->ethereumBootnodesFile())
                               << LOG_KV("listenPort", m_nodeConfig->ethereumListenPort())
@@ -131,13 +144,13 @@ public:
         m_thread = std::thread([this]() { syncLoop(); });
     }
 
-    /// Stop the background thread and join it.
+    /// Stop the background thread and join it. The join is unconditional (not gated
+    /// on m_running): the sync thread can also exit on its own after a fatal error
+    /// (reorg detection / checkpoint mismatch) with m_running already false, and a
+    /// joinable thread that is never joined terminates the process.
     void stop()
     {
-        if (!m_running.exchange(false))
-        {
-            return;
-        }
+        m_running.store(false);
         if (m_thread.joinable())
         {
             m_thread.join();
@@ -244,8 +257,8 @@ private:
         config.cancunTime = m_nodeConfig->ethereumForkCancunTime();
         config.pragueTime = m_nodeConfig->ethereumForkPragueTime();
         // Blocks before the merge are PoW (non-zero difficulty, ommers allowed);
-        // from the merge block onward the chain is PoS.
-        config.mergeBlock = c_sepoliaMergeBlock;
+        // from the merge block onward the chain is PoS. 0 = PoS from genesis.
+        config.mergeBlock = m_nodeConfig->ethereumMergeBlock();
         return config;
     }
 
@@ -265,16 +278,23 @@ private:
         auto const& genesis = m_nodeConfig->genesisConfig().m_ethGenesisHeader.value();
         uint32_t hash = bcos::devp2p::eth::crc32(
             bcos::bytesConstRef(genesis.m_hash.data(), genesis.m_hash.size()));
-        // Sepolia's only block-based EL fork: the merge (terminal total difficulty)
-        // block. (London is active at genesis and is skipped by geth's gatherForks.)
-        if (c_sepoliaMergeBlock <= _localHeadNumber)
+        // The chain's only block-based EL fork: the merge (terminal total
+        // difficulty) block, from the chain-level [fork_timestamps].merge_block
+        // declaration. (London is active at genesis and is skipped by geth's
+        // gatherForks; a merge block of 0 — PoS from genesis — is likewise not
+        // chained into the fork-id.)
+        auto const mergeBlock = m_nodeConfig->ethereumMergeBlock();
+        if (mergeBlock > 0)
         {
-            hash = bcos::devp2p::eth::forkIdAddForkPoint(hash, c_sepoliaMergeBlock);
-        }
-        else
-        {
-            // Merge not yet passed locally (fresh node): announce it as next.
-            return {hash, c_sepoliaMergeBlock};
+            if (mergeBlock <= _localHeadNumber)
+            {
+                hash = bcos::devp2p::eth::forkIdAddForkPoint(hash, mergeBlock);
+            }
+            else
+            {
+                // Merge not yet passed locally (fresh node): announce it as next.
+                return {hash, mergeBlock};
+            }
         }
         // Timestamp-based forks, chained in activation order; only chain in the ones
         // the local head has passed, and announce the first not-yet-passed one.
@@ -310,8 +330,8 @@ private:
         forks.londonTime = m_nodeConfig->ethereumForkLondonTime();
         // Paris (The Merge): timestamp from [fork_timestamps] paris_time. Chains
         // with a PoW phase (Sepolia) must set it (1661128380) so pre-merge blocks
-        // run at LONDON (DIFFICULTY semantics); pure-PoS chains omit it (0 =
-        // active from genesis).
+        // run at LONDON (DIFFICULTY semantics); pure-PoS chains set it to 0
+        // explicitly (0 = active from genesis; the key itself is required).
         forks.parisTime = m_nodeConfig->ethereumForkParisTime();
         forks.shanghaiTime = m_nodeConfig->ethereumForkShanghaiTime();
         forks.cancunTime = m_nodeConfig->ethereumForkCancunTime();
@@ -327,6 +347,146 @@ private:
         auto cryptoSuite = m_blockFactory->cryptoSuite();
         return bcos::rpc::decodeWeb3RawTransaction(
             bcos::bytesConstRef(raw.data(), raw.size()), *cryptoSuite->hashImpl());
+    }
+
+    /// Fatal, non-retryable sync failure: thrown past the per-bootnode catch so the
+    /// sync loop STOPS (operator intervention required) instead of trying the next
+    /// bootnode — used for finalized-checkpoint mismatches.
+    struct FatalSyncError : public std::runtime_error
+    {
+        using std::runtime_error::runtime_error;
+    };
+
+    /// Read a 32-byte secp256k1 private key from _path: hex text with an optional
+    /// 0x prefix, surrounding whitespace ignored. Every failure names the file.
+    static bcos::bytes readNodeKeyFile(std::string const& _path)
+    {
+        std::ifstream in(_path);
+        if (!in)
+        {
+            throw std::runtime_error("EL sync: cannot open node key file " + _path);
+        }
+        std::stringstream ss;
+        ss << in.rdbuf();
+        auto hex = ss.str();
+        boost::algorithm::trim(hex);
+        if (hex.rfind("0x", 0) == 0 || hex.rfind("0X", 0) == 0)
+        {
+            hex.erase(0, 2);
+        }
+        // Exactly 64 hex chars: fromHex pads odd-length input with a leading '0',
+        // which would silently shift a 63-char typo into a wrong-but-valid key.
+        if (hex.size() != 64 ||
+            !std::all_of(hex.begin(), hex.end(), [](unsigned char c) { return std::isxdigit(c); }))
+        {
+            throw std::runtime_error(
+                "EL sync: node key file " + _path + " must hold exactly 64 hex chars " +
+                "(a 32-byte secp256k1 private key, optional 0x prefix)");
+        }
+        return bcos::fromHex(hex);
+    }
+
+    /// The node's RLPx identity key. With [ethereum].node_key_file set, load the key
+    /// from that file. Empty: persist an auto-generated random key at
+    /// node.rlpx.key next to the FISCO node key (private_key_path's directory) on
+    /// first start and reuse it afterwards, so the node identity — bootnodes
+    /// authenticate us by public key — is stable across restarts.
+    bcos::devp2p::rlpx::EccKeyPair loadNodeKey() const
+    {
+        auto const& configured = m_nodeConfig->ethereumNodeKeyFile();
+        if (!configured.empty())
+        {
+            auto key = readNodeKeyFile(configured);
+            INITIALIZER_LOG(INFO)
+                << LOG_DESC("EL sync: loaded node key") << LOG_KV("file", configured);
+            return makeNodeKeyPair(std::move(key), configured);
+        }
+        auto const dir = std::filesystem::path(m_nodeConfig->privateKeyPath()).parent_path();
+        auto const path = (dir.empty() ? std::filesystem::path(".") : dir) / "node.rlpx.key";
+        if (std::filesystem::exists(path))
+        {
+            auto key = readNodeKeyFile(path.string());
+            INITIALIZER_LOG(INFO)
+                << LOG_DESC("EL sync: loaded persisted node key") << LOG_KV("file", path);
+            return makeNodeKeyPair(std::move(key), path.string());
+        }
+        bcos::devp2p::rlpx::EccKeyPair generated;  // random keypair
+        {
+            std::ofstream out(path);
+            if (!out)
+            {
+                throw std::runtime_error(
+                    "EL sync: cannot persist generated node key to " + path.string());
+            }
+            out << bcos::toHexStringWithPrefix(generated.privateKey()) << '\n';
+        }
+        std::filesystem::permissions(path, std::filesystem::perms::owner_read |
+                                               std::filesystem::perms::owner_write);
+        INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: generated and persisted node key")
+                              << LOG_KV("file", path);
+        return generated;
+    }
+
+    /// Construct the keypair from file-loaded key material, naming the source file
+    /// on an invalid scalar (an out-of-range secp256k1 key must not surface as a
+    /// bare invalid_argument from deep inside the crypto layer).
+    static bcos::devp2p::rlpx::EccKeyPair makeNodeKeyPair(
+        bcos::bytes _privateKey, std::string const& _path)
+    {
+        try
+        {
+            return bcos::devp2p::rlpx::EccKeyPair(std::move(_privateKey));
+        }
+        catch (std::exception const& e)
+        {
+            throw std::runtime_error(
+                "EL sync: invalid secp256k1 private key in " + _path + ": " + e.what());
+        }
+    }
+
+    /// Startup half of the finalized-checkpoint check: when the local chain already
+    /// reaches past the pinned checkpoint height, the committed block there must
+    /// carry the pinned hash. Returns false (after a FATAL log) on a mismatch or an
+    /// unreadable local block; true when the checkpoint holds or the local chain has
+    /// not reached it yet — the crossing block is then checked as it downloads (see
+    /// the syncLoop callback).
+    bool verifyLocalCheckpoint(
+        bcos::tool::NodeConfig::EthereumFinalizedCheckpoint const& _checkpoint) const
+    {
+        auto current = task::syncWait(ledger::getCurrentBlockNumber(*m_ledger));
+        if (current < static_cast<int64_t>(_checkpoint.number))
+        {
+            return true;
+        }
+        auto block = task::syncWait(ledger::getBlockData(
+            *m_ledger, static_cast<int64_t>(_checkpoint.number), bcos::ledger::HEADER));
+        // The stored Tars header re-encodes to the byte-exact committed RLP (the same
+        // invariant the resume anchor relies on), so this hash IS the committed
+        // Ethereum block hash.
+        bcos::h256 localHash;
+        if (block && block->blockHeader())
+        {
+            bcos::protocol::EthBlockHeader localHeader(*block->blockHeader());
+            localHash = anchorHeaderHash(localHeader.data());
+        }
+        if (localHash != _checkpoint.hash)
+        {
+            INITIALIZER_LOG(FATAL)
+                << LOG_DESC("EL sync: finalized checkpoint mismatch — the local chain is on "
+                            "a wrong fork; refusing to start the sync loop")
+                << LOG_KV("checkpointNumber", _checkpoint.number)
+                << LOG_KV("expectedHash", _checkpoint.hash.hex())
+                << LOG_KV("localHash", localHash.hex())
+                << LOG_KV("action",
+                    "roll the local data back below the checkpoint height (or resync from "
+                    "scratch) and verify the bootnode list / finalized_checkpoint setting, "
+                    "then restart");
+            return false;
+        }
+        INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: finalized checkpoint verified")
+                              << LOG_KV("number", _checkpoint.number)
+                              << LOG_KV("hash", _checkpoint.hash.hex());
+        return true;
     }
 
     void syncLoop()
@@ -345,11 +505,29 @@ private:
                 "legacy state-root fold must not run for executor v2 (Ethereum L1 EL mode)"});
         };
 
-        // The node's own identity for the RLPx handshake. Deterministic from the configured
-        // node key file when present; otherwise a fresh keypair (bootnodes authenticate us by
-        // our public key, so a stable key is strongly recommended).
-        bcos::devp2p::rlpx::EccKeyPair localKey;
-        // TODO(el): load from m_nodeConfig->ethereumNodeKeyFile() when non-empty.
+        // The node's own identity for the RLPx handshake: loaded/persisted by start()
+        // (see loadNodeKey) so bootnodes can authenticate us by a stable public key.
+        auto& localKey = *m_localKey;
+        auto const mergeBlock = m_nodeConfig->ethereumMergeBlock();
+        auto const& checkpoint = m_nodeConfig->ethereumFinalizedCheckpoint();
+
+        // Operator-pinned finalized checkpoint: if the local chain already reaches
+        // past it, the committed block at that height MUST carry the pinned hash —
+        // a mismatch means the local chain sits on a wrong fork; refuse to sync on.
+        if (checkpoint && !verifyLocalCheckpoint(*checkpoint))
+        {
+            m_running.store(false);
+            return;
+        }
+
+        // Reorg detection: a parent-hash mismatch means the bootnode's chain does not
+        // build on our committed local head. Committed blocks are NOT rolled back (no
+        // reorg handling yet), so every following round re-anchors on the same
+        // wrong-fork head and fails identically — detect the streak at one anchor and
+        // stop with operator guidance instead of spinning forever.
+        constexpr size_t c_maxAnchorMismatchStreak = 3;
+        int64_t mismatchAnchor = -1;
+        size_t mismatchStreak = 0;
 
         while (m_running.load())
         {
@@ -361,6 +539,13 @@ private:
                 // already have. The chain genesis is pinned separately for the RLPx
                 // handshake — it must never change.
                 auto resume = resumePoint();
+                if (resume.anchor.number != mismatchAnchor)
+                {
+                    // Anchor advanced (or first round): the mismatch streak resets —
+                    // only REPEATED failures at the SAME anchor indicate a reorg.
+                    mismatchAnchor = resume.anchor.number;
+                    mismatchStreak = 0;
+                }
                 auto const& anchor = resume.anchor;
                 auto const& genesisHeader = resume.genesisHeader;
                 auto devp2pConfig = devp2pChainConfig();
@@ -403,9 +588,11 @@ private:
                             << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
                             << LOG_KV("startNumber", resume.startNumber);
                         auto established = client.connect();
-                        std::cerr << "[EL sync] handshake OK with " << peer.host
-                                  << " (peerHead=" << established.peerStatus.headHash.hex().substr(0, 18)
-                                  << ")" << std::endl;
+                        INITIALIZER_LOG(INFO)
+                            << LOG_DESC("EL sync: handshake OK")
+                            << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
+                            << LOG_KV("peerHead",
+                                established.peerStatus.headHash.hex().substr(0, 18));
 
                         // Download from the local head onward: startNumber = anchor + 1,
                         // anchor = local head header (genesis on a fresh node). Blocks are
@@ -414,9 +601,10 @@ private:
                         bcos::devp2p::sync::BlockExchange exchange(
                             resume.startNumber, anchor, devp2pConfig,
                             m_nodeConfig->ethereumMaxBatchSize());
-                        std::cerr << "[EL sync] starting download from "
-                                  << resume.startNumber << " batch="
-                                  << m_nodeConfig->ethereumMaxBatchSize() << std::endl;
+                        INITIALIZER_LOG(INFO)
+                            << LOG_DESC("EL sync: starting download")
+                            << LOG_KV("startNumber", resume.startNumber)
+                            << LOG_KV("batch", m_nodeConfig->ethereumMaxBatchSize());
 
                         auto prevHeader = resume.prevHeader;
                         exchange.downloadRange(established.session,
@@ -426,11 +614,30 @@ private:
                                 {
                                     return;
                                 }
+                                // Operator-pinned finalized checkpoint: the block that
+                                // CROSSES the checkpoint height must carry the pinned
+                                // hash. A mismatch means the bootnodes serve a chain
+                                // that conflicts with the operator's trust anchor —
+                                // fatal, do NOT try the next bootnode.
+                                if (checkpoint &&
+                                    block.header.number ==
+                                        static_cast<int64_t>(checkpoint->number) &&
+                                    block.hash != checkpoint->hash)
+                                {
+                                    BOOST_THROW_EXCEPTION(FatalSyncError(
+                                        "EL sync: finalized checkpoint mismatch at block " +
+                                        std::to_string(checkpoint->number) + " (downloaded hash " +
+                                        block.hash.hex() + " != configured " +
+                                        checkpoint->hash.hex() +
+                                        "): the bootnodes serve a wrong fork — refusing to "
+                                        "commit; verify the bootnode list and the "
+                                        "finalized_checkpoint setting"));
+                                }
                                 auto result = task::syncWait(verifier.verifyAndCommit(
                                     m_globalStateStorageInitializer->storage(), *m_ledger,
                                     block.header, prevHeader, block.transactions,
                                     block.withdrawals, forks, chainId, block.uncles,
-                                    c_sepoliaMergeBlock,
+                                    mergeBlock,
                                     [this](bcos::bytes const& raw) { return decodeRaw(raw); },
                                     stateRootCalc));
                                 if (!result.valid)
@@ -454,8 +661,37 @@ private:
                                         result.stateRoot.hex().substr(0, 18));
                             });
                     }
+                    catch (FatalSyncError const& e)
+                    {
+                        INITIALIZER_LOG(FATAL)
+                            << LOG_DESC("EL sync: fatal error, stopping the sync loop")
+                            << LOG_KV("error", e.what());
+                        m_running.store(false);
+                        return;
+                    }
                     catch (std::exception const& e)
                     {
+                        if (std::string(e.what()).find("parent hash mismatch") !=
+                            std::string::npos)
+                        {
+                            ++mismatchStreak;
+                        }
+                        if (mismatchStreak >= c_maxAnchorMismatchStreak)
+                        {
+                            INITIALIZER_LOG(FATAL)
+                                << LOG_DESC("EL sync: repeated parent hash mismatch at the same "
+                                            "anchor — the committed local chain is on a fork the "
+                                            "bootnodes rejected (reorg); stopping the sync loop")
+                                << LOG_KV("anchorNumber", mismatchAnchor)
+                                << LOG_KV("streak", mismatchStreak)
+                                << LOG_KV("action",
+                                    "automatic reorg rollback is not implemented yet: roll the "
+                                    "local data back below the anchor height (or resync from "
+                                    "scratch), verify the bootnode list / finalized_checkpoint "
+                                    "setting, then restart");
+                            m_running.store(false);
+                            return;
+                        }
                         INITIALIZER_LOG(WARNING)
                             << LOG_DESC("EL sync: bootnode failed, trying next")
                             << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
@@ -501,6 +737,8 @@ private:
 
     std::atomic_bool m_running{false};
     std::thread m_thread;
+    // The RLPx identity key, loaded/persisted by start() before the thread spawns.
+    std::optional<bcos::devp2p::rlpx::EccKeyPair> m_localKey;
 };
 
 }  // namespace bcos::initializer

@@ -387,7 +387,12 @@ BOOST_FIXTURE_TEST_CASE(verifyAndCommitValidExternalBlock, EEBVFixture)
         scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor> verifier(
             scheduler, *executor, *blockFactory);
 
-        scheduler_v1::EvmcForkTimestamps forks;  // paris/shanghai active from genesis
+        scheduler_v1::EvmcForkTimestamps forks;
+        // Unset fields default to UINT64_MAX (never active) — London/Paris/Shanghai must
+        // be pinned to 0 explicitly to mean "active from genesis".
+        forks.londonTime = 0;
+        forks.parisTime = 0;
+        forks.shanghaiTime = 0;
         forks.cancunTime = std::numeric_limits<uint64_t>::max();   // Cancun not yet
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
         forks.osakaTime = std::numeric_limits<uint64_t>::max();
@@ -506,6 +511,9 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsTamperedTxsRoot, EEBVFixture)
             scheduler, *executor, *blockFactory);
 
         scheduler_v1::EvmcForkTimestamps forks;
+        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.shanghaiTime = 0;
         forks.cancunTime = std::numeric_limits<uint64_t>::max();
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
         forks.osakaTime = std::numeric_limits<uint64_t>::max();
@@ -535,8 +543,9 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsTamperedTxsRoot, EEBVFixture)
 // header round-trips to the SAME RLP/hash on resume (the resume anchor re-encodes
 // the stored header). Any field dropped by the Tars bridge makes the resume
 // parent-hash check fail. The execution header stores the timestamp in FISCO
-// milliseconds, so the resume read-back divides by 1000 (exactly what
-// EthereumSyncInitializer::resumePoint does) before re-encoding.
+// milliseconds; the EthBlockHeader(BlockHeader) ctor converts it back to seconds
+// (ms -> s) at the RLP boundary, so the resume read-back does NOT divide by 1000
+// itself.
 BOOST_AUTO_TEST_CASE(tarsExecutionHeaderRoundTripPreservesRlp)
 {
     bcos::protocol::EthBlockHeaderData h;
@@ -565,11 +574,11 @@ BOOST_AUTO_TEST_CASE(tarsExecutionHeaderRoundTripPreservesRlp)
     auto blockFactory = bcos::test::createBlockFactory(cryptoSuite);
     auto header = scheduler_v1::makeExecutionBlockHeader(h, *blockFactory, 0);
 
-    // Resume read-back: EthBlockHeader(*storedHeader) sees the millisecond value,
-    // then resumePoint() divides by 1000 back to seconds before re-encoding.
+    // Resume read-back: the EthBlockHeader(BlockHeader) ctor already converts the stored
+    // millisecond timestamp back to seconds — no manual /= 1000 here (dividing again would
+    // double-convert and break the round-trip).
     bcos::protocol::EthBlockHeader rebuilt(*header);
     auto data = rebuilt.data();
-    data.timestamp /= 1000;
     bcos::bytes rebuiltRlp;
     bcos::codec::rlp::encode(rebuiltRlp, data);
     auto rebuiltHash =

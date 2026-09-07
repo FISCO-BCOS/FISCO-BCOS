@@ -54,10 +54,14 @@ inline bcos::devp2p::rlpx::PeerConfig parseEnode(std::string const& enode)
                                   enode));
     }
     auto pubHex = rest.substr(0, at);
-    // 64 hex chars = 32 bytes = 64 hex digits uncompressed X coordinate (secp256k1
-    // uncompressed public key is 64 bytes = 128 hex chars; geth enodes carry the
-    // 64-byte uncompressed key, i.e. 128 hex chars).
+    // geth enodes carry the 64-byte uncompressed secp256k1 public key
+    // (128 hex chars).
     auto pubBytes = bcos::fromHex(std::string(pubHex));
+    if (pubBytes.size() != 64)
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
+            "parseEnode: public key must be 64 bytes (128 hex chars): " + enode));
+    }
     auto endpoint = rest.substr(at + 1);
     auto q = endpoint.find('?');
     auto hostPort = endpoint.substr(0, q);
