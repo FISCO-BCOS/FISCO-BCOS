@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "bcos-framework/multigroup/GroupInfoCodec.h"
+#include "bcos-framework/multigroup/GroupInfoFactory.h"
 #include "bcos-tars-protocol/Common.h"
 
 namespace bcostars

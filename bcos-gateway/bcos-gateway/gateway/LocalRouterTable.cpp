@@ -20,8 +20,10 @@
 #include "LocalRouterTable.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-gateway/Common.h"
+#ifndef ONLY_CPP_SDK
 #include "bcos-tars-protocol/client/FrontServiceClient.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#endif
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::gateway;
@@ -208,6 +210,7 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
         }
 
         // TODO:: tars
+#ifndef ONLY_CPP_SDK
         auto frontPrx = bcostars::createServantProxy<bcostars::FrontServicePrx>(serviceName);
         auto frontClient = std::make_shared<bcostars::FrontServiceClient>(frontPrx, m_keyFactory);
 
@@ -222,6 +225,7 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
                          << LOG_KV("maxVersion", nodeInfo->nodeProtocol()->maxVersion())
                          << LOG_KV("serviceName", serviceName) << printNodeInfo(nodeInfo);
         frontServiceUpdated = true;
+#endif
     }
     return frontServiceUpdated;
 }
