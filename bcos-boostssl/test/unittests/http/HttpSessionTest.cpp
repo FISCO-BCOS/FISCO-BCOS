@@ -156,7 +156,8 @@ BOOST_AUTO_TEST_CASE(test_loadWeb3ConfigTest)
         BOOST_CHECK_EQUAL(nodeConfig->web3EnableCors(), true);
         BOOST_CHECK_EQUAL(nodeConfig->web3HttpBodySizeLimit(), 10240000);
 
-        auto rpcFactory = std::make_shared<RpcFactory>("1", nullptr, nullptr, nullptr);
+        auto rpcFactory =
+            std::make_shared<RpcFactory>("1", bcos::gateway::GatewayHandle{}, nullptr, nullptr);
         auto wsConfig = rpcFactory->initWeb3RpcServiceConfig(nodeConfig);
         BOOST_CHECK_EQUAL(wsConfig->corsConfig().allowCredentials, true);
         BOOST_CHECK_EQUAL(wsConfig->corsConfig().allowedOrigins, "*");
@@ -202,7 +203,8 @@ BOOST_AUTO_TEST_CASE(test_loadWeb3ConfigTest)
         BOOST_CHECK_EQUAL(nodeConfig->web3CorsMaxAge(), -1);
         BOOST_CHECK_EQUAL(nodeConfig->web3HttpBodySizeLimit(), 10240001);
 
-        auto rpcFactory = std::make_shared<RpcFactory>("1", nullptr, nullptr, nullptr);
+        auto rpcFactory =
+            std::make_shared<RpcFactory>("1", bcos::gateway::GatewayHandle{}, nullptr, nullptr);
         auto wsConfig = rpcFactory->initWeb3RpcServiceConfig(nodeConfig);
         BOOST_CHECK_EQUAL(wsConfig->corsConfig().allowCredentials, false);
         BOOST_CHECK_EQUAL(wsConfig->corsConfig().allowedOrigins, "potos.hk");
