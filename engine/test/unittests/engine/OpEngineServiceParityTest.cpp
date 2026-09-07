@@ -19,20 +19,22 @@
 //
 // Matrix: S5 — OpEngineService wired on release-3.18.0 (single transactions[i].raw carrier).
 // Suite split: the dual-impl cases below pin OpEngineService against EngineServiceImpl
-// (FCU ordering/exception consistency); the op-geth reference lives in the vendored t8n
-// corpus (opstack-executor/tests/t8n, PROVENANCE.md) — op_golden_vector_rebuild... pins
+// (FCU ordering/exception consistency); the op-geth reference lives in
+// FISCO-BCOS/op-stack-e2e-tests (symlinked to opstack-executor/tests/t8n by CI or
+// tools/.ci/provision_t8n_corpus.sh) — op_golden_vector_rebuild... pins
 // this suite's header-rebuild path against the op-geth block hash, and
 // OpEngineServiceExecParityTest drives the corpus end-to-end through the production wire
 // dialect. This suite covers:
 //   - OpEngineService API gates (capabilities, V3 newPayload, gasLimit)
 //   - Shared FCU ordering exceptions vs EngineServiceImpl (safe/finalized)
 //   - EngineTracker exclusive/shared publish concurrency (op_fast_path)
-//   - op-geth golden rebuild pin (vendored corpus)
+//   - op-geth golden rebuild pin (external t8n corpus)
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 #include "engine/bcos-engine/EngineTracker.h"
 #include "engine/bcos-engine/OpEngineService.inl"
 
+#include "support/GoldenSample.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
@@ -62,7 +64,6 @@
 #include <bcos-utilities/Exceptions.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <opstack-executor/tests/OpSchedulerSeamTestHelpers.h>
-#include "support/GoldenSample.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -506,7 +507,8 @@ bcos::engine::NewPayloadRequest makeValidIsthmusNewPayload(
     bcos::protocol::BlockNumber blockNumber)
 {
     bcos::engine::NewPayloadRequest request;
-    request.executionRequests = std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
+    request.executionRequests =
+        std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
     auto& payload = request.executionPayload;
     payload.parentHash = parentHash;
     payload.blockNumber = blockNumber;
@@ -562,8 +564,8 @@ void checkSameExecutionPayload(
         BOOST_CHECK(*left.excessBlobGas == *right.excessBlobGas);
     BOOST_REQUIRE_EQUAL(left.transactions.size(), right.transactions.size());
     for (std::size_t i = 0; i < left.transactions.size(); ++i)
-        BOOST_CHECK_EQUAL(bcos::toHex(left.transactions[i].raw),
-            bcos::toHex(right.transactions[i].raw));
+        BOOST_CHECK_EQUAL(
+            bcos::toHex(left.transactions[i].raw), bcos::toHex(right.transactions[i].raw));
 }
 
 template <typename Exception>
@@ -611,9 +613,8 @@ struct OpServicePair
         bcos::scheduler::SchedulerInterface::Ptr delegateIn = nullptr,
         std::shared_ptr<bcos::engine::DACaps> daCapsIn = nullptr)
       : delegate(std::move(delegateIn)),
-        service(memPool, storage, scheduler, blockFactory,
-            bcos::engine::c_defaultBlockTxCountLimit, delegate, std::move(daCapsIn),
-            allowSynthesizedL1Attributes)
+        service(memPool, storage, scheduler, blockFactory, bcos::engine::c_defaultBlockTxCountLimit,
+            delegate, std::move(daCapsIn), allowSynthesizedL1Attributes)
     {}
 };
 
@@ -663,7 +664,8 @@ BOOST_AUTO_TEST_CASE(op_v3_new_payload_throws_unsupported_fork)
     // Matrix: S5 — release carrier is transactions[i].raw (empty list here).
     OpServicePair pair;
     bcos::engine::NewPayloadRequest request;
-    request.executionRequests = std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
+    request.executionRequests =
+        std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
     request.executionPayload.timestamp = 1000;
     request.executionPayload.blockNumber = 1;
     request.executionPayload.transactions = {};
@@ -1124,10 +1126,10 @@ BOOST_AUTO_TEST_CASE(op_da_skip_drops_higher_nonce_regardless_of_seal_order)
         nonceN.tx->extraTransactionBytes(), nonceN.tx->signatureData());
     auto n1Raw = bcostars::protocol::reassembleWeb3RawTransaction(
         nonceN1.tx->extraTransactionBytes(), nonceN1.tx->signatureData());
-    auto const nEstimate = bcos::evm::opstack::estimatedDaSize(
-        evmc::bytes_view(nRaw.data(), nRaw.size()));
-    auto const n1Estimate = bcos::evm::opstack::estimatedDaSize(
-        evmc::bytes_view(n1Raw.data(), n1Raw.size()));
+    auto const nEstimate =
+        bcos::evm::opstack::estimatedDaSize(evmc::bytes_view(nRaw.data(), nRaw.size()));
+    auto const n1Estimate =
+        bcos::evm::opstack::estimatedDaSize(evmc::bytes_view(n1Raw.data(), n1Raw.size()));
     BOOST_REQUIRE_GT(nEstimate, n1Estimate);
     daCaps->maxTxSize.store(n1Estimate, std::memory_order_relaxed);  // inclusive cap
 
@@ -1287,7 +1289,8 @@ BOOST_AUTO_TEST_CASE(op_fcu_getpayload_newpayload_roundtrip)
     BOOST_REQUIRE_EQUAL(bcos::toHex(payload->executionPayload.extraData), "00000000fa00000006");
 
     bcos::engine::NewPayloadRequest request;
-    request.executionRequests = std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
+    request.executionRequests =
+        std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
     request.executionPayload = payload->executionPayload;
     request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
     request.expectedBlobVersionedHashes = {};
@@ -1327,7 +1330,8 @@ BOOST_AUTO_TEST_CASE(op_newpayload_failure_keeps_last_executed_header)
     BOOST_REQUIRE(payload);
 
     bcos::engine::NewPayloadRequest request;
-    request.executionRequests = std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
+    request.executionRequests =
+        std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
     request.executionPayload = payload->executionPayload;
     request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
     request.expectedBlobVersionedHashes = {};
@@ -1380,8 +1384,7 @@ BOOST_AUTO_TEST_CASE(op_newpayload_wire_roundtrip_survives_engine_helper_v4)
     BOOST_REQUIRE(payload);
 
     auto const& original = payload->executionPayload;
-    auto epJson =
-        bcos::rpc::serializeExecutionPayload(original, bcos::engine::ApiVersion::V4);
+    auto epJson = bcos::rpc::serializeExecutionPayload(original, bcos::engine::ApiVersion::V4);
     Json::Value params(Json::arrayValue);
     params.append(epJson);
     params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes = []
@@ -1424,7 +1427,8 @@ BOOST_AUTO_TEST_CASE(op_newpayload_honest_retry_does_not_recommit)
     BOOST_REQUIRE(payload);
 
     bcos::engine::NewPayloadRequest request;
-    request.executionRequests = std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
+    request.executionRequests =
+        std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
     request.executionPayload = payload->executionPayload;
     request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
     request.expectedBlobVersionedHashes = {};
@@ -1466,7 +1470,8 @@ BOOST_AUTO_TEST_CASE(op_newpayload_retry_after_failed_commit_recommits)
     BOOST_REQUIRE(payload);
 
     bcos::engine::NewPayloadRequest request;
-    request.executionRequests = std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
+    request.executionRequests =
+        std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
     request.executionPayload = payload->executionPayload;
     request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
     request.expectedBlobVersionedHashes = {};
@@ -1493,8 +1498,7 @@ BOOST_AUTO_TEST_CASE(op_newpayload_retry_after_failed_commit_recommits)
 /// pin both routes so a future change to either side cannot silently flip them.
 BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
 {
-    auto makeRequest = [](OpServicePair& pair, RecordingScheduler& delegate)
-    {
+    auto makeRequest = [](OpServicePair& pair, RecordingScheduler& delegate) {
         auto decoded = makeDecodableWeb3Tx(1);
         auto attrs = makeOpPayloadAttributes();
         attrs.minBaseFee = std::nullopt;
@@ -1509,7 +1513,8 @@ BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
         auto payload = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 3));
         BOOST_REQUIRE(payload);
         bcos::engine::NewPayloadRequest request;
-    request.executionRequests = std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
+        request.executionRequests =
+            std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
         request.executionPayload = payload->executionPayload;
         request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
         request.expectedBlobVersionedHashes = {};
@@ -1521,8 +1526,7 @@ BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
         auto delegate = std::make_shared<RecordingScheduler>();
         delegate->failFirst = false;
         delegate->failCommit = true;
-        delegate->commitErrorCode =
-            static_cast<int>(bcos::scheduler::SchedulerError::UnknownError);
+        delegate->commitErrorCode = static_cast<int>(bcos::scheduler::SchedulerError::UnknownError);
         OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
         delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
         auto request = makeRequest(pair, *delegate);
@@ -1566,8 +1570,7 @@ BOOST_AUTO_TEST_CASE(op_reset_failure_is_internal_error)
     bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
     registerVerifiedBlock(pair.storage, hash, 0);
     registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
-    BOOST_CHECK_THROW(
-        bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3)),
+    BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3)),
         bcos::engine::OpExecutionInternalError);
 }
 
@@ -1597,8 +1600,7 @@ BOOST_AUTO_TEST_CASE(op_getpayload_v4_v5_serve_the_built_payload)
         auto response = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, version));
         BOOST_REQUIRE(response);
         BOOST_REQUIRE(response->executionPayload.withdrawalsRoot.has_value());
-        BOOST_CHECK_EQUAL(
-            response->executionPayload.withdrawalsRoot->hex(),
+        BOOST_CHECK_EQUAL(response->executionPayload.withdrawalsRoot->hex(),
             delegate->executedWithdrawalsRoot.hex());
         checkSameExecutionPayload(v3->executionPayload, response->executionPayload);
     }
@@ -1626,8 +1628,7 @@ BOOST_AUTO_TEST_CASE(op_fcu_v4_is_outside_the_advertised_window)
     registerVerifiedBlock(pair.storage, hash, 0);
     registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
 
-    BOOST_CHECK_THROW(
-        bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 4)),
+    BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 4)),
         bcos::engine::UnsupportedEngineApiVersion);
     auto built = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
     BOOST_REQUIRE(built.payloadId.has_value());
@@ -1660,8 +1661,7 @@ BOOST_AUTO_TEST_CASE(op_getpayload_v5_response_json_shape)
     BOOST_REQUIRE(payload);
 
     Json::Value response;
-    bcos::rpc::combineGetPayloadResponse(
-        response, payload, bcos::engine::ApiVersion::V5);
+    bcos::rpc::combineGetPayloadResponse(response, payload, bcos::engine::ApiVersion::V5);
     BOOST_REQUIRE(response.isMember("executionPayload"));
     BOOST_CHECK_EQUAL(response["blockValue"].asString(), "0x0");
     BOOST_REQUIRE(response["blobsBundle"].isObject());
@@ -1672,8 +1672,8 @@ BOOST_AUTO_TEST_CASE(op_getpayload_v5_response_json_shape)
     BOOST_REQUIRE(response["executionRequests"].isArray());
     BOOST_CHECK_EQUAL(response["executionRequests"].size(), 0U);
     BOOST_REQUIRE(response.isMember("parentBeaconBlockRoot"));
-    BOOST_CHECK_EQUAL(response["parentBeaconBlockRoot"].asString(),
-        "0x" + payload->parentBeaconBlockRoot->hex());
+    BOOST_CHECK_EQUAL(
+        response["parentBeaconBlockRoot"].asString(), "0x" + payload->parentBeaconBlockRoot->hex());
 
     // The embedded executionPayload must re-parse to the built payload (wire round trip
     // through the response's own JSON).
@@ -1759,7 +1759,8 @@ BOOST_AUTO_TEST_CASE(op_fcu_getpayload_newpayload_roundtrip_messagepasser_root)
         payload->executionPayload.withdrawalsRoot->hex(), delegate->executedWithdrawalsRoot.hex());
 
     bcos::engine::NewPayloadRequest request;
-    request.executionRequests = std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
+    request.executionRequests =
+        std::vector<bcos::bytes>{};  // present-but-empty: the Isthmus wire contract
     request.executionPayload = payload->executionPayload;
     request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
     request.expectedBlobVersionedHashes = {};
@@ -1815,15 +1816,20 @@ BOOST_AUTO_TEST_CASE(op_newpayload_rejects_executed_withdrawals_root_mismatch)
 /// rebuildOpEthHeader's field layout and the RLP hash match op-geth byte-for-byte.
 BOOST_AUTO_TEST_CASE(op_golden_vector_rebuild_matches_op_geth_block_hash)
 {
+    if (!w6test::enterT8nCorpusTest())
+    {
+        BOOST_TEST_MESSAGE("skipping: t8n corpus missing");
+        return;
+    }
     auto sample = w6test::loadVectorSample("isthmus_deposit_only");
     auto params = w6test::makeParamsJson(sample);
     auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
     auto blockFactory = makeBlockFactory();
     auto const txRoot = EngineOpScheduler::computeTxRoot(
         bcos::engine::detail::rawEnvelopes(request.executionPayload));
-    auto header = bcos::engine::engine_common::op::rebuildOpEthHeader(
-        blockFactory->blockHeaderFactory(), request.executionPayload, txRoot,
-        *request.parentBeaconBlockRoot);
+    auto header =
+        bcos::engine::engine_common::op::rebuildOpEthHeader(blockFactory->blockHeaderFactory(),
+            request.executionPayload, txRoot, *request.parentBeaconBlockRoot);
     auto const rebuilt = bcos::protocol::EthBlockHeader::computeHash(*header);
     auto const golden = bcos::h256(sample.golden["blockHash"].asString());
     BOOST_CHECK_EQUAL(rebuilt.hex(), golden.hex());

@@ -131,6 +131,22 @@ jobs:
         run: |
           cd build
           cmake --build .
+      - name: Checkout S6 t8n corpus
+        # S6 (OpEngineServiceExecParityTest) reads vectors at runtime from
+        # opstack-executor/tests/t8n (git-ignored; canonical source is the asset repo).
+        # Pin must match tools/.ci/provision_t8n_corpus.sh.
+        if: matrix.os != 'windows-2025'
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: 759a9af097761cc5afc153689e200ab87088ae09
+          path: .t8n-corpus
+      - name: Link t8n corpus into the source tree
+        if: matrix.os != 'windows-2025'
+        run: |
+          mkdir -p opstack-executor/tests
+          ln -sfn "${{ github.workspace }}/.t8n-corpus/opstack-executor/tests/t8n" \
+            opstack-executor/tests/t8n
       - name: Test
         if: matrix.os != 'windows-2025'
         run: |
@@ -362,6 +378,17 @@ jobs:
         run: |
           cd build
           cmake --build . --parallel 3
+      - name: Checkout S6 t8n corpus
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: 759a9af097761cc5afc153689e200ab87088ae09
+          path: .t8n-corpus
+      - name: Link t8n corpus into the source tree
+        run: |
+          mkdir -p opstack-executor/tests
+          ln -sfn "${{ github.workspace }}/.t8n-corpus/opstack-executor/tests/t8n" \
+            opstack-executor/tests/t8n
       - name: Run tests
         run: |
           cd build

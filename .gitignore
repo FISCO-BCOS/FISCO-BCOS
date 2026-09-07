@@ -69,21 +69,10 @@ tools/BcosProBuilder/generated**
 tools/BcosAirBuilder/*
 *.log
 
-# t8n reference vectors: the vendored subset that OpEngineServiceExecParityTest
-# executes is TRACKED (see opstack-executor/tests/t8n/PROVENANCE.md for the upstream
-# pin + SHA256); the bcos-evm generator cases and any other locally regenerated
-# vector/golden files stay untracked.
+# t8n corpus: canonical source is FISCO-BCOS/op-stack-e2e-tests. CI symlinks into
+# opstack-executor/tests/t8n; locally run tools/.ci/provision_t8n_corpus.sh.
 bcos-evm/test/opstack/t8n/cases/
-opstack-executor/tests/t8n/cases/
-opstack-executor/tests/t8n/vectors/*.json
-!opstack-executor/tests/t8n/vectors/isthmus_deposit_only.json
-!opstack-executor/tests/t8n/vectors/jovian_deposit_only.json
-!opstack-executor/tests/t8n/vectors/jovian_transfer_multi.json
-opstack-executor/tests/t8n/golden/engine/*.golden.json
-!opstack-executor/tests/t8n/golden/engine/isthmus_deposit_only.golden.json
-!opstack-executor/tests/t8n/golden/engine/jovian_deposit_only.golden.json
-!opstack-executor/tests/t8n/golden/engine/jovian_transfer_multi.golden.json
-opstack-executor/tests/t8n/golden/engine/chained/*.json
+opstack-executor/tests/t8n/
 
 test/*
 /CMakeSettings.json

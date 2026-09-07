@@ -31,6 +31,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 namespace w6test
@@ -65,6 +66,22 @@ inline bool t8nCorpusRequired()
 #else
     return false;
 #endif
+}
+
+/// Corpus-dependent tests: return false to skip (local dev without assets).
+/// When t8nCorpusRequired() (CI), a missing tree is a hard error.
+inline bool enterT8nCorpusTest()
+{
+    if (t8nCorpusAvailable())
+    {
+        return true;
+    }
+    if (t8nCorpusRequired())
+    {
+        throw std::runtime_error(std::string("t8n corpus required but missing at ") +
+                                 OP_T8N_VECTORS_DIR + " / " + OP_T8N_GOLDEN_ENGINE_DIR);
+    }
+    return false;
 }
 
 struct GoldenSample
