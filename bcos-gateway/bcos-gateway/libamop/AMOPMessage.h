@@ -45,19 +45,18 @@ public:
     using Ptr = std::shared_ptr<AMOPMessage>;
     AMOPMessage();
     AMOPMessage(bytesConstRef _data);
-    virtual ~AMOPMessage();
 
-    virtual uint16_t type() const;
-    virtual void setType(uint16_t _type);
+    uint16_t type() const;
+    void setType(uint16_t _type);
 
-    virtual bytesConstRef data() const;
+    bytesConstRef data() const;
     // Note: must maintain life time for _data
-    virtual void setData(bcos::bytesConstRef _data);
-    virtual void setStatus(uint16_t _status);
-    virtual uint16_t status() const;
+    void setData(bcos::bytesConstRef _data);
+    void setStatus(uint16_t _status);
+    uint16_t status() const;
 
-    virtual uint16_t version() const;
-    virtual void setVersion(uint16_t version);
+    uint16_t version() const;
+    void setVersion(uint16_t version);
 
 public:
     bool encode(bytes& _buffer);

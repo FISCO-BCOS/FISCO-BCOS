@@ -40,8 +40,7 @@ public:
         P2PInterface::Ptr _p2pInterface)
       : m_uuid(std::move(_uuid)),
         m_keyFactory(std::move(_keyFactory)),
-        m_p2pInterface(std::move(_p2pInterface)),
-        m_gatewayStatusFactory(std::make_shared<GatewayStatusFactory>())
+        m_p2pInterface(std::move(_p2pInterface))
     {}
     virtual ~PeersRouterTable() = default;
 
@@ -107,7 +106,6 @@ private:
     std::map<P2pID, GatewayNodeStatus::Ptr> m_peersStatus;
     mutable SharedMutex x_peersStatus;
 
-    GatewayStatusFactory::Ptr m_gatewayStatusFactory;
     tbb::concurrent_unordered_map<std::string, GatewayStatus::Ptr> m_gatewayInfos;
 };
 }  // namespace bcos::gateway

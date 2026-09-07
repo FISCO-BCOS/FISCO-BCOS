@@ -33,12 +33,10 @@ static bool isRawP2pID(std::string const& p2pID)
     return p2pID.size() > HASH_NODEID_MAX_SIZE;
 }
 
-ServiceV2::ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTableFactory,
-    boost::asio::io_context& _ioContext)
+ServiceV2::ServiceV2(P2PInfo const& _p2pInfo, boost::asio::io_context& _ioContext)
   : Service(_p2pInfo),
     m_routerTimer(std::make_shared<Timer>(_ioContext, 3000, "routerSeqSync")),
-    m_routerTableFactory(std::move(_routerTableFactory)),
-    m_routerTable(m_routerTableFactory->createRouterTable())
+    m_routerTable(std::make_shared<RouterTable>())
 
 {
     updateP2pInfo(m_selfInfo);
@@ -109,7 +107,7 @@ void ServiceV2::onReceivePeersRouterTable(
                               << LOG_KV("code", _error.errorCode()) << LOG_KV("msg", _error.what());
         return;
     }
-    auto routerTable = m_routerTableFactory->createRouterTable(_message->payload());
+    auto routerTable = std::make_shared<RouterTable>(_message->payload());
 
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceivePeersRouterTable")
                        << LOG_KV("peer", _session->printP2pID())
@@ -118,7 +116,7 @@ void ServiceV2::onReceivePeersRouterTable(
 }
 
 void ServiceV2::joinRouterTable(
-    std::shared_ptr<P2PSession> _session, RouterTableInterface::Ptr _routerTable)
+    std::shared_ptr<P2PSession> _session, RouterTable::Ptr _routerTable)
 {
     auto generatedFrom = _session->p2pID();
     std::set<std::string> unreachableNodes;
@@ -145,7 +143,7 @@ void ServiceV2::joinRouterTable(
     SERVICE2_LOG(INFO) << LOG_BADGE("joinRouterTable") << LOG_DESC("create router entry")
                        << LOG_KV("dst", printShortP2pID(generatedFrom));
 
-    auto entry = m_routerTableFactory->createRouterEntry();
+    auto entry = std::make_shared<RouterTableEntry>();
     entry->setDstNode(_session->p2pID());
     entry->setDstNodeInfo(_session->p2pInfo());
     entry->setDistance(0);
@@ -305,7 +303,7 @@ void ServiceV2::onNewSession(P2PSession::Ptr _session)
     // update the p2p information when establish new session
     updateP2pInfo(_session->p2pInfo());
     std::set<std::string> unreachableNodes;
-    auto entry = m_routerTableFactory->createRouterEntry();
+    auto entry = std::make_shared<RouterTableEntry>();
     entry->setDstNode(_session->p2pID());
     entry->setDstNodeInfo(_session->p2pInfo());
     entry->setDistance(0);

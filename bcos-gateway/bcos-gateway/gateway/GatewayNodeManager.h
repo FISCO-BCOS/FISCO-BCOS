@@ -104,7 +104,5 @@ protected:
     // promptly on the first drop, while a persistent bulk-disconnect is bounded to ~one sync per
     // period instead of one full node-list broadcast to every front per dropped session.
     std::atomic_bool m_nodeIDListDirty{false};
-
-    GatewayNodeStatusFactory::Ptr m_gatewayNodeStatusFactory;
 };
 }  // namespace bcos::gateway
