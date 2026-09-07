@@ -359,7 +359,7 @@ bool ServiceV2::eraseSeq(std::string const& _p2pNodeID)
     return true;
 }
 
-void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Message::Ptr _message,
+void ServiceV2::onMessage(NetworkException _error, std::shared_ptr<Session> _session, Message::Ptr _message,
     std::weak_ptr<P2PSession> _p2pSessionWeakPtr)
 {
     if (_error.errorCode() != 0)

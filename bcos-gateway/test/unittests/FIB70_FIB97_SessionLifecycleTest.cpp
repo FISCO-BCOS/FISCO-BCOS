@@ -55,17 +55,16 @@ public:
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"))
     {}
-    ~FakeASIO_FIB() noexcept override {}
 
     // Compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): the read loop
     // is launched with this policy (startWithPolicy<FakeASIO_FIB::ReadPolicy>) so every read
     // parks its completion here instead of arming the real async_read_some.
     struct ReadPolicy
     {
-        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketFace>& /*socket*/,
+        static void invoke(ASIOInterface* asio, const std::shared_ptr<Socket>& /*socket*/,
             ba::mutable_buffer buffers, ReadCompletion completion)
         {
-            dynamic_cast<FakeASIO_FIB*>(asio)->parkRead(buffers, std::move(completion));
+            static_cast<FakeASIO_FIB*>(asio)->parkRead(buffers, std::move(completion));
         }
     };
 
@@ -233,58 +232,29 @@ public:
     }
 };
 
-// A FakeSocket backed by a real SSL context and stream so that drop() can safely
-// call sslref().async_shutdown() without crashing.
-// We create a connected TCP socket-pair (accept → connect) so the underlying TCP
-// socket is in a valid ESTABLISHED state. Without this, async_shutdown on an
-// unconnected SSL stream triggers a null-pointer dereference in some SSL
-// implementations (e.g. Apple's SecureTransport / LibreSSL on macOS).
-class FakeSocket_FIB : public SocketFace
+// Socket is a concrete class now, so the tests drive the real thing: a Socket whose SSL stream
+// sits on a connected TCP socket-pair (accept → connect), so the underlying TCP socket is in a
+// valid ESTABLISHED state and drop() can safely call sslref().async_shutdown() without crashing.
+// Without this, async_shutdown on an unconnected SSL stream triggers a null-pointer dereference
+// in some SSL implementations (e.g. Apple's SecureTransport / LibreSSL on macOS).
+// The acceptor-side socket closes when it goes out of scope, so the shutdown completes with an
+// error. The returned bundle owns the io_context and the ssl context alongside the socket.
+struct FakeSocket_FIB
 {
-public:
+    std::shared_ptr<ba::io_context> ioContext = std::make_shared<ba::io_context>();
+    ba::ssl::context sslContext{ba::ssl::context::tlsv12};
+    std::shared_ptr<Socket> socket = std::make_shared<Socket>(ioContext, sslContext, NodeIPEndpoint());
+
     FakeSocket_FIB()
-      : SocketFace(),
-        m_ioContext(std::make_shared<ba::io_context>()),
-        m_sslContext(ba::ssl::context::tlsv12)
     {
         // Create a connected TCP socket pair so the SSL stream has a valid transport.
-        bi::tcp::acceptor acceptor(*m_ioContext, bi::tcp::endpoint(bi::tcp::v4(), 0));
-        auto endpoint = acceptor.local_endpoint();
-        bi::tcp::socket clientSocket(*m_ioContext);
-        clientSocket.connect(endpoint);
-        bi::tcp::socket serverSocket(*m_ioContext);
+        bi::tcp::acceptor acceptor(*ioContext, bi::tcp::endpoint(bi::tcp::v4(), 0));
+        socket->ref().connect(acceptor.local_endpoint());
+        bi::tcp::socket serverSocket(*ioContext);
         acceptor.accept(serverSocket);
-        // clientSocket is now in ESTABLISHED state; serverSocket is the
+        // socket->ref() is now in ESTABLISHED state; serverSocket is the
         // acceptor-side and will close when it goes out of scope.
-
-        m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket>>(
-            std::move(clientSocket), m_sslContext);
     }
-    ~FakeSocket_FIB() override = default;
-
-    bool isConnected() const override { return m_connected; }
-    void close() override { m_connected = false; }
-    boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code ec) override
-    {
-        return {};
-    }
-    boost::asio::ip::tcp::endpoint localEndpoint(boost::system::error_code ec) override
-    {
-        return {};
-    }
-    bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override {}
-    ba::io_context& ioService() override { return *m_ioContext; }
-
-    bool m_connected{true};
-
-private:
-    std::shared_ptr<ba::io_context> m_ioContext;
-    ba::ssl::context m_sslContext;
-    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
-    NodeIPEndpoint m_nodeIPEndpoint;
 };
 
 // FIB-70: Verify that decode error (negative return from decode()) triggers session drop.
@@ -301,10 +271,10 @@ BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
         auto fakeHost =
             std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr, decodeErrorFactory);
 
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        auto session = std::make_shared<Session>(fakeSocket->socket, *fakeHost, 2, true);
         session->setMessageFactory(fakeHost->messageFactory());
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
+            [](NetworkException e, Session::Ptr sessionFace, Message::Ptr message) {});
 
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
@@ -327,7 +297,7 @@ BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
         session->setSocket(nullptr);
     }
 
-    fakeSocket->close();
+    fakeSocket->socket->close();
 }
 
 // FIB-70: Verify that decode exception triggers session drop.
@@ -344,10 +314,10 @@ BOOST_AUTO_TEST_CASE(DecodeExceptionTriggersSessionDrop)
         auto fakeHost =
             std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr, decodeExceptionFactory);
 
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        auto session = std::make_shared<Session>(fakeSocket->socket, *fakeHost, 2, true);
         session->setMessageFactory(fakeHost->messageFactory());
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
+            [](NetworkException e, Session::Ptr sessionFace, Message::Ptr message) {});
 
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
@@ -369,7 +339,7 @@ BOOST_AUTO_TEST_CASE(DecodeExceptionTriggersSessionDrop)
         session->setSocket(nullptr);
     }
 
-    fakeSocket->close();
+    fakeSocket->socket->close();
 }
 
 // FIB-97: Verify socket shared_ptr capture prevents premature destruction.
@@ -382,7 +352,7 @@ BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
     auto decodeErrorFactory = std::make_shared<DecodeErrorMessageFactory>();
 
     // Verify socket has expected reference count before session creation
-    auto initialRefCount = fakeSocket.use_count();
+    auto initialRefCount = fakeSocket->socket.use_count();
     BOOST_CHECK_EQUAL(initialRefCount, 1);
 
     {
@@ -390,21 +360,21 @@ BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
         auto fakeHost =
             std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr, decodeErrorFactory);
 
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        auto session = std::make_shared<Session>(fakeSocket->socket, *fakeHost, 2, true);
         session->setMessageFactory(fakeHost->messageFactory());
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
+            [](NetworkException e, Session::Ptr sessionFace, Message::Ptr message) {});
 
         // After session creation, socket should be held by both fakeSocket and session
-        BOOST_CHECK(fakeSocket.use_count() > 1);
+        BOOST_CHECK(fakeSocket->socket.use_count() > 1);
 
         session->setSocket(nullptr);
     }
 
     // After session destruction, only fakeSocket holds the socket
-    BOOST_CHECK_EQUAL(fakeSocket.use_count(), 1);
+    BOOST_CHECK_EQUAL(fakeSocket->socket.use_count(), 1);
 
-    fakeSocket->close();
+    fakeSocket->socket->close();
 }
 
 // The response-callback manager is shared host-wide (GatewayFactory creates one
@@ -424,10 +394,10 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
         // one manager shared by both sessions, as in production
         auto callbackManager = std::make_shared<SessionCallbackManagerBucket>();
 
-        auto sessionA = std::make_shared<Session>(fakeSocketA, *fakeHost, 2, true);
+        auto sessionA = std::make_shared<Session>(fakeSocketA->socket, *fakeHost, 2, true);
         sessionA->setMessageFactory(fakeHost->messageFactory());
         sessionA->setSessionCallbackManager(callbackManager);
-        auto sessionB = std::make_shared<Session>(fakeSocketB, *fakeHost, 2, true);
+        auto sessionB = std::make_shared<Session>(fakeSocketB->socket, *fakeHost, 2, true);
         sessionB->setMessageFactory(fakeHost->messageFactory());
         sessionB->setSessionCallbackManager(callbackManager);
 
@@ -475,8 +445,8 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
         sessionB->setSocket(nullptr);
     }
 
-    fakeSocketA->close();
-    fakeSocketB->close();
+    fakeSocketA->socket->close();
+    fakeSocketB->socket->close();
 }
 
 // The with-response send must fail exactly once when the async write itself fails, claiming the
@@ -501,16 +471,16 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
             hashImpl, fakeAsio, nullptr, std::make_shared<P2PMessageFactory>());
         auto callbackManager = std::make_shared<SessionCallbackManagerBucket>();
 
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        auto session = std::make_shared<Session>(fakeSocket->socket, *fakeHost, 2, true);
         session->setMessageFactory(fakeHost->messageFactory());
         session->setSessionCallbackManager(callbackManager);
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
+            [](NetworkException e, Session::Ptr sessionFace, Message::Ptr message) {});
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
         // the socket's io_context is never run by the fixture: drive it so the posted
         // async_write actually executes (and fails against the closed peer)
-        std::thread ioThread([&]() { fakeSocket->ioService().run(); });
+        std::thread ioThread([&]() { fakeSocket->ioContext->run(); });
 
         auto message = std::static_pointer_cast<P2PMessage>(fakeHost->messageFactory()->buildMessage());
         message->setPacketType(1);
@@ -541,7 +511,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
             retryCount++;
         }
 
-        fakeSocket->ioService().stop();
+        fakeSocket->ioContext->stop();
         ioThread.join();
 
         // exactly one completion, always a failure, and the response callback is gone
@@ -561,7 +531,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
         session->setSocket(nullptr);
     }
 
-    fakeSocket->close();
+    fakeSocket->socket->close();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

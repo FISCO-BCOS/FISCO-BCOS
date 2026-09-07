@@ -5,6 +5,7 @@
 
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
+#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
@@ -35,12 +36,12 @@ bool P2PSession::active()
     return m_run;
 }
 
-SessionFace::Ptr P2PSession::session()
+Session::Ptr P2PSession::session()
 {
     return m_session;
 }
 
-void P2PSession::setSession(std::shared_ptr<SessionFace> session)
+void P2PSession::setSession(std::shared_ptr<Session> session)
 {
     m_session = std::move(session);
 }

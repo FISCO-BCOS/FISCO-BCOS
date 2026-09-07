@@ -28,6 +28,7 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <chrono>
 #include <thread>
 
 using namespace bcos;
@@ -48,53 +49,30 @@ public:
     FakeASIO_FIB97new()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB97new"), "0.0.0.0", 0)
     {}
-    ~FakeASIO_FIB97new() noexcept override = default;
 };
 
-class FakeSocket_FIB97new : public SocketFace
+// Socket is a concrete class now, so the tests drive the real thing: a Socket whose SSL stream
+// sits on a connected loopback TCP pair (the acceptor side closes at scope exit). A real close()
+// really disconnects the socket, so a double-teardown's second closeSocket() early-returns on
+// isConnected() — the "close exactly once" property is instead asserted through the teardown
+// notification counter in SessionBundle_FIB97new (the notification is posted once iff drop()'s
+// CAS admitted exactly one teardown).
+struct FakeSocket_FIB97new
 {
-public:
+    std::shared_ptr<boost::asio::io_context> ioContext =
+        std::make_shared<boost::asio::io_context>();
+    boost::asio::ssl::context sslContext{boost::asio::ssl::context::tlsv12};
+    std::shared_ptr<Socket> socket =
+        std::make_shared<Socket>(ioContext, sslContext, NodeIPEndpoint());
+
     FakeSocket_FIB97new()
-      : SocketFace(),
-        m_ioContext(std::make_shared<boost::asio::io_context>()),
-        m_sslContext(boost::asio::ssl::context::tlsv12),
-        m_sslSocket(std::make_shared<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>>(
-            *m_ioContext, m_sslContext))
-    {}
-    ~FakeSocket_FIB97new() override = default;
-
-    bool isConnected() const override { return m_connected.load(); }
-    void close() override
     {
-        m_connected.store(false);
-        ++m_closeCount;
+        boost::asio::ip::tcp::acceptor acceptor(
+            *ioContext, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 0));
+        socket->ref().connect(acceptor.local_endpoint());
+        boost::asio::ip::tcp::socket serverSocket(*ioContext);
+        acceptor.accept(serverSocket);
     }
-    boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code /*ec*/) override
-    {
-        return {};
-    }
-    boost::asio::ip::tcp::endpoint localEndpoint(boost::system::error_code /*ec*/) override
-    {
-        return {};
-    }
-    boost::asio::ip::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
-    boost::asio::ssl::stream<boost::asio::ip::tcp::socket>& sslref() override
-    {
-        return *m_sslSocket;
-    }
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint /*unused*/) override {}
-    boost::asio::io_context& ioService() override { return *m_ioContext; }
-
-    // Counts to detect double-teardown
-    std::atomic<int> m_closeCount{0};
-    std::atomic<bool> m_connected{true};
-
-private:
-    std::shared_ptr<boost::asio::io_context> m_ioContext;
-    boost::asio::ssl::context m_sslContext;
-    std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>> m_sslSocket;
-    NodeIPEndpoint m_nodeIPEndpoint;
 };
 
 class FakeHost_FIB97new : public bcos::gateway::Host
@@ -115,6 +93,10 @@ struct SessionBundle_FIB97new
     std::shared_ptr<FakeHost_FIB97new> host;
     std::shared_ptr<FakeSocket_FIB97new> socket;
     std::shared_ptr<bcos::gateway::Session> session;
+    // teardown-notification count: drop() posts exactly one notification iff its CAS admitted
+    // exactly one teardown — the observable proxy for "socket teardown ran exactly once" now
+    // that the socket is a real Socket whose close() cannot be counted from outside.
+    std::shared_ptr<std::atomic<int>> notifyCount;
 };
 
 inline SessionBundle_FIB97new makeSessionFib97new()
@@ -125,12 +107,18 @@ inline SessionBundle_FIB97new makeSessionFib97new()
     auto msgFactory = std::make_shared<P2PMessageFactory>();
     auto fakeHost = std::make_shared<FakeHost_FIB97new>(hashImpl, fakeAsio, nullptr, msgFactory);
 
-    auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+    auto notifyCount = std::make_shared<std::atomic<int>>(0);
+    auto session = std::make_shared<Session>(fakeSocket->socket, *fakeHost, 2, true);
     session->setMessageFactory(msgFactory);
     session->setMessageHandler(
-        [](NetworkException /*e*/, SessionFace::Ptr /*s*/, Message::Ptr /*m*/) {});
+        [notifyCount](NetworkException e, Session::Ptr /*s*/, Message::Ptr /*m*/) {
+            if (e.errorCode() != 0)
+            {
+                ++(*notifyCount);
+            }
+        });
 
-    return {fakeHost, fakeSocket, session};
+    return {fakeHost, fakeSocket, session, notifyCount};
 }
 
 }  // namespace
@@ -157,12 +145,17 @@ BOOST_AUTO_TEST_CASE(drop_twice_sequential_no_double_teardown)
 
     // FIB-184: the actual socket close/shutdown is deferred onto the socket's own io_context so it
     // can never race an in-flight async_read_some/async_write. Drain that io_context to run the
-    // deferred teardown; only the CAS winner posted one, so close() must run exactly once.
-    bundle.socket->ioService().poll();
+    // deferred teardown; only the CAS winner posted one.
+    bundle.socket->ioContext->poll();
 
-    // The socket must have been closed exactly once — a second drop re-invoking socket close is a
-    // sign of double-teardown. close() in FakeSocket increments m_closeCount.
-    BOOST_CHECK_EQUAL(bundle.socket->m_closeCount.load(), 1);
+    // The teardown notification must have fired exactly once — a second drop re-entering the
+    // teardown body would post a second one. It runs on the host's dedicated teardown executor,
+    // so wait (bounded) until it lands.
+    for (int i = 0; i < 200 && bundle.notifyCount->load() == 0; ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    BOOST_CHECK_EQUAL(bundle.notifyCount->load(), 1);
 }
 
 // FIB-97-new: Calling drop() concurrently from two threads must not data-race.
@@ -181,8 +174,12 @@ BOOST_AUTO_TEST_CASE(drop_concurrent_two_threads_no_race)
     // No crash, no UAF, no TSan report.
     BOOST_CHECK(!bundle.session->active());
     // FIB-184: run the deferred teardown posted by the single CAS winner (see sequential case).
-    bundle.socket->ioService().poll();
-    BOOST_CHECK_EQUAL(bundle.socket->m_closeCount.load(), 1);
+    bundle.socket->ioContext->poll();
+    for (int i = 0; i < 200 && bundle.notifyCount->load() == 0; ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    BOOST_CHECK_EQUAL(bundle.notifyCount->load(), 1);
 }
 
 // FIB-97-new: Eight threads all calling drop() concurrently — stress the CAS path.
@@ -205,8 +202,12 @@ BOOST_AUTO_TEST_CASE(drop_many_threads_stress)
 
     BOOST_CHECK(!bundle.session->active());
     // FIB-184: run the deferred teardown posted by the single CAS winner (see sequential case).
-    bundle.socket->ioService().poll();
-    BOOST_CHECK_EQUAL(bundle.socket->m_closeCount.load(), 1);
+    bundle.socket->ioContext->poll();
+    for (int i = 0; i < 200 && bundle.notifyCount->load() == 0; ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    BOOST_CHECK_EQUAL(bundle.notifyCount->load(), 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

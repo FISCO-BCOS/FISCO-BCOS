@@ -44,39 +44,16 @@ public:
     FakeASIO_FIB184()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB184"), "0.0.0.0", 0)
     {}
-    ~FakeASIO_FIB184() noexcept override {}
 };
 
-class FakeSocket_FIB184 : public SocketFace
+// Socket is a concrete class now, so the tests drive the real thing. These tests never start the
+// session (no reads/writes run), so the socket's underlying TCP connection is never opened — the
+// same state the old fake represented with its always-connected flag over an unopened stream.
+struct FakeSocket_FIB184
 {
-public:
-    FakeSocket_FIB184()
-      : m_ioContext(std::make_shared<ba::io_context>()),
-        m_sslContext(ba::ssl::context::tlsv12),
-        m_sslSocket(std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*m_ioContext, m_sslContext))
-    {}
-    ~FakeSocket_FIB184() override = default;
-
-    bool isConnected() const override { return m_connected; }
-    void close() override { m_connected = false; }
-    bi::tcp::endpoint remoteEndpoint(boost::system::error_code) override { return {}; }
-    bi::tcp::endpoint localEndpoint(boost::system::error_code) override { return {}; }
-    bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override
-    {
-        m_nodeIPEndpoint = std::move(_nodeIPEndpoint);
-    }
-    ba::io_context& ioService() override { return *m_ioContext; }
-
-    bool m_connected{true};
-
-private:
-    std::shared_ptr<ba::io_context> m_ioContext;
-    ba::ssl::context m_sslContext;
-    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
-    NodeIPEndpoint m_nodeIPEndpoint;
+    std::shared_ptr<ba::io_context> ioContext = std::make_shared<ba::io_context>();
+    ba::ssl::context sslContext{ba::ssl::context::tlsv12};
+    std::shared_ptr<Socket> socket = std::make_shared<Socket>(ioContext, sslContext, NodeIPEndpoint());
 };
 
 // Exposes the protected session-cap helpers for direct testing.
@@ -101,13 +78,13 @@ BOOST_AUTO_TEST_CASE(ForcedSmallRecvBufferIsHonored)
     auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
     auto fakeHost = std::make_shared<FakeHost_FIB184>(hashImpl, fakeAsio);
 
-    auto session = std::make_shared<Session>(fakeSocket, *fakeHost, /*size*/ 2, /*forceSize*/ true);
+    auto session = std::make_shared<Session>(fakeSocket->socket, *fakeHost, /*size*/ 2, /*forceSize*/ true);
     BOOST_CHECK_EQUAL(session->recvBuffer().recvBufferSize(), 2u);
     // grow ceiling is still the 512KB minimum
     BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), Session::MIN_SESSION_RECV_BUFFER_SIZE);
 
     session->setSocket(nullptr);
-    fakeSocket->close();
+    fakeSocket->socket->close();
 }
 
 // FIB-184 Fix 2: a default-constructed session no longer allocates the 512KB floor up front;
@@ -119,7 +96,7 @@ BOOST_AUTO_TEST_CASE(DefaultRecvBufferStartsSmall)
     auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
     auto fakeHost = std::make_shared<FakeHost_FIB184>(hashImpl, fakeAsio);
 
-    auto session = std::make_shared<Session>(fakeSocket, *fakeHost);
+    auto session = std::make_shared<Session>(fakeSocket->socket, *fakeHost);
     BOOST_CHECK_EQUAL(
         session->recvBuffer().recvBufferSize(), Session::INITIAL_SESSION_RECV_BUFFER_SIZE);
     BOOST_CHECK_LT(
@@ -128,7 +105,7 @@ BOOST_AUTO_TEST_CASE(DefaultRecvBufferStartsSmall)
     BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), Session::MIN_SESSION_RECV_BUFFER_SIZE);
 
     session->setSocket(nullptr);
-    fakeSocket->close();
+    fakeSocket->socket->close();
 }
 
 // FIB-184: production createSession passes the config-validated ceiling (forced to
@@ -145,7 +122,7 @@ BOOST_AUTO_TEST_CASE(ProductionLargeRecvBufferDoesNotPreallocate)
     constexpr size_t k64MB =
         64UL * 1024 * 1024;  // == 2 * MAX_MESSAGE_LENGTH, the production ceiling
     auto session =
-        std::make_shared<Session>(fakeSocket, *fakeHost, /*ceiling*/ k64MB, /*forceSize*/ false);
+        std::make_shared<Session>(fakeSocket->socket, *fakeHost, /*ceiling*/ k64MB, /*forceSize*/ false);
 
     // initial allocation is the lazy 16KB, NOT the 64MB ceiling
     BOOST_CHECK_EQUAL(
@@ -154,7 +131,7 @@ BOOST_AUTO_TEST_CASE(ProductionLargeRecvBufferDoesNotPreallocate)
     BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), k64MB);
 
     session->setSocket(nullptr);
-    fakeSocket->close();
+    fakeSocket->socket->close();
 }
 
 // FIB-184 Fix 1: per-IP cap rejects slot acquisition once the limit is hit; releasing a slot
@@ -222,7 +199,7 @@ BOOST_AUTO_TEST_CASE(LifetimeGuardReleasesSlotOnSessionDestruction)
     BOOST_CHECK_EQUAL(fakeHost->currentSessionCount(), 1u);
 
     {
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        auto session = std::make_shared<Session>(fakeSocket->socket, *fakeHost, 2, true);
         // Attach a guard that releases the slot when the session is destroyed, mirroring
         // Host::startPeerSession. Capture the host by weak_ptr so the lambda guard is safe.
         std::weak_ptr<Host> weakHost = fakeHost;
@@ -239,7 +216,7 @@ BOOST_AUTO_TEST_CASE(LifetimeGuardReleasesSlotOnSessionDestruction)
     // After the session (and its guard) is destroyed, the slot is released.
     BOOST_CHECK_EQUAL(fakeHost->currentSessionCount(), 0u);
 
-    fakeSocket->close();
+    fakeSocket->socket->close();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

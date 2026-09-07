@@ -43,7 +43,6 @@ public:
     FakeASIO_FIB186()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB186"), "0.0.0.0", 0)
     {}
-    ~FakeASIO_FIB186() noexcept override {}
 };
 
 // Exposes the protected handshake-admission helpers for direct testing, mirroring the FIB-184

@@ -12,9 +12,8 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/SessionFace.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
-#include "bcos-gateway/libnetwork/SocketFace.h"
+#include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/Common.h"  // for c_compressThreshold / c_zstdCompressLevel
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Overloaded.h"
@@ -45,7 +44,7 @@ using namespace bcos::gateway;
 constexpr size_t c_p2pHeaderExtOffset = 12;  // P2PMessage::MESSAGE_HEADER_LENGTH(14) - 2
 
 Session::Session(
-    std::shared_ptr<SocketFace> socket, Host& server, size_t _recvBufferSize, bool _forceSize)
+    std::shared_ptr<Socket> socket, Host& server, size_t _recvBufferSize, bool _forceSize)
   : m_maxRecvBufferSize(std::max<size_t>(_recvBufferSize, MIN_SESSION_RECV_BUFFER_SIZE)),
     // FIB-184: treat _recvBufferSize as the grow CEILING, not the initial allocation. Production
     // createSession passes the config-validated session_recv_buffer_size, which is forced to
@@ -1465,11 +1464,11 @@ bcos::gateway::Host& bcos::gateway::Session::host()
 {
     return m_server;
 }
-std::shared_ptr<SocketFace> bcos::gateway::Session::socket()
+std::shared_ptr<Socket> bcos::gateway::Session::socket()
 {
     return m_socket;
 }
-void bcos::gateway::Session::setSocket(const std::shared_ptr<SocketFace>& socket)
+void bcos::gateway::Session::setSocket(const std::shared_ptr<Socket>& socket)
 {
     m_socket = socket;
 }
@@ -1491,19 +1490,19 @@ void bcos::gateway::Session::setSessionCallbackManager(
 {
     m_sessionCallbackManager = _sessionCallbackManager;
 }
-const std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)>&
+const std::function<void(NetworkException, Session::Ptr, Message::Ptr)>&
 bcos::gateway::Session::messageHandler()
 {
     return m_messageHandler;
 }
 void bcos::gateway::Session::setMessageHandler(
-    std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler)
+    std::function<void(NetworkException, Session::Ptr, Message::Ptr)> messageHandler)
 
 {
     m_messageHandler = std::move(messageHandler);
 }
 void bcos::gateway::Session::setBeforeMessageHandler(
-    std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)> handler)
+    std::function<std::optional<bcos::Error>(Session&, const Message&, uint32_t)> handler)
 {
     m_beforeMessageHandler = std::move(handler);
 }
@@ -1551,8 +1550,8 @@ const bcos::gateway::SessionRecvBuffer& bcos::gateway::Session::recvBuffer() con
 {
     return m_recvBuffer;
 }
-std::shared_ptr<SessionFace> bcos::gateway::SessionFactory::createSession(Host& _server,
-    std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr& _messageFactory,
+std::shared_ptr<Session> bcos::gateway::SessionFactory::createSession(Host& _server,
+    std::shared_ptr<Socket> const& _socket, MessageFactory::Ptr& _messageFactory,
     SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
 {
     std::shared_ptr<Session> session =
