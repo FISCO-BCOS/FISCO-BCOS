@@ -228,6 +228,19 @@ public:
     /// would undo FIB-59.
     virtual task::Task<std::optional<u256>> committedNonce(std::string_view sender);
 
+    /// The committed-nonce window, stated once: a Web3 transaction may queue when its nonce is at
+    /// or above the account's committed nonce and at most DEFAULT_WEB3_NONCE_CHECK_LIMIT beyond
+    /// it. Both readers of a committed nonce apply this and nothing else to it -- checkWeb3Nonce()
+    /// here, which the pool's re-checks of pooled transactions call (seal-time, txs-status
+    /// response and cleanup), and the admission layer's Web3NonceWindow check over the value
+    /// committedNonce() returned -- so the two verdicts cannot drift.
+    ///
+    /// The addition is u256 arithmetic under boost's unchecked policy and would wrap for a
+    /// committed nonce within the limit of 2^256. A nonce read from the ledger is below 2^64 --
+    /// EIP-2681 in the Ethereum executors, and the v1 executor derives it from uint64
+    /// transaction nonces -- so it cannot.
+    static bool withinCommittedWindow(u256 const& txNonce, u256 const& committedNonce);
+
     /// Whether a PENDING transaction in this pool already holds (sender, nonce) -- the read half
     /// of insertMemoryNonce's reservation, split out for the same reason committedNonce was:
     /// the admission layer states the rule as its own check instead of calling a function that
