@@ -14,11 +14,11 @@
  *  limitations under the License.
  *
  * @file EngineServiceImpl.h
- * @brief Engine API template still constructed by EngineServiceInitializer.
+ * @brief Shared Engine API template: Tracker, PayloadCache, and engine_common helpers.
  *
- * This extract adds Tracker / PayloadCache / engine_common beside the live
- * template. It does not cut production over: Initializer still instantiates
- * EngineServiceImpl. EthEngineService / OpEngineService are later PRs.
+ * Production nodes wire EthEngineService / OpEngineService through EngineServiceInitializer
+ * (see Initializer::init). This header keeps the original EngineServiceImpl template for
+ * reuse and unit tests.
  */
 
 #pragma once

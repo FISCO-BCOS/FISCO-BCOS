@@ -168,13 +168,13 @@ public:
     /// Version-window contract (the four surfaces deliberately differ, matching
     /// op-geth's by-design ceiling split; do not "fix" them to agree):
     /// - exchangeCapabilities: the FULL supported list regardless of
-    /// m_maxEngineVersion — capability advertisement is static, method windows
-    /// are what gate actual dispatch.
+    ///   m_maxEngineVersion — capability advertisement is static, method windows
+    ///   are what gate actual dispatch.
     /// - updateForkchoice (FCU): instance-gated by m_maxEngineVersion (V1–V3 for
-    /// the default-constructed service).
+    ///   the default-constructed service).
     /// - newPayload: V1–V4 (Isthmus V4 empty-lists shape).
     /// - getPayload: V1–V5 via the tracker's window (the V2 build answers V1–V2,
-    /// the V3 build answers V1–V5).
+    ///   the V3 build answers V1–V5).
     task::Task<std::vector<std::string>> exchangeCapabilities(
         std::vector<std::string> remoteCapabilities)
     {
@@ -226,7 +226,7 @@ private:
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
         std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view,
-        std::vector<bcos::bytes> decodedForcedTxs) const;
+        std::vector<bcos::bytes> const& decodedForcedTxs) const;
 
     EngineTracker m_tracker;
     std::unordered_map<PayloadID, EthPayloadArtifacts<ViewType>> m_artifacts;

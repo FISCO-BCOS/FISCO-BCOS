@@ -49,9 +49,16 @@ bcos::u256 calcOpNextBaseFee(bcos::protocol::BlockHeader const& parent);
 bcos::u256 effectivePriorityFeePerGas(
     bcos::protocol::Transaction const& tx, bcos::u256 const& baseFee);
 
-/// Pick reward percentiles from sorted priority fees (geth-compatible indexing).
+/// One transaction's effective priority fee and gas limit for eth_feeHistory rewards.
+struct GasWeightedPriorityFee
+{
+    bcos::u256 tip;
+    std::uint64_t gas;
+};
+
+/// Pick reward percentiles using geth's gas-weighted indexing over ascending tips.
 std::vector<bcos::u256> pickRewardPercentiles(
-    std::vector<bcos::u256> const& sortedTips, std::span<double const> percentiles);
+    std::vector<GasWeightedPriorityFee> const& samples, std::span<double const> percentiles);
 
 /// Build the eth_feeHistory result object. `opStackMode` selects OP vs Ethereum base-fee
 /// prediction for the trailing entry (and OP parent metering on Jovian parents).
