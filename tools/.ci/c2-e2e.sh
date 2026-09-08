@@ -85,7 +85,7 @@ if [[ ! -d "${REPO_ROOT}/bcos-l2-contracts/out" ]]; then
   (cd "${REPO_ROOT}/bcos-l2-contracts" && forge build)
 fi
 
-# Python deps for the op-e2e helpers (pyyaml / eth-hash / py-trie / rlp). The runner's
+# Python deps for the op-e2e helpers (pyyaml / eth-hash / trie / rlp). The runner's
 # system python3 is PEP-668 externally-managed, so a plain `python3 -m pip install`
 # fails there; mirror workflow.yml's fallback chain. A real failure still aborts.
 REQS="${REPO_ROOT}/tools/.ci/c2-e2e-requirements.txt"
@@ -93,7 +93,7 @@ python3 -m pip install --quiet -r "$REQS" 2>/dev/null \
   || pip3 install --quiet -r "$REQS" 2>/dev/null \
   || pip3 install --break-system-packages --quiet -r "$REQS"
 python3 -c "import yaml, eth_hash, trie, rlp" 2>/dev/null \
-  || die "C2 python deps unavailable after install (pyyaml/eth-hash/py-trie/rlp)"
+  || die "C2 python deps unavailable after install (pyyaml/eth-hash/trie/rlp)"
 
 export NO_PROXY="${NO_PROXY:-127.0.0.1,localhost}"
 export no_proxy="${no_proxy:-127.0.0.1,localhost}"
