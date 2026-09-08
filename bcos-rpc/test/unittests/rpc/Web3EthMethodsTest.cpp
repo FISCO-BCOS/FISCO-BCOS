@@ -232,7 +232,8 @@ BOOST_AUTO_TEST_CASE(sendRawTransactionGarbageReportsError)
 
 BOOST_AUTO_TEST_CASE(feeHistoryAndSetMaxDASizeRegistered)
 {
-    // Check handler registration directly; a generic RPC error is not enough.
+    // Pin the registration contract, not a tautology: the old assertion accepted
+    // `result || error`, which is also true for an unregistered method (JSON-RPC -32601).
     EndpointsMapping publicMapping(/*enableOPEngine=*/false);
     BOOST_CHECK_MESSAGE(
         publicMapping.findHandler("eth_feeHistory").has_value(), "eth_feeHistory not dispatched");
@@ -243,7 +244,6 @@ BOOST_AUTO_TEST_CASE(feeHistoryAndSetMaxDASizeRegistered)
     BOOST_CHECK_MESSAGE(engineMapping.findHandler("miner_setMaxDASize").has_value(),
         "miner_setMaxDASize not dispatched on op_engine_rpc");
 
-    // And the endpoint stays reachable through the real dispatch path.
     auto resp = call(req("eth_feeHistory", R"(["0x1","latest"])"));
     if (resp.isMember("error"))
     {
