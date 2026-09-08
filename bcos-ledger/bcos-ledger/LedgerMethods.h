@@ -129,7 +129,8 @@ inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
         // Only externally owned transactions may be marked persisted after the write;
         // for inline transactions tx points into the per-iteration anyTx holder and
         // must not escape the loop.
-        out.push_back(EncodedBlockTransaction{tx->hash(), std::move(encoded), blockTxs ? tx : nullptr});
+        out.push_back(
+            EncodedBlockTransaction{tx->hash(), std::move(encoded), blockTxs ? tx : nullptr});
     }
     return out;
 }
@@ -283,6 +284,14 @@ task::Task<protocol::Block::Ptr> getBlockDataFromStorages(
                     }));
                 for (auto& txEntry : transactions)
                 {
+                    if (!txEntry)
+                    {
+                        // Fail closed like the base asyncBatchGetTransactions path: a
+                        // missing SYS_HASH_2_TX row (lagging or pruned block storage) is a
+                        // storage error, not a reason to dereference a disengaged optional.
+                        BOOST_THROW_EXCEPTION(
+                            BCOS_ERROR(LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
+                    }
                     auto field = txEntry->get();
                     auto transaction = blockFactory.transactionFactory()->createTransaction(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false,
@@ -300,6 +309,12 @@ task::Task<protocol::Block::Ptr> getBlockDataFromStorages(
                     }));
                 for (auto& receiptEntry : receipts)
                 {
+                    if (!receiptEntry)
+                    {
+                        // Same fail-closed contract as the base asyncBatchGetReceipts path.
+                        BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                            LedgerError::GetStorageError, "missing SYS_HASH_2_RECEIPT row"));
+                    }
                     auto field = receiptEntry->get();
                     auto receipt = blockFactory.receiptFactory()->createReceipt(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));

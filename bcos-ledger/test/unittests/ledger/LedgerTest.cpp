@@ -975,6 +975,72 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
     BOOST_CHECK_EQUAL(f8.get(), true);
 }
 
+BOOST_AUTO_TEST_CASE(getBlockDataMissingTxRowFailsClosed)
+{
+    initFixture();
+    initChain(10);
+
+    // m_fakeBlocks->at(i) carries block number i + 1.
+    // Delete one SYS_HASH_2_TX row of block 3 (simulating a lagging or pruned block
+    // storage): the block read must fail closed with a storage error instead of
+    // dereferencing the disengaged optional returned by readSome.
+    auto txHash = m_fakeBlocks->at(2)->transactionHash(0);
+    Entry deletedEntry;
+    deletedEntry.setStatus(Entry::DELETED);
+    std::promise<bool> deletePromise;
+    m_storage->asyncSetRow(SYS_HASH_2_TX, std::string((char*)txHash.data(), txHash.size()),
+        std::move(deletedEntry), [&deletePromise](Error::UniquePtr error) {
+            deletePromise.set_value(!error);
+        });
+    BOOST_CHECK(deletePromise.get_future().get());
+
+    // No assertions inside the callback: a failing BOOST_REQUIRE would unwind through
+    // the coroutine resumption that invoked it.
+    Error::Ptr readError;
+    Block::Ptr readBlock;
+    std::promise<bool> p1;
+    m_ledger->asyncGetBlockDataByNumber(
+        3, FULL_BLOCK, [&](Error::Ptr _error, Block::Ptr _block) {
+            readError = std::move(_error);
+            readBlock = std::move(_block);
+            p1.set_value(true);
+        });
+    BOOST_CHECK(p1.get_future().get());
+    BOOST_REQUIRE(readError != nullptr);
+    BOOST_CHECK_EQUAL(readError->errorCode(), LedgerError::GetStorageError);
+    BOOST_CHECK(readBlock == nullptr);
+
+    BOOST_CHECK_THROW(
+        task::syncWait(ledger::getBlockData(*m_storage, 3, FULL_BLOCK, *m_blockFactory)),
+        bcos::Error);
+
+    // A missing SYS_HASH_2_RECEIPT row fails closed the same way (block 4 -> at(3)).
+    auto receiptHash = m_fakeBlocks->at(3)->transactionHash(0);
+    Entry deletedReceiptEntry;
+    deletedReceiptEntry.setStatus(Entry::DELETED);
+    std::promise<bool> deletePromise2;
+    m_storage->asyncSetRow(SYS_HASH_2_RECEIPT,
+        std::string((char*)receiptHash.data(), receiptHash.size()),
+        std::move(deletedReceiptEntry), [&deletePromise2](Error::UniquePtr error) {
+            deletePromise2.set_value(!error);
+        });
+    BOOST_CHECK(deletePromise2.get_future().get());
+
+    Error::Ptr readError2;
+    Block::Ptr readBlock2;
+    std::promise<bool> p2;
+    m_ledger->asyncGetBlockDataByNumber(
+        4, RECEIPTS, [&](Error::Ptr _error, Block::Ptr _block) {
+            readError2 = std::move(_error);
+            readBlock2 = std::move(_block);
+            p2.set_value(true);
+        });
+    BOOST_CHECK(p2.get_future().get());
+    BOOST_REQUIRE(readError2 != nullptr);
+    BOOST_CHECK_EQUAL(readError2->errorCode(), LedgerError::GetStorageError);
+    BOOST_CHECK(readBlock2 == nullptr);
+}
+
 BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)
 {
     // The ledger persists header / tx hashes / txs / receipts but NOT the block-level

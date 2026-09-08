@@ -632,8 +632,9 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
         catch (bcos::Error const& e)
         {
             // Argument / archived errors carry their LedgerError code through.
-            LEDGER_LOG(DEBUG) << "GetBlockDataByNumber request failed!" << LOG_KV("number", blockNumber)
-                              << LOG_KV("code", e.errorCode()) << LOG_KV("msg", e.errorMessage());
+            LEDGER_LOG(DEBUG) << "GetBlockDataByNumber request failed!"
+                              << LOG_KV("number", blockNumber) << LOG_KV("code", e.errorCode())
+                              << LOG_KV("msg", e.errorMessage());
             callback(BCOS_ERROR_WITH_PREV_PTR(e.errorCode(), e.errorMessage(), e), nullptr);
             co_return;
         }
@@ -641,8 +642,8 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
         {
             // Missing header / storage failures surface as the aggregated block-read error,
             // matching the historical CollectAsyncCallbackError contract.
-            LEDGER_LOG(DEBUG) << "GetBlockDataByNumber request failed!" << LOG_KV("number", blockNumber)
-                              << boost::diagnostic_information(e);
+            LEDGER_LOG(DEBUG) << "GetBlockDataByNumber request failed!"
+                              << LOG_KV("number", blockNumber) << boost::diagnostic_information(e);
             callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::CollectAsyncCallbackError,
                          "Get block failed with errors!", e),
                 nullptr);
@@ -702,12 +703,13 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
     task::wait([](decltype(*this)& self, bcos::protocol::BlockNumber blockNumber,
                    std::function<void(Error::Ptr, bcos::crypto::HashType)> callback)
                    -> task::Task<void> {
+        std::optional<bcos::crypto::HashType> blockHash;
         try
         {
             // Delegate the SYS_NUMBER_2_HASH read to the shared storage2 free function;
             // a missing row (block not yet committed) keeps the historical GetStorageError
             // contract of this async API.
-            auto blockHash =
+            blockHash =
                 co_await ledger::getBlockHash(*self.m_stateStorage, blockNumber, fromStorage);
             if (!blockHash)
             {
@@ -717,7 +719,6 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
                     bcos::crypto::HashType());
                 co_return;
             }
-            callback(nullptr, *blockHash);
         }
         catch (std::exception& e)
         {
@@ -726,7 +727,11 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
             callback(BCOS_ERROR_WITH_PREV_PTR(
                          LedgerError::GetStorageError, "GetBlockHashByNumber failed", e),
                 bcos::crypto::HashType());
+            co_return;
         }
+        // Outside the try: a throwing consumer callback must not be re-invoked from the
+        // catch above.
+        callback(nullptr, *blockHash);
     }(*this, _blockNumber, std::move(_onGetBlock)));
 }
 
@@ -738,11 +743,12 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
     task::wait([](decltype(*this)& self, crypto::HashType blockHash,
                    std::function<void(Error::Ptr, bcos::protocol::BlockNumber)> callback)
                    -> task::Task<void> {
+        std::optional<bcos::protocol::BlockNumber> blockNumber;
         try
         {
             // Delegate the SYS_HASH_2_NUMBER read to the shared storage2 free function;
             // a missing row keeps the historical GetStorageError contract of this async API.
-            auto blockNumber =
+            blockNumber =
                 co_await ledger::getBlockNumber(*self.m_stateStorage, blockHash, fromStorage);
             if (!blockNumber)
             {
@@ -752,7 +758,6 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
                     -1);
                 co_return;
             }
-            callback(nullptr, *blockNumber);
         }
         catch (boost::bad_lexical_cast const& e)
         {
@@ -760,6 +765,7 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
             // (the shared storage2 free function surfaces it as an exception instead).
             LEDGER_LOG(INFO) << "Cast blockNumber failed, may be empty, set to default value -1";
             callback(nullptr, -1);
+            co_return;
         }
         catch (std::exception& e)
         {
@@ -768,7 +774,11 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
             callback(BCOS_ERROR_WITH_PREV_PTR(
                          LedgerError::GetStorageError, "GetBlockNumberByHash failed", e),
                 -1);
+            co_return;
         }
+        // Outside the try: a throwing consumer callback must not be re-invoked from the
+        // catch above.
+        callback(nullptr, *blockNumber);
     }(*this, _blockHash, std::move(_onGetBlock)));
 }
 
@@ -994,6 +1004,8 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
     task::wait([](decltype(*this)& self, std::string key,
                    std::function<void(Error::Ptr, std::string, bcos::protocol::BlockNumber)>
                        callback) -> task::Task<void> {
+        std::string value;
+        bcos::protocol::BlockNumber number = -1;
         try
         {
             // Delegate the SYS_CONFIG read to the shared storage2 free function. The
@@ -1014,7 +1026,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
                 co_return;
             }
 
-            auto [value, number] = *config;
+            std::tie(value, number) = std::move(*config);
 
             // The param was reset at height getLatestBlockNumber(), and takes effect in
             // next block. So we query the status of getLatestBlockNumber() + 1.
@@ -1028,10 +1040,6 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
                     -1);
                 co_return;
             }
-
-            LEDGER_LOG(TRACE) << "GetSystemConfigByKey success" << LOG_KV("value", value)
-                              << LOG_KV("number", number);
-            callback(nullptr, std::move(value), number);
         }
         catch (std::exception& e)
         {
@@ -1039,7 +1047,14 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
                               << boost::diagnostic_information(e);
             callback(
                 BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "error", e), "", -1);
+            co_return;
         }
+
+        LEDGER_LOG(TRACE) << "GetSystemConfigByKey success" << LOG_KV("value", value)
+                          << LOG_KV("number", number);
+        // Outside the try: a throwing consumer callback must not be re-invoked from the
+        // catch above.
+        callback(nullptr, std::move(value), number);
     }(*this, std::string(_key), std::move(_onGetConfig)));
 }
 
