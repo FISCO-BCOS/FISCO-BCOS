@@ -441,6 +441,34 @@ jobs:
             build/pr-number.txt
           retention-days: 7
 
+  # Path filter for jobs that should not run on every PR (e.g. the heavy C2 e2e leg).
+  changes:
+    name: Detect path filters
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      c2_e2e: ${{ steps.filter.outputs.c2_e2e }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            c2_e2e:
+              - 'tools/op-e2e/**'
+              - 'tools/opstack-genesis/**'
+              - 'tools/.ci/c2-e2e.sh'
+              - 'bcos-l2-contracts/**'
+              - 'opstack-executor/**'
+              - 'bcos-rpc/**'
+              - 'bcos-evm/**'
+              - 'engine/**'
+              - 'fisco-bcos-air/**'
+              - 'libinitializer/**'
+              - '.github/workflows/workflow.yml'
+              - '.github/workflows/c2-e2e.yml'
+
   # Dedicated, lightweight leg for the OP-Stack L2 mode. Kept OUT of the 5-OS
   # `build` matrix on purpose: multiplying that matrix by an l2 dimension would
   # double an already heavy C++ build for no extra coverage. L2 mode is a
@@ -451,6 +479,7 @@ jobs:
   # itself when the A8 devnet is absent).
   l2_unit_suites:
     name: L2 unit suites
+    needs: changes
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -511,3 +540,102 @@ jobs:
             'NodeConfigAllocsTest|GenesisStateRootTest|LedgerGenesisL2Test|LedgerGenesisAllocsHashTest|FeatureL2FlagTest|L2ConfigLoaderTest|PrecompiledMapDisabledInL2Test|PrecompiledMapProductionInvariantTest|KzgPrecompileRegisteredTest|EthEndpointSystemConfigTest'
       - name: L2 integration runner (SKIPs without the A8 devnet)
         run: bash tools/.ci/l2-integration/run-all.sh
+      - name: Upload fisco-bcos for C2 e2e
+        if: needs.changes.outputs.c2_e2e == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fisco-bcos-l2-ubuntu
+          path: build/fisco-bcos-air/fisco-bcos
+          retention-days: 1
+
+  # Full-stack C2 devnet e2e. Reuses the fisco-bcos binary built by
+  # l2_unit_suites (artifact) so this job skips vcpkg configure + C++ build.
+  c2_e2e:
+    name: C2 deposit/withdraw e2e
+    needs: [changes, l2_unit_suites]
+    if: needs.changes.outputs.c2_e2e == 'true' && needs.l2_unit_suites.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      CONTEST: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Download fisco-bcos from L2 unit job
+        uses: actions/download-artifact@v4
+        with:
+          name: fisco-bcos-l2-ubuntu
+          path: build/fisco-bcos-air
+
+      - name: Install C2 system packages
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends \
+            wget python3-dev python3-pip git curl ca-certificates jq zip
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: 1.5.1
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+          cache-dependency-path: |
+            go.sum
+
+      - name: Read OP monorepo pin
+        id: op-pin
+        run: |
+          set -euo pipefail
+          COMMIT=$(python3 -c "import json; print(json.load(open('tools/op-e2e/versions.json'))['op_monorepo']['commit'])")
+          echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache OP monorepo + binaries
+        id: op-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-op-monorepo
+            .ci-c2-bins
+          key: c2-op-${{ steps.op-pin.outputs.commit }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build OP stack binaries
+        if: steps.op-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-c2-bins
+          if [ ! -d .ci-op-monorepo/.git ]; then
+            git clone --filter=blob:none https://github.com/ethereum-optimism/optimism .ci-op-monorepo
+          fi
+          git -C .ci-op-monorepo fetch --depth=1 origin "${{ steps.op-pin.outputs.commit }}" \
+            || git -C .ci-op-monorepo fetch origin
+          git -C .ci-op-monorepo checkout -q "${{ steps.op-pin.outputs.commit }}"
+          git -C .ci-op-monorepo submodule update --init superchain-registry
+          bash .ci-op-monorepo/op-core/superchain/sync-superchain.sh
+          (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-deployer" ./op-deployer/cmd/op-deployer)
+          (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-batcher" ./op-batcher/cmd)
+          (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-node" ./op-node/cmd)
+
+      - name: Fetch pinned Solidity deps
+        run: bash tools/.ci/fetch-l2-contract-deps.sh
+
+      - name: Forge build L2 contracts
+        run: forge build
+        working-directory: bcos-l2-contracts
+
+      - name: Run C2 ephemeral e2e
+        run: SKIP_OP_BUILD=1 bash tools/.ci/c2-e2e.sh
+        env:
+          REPO_ROOT: ${{ github.workspace }}
+          BIN_DIR: ${{ github.workspace }}/.ci-c2-bins
+          FISCO_BIN: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
+          SKIP_FISCO_BUILD: "1"

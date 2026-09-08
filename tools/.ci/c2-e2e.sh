@@ -81,6 +81,8 @@ if ! command -v forge >/dev/null; then
   die "forge not on PATH (install Foundry before running c2-e2e)"
 fi
 if [[ ! -d "${REPO_ROOT}/bcos-l2-contracts/out" ]]; then
+  log "fetching bcos-l2-contracts Solidity deps…"
+  bash "${REPO_ROOT}/tools/.ci/fetch-l2-contract-deps.sh" "$REPO_ROOT"
   log "forge build bcos-l2-contracts (first run)…"
   (cd "${REPO_ROOT}/bcos-l2-contracts" && forge build)
 fi

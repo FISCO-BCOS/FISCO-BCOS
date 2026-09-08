@@ -1,37 +1,7 @@
-name: C2 OP e2e
-# Full-stack C2 devnet: anvil L1 + op-deployer + FISCO L2 + op-node sequencer +
-# deposit/withdraw/claim (+ adversarial CONTEST=1 by default).
-#
-# Kept separate from workflow.yml's l2_unit_suites job: this leg needs Go OP
-# binaries, Foundry cast/anvil, and ~10–20 minutes wall time.
+name: C2 OP e2e (manual)
+# PR/push C2 e2e runs from workflow.yml → c2_e2e (reuses l2_unit_suites artifact).
+# This workflow is for manual smoke runs only — it builds fisco-bcos from scratch.
 on:
-  push:
-    branches: [master, release-3.18.0]
-    paths:
-      - "tools/op-e2e/**"
-      - "tools/opstack-genesis/**"
-      - "tools/.ci/c2-e2e.sh"
-      - "bcos-l2-contracts/**"
-      - "opstack-executor/**"
-      - "bcos-rpc/**"
-      - "bcos-evm/**"
-      - "engine/**"
-      - "fisco-bcos-air/**"
-      - "libinitializer/**"
-      - ".github/workflows/c2-e2e.yml"
-  pull_request:
-    paths:
-      - "tools/op-e2e/**"
-      - "tools/opstack-genesis/**"
-      - "tools/.ci/c2-e2e.sh"
-      - "bcos-l2-contracts/**"
-      - "opstack-executor/**"
-      - "bcos-rpc/**"
-      - "bcos-evm/**"
-      - "engine/**"
-      - "fisco-bcos-air/**"
-      - "libinitializer/**"
-      - ".github/workflows/c2-e2e.yml"
   workflow_dispatch:
     inputs:
       contest:
@@ -42,7 +12,7 @@ on:
         options: ["1", "0"]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -53,7 +23,7 @@ jobs:
     permissions:
       contents: read
     env:
-      CONTEST: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.contest || '1' }}
+      CONTEST: ${{ github.event.inputs.contest }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -145,13 +115,15 @@ jobs:
       - name: Build fisco-bcos
         run: cmake --build build --target fisco-bcos
 
+      - name: Fetch pinned Solidity deps
+        run: bash tools/.ci/fetch-l2-contract-deps.sh
+
       - name: Forge build L2 contracts
         run: forge build
         working-directory: bcos-l2-contracts
 
       - name: Run C2 ephemeral e2e
-        run: |
-          SKIP_OP_BUILD=1 bash tools/.ci/c2-e2e.sh
+        run: SKIP_OP_BUILD=1 bash tools/.ci/c2-e2e.sh
         env:
           REPO_ROOT: ${{ github.workspace }}
           BIN_DIR: ${{ github.workspace }}/.ci-c2-bins
