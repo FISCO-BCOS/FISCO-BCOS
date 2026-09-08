@@ -80,6 +80,61 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInter
 task::Task<void> tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>, LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block);
 
+/// A transaction pending persistence: its hash and encoded body. When the transaction
+/// came from an external @c ConstTransactionsPtr list, @p tx points at it so the caller
+/// can mark it persisted via setStoreToBackend() (a const method on a mutable flag)
+/// after the write succeeds; it stays null for block-carried (inline) transactions,
+/// which are never marked — matching the historical behavior of both write paths.
+struct EncodedBlockTransaction
+{
+    bcos::crypto::HashType hash;
+    bcos::bytes encoded;
+    bcos::protocol::Transaction const* tx = nullptr;
+};
+
+/// Select the transactions of @p block that still need persisting and encode them, in
+/// block order. With an external @p blockTxs list, transactions whose storeToBackend()
+/// flag is already set are skipped (dedup) and the resulting items carry the external
+/// transaction pointer for post-write marking. With @p blockTxs null the block's inline
+/// transactions are used and always emitted. Shared by Ledger::storeTransactionsAndReceipts
+/// (Ledger.cpp) and the storage2 prewriteBlockToBuffer path below so the dedup/encode
+/// decision lives in exactly one place.
+inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
+    bcos::protocol::Block::ConstPtr block, bcos::protocol::ConstTransactionsPtr blockTxs)
+{
+    auto const txCount = std::max(block->transactionsSize(), block->transactionsMetaDataSize());
+    auto inlineTxs = block->transactions();
+    std::vector<EncodedBlockTransaction> out;
+    out.reserve(txCount);
+    for (size_t i = 0; i < txCount; ++i)
+    {
+        bcos::protocol::Transaction const* tx = nullptr;
+        std::optional<bcos::protocol::AnyTransaction> anyTx;
+        if (blockTxs)
+        {
+            tx = blockTxs->at(i).get();
+        }
+        else
+        {
+            anyTx = inlineTxs[i];
+            tx = anyTx->get();
+        }
+        if (blockTxs && tx->storeToBackend())
+        {
+            continue;
+        }
+
+        bcos::bytes encoded;
+        tx->encode(encoded);
+        // Only externally owned transactions may be marked persisted after the write;
+        // for inline transactions tx points into the per-iteration anyTx holder and
+        // must not escape the loop.
+        out.push_back(
+            EncodedBlockTransaction{tx->hash(), std::move(encoded), blockTxs ? tx : nullptr});
+    }
+    return out;
+}
+
 // FIB-104: Unified prewrite — routes block, transaction, and receipt data into
 // the caller-provided storage buffer. Phase 1 reuses the existing prewriteBlock
 // path (with txs/receipts disabled) to write metadata; phase 2 writes
@@ -126,39 +181,20 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
             std::move(receiptEntry));
     }
 
-    // SYS_HASH_2_TX — encoded transactions keyed by tx hash. Skip txs already
-    // persisted (storeToBackend flag) to match existing dedup semantics.
-    for (size_t i = 0; i < txSize; ++i)
+    // SYS_HASH_2_TX — encoded transactions keyed by tx hash, deduped by the
+    // storeToBackend flag (same shared logic as storeTransactionsAndReceipts /
+    // asyncPreStoreBlockTxs); txs already persisted are skipped.
+    for (auto& pending : encodeUnsavedBlockTransactions(block, blockTxs))
     {
-        const protocol::Transaction* tx = nullptr;
-        std::optional<protocol::AnyTransaction> anyTx;
-        if (blockTxs)
-        {
-            tx = blockTxs->at(i).get();
-        }
-        else
-        {
-            anyTx = inlineTxs[i];
-            tx = anyTx->get();
-        }
-        if (blockTxs && tx->storeToBackend())
-        {
-            continue;
-        }
-
-        bytes encodedTx;
-        tx->encode(encodedTx);
-        auto txHash = tx->hash();
-
         storage::Entry txEntry;
-        txEntry.set(std::move(encodedTx));
+        txEntry.set(std::move(pending.encoded));
         co_await storage2::writeOne(storage,
-            executor_v1::StateKey{SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)},
+            executor_v1::StateKey{SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(pending.hash)},
             std::move(txEntry));
 
-        if (blockTxs)
+        if (pending.tx)
         {
-            tx->setStoreToBackend(true);
+            pending.tx->setStoreToBackend(true);
         }
     }
 }
@@ -169,8 +205,15 @@ void tag_invoke(ledger::tag_t<removeExpiredNonce>, LedgerInterface& ledger,
 task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
     LedgerInterface& ledger, protocol::BlockNumber blockNumber, int32_t blockFlag);
 
-task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
-    storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage,
+// Shared two-storage block assembly. The header / tx-hash list / archived-number rows live
+// in the state storage (@p metaStorage), while the SYS_HASH_2_TX / SYS_HASH_2_RECEIPT rows
+// live in the block storage (@p dataStorage) — the same object unless the node runs with a
+// separate block storage (enableSeparateBlockAndState). Ledger::asyncGetBlockDataByNumber
+// passes {m_stateStorage, getBlockStorage()}; the single-storage tag_invoke below passes the
+// same storage for both so the block assembly stays in exactly one place.
+task::Task<protocol::Block::Ptr> getBlockDataFromStorages(
+    storage2::ReadableStorage<executor_v1::StateKeyView> auto& metaStorage,
+    storage2::ReadableStorage<executor_v1::StateKeyView> auto& dataStorage,
     protocol::BlockNumber _blockNumber, int32_t _blockFlag, protocol::BlockFactory& blockFactory)
 {
     LEDGER_LOG(TRACE) << "GetBlockDataByNumber request" << LOG_KV("blockNumber", _blockNumber)
@@ -189,7 +232,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
     if ((_blockFlag & TRANSACTIONS) != 0 || (_blockFlag & RECEIPTS) != 0)
     {
         if (auto entry = co_await storage2::readOne(
-                storage, executor_v1::StateKeyView{SYS_CURRENT_STATE, SYS_KEY_ARCHIVED_NUMBER}))
+                metaStorage, executor_v1::StateKeyView{SYS_CURRENT_STATE, SYS_KEY_ARCHIVED_NUMBER}))
         {
             auto archivedBlockNumber = boost::lexical_cast<int64_t>(entry->get());
             if (_blockNumber < archivedBlockNumber)
@@ -207,7 +250,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
     if (_blockFlag & HEADER)
     {
         if (auto entry = co_await storage2::readOne(
-                storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
+                metaStorage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
         {
             auto field = entry->get();
             auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
@@ -223,7 +266,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
         (_blockFlag & TRANSACTIONS_HASH) != 0)
     {
         if (auto txsEntry = co_await storage2::readOne(
-                storage, executor_v1::StateKeyView{SYS_NUMBER_2_TXS, blockNumberStr}))
+                metaStorage, executor_v1::StateKeyView{SYS_NUMBER_2_TXS, blockNumberStr}))
         {
             auto txs = txsEntry->get();
             auto blockWithTxs =
@@ -234,12 +277,20 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
             if ((_blockFlag & TRANSACTIONS) != 0)
             {
                 auto transactions = co_await storage2::readSome(
-                    storage, hashes | ::ranges::views::transform([](auto& hash) {
+                    dataStorage, hashes | ::ranges::views::transform([](auto& hash) {
                         return executor_v1::StateKeyView{
                             SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(hash)};
                     }));
                 for (auto& txEntry : transactions)
                 {
+                    if (!txEntry)
+                    {
+                        // Fail closed like the base asyncBatchGetTransactions path: a
+                        // missing SYS_HASH_2_TX row (lagging or pruned block storage) is a
+                        // storage error, not a reason to dereference a disengaged optional.
+                        BOOST_THROW_EXCEPTION(
+                            BCOS_ERROR(LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
+                    }
                     auto field = txEntry->get();
                     auto transaction = blockFactory.transactionFactory()->createTransaction(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false,
@@ -251,12 +302,18 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
             if ((_blockFlag & RECEIPTS) != 0)
             {
                 auto receipts = co_await storage2::readSome(
-                    storage, ::ranges::views::transform(hashes, [](auto& hash) {
+                    dataStorage, ::ranges::views::transform(hashes, [](auto& hash) {
                         return executor_v1::StateKeyView{
                             SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(hash)};
                     }));
                 for (auto& receiptEntry : receipts)
                 {
+                    if (!receiptEntry)
+                    {
+                        // Same fail-closed contract as the base asyncBatchGetReceipts path.
+                        BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                            LedgerError::GetStorageError, "missing SYS_HASH_2_RECEIPT row"));
+                    }
                     auto field = receiptEntry->get();
                     auto receipt = blockFactory.receiptFactory()->createReceipt(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
@@ -274,8 +331,23 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
                 }
             }
         }
+        else
+        {
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(LedgerError::GetStorageError, "missing SYS_NUMBER_2_TXS row"));
+        }
     }
     co_return block;
+}
+
+task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
+    storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage,
+    protocol::BlockNumber _blockNumber, int32_t _blockFlag, protocol::BlockFactory& blockFactory)
+{
+    // Single-storage flavor (storage2 views hold meta + tx/receipt rows together): both
+    // storages are the same object.
+    co_return co_await getBlockDataFromStorages(
+        storage, storage, _blockNumber, _blockFlag, blockFactory);
 }
 
 task::Task<TransactionCount> tag_invoke(
@@ -296,20 +368,24 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
 task::Task<void> tag_invoke(
     ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger, LedgerConfig& ledgerConfig);
 
-task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& storage,
-    LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber,
-    protocol::BlockFactory& blockFactory)
+/// Shared LedgerConfig assembly used by both getLedgerConfig overloads (the
+/// LedgerInterface-based one in LedgerMethods.cpp and the storage2-view one below). The two
+/// call sites only differ in how they fetch their inputs (node list, system configs /
+/// features at their respective block basis, header hash / timestamp); this helper performs
+/// the pure mapping so the consensus-relevant assembly cannot drift between the paths.
+/// Callers resolve an absent committed header to a disengaged hash/timestamp, leaving the
+/// previous values untouched — matching the historical behavior of both call sites.
+inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
+    bcos::consensus::ConsensusNodeList const& nodeList, ledger::SystemConfigs const& sysConfig,
+    ledger::Features const& features, protocol::BlockNumber blockNumber,
+    std::optional<int64_t> const& timestamp, std::optional<crypto::HashType> const& blockHash)
 {
-    auto nodeList = co_await ledger::getNodeList(storage);
-    ledgerConfig.setConsensusNodeList(::ranges::views::filter(nodeList, [](auto& node) {
+    ledgerConfig.setConsensusNodeList(::ranges::views::filter(nodeList, [](auto const& node) {
         return node.type == consensus::Type::consensus_sealer;
     }) | ::ranges::to<std::vector>());
-    ledgerConfig.setObserverNodeList(::ranges::views::filter(nodeList, [](auto& node) {
+    ledgerConfig.setObserverNodeList(::ranges::views::filter(nodeList, [](auto const& node) {
         return node.type == consensus::Type::consensus_observer;
     }) | ::ranges::to<std::vector>());
-
-    ledger::SystemConfigs sysConfig;
-    co_await readFromStorage(sysConfig, storage, blockNumber);
 
     if (auto txLimitConfig = sysConfig.get(ledger::SystemConfig::tx_count_limit))
     {
@@ -341,23 +417,15 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
         ledgerConfig.setExcessBlobGas(boost::lexical_cast<uint64_t>(excessBlobGas.value().first));
     }
 
-    // Get block header to retrieve timestamp
-    auto blockNumberStr = std::to_string(blockNumber);
-    if (auto entry = co_await storage2::readOne(
-            storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
-    {
-        auto field = entry->get();
-        auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
-            bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
-        ledgerConfig.setTimestamp(headerPtr->timestamp());
-        ledgerConfig.setHash(headerPtr->hash());
-    }
     ledgerConfig.setBlockNumber(blockNumber);
-    // auto blockHash = co_await getBlockHash(storage, blockNumber, fromStorage);
-    // ledgerConfig.setHash(blockHash.value_or(crypto::HashType{}));
-
-    Features features;
-    co_await readFromStorage(features, storage, blockNumber);
+    if (blockHash)
+    {
+        ledgerConfig.setHash(*blockHash);
+    }
+    if (timestamp)
+    {
+        ledgerConfig.setTimestamp(*timestamp);
+    }
     ledgerConfig.setFeatures(features);
 
     auto enableRPBFT =
@@ -428,6 +496,38 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
             ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
         }
     }
+}
+
+task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& storage,
+    LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber,
+    protocol::BlockFactory& blockFactory)
+{
+    // Resolve all inputs first (node list, system configs at @p blockNumber's basis, the
+    // committed header's hash / timestamp), then let applyLedgerConfig do the shared
+    // assembly. Block hash / timestamp come from the SYS_NUMBER_2_BLOCK_HEADER row.
+    auto nodeList = co_await ledger::getNodeList(storage);
+
+    ledger::SystemConfigs sysConfig;
+    co_await readFromStorage(sysConfig, storage, blockNumber);
+
+    std::optional<int64_t> timestamp;
+    std::optional<crypto::HashType> blockHash;
+    auto blockNumberStr = std::to_string(blockNumber);
+    if (auto entry = co_await storage2::readOne(
+            storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
+    {
+        auto field = entry->get();
+        auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
+            bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
+        timestamp = headerPtr->timestamp();
+        blockHash = headerPtr->hash();
+    }
+
+    Features features;
+    co_await readFromStorage(features, storage, blockNumber);
+
+    applyLedgerConfig(
+        ledgerConfig, nodeList, sysConfig, features, blockNumber, timestamp, blockHash);
 }
 
 task::Task<Features> tag_invoke(ledger::tag_t<getFeatures> /*unused*/, LedgerInterface& ledger);

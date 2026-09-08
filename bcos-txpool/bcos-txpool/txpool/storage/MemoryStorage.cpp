@@ -23,9 +23,9 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-task/Wait.h"
-#include "bcos-txpool/txpool/validator/TxValidator.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ITTAPI.h"
+#include <bcos-tx-validator/CheckSet.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/parallel_for.h>
@@ -271,33 +271,60 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
 }
 
 // Note: the signature of the tx has already been verified
+TransactionStatus MemoryStorage::committedNonceStatus(Transaction const& _tx) const
+{
+    if (_tx.type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
+    {
+        // committedNonce() through the FIB-59 cache, then Web3NonceChecker's window rule: the
+        // same read and the same function as admission's Web3NonceWindow, so what this refuses
+        // is what admission would refuse against the same committed nonce.
+        return task::syncWait(m_config->web3NonceChecker()->checkWeb3Nonce(_tx, true));
+    }
+    // checkNonce covers the block limit as well as the committed nonce.
+    return m_config->ledgerNonceChecker()->checkNonce(_tx);
+}
+
 TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 {
     auto txHash = _tx->hash();
-    // Issue #5318: transactions on this path come from another node's proposal and bypass
-    // validateTransaction(), so re-check `to` here — otherwise a proposal carrying a
-    // malformed `to` is imported, passes verification and deterministically fails
-    // execution, halting consensus. Rejecting it fails the proposal verification instead,
-    // and PBFT view-changes to a leader with a clean proposal.
-    if (!isValidToField(_tx->to()))
+    // Everything a proposal is held to runs inside verify(), under ProposalVerification. That
+    // includes the `to` format (issue #5318: a malformed `to` that reaches a block fails
+    // execution deterministically and halts consensus), which this function re-checked by hand
+    // while it bypassed the pool's validator. It no longer bypasses anything, and the gate's
+    // ToFieldFormat is the one copy of that rule.
+    TransactionStatus result = TransactionStatus::None;
+    try
     {
-        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for malformed to field")
-                            << LOG_KV("to", _tx->to()) << LOG_KV("importTxHash", txHash.abridged())
-                            << LOG_KV("importBatchId", _tx->batchId())
-                            << LOG_KV("importBatchHash", _tx->batchHash().abridged());
-        return TransactionStatus::Malformed;
+        result = task::syncWait(m_config->txValidator()->verify(*_tx,
+            txvalidator::AdmissionContext::ProposalVerification,
+            m_config->checkTransactionSignature() ? txvalidator::SignaturePolicy::Required :
+                                                    txvalidator::SignaturePolicy::Disabled));
     }
-    // the transaction has already onChain, reject it
-    // check ledger tx
-    // check web3 tx
-    if (auto result = m_config->txValidator()->checkTransaction(*_tx, true);
-        result == TransactionStatus::NonceCheckFail)
+    catch (...)
     {
-        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for nonce check failed: ")
+        // verify() throws, by contract, when the data it needs cannot be read (TxValidator.h):
+        // a storage fault must not be reported as a defect in the transaction. This is the one
+        // ingress with no catch above it -- the ledger's asyncGetBatchTxsByHashList callback
+        // reaches here through onGetMissedTxsFromLedger and importDownloadedTxs -- so an
+        // exception leaving this function would leave the ledger thread. Refusing the proposal
+        // is the fail-closed answer: consensus retries, whereas the alternative ends the process.
+        TXPOOL_LOG(ERROR) << LOG_DESC("enforce to seal: admission could not be decided")
+                          << LOG_KV("importTxHash", txHash)
+                          << LOG_KV("importBatchId", _tx->batchId())
+                          << LOG_KV("reason", boost::current_exception_diagnostic_information());
+        return TransactionStatus::Unknown;
+    }
+    if (result != TransactionStatus::None)
+    {
+        // Report the verdict admission reached, not a fixed one. This branch used to fire only
+        // for NonceCheckFail and let every other status through silently -- a proposal carrying a
+        // transaction that failed the block limit, the chain id or the intrinsic-gas floor was
+        // sealed anyway. It now rejects on any of them, so the status has to travel.
+        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed") << LOG_KV("status", result)
                             << LOG_KV("importTxHash", txHash)
                             << LOG_KV("importBatchId", _tx->batchId())
                             << LOG_KV("importBatchHash", _tx->batchHash().abridged());
-        return TransactionStatus::NonceCheckFail;
+        return result;
     }
 
     Transaction::Ptr tx = nullptr;
@@ -390,69 +417,57 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         }
     }
 
-    // Define remaining validation steps as a chain
-    // Each step returns TransactionStatus::None if validation passes, or an error status otherwise
-    const std::vector<std::function<TransactionStatus()>> validationSteps = {
-        [this, transaction, &txSubmitCallback]() {
-            // Step 1: Check if transaction already exists in txpool
-            auto result = txpoolStorageCheck(*transaction, txSubmitCallback);
-            if (result == TransactionStatus::AlreadyInTxPoolAndAccept) [[unlikely]]
-            {
-                // Note: if rpc is slower than p2p tx sync, we also need to accept this tx and
-                // record callback
-                return TransactionStatus::None;
-            }
-            return result;
-        },
-        [this, checkPoolLimit]() {
-            // Step 1.5: Enforce pool size limit before running expensive validation steps (FIB-55)
-            if (checkPoolLimit &&
-                (m_bcosTransactions.unsealTransactions.size() +
-                    m_bcosTransactions.sealedTransactions.size()) >= m_config->poolLimit())
-            {
-                return TransactionStatus::TxPoolIsFull;
-            }
-            return TransactionStatus::None;
-        },
-        [this, transaction]() {
-            // Step 2: Verify transaction signature (if enabled)
-            return m_config->checkTransactionSignature() ?
-                       m_config->txValidator()->verify(*transaction) :
-                       TransactionStatus::None;
-        },
-        [this, transaction]() {
-            // Step 3: Validate transaction format and constraints
-            return m_config->txValidator()->validateTransaction(*transaction);
-        },
-        [this, transaction]() {
-            // Step 4: Validate balance (only for Web3 transactions)
-            if (transaction->type() ==
-                static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
-            {
-                return task::syncWait(
-                    m_config->txValidator()->validateBalance(*transaction, m_config->ledger()));
-            }
-            return bcos::protocol::TransactionStatus::None;
-        },
-        [this, transaction]() {
-            // Step 5: Check chain Id
-            return task::syncWait(
-                m_config->txValidator()->validateChainId(*transaction, m_config->ledger()));
-        },
-    };
-
-    // Execute validation chain - stop at first failure
-    for (const auto& step : validationSteps)
+    // Step 2: pool size limit, before anything expensive (FIB-55)
+    if (checkPoolLimit &&
+        (m_bcosTransactions.unsealTransactions.size() +
+            m_bcosTransactions.sealedTransactions.size()) >= m_config->poolLimit())
     {
-        if (const auto result = step(); result != TransactionStatus::None)
-        {
-            return result;
-        }
+        return TransactionStatus::TxPoolIsFull;
+    }
+
+    // Step 3: admission. One call replaces the signature / format / balance / chain-id chain that
+    // used to live here, so this ingress and every other one answer the question the same way.
+    //
+    // syncWait, not co_await: verifyAndSubmitTransaction returns TransactionStatus and is called
+    // synchronously from the submit path. Turning the whole chain into a coroutine would also mean
+    // re-examining what a suspended admission does to the threads that call this synchronously.
+    const auto policy = m_config->checkTransactionSignature() ?
+                            txvalidator::SignaturePolicy::Required :
+                            txvalidator::SignaturePolicy::Disabled;
+    TransactionStatus status = TransactionStatus::None;
+    try
+    {
+        status = task::syncWait(m_config->txValidator()->verify(
+            *transaction, txvalidator::AdmissionContext::PoolAdmission, policy));
+    }
+    catch (...)
+    {
+        // verify() throws, by contract, when the data it needs cannot be read (TxValidator.h),
+        // and on this path it does read: a Web3 sender's account. The same catch as
+        // enforceSubmitTransaction, for the same reason -- a storage fault is not a verdict on
+        // the transaction. Without it, each caller turned the fault into a different wrong
+        // answer. submitTransaction's await_ready branch (waitForReceipt = false: the Web3 RPC
+        // default) let it leave through co_await, so the client received the raw diagnostic
+        // string; its await_suspend branch (waitForReceipt = true: BCOS JSON-RPC, tars RPC)
+        // caught it and reported Malformed, a verdict on a transaction never judged; and
+        // batchImportTxs let it abort the whole batch -- on the ledger-fetch path (requestMissedTxs
+        // with no proposal) out of the asyncGetBatchTxsByHashList callback, which has no catch,
+        // so the fetch's completion callback never ran. Refusing here gives all three one
+        // fail-closed answer, and the reservation below never happens for a transaction that
+        // was not judged.
+        TXPOOL_LOG(ERROR) << LOG_DESC("admission could not be decided")
+                          << LOG_KV("txHash", transaction->hash().abridged())
+                          << LOG_KV("reason", boost::current_exception_diagnostic_information());
+        return TransactionStatus::Unknown;
+    }
+    if (status != TransactionStatus::None)
+    {
+        return status;
     }
 
     // All validations passed — now insert nonce atomically before inserting the transaction.
-    // Nonce insertion is done here (not inside verify()) so that failures in validateTransaction()
-    // or validateChainId() cannot leave a stale nonce in the pool (FIB-50).
+    // Nonce insertion is done here (not inside verify()) so that a refusal from verify() cannot
+    // leave a stale nonce in the pool (FIB-50).
     // Atomic check-and-reserve: insert() returns false when the nonce already exists,
     // eliminating the TOCTOU window between separate checkNonce() + insert() calls (FIB-51).
     if (m_config->checkTransactionSignature())
@@ -467,7 +482,7 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         }
         else
         {
-            if (!task::syncWait(m_config->txValidator()->web3NonceChecker()->insertMemoryNonce(
+            if (!task::syncWait(m_config->web3NonceChecker()->insertMemoryNonce(
                     std::string(transaction->sender()), std::string(transaction->nonce()))))
                 [[unlikely]]
             {
@@ -652,12 +667,12 @@ void MemoryStorage::batchRemoveSealedTxs(
             nonceListPtr->emplace_back(nonceString);
         }
     }
-    m_config->txValidator()->ledgerNonceChecker()->batchInsert(batchId, nonceListPtr);
+    m_config->ledgerNonceChecker()->batchInsert(batchId, nonceListPtr);
     auto updateLedgerNonceT = utcTime() - startT;
 
     startT = utcTime();
-    task::syncWait(m_config->txValidator()->web3NonceChecker()->updateNonceCache(
-        ::ranges::views::all(web3NonceMap)));
+    task::syncWait(
+        m_config->web3NonceChecker()->updateNonceCache(::ranges::views::all(web3NonceMap)));
     auto updateWeb3NonceT = utcTime() - startT;
 
     startT = utcTime();
@@ -732,7 +747,7 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
         // txPool, the txs with duplicated nonce here are already-committed, but have not been
         // dropped
         // check txpool txs, no need to check txpool nonce
-        const auto result = m_config->txValidator()->checkTransaction(*tx, true);
+        const auto result = committedNonceStatus(*tx);
         if (result == TransactionStatus::NonceCheckFail)
         {
             TXPOOL_LOG(WARNING) << "txPool nonce check failed, hash:" << tx->hash()
@@ -859,7 +874,7 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
                 return _tx->type() == TransactionType::Web3Transaction;
             });
         m_config->txPoolNonceChecker()->batchRemove(invalidNonceList);
-        task::syncWait(m_config->txValidator()->web3NonceChecker()->batchRemoveMemoryNonce(
+        task::syncWait(m_config->web3NonceChecker()->batchRemoveMemoryNonce(
             web3Txs | ::ranges::views::transform([](auto const& _tx) { return _tx->sender(); }),
             web3Txs | ::ranges::views::transform([](auto const& _tx) { return _tx->nonce(); })));
 
@@ -963,7 +978,7 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
                     foundInFromMap = true;
                 }
                 else if (TxsMap::ReadAccessor toAccessor;
-                    toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
+                         toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
                 {
                     transaction = toAccessor.value();
                 }
@@ -1160,7 +1175,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
             continue;
         }
         // check txpool txs, no need to check txpool nonce
-        auto result = m_config->txValidator()->checkTransaction(*tx, true);
+        auto result = committedNonceStatus(*tx);
         if (result != TransactionStatus::None)
         {
             invalidTxs.emplace_back(tx);
@@ -1224,8 +1239,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
             added = true;
         }
         // check txpool txs, no need to check txpool nonce
-        auto validator = m_config->txValidator();
-        auto result = validator->checkTransaction(*tx, true);
+        auto result = committedNonceStatus(*tx);
         // blockLimit expired
         if (result != TransactionStatus::None)
         {

@@ -23,6 +23,7 @@
 #include "PBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
+#include "bcos-framework/ledger/LedgerConfigState.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
@@ -168,6 +169,7 @@ private:
     ProtocolInitializer::Ptr m_protocolInitializer;
     FrontServiceInitializer::Ptr m_frontServiceInitializer;
     bcos::IOServicePool::Ptr m_ioServicePool;
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
 #ifdef WITH_LIGHTNODE

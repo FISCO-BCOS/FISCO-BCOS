@@ -24,7 +24,6 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
-#include "txpool/validator/TxValidator.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-tx-validator/LedgerNonceChecker.h>
 #include <bcos-utilities/ITTAPI.h>
@@ -650,8 +649,10 @@ void TxPool::init()
     auto ledgerNonceChecker = std::make_shared<txvalidator::LedgerNonceChecker>(
         nonceList, ledgerConfig->blockNumber(), blockLimit, m_checkBlockLimit);
 
-    auto validator = std::dynamic_pointer_cast<TxValidator>(m_config->txValidator());
-    validator->setLedgerNonceChecker(ledgerNonceChecker);
+    // Bound on the validator only. The pool reaches the same instance through
+    // TxPoolConfig::ledgerNonceChecker, so the commit path clears exactly the history admission
+    // checks against -- one holder, nothing to keep in step.
+    m_config->txValidator()->setLedgerNonceChecker(ledgerNonceChecker);
     TXPOOL_LOG(INFO) << LOG_DESC("init txs validator success");
 
     // init syncConfig
@@ -683,20 +684,20 @@ void TxPool::initSendResponseHandler()
             }
             // fire-and-forget: the coroutine parameters own the payload copy so nothing
             // dangles after task::wait detaches
-            task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _id,
-                           int _moduleID, NodeIDPtr _dstNode,
-                           bcos::bytes _payload) -> task::Task<void> {
-                auto error = co_await _frontService->sendResponse(
-                    _id, _moduleID, _dstNode, bcos::ref(_payload));
-                if (error)
-                {
-                    TXPOOL_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                                      << LOG_KV("module", std::to_string(_moduleID))
-                                      << LOG_KV("dst", _dstNode->shortHex())
-                                      << LOG_KV("code", error->errorCode())
-                                      << LOG_KV("msg", error->errorMessage());
-                }
-            }(frontService, _id, _moduleID, _dstNode, _data.toBytes()));
+            task::wait(
+                [](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _id,
+                    int _moduleID, NodeIDPtr _dstNode, bcos::bytes _payload) -> task::Task<void> {
+                    auto error = co_await _frontService->sendResponse(
+                        _id, _moduleID, _dstNode, bcos::ref(_payload));
+                    if (error)
+                    {
+                        TXPOOL_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                                          << LOG_KV("module", std::to_string(_moduleID))
+                                          << LOG_KV("dst", _dstNode->shortHex())
+                                          << LOG_KV("code", error->errorCode())
+                                          << LOG_KV("msg", error->errorMessage());
+                    }
+                }(frontService, _id, _moduleID, _dstNode, _data.toBytes()));
         }
         catch (std::exception const& e)
         {
@@ -797,7 +798,7 @@ void bcos::txpool::TxPool::tryToSyncTxsFromPeers()
 
 task::Task<std::optional<u256>> bcos::txpool::TxPool::getWeb3PendingNonce(std::string_view address)
 {
-    co_return co_await m_config->txValidator()->web3NonceChecker()->getPendingNonce(address);
+    co_return co_await m_config->web3NonceChecker()->getPendingNonce(address);
 }
 
 void bcos::txpool::TxPool::asyncGetPendingTransactionSize(

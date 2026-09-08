@@ -82,7 +82,6 @@
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
-#include <txpool/validator/TxValidator.h>
 #include <util/tc_clientsocket.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
@@ -307,10 +306,22 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto transactionSubmitResultFactory =
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
 
+    // One holder per process, written by whoever commits a block and read by transaction
+    // admission. Created here because it outlives both and neither should own the other.
+    //
+    // Published once now, from the ledger as it stands at boot, rather than left empty until the
+    // first commit: an empty holder has no chain id and admission fails closed on that, so a
+    // restarted node would refuse every EIP-155 transaction until a block committed -- which on
+    // a quiet chain is never, since nothing gets admitted to fill one. A malformed persisted
+    // value (web3_chain_id, evmc_revision) throws here and refuses to start, the same fail-stop
+    // the per-block refetch applies.
+    m_ledgerConfigState = std::make_shared<bcos::ledger::LedgerConfigState>(
+        task::syncWait(ledger::getLedgerConfig(*m_ledger)));
+
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,
         m_frontServiceInitializer->front(), ledger, *m_ioServicePool->getIOService(),
-        m_ioServicePool);
+        m_ioServicePool, m_ledgerConfigState);
     m_memPoolInitializer = MemPoolInitializer::build();
 
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
@@ -557,13 +568,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                // switch to a leader during startup
+    // The dispatcher republishes the configuration after every commit, for every executor
+    // version; the holder was published once at boot when it was created.
     auto multiVersionScheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager, m_ioServicePool),
                 m_baselineSchedulerHolder(), m_ethereumSchedulerHolder(),
                 // Slot 3: OP scheduler; nullptr on non-OP nodes.
-                m_opScheduler}));
+                m_opScheduler}),
+        m_ledgerConfigState);
 
     // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
     // Governance may later write executor_version on-chain; MultiVersionScheduler::setVersion

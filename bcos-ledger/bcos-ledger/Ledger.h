@@ -28,12 +28,12 @@
 #include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/compute/detail/lru_cache.hpp>
 #include <utility>
-#include <bcos-utilities/BoostLog.h>
 
 #define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
 
@@ -160,9 +160,6 @@ private:
 
     Error::Ptr checkEntryValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Entry>& entry, const std::string_view& key);
-
-    void asyncGetBlockHeader(bcos::protocol::Block::Ptr block,
-        bcos::protocol::BlockNumber blockNumber, std::function<void(Error::Ptr&&)> callback);
 
     void asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>> hashes,
         std::function<void(Error::Ptr&&, std::vector<protocol::Transaction::Ptr>&&)> callback);
