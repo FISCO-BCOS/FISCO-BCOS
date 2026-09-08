@@ -31,8 +31,12 @@
 #include "bcos-pbft/pbft/utilities/PBFTMsgVersion.h"
 #include "bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
+
+namespace bcos::front
+{
+class FrontService;
+}
 
 namespace bcos::consensus
 {
@@ -45,7 +49,7 @@ public:
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
-        std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
+        std::shared_ptr<bcos::front::FrontService> _frontService,
         StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage,
         bcos::protocol::BlockFactory::Ptr _blockFactory)
       : ConsensusConfig(std::move(_keyPair)),
@@ -135,7 +139,7 @@ public:
 
     bcos::crypto::CryptoSuite::Ptr cryptoSuite() { return m_cryptoSuite; }
     std::shared_ptr<PBFTMessageFactory> pbftMessageFactory() { return m_pbftMessageFactory; }
-    std::shared_ptr<bcos::front::FrontServiceInterface> frontService() { return m_frontService; }
+    std::shared_ptr<bcos::front::FrontService> frontService() { return m_frontService; }
     std::shared_ptr<PBFTCodecInterface> codec() { return m_codec; }
 
     PBFTProposalInterface::Ptr populateCommittedProposal();
@@ -458,7 +462,7 @@ protected:
     // Proposal validator
     std::shared_ptr<ValidatorInterface> m_validator;
     // FrontService, used to send/receive P2P message packages
-    std::shared_ptr<bcos::front::FrontServiceInterface> m_frontService;
+    std::shared_ptr<bcos::front::FrontService> m_frontService;
     StateMachineInterface::Ptr m_stateMachine;
     PBFTStorage::Ptr m_storage;
     // Timer, for pbft consensus

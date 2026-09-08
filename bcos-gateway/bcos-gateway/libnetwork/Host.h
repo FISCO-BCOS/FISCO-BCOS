@@ -41,8 +41,8 @@ class IOServicePool;
 namespace bcos::gateway
 {
 class SessionFactory;
-class SessionFace;
-class SocketFace;
+class Session;
+class Socket;
 class ASIOInterface;
 
 using x509PubHandler = std::function<bool(X509* x509, std::string& pubHex)>;
@@ -63,53 +63,53 @@ public:
     Host& operator=(Host&&) = delete;
     Host(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
         std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory);
-    virtual ~Host();
+    ~Host();
 
     using Ptr = std::shared_ptr<Host>;
 
-    virtual uint16_t listenPort() const;
+    uint16_t listenPort() const;
 
-    virtual void start();
-    virtual void stop();
+    void start();
+    void stop();
 
-    virtual void asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+    void asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
+        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)>
             callback);
 
-    virtual bool haveNetwork() const;
+    bool haveNetwork() const;
 
-    virtual std::string listenHost() const;
-    virtual void setHostPort(std::string host, uint16_t port);
+    std::string listenHost() const;
+    void setHostPort(std::string host, uint16_t port);
 
-    virtual std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)>
     connectionHandler() const;
-    virtual void setConnectionHandler(
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+    void setConnectionHandler(
+        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)>
             connectionHandler);
 
-    virtual std::function<bool(X509* x509, std::string& pubHex)> sslContextPubHandler();
+    std::function<bool(X509* x509, std::string& pubHex)> sslContextPubHandler();
 
-    virtual void setSSLContextPubHandler(
+    void setSSLContextPubHandler(
         std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandler);
 
-    virtual std::function<bool(X509* x509, std::string& pubHex)>
+    std::function<bool(X509* x509, std::string& pubHex)>
     sslContextPubHandlerWithoutExtInfo();
 
-    virtual void setSSLContextPubHandlerWithoutExtInfo(
+    void setSSLContextPubHandlerWithoutExtInfo(
         std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandlerWithoutExtInfo);
 
-    virtual void setSessionCallbackManager(
+    void setSessionCallbackManager(
         SessionCallbackManagerInterface::Ptr sessionCallbackManager);
 
-    virtual const std::shared_ptr<ASIOInterface>& asioInterface() const;
-    virtual std::shared_ptr<SessionFactory> sessionFactory() const;
-    virtual MessageFactory::Ptr messageFactory() const;
-    virtual P2PInfo p2pInfo();
+    const std::shared_ptr<ASIOInterface>& asioInterface() const;
+    std::shared_ptr<SessionFactory> sessionFactory() const;
+    MessageFactory::Ptr messageFactory() const;
+    P2PInfo p2pInfo();
 
-    virtual void setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist);
-    virtual PeerBlackWhitelistInterface::Ptr peerBlacklist();
-    virtual void setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist);
-    virtual PeerBlackWhitelistInterface::Ptr peerWhitelist();
+    void setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist);
+    PeerBlackWhitelistInterface::Ptr peerBlacklist();
+    void setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist);
+    PeerBlackWhitelistInterface::Ptr peerWhitelist();
 
     // FIB-186 (vector D): run a session-teardown notification on the dedicated teardown executor
     // instead of the shared I/O pool. Teardown of established sessions (Service::onMessage's error
@@ -253,15 +253,15 @@ protected:
     /// RLPxHandshake to obtain informations(client version, caps, etc),start peer
     /// session and start accepting procedure repeatedly
     void handshakeServer(const boost::system::error_code& error,
-        std::shared_ptr<std::string> endpointPublicKey, std::shared_ptr<SocketFace> socket);
+        std::shared_ptr<std::string> endpointPublicKey, std::shared_ptr<Socket> socket);
 
-    void startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+    void startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<Socket> const& socket,
+        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)>
             handler);
 
-    void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
+    void handshakeClient(const boost::system::error_code& error, std::shared_ptr<Socket> socket,
         std::shared_ptr<std::string> endpointPublicKey,
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)>
             callback,
         NodeIPEndpoint _nodeIPEndpoint);
 
@@ -282,10 +282,10 @@ private:
     // this coroutine frame unwinds. Held as shared_ptr<void> to keep the concrete guard type an
     // implementation detail of Host.cpp.
     task::Task<void> serverHandshake(
-        std::shared_ptr<SocketFace> socket, std::shared_ptr<void> handshakeGuard);
-    task::Task<void> clientConnect(std::shared_ptr<SocketFace> socket,
+        std::shared_ptr<Socket> socket, std::shared_ptr<void> handshakeGuard);
+    task::Task<void> clientConnect(std::shared_ptr<Socket> socket,
         NodeIPEndpoint _nodeIPEndpoint,
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)>
             callback);
 
 protected:
@@ -316,7 +316,7 @@ protected:
     // enable ssl verify or not
     bool m_enableSSLVerify = true;
 
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<Session>)>
         m_connectionHandler;
 
     // get the hex public key of the peer from the the SSL connection

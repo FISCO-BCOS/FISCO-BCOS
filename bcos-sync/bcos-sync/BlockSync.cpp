@@ -19,6 +19,7 @@
  * @date 2021-05-24
  */
 #include "bcos-sync/BlockSync.h"
+#include <bcos-front/FrontService.h>
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
@@ -124,7 +125,7 @@ void BlockSync::enableAsMaster(bool _masterNode)
 void BlockSync::initSendResponseHandler()
 {
     // set the sendResponse callback
-    std::weak_ptr<bcos::front::FrontServiceInterface> weakFrontService = m_config->frontService();
+    std::weak_ptr<bcos::front::FrontService> weakFrontService = m_config->frontService();
     m_sendResponseHandler = [weakFrontService](std::string const& _id, int _moduleID,
                                 NodeIDPtr _dstNode, bytesConstRef _data) {
         try
@@ -136,7 +137,7 @@ void BlockSync::initSendResponseHandler()
             }
             // fire-and-forget: the coroutine parameters own the payload copy so nothing
             // dangles after task::wait detaches
-            task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _id,
+            task::wait([](bcos::front::FrontService::Ptr _frontService, std::string _id,
                            int _moduleID, NodeIDPtr _dstNode,
                            bcos::bytes _payload) -> task::Task<void> {
                 auto error = co_await _frontService->sendResponse(
@@ -1013,7 +1014,7 @@ void BlockSync::broadcastSyncStatus()
     if (m_allowFreeNode)
     {
         task::wait([](decltype(encodedData) encodedData,
-                       bcos::front::FrontServiceInterface::Ptr front) -> task::Task<void> {
+                       bcos::front::FrontService::Ptr front) -> task::Task<void> {
             try
             {
                 co_await front->broadcastMessage(

@@ -45,6 +45,7 @@
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
+#include "bcos-utilities/Exceptions.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
@@ -97,16 +98,22 @@ using namespace bcos::initializer;
 namespace fs = boost::filesystem;
 
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
-    bcos::gateway::GatewayInterface::Ptr _gateway, const std::string& _logPath)
+    bcos::gateway::GatewayHandle _gateway, const std::string& _logPath)
 {
     initConfig(_configFilePath, _genesisFile, "", true);
-    init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway, true,
-        _logPath);
+    init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile,
+        std::move(_gateway), true, _logPath);
 }
 void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     std::string const& _privateKeyPath, const std::string& _logPath)
 {
+#ifdef ONLY_CPP_SDK
+    // tars clients are excluded from ONLY_CPP_SDK builds; pro-mode nodes are never built there
+    BOOST_THROW_EXCEPTION(
+        InvalidParameter() << errinfo_comment(
+            "initMicroServiceNode is unavailable in ONLY_CPP_SDK builds"));
+#else
     initConfig(_configFilePath, _genesisFile, _privateKeyPath, false);
     // get gateway client
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
@@ -123,6 +130,7 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
     auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
         gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
     init(_nodeArchType, _configFilePath, _genesisFile, gateWay, false, _logPath);
+#endif
 }
 
 void Initializer::initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
@@ -177,7 +185,7 @@ std::shared_ptr<bcos::engine::AnyEngineService> Initializer::engineService()
 
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
-    bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
+    bcos::gateway::GatewayHandle _gateway, bool _airVersion, const std::string& _logPath)
 {
     // Engine-driven block production (single-node consensus or [op_engine_rpc]) is AIR-only.
     // Both modes skip txpool/pbft init and wire the in-process mempool into NodeService via
@@ -635,15 +643,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
         auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(protocol::ProtocolModuleID::NodeService);
         // registerNode when air node first start-up
-        _gateway->registerNode(
-            groupID, nodeID, blockSync->config()->nodeType(), frontService, nodeProtocolInfo);
+        bcos::gateway::registerNode(
+            _gateway, groupID, nodeID, blockSync->config()->nodeType(), frontService, nodeProtocolInfo);
         INITIALIZER_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
                               << LOG_KV("node", nodeID->hex())
                               << LOG_KV("type", blockSync->config()->nodeType());
         // update the frontServiceInfo when nodeType changed
         blockSync->config()->registerOnNodeTypeChanged(
             [_gateway, groupID, nodeID, frontService, nodeProtocolInfo](protocol::NodeType _type) {
-                _gateway->registerNode(groupID, nodeID, _type, frontService, nodeProtocolInfo);
+                bcos::gateway::registerNode(
+                    _gateway, groupID, nodeID, _type, frontService, nodeProtocolInfo);
                 INITIALIZER_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
                                       << LOG_KV("node", nodeID->hex()) << LOG_KV("type", _type);
             });

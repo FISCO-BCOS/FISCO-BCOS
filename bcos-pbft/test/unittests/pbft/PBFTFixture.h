@@ -62,7 +62,7 @@ public:
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
-        std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
+        std::shared_ptr<bcos::front::FrontService> _frontService,
         StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage,
         protocol::BlockFactory::Ptr _blockFactory)
       : PBFTConfig(_ioService, _cryptoSuite, _keyPair, _pbftMessageFactory, _codec, _validator,
@@ -250,7 +250,7 @@ public:
     using Ptr = std::shared_ptr<PBFTFactory>;
     FakePBFTFactory(boost::asio::io_context& _ioService,
         bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bcos::crypto::KeyPairInterface::Ptr _keyPair,
-        std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
+        std::shared_ptr<bcos::front::FrontService> _frontService,
         std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,

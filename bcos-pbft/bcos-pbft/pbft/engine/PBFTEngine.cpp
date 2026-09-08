@@ -19,9 +19,9 @@
  * @date 2021-04-20
  */
 #include "PBFTEngine.h"
+#include <bcos-front/FrontService.h>
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
-#include "bcos-framework/front/FrontServiceInterface.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
@@ -97,7 +97,7 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& _ioCont
 void PBFTEngine::initSendResponseHandler()
 {
     // set the sendResponse callback
-    std::weak_ptr<FrontServiceInterface> weakFrontService = m_config->frontService();
+    std::weak_ptr<FrontService> weakFrontService = m_config->frontService();
     m_sendResponseHandler = [weakFrontService](std::string const& _id, int _moduleID,
                                 NodeIDPtr _dstNode, bytesConstRef _data) {
         try
@@ -109,7 +109,7 @@ void PBFTEngine::initSendResponseHandler()
             }
             // fire-and-forget: the coroutine parameters own the payload copy so nothing
             // dangles after task::wait detaches
-            task::wait([](FrontServiceInterface::Ptr _frontService, std::string _id, int _moduleID,
+            task::wait([](FrontService::Ptr _frontService, std::string _id, int _moduleID,
                            NodeIDPtr _dstNode, bcos::bytes _payload) -> task::Task<void> {
                 auto error = co_await _frontService->sendResponse(
                     _id, _moduleID, _dstNode, bcos::ref(_payload));

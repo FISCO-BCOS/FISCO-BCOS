@@ -19,7 +19,8 @@
 #include <chrono>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-front/FrontService.h>
-#include <bcos-front/FrontServiceFactory.h>
+#include <bcos-front/FrontService.h>
+#include <bcos-gateway/gateway/GatewayHandle.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -81,13 +82,13 @@ public:
 
 std::shared_ptr<FrontService> buildFrontServiceWith(std::shared_ptr<BlockingGateway> _gateway)
 {
-    auto factory = std::make_shared<FrontServiceFactory>();
-    factory->setGatewayInterface(std::move(_gateway));
-    // FrontServiceFactory now requires the shared IOServicePool to be injected before
-    // buildFrontService (it used to create its own threads); it is also what enqueueSend's
-    // drainer runs on, which is exactly what this test exercises.
-    factory->setIOServicePool(std::make_shared<bcos::IOServicePool>(2, "fib185Test"));
-    auto front = factory->buildFrontService("fib185.group", makeNodeID("fib185.src.nodeid"));
+    auto front = std::make_shared<FrontService>();
+    front->setGroupID("fib185.group");
+    front->setNodeID(makeNodeID("fib185.src.nodeid"));
+    // The shared IOServicePool is what enqueueSend's drainer runs on, which is exactly what this
+    // test exercises.
+    front->setIOServicePool(std::make_shared<bcos::IOServicePool>(2, "fib185Test"));
+    front->setGateway(bcos::gateway::makeFrontServiceGateway(std::move(_gateway)));
     front->start();
     return front;
 }

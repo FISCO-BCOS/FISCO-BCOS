@@ -34,8 +34,6 @@ AMOPMessage::AMOPMessage(bytesConstRef _data)
     decode(_data);
 }
 
-AMOPMessage::~AMOPMessage() = default;
-
 uint16_t AMOPMessage::type() const
 {
     return m_type;

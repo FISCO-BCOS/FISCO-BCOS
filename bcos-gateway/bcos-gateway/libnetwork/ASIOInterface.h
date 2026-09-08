@@ -1,5 +1,5 @@
 /**
- * @brief: inteface for boost::asio(for unittest)
+ * @brief: boost::asio wrapper (socket/acceptor/timer creation and coroutine awaitables)
  *
  * @file AsioInterface.h
  * @author: yujiechen
@@ -7,7 +7,7 @@
  */
 #pragma once
 #include "bcos-gateway/libnetwork/AsioAwaitable.h"
-#include "bcos-gateway/libnetwork/SocketFace.h"
+#include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/IOServicePool.h"
 #include <boost/asio.hpp>
@@ -36,28 +36,28 @@ public:
     using VerifyCallback = std::function<bool(bool, boost::asio::ssl::verify_context&)>;
 
     ASIOInterface(IOServicePool::Ptr _ioServicePool, std::string listenHost, uint16_t listenPort);
-    virtual ~ASIOInterface();
-    virtual void setType(int type);
+    ~ASIOInterface();
+    void setType(int type);
 
-    virtual ba::ssl::context* srvContext();
+    ba::ssl::context* srvContext();
 
-    virtual void setSrvContext(ba::ssl::context _srvContext);
-    virtual void setClientContext(ba::ssl::context _clientContext);
+    void setSrvContext(ba::ssl::context _srvContext);
+    void setClientContext(ba::ssl::context _clientContext);
 
-    virtual boost::asio::steady_timer newTimer(uint32_t timeout);
+    boost::asio::steady_timer newTimer(uint32_t timeout);
     // Unlike newTimer (round-robin pool context), this timer is bound to the acceptor's own
     // executor, so awaiting it resumes the caller on the acceptor's single io_context thread.
     // The accept retry loop relies on that thread to serialize its m_run re-check and its
     // async_accept re-arm against the cancelAcceptor() that Host::stop() posts there.
-    virtual boost::asio::steady_timer newAcceptorTimer(uint32_t timeout);
+    boost::asio::steady_timer newAcceptorTimer(uint32_t timeout);
 
-    virtual std::shared_ptr<SocketFace> newSocket(
+    std::shared_ptr<Socket> newSocket(
         bool _server, NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint());
 
-    virtual bi::tcp::acceptor* acceptor();
+    bi::tcp::acceptor* acceptor();
 
-    virtual void setVerifyCallback(
-        const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/ = true);
+    void setVerifyCallback(
+        const std::shared_ptr<Socket>& socket, VerifyCallback callback, bool /*unused*/ = true);
 
     // ----- coroutine-facing interface -----------------------------------------
     // Awaitable network operations, for use inside task::Task coroutines (see AsioAwaitable.h
@@ -86,7 +86,7 @@ public:
     // with the same invoke() signature.
     struct DefaultReadPolicy
     {
-        static void invoke(ASIOInterface* self, const std::shared_ptr<SocketFace>& socket,
+        static void invoke(ASIOInterface* self, const std::shared_ptr<Socket>& socket,
             boost::asio::mutable_buffer buffers, ReadSomeHandler completion)
         {
             switch (self->m_type)
@@ -114,7 +114,7 @@ public:
 
     template <typename ReadPolicy = DefaultReadPolicy>
     auto awaitableReadSome(
-        const std::shared_ptr<SocketFace>& socket, boost::asio::mutable_buffer buffers)
+        const std::shared_ptr<Socket>& socket, boost::asio::mutable_buffer buffers)
     {
         return makeAsioAwaitable<boost::system::error_code, std::size_t>(
             [this, socket, buffers](auto handler) {
@@ -122,7 +122,7 @@ public:
             });
     }
 
-    auto awaitableAccept(const std::shared_ptr<SocketFace>& socket)
+    auto awaitableAccept(const std::shared_ptr<Socket>& socket)
     {
         return makeAsioAwaitable<boost::system::error_code>(
             [this, socket](auto handler) {
@@ -130,13 +130,13 @@ public:
             });
     }
 
-    auto awaitableResolveConnect(const std::shared_ptr<SocketFace>& socket)
+    auto awaitableResolveConnect(const std::shared_ptr<Socket>& socket)
     {
         return makeAsioAwaitable<boost::system::error_code>(
             [this, socket](auto handler) { resolveConnect(socket, std::move(handler)); });
     }
 
-    static auto awaitableHandshake(const std::shared_ptr<SocketFace>& socket,
+    static auto awaitableHandshake(const std::shared_ptr<Socket>& socket,
         ba::ssl::stream_base::handshake_type type)
     {
         return makeAsioAwaitable<boost::system::error_code>(
@@ -145,7 +145,7 @@ public:
             });
     }
 
-    auto awaitableWrite(const std::shared_ptr<SocketFace>& socket, auto buffers)
+    auto awaitableWrite(const std::shared_ptr<Socket>& socket, auto buffers)
     {
         return makeAsioAwaitable<boost::system::error_code, std::size_t>(
             [this, socket, buffers = std::move(buffers)](auto handler) mutable {
@@ -209,7 +209,7 @@ private:
     // fires with an error when resolution fails — see the coroutine-interface comment above).
     // Templated because the handler is the move-only AsioCompletion.
     template <typename Handler>
-    void resolveConnect(const std::shared_ptr<SocketFace>& socket, Handler handler)
+    void resolveConnect(const std::shared_ptr<Socket>& socket, Handler handler)
     {
         auto protocol = socket->nodeIPEndpoint().isIPv6() ? bi::tcp::tcp::v6() : bi::tcp::tcp::v4();
         m_resolver.async_resolve(protocol, socket->nodeIPEndpoint().address(),

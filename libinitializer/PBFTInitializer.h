@@ -25,13 +25,13 @@
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/election/LeaderElectionInterface.h>
-#include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/multigroup/GroupInfo.h>
 #include <bcos-framework/multigroup/GroupInfoCodec.h>
 #include <bcos-framework/protocol/MemberInterface.h>
 #include <bcos-framework/sealer/SealerInterface.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
+#include <bcos-front/FrontService.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 
@@ -69,7 +69,7 @@ public:
         bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::storage::StorageInterface::Ptr _storage,
-        bcos::front::FrontServiceInterface::Ptr _frontService,
+        bcos::front::FrontService::Ptr _frontService,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
         bcos::IOServicePool::Ptr _ioServicePool);
 
@@ -118,7 +118,7 @@ protected:
     std::shared_ptr<bcos::ledger::Ledger> m_ledger;
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::storage::StorageInterface::Ptr m_storage;
-    bcos::front::FrontServiceInterface::Ptr m_frontService;
+    bcos::front::FrontService::Ptr m_frontService;
 
     std::shared_ptr<bcos::sealer::Sealer> m_sealer;
     std::shared_ptr<bcos::sync::BlockSync> m_blockSync;

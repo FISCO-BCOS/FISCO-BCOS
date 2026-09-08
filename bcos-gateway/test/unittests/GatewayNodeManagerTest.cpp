@@ -21,8 +21,9 @@
 #include "bcos-crypto/signature/key/KeyFactoryImpl.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
-#include "bcos-front/FrontServiceFactory.h"
+#include "bcos-front/FrontService.h"
 #include "bcos-gateway/Gateway.h"
+#include "bcos-gateway/gateway/GatewayHandle.h"
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
@@ -42,7 +43,7 @@ public:
     {
         m_keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     }
-    ~FakeGatewayNodeManager() override {}
+    ~FakeGatewayNodeManager() {}
 
     bool statusChanged(std::string const& _p2pNodeID, uint32_t _seq)
     {
@@ -50,8 +51,8 @@ public:
     }
     uint32_t statusSeq() { return GatewayNodeManager::statusSeq(); }
 
-    bytesPointer generateNodeStatus() override { return GatewayNodeManager::generateNodeStatus(); }
-    void updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status) override
+    bytesPointer generateNodeStatus() { return GatewayNodeManager::generateNodeStatus(); }
+    void updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status)
     {
         return GatewayNodeManager::updatePeerStatus(_p2pID, _status);
     }
@@ -62,8 +63,8 @@ public:
             accessor->second = _seq;
         }
     }
-    void start() override {}
-    void stop() override {}
+    void start() {}
+    void stop() {}
 };
 
 inline GatewayNodeStatus::Ptr createGatewayNodeStatus(
@@ -120,12 +121,12 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     auto nodeID =
         keyFactory->createKey(bytesConstRef((bcos::byte*)strNodeID.data(), strNodeID.size()));
 
-    auto frontServiceFactory = std::make_shared<bcos::front::FrontServiceFactory>();
     auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "gwNodeTest");
-    frontServiceFactory->setGatewayInterface(std::make_shared<FakeGateway>());
-    frontServiceFactory->setIOServicePool(ioServicePool);
-
-    auto frontService = frontServiceFactory->buildFrontService(groupID, nodeID);
+    auto frontService = std::make_shared<bcos::front::FrontService>();
+    frontService->setGroupID(groupID);
+    frontService->setNodeID(nodeID);
+    frontService->setIOServicePool(ioServicePool);
+    frontService->setGateway(makeFrontServiceGateway(std::make_shared<FakeGateway>()));
 
     bool r = false;
     auto seq = gatewayNodeManager->statusSeq();

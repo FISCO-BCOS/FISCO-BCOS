@@ -22,8 +22,8 @@
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-framework/gateway/GroupNodeInfo.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-task/Task.h"
 #include <oneapi/tbb/concurrent_unordered_map.h>
@@ -37,11 +37,10 @@ class PeersRouterTable
 public:
     using Ptr = std::shared_ptr<PeersRouterTable>;
     PeersRouterTable(std::string _uuid, bcos::crypto::KeyFactory::Ptr _keyFactory,
-        P2PInterface::Ptr _p2pInterface)
+        std::shared_ptr<Service> _p2pInterface)
       : m_uuid(std::move(_uuid)),
         m_keyFactory(std::move(_keyFactory)),
-        m_p2pInterface(std::move(_p2pInterface)),
-        m_gatewayStatusFactory(std::make_shared<GatewayStatusFactory>())
+        m_p2pInterface(std::move(_p2pInterface))
     {}
     virtual ~PeersRouterTable() = default;
 
@@ -76,7 +75,7 @@ protected:
 private:
     std::string m_uuid;
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
-    P2PInterface::Ptr m_p2pInterface;
+    std::shared_ptr<Service> m_p2pInterface;
     // used for peer-to-peer router
     // groupID => NodeID => set<P2pID>
     std::map<std::string, std::map<std::string, std::set<P2pID>, std::less<>>, std::less<>>
@@ -107,7 +106,6 @@ private:
     std::map<P2pID, GatewayNodeStatus::Ptr> m_peersStatus;
     mutable SharedMutex x_peersStatus;
 
-    GatewayStatusFactory::Ptr m_gatewayStatusFactory;
     tbb::concurrent_unordered_map<std::string, GatewayStatus::Ptr> m_gatewayInfos;
 };
 }  // namespace bcos::gateway

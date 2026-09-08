@@ -27,18 +27,9 @@ using namespace bcos::protocol;
 
 GatewayStatus::GatewayStatus(std::string const& _uuid) : m_uuid(_uuid) {}
 
-GatewayStatus::~GatewayStatus() = default;
-
 std::string const& GatewayStatus::uuid() const
 {
     return m_uuid;
-}
-
-GatewayStatusFactory::~GatewayStatusFactory() = default;
-
-GatewayStatus::Ptr GatewayStatusFactory::createGatewayInfo(std::string const& _uuid)
-{
-    return std::make_shared<GatewayStatus>(_uuid);
 }
 
 void GatewayStatus::update(std::string const& _p2pNodeID, GatewayNodeStatus::ConstPtr _nodeStatus)

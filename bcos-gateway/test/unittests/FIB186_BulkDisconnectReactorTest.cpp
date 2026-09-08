@@ -77,7 +77,6 @@ public:
     FakeASIO_Reactor()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(2, "FIB186Reactor"), "0.0.0.0", 0)
     {}
-    ~FakeASIO_Reactor() noexcept override = default;
 };
 
 // Host subclass with the network marked up, so Session::drop() takes the "hand the teardown
@@ -93,33 +92,14 @@ public:
     }
 };
 
-// Socket fake backed by a real SSL stream so drop()/closeSocket() can call sslref(); starts
-// disconnected so closeSocket() early-returns (this test exercises only the m_asyncGroup path).
-class FakeSocket_Reactor : public SocketFace
+// Real Socket, never connected, so drop()/closeSocket() early-returns on isConnected() (this
+// test exercises only the teardown-notification path, no socket I/O). Socket is a concrete class
+// now, so the test drives the real thing; the bundle owns the io_context and ssl context.
+struct FakeSocket_Reactor
 {
-public:
-    FakeSocket_Reactor()
-      : m_ioContext(std::make_shared<ba::io_context>()),
-        m_sslContext(ba::ssl::context::tlsv12),
-        m_sslSocket(std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*m_ioContext, m_sslContext))
-    {}
-    bool isConnected() const override { return m_connected; }
-    void close() override { m_connected = false; }
-    bi::tcp::endpoint remoteEndpoint(boost::system::error_code) override { return {}; }
-    bi::tcp::endpoint localEndpoint(boost::system::error_code) override { return {}; }
-    bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint) override {}
-    ba::io_context& ioService() override { return *m_ioContext; }
-
-    bool m_connected{false};
-
-private:
-    std::shared_ptr<ba::io_context> m_ioContext;
-    ba::ssl::context m_sslContext;
-    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
-    NodeIPEndpoint m_nodeIPEndpoint;
+    std::shared_ptr<ba::io_context> ioContext = std::make_shared<ba::io_context>();
+    ba::ssl::context sslContext{ba::ssl::context::tlsv12};
+    std::shared_ptr<Socket> socket = std::make_shared<Socket>(ioContext, sslContext, NodeIPEndpoint());
 };
 
 // Shared state, held by shared_ptr so a task that outlives the test body never dangles.
@@ -155,10 +135,10 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
     sessions.reserve(floodCount);
     for (int i = 0; i < floodCount; ++i)
     {
-        auto socket = std::make_shared<FakeSocket_Reactor>();
-        auto session = std::make_shared<Session>(socket, *fakeHost, 1024, true);
+        auto socketBundle = std::make_shared<FakeSocket_Reactor>();
+        auto session = std::make_shared<Session>(socketBundle->socket, *fakeHost, 1024, true);
         session->setMessageFactory(messageFactory);
-        session->setMessageHandler([probe](NetworkException, SessionFace::Ptr, Message::Ptr) {
+        session->setMessageHandler([probe](NetworkException, Session::Ptr, Message::Ptr) {
             probe->teardownRunning.fetch_add(1);
             while (!probe->release.load())
             {  // hold the reactor worker, as a batch of real teardowns would

@@ -102,20 +102,15 @@ void FrontService::setGroupID(const std::string& _groupID)
     m_groupID = _groupID;
 }
 
-std::shared_ptr<gateway::GatewayInterface> FrontService::gatewayInterface()
-{
-    return m_gatewayInterface;
-}
-
 bcos::gateway::GroupNodeInfo::Ptr FrontService::groupNodeInfo() const
 {
     Guard guard(x_groupNodeInfo);
     return m_groupNodeInfo;
 }
 
-void FrontService::setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface)
+void FrontService::setGateway(FrontServiceGateway _gateway)
 {
-    m_gatewayInterface = std::move(_gatewayInterface);
+    m_gateway = std::move(_gateway);
 }
 
 std::shared_ptr<boost::asio::io_context> FrontService::ioService() const
@@ -123,17 +118,13 @@ std::shared_ptr<boost::asio::io_context> FrontService::ioService() const
     return m_ioService;
 }
 
-void FrontService::setIoService(std::shared_ptr<boost::asio::io_context> _ioService)
-{
-    m_ioService = std::move(_ioService);
-}
-
 void FrontService::setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
 {
     m_ioServicePool = std::move(_ioServicePool);
-    // FIB-185: (re)create the serial send strand over the pool the factory injects. This always
-    // runs before start() (FrontServiceFactory calls it in buildFrontService), and enqueueSend()
-    // only fires once m_run is true, so m_sendStrand is set before the first send.
+    m_ioService = m_ioServicePool->getIOService();
+    // FIB-185: (re)create the serial send strand over the injected pool. This always runs before
+    // start(), and enqueueSend() only fires once m_run is true, so m_sendStrand is set before the
+    // first send.
     m_sendStrand = std::make_unique<bcos::Strand>(m_ioServicePool);
 }
 
@@ -216,10 +207,11 @@ void FrontService::checkParams()
             InvalidParameter() << errinfo_comment(" FrontService nodeID is uninitialized"));
     }
 
-    if (!m_gatewayInterface)
+    if (!m_gateway.getGroupNodeInfo || !m_gateway.broadcastMessage ||
+        !m_gateway.sendMessageByNodeID)
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
-                                  " FrontService gatewayInterface is uninitialized"));
+                                  " FrontService gateway is uninitialized"));
     }
 
     if (!m_ioService)
@@ -249,12 +241,10 @@ void FrontService::start()
     m_run = true;
 
     // try to getNodeIDs from gateway
-    auto self = std::weak_ptr<FrontService>(
-        std::static_pointer_cast<FrontService>(shared_from_this()));
-    task::wait([](std::weak_ptr<FrontService> self,
-                   bcos::gateway::GatewayInterface::Ptr gateway,
+    auto self = std::weak_ptr<FrontService>(shared_from_this());
+    task::wait([](std::weak_ptr<FrontService> self, FrontServiceGateway gateway,
                    std::string groupID) -> bcos::task::Task<void> {
-        auto [error, groupNodeInfo] = co_await gateway->getGroupNodeInfo(groupID);
+        auto [error, groupNodeInfo] = co_await gateway.getGroupNodeInfo(groupID);
         if (error)
         {
             FRONT_LOG(ERROR) << LOG_BADGE("start") << LOG_DESC("getGroupNodeInfo failed")
@@ -269,7 +259,7 @@ void FrontService::start()
                             << LOG_KV("node size", groupNodeInfo->nodeIDList().size());
             co_await frontService->onReceiveGroupNodeInfo(frontService->groupID(), groupNodeInfo);
         }
-    }(self, m_gatewayInterface, m_groupID));
+    }(self, m_gateway, m_groupID));
 
     FRONT_LOG(INFO) << LOG_DESC("start") << LOG_KV("nodeID", m_nodeID->hex())
                     << LOG_KV("groupID", m_groupID);
@@ -397,14 +387,12 @@ std::string FrontService::registerCallback(
     if (_timeout > 0)
     {
         // create new timer to handle timeout
-        auto timeoutHandler = std::make_shared<boost::asio::steady_timer>(
-            *m_ioService, std::chrono::milliseconds(_timeout));
+        auto& timeoutHandler =
+            callback->timeoutHandler.emplace(*m_ioService, std::chrono::milliseconds(_timeout));
 
-        callback->timeoutHandler = timeoutHandler;
-        auto frontServiceWeakPtr = std::weak_ptr<FrontService>(
-            std::static_pointer_cast<FrontService>(shared_from_this()));
+        auto frontServiceWeakPtr = std::weak_ptr<FrontService>(shared_from_this());
         // callback->startTime = utcSteadyTime();
-        timeoutHandler->async_wait(
+        timeoutHandler.async_wait(
             [frontServiceWeakPtr, _nodeID, uuid](const boost::system::error_code& e) {
                 auto frontService = frontServiceWeakPtr.lock();
                 if (frontService)
@@ -437,7 +425,7 @@ task::Task<Error::Ptr> FrontService::sendResponse(std::string _id, int _moduleID
     bytes header;
     message.encodeHeader(header);
 
-    co_return co_await m_gatewayInterface->sendMessageByNodeID(m_groupID, _moduleID, m_nodeID,
+    co_return co_await m_gateway.sendMessageByNodeID(m_groupID, _moduleID, m_nodeID,
         std::move(_nodeID),
         ::ranges::views::concat(::ranges::views::single(bcos::ref(std::as_const(header))),
             ::ranges::views::single(_data)));
@@ -453,7 +441,7 @@ task::Task<void> FrontService::broadcastMessage(
     bytes header;
     message.encodeHeader(header);
 
-    co_await m_gatewayInterface->broadcastMessage(type, m_groupID, moduleID, *m_nodeID,
+    co_await m_gateway.broadcastMessage(type, m_groupID, moduleID, *m_nodeID,
         ::ranges::views::concat(
             ::ranges::views::single(bcos::ref(std::as_const(header))), std::move(payloads)));
 }
@@ -470,13 +458,13 @@ void FrontService::broadcastMessageByOwnedPayload(
         message.setModuleID(moduleID);
         auto header = std::make_shared<bytes>();
         message.encodeHeader(*header);
-        task::wait([](gateway::GatewayInterface::Ptr gateway, uint16_t msgType, std::string groupID,
+        task::wait([](FrontServiceGateway gateway, uint16_t msgType, std::string groupID,
                        int module, bcos::crypto::NodeIDPtr srcNodeID, std::shared_ptr<bytes> hdr,
                        bytesPointer body) -> task::Task<void> {
-            co_await gateway->broadcastMessage(msgType, groupID, module, *srcNodeID,
+            co_await gateway.broadcastMessage(msgType, groupID, module, *srcNodeID,
                 ::ranges::views::concat(::ranges::views::single(bcos::ref(*hdr)),
                     ::ranges::views::single(bcos::ref(*body))));
-        }(m_gatewayInterface, type, m_groupID, moduleID, m_nodeID, header, payload));
+        }(m_gateway, type, m_groupID, moduleID, m_nodeID, header, payload));
     });
 }
 
@@ -488,7 +476,7 @@ void FrontService::sendMessageByNodeIDByOwnedPayload(
     // gateway-session-lock-acquiring send on its own thread. The owned payload is captured by the
     // launched coroutine -> the message body is sent as a view (zero-copy).
     enqueueSend([this, moduleID, nodeID = std::move(nodeID), payload = std::move(payload)]() {
-        auto self = std::static_pointer_cast<FrontService>(shared_from_this());
+        auto self = shared_from_this();
         task::wait(
             [](FrontService::Ptr _self, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
                 bytesPointer _payload) -> task::Task<void> {
@@ -535,7 +523,7 @@ bcos::task::Task<SendResult> FrontService::sendMessageByNodeID(
     message.encodeHeader(header);
 
     auto nodeID = _nodeID;  // keep a copy for the gateway-error path below
-    auto gatewayError = co_await m_gatewayInterface->sendMessageByNodeID(m_groupID, _moduleID,
+    auto gatewayError = co_await m_gateway.sendMessageByNodeID(m_groupID, _moduleID,
         m_nodeID, std::move(_nodeID),
         ::ranges::views::concat(
             ::ranges::views::single(bcos::ref(std::as_const(header))), std::move(_payloads)));
@@ -607,9 +595,9 @@ void FrontService::enqueueSend(std::function<void()> _sendTask)
     // on the pool's threads (the same threading model as the old single-drainer, minus the
     // hand-rolled CAS / lost-wakeup bookkeeping).
     //
-    // PRECONDITION: FrontService must be owned by a shared_ptr (FrontServiceFactory is the only
-    // construction site and uses make_shared); stack-allocating one would make weak_from_this()
-    // empty and the send would never run.
+    // PRECONDITION: FrontService must be owned by a shared_ptr (all construction sites use
+    // make_shared); stack-allocating one would make weak_from_this() empty and the send would
+    // never run.
     //
     // Hold the FrontService via weak_from_this, NOT a raw `this` and NOT shared_ptr: the shared
     // IOServicePool is owned outside and cannot be joined, so a posted task can outlive
@@ -617,7 +605,7 @@ void FrontService::enqueueSend(std::function<void()> _sendTask)
     // for the send and no-ops once it is gone. (A shared_ptr capture would also form a cycle:
     // FrontService -> Strand -> queued task -> FrontService.)
     m_sendStrand->post([weak = weak_from_this(), task = std::move(_sendTask)]() mutable {
-        if (auto self = std::static_pointer_cast<FrontService>(weak.lock()))
+        if (auto self = weak.lock())
         {
             // this task no longer occupies queue space; decrement before running so the counter
             // reflects queued depth while a blocking gateway send is in flight
@@ -651,7 +639,7 @@ task::Task<Error::Ptr> FrontService::onReceiveGroupNodeInfo(
     auto self = weak_from_this();
     dispatchTo(
         *m_ioServicePool, [self, _groupID, _groupNodeInfo = std::move(_groupNodeInfo)]() mutable {
-            if (auto frontService = std::static_pointer_cast<FrontService>(self.lock()))
+            if (auto frontService = self.lock())
             {
                 frontService->notifyGroupNodeInfo(_groupID, _groupNodeInfo);
             }
@@ -725,8 +713,7 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
     {
         return;
     }
-    auto frontServiceWeakPtr = std::weak_ptr<FrontService>(
-        std::static_pointer_cast<FrontService>(shared_from_this()));
+    auto frontServiceWeakPtr = std::weak_ptr<FrontService>(shared_from_this());
     auto respFunc = [frontServiceWeakPtr, _moduleID, _nodeID, _uuid](bytesConstRef _data) {
         // the module hands us a transient view: copy it into the detached coroutine frame so the
         // fire-and-forget response send never dangles

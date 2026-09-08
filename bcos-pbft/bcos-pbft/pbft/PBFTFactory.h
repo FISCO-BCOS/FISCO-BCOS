@@ -36,7 +36,7 @@ public:
     PBFTFactory(boost::asio::io_context& _ioService,
         bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
-        std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
+        std::shared_ptr<bcos::front::FrontService> _frontService,
         std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
@@ -51,7 +51,7 @@ protected:
     std::reference_wrapper<boost::asio::io_context> m_ioService;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
-    std::shared_ptr<bcos::front::FrontServiceInterface> m_frontService;
+    std::shared_ptr<bcos::front::FrontService> m_frontService;
     std::shared_ptr<bcos::storage::KVStorageHelper> m_storage;
     std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;

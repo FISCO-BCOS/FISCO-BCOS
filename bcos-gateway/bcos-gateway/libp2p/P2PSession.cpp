@@ -5,6 +5,7 @@
 
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
+#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
@@ -35,12 +36,12 @@ bool P2PSession::active()
     return m_run;
 }
 
-SessionFace::Ptr P2PSession::session()
+Session::Ptr P2PSession::session()
 {
     return m_session;
 }
 
-void P2PSession::setSession(std::shared_ptr<SessionFace> session)
+void P2PSession::setSession(std::shared_ptr<Session> session)
 {
     m_session = std::move(session);
 }
@@ -189,7 +190,7 @@ bcos::task::Task<Message::Ptr> P2PSession::fastSendP2PMessage(
     // the p2p message version must match the negotiated protocol version of this session: the
     // encodeHeaderImpl of P2PMessageV2 only encodes the ttl/src/dst routing fields for version > V0,
     // so sending with the default (V0) version would silently drop the V2 routing fields and break
-    // multi-hop forwarding through ServiceV2 router tables
+    // multi-hop forwarding through the RIP router tables
     message.setVersion((uint16_t)m_protocolInfo->version());
     co_return co_await m_session->fastSendMessage(message, std::move(payloads), options);
 }

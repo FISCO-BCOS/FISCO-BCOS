@@ -20,9 +20,9 @@
  */
 #pragma once
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/protocol/AMOPRequest.h>
 #include <bcos-framework/rpc/RPCInterface.h>
+#include <bcos-gateway/gateway/GatewayHandle.h>
 #include <bcos-utilities/Timer.h>
 #include <servant/Application.h>
 
@@ -40,7 +40,7 @@ public:
     AMOPClient(boost::asio::io_context& _ioService,
         std::shared_ptr<boostssl::ws::WsService> _wsService,
         std::shared_ptr<bcos::protocol::AMOPRequestFactory> _requestFactory,
-        bcos::gateway::GatewayInterface::Ptr _gateway, std::string _gatewayServiceName)
+        bcos::gateway::GatewayHandle _gateway, std::string _gatewayServiceName)
       : m_wsService(std::move(_wsService)),
         m_requestFactory(std::move(_requestFactory)),
         m_gateway(std::move(_gateway)),
@@ -175,7 +175,7 @@ protected:
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
     std::shared_ptr<bcos::protocol::AMOPRequestFactory> m_requestFactory;
 
-    bcos::gateway::GatewayInterface::Ptr m_gateway;
+    bcos::gateway::GatewayHandle m_gateway;
     std::string m_clientID = "localAMOP";
     std::string m_gatewayServiceName;
 

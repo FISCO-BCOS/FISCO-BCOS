@@ -22,6 +22,7 @@
 #include "../cache/PBFTCacheProcessor.h"
 #include "../config/PBFTConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-framework/front/FrontServiceTypeDef.h>
 #include <bcos-utilities/IOServicePool.h>
 namespace bcos::consensus
 {

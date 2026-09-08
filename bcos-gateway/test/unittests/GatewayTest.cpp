@@ -22,10 +22,14 @@
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-crypto/signature/key/KeyFactoryImpl.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/rpc/RPCInterface.h"
 #include "bcos-gateway/Gateway.h"
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/libamop/AMOPImpl.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libamop/TopicManager.h"
+#include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include "bcos-gateway/libp2p/Service.h"
+#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
@@ -40,18 +44,66 @@ using namespace bcos::protocol;
 using namespace bcos::test;
 using namespace bcos::group;
 
-// Forward declarations for interfaces we'll mock
-namespace bcos::gateway
+BOOST_AUTO_TEST_SUITE(GatewayUnitTest)
+
+namespace
 {
-class P2PInterface;
-class GatewayNodeManager;
-}  // namespace bcos::gateway
-namespace bcos::amop
+// Hand-written counting fake replacing the former FakeIt Mock<P2PInterface> (the interface is
+// gone; Service is the single concrete p2p service).
+class CountingP2PService : public Service
 {
-class AMOPImpl;
+public:
+    CountingP2PService() : Service(P2PInfo()) {}
+
+    void start() override { ++startCalls; }
+    void stop() override { ++stopCalls; }
+
+    int startCalls = 0;
+    int stopCalls = 0;
+};
+
+// Exposes the protected "for ut" constructor so a real GatewayNodeManager can be driven without a
+// p2p service.
+class TestNodeManager : public GatewayNodeManager
+{
+public:
+    TestNodeManager() : GatewayNodeManager("", std::make_shared<KeyFactoryImpl>(), nullptr) {}
+};
+
+ProtocolInfo::ConstPtr makeTestProtocolInfo()
+{
+    return std::make_shared<ProtocolInfo>(
+        ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1);
 }
 
-BOOST_AUTO_TEST_SUITE(GatewayUnitTest)
+// Real AMOPImpl over a local-mode TopicManager whose local RPC client is a FakeIt mock of the
+// (still abstract) RPCInterface -- this replaces the former Mock<AMOPImpl>: the assertions now run
+// against the real AMOPImpl topic-dispatch path and the mock only scripts the RPC client's
+// notifyAMOPMessage responses.
+struct AMOPTestContext
+{
+    AMOPTestContext()
+    {
+        topicManager =
+            std::make_shared<amop::TopicManager>("gatewayTest", service, /*_localMode=*/true);
+        topicManager->setLocalClient(
+            bcos::rpc::RPCInterface::Ptr(&rpcMock.get(), [](bcos::rpc::RPCInterface*) {}));
+        ioServicePool = std::make_shared<bcos::IOServicePool>(1, "gatewayTest");
+        amop = std::make_shared<amop::AMOPImpl>(topicManager,
+            std::make_shared<amop::AMOPMessageFactory>(),
+            std::make_shared<bcos::protocol::AMOPRequestFactory>(), service, localNodeID, ioContext,
+            ioServicePool);
+    }
+
+    std::shared_ptr<CountingP2PService> service = std::make_shared<CountingP2PService>();
+    fakeit::Mock<bcos::rpc::RPCInterface> rpcMock;
+    amop::TopicManager::Ptr topicManager;
+    boost::asio::io_context ioContext;
+    bcos::IOServicePool::Ptr ioServicePool;
+    std::shared_ptr<amop::AMOPImpl> amop;
+    P2pID localNodeID = std::string(128, 'f');
+};
+}  // namespace
 
 struct GatewayTestFixture : public TestPromptFixture
 {
@@ -62,8 +114,6 @@ struct GatewayTestFixture : public TestPromptFixture
         const size_t NODE_ID_SIZE = 32;
         nodeID = keyFactory->createKey(bytes(NODE_ID_SIZE, 0x1));
 
-        // Create mocks using fakeit
-        // Note: We need to be careful about mock lifetime and shared_ptr usage
         setupMocks();
     }
 
@@ -180,33 +230,18 @@ BOOST_AUTO_TEST_CASE(testGatewayObjectCreation)
     BOOST_CHECK_EQUAL(hex1, nodeID1->hex());  // Should be consistent
 }
 
-BOOST_AUTO_TEST_CASE(testFakeItWithInterfaces)
+BOOST_AUTO_TEST_CASE(testP2PServiceStartStop)
 {
-    // Test fakeit usage similar to testBaselineScheduler.cpp
-    // Create mocks for Gateway dependencies
+    // Formerly testFakeItWithInterfaces / testGatewayP2PInterfaceMock (FakeIt Mock<P2PInterface>):
+    // the P2PInterface mock is replaced by a hand-written counting Service subclass; the assertion
+    // intent (start/stop callable, each invoked exactly once) is preserved as counter assertions.
+    auto service = std::make_shared<CountingP2PService>();
 
-    // Mock P2PInterface for testing P2P operations
-    fakeit::Mock<P2PInterface> mockP2PInterface;
+    BOOST_CHECK_NO_THROW(service->start());
+    BOOST_CHECK_NO_THROW(service->stop());
 
-    // Setup mock behaviors using When().AlwaysDo() pattern like in testBaselineScheduler
-    fakeit::When(Method(mockP2PInterface, start)).AlwaysDo([]() {
-        // Mock start behavior - just return successfully
-    });
-
-    fakeit::When(Method(mockP2PInterface, stop)).AlwaysDo([]() {
-        // Mock stop behavior - just return successfully
-    });
-
-    // Test that we can call the mocked methods
-    P2PInterface& p2pRef = mockP2PInterface.get();
-
-    // These should not throw since we've mocked them
-    BOOST_CHECK_NO_THROW(p2pRef.start());
-    BOOST_CHECK_NO_THROW(p2pRef.stop());
-
-    // Verify the methods were called (like in testBaselineScheduler)
-    fakeit::Verify(Method(mockP2PInterface, start)).Exactly(1);
-    fakeit::Verify(Method(mockP2PInterface, stop)).Exactly(1);
+    BOOST_CHECK_EQUAL(service->startCalls, 1);
+    BOOST_CHECK_EQUAL(service->stopCalls, 1);
 }
 
 BOOST_AUTO_TEST_CASE(testGatewayWithFakeIt)
@@ -268,153 +303,117 @@ BOOST_AUTO_TEST_CASE(testNodeIDOperations)
     }
 }
 
-BOOST_AUTO_TEST_CASE(testGatewayP2PInterfaceMock)
+BOOST_AUTO_TEST_CASE(testGatewayNodeManagerRegister)
 {
-    // Test P2PInterface mocking similar to testBaselineScheduler pattern
-    // P2PInterface is polymorphic and can be mocked
-    fakeit::Mock<P2PInterface> mockP2PInterface;
+    // Formerly FakeIt Mock<GatewayNodeManager>: now drives a real GatewayNodeManager (built via
+    // the protected for-ut constructor, without a p2p service) and asserts the real routing-table
+    // state instead of the mock Verify call counts.
+    auto nodeManager = std::make_shared<TestNodeManager>();
 
-    // Setup mock behaviors using When().AlwaysDo() pattern
-    fakeit::When(Method(mockP2PInterface, start)).AlwaysDo([]() {
-        // Mock successful start
-    });
-    fakeit::When(Method(mockP2PInterface, stop)).AlwaysDo([]() {
-        // Mock successful stop
-    });
-
-    // Test the mocked P2P interface
-    P2PInterface& p2pRef = mockP2PInterface.get();
-
-    // These should not throw since we've mocked them
-    BOOST_CHECK_NO_THROW(p2pRef.start());
-    BOOST_CHECK_NO_THROW(p2pRef.stop());
-
-    // Verify methods were called
-    fakeit::Verify(Method(mockP2PInterface, start)).Exactly(1);
-    fakeit::Verify(Method(mockP2PInterface, stop)).Exactly(1);
-}
-
-BOOST_AUTO_TEST_CASE(testGatewayNodeManagerMock)
-{
-    // Test GatewayNodeManager mocking
-    fakeit::Mock<GatewayNodeManager> mockGatewayNodeManager;
-
-    // Setup mock behaviors for node registration
-    fakeit::When(Method(mockGatewayNodeManager, registerNode)).AlwaysReturn(true);
-    fakeit::When(Method(mockGatewayNodeManager, unregisterNode)).AlwaysReturn(true);
-
-    // Test the mocked node manager
-    GatewayNodeManager& nodeManagerRef = mockGatewayNodeManager.get();
-
-    // Create test parameters
     std::string testGroupID = "testGroup";
     auto keyFactory = std::make_shared<KeyFactoryImpl>();
     const size_t NODE_ID_SIZE = 32;
     auto testNodeID = keyFactory->createKey(bytes(NODE_ID_SIZE, 0x1));
 
     // Test node registration
-    bool registerResult = nodeManagerRef.registerNode(
-        testGroupID, testNodeID, NodeType::CONSENSUS_NODE, nullptr, nullptr);
+    bool registerResult = nodeManager->registerNode(
+        testGroupID, testNodeID, NodeType::CONSENSUS_NODE, nullptr, makeTestProtocolInfo());
     BOOST_CHECK(registerResult);
 
-    // Test node unregistration
-    bool unregisterResult = nodeManagerRef.unregisterNode(testGroupID, testNodeID->hex());
-    BOOST_CHECK(unregisterResult);
+    // the node is now visible in the local router table; re-registering the same node fails
+    auto nodeList = nodeManager->localRouterTable()->nodeList();
+    BOOST_REQUIRE_EQUAL(nodeList.count(testGroupID), 1U);
+    BOOST_CHECK(nodeList.at(testGroupID).count(testNodeID->hex()) == 1U);
+    BOOST_CHECK(!nodeManager->registerNode(
+        testGroupID, testNodeID, NodeType::CONSENSUS_NODE, nullptr, makeTestProtocolInfo()));
 
-    // Verify methods were called
-    fakeit::Verify(Method(mockGatewayNodeManager, registerNode)).Exactly(1);
-    fakeit::Verify(Method(mockGatewayNodeManager, unregisterNode)).Exactly(1);
+    // Test node unregistration
+    bool unregisterResult = nodeManager->unregisterNode(testGroupID, testNodeID->hex());
+    BOOST_CHECK(unregisterResult);
+    BOOST_CHECK(nodeManager->localRouterTable()->nodeList().count(testGroupID) == 0U);
+    // unregistering a removed node fails
+    BOOST_CHECK(!nodeManager->unregisterNode(testGroupID, testNodeID->hex()));
 }
 
-BOOST_AUTO_TEST_CASE(testAMOPMock)
+BOOST_AUTO_TEST_CASE(testAMOPSubscribeAndLocalDelivery)
 {
-    // Test AMOP interface mocking
-    fakeit::Mock<bcos::amop::AMOPImpl> mockAMOP;
+    // Formerly FakeIt Mock<AMOPImpl> (sendMessageByTopic / asyncSubscribeTopic scripted tuples):
+    // the mock is replaced by a real AMOPImpl whose topicManager runs in local (Air) mode with a
+    // mocked RPCInterface client, so the assertions exercise the real local-delivery path.
+    AMOPTestContext ctx;
 
-    // Setup mock behaviors for AMOP operations using lambda pattern from testBaselineScheduler
-    fakeit::When(Method(mockAMOP, sendMessageByTopic))
-        .AlwaysDo([](const std::string& /*topic*/, bcos::bytesConstRef /*data*/)
-                      -> bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> {
-            // Simulate successful message send
-            co_return std::make_tuple(bcos::Error::Ptr(nullptr), int16_t(0), bcos::bytes{});
+    bcos::bytes responsePayload{0x4, 0x5, 0x6};
+    fakeit::When(Method(ctx.rpcMock, notifyAMOPMessage))
+        .AlwaysDo([responsePayload](int16_t, std::string const&, bytesConstRef)
+                      -> bcos::task::Task<std::tuple<bcos::Error::Ptr, bytesPointer>> {
+            co_return std::make_tuple(
+                bcos::Error::Ptr(nullptr), std::make_shared<bcos::bytes>(responsePayload));
         });
-
-    fakeit::When(Method(mockAMOP, asyncSubscribeTopic))
-        .AlwaysDo([](std::string const& /*clientID*/, std::string const& /*topicInfo*/,
-                      const std::function<void(bcos::Error::Ptr&&)>& callback) {
-            // Simulate successful subscription
-            if (callback)
-            {
-                callback(nullptr);
-            }
-        });
-
-    // Test the mocked AMOP
-    bcos::amop::AMOPImpl& amopRef = mockAMOP.get();
 
     std::string testTopic = "testTopic";
     std::string testClientID = "testClient";
     bcos::bytes testData = {0x1, 0x2, 0x3};
 
-    // Test message sending
-    auto [sendError, sendCode, sendResponse] = bcos::task::syncWait(amopRef.sendMessageByTopic(
-        testTopic, bcos::bytesConstRef(testData.data(), testData.size())));
-    BOOST_CHECK(!sendError);
-    BOOST_CHECK_EQUAL(sendCode, 0);
-    BOOST_CHECK(sendResponse.empty());
-
-    // Test topic subscription
+    // Test topic subscription: the callback fires with a null error and the topic is registered
     bool subscriptionCallbackInvoked = false;
-    amopRef.asyncSubscribeTopic(
-        testClientID, testTopic, [&subscriptionCallbackInvoked](const bcos::Error::Ptr& /*error*/) {
+    ctx.amop->asyncSubscribeTopic(testClientID, R"({"topics":["testTopic"]})",
+        [&subscriptionCallbackInvoked](bcos::Error::Ptr&& error) {
+            BOOST_CHECK(!error);
             subscriptionCallbackInvoked = true;
         });
     BOOST_CHECK(subscriptionCallbackInvoked);
 
-    // Verify methods were called
-    fakeit::Verify(Method(mockAMOP, sendMessageByTopic)).Exactly(1);
-    fakeit::Verify(Method(mockAMOP, asyncSubscribeTopic)).Exactly(1);
+    amop::TopicItems topicItems;
+    BOOST_REQUIRE(ctx.topicManager->queryTopicItemsByClient(testClientID, topicItems));
+    BOOST_CHECK_EQUAL(topicItems.size(), 1U);
+
+    // Test message sending: no remote subscriber, so it is delivered to the local client
+    auto [sendError, sendCode, sendResponse] = bcos::task::syncWait(ctx.amop->sendMessageByTopic(
+        testTopic, bcos::bytesConstRef(testData.data(), testData.size())));
+    BOOST_CHECK(!sendError);
+    BOOST_CHECK_EQUAL(sendCode, GatewayMessageType::WSMessageType);
+    BOOST_CHECK(sendResponse == responsePayload);
+
+    // the local RPC client was notified exactly once
+    fakeit::Verify(Method(ctx.rpcMock, notifyAMOPMessage)).Exactly(1);
+
+    // a topic without any subscriber fails fast
+    auto [noSubError, noSubCode, noSubResponse] = bcos::task::syncWait(
+        ctx.amop->sendMessageByTopic("topic_without_subscriber",
+            bcos::bytesConstRef(testData.data(), testData.size())));
+    BOOST_CHECK(noSubError != nullptr);
+    BOOST_CHECK_EQUAL(noSubError->errorCode(), CommonError::NotFoundPeerByTopicSendMsg);
+    BOOST_CHECK(noSubResponse.empty());
+
+    fakeit::Verify(Method(ctx.rpcMock, notifyAMOPMessage)).Exactly(1);
 }
 
 BOOST_AUTO_TEST_CASE(testComplexGatewayScenario)
 {
-    // Test a more complex scenario using multiple mocks together
-    // This demonstrates how to build comprehensive tests similar to testBaselineScheduler.cpp
+    // Test a more complex scenario using the real components together (formerly three FakeIt
+    // mocks): counting p2p service, real GatewayNodeManager, real AMOPImpl with a mocked local
+    // RPC client that answers per topic.
+    auto service = std::make_shared<CountingP2PService>();
+    auto nodeManager = std::make_shared<TestNodeManager>();
+    AMOPTestContext ctx;
 
-    // Create multiple mocks for a complete Gateway test
-    fakeit::Mock<P2PInterface> mockP2PInterface;
-    fakeit::Mock<GatewayNodeManager> mockGatewayNodeManager;
-    fakeit::Mock<bcos::amop::AMOPImpl> mockAMOP;
-
-    // Setup complex mock behaviors
-    fakeit::When(Method(mockP2PInterface, start)).AlwaysDo([]() {
-        // Mock P2P start - simulate successful initialization
-    });
-
-    fakeit::When(Method(mockGatewayNodeManager, registerNode)).AlwaysReturn(true);
-    fakeit::When(Method(mockGatewayNodeManager, unregisterNode)).AlwaysReturn(true);
-
-    // Setup AMOP with multiple different behaviors for different calls
-    fakeit::When(Method(mockAMOP, sendMessageByTopic))
-        .AlwaysDo([](const std::string& topic, bcos::bytesConstRef /*data*/)
-                      -> bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> {
+    fakeit::When(Method(ctx.rpcMock, notifyAMOPMessage))
+        .AlwaysDo([](int16_t, std::string const& topic, bytesConstRef)
+                      -> bcos::task::Task<std::tuple<bcos::Error::Ptr, bytesPointer>> {
             // Simulate different responses based on topic
             if (topic == "failTopic")
             {
                 auto error = std::make_shared<bcos::Error>(
                     bcos::Error::buildError("MockTest", -1, "Mock error for test"));
-                co_return std::make_tuple(std::move(error), int16_t(-1), bcos::bytes{});
+                co_return std::make_tuple(std::move(error), bytesPointer{});
             }
-            co_return std::make_tuple(bcos::Error::Ptr(nullptr), int16_t(0), bcos::bytes{});
+            co_return std::make_tuple(
+                bcos::Error::Ptr(nullptr), std::make_shared<bcos::bytes>());
         });
 
-    // Test the complex scenario
-    P2PInterface& p2pRef = mockP2PInterface.get();
-    GatewayNodeManager& nodeManagerRef = mockGatewayNodeManager.get();
-    bcos::amop::AMOPImpl& amopRef = mockAMOP.get();
-
     // Simulate a complete Gateway workflow
-    p2pRef.start();  // Start P2P interface
+    service->start();  // Start P2P service
+    BOOST_CHECK_EQUAL(service->startCalls, 1);
 
     // Register some nodes
     auto keyFactory = std::make_shared<KeyFactoryImpl>();
@@ -422,87 +421,100 @@ BOOST_AUTO_TEST_CASE(testComplexGatewayScenario)
     auto nodeID1 = keyFactory->createKey(bytes(NODE_ID_SIZE, 0x1));
     auto nodeID2 = keyFactory->createKey(bytes(NODE_ID_SIZE, 0x2));
 
-    bool reg1 =
-        nodeManagerRef.registerNode("group1", nodeID1, NodeType::CONSENSUS_NODE, nullptr, nullptr);
-    bool reg2 =
-        nodeManagerRef.registerNode("group1", nodeID2, NodeType::CONSENSUS_NODE, nullptr, nullptr);
+    bool reg1 = nodeManager->registerNode(
+        "group1", nodeID1, NodeType::CONSENSUS_NODE, nullptr, makeTestProtocolInfo());
+    bool reg2 = nodeManager->registerNode(
+        "group1", nodeID2, NodeType::CONSENSUS_NODE, nullptr, makeTestProtocolInfo());
 
     BOOST_CHECK(reg1);
     BOOST_CHECK(reg2);
+    BOOST_CHECK_EQUAL(nodeManager->localRouterTable()->nodeList().at("group1").size(), 2U);
 
     // Test AMOP operations with different outcomes
     bcos::bytes testData = {0x1, 0x2, 0x3};
+    std::string testClientID = "testClient";
+    ctx.amop->asyncSubscribeTopic(
+        testClientID, R"({"topics":["successTopic","failTopic"]})", [](bcos::Error::Ptr&&) {});
 
     // Test successful case
     auto [successError, successCode, successResponse] =
-        bcos::task::syncWait(amopRef.sendMessageByTopic(
+        bcos::task::syncWait(ctx.amop->sendMessageByTopic(
             "successTopic", bcos::bytesConstRef(testData.data(), testData.size())));
     BOOST_CHECK(!successError);
-    BOOST_CHECK_EQUAL(successCode, 0);
+    BOOST_CHECK_EQUAL(successCode, GatewayMessageType::WSMessageType);
     BOOST_CHECK(successResponse.empty());
 
-    // Test failure case
-    auto [failError, failCode, failResponse] = bcos::task::syncWait(amopRef.sendMessageByTopic(
+    // Test failure case: the local client reports an error, surfaced as an AMOP error response.
+    // The error code crosses the wire through the AMOPMessage uint16 status field, so -1 arrives
+    // as 65535; the raw response payload is the encoded AMOPMessage (status + error message).
+    auto [failError, failCode, failResponse] = bcos::task::syncWait(ctx.amop->sendMessageByTopic(
         "failTopic", bcos::bytesConstRef(testData.data(), testData.size())));
     BOOST_CHECK(failError != nullptr);
-    BOOST_CHECK_EQUAL(failCode, -1);
-    BOOST_CHECK(failResponse.empty());
+    BOOST_CHECK_EQUAL(failError->errorCode(), (int)(uint16_t)(-1));
+    BOOST_CHECK_EQUAL(failError->errorMessage(), "Mock error for test");
+    BOOST_CHECK_EQUAL(failCode, GatewayMessageType::AMOPMessageType);
+    BOOST_CHECK(!failResponse.empty());
 
     // Clean up - unregister nodes
-    bool unreg1 = nodeManagerRef.unregisterNode("group1", nodeID1->hex());
-    bool unreg2 = nodeManagerRef.unregisterNode("group1", nodeID2->hex());
+    bool unreg1 = nodeManager->unregisterNode("group1", nodeID1->hex());
+    bool unreg2 = nodeManager->unregisterNode("group1", nodeID2->hex());
 
     BOOST_CHECK(unreg1);
     BOOST_CHECK(unreg2);
+    BOOST_CHECK(nodeManager->localRouterTable()->nodeList().count("group1") == 0U);
 
-    // Verify all expected interactions occurred
-    fakeit::Verify(Method(mockP2PInterface, start)).Exactly(1);
-    fakeit::Verify(Method(mockGatewayNodeManager, registerNode)).Exactly(2);
-    fakeit::Verify(Method(mockGatewayNodeManager, unregisterNode)).Exactly(2);
-    fakeit::Verify(Method(mockAMOP, sendMessageByTopic)).Exactly(2);
+    // all expected interactions occurred
+    fakeit::Verify(Method(ctx.rpcMock, notifyAMOPMessage)).Exactly(2);
 }
 
 BOOST_AUTO_TEST_CASE(testErrorHandlingScenarios)
 {
-    // Test error handling scenarios using fakeit
-    fakeit::Mock<bcos::amop::AMOPImpl> mockAMOP;
+    // Sequential behavior (formerly a FakeIt Mock<AMOPImpl> with a call-count switch): the local
+    // RPC client mock fails from the second call on, and the real AMOPImpl surfaces that error.
+    AMOPTestContext ctx;
 
-    // Setup error scenarios
     int callCount = 0;
-    fakeit::When(Method(mockAMOP, sendMessageByTopic))
-        .AlwaysDo([&callCount](const std::string& /*topic*/, bcos::bytesConstRef /*data*/)
-                      -> bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> {
+    fakeit::When(Method(ctx.rpcMock, notifyAMOPMessage))
+        .AlwaysDo([&callCount](int16_t, std::string const&, bytesConstRef)
+                      -> bcos::task::Task<std::tuple<bcos::Error::Ptr, bytesPointer>> {
             ++callCount;
             if (callCount == 1)
             {
                 // First call succeeds
-                co_return std::make_tuple(bcos::Error::Ptr(nullptr), int16_t(0), bcos::bytes{});
+                co_return std::make_tuple(
+                    bcos::Error::Ptr(nullptr), std::make_shared<bcos::bytes>());
             }
             // Subsequent calls fail
             auto error = std::make_shared<bcos::Error>(
                 bcos::Error::buildError("MockTest", -2, "Network timeout"));
-            co_return std::make_tuple(std::move(error), int16_t(-2), bcos::bytes{});
+            co_return std::make_tuple(std::move(error), bytesPointer{});
         });
 
-    bcos::amop::AMOPImpl& amopRef = mockAMOP.get();
+    ctx.amop->asyncSubscribeTopic(
+        "testClient", R"({"topics":["testTopic"]})", [](bcos::Error::Ptr&&) {});
+
     bcos::bytes testData = {0x1, 0x2, 0x3};
 
     // First call should succeed
     auto [firstError, firstCode, firstResponse] = bcos::task::syncWait(
-        amopRef.sendMessageByTopic("testTopic", bcos::bytesConstRef(testData.data(),
+        ctx.amop->sendMessageByTopic("testTopic", bcos::bytesConstRef(testData.data(),
             testData.size())));
-    BOOST_CHECK(firstError == nullptr && firstCode == 0);
+    BOOST_CHECK(firstError == nullptr && firstCode == GatewayMessageType::WSMessageType);
     BOOST_CHECK(firstResponse.empty());
 
-    // Second call should fail
+    // Second call should fail: the local client error is encoded into the AMOPMessage uint16
+    // status (-2 -> 65534), and the response payload is the encoded error message frame.
     auto [secondError, secondCode, secondResponse] = bcos::task::syncWait(
-        amopRef.sendMessageByTopic("testTopic", bcos::bytesConstRef(testData.data(),
+        ctx.amop->sendMessageByTopic("testTopic", bcos::bytesConstRef(testData.data(),
             testData.size())));
-    BOOST_CHECK(secondError != nullptr && secondCode == -2);
-    BOOST_CHECK(secondResponse.empty());
+    BOOST_CHECK(secondError != nullptr && secondError->errorCode() == (int)(uint16_t)(-2));
+    BOOST_CHECK_EQUAL(secondError->errorMessage(), "Network timeout");
+    BOOST_CHECK_EQUAL(secondCode, GatewayMessageType::AMOPMessageType);
+    BOOST_CHECK(!secondResponse.empty());
 
-    // Verify both calls were made
-    fakeit::Verify(Method(mockAMOP, sendMessageByTopic)).Exactly(2);
+    // both calls reached the local RPC client
+    BOOST_CHECK_EQUAL(callCount, 2);
+    fakeit::Verify(Method(ctx.rpcMock, notifyAMOPMessage)).Exactly(2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

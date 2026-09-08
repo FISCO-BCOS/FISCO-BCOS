@@ -70,7 +70,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_1)
     auto bcr = bytesConstRef(buffer->data(), buffer->size());
 
     auto r1 = decodeMessage.decode(bcr);
-    BOOST_CHECK_EQUAL(r1, MessageDecodeStatus::MESSAGE_COMPLETE);
+    BOOST_CHECK_EQUAL(r1, bcos::front::MessageDecodeStatus::MESSAGE_COMPLETE);
 
     BOOST_CHECK_EQUAL(moduleID, decodeMessage.moduleID());
     BOOST_CHECK_EQUAL(ext, decodeMessage.ext());
@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_2)
     auto bcr = bytesConstRef(buffer->data(), buffer->size());
 
     auto r1 = decodeMessage.decode(bcr);
-    BOOST_CHECK_EQUAL(r1, MessageDecodeStatus::MESSAGE_COMPLETE);
+    BOOST_CHECK_EQUAL(r1, bcos::front::MessageDecodeStatus::MESSAGE_COMPLETE);
 
     BOOST_CHECK_EQUAL(moduleID, decodeMessage.moduleID());
     BOOST_CHECK_EQUAL(ext, decodeMessage.ext());
@@ -144,7 +144,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_3)
     auto bcr = bytesConstRef(buffer->data(), buffer->size());
 
     auto r1 = decodeMessage.decode(bcr);
-    BOOST_CHECK_EQUAL(r1, MessageDecodeStatus::MESSAGE_COMPLETE);
+    BOOST_CHECK_EQUAL(r1, bcos::front::MessageDecodeStatus::MESSAGE_COMPLETE);
 
     BOOST_CHECK_EQUAL(moduleID, decodeMessage.moduleID());
     BOOST_CHECK_EQUAL(ext, decodeMessage.ext());
@@ -198,7 +198,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_4)
     buffer->clear();
     FrontMessage decodeMessage;
     auto r1 = decodeMessage.decode(bytesConstRef(buffer->data(), buffer->size()));
-    BOOST_CHECK_EQUAL(r1, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(r1, bcos::front::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(testFrontMessage_5)
@@ -221,7 +221,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_5)
 
     FrontMessage decodeMessage;
     auto r1 = decodeMessage.decode(bytesConstRef(buffer->data(), buffer->size()));
-    BOOST_CHECK_EQUAL(r1, MessageDecodeStatus::MESSAGE_COMPLETE);
+    BOOST_CHECK_EQUAL(r1, bcos::front::MessageDecodeStatus::MESSAGE_COMPLETE);
     BOOST_CHECK_EQUAL(
         payload, std::string(decodeMessage.payload().begin(), decodeMessage.payload().end()));
 }

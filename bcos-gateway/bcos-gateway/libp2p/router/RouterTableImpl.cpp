@@ -110,7 +110,17 @@ RouterTable::RouterTable(bytesConstRef _decodedData) : RouterTable()
     decode(_decodedData);
 }
 
-std::map<std::string, RouterTableEntryInterface::Ptr> const& RouterTable::routerEntries()
+std::string RouterTableEntry::printDstNode() const
+{
+    return printShortP2pID(dstNode());
+}
+
+std::string RouterTableEntry::printNextHop() const
+{
+    return printShortP2pID(nextHop());
+}
+
+std::map<std::string, RouterTableEntry::Ptr> const& RouterTable::routerEntries()
 {
     return m_routerEntries;
 }
@@ -130,21 +140,6 @@ void RouterTable::setUnreachableDistance(int _unreachableDistance)
     m_unreachableDistance = _unreachableDistance;
 }
 
-RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable()
-{
-    return std::make_shared<RouterTable>();
-}
-
-RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable(bcos::bytesConstRef _decodedData)
-{
-    return std::make_shared<RouterTable>(_decodedData);
-}
-
-RouterTableEntryInterface::Ptr RouterTableFactoryImpl::createRouterEntry()
-{
-    return std::make_shared<RouterTableEntry>();
-}
-
 void RouterTable::encode(bcos::bytes& _encodedData)
 {
     WriteGuard writeGuard(x_routerEntries);
@@ -152,8 +147,7 @@ void RouterTable::encode(bcos::bytes& _encodedData)
     // encode m_routerEntries
     for (auto const& it : m_routerEntries)
     {
-        auto entry = std::dynamic_pointer_cast<RouterTableEntry>(it.second);
-        m_inner()->routerEntries.emplace_back(entry->inner());
+        m_inner()->routerEntries.emplace_back(it.second->inner());
     }
     tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
     m_inner()->writeTo(output);
@@ -228,7 +222,7 @@ void RouterTable::updateDistanceForAllRouterEntries(
 }
 
 bool RouterTable::update(std::set<std::string>& _unreachableNodes,
-    std::string const& _generatedFrom, RouterTableEntryInterface::Ptr _entry)
+    std::string const& _generatedFrom, RouterTableEntry::Ptr _entry)
 {
     if (c_fileLogLevel <= TRACE) [[unlikely]]
     {
@@ -270,7 +264,7 @@ bool RouterTable::update(std::set<std::string>& _unreachableNodes,
 }
 
 bool RouterTable::updateDstNodeEntry(
-    std::string const& _generatedFrom, RouterTableEntryInterface::Ptr _entry)
+    std::string const& _generatedFrom, RouterTableEntry::Ptr _entry)
 {
     UpgradableGuard upgradableGuard(x_routerEntries);
     // the node self

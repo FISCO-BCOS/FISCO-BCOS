@@ -10,8 +10,7 @@
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-gateway/gateway/GatewayMessageExtAttributes.h"
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
-#include "bcos-gateway/gateway/ProGatewayNodeManager.h"
-#include "bcos-gateway/libamop/AirTopicManager.h"
+#include "bcos-gateway/libamop/TopicManager.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Host.h"
@@ -22,8 +21,6 @@
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include "bcos-gateway/libp2p/ServiceV2.h"
-#include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
 #include "bcos-tars-protocol/protocol/GroupInfoCodecImpl.h"
@@ -732,9 +729,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     Service::Ptr service = nullptr;
     if (enableRIPProtocol)
     {
-        auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
-        service = std::make_shared<ServiceV2>(
-            selfInfo, routerTableFactory, *ioServicePool->getIOService());
+        service = std::make_shared<Service>(selfInfo, *ioServicePool->getIOService());
     }
     else
     {
@@ -800,8 +795,11 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             }
             else
             {
-                gatewayNodeManager = std::make_shared<ProGatewayNodeManager>(
-                    _config->uuid(), pubHex, keyFactory, service, *m_ioServicePool->getIOService());
+                // pro/tars mode without a failover entry point: enable the node-alive detector
+                // (the former ProGatewayNodeManager)
+                gatewayNodeManager = std::make_shared<GatewayNodeManager>(_config->uuid(), pubHex,
+                    keyFactory, service, *m_ioServicePool->getIOService(),
+                    /*_enableNodeAliveDetection=*/true);
             }
 
             if (!_config->readonly())
@@ -884,7 +882,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         {
             auto gatewayRateLimiterWeakPtr =
                 std::weak_ptr<ratelimiter::GatewayRateLimiter>(gatewayRateLimiter);
-            service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](SessionFace& _session,
+            service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](Session& _session,
                                                  const Message& _msg,
                                                  uint32_t _wireLength) -> std::optional<bcos::Error> {
                 auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
@@ -914,7 +912,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 return {};
             });
 
-            service->setOnMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
+            service->setOnMessageHandler([gatewayRateLimiterWeakPtr](std::shared_ptr<Session> _session,
                                              Message::Ptr _message) -> std::optional<bcos::Error> {
                 auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
                 if (!gatewayRateLimiter)
@@ -999,29 +997,28 @@ void GatewayFactory::initFailOver(
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
-    P2PInterface::Ptr _network, P2pID const& _p2pNodeID)
+    Service::Ptr _network, P2pID const& _p2pNodeID)
 {
     auto topicManager = std::make_shared<TopicManager>(m_rpcServiceName, _network);
     auto amopMessageFactory = std::make_shared<AMOPMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
 
-    auto service = std::dynamic_pointer_cast<Service>(_network);
-    registerAMOPHandlers(service, topicManager);
+    registerAMOPHandlers(_network, topicManager);
 
     return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
         _p2pNodeID, *m_ioServicePool->getIOService(), m_ioServicePool);
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
-    P2PInterface::Ptr _network, P2pID const& _p2pNodeID)
+    Service::Ptr _network, P2pID const& _p2pNodeID)
 {
     // Note: must set rpc to the topicManager before start the amop
-    auto topicManager = std::make_shared<LocalTopicManager>(m_rpcServiceName, _network);
+    auto topicManager =
+        std::make_shared<TopicManager>(m_rpcServiceName, _network, /*_localMode=*/true);
     auto amopMessageFactory = std::make_shared<AMOPMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
 
-    auto service = std::dynamic_pointer_cast<Service>(_network);
-    registerAMOPHandlers(service, topicManager);
+    registerAMOPHandlers(_network, topicManager);
 
     return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
         _p2pNodeID, *m_ioServicePool->getIOService(), m_ioServicePool);

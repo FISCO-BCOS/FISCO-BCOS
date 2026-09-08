@@ -100,7 +100,7 @@ public:
     // create its own Timer threads); the test owns it and passes it in.
     MinimalPBFTConfig(boost::asio::io_context& _ioContext, CryptoSuite::Ptr _cryptoSuite,
         KeyPairInterface::Ptr _keyPair, std::shared_ptr<ValidatorInterface> _validator,
-        std::shared_ptr<FrontServiceInterface> _frontService, BlockFactory::Ptr _blockFactory)
+        std::shared_ptr<FrontService> _frontService, BlockFactory::Ptr _blockFactory)
       : PBFTConfig(_ioContext, std::move(_cryptoSuite), std::move(_keyPair),
             std::make_shared<PBFTMessageFactoryImpl>(), nullptr, std::move(_validator),
             std::move(_frontService), nullptr, nullptr, std::move(_blockFactory))

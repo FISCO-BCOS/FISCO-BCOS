@@ -19,19 +19,32 @@
  */
 
 #pragma once
-#include <bcos-framework/front/FrontServiceInterface.h>
-#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-framework/front/FrontServiceTypeDef.h>
 #include <bcos-framework/gateway/GroupNodeInfo.h>
+#include <bcos-front/FrontServiceGateway.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/asio.hpp>
 #include <atomic>
 #include <functional>
+#include <optional>
+#include <range/v3/view/any_view.hpp>
 #include <utility>
 
 namespace bcos::front
 {
-class FrontService : public FrontServiceInterface
+/**
+ * @brief: the in-process front service.
+ *
+ * The virtuals exist for the test fake (bcos::test::FakeFrontService), which inherits this class
+ * and re-implements the send/receive entry points against a scripted in-process fake gateway.
+ *
+ * enable_shared_from_this lets the send path (registerCallback / handleCallback /
+ * sendMessageByNodeIDByOwnedPayload) keep the front object alive for the whole detached send
+ * instead of holding a raw `this`.
+ */
+class FrontService : public std::enable_shared_from_this<FrontService>
 {
 public:
     using Ptr = std::shared_ptr<FrontService>;
@@ -39,13 +52,13 @@ public:
     FrontService();
     FrontService(const FrontService&) = delete;
     FrontService(FrontService&&) = delete;
-    ~FrontService() noexcept override;
+    virtual ~FrontService() noexcept;
 
     FrontService& operator=(const FrontService&) = delete;
     FrontService& operator=(FrontService&&) = delete;
 
-    void start() override;
-    void stop() override;
+    virtual void start();
+    virtual void stop();
 
     // check the startup parameters, if the required parameters are not set
     // properly, exception will be thrown
@@ -55,8 +68,8 @@ public:
      * @brief: (coroutine) get the latest groupNodeInfo the gateway pushed to this front
      * @return {error, groupNodeInfo}: error is nullptr on success
      */
-    task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo()
-        override;
+    virtual task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>>
+    getGroupNodeInfo();
     /**
      * @brief: (coroutine) send response
      * @param _id: the request id
@@ -65,35 +78,45 @@ public:
      * @param _data: message (a view kept alive by the caller for the duration of the co_await)
      * @return error: nullptr on success, the gateway send failure otherwise
      */
-    task::Task<Error::Ptr> sendResponse(std::string _id, int _moduleID,
-        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) override;
+    virtual task::Task<Error::Ptr> sendResponse(std::string _id, int _moduleID,
+        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data);
 
-    task::Task<void> broadcastMessage(
+    virtual task::Task<void> broadcastMessage(
         uint16_t type, int moduleID,
-        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override;
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads);
 
     /**
      * @brief: (coroutine, zero-copy) send message to one node and await the module-level response.
      *         The payload rides as views that the caller keeps alive for the duration of the
      *         co_await; the coroutine resumes with the peer's response (or timeout / gateway
-     *         failure). See FrontServiceInterface::sendMessageByNodeID for the contract.
+     *         failure). With _timeout == 0 the send is fire-and-forget: no response is expected
+     *         and the coroutine returns as soon as the gateway send completes.
+     *
+     * The payloads must be at least forward ranges: implementations may iterate them multiple
+     * times (e.g. a retry loop).
+     *
+     * @param _moduleID: moduleID
+     * @param _nodeID: the receiver nodeID
+     * @param _payloads: message content (views, kept alive by the caller)
+     * @param _timeout: the module-response timeout in milliseconds; 0 = fire-and-forget
      */
-    task::Task<SendResult> sendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+    virtual task::Task<SendResult> sendMessageByNodeID(int _moduleID,
+        bcos::crypto::NodeIDPtr _nodeID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
-        uint32_t _timeout) override;
+        uint32_t _timeout);
 
     // FIB-185: dispatch the gateway broadcast onto a serial send queue (off the caller thread) so a
     // caller holding a lock (PBFT under m_mutex) is not coupled to gateway session-lock contention.
     // The owned payload is captured by the queued task -> the message body is never copied.
-    void broadcastMessageByOwnedPayload(
-        uint16_t type, int moduleID, bytesPointer payload) override;
+    virtual void broadcastMessageByOwnedPayload(
+        uint16_t type, int moduleID, bytesPointer payload);
 
     // FIB-185: dispatch the point-to-point gateway send onto the serial send queue (off the caller
     // thread), so sendViewChange / sendRecoverResponse run under m_mutex without contending the
     // gateway session lock. Point-to-point encodes the wire frame, so this is not zero-copy; the
     // owned payload is captured only to keep it alive across the deferred encode.
-    void sendMessageByNodeIDByOwnedPayload(
-        int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload) override;
+    virtual void sendMessageByNodeIDByOwnedPayload(
+        int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload);
 
     /**
      * @brief: (coroutine) receive nodeIDs from gateway
@@ -101,8 +124,8 @@ public:
      * @param _groupNodeInfo: nodeIDs pushed by gateway
      * @return error: nullptr on success
      */
-    task::Task<Error::Ptr> onReceiveGroupNodeInfo(std::string _groupID,
-        bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) override;
+    virtual task::Task<Error::Ptr> onReceiveGroupNodeInfo(std::string _groupID,
+        bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
     /**
      * @brief: (coroutine) receive message from gateway
@@ -112,8 +135,8 @@ public:
      *        completes; the payload is copied before the deferred module dispatch)
      * @return error: nullptr on success
      */
-    task::Task<Error::Ptr> onReceiveMessage(std::string _groupID,
-        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) override;
+    virtual task::Task<Error::Ptr> onReceiveMessage(std::string _groupID,
+        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data);
 
     /**
      * @brief: (coroutine) receive broadcast message from gateway
@@ -122,8 +145,8 @@ public:
      * @param _data: received message data (a view — same lifetime contract as onReceiveMessage)
      * @return error: nullptr on success
      */
-    task::Task<Error::Ptr> onReceiveBroadcastMessage(std::string _groupID,
-        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) override;
+    virtual task::Task<Error::Ptr> onReceiveBroadcastMessage(std::string _groupID,
+        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data);
 
     /**
      * @brief: handle message timeout
@@ -139,14 +162,13 @@ public:
     std::string groupID() const;
     void setGroupID(const std::string& _groupID);
 
-    std::shared_ptr<gateway::GatewayInterface> gatewayInterface();
+    virtual bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const;
 
-    bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const override;
-
-    void setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface);
+    // Bind the gateway the front sends through (see FrontServiceGateway.h); called once by the
+    // assembly side before start().
+    void setGateway(FrontServiceGateway _gateway);
 
     std::shared_ptr<boost::asio::io_context> ioService() const;
-    void setIoService(std::shared_ptr<boost::asio::io_context> _ioService);
     void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool);
 
     // register message _dispatcher for module
@@ -175,7 +197,7 @@ public:
         using Ptr = std::shared_ptr<Callback>;
         uint64_t startTime = utcSteadyTime();
         CallbackFunc callbackFunc;
-        std::shared_ptr<boost::asio::steady_timer> timeoutHandler;
+        std::optional<boost::asio::steady_timer> timeoutHandler;
     };
     // lock m_callback
     mutable bcos::Mutex x_callback;
@@ -190,12 +212,12 @@ public:
     void addCallback(const std::string& _uuid, Callback::Ptr callback);
 
 protected:
-    virtual void handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoad,
+    void handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoad,
         std::string const& _uuid, int _moduleID, bcos::crypto::NodeIDPtr _nodeID);
     void notifyGroupNodeInfo(
         const std::string& _groupID, const bcos::gateway::GroupNodeInfo::Ptr& _groupNodeInfo);
 
-    virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
+    void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
     // FIB-185: hand a send task to the serial send strand and return immediately; tasks run FIFO
     // on the shared IOServicePool (serialized, never concurrently), so no caller thread runs the
@@ -219,8 +241,8 @@ private:
     std::atomic<size_t> m_pendingSendCount{0};
     // timer
     std::shared_ptr<boost::asio::io_context> m_ioService;
-    /// gateway interface
-    std::shared_ptr<bcos::gateway::GatewayInterface> m_gatewayInterface;
+    /// gateway send entry points (bound via setGateway)
+    FrontServiceGateway m_gateway;
 
     std::unordered_map<int,
         std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>>

@@ -293,8 +293,8 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNod
     task::wait([](FrontServiceInfo::Ptr _frontServiceInfo, std::string _groupID,
                    NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, std::shared_ptr<P2PMessage> _msg,
                    ErrorRespFunc _errorRespFunc) -> task::Task<void> {
-        auto error = co_await _frontServiceInfo->frontService()->onReceiveMessage(
-            _groupID, _srcNodeID, _msg->payload());
+        auto error = co_await onReceiveMessage(
+            _frontServiceInfo->frontService(), _groupID, _srcNodeID, _msg->payload());
         if (_errorRespFunc)
         {
             _errorRespFunc(error);
@@ -543,7 +543,7 @@ bcos::task::Task<void> bcos::gateway::Gateway::broadcastMessage(uint16_t type,
     co_await m_gatewayNodeManager->peersRouterTable()->broadcastMessage(
         type, groupID, moduleID, message, std::move(payloads));
 }
-bcos::gateway::Gateway::Gateway(GatewayConfig::Ptr _gatewayConfig, P2PInterface::Ptr _p2pInterface,
+bcos::gateway::Gateway::Gateway(GatewayConfig::Ptr _gatewayConfig, Service::Ptr _p2pInterface,
     GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
     ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter, std::string _gatewayServiceName)
   : m_gatewayServiceName(std::move(_gatewayServiceName)),
@@ -570,7 +570,7 @@ bcos::gateway::Gateway::~Gateway()
 {
     stop();
 }
-bcos::gateway::P2PInterface::Ptr bcos::gateway::Gateway::p2pInterface() const
+bcos::gateway::Service::Ptr bcos::gateway::Gateway::p2pInterface() const
 {
     return m_p2pInterface;
 }
@@ -623,7 +623,7 @@ bcos::amop::AMOPImpl::Ptr bcos::gateway::Gateway::amop()
 }
 bool bcos::gateway::Gateway::registerNode(const std::string& _groupID,
     bcos::crypto::NodeIDPtr _nodeID, bcos::protocol::NodeType _nodeType,
-    bcos::front::FrontServiceInterface::Ptr _frontService,
+    bcos::front::FrontService::Ptr _frontService,
     bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
 {
     return m_gatewayNodeManager->registerNode(

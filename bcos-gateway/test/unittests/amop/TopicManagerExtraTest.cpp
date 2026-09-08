@@ -17,19 +17,13 @@ namespace bcos::test
 {
 namespace
 {
-// subTopic() calls the virtual createAndGetServiceByClient/notifyRpc which
-// touch the (null) network; override them so the in-memory topic logic is
+// subTopic() calls createAndGetServiceByClient, which in non-local mode would touch the tars
+// network; local mode returns the (null) local client instead, so the in-memory topic logic is
 // testable standalone.
-class TestTopicManager : public TopicManager
+TopicManager makeTestTopicManager()
 {
-public:
-    using TopicManager::TopicManager;
-    bcos::rpc::RPCInterface::Ptr createAndGetServiceByClient(std::string const&) override
-    {
-        return nullptr;
-    }
-    void notifyRpcToSubscribeTopics() override {}
-};
+    return TopicManager("rpc", nullptr, /*_localMode=*/true);
+}
 
 TopicItems items(std::initializer_list<std::string> names)
 {
@@ -46,7 +40,7 @@ BOOST_AUTO_TEST_SUITE(TopicManagerExtraTest)
 
 BOOST_AUTO_TEST_CASE(subscribeAndQueryByClient)
 {
-    TestTopicManager mgr("rpc", nullptr);
+    auto mgr = makeTestTopicManager();
     mgr.subTopic("clientA", items({"t1", "t2"}));
 
     TopicItems got;
@@ -59,7 +53,7 @@ BOOST_AUTO_TEST_CASE(subscribeAndQueryByClient)
 
 BOOST_AUTO_TEST_CASE(topicSeqIncrements)
 {
-    TestTopicManager mgr("rpc", nullptr);
+    auto mgr = makeTestTopicManager();
     auto before = mgr.topicSeq();
     mgr.subTopic("clientA", items({"t1"}));  // non-empty → incTopicSeq
     BOOST_CHECK_GT(mgr.topicSeq(), before);
@@ -67,7 +61,7 @@ BOOST_AUTO_TEST_CASE(topicSeqIncrements)
 
 BOOST_AUTO_TEST_CASE(removeTopicsSubset)
 {
-    TestTopicManager mgr("rpc", nullptr);
+    auto mgr = makeTestTopicManager();
     mgr.subTopic("clientA", items({"t1", "t2", "t3"}));
     mgr.removeTopics("clientA", {"t2"});
 
@@ -79,7 +73,7 @@ BOOST_AUTO_TEST_CASE(removeTopicsSubset)
 
 BOOST_AUTO_TEST_CASE(removeTopicsByClientClearsAll)
 {
-    TestTopicManager mgr("rpc", nullptr);
+    auto mgr = makeTestTopicManager();
     mgr.subTopic("clientA", items({"t1", "t2"}));
     mgr.removeTopicsByClient("clientA");
 
@@ -89,7 +83,7 @@ BOOST_AUTO_TEST_CASE(removeTopicsByClientClearsAll)
 
 BOOST_AUTO_TEST_CASE(reverseLookupClientsByTopic)
 {
-    TestTopicManager mgr("rpc", nullptr);
+    auto mgr = makeTestTopicManager();
     mgr.subTopic("clientA", items({"shared", "a-only"}));
     mgr.subTopic("clientB", items({"shared"}));
 
@@ -103,7 +97,7 @@ BOOST_AUTO_TEST_CASE(reverseLookupClientsByTopic)
 
 BOOST_AUTO_TEST_CASE(queryTopicsSubByClientJson)
 {
-    TestTopicManager mgr("rpc", nullptr);
+    auto mgr = makeTestTopicManager();
     mgr.subTopic("clientA", items({"t1"}));
     auto json = mgr.queryTopicsSubByClient();
     BOOST_CHECK(!json.empty());

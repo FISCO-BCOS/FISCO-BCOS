@@ -29,7 +29,7 @@ using namespace bcos::initializer;
 
 TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     ProtocolInitializer::Ptr _protocolInitializer,
-    bcos::front::FrontServiceInterface::Ptr _frontService,
+    bcos::front::FrontService::Ptr _frontService,
     bcos::ledger::LedgerInterface::Ptr _ledger,
     boost::asio::io_context& _ioContext,
     bcos::IOServicePool::Ptr _ioServicePool)

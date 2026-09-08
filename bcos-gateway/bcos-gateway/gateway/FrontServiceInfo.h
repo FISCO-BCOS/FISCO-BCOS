@@ -18,7 +18,7 @@
  * @date 2021-05-13
  */
 #pragma once
-#include "bcos-framework/front/FrontServiceInterface.h"
+#include "FrontServiceHandle.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"
 #include "bcos-tars-protocol/tars/FrontService.h"
@@ -30,9 +30,9 @@ class FrontServiceInfo
 {
 public:
     using Ptr = std::shared_ptr<FrontServiceInfo>;
-    FrontServiceInfo(std::string _nodeID, bcos::front::FrontServiceInterface::Ptr _frontService,
+    FrontServiceInfo(std::string _nodeID, FrontServiceHandle _frontService,
         bcos::protocol::NodeType _type, bcostars::FrontServicePrx _frontServicePrx);
-    bcos::front::FrontServiceInterface::Ptr frontService();
+    FrontServiceHandle const& frontService() const;
     bcostars::FrontServicePrx frontServicePrx();
 
     bool unreachable();
@@ -48,7 +48,7 @@ public:
 private:
     std::string m_nodeID;
     bcos::protocol::NodeType m_nodeType;
-    bcos::front::FrontServiceInterface::Ptr m_frontService;
+    FrontServiceHandle m_frontService;
     bcostars::FrontServicePrx m_frontServicePrx;
 
     bcos::protocol::ProtocolInfo::ConstPtr m_protocolInfo;

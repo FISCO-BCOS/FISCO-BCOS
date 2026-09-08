@@ -22,8 +22,9 @@
 
 #include "bcos-crypto/signature/key/KeyFactoryImpl.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-front/FrontServiceFactory.h"
+#include "bcos-front/FrontService.h"
 #include "bcos-gateway/GatewayFactory.h"
+#include "bcos-gateway/gateway/GatewayHandle.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/uuid/uuid.hpp>
@@ -35,7 +36,6 @@ inline std::shared_ptr<bcos::front::FrontService> buildFrontService(
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto gatewayFactory = std::make_shared<bcos::gateway::GatewayFactory>("", "");
-    auto frontServiceFactory = std::make_shared<bcos::front::FrontServiceFactory>();
     auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "frontBuild");
     auto threadPool = std::make_shared<bcos::IOServicePool>(16, "frontServiceTest");
 
@@ -47,11 +47,12 @@ inline std::shared_ptr<bcos::front::FrontService> buildFrontService(
     auto nodeIDPtr =
         keyFactory->createKey(bcos::bytesConstRef((bcos::byte*)_nodeID.data(), _nodeID.size()));
 
-    frontServiceFactory->setGatewayInterface(gateway);
-    frontServiceFactory->setIOServicePool(ioServicePool);
-
     // create frontService
-    auto frontService = frontServiceFactory->buildFrontService(_groupID, nodeIDPtr);
+    auto frontService = std::make_shared<bcos::front::FrontService>();
+    frontService->setGroupID(_groupID);
+    frontService->setNodeID(nodeIDPtr);
+    frontService->setIOServicePool(ioServicePool);
+    frontService->setGateway(bcos::gateway::makeFrontServiceGateway(gateway));
     // register front service to gateway
     gateway->gatewayNodeManager()->registerNode(
         _groupID, nodeIDPtr, bcos::protocol::NodeType::CONSENSUS_NODE, frontService, nullptr);

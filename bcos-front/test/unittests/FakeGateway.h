@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include <bcos-framework/front/FrontServiceInterface.h>
-#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-front/FrontService.h>
+#include <bcos-gateway/Gateway.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/asio.hpp>
@@ -30,14 +30,16 @@
 
 namespace bcos::front::test
 {
-class FakeGateway : public gateway::GatewayInterface,
-                    public std::enable_shared_from_this<FakeGateway>
+// Inherits the concrete gateway::Gateway via its protected default ctor and overrides the
+// send/query entry points with scripted local delivery into the front service under test.
+class FakeGateway : public gateway::Gateway
 {
 public:
-    virtual ~FakeGateway() {}
+    FakeGateway() : gateway::Gateway() {}
+    ~FakeGateway() override {}
 
-    std::weak_ptr<FrontServiceInterface> m_frontService;
-    void setFrontService(std::shared_ptr<FrontServiceInterface> _frontService)
+    std::weak_ptr<FrontService> m_frontService;
+    void setFrontService(FrontService::Ptr _frontService)
     {
         m_frontService = _frontService;
     }

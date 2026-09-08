@@ -21,13 +21,16 @@
 #pragma once
 #include "../txpool/interfaces/TxPoolStorageInterface.h"
 #include "interfaces/TxsSyncMsgFactory.h"
-#include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/sync/SyncConfig.h>
 
 #include <atomic>
 #include <utility>
+namespace bcos::front
+{
+class FrontService;
+}
 namespace bcos
 {
 namespace sync
@@ -37,7 +40,7 @@ class TransactionSyncConfig : public SyncConfig
 public:
     using Ptr = std::shared_ptr<TransactionSyncConfig>;
     TransactionSyncConfig(bcos::crypto::NodeIDPtr _nodeId,
-        bcos::front::FrontServiceInterface::Ptr _frontService,
+        std::shared_ptr<bcos::front::FrontService> _frontService,
         bcos::txpool::TxPoolStorageInterface::Ptr _txpoolStorage,
         bcos::sync::TxsSyncMsgFactory::Ptr _msgFactory,
         bcos::protocol::BlockFactory::Ptr _blockFactory,
@@ -52,7 +55,7 @@ public:
 
     ~TransactionSyncConfig() override = default;
 
-    bcos::front::FrontServiceInterface::Ptr frontService() { return m_frontService; }
+    std::shared_ptr<bcos::front::FrontService> frontService() { return m_frontService; }
     bcos::txpool::TxPoolStorageInterface::Ptr txpoolStorage() { return m_txpoolStorage; }
     bcos::sync::TxsSyncMsgFactory::Ptr msgFactory() { return m_msgFactory; }
 
@@ -88,7 +91,7 @@ public:
     uint64_t blockTxCountLimit() const noexcept { return m_blockTxCountLimit.load(); }
 
 private:
-    bcos::front::FrontServiceInterface::Ptr m_frontService;
+    std::shared_ptr<bcos::front::FrontService> m_frontService;
     bcos::txpool::TxPoolStorageInterface::Ptr m_txpoolStorage;
     bcos::sync::TxsSyncMsgFactory::Ptr m_msgFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

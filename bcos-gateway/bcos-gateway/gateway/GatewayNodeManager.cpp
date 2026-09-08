@@ -35,6 +35,10 @@ GatewayNodeManager::~GatewayNodeManager() = default;
 void GatewayNodeManager::start()
 {
     m_timer->start();
+    if (m_nodeAliveDetector)
+    {
+        m_nodeAliveDetector->start();
+    }
 }
 
 LocalRouterTable::Ptr GatewayNodeManager::localRouterTable()
@@ -53,12 +57,11 @@ std::shared_ptr<bcos::crypto::KeyFactory> GatewayNodeManager::keyFactory()
 }
 
 GatewayNodeManager::GatewayNodeManager(std::string const& _uuid,
-    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
+    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, Service::Ptr _p2pInterface)
   : m_uuid(_uuid),
     m_keyFactory(_keyFactory),
     m_localRouterTable(std::make_shared<LocalRouterTable>(_keyFactory)),
-    m_peersRouterTable(std::make_shared<PeersRouterTable>(_uuid, _keyFactory, _p2pInterface)),
-    m_gatewayNodeStatusFactory(std::make_shared<GatewayNodeStatusFactory>())
+    m_peersRouterTable(std::make_shared<PeersRouterTable>(_uuid, _keyFactory, _p2pInterface))
 {}
 
 uint32_t GatewayNodeManager::increaseSeq()
@@ -73,8 +76,8 @@ uint32_t GatewayNodeManager::statusSeq()
 }
 
 GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
-    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface,
-    boost::asio::io_context& _ioContext)
+    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, Service::Ptr _p2pInterface,
+    boost::asio::io_context& _ioContext, bool _enableNodeAliveDetection)
   : GatewayNodeManager(_uuid, _keyFactory, _p2pInterface)
 {
     m_uuid = _uuid;
@@ -126,10 +129,21 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
         }
         broadcastStatusSeq();
     });
+
+    if (_enableNodeAliveDetection)
+    {
+        m_nodeAliveDetector =
+            std::make_shared<Timer>(_ioContext, c_tarsAdminRefreshTimeInterval, "nodeUpdater");
+        m_nodeAliveDetector->registerTimeoutHandler([this]() { detectNodeAlive(); });
+    }
 }
 
 void GatewayNodeManager::stop()
 {
+    if (m_nodeAliveDetector)
+    {
+        m_nodeAliveDetector->stop();
+    }
     if (m_p2pInterface)
     {
         m_p2pInterface->eraseHandlerByMsgType(GatewayMessageType::SyncNodeSeq);
@@ -143,7 +157,7 @@ void GatewayNodeManager::stop()
 }
 
 bool GatewayNodeManager::registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-    bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService,
+    bcos::protocol::NodeType _nodeType, bcos::front::FrontService::Ptr _frontService,
     bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
 {
     auto ret =
@@ -175,7 +189,7 @@ void GatewayNodeManager::onReceiveStatusSeq(
         return;
     }
     // FIB-183: onReceiveStatusSeq reads a 4-byte sequence via *(uint32_t*)payload().data()
-    // with no size check (same defect class fixed in ServiceV2::onReceiveRouterSeq); a 0-3 byte
+    // with no size check (same defect class fixed in the RIP-mode Service::onReceiveRouterSeq); a 0-3 byte
     // payload reads past the decoded buffer. Drop short payloads and use memcpy for the read.
     if (_msg->payload().size() < sizeof(uint32_t))
     {
@@ -198,7 +212,7 @@ void GatewayNodeManager::onReceiveStatusSeq(
     auto p2pInterface = m_p2pInterface;
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
     // (empty) payload rides as a view; an unreachable peer is an expected, recoverable state.
-    task::wait([](P2PInterface::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID)
+    task::wait([](Service::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID)
                    -> task::Task<void> {
         P2PMessageV2 message;
         message.setPacketType(_type);
@@ -236,7 +250,7 @@ void GatewayNodeManager::onReceiveNodeStatus(
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
-    auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
+    auto gatewayNodeStatus = std::make_shared<GatewayNodeStatus>();
     gatewayNodeStatus->decode(bytesConstRef(_msg->payload().data(), _msg->payload().size()));
     auto const& from = (!_msg->srcP2PNodeID().empty()) ? _msg->srcP2PNodeID() : _session->p2pID();
 
@@ -271,8 +285,24 @@ bool GatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _gro
     {
         increaseSeq();
         syncLatestNodeIDList();
+        if (m_nodeAliveDetector)
+        {
+            m_nodeAliveDetector->restart();
+        }
     }
     return updated;
+}
+
+void GatewayNodeManager::detectNodeAlive()
+{
+    m_nodeAliveDetector->restart();
+    auto updated = m_localRouterTable->eraseUnreachableNodes();
+    if (updated)
+    {
+        increaseSeq();
+    }
+
+    syncLatestNodeIDList();
 }
 
 void GatewayNodeManager::onRequestNodeStatus(
@@ -298,7 +328,7 @@ void GatewayNodeManager::onRequestNodeStatus(
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
     // node status payload is moved into it (the caller's buffer does not outlive the deferred
     // send); an unreachable peer is an expected, recoverable state.
-    task::wait([](P2PInterface::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID,
+    task::wait([](Service::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID,
                    bcos::bytes _payload) -> task::Task<void> {
         P2PMessageV2 message;
         message.setPacketType(_type);
@@ -321,14 +351,14 @@ void GatewayNodeManager::onRequestNodeStatus(
 
 bytesPointer GatewayNodeManager::generateNodeStatus()
 {
-    auto nodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
+    auto nodeStatus = std::make_shared<GatewayNodeStatus>();
     nodeStatus->setUUID(m_uuid);
     nodeStatus->setSeq(statusSeq());
     auto nodeList = m_localRouterTable->nodeList();
     std::vector<GroupNodeInfo::Ptr> groupNodeInfos;
     for (auto const& it : nodeList)
     {
-        auto groupNodeInfo = m_gatewayNodeStatusFactory->createGroupNodeInfo();
+        auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
         groupNodeInfo->setGroupID(it.first);
         // get nodeID and type
         std::vector<std::string> nodeIDList;
@@ -420,7 +450,7 @@ void GatewayNodeManager::broadcastStatusSeq()
     // value message held by shared_ptr; the 4-byte seq payload is owned by it (zero-copy view
     // send). The p2p interface is passed as a coroutine parameter so it is copied into the frame
     // and stays alive for the whole (possibly deferred) send.
-    task::wait([](P2PInterface::Ptr _p2p, bcos::bytes _payload) mutable
+    task::wait([](Service::Ptr _p2p, bcos::bytes _payload) mutable
                    -> task::Task<void> {
         auto message = std::make_shared<P2PMessageV2>();
         message->setPacketType(GatewayMessageType::SyncNodeSeq);
@@ -442,11 +472,10 @@ void GatewayNodeManager::syncLatestNodeIDList()
                                << LOG_KV("nodeCount", groupNodeInfos->nodeIDList().size());
         for (const auto& entry : localNodeEntryPoints)
         {
-            task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService,
-                           std::string _groupID,
+            task::wait([](FrontServiceHandle _frontService, std::string _groupID,
                            GroupNodeInfo::Ptr _groupNodeInfo) -> task::Task<void> {
-                auto error = co_await _frontService->onReceiveGroupNodeInfo(
-                    std::move(_groupID), std::move(_groupNodeInfo));
+                auto error = co_await onReceiveGroupNodeInfo(
+                    _frontService, std::move(_groupID), std::move(_groupNodeInfo));
                 if (!error)
                 {
                     co_return;
@@ -462,7 +491,7 @@ void GatewayNodeManager::syncLatestNodeIDList()
 
 GroupNodeInfo::Ptr GatewayNodeManager::getGroupNodeInfoList(const std::string& _groupID)
 {
-    auto groupNodeInfo = m_gatewayNodeStatusFactory->createGroupNodeInfo();
+    auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
     groupNodeInfo->setGroupID(_groupID);
 
     m_localRouterTable->getGroupNodeInfoList(groupNodeInfo, _groupID);

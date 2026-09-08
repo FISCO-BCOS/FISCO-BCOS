@@ -9,15 +9,17 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
-#include "bcos-gateway/libnetwork/SessionFace.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/Overloaded.h"
 #include "bcos-utilities/Timer.h"
+#include <bcos-task/Task.h>
 #include <oneapi/tbb/concurrent_queue.h>
 #include <boost/asio/buffer.hpp>
 #include <boost/container/small_vector.hpp>
 #include <boost/heap/priority_queue.hpp>
+#include <range/v3/view/any_view.hpp>
 #include <atomic>
 #include <cstddef>
 #include <functional>
@@ -30,7 +32,7 @@
 namespace bcos::gateway
 {
 class Host;
-class SocketFace;
+class Socket;
 
 class SessionRecvBuffer
 {
@@ -88,7 +90,7 @@ struct Payload
     }
 };
 
-class Session : public SessionFace, public std::enable_shared_from_this<Session>
+class Session : public std::enable_shared_from_this<Session>
 {
 public:
     // Grow ceiling: the recv buffer never grows beyond this (see the read-loop grow path).
@@ -101,62 +103,60 @@ public:
     // header length so the first read can always make forward progress.
     constexpr static const std::size_t INITIAL_SESSION_RECV_BUFFER_SIZE = 16 * 1024UL;
 
-    Session(std::shared_ptr<SocketFace> socket, Host& server,
+    Session(std::shared_ptr<Socket> socket, Host& server,
         size_t _recvBufferSize = INITIAL_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
 
     Session(const Session&) = delete;
     Session(Session&&) = delete;
     Session& operator=(Session&&) = delete;
     Session& operator=(const Session&) = delete;
-    ~Session() noexcept override;
+    ~Session() noexcept;
 
     using Ptr = std::shared_ptr<Session>;
 
-    void start() override;
+    void start();
 
     // Read-policy seam (compile-time): identical lifecycle to start(), but the read loop is
     // compiled against an explicit ReadPolicy so read-loop test fakes can inject a policy that
     // parks / controls read completions (see ASIOInterface::awaitableReadSome). Production call
-    // sites use the virtual start() (the default policy) — this template costs nothing there.
+    // sites use start() (the default policy) — this template costs nothing there.
     // Definition lives in SessionReadLoop.h.
     template <typename ReadPolicy>
     void startWithPolicy();
-    void disconnect(DisconnectReason _reason) override;
+    void disconnect(DisconnectReason _reason);
 
     task::Task<Message::Ptr> fastSendMessage(const Message& message,
-        ::ranges::any_view<bytesConstRef> payloads, Options options) override;
+        ::ranges::any_view<bytesConstRef> payloads, Options options);
 
-    NodeIPEndpoint nodeIPEndpoint() const override;
+    NodeIPEndpoint nodeIPEndpoint() const;
 
-    bool active() const override;
+    bool active() const;
 
     bool active(Host& server) const;
 
-    std::size_t writeQueueSize() override;
+    std::size_t writeQueueSize();
 
-    virtual Host& host();
+    Host& host();
 
-    std::shared_ptr<SocketFace> socket() override;
-    virtual void setSocket(const std::shared_ptr<SocketFace>& socket);
+    std::shared_ptr<Socket> socket();
+    void setSocket(const std::shared_ptr<Socket>& socket);
 
-    virtual MessageFactory::Ptr messageFactory() const;
-    virtual void setMessageFactory(const MessageFactory::Ptr& _messageFactory);
+    MessageFactory::Ptr messageFactory() const;
+    void setMessageFactory(const MessageFactory::Ptr& _messageFactory);
 
     SessionCallbackManagerInterface::Ptr sessionCallbackManager() const;
     void setSessionCallbackManager(
         const SessionCallbackManagerInterface::Ptr& _sessionCallbackManager);
 
-    virtual const std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)>&
-    messageHandler();
+    const std::function<void(NetworkException, Session::Ptr, Message::Ptr)>& messageHandler();
     void setMessageHandler(
-        std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler)
-        override;
+        std::function<void(NetworkException, Session::Ptr, Message::Ptr)> messageHandler);
 
     // handle before sending message: if the check fails (returns an error), the message is not
     // sent and a NetworkException surfaces so coroutine retry loops can stop. The handler receives
     // the actual wire length (payload views included) as _wireLength.
     void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t _wireLength)> handler) override;
+        Session&, const Message&, uint32_t _wireLength)> handler);
 
     void setHostInfo(P2PInfo _hostInfo);
 
@@ -164,7 +164,7 @@ public:
     // exactly when the session object is destroyed, which Host uses to release a session-cap
     // slot (the guard's destructor decrements the Host counters). Kept opaque so libnetwork
     // does not depend on the accounting type.
-    void setLifetimeGuard(std::shared_ptr<void> _guard) override
+    void setLifetimeGuard(std::shared_ptr<void> _guard)
     {
         m_lifetimeGuard = std::move(_guard);
     }
@@ -197,7 +197,7 @@ public:
      */
     bool tryPopSomeEncodedMsgs(std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize);
 
-    virtual void checkNetworkStatus();
+    void checkNetworkStatus();
 
     // FIB-184 (review): keep the grow ceiling private so it can only be read via
     // maxRecvBufferSize() and never widened from outside. Declared before m_recvBuffer to preserve
@@ -262,7 +262,7 @@ public:
     void onMessage(NetworkException const& e, Message::Ptr message);
 
     std::reference_wrapper<Host> m_server;  ///< The host that owns us. Never null.
-    std::shared_ptr<SocketFace> m_socket;   ///< Socket of peer's connection.
+    std::shared_ptr<Socket> m_socket;       ///< Socket of peer's connection.
 
     MessageFactory::Ptr m_messageFactory;
     tbb::concurrent_queue<Payload> m_writeQueue;
@@ -278,9 +278,9 @@ public:
     std::atomic<bool> m_active{false};
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
-    std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
+    std::function<void(NetworkException, Session::Ptr, Message::Ptr)> m_messageHandler;
     std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
+        Session&, const Message&, uint32_t)> m_beforeMessageHandler;
 
     // Seqs of with-response sends registered through this session. The callback manager above is
     // shared host-wide, so drop() uses this set to fail only THIS session's pending response
@@ -337,10 +337,10 @@ public:
     SessionFactory(SessionFactory&&) = delete;
     SessionFactory& operator=(SessionFactory&&) = delete;
     SessionFactory& operator=(const SessionFactory&) = delete;
-    virtual ~SessionFactory() = default;
+    ~SessionFactory() = default;
 
-    virtual std::shared_ptr<SessionFace> createSession(Host& _server,
-        std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr& _messageFactory,
+    std::shared_ptr<Session> createSession(Host& _server,
+        std::shared_ptr<Socket> const& _socket, MessageFactory::Ptr& _messageFactory,
         SessionCallbackManagerInterface::Ptr& _sessionCallbackManager);
 
 private:

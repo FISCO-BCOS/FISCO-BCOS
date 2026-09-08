@@ -24,11 +24,10 @@
 #include "bcos-task/Wait.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
-#include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-front/FrontServiceFactory.h>
+#include <bcos-front/FrontService.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
 #include <utility>
 
@@ -38,18 +37,16 @@ using namespace bcos::front;
 
 FrontServiceInitializer::FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     bcos::initializer::ProtocolInitializer::Ptr _protocolInitializer,
-    bcos::gateway::GatewayInterface::Ptr _gateWay, bcos::IOServicePool::Ptr _ioServicePool)
+    bcos::gateway::GatewayHandle _gateWay, bcos::IOServicePool::Ptr _ioServicePool)
   : m_nodeConfig(std::move(_nodeConfig)),
     m_protocolInitializer(std::move(_protocolInitializer)),
-    m_gateWay(std::move(_gateWay)),
     m_ioServicePool(std::move(_ioServicePool))
 {
-    auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
-    frontServiceFactory->setGatewayInterface(m_gateWay);
-    frontServiceFactory->setIOServicePool(m_ioServicePool);
-
-    m_front = frontServiceFactory->buildFrontService(
-        m_nodeConfig->groupId(), m_protocolInitializer->keyPair()->publicKey());
+    m_front = std::make_shared<FrontService>();
+    m_front->setGroupID(m_nodeConfig->groupId());
+    m_front->setNodeID(m_protocolInitializer->keyPair()->publicKey());
+    m_front->setIOServicePool(m_ioServicePool);
+    m_front->setGateway(bcos::gateway::makeFrontServiceGateway(std::move(_gateWay)));
 }
 
 void FrontServiceInitializer::start()
@@ -270,7 +267,7 @@ bcos::crypto::KeyFactory::Ptr FrontServiceInitializer::keyFactory()
 {
     return m_protocolInitializer->keyFactory();
 }
-bcos::front::FrontServiceInterface::Ptr FrontServiceInitializer::front()
+std::shared_ptr<bcos::front::FrontService> FrontServiceInitializer::front()
 {
     return m_front;
 }

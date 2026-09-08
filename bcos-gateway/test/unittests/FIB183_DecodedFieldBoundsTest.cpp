@@ -21,8 +21,7 @@
 #include "bcos-gateway/Gateway.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
-#include "bcos-gateway/libp2p/ServiceV2.h"
-#include "bcos-gateway/libp2p/router/RouterTableImpl.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 
 #include <boost/test/unit_test.hpp>
@@ -50,14 +49,13 @@ public:
     }
 };
 
-// Exposes the protected router-seq handler.
-class FakeServiceV2FIB183 : public ServiceV2
+// Exposes the protected router-seq handler (RIP-router mode, formerly ServiceV2).
+class FakeServiceFIB183 : public Service
 {
 public:
-    // ServiceV2 borrows an external io_context now; the test owns it and passes it in.
-    FakeServiceV2FIB183(
-        P2PInfo const& _info, RouterTableFactory::Ptr _factory, boost::asio::io_context& _ioContext)
-      : ServiceV2(_info, std::move(_factory), _ioContext)
+    // RIP-router mode borrows an external io_context now; the test owns it and passes it in.
+    FakeServiceFIB183(P2PInfo const& _info, boost::asio::io_context& _ioContext)
+      : Service(_info, _ioContext)
     {}
     void callOnReceiveRouterSeq(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
@@ -119,9 +117,8 @@ BOOST_AUTO_TEST_CASE(ShortRouterSeqPayloadIsDropped)
     P2PInfo selfInfo;
     selfInfo.rawP2pID = "selfRawP2pID";
     selfInfo.p2pID = "selfP2pID";
-    auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
     boost::asio::io_context ioContext;
-    auto service = std::make_shared<FakeServiceV2FIB183>(selfInfo, routerTableFactory, ioContext);
+    auto service = std::make_shared<FakeServiceFIB183>(selfInfo, ioContext);
     auto factory = std::make_shared<P2PMessageFactoryV2>();
 
     for (size_t len = 0; len < sizeof(uint32_t); ++len)

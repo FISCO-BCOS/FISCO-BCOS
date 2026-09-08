@@ -28,7 +28,6 @@ class GatewayStatus
 public:
     using Ptr = std::shared_ptr<GatewayStatus>;
     GatewayStatus(std::string const& _uuid);
-    virtual ~GatewayStatus();
 
     std::string const& uuid() const;
 
@@ -58,15 +57,5 @@ private:
     // Most scenarios involve reading, with only a few involving writing,
     // so using a read-write lock will not cause significant additional overhead.
     mutable SharedMutex x_groupP2PNodeList;
-};
-
-class GatewayStatusFactory
-{
-public:
-    using Ptr = std::shared_ptr<GatewayStatusFactory>;
-    GatewayStatusFactory() = default;
-    virtual ~GatewayStatusFactory();
-
-    virtual GatewayStatus::Ptr createGatewayInfo(std::string const& _uuid);
 };
 }  // namespace bcos::gateway

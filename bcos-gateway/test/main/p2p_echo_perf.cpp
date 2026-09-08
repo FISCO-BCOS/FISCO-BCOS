@@ -190,7 +190,7 @@ int main(int argc, const char** argv)
                 // the removed asyncSendMessageByNodeID callback path): the message is passed as a
                 // coroutine parameter so it is copied into the frame and stays alive for the whole
                 // (possibly deferred) send.
-                task::wait([](P2PInterface::Ptr _service, P2pID _p2pID, P2PMessage::Ptr _message)
+                task::wait([](Service::Ptr _service, P2pID _p2pID, P2PMessage::Ptr _message)
                                -> task::Task<void> {
                     try
                     {

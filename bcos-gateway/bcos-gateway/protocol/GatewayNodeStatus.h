@@ -32,33 +32,21 @@ public:
     using Ptr = std::shared_ptr<GatewayNodeStatus>;
     using ConstPtr = std::shared_ptr<GatewayNodeStatus const>;
     GatewayNodeStatus();
-    virtual ~GatewayNodeStatus() = default;
 
-    virtual void setUUID(std::string const& _uuid);
-    virtual void setSeq(uint32_t _seq);
-    virtual void setGroupNodeInfos(std::vector<GroupNodeInfo::Ptr>&& _groupNodeInfos);
+    void setUUID(std::string const& _uuid);
+    void setSeq(uint32_t _seq);
+    void setGroupNodeInfos(std::vector<GroupNodeInfo::Ptr>&& _groupNodeInfos);
 
-    virtual bytesPointer encode();
-    virtual void decode(bytesConstRef _data);
+    bytesPointer encode();
+    void decode(bytesConstRef _data);
 
-    virtual std::string const& uuid() const;
-    virtual uint32_t seq() const;
+    std::string const& uuid() const;
+    uint32_t seq() const;
     // Note: externally ensure thread safety
-    virtual std::vector<GroupNodeInfo::Ptr> const& groupNodeInfos() const;
+    std::vector<GroupNodeInfo::Ptr> const& groupNodeInfos() const;
 
 private:
     std::shared_ptr<bcostars::GatewayNodeStatus> m_tarsStatus;
     std::vector<GroupNodeInfo::Ptr> m_groupNodeInfos;
-};
-
-class GatewayNodeStatusFactory
-{
-public:
-    using Ptr = std::shared_ptr<GatewayNodeStatusFactory>;
-    GatewayNodeStatusFactory() = default;
-    virtual ~GatewayNodeStatusFactory() = default;
-
-    GatewayNodeStatus::Ptr createGatewayNodeStatus();
-    GroupNodeInfo::Ptr createGroupNodeInfo();
 };
 }  // namespace bcos::gateway

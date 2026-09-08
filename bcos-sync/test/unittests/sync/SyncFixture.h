@@ -81,7 +81,7 @@ class FakeBlockSyncFactory : public BlockSyncFactory
 public:
     using Ptr = std::shared_ptr<FakeBlockSyncFactory>;
     FakeBlockSyncFactory(PublicPtr _nodeId, BlockFactory::Ptr _blockFactory,
-        LedgerInterface::Ptr _ledger, FrontServiceInterface::Ptr _frontService,
+        LedgerInterface::Ptr _ledger, FrontService::Ptr _frontService,
         SchedulerInterface::Ptr _dispatcher, ConsensusInterface::Ptr _consensus,
         NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
       : BlockSyncFactory(_nodeId, _blockFactory,

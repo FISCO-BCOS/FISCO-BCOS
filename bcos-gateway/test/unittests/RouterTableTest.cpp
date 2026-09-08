@@ -18,7 +18,7 @@ namespace bcos::test
 {
 namespace
 {
-RouterTableEntryInterface::Ptr makeEntry(
+RouterTableEntry::Ptr makeEntry(
     const std::string& dst, const std::string& nextHop, int32_t distance)
 {
     auto entry = std::make_shared<RouterTableEntry>();
@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE(eraseRemovesEntry)
     BOOST_CHECK(reachable.find("nodeA") == reachable.end());
 }
 
-BOOST_AUTO_TEST_CASE(factoryBuildsFromEncoded)
+BOOST_AUTO_TEST_CASE(decodeFromEncoded)
 {
     RouterTable table;
     table.setNodeID("self");
@@ -102,10 +102,8 @@ BOOST_AUTO_TEST_CASE(factoryBuildsFromEncoded)
     bcos::bytes encoded;
     table.encode(encoded);
 
-    RouterTableFactoryImpl factory;
-    auto built = factory.createRouterTable(bcos::ref(encoded));
-    BOOST_REQUIRE(built);
-    BOOST_CHECK_EQUAL(built->routerEntries().size(), 1U);
+    RouterTable built(bcos::ref(encoded));
+    BOOST_CHECK_EQUAL(built.routerEntries().size(), 1U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

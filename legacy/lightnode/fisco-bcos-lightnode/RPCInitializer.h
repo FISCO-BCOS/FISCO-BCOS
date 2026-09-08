@@ -8,7 +8,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-front/FrontServiceFactory.h>
+#include <bcos-front/FrontService.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/RpcFactory.h>

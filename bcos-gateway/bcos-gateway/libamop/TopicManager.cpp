@@ -33,14 +33,18 @@ using namespace bcos::amop;
 using namespace bcos::gateway;
 
 TopicManager::TopicManager(
-    std::string const& _rpcServiceName, bcos::gateway::P2PInterface::Ptr _network)
-  : m_rpcServiceName(_rpcServiceName), m_network(_network)
+    std::string const& _rpcServiceName, bcos::gateway::Service::Ptr _network, bool _localMode)
+  : m_rpcServiceName(_rpcServiceName), m_network(_network), m_localMode(_localMode)
 {}
 
 TopicManager::~TopicManager() = default;
 
 void TopicManager::start()
 {
+    if (m_localMode)
+    {
+        return;
+    }
     notifyRpcToSubscribeTopics();
 }
 
@@ -415,6 +419,10 @@ void TopicManager::queryClientsByTopic(
 
 bcos::rpc::RPCInterface::Ptr TopicManager::createAndGetServiceByClient(std::string const& _clientID)
 {
+    if (m_localMode)
+    {
+        return m_localClient;
+    }
     try
     {
         UpgradableGuard l(x_clientInfo);
