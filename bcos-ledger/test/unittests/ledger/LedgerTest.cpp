@@ -1010,9 +1010,10 @@ BOOST_AUTO_TEST_CASE(getBlockDataMissingTxRowFailsClosed)
     BOOST_CHECK_EQUAL(readError->errorCode(), LedgerError::GetStorageError);
     BOOST_CHECK(readBlock == nullptr);
 
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         task::syncWait(ledger::getBlockData(*m_storage, 3, FULL_BLOCK, *m_blockFactory)),
-        bcos::Error);
+        bcos::Error,
+        [](bcos::Error const& e) { return e.errorCode() == LedgerError::GetStorageError; });
 
     // A missing SYS_HASH_2_RECEIPT row fails closed the same way (block 4 -> at(3)).
     auto receiptHash = m_fakeBlocks->at(3)->transactionHash(0);
@@ -1039,6 +1040,28 @@ BOOST_AUTO_TEST_CASE(getBlockDataMissingTxRowFailsClosed)
     BOOST_REQUIRE(readError2 != nullptr);
     BOOST_CHECK_EQUAL(readError2->errorCode(), LedgerError::GetStorageError);
     BOOST_CHECK(readBlock2 == nullptr);
+
+    // A missing SYS_NUMBER_2_TXS row must also fail closed instead of yielding an empty
+    // block body (block 5).
+    Entry deletedTxsEntry;
+    deletedTxsEntry.setStatus(Entry::DELETED);
+    std::promise<bool> deletePromise3;
+    m_storage->asyncSetRow(SYS_NUMBER_2_TXS, "5", std::move(deletedTxsEntry),
+        [&deletePromise3](Error::UniquePtr error) { deletePromise3.set_value(!error); });
+    BOOST_CHECK(deletePromise3.get_future().get());
+
+    Error::Ptr readError3;
+    Block::Ptr readBlock3;
+    std::promise<bool> p3;
+    m_ledger->asyncGetBlockDataByNumber(5, TRANSACTIONS, [&](Error::Ptr _error, Block::Ptr _block) {
+        readError3 = std::move(_error);
+        readBlock3 = std::move(_block);
+        p3.set_value(true);
+    });
+    BOOST_CHECK(p3.get_future().get());
+    BOOST_REQUIRE(readError3 != nullptr);
+    BOOST_CHECK_EQUAL(readError3->errorCode(), LedgerError::GetStorageError);
+    BOOST_CHECK(readBlock3 == nullptr);
 }
 
 BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)

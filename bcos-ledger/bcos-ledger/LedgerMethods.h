@@ -332,6 +332,11 @@ task::Task<protocol::Block::Ptr> getBlockDataFromStorages(
                 }
             }
         }
+        else
+        {
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(LedgerError::GetStorageError, "missing SYS_NUMBER_2_TXS row"));
+        }
     }
     co_return block;
 }
