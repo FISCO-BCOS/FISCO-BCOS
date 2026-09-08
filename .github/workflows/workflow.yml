@@ -580,10 +580,15 @@ jobs:
             https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
-      - name: Install Foundry
+      - name: Install Foundry (optimism contracts-bedrock pin)
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: 1.5.1
+          version: 1.2.3
+
+      - name: Install just (op-deployer build)
+        run: |
+          go install github.com/casey/just@v1.39.0
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -621,7 +626,9 @@ jobs:
           git -C .ci-op-monorepo checkout -q "${{ steps.op-pin.outputs.commit }}"
           git -C .ci-op-monorepo submodule update --init superchain-registry
           bash .ci-op-monorepo/op-core/superchain/sync-superchain.sh
-          (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-deployer" ./op-deployer/cmd/op-deployer)
+          # Plain go build omits artifacts.tzst; op-deployer apply fails without just build.
+          (cd .ci-op-monorepo/op-deployer && just build)
+          cp .ci-op-monorepo/op-deployer/bin/op-deployer "$GITHUB_WORKSPACE/.ci-c2-bins/op-deployer"
           (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-batcher" ./op-batcher/cmd)
           (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-node" ./op-node/cmd)
 

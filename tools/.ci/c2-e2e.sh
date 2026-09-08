@@ -50,6 +50,24 @@ prepare_op_monorepo_for_go_build() {
   bash "$OP_MONOREPO/op-core/superchain/sync-superchain.sh"
 }
 
+# optimism pins forge in mise.toml; newer forge runs forge-lint during build and fails.
+# Scope only forge (not cast) so e2e can keep a newer cast with `send --data`.
+ensure_op_forge() {
+  local pin forge_dir
+  pin="$(yq -r '.tools.forge' "$OP_MONOREPO/mise.toml" 2>/dev/null || true)"
+  [[ "$pin" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || pin="1.2.3"
+  forge_dir="${HOME}/.foundry/versions/v${pin}"
+  if [[ ! -x "${forge_dir}/forge" ]]; then
+    if command -v foundryup >/dev/null; then
+      log "installing forge ${pin} for op-deployer build…"
+      foundryup -i "v${pin}"
+    else
+      die "forge ${pin} required for op-deployer build; install foundryup"
+    fi
+  fi
+  OP_FORGE_BIN_DIR="$(cd "${forge_dir}" && pwd)"
+}
+
 mkdir -p "$BIN_DIR"
 
 if [[ "${SKIP_OP_BUILD:-0}" != "1" ]]; then
@@ -62,8 +80,15 @@ if [[ "${SKIP_OP_BUILD:-0}" != "1" ]]; then
   git -C "$OP_MONOREPO" checkout -q "$OP_COMMIT"
   prepare_op_monorepo_for_go_build
 
-  log "building op-deployer, op-node, op-batcher…"
-  (cd "$OP_MONOREPO" && go build -o "$BIN_DIR/op-deployer" ./op-deployer/cmd/op-deployer)
+  log "building op-deployer (with embedded L1 artifacts), op-node, op-batcher…"
+  if command -v just >/dev/null && [ -f "$OP_MONOREPO/op-deployer/justfile" ]; then
+    # Plain `go build` omits artifacts.tzst; op-deployer apply then fails at runtime.
+    ensure_op_forge
+    ( PATH="${OP_FORGE_BIN_DIR}:$PATH" && cd "$OP_MONOREPO/op-deployer" && just build )
+    cp "$OP_MONOREPO/op-deployer/bin/op-deployer" "$BIN_DIR/op-deployer"
+  else
+    die "just is required to build op-deployer with embedded artifacts (install: cargo install just)"
+  fi
   (cd "$OP_MONOREPO" && go build -o "$BIN_DIR/op-node" ./op-node/cmd)
   (cd "$OP_MONOREPO" && go build -o "$BIN_DIR/op-batcher" ./op-batcher/cmd)
 fi

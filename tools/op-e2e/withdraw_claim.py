@@ -115,6 +115,22 @@ def cast(*args):
     return r.stdout.strip()
 
 
+_CAST_SEND_DATA_FLAG = None
+
+
+def cast_send_with_data(to, calldata, *rest):
+    """cast send with raw calldata — 1.7+ uses --data; 1.2.x takes positional hex."""
+    global _CAST_SEND_DATA_FLAG
+    if _CAST_SEND_DATA_FLAG is None:
+        help_out = subprocess.run(["cast", "send", "--help"],
+                                  capture_output=True, text=True).stdout
+        _CAST_SEND_DATA_FLAG = "--data" in help_out
+    if _CAST_SEND_DATA_FLAG:
+        cast("send", to, "--data", calldata, *rest)
+    else:
+        cast("send", to, calldata, *rest)
+
+
 def contracts():
     s = json.load(open(STATE))
     oc = s["opChainDeployments"][0]
@@ -362,7 +378,7 @@ def prove_withdrawal(portal, w, game_index, orp, proof):
                       portal, "--data", calldata, "--from", PROPOSER_ADDR,
                       "--rpc-url", L1):
         raise SystemExit("prove not callable within 120s")
-    cast("send", portal, "--data", calldata, "--private-key", PROPOSER_KEY,
+    cast_send_with_data(portal, calldata, "--private-key", PROPOSER_KEY,
          "--rpc-url", L1)
     return tx, calldata
 
@@ -610,7 +626,7 @@ def main():
     if not wait_until("prove (game-creation block passed)", 120,
                       portal, "--data", calldata, "--rpc-url", L1):
         raise SystemExit("prove not callable within 120s")
-    cast("send", portal, "--data", calldata, "--private-key", PROPOSER_KEY,
+    cast_send_with_data(portal, calldata, "--private-key", PROPOSER_KEY,
          "--rpc-url", L1)
     print("proven")
     lifecycle("portal records the proof (game + timestamp)",
