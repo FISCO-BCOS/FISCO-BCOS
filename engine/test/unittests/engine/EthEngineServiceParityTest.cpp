@@ -21,7 +21,6 @@
 #include "engine/bcos-engine/EthEngineService.h"
 #include "engine/test/unittests/engine/EthServiceStubs.h"
 
-#include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -39,6 +38,7 @@
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -305,9 +305,7 @@ void checkForkchoiceParity(
         legacyResult.payloadStatus.latestValidHash == newResult.payloadStatus.latestValidHash);
     BOOST_CHECK(
         legacyResult.payloadStatus.validationError == newResult.payloadStatus.validationError);
-    // Payload ID policy (option B): EthEngineService uses deterministic derivePayloadId
-    // (op-geth-aligned). release EngineServiceImpl still uses nextPayloadID(). Parity
-    // requires matching presence only — ID strings are not part of the cutover contract.
+    // Payload ID parity checks presence only, not the ID string.
     BOOST_CHECK_EQUAL(legacyResult.payloadId.has_value(), newResult.payloadId.has_value());
 }
 
@@ -668,11 +666,7 @@ BOOST_AUTO_TEST_CASE(generic_bounded_cache_evicts_front_after_sixty_five_builds)
 
 BOOST_AUTO_TEST_CASE(eth_derive_payload_id_stable_under_identical_attrs)
 {
-    // Matrix: E4 — presence-only FCU ID comparison is option B (checkForkchoiceParity).
-    // This case is the same-attrs overwrite contract, not an ID-string equality vs Impl.
-    // Option B: Eth contract is derivePayloadId — identical attrs → identical id and cache
-    // overwrite (no FIFO growth). Legacy nextPayloadID characterization kept alongside for
-    // cutover awareness; it is not a defect on the Eth path.
+    // Eth path uses stable derivePayloadId; legacy uses sequential IDs.
     ServicePair pair;
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
@@ -699,13 +693,13 @@ BOOST_AUTO_TEST_CASE(eth_derive_payload_id_stable_under_identical_attrs)
         }
     }
 
-    // Legacy characterization (sequential ids + FIFO eviction) — pre-cutover only.
+    // Legacy nextPayloadID behavior for comparison only.
     BOOST_CHECK_NE(legacyIds.front(), legacyIds.back());
     BOOST_CHECK_THROW(
         task::syncWait(pair.legacy.getPayload(legacyIds.front(), 3)), bcos::engine::UnknownPayload);
     BOOST_CHECK_NO_THROW(task::syncWait(pair.legacy.getPayload(legacyIds.back(), 3)));
 
-    // Eth contract under option B.
+    // Eth path reuses the same payload ID for identical attrs.
     BOOST_CHECK_EQUAL(newIds.front(), newIds.back());
     auto ethPayload = task::syncWait(pair.fresh.getPayload(newIds.front(), 3));
     BOOST_REQUIRE(ethPayload);
@@ -1580,44 +1574,42 @@ BOOST_AUTO_TEST_CASE(eth_nonempty_withdrawals_rejected_with_pinned_message)
     BOOST_REQUIRE(legacyPayload);
     BOOST_REQUIRE(newPayload);
 
-    auto checkNonEmptyWithdrawalsInvalid =
-        [](PayloadStatus const& status, const char* what)
-    {
-        BOOST_CHECK_EQUAL(static_cast<int>(status.status),
-            static_cast<int>(PayloadValidationStatus::Invalid));
+    auto checkNonEmptyWithdrawalsInvalid = [](PayloadStatus const& status, const char* what) {
+        BOOST_CHECK_EQUAL(
+            static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Invalid));
         BOOST_REQUIRE(status.validationError.has_value());
-        BOOST_CHECK_MESSAGE(status.validationError->find("non-empty withdrawals") !=
-                                std::string::npos,
+        BOOST_CHECK_MESSAGE(
+            status.validationError->find("non-empty withdrawals") != std::string::npos,
             what << ": unexpected validationError: " << *status.validationError);
     };
 
     // V2: the first version that carries withdrawals.
     NewPayloadRequest legacyV2;
     legacyV2.executionPayload = legacyPayload->executionPayload;
-    legacyV2.executionPayload.withdrawals =
-        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
+    legacyV2.executionPayload.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
     auto legacyV2Status = task::syncWait(pair.legacy.newPayload(legacyV2, 2));
     checkNonEmptyWithdrawalsInvalid(legacyV2Status, "legacy V2");
 
     NewPayloadRequest newV2;
     newV2.executionPayload = newPayload->executionPayload;
-    newV2.executionPayload.withdrawals =
-        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
+    newV2.executionPayload.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
     auto newV2Status = task::syncWait(pair.fresh.newPayload(newV2, 2));
     checkNonEmptyWithdrawalsInvalid(newV2Status, "fresh V2");
 
     // V4 (Isthmus): the advertised newPayload ceiling.
     NewPayloadRequest legacyV4 = makeNewPayloadRequestV3(legacyPayload->executionPayload);
     legacyV4.executionRequests = std::vector<bytes>{};
-    legacyV4.executionPayload.withdrawals =
-        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
+    legacyV4.executionPayload.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
     auto legacyV4Status = task::syncWait(pair.legacy.newPayload(legacyV4, 4));
     checkNonEmptyWithdrawalsInvalid(legacyV4Status, "legacy V4");
 
     NewPayloadRequest newV4 = makeNewPayloadRequestV3(newPayload->executionPayload);
     newV4.executionRequests = std::vector<bytes>{};
-    newV4.executionPayload.withdrawals =
-        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
+    newV4.executionPayload.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
     auto newV4Status = task::syncWait(pair.fresh.newPayload(newV4, 4));
     checkNonEmptyWithdrawalsInvalid(newV4Status, "fresh V4");
 }
@@ -1749,9 +1741,8 @@ BOOST_AUTO_TEST_CASE(wire_round_trip_through_engine_helper)
         BOOST_REQUIRE(parsed.parentBeaconBlockRoot.has_value());
         BOOST_CHECK_EQUAL(parsed.parentBeaconBlockRoot->hexPrefixed(),
             built->parentBeaconBlockRoot->hexPrefixed());
-        auto mismatch =
-            bcos::engine::detail::compareWithBuiltPayload(
-                parsed.executionPayload, built->executionPayload);
+        auto mismatch = bcos::engine::detail::compareWithBuiltPayload(
+            parsed.executionPayload, built->executionPayload);
         BOOST_CHECK_MESSAGE(!mismatch, label << " wire round-trip diverged: " << *mismatch);
     }
 

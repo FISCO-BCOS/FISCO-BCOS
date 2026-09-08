@@ -15,7 +15,7 @@
  *
  * @file DACaps.h
  * @brief Shared DA throttling caps for the OP payload build path.
- *        Zero remains uncapped until an RPC writer (miner_setMaxDASize) is added.
+ *        Zero remains uncapped until miner_setMaxDASize is called.
  */
 
 #pragma once
@@ -33,10 +33,8 @@ namespace bcos::engine
 /// one instance created by the initializer, handed to both sides (NodeService carries
 /// it for the RPC, the engine service ctor receives it directly).
 ///
-/// Status in this slice: CONSUMER-SIDE ONLY. No miner_setMaxDASize RPC writer exists yet
-/// (the caps stay zero/uncapped until that producer lands), and NodeService does not yet
-/// carry the instance — the handoff described above is the intended wiring, not current
-/// code.
+/// Status: the RPC writer (miner_setMaxDASize) and engine consumer share one instance
+/// created by the initializer and wired through NodeService::setDaCaps().
 ///
 /// Semantics (both in ESTIMATED DA bytes — the Fjord FastLZ size estimate of the
 /// serialized EIP-2718 envelope, matching op-geth's DA throttling: its txpool DA filter

@@ -314,8 +314,7 @@ namespace engine = bcos::evm::engine;
     namespace rlp = bcos::codec::rlp;
     if (!isList)
         return "accessList field is an RLP string";
-    bcos::bytesRef walker(
-        const_cast<bcos::byte*>(listPayload.data()), listPayload.size());
+    bcos::bytesRef walker(const_cast<bcos::byte*>(listPayload.data()), listPayload.size());
     size_t envEntries = 0;
     while (!walker.empty())
     {
@@ -344,8 +343,7 @@ namespace engine = bcos::evm::engine;
         while (!keys.empty())
         {
             auto [keyErr, keyHeader] = rlp::decodeHeader(keys);
-            if (keyErr || keyHeader.isList ||
-                keyHeader.payloadLength != sizeof(evmc::bytes32) ||
+            if (keyErr || keyHeader.isList || keyHeader.payloadLength != sizeof(evmc::bytes32) ||
                 keyHeader.payloadLength > keys.size())
                 return "accessList storage key is malformed";
             evmc::bytes32 key{};
@@ -376,14 +374,12 @@ namespace engine = bcos::evm::engine;
     namespace rlp = bcos::codec::rlp;
     if (!isList)
         return "blobVersionedHashes field is an RLP string";
-    bcos::bytesRef walker(
-        const_cast<bcos::byte*>(listPayload.data()), listPayload.size());
+    bcos::bytesRef walker(const_cast<bcos::byte*>(listPayload.data()), listPayload.size());
     size_t count = 0;
     while (!walker.empty())
     {
         auto [hashErr, hashHeader] = rlp::decodeHeader(walker);
-        if (hashErr || hashHeader.isList ||
-            hashHeader.payloadLength != sizeof(evmc::bytes32) ||
+        if (hashErr || hashHeader.isList || hashHeader.payloadLength != sizeof(evmc::bytes32) ||
             hashHeader.payloadLength > walker.size())
             return "blobVersionedHashes entry is malformed";
         evmc::bytes32 hash{};
@@ -464,9 +460,8 @@ namespace engine = bcos::evm::engine;
     // legacy carry no accessList field. blobVersionedHashes candidate at 10 (0x02/0x03 —
     // only consumed for 0x03, or 0x02 with the 4844 extension).
     constexpr size_t c_noField = std::numeric_limits<size_t>::max();
-    size_t const accessListIdx = !typed || envelopeKind == 0x7e ?
-                                     c_noField :
-                                     (envelopeKind == 0x01 ? 7 : 8);
+    size_t const accessListIdx =
+        !typed || envelopeKind == 0x7e ? c_noField : (envelopeKind == 0x01 ? 7 : 8);
     size_t const blobIdx = envelopeKind == 0x02 || envelopeKind == 0x03 ? 10 : c_noField;
     size_t idx = 0;
     while (!walker.empty())
@@ -606,8 +601,8 @@ namespace engine = bcos::evm::engine;
     // (legacy, 0x7e deposits) still reject a non-empty mirror list.
     if (accessListPayload)
     {
-        if (auto err = bindEnvelopeAccessList(*accessListPayload, accessListIsList,
-                evmTx.access_list))
+        if (auto err =
+                bindEnvelopeAccessList(*accessListPayload, accessListIsList, evmTx.access_list))
             return err;
     }
     else if (!evmTx.access_list.empty())
@@ -617,8 +612,7 @@ namespace engine = bcos::evm::engine;
     // blobVersionedHashes: 0x03 always has the field; 0x02 only with the 4844 extension
     // (>= 14 items — below that idx 10 is the signature and must not be read). 0x01/0x04
     // have no blob fields at all.
-    bool const blobFieldsPresent =
-        envelopeKind == 0x03 || (envelopeKind == 0x02 && idx >= 14);
+    bool const blobFieldsPresent = envelopeKind == 0x03 || (envelopeKind == 0x02 && idx >= 14);
     if (blobFieldsPresent)
     {
         if (auto err = bindEnvelopeBlobHashes(*blobPayload, blobIsList, evmTx.blob_hashes))

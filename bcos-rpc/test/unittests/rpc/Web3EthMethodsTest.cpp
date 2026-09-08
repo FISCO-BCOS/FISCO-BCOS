@@ -229,5 +229,11 @@ BOOST_AUTO_TEST_CASE(sendRawTransactionGarbageReportsError)
     BOOST_CHECK(resp.isMember("id"));
 }
 
+BOOST_AUTO_TEST_CASE(feeHistoryRegistered)
+{
+    auto resp = call(req("eth_feeHistory", R"(["0x1","latest"])"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

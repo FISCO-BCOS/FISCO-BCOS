@@ -2,20 +2,20 @@
 
 #include "bcos-concepts/Serialize.h"
 #include "bcos-lightnode/Log.h"
-#include <legacy/concepts/bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontService.h>
-#include <legacy/bcos-ledger/LedgerImpl.h>
 #include <bcos-lightnode/scheduler/SchedulerWrapperImpl.h>
 #include <bcos-lightnode/transaction-pool/TransactionPoolImpl.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
+#include <legacy/bcos-ledger/LedgerImpl.h>
+#include <legacy/concepts/bcos-concepts/ledger/Ledger.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
@@ -85,13 +85,13 @@ public:
 
                     bcos::bytes responseBuffer;
                     bcos::concepts::serialize::encode(response, responseBuffer);
-                    auto error = co_await front->sendResponse(id,
-                        bcos::protocol::LIGHTNODE_GET_TRANSACTIONS, nodeID,
-                        bcos::ref(responseBuffer));
+                    auto error =
+                        co_await front->sendResponse(id, bcos::protocol::LIGHTNODE_GET_TRANSACTIONS,
+                            nodeID, bcos::ref(responseBuffer));
                     if (error)
                     {
-                        LIGHTNODE_LOG(ERROR) << "send getTransactionsResponse failed "
-                                             << LOG_KV("id", id);
+                        LIGHTNODE_LOG(ERROR)
+                            << "send getTransactionsResponse failed " << LOG_KV("id", id);
                     }
                 }(ledger, front, std::move(nodeID), id, data));
             });
@@ -126,13 +126,12 @@ public:
 
                     bcos::bytes responseBuffer;
                     bcos::concepts::serialize::encode(response, responseBuffer);
-                    auto error = co_await front->sendResponse(
-                        id, bcos::protocol::LIGHTNODE_GET_RECEIPTS, nodeID,
-                        bcos::ref(responseBuffer));
+                    auto error = co_await front->sendResponse(id,
+                        bcos::protocol::LIGHTNODE_GET_RECEIPTS, nodeID, bcos::ref(responseBuffer));
                     if (error)
                     {
-                        LIGHTNODE_LOG(ERROR) << "send getReceiptsResponse failed "
-                                             << LOG_KV("id", id);
+                        LIGHTNODE_LOG(ERROR)
+                            << "send getReceiptsResponse failed " << LOG_KV("id", id);
                     }
                 }(ledger, weakFront, id, std::move(nodeID), data));
             });
@@ -171,8 +170,8 @@ public:
                         bcos::protocol::LIGHTNODE_GET_STATUS, nodeID, bcos::ref(responseBuffer));
                     if (error)
                     {
-                        LIGHTNODE_LOG(ERROR) << "send getStatusResponse failed "
-                                             << LOG_KV("id", messageID);
+                        LIGHTNODE_LOG(ERROR)
+                            << "send getStatusResponse failed " << LOG_KV("id", messageID);
                     }
                 }(ledger, std::move(front), std::move(nodeID), std::string(messageID), data));
             });
@@ -224,8 +223,8 @@ public:
                 bcostars::RequestSendTransaction request;
                 // a decode failure already sent an error response inside decodeRequest: do not
                 // also submitTransaction on the default-constructed request
-                if (!init->decodeRequest<bcostars::ResponseSendTransaction>(request, front,
-                        protocol::LIGHTNODE_SEND_TRANSACTION, nodeID, id, data))
+                if (!init->decodeRequest<bcostars::ResponseSendTransaction>(
+                        request, front, protocol::LIGHTNODE_SEND_TRANSACTION, nodeID, id, data))
                 {
                     return;
                 }
@@ -246,8 +245,8 @@ public:
                 bcostars::RequestSendTransaction request;
                 // a decode failure already sent an error response inside decodeRequest: do not
                 // also run call on the default-constructed request
-                if (!init->decodeRequest<bcostars::ResponseSendTransaction>(request, front,
-                        protocol::LIGHTNODE_CALL, nodeID, id, data))
+                if (!init->decodeRequest<bcostars::ResponseSendTransaction>(
+                        request, front, protocol::LIGHTNODE_CALL, nodeID, id, data))
                 {
                     return;
                 }
@@ -285,8 +284,8 @@ private:
                     _id, _moduleID, std::move(_nodeID), bcos::ref(_payload));
                 if (error)
                 {
-                    LIGHTNODE_LOG(ERROR) << "send decodeErrorResponse failed "
-                                         << LOG_KV("id", _id) << LOG_KV("moduleID", _moduleID);
+                    LIGHTNODE_LOG(ERROR) << "send decodeErrorResponse failed " << LOG_KV("id", _id)
+                                         << LOG_KV("moduleID", _moduleID);
                 }
             }(front, std::string(id), moduleID, std::move(nodeID), std::move(responseBuffer)));
         }
@@ -329,11 +328,11 @@ private:
             messageID, bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, bcos::ref(responseBuffer));
         if (error)
         {
-            LIGHTNODE_LOG(ERROR)
-                << "send getblockResponse failed " << LOG_KV("blockNumber", blockNumber);
+            LIGHTNODE_LOG(ERROR) << "send getblockResponse failed "
+                                 << LOG_KV("blockNumber", blockNumber);
         }
-        LIGHTNODE_LOG(DEBUG) << "sendResponse: sendResponseMessage to dstNode:"
-                             << nodeID->hex() << LOG_KV("blockNUmber", blockNumber)
+        LIGHTNODE_LOG(DEBUG) << "sendResponse: sendResponseMessage to dstNode:" << nodeID->hex()
+                             << LOG_KV("blockNUmber", blockNumber)
                              << LOG_KV("moduleID", bcos::protocol::LIGHTNODE_GET_BLOCK)
                              << LOG_KV("responseBuffer size", responseBuffer.size());
     }

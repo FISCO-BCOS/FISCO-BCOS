@@ -332,8 +332,7 @@ bcos::bytes rlpAccessList(bcos::protocol::Web3AccessList const& list)
         bcos::bytes keysPayload;
         for (auto const& key : entry.storageKeys)
         {
-            auto encoded = stringItem(
-                bcos::bytes(key.data(), key.data() + key.size()));
+            auto encoded = stringItem(bcos::bytes(key.data(), key.data() + key.size()));
             keysPayload.insert(keysPayload.end(), encoded.begin(), encoded.end());
         }
         bcos::bytes keys;
@@ -1156,9 +1155,9 @@ BOOST_AUTO_TEST_CASE(EnvelopeAccessListFullBindPasses)
 {
     FakeTx tx;
     bcos::protocol::Web3AccessList envelopeList;
-    envelopeList.push_back(bcos::protocol::Web3AccessListEntry{
-        .account = bcos::Address(std::string(40, '1')),
-        .storageKeys = {bcos::h256(1), bcos::h256(2)}});
+    envelopeList.push_back(
+        bcos::protocol::Web3AccessListEntry{.account = bcos::Address(std::string(40, '1')),
+            .storageKeys = {bcos::h256(1), bcos::h256(2)}});
     envelopeList.push_back(bcos::protocol::Web3AccessListEntry{
         .account = bcos::Address(std::string(40, '2')), .storageKeys = {}});
     tx.m_extraBytes = eip1559EnvelopeWithAccessList(10, 7, 5000000,
@@ -1256,19 +1255,18 @@ BOOST_AUTO_TEST_CASE(ShortType03EnvelopeFewerFieldsRejected)
         return out;
     };
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
-    append(intItem(10));            // chainId
-    append(intItem(7));             // nonce
-    append(intItem(30000000000));   // maxPriorityFeePerGas
-    append(intItem(30000000000));   // maxFeePerGas
-    append(intItem(5000000));       // gasLimit
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(10));           // chainId
+    append(intItem(7));            // nonce
+    append(intItem(30000000000));  // maxPriorityFeePerGas
+    append(intItem(30000000000));  // maxFeePerGas
+    append(intItem(5000000));      // gasLimit
     append(item(bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7")));  // to
-    append(intItem(5));             // value
-    append(item({0xde}));           // data
-    payload.push_back(0xc0);        // accessList (idx 8)
-    append(intItem(1));             // maxFeePerBlobGas (idx 9) — no idx 10 follows
+    append(intItem(5));                                                       // value
+    append(item({0xde}));                                                     // data
+    payload.push_back(0xc0);                                                  // accessList (idx 8)
+    append(intItem(1));  // maxFeePerBlobGas (idx 9) — no idx 10 follows
 
     bcos::bytes envelope{static_cast<bcos::byte>(0x03)};
     rlp::encodeHeader(envelope, {.isList = true, .payloadLength = payload.size()});
@@ -1313,17 +1311,16 @@ BOOST_AUTO_TEST_CASE(TruncatedAccessListAddressRejected)
     accessListItem.insert(accessListItem.end(), listPayload.begin(), listPayload.end());
 
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
-    append(intItem(10));          // chainId
-    append(intItem(7));           // nonce
-    append(intItem(1000000000));  // gasPrice
-    append(intItem(5000000));     // gasLimit
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(10));                                                      // chainId
+    append(intItem(7));                                                       // nonce
+    append(intItem(1000000000));                                              // gasPrice
+    append(intItem(5000000));                                                 // gasLimit
     append(item(bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7")));  // to
-    append(intItem(5));           // value
-    append(item({0xde}));         // data
-    append(accessListItem);       // accessList (idx 7 for 0x01)
+    append(intItem(5));                                                       // value
+    append(item({0xde}));                                                     // data
+    append(accessListItem);  // accessList (idx 7 for 0x01)
     bcos::bytes envelope{static_cast<bcos::byte>(0x01)};
     rlp::encodeHeader(envelope, {.isList = true, .payloadLength = payload.size()});
     envelope.insert(envelope.end(), payload.begin(), payload.end());
@@ -1364,20 +1361,19 @@ BOOST_AUTO_TEST_CASE(TruncatedBlobHashRejected)
     blobListItem.insert(blobListItem.end(), hashItem.begin(), hashItem.end());
 
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
-    append(intItem(10));            // chainId
-    append(intItem(7));             // nonce
-    append(intItem(30000000000));   // maxPriorityFeePerGas
-    append(intItem(30000000000));   // maxFeePerGas
-    append(intItem(5000000));       // gasLimit
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(10));           // chainId
+    append(intItem(7));            // nonce
+    append(intItem(30000000000));  // maxPriorityFeePerGas
+    append(intItem(30000000000));  // maxFeePerGas
+    append(intItem(5000000));      // gasLimit
     append(item(bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7")));  // to
-    append(intItem(5));             // value
-    append(item({0xde}));           // data
-    payload.push_back(0xc0);        // accessList
-    append(intItem(1));             // maxFeePerBlobGas
-    append(blobListItem);           // blobVersionedHashes (idx 10)
+    append(intItem(5));                                                       // value
+    append(item({0xde}));                                                     // data
+    payload.push_back(0xc0);                                                  // accessList
+    append(intItem(1));                                                       // maxFeePerBlobGas
+    append(blobListItem);  // blobVersionedHashes (idx 10)
     bcos::bytes envelope{static_cast<bcos::byte>(0x03)};
     rlp::encodeHeader(envelope, {.isList = true, .payloadLength = payload.size()});
     envelope.insert(envelope.end(), payload.begin(), payload.end());

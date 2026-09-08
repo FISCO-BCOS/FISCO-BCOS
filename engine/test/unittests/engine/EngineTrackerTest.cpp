@@ -607,8 +607,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_moved_from_exclusive_access_is_dead)
     EngineTracker tracker;
     auto guard = tracker.lockExclusive();
     auto moved = std::move(guard);
-    checkExceptionMessage<InvalidGuardState>(
-        [&]() { guard.findPayload("0x01"); },
+    checkExceptionMessage<InvalidGuardState>([&]() { guard.findPayload("0x01"); },
         "EngineTracker::ExclusiveAccess used after move or without owning its lock");
     BOOST_CHECK(moved.findPayload("0x01") == nullptr);
 }

@@ -289,8 +289,8 @@ public:
             bcos::storage::Entry hash2NumberEntry;
             hash2NumberEntry.set(std::to_string(header->number()));
             storage->asyncSetRow(ledger::SYS_HASH_2_NUMBER,
-                bcos::concepts::bytebuffer::toView(header->hash()),
-                std::move(hash2NumberEntry), [](auto&&) {});
+                bcos::concepts::bytebuffer::toView(header->hash()), std::move(hash2NumberEntry),
+                [](auto&&) {});
         }
         ++prewriteCount;
         callback("", nullptr);
