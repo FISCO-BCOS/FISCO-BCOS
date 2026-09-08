@@ -1,17 +1,17 @@
 /**
- * Copyright (C) 2026 FISCO BCOS.
- * SPDX-License-Identifier: Apache-2.0
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *
  * @file FeeHistory.h
  * @brief eth_feeHistory: EIP-1559 history on Ethereum-mode chains, OP base-fee rules on OP Stack.
@@ -49,16 +49,9 @@ bcos::u256 calcOpNextBaseFee(bcos::protocol::BlockHeader const& parent);
 bcos::u256 effectivePriorityFeePerGas(
     bcos::protocol::Transaction const& tx, bcos::u256 const& baseFee);
 
-/// One transaction's effective priority fee and gas limit for eth_feeHistory rewards.
-struct GasWeightedPriorityFee
-{
-    bcos::u256 tip;
-    std::uint64_t gas;
-};
-
-/// Pick reward percentiles using geth's gas-weighted indexing over ascending tips.
+/// Pick reward percentiles from sorted priority fees (geth-compatible indexing).
 std::vector<bcos::u256> pickRewardPercentiles(
-    std::vector<GasWeightedPriorityFee> const& samples, std::span<double const> percentiles);
+    std::vector<bcos::u256> const& sortedTips, std::span<double const> percentiles);
 
 /// Build the eth_feeHistory result object. `opStackMode` selects OP vs Ethereum base-fee
 /// prediction for the trailing entry (and OP parent metering on Jovian parents).

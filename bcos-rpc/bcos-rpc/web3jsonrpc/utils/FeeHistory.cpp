@@ -1,17 +1,17 @@
 /**
- * Copyright (C) 2026 FISCO BCOS.
- * SPDX-License-Identifier: Apache-2.0
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *
  * @file FeeHistory.cpp
  * @brief eth_feeHistory: EIP-1559 history on Ethereum-mode chains, OP base-fee rules on OP Stack.
@@ -65,29 +65,19 @@ double gasUsedRatio(bcos::protocol::BlockHeader const& header)
     return std::clamp(ratio, 0.0, 1.0);
 }
 
-std::vector<GasWeightedPriorityFee> collectPriorityFeeSamples(
-    bcos::protocol::Block const& block, bcos::u256 baseFee)
+std::vector<bcos::u256> collectPriorityFees(bcos::protocol::Block const& block, bcos::u256 baseFee)
 {
-    std::vector<GasWeightedPriorityFee> samples;
+    std::vector<bcos::u256> tips;
     for (auto const& tx : block.transactions())
     {
         auto const tip = effectivePriorityFeePerGas(*tx, baseFee);
-        if (tip <= 0)
+        if (tip > 0)
         {
-            continue;
+            tips.push_back(tip);
         }
-        auto const gas = static_cast<std::uint64_t>(tx->gasLimit());
-        if (gas == 0)
-        {
-            continue;
-        }
-        samples.push_back(GasWeightedPriorityFee{tip, gas});
     }
-    std::sort(samples.begin(), samples.end(),
-        [](GasWeightedPriorityFee const& left, GasWeightedPriorityFee const& right) {
-            return left.tip < right.tip;
-        });
-    return samples;
+    std::sort(tips.begin(), tips.end());
+    return tips;
 }
 }  // namespace
 
@@ -180,41 +170,20 @@ bcos::u256 bcos::rpc::effectivePriorityFeePerGas(
 }
 
 std::vector<bcos::u256> bcos::rpc::pickRewardPercentiles(
-    std::vector<GasWeightedPriorityFee> const& samples, std::span<double const> percentiles)
+    std::vector<bcos::u256> const& sortedTips, std::span<double const> percentiles)
 {
     std::vector<bcos::u256> rewards;
     rewards.reserve(percentiles.size());
-    if (samples.empty())
+    if (sortedTips.empty())
     {
         rewards.assign(percentiles.size(), 0);
         return rewards;
     }
-    std::uint64_t totalGas = 0;
-    for (auto const& sample : samples)
-    {
-        totalGas += sample.gas;
-    }
     for (double percentile : percentiles)
     {
         auto const clamped = std::clamp(percentile, 0.0, 100.0);
-        if (totalGas == 0)
-        {
-            rewards.push_back(0);
-            continue;
-        }
-        auto const threshold = static_cast<double>(totalGas) * clamped / 100.0;
-        std::uint64_t cumulativeGas = 0;
-        bcos::u256 reward = samples.back().tip;
-        for (auto const& sample : samples)
-        {
-            cumulativeGas += sample.gas;
-            reward = sample.tip;
-            if (static_cast<double>(cumulativeGas) >= threshold)
-            {
-                break;
-            }
-        }
-        rewards.push_back(reward);
+        auto const idx = static_cast<std::size_t>((sortedTips.size() - 1) * clamped / 100.0);
+        rewards.push_back(sortedTips[idx]);
     }
     return rewards;
 }
@@ -258,8 +227,8 @@ bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInt
 
         if (wantRewards)
         {
-            auto const samples = collectPriorityFeeSamples(*block, blockBaseFee(header));
-            auto const row = pickRewardPercentiles(samples, rewardPercentiles);
+            auto const tips = collectPriorityFees(*block, blockBaseFee(header));
+            auto const row = pickRewardPercentiles(tips, rewardPercentiles);
             Json::Value rewardRow(Json::arrayValue);
             for (auto const& tip : row)
             {
