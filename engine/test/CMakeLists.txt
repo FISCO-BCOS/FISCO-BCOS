@@ -23,11 +23,11 @@ target_link_libraries(${TEST_BINARY_NAME} PUBLIC
     engine mempool protocol-tars rlp-protocol opstack-executor ledger rpc
     jsoncpp_static Boost::unit_test_framework)
 
-# S6: GoldenSample / t8n corpus. The corpus is external: provision
-# FISCO-BCOS/op-stack-e2e-tests (see tools/.ci/provision_t8n_corpus.sh) and place
-# vectors/ and golden/engine/ under opstack-executor/tests/t8n/ (or point
-# OP_T8N_* below at your checkout). Local builds skip when it is absent;
-# CI (GITHUB_ACTIONS/CI or -DREQUIRE_T8N_CORPUS=ON) must fail instead.
+# S6: GoldenSample / t8n corpus. The vectors and golden/engine/ files are tracked in-tree
+# under opstack-executor/tests/t8n/ (the external FISCO-BCOS/op-stack-e2e-tests pin is an
+# optional refresh source, not a build requirement); OP_T8N_* below only override the
+# location. Local builds skip when the corpus is absent, CI (GITHUB_ACTIONS/CI or
+# -DREQUIRE_T8N_CORPUS=ON) must fail instead.
 if(NOT DEFINED OP_T8N_VECTORS_DIR)
     set(OP_T8N_VECTORS_DIR "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/vectors")
 endif()
@@ -44,10 +44,6 @@ endif()
 target_compile_definitions(${TEST_BINARY_NAME} PRIVATE ${_t8n_defs})
 
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties(
-    "unittests/engine/EthEngineServiceParityTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties(
-    "unittests/engine/EthEngineServiceTransactionalTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties(
     "unittests/engine/OpEngineServiceParityTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties(

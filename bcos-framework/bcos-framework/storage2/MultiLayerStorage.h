@@ -599,6 +599,9 @@ public:
     }
 
     /// Oldest pending layer, discarded without a backend write (A8-1 / A8-4).
+    /// No production caller at this head: the engine drains queued layers via
+    /// mergeBackStorage (engine_common::drainQueuedLayers) and does not yet discard
+    /// abandoned ones. Kept for the commit-serial work (A8-1/A8-4/A7-4) that consumes it.
     void popBackStorage()
     {
         std::unique_lock lock(m_listMutex);
@@ -608,6 +611,8 @@ public:
         }
     }
 
+    /// Queued-layer depth; same status as popBackStorage (test-exercised, no production
+    /// caller yet). Const-correct callers can use it once the commit serial lands.
     std::size_t pendingLayerCount()
     {
         std::unique_lock lock(m_listMutex);

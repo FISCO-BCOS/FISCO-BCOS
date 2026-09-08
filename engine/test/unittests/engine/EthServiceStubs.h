@@ -120,7 +120,7 @@ struct StubScheduler
 
 /// Whole-second milliseconds: finalizeEthBlockHeader / validateHeader require
 /// a whole number of seconds at the Eth RLP boundary.
-inline constexpr std::uint64_t kDefaultPayloadTimestamp = 1700000000ULL * 1000ULL;
+inline constexpr std::uint64_t c_defaultPayloadTimestamp = 1700000000ULL * 1000ULL;
 
 inline ForkchoiceState makeForkchoiceState()
 {
@@ -129,7 +129,8 @@ inline ForkchoiceState makeForkchoiceState()
         h256("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")};
 }
 
-inline PayloadAttributes makePayloadAttributesV2(std::uint64_t timestamp = kDefaultPayloadTimestamp)
+inline PayloadAttributes makePayloadAttributesV2(
+    std::uint64_t timestamp = c_defaultPayloadTimestamp)
 {
     PayloadAttributes payloadAttributes;
     payloadAttributes.timestamp = timestamp;
@@ -140,7 +141,8 @@ inline PayloadAttributes makePayloadAttributesV2(std::uint64_t timestamp = kDefa
     return payloadAttributes;
 }
 
-inline PayloadAttributes makePayloadAttributesV3(std::uint64_t timestamp = kDefaultPayloadTimestamp)
+inline PayloadAttributes makePayloadAttributesV3(
+    std::uint64_t timestamp = c_defaultPayloadTimestamp)
 {
     auto payloadAttributes = makePayloadAttributesV2(timestamp);
     payloadAttributes.parentBeaconBlockRoot =
@@ -151,7 +153,7 @@ inline PayloadAttributes makePayloadAttributesV3(std::uint64_t timestamp = kDefa
 /// op-node Karst attributes: V3 plus an empty withdrawals list (already the V3
 /// default; kept so call sites stay explicit).
 inline PayloadAttributes makeKarstPayloadAttributes(
-    std::uint64_t timestamp = kDefaultPayloadTimestamp)
+    std::uint64_t timestamp = c_defaultPayloadTimestamp)
 {
     return makePayloadAttributesV3(timestamp);
 }

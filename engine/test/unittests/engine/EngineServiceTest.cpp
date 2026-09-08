@@ -56,7 +56,7 @@ namespace
 // Whole-second milliseconds (1700000000s): every Eth header produced by finalizeEthBlockHeader
 // must satisfy validateHeader's "timestamp is a whole number of seconds" check, so a fixture
 // timestamp with sub-second milliseconds would make every build path throw.
-constexpr std::uint64_t c_timestamp = 1700000000ULL * 1000ULL;
+// Value lives once in EthServiceStubs.h (c_defaultPayloadTimestamp, imported below).
 constexpr bcos::protocol::BlockNumber c_initialBlockNumber = 5;
 constexpr bcos::protocol::BlockNumber c_trackedInitialBlockNumber = 10;
 constexpr bcos::protocol::BlockNumber c_trackedNextBlockNumber = 11;
@@ -378,7 +378,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_paylo
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
     BOOST_CHECK_EQUAL(payload->executionPayload.parentHash, forkchoiceState.headBlockHash);
     BOOST_CHECK_EQUAL(payload->executionPayload.blockNumber, c_initialBlockNumber + 1);
-    BOOST_CHECK_EQUAL(payload->executionPayload.timestamp, c_timestamp);
+    BOOST_CHECK_EQUAL(payload->executionPayload.timestamp, c_defaultPayloadTimestamp);
     BOOST_CHECK(payload->executionPayload.withdrawals.has_value());
     BOOST_CHECK(!payload->executionPayload.blobGasUsed.has_value());
     // makeTx is a native Tars tx (no EIP-2718 wire form). Sealing it into the

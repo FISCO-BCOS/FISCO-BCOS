@@ -13,7 +13,10 @@ import sys
 import urllib.request
 
 DEFAULT_DB = os.environ.get("B3_DB", "/tmp/op-spike/b3/data/group/latest")
-TOOL = os.environ.get("OP_STATE_READ", "/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/tools/op-e2e/op_state_read")
+# op_state_read is built from the committed op_state_read.cpp in this directory; resolve
+# it relative to the script so the gate works on any checkout (override: OP_STATE_READ).
+_HERE = os.path.dirname(os.path.abspath(__file__))
+TOOL = os.environ.get("OP_STATE_READ", os.path.join(_HERE, "op_state_read"))
 
 PASSED = []
 FAILED = []
@@ -148,6 +151,13 @@ def main():
     ap.add_argument("--max-blocks", type=int, default=2)
     args = ap.parse_args()
 
+    if not os.path.exists(TOOL):
+        print(f"ERROR: op_state_read not found at {TOOL}\n"
+              f"  build it: c++ -O2 {os.path.join(_HERE, 'op_state_read.cpp')} -o {TOOL} "
+              f"-std=c++17 -lrocksdb\n"
+              f"  or point OP_STATE_READ at an existing binary")
+        return 2
+
     b1_table_consistency(args.db, args.node_rpc, None)
     b2_header_chain(args.db, args.node_rpc, args.max_blocks)
 
@@ -158,4 +168,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

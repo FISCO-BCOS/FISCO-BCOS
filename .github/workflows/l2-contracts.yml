@@ -8,11 +8,13 @@ on:
     paths:
       - "bcos-l2-contracts/**"
       - "tools/opstack-genesis/**"
+      - "tools/op-e2e/**"
       - ".github/workflows/l2-contracts.yml"
   pull_request:
     paths:
       - "bcos-l2-contracts/**"
       - "tools/opstack-genesis/**"
+      - "tools/op-e2e/**"
       - ".github/workflows/l2-contracts.yml"
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -175,6 +177,13 @@ jobs:
       - name: Install Python deps
         # build-allocs.py imports pyyaml at module load, so the pytest suite
         # (which loads it by path) needs pyyaml too. pytest runs the suite.
-        run: python3 -m pip install --upgrade pip pyyaml pytest
+        # eth-hash / py-trie / rlp are the independent oracle the op-e2e pure tests
+        # cross-check withdraw_claim's ABI/Merkle decoding against.
+        run: python3 -m pip install --upgrade pip pyyaml pytest eth-hash py-trie rlp
       - name: Run pytest
-        run: python3 -m pytest test_build_allocs.py test_gen_rollup_config.py -v
+        run: python3 -m pytest test_build_allocs.py test_gen_rollup_config.py test_gen_eth_header_fixture.py -v
+      - name: Run op-e2e pure tests
+        # tier-1 mock layer of tools/op-e2e (no node required). Committed but previously
+        # unwired, so its frozen-constant and ABI-layout anchors never ran in CI.
+        working-directory: .
+        run: python3 -m unittest discover -s tools/op-e2e/tests -v

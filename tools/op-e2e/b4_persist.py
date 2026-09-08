@@ -11,6 +11,9 @@ import time
 import urllib.request
 
 URL = f"http://127.0.0.1:{os.environ.get('B3_ETH_PORT', 8553)}"
+# restart_b3.sh is committed next to this file; resolve relative so the gate is portable.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+RESTART = os.environ.get("B3_RESTART", os.path.join(_HERE, "restart_b3.sh"))
 PASSED, FAILED = [], []
 
 
@@ -33,8 +36,7 @@ def head():
 def main():
     h1 = head()
     print(f"head before restart: {h1}")
-    r = subprocess.run(["bash", "/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/"
-                       "tools/op-e2e/restart_b3.sh"], capture_output=True, text=True)
+    r = subprocess.run(["bash", RESTART], capture_output=True, text=True)
     print(f"restart: {r.stdout.strip()}")
 
     h2 = None

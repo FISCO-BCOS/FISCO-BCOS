@@ -45,11 +45,11 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <engine/bcos-engine/OpEngineService.inl>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
+#include <engine/bcos-engine/OpEngineService.inl>
 
 #include <algorithm>
 #include <filesystem>
@@ -322,8 +322,8 @@ void runGoldenVector(std::string const& id)
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
-    registerGoldenParentHeader(fixture->multiLayerStorage, fixture->blockFactory,
-        sample.vector["env"], sample.jovian);
+    registerGoldenParentHeader(
+        fixture->multiLayerStorage, fixture->blockFactory, sample.vector["env"], sample.jovian);
 
     auto params = w6test::makeParamsJson(sample);
     auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
@@ -349,8 +349,8 @@ void runInvalidFieldParity(std::string const& vectorId, std::string const& corru
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
-    registerGoldenParentHeader(fixture->multiLayerStorage, fixture->blockFactory,
-        sample.vector["env"], sample.jovian);
+    registerGoldenParentHeader(
+        fixture->multiLayerStorage, fixture->blockFactory, sample.vector["env"], sample.jovian);
 
     auto params = w6test::makeParamsJson(sample);
     if (corruptField == "stateRoot")
@@ -388,6 +388,8 @@ void runInvalidFieldParity(std::string const& vectorId, std::string const& corru
 
 }  // namespace op_engine_exec_parity
 
+// A skipped case is not a PASS: when the corpus is absent on a local run the macro warns
+// (visible in the summary) instead of returning silently; CI fails via BOOST_FAIL above.
 #define SKIP_IF_NO_T8N_CORPUS()                                                              \
     do                                                                                       \
     {                                                                                        \
@@ -398,7 +400,7 @@ void runInvalidFieldParity(std::string const& vectorId, std::string const& corru
                 BOOST_FAIL("S6 t8n corpus required in CI but missing at " OP_T8N_VECTORS_DIR \
                            " / " OP_T8N_GOLDEN_ENGINE_DIR);                                  \
             }                                                                                \
-            BOOST_TEST_MESSAGE("skipping S6: t8n corpus missing");                           \
+            BOOST_WARN_MESSAGE(false, "skipping S6: t8n corpus missing (local run)");        \
             return;                                                                          \
         }                                                                                    \
     } while (0)

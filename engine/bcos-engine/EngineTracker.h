@@ -39,6 +39,11 @@ namespace tracker_detail
 {
 /// shared_mutex unlock on the wrong thread is POSIX UB. Method misuse throws
 /// InvalidGuardState; move/dtor cannot throw, so they terminate instead.
+///
+/// Deliberate hardening (not an oversight): a guard that crosses threads is already a
+/// bug the compiler cannot see, and aborting names it at the point of misuse instead of
+/// unlocking a mutex the current thread does not own. Every in-tree call site keeps its
+/// guard inside one scope with no co_await, so this is unreachable on the live path.
 inline void abortIfForeignThread(bool ownsLock, std::thread::id lockedOn) noexcept
 {
     if (ownsLock && lockedOn != std::this_thread::get_id())

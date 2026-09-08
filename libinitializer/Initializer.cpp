@@ -369,15 +369,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
 
     // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
-    // endpoint would silently serve the v1 EngineService built below, and an external
-    // op-node — which trusts the EL and never cross-checks state roots — would drive a
-    // chain with v1 (non-Ethereum) semantics. Fail fast instead. The only exception is the
-    // explicit test-only escape hatch unsafe_allow_v1_executor, which the former v1 Engine
-    // API integration harness (tools/engine_integration_test.sh) set. The harness now runs
-    // executor_version=2 + evm_revision=cancun like production, and payload building in
-    // any case requires an on-chain EVM revision (buildPayload fails closed without one),
-    // so the escape hatch can no longer build payloads; production configs must never set
-    // it.
+    // endpoint would silently serve EthEngineService over the v1 TransactionExecutorImpl
+    // built below, and an external op-node — which trusts the EL and never cross-checks
+    // state roots — would drive a chain with v1 (non-Ethereum) semantics. Fail fast
+    // instead. The only exception is the explicit test-only escape hatch
+    // unsafe_allow_v1_executor, which the former v1 Engine API integration harness
+    // (tools/engine_integration_test.sh) set. The harness now runs executor_version=2 +
+    // evm_revision=cancun like production, and payload building in any case requires an
+    // on-chain EVM revision (buildPayload fails closed without one), so the escape hatch
+    // can no longer build payloads; production configs must never set it.
     if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
     {
         if (!m_nodeConfig->opEngineAllowV1Executor())
@@ -392,8 +392,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                     "unsafe_allow_v1_executor=true"));
         }
         INITIALIZER_LOG(WARNING) << LOG_DESC(
-            "op_engine_rpc serving the v1 EngineService (unsafe_allow_v1_executor=true): "
-            "test-harness mode, never drive this endpoint with a production op-node");
+            "op_engine_rpc on executor_version < 2 serves EthEngineService over the v1 "
+            "TransactionExecutorImpl (unsafe_allow_v1_executor=true): test-harness mode, "
+            "never drive this endpoint with a production op-node");
     }
 
     if (baselineSchedulerConfig.parallel)
@@ -534,10 +535,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_daCaps = std::make_shared<bcos::engine::DACaps>();
         m_engineServiceInitializer = EngineServiceInitializer::buildOp(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
-            m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
-            bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
-            /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), m_daCaps,
-            /*allowSynthesizedL1Attributes=*/false);
+            m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
+            m_daCaps, /*allowSynthesizedL1Attributes=*/false);
 
         m_opScheduler = opDelegate;
         m_setOpSchedulerBlockNumberNotifier =
@@ -584,6 +583,25 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             ledger::applyEVMCRevisionConfig(probe, std::get<0>(*evmcRev));
             INITIALIZER_LOG(INFO) << LOG_DESC("Effective EVMC revision (v2)")
                                   << LOG_KV("evmcRevision", std::get<0>(*evmcRev));
+            if (opStackMode)
+            {
+                // The OP executor gates every block on ledger evmcRevision == the fork
+                // config's rev (OpstackExecutor::checkForkRevision). A row that merely
+                // exists is not enough: e.g. evm_revision=cancun with feature_op_jovian
+                // boots and then fails every newPayload. Refuse at boot instead.
+                auto const forkFlags = bcos::evm::opstack::OpForkFlags{
+                    .jovianActive = m_nodeConfig->opJovianActive(),
+                };
+                auto const expectedRev = bcos::evm::opstack::configAt(forkFlags).rev;
+                if (!probe.evmcRevision().has_value() || *probe.evmcRevision() != expectedRev)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "OP mode (executor_version>=3) requires the on-chain "
+                            "evmc_revision to match the configured OP fork schedule; a "
+                            "mismatch makes every newPayload fail. Refusing to start"));
+                }
+            }
         }
         else
         {

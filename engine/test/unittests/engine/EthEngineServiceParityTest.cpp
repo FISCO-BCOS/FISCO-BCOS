@@ -68,8 +68,8 @@ namespace eth_parity_test
 
 using namespace bcos::engine::eth_test;
 // Whole-second milliseconds: finalizeEthBlockHeader / validateHeader require a whole
-// number of seconds at the Eth RLP boundary.
-constexpr std::uint64_t c_timestamp = 1700000000ULL * 1000ULL;
+// number of seconds at the Eth RLP boundary. Single definition in EthServiceStubs.h.
+constexpr std::uint64_t c_timestamp = bcos::engine::eth_test::c_defaultPayloadTimestamp;
 constexpr bcos::protocol::BlockNumber c_initialBlockNumber = 5;
 constexpr bcos::protocol::BlockNumber c_trackedInitialBlockNumber = 10;
 constexpr bcos::protocol::BlockNumber c_trackedNextBlockNumber = 11;
