@@ -989,9 +989,8 @@ BOOST_AUTO_TEST_CASE(getBlockDataMissingTxRowFailsClosed)
     deletedEntry.setStatus(Entry::DELETED);
     std::promise<bool> deletePromise;
     m_storage->asyncSetRow(SYS_HASH_2_TX, std::string((char*)txHash.data(), txHash.size()),
-        std::move(deletedEntry), [&deletePromise](Error::UniquePtr error) {
-            deletePromise.set_value(!error);
-        });
+        std::move(deletedEntry),
+        [&deletePromise](Error::UniquePtr error) { deletePromise.set_value(!error); });
     BOOST_CHECK(deletePromise.get_future().get());
 
     // No assertions inside the callback: a failing BOOST_REQUIRE would unwind through
@@ -999,12 +998,11 @@ BOOST_AUTO_TEST_CASE(getBlockDataMissingTxRowFailsClosed)
     Error::Ptr readError;
     Block::Ptr readBlock;
     std::promise<bool> p1;
-    m_ledger->asyncGetBlockDataByNumber(
-        3, FULL_BLOCK, [&](Error::Ptr _error, Block::Ptr _block) {
-            readError = std::move(_error);
-            readBlock = std::move(_block);
-            p1.set_value(true);
-        });
+    m_ledger->asyncGetBlockDataByNumber(3, FULL_BLOCK, [&](Error::Ptr _error, Block::Ptr _block) {
+        readError = std::move(_error);
+        readBlock = std::move(_block);
+        p1.set_value(true);
+    });
     BOOST_CHECK(p1.get_future().get());
     BOOST_REQUIRE(readError != nullptr);
     BOOST_CHECK_EQUAL(readError->errorCode(), LedgerError::GetStorageError);
@@ -1021,21 +1019,18 @@ BOOST_AUTO_TEST_CASE(getBlockDataMissingTxRowFailsClosed)
     deletedReceiptEntry.setStatus(Entry::DELETED);
     std::promise<bool> deletePromise2;
     m_storage->asyncSetRow(SYS_HASH_2_RECEIPT,
-        std::string((char*)receiptHash.data(), receiptHash.size()),
-        std::move(deletedReceiptEntry), [&deletePromise2](Error::UniquePtr error) {
-            deletePromise2.set_value(!error);
-        });
+        std::string((char*)receiptHash.data(), receiptHash.size()), std::move(deletedReceiptEntry),
+        [&deletePromise2](Error::UniquePtr error) { deletePromise2.set_value(!error); });
     BOOST_CHECK(deletePromise2.get_future().get());
 
     Error::Ptr readError2;
     Block::Ptr readBlock2;
     std::promise<bool> p2;
-    m_ledger->asyncGetBlockDataByNumber(
-        4, RECEIPTS, [&](Error::Ptr _error, Block::Ptr _block) {
-            readError2 = std::move(_error);
-            readBlock2 = std::move(_block);
-            p2.set_value(true);
-        });
+    m_ledger->asyncGetBlockDataByNumber(4, RECEIPTS, [&](Error::Ptr _error, Block::Ptr _block) {
+        readError2 = std::move(_error);
+        readBlock2 = std::move(_block);
+        p2.set_value(true);
+    });
     BOOST_CHECK(p2.get_future().get());
     BOOST_REQUIRE(readError2 != nullptr);
     BOOST_CHECK_EQUAL(readError2->errorCode(), LedgerError::GetStorageError);

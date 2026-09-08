@@ -45,6 +45,7 @@
 #include <bcos-rpc/web3jsonrpc/model/CallRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
+#include <bcos-rpc/web3jsonrpc/utils/FeeHistory.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <boost/algorithm/string.hpp>
@@ -239,6 +240,27 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     u256 balance = 0;
     if (isLatest)
     {
+        // OP / scenario-B chains commit account state in MPT only; the flat ACCOUNT_BALANCE
+        // row is absent, so "latest" must read the tip block's committed state root (same as
+        // an explicit block tag) instead of ledger::getStorageAt on the empty flat plane.
+        auto const mptReader = m_nodeService->mptNodeReader();
+        if (mptReader)
+        {
+            auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
+            if (ctx.fullTrie)
+            {
+                bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
+                auto const account = co_await view.readAccount(
+                    bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+                if (account)
+                {
+                    balance = account->balance;
+                }
+                Json::Value result = toQuantity(std::move(balance));
+                buildJsonContent(result, response);
+                co_return;
+            }
+        }
         if (auto const entry = co_await ledger::getStorageAt(
                 *ledger, addressStr, bcos::executor::ACCOUNT_BALANCE, /*blockNumber*/ 0);
             entry.has_value())
@@ -507,6 +529,24 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     u256 nonce = 0;
     if (isLatest)
     {
+        auto const mptReader = m_nodeService->mptNodeReader();
+        if (mptReader)
+        {
+            auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
+            if (ctx.fullTrie)
+            {
+                bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
+                auto const account = co_await view.readAccount(
+                    bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+                if (account)
+                {
+                    nonce = account->nonce;
+                }
+                Json::Value result = toQuantity(nonce);
+                buildJsonContent(result, response);
+                co_return;
+            }
+        }
         if (auto const entry = co_await ledger::getStorageAt(
                 *ledger, addressStr, bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*blockNumber*/ 0);
             entry.has_value())
@@ -1295,6 +1335,52 @@ task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     Json::Value result = "0x0";
     buildJsonContent(result, response);
     co_return;
+}
+
+task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value& response)
+{
+    // params: blockCount(QTY), newestBlock(QTY|TAG), rewardPercentiles(FLOAT[] optional)
+    if (request.empty() || !request[0U].isString())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
+    }
+    auto const blockCountParsed = bcos::safeFromQuantity(request[0U].asString());
+    if (!blockCountParsed.has_value())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid blockCount"));
+    }
+    if (request.size() < 2 || !request[1U].isString())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
+    }
+
+    auto const newestTag = toView(request[1U]);
+    auto [newestBlock, _] = co_await getBlockNumberByTag(newestTag);
+
+    std::vector<double> rewardPercentiles;
+    if (request.size() >= 3 && request[2U].isArray())
+    {
+        for (auto const& entry : request[2U])
+        {
+            if (!entry.isNumeric())
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "rewardPercentiles must be numbers"));
+            }
+            rewardPercentiles.push_back(entry.asDouble());
+        }
+    }
+
+    // The OP base-fee rule is keyed on the chain's L2 flag (feature_l2_ethereum_compat) —
+    // the same canonical source the MPT paths above use — not on the DA-cap object, which
+    // is a DA-throttling handshake that only coincides with OP mode today.
+    auto const opStackMode = co_await ledger::getFeature(
+        *m_nodeService->ledger(), ledger::Features::Flag::feature_l2_ethereum_compat, newestBlock);
+    auto result = co_await buildFeeHistory(*m_nodeService->ledger(), newestBlock,
+        static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode);
+    buildJsonContent(result, response);
 }
 
 /// eth_getProof custom error code (spec §5.9): both request-level proof failures — dormant

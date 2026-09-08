@@ -41,13 +41,6 @@ using bcos::executor_v1::opstack::envelopeChainIdMismatch;
 using bcos::executor_v1::opstack::envelopeExecutionFieldsMismatch;
 namespace rlp = bcos::codec::rlp;
 
-/// The cross-check compares the envelope against the values the executor will actually use
-/// (evmTx, built by toEvmoneTransaction from the mirror) — never the raw mirror strings.
-inline auto evmTxOf(bcos::protocol::Transaction const& tx)
-{
-    return toEvmoneTransaction(tx);
-}
-
 namespace
 {
 class FakeTx : public bcos::protocol::Transaction
@@ -122,6 +115,39 @@ public:
     int32_t attribute() const override { return 0; }
     void setAttribute(int32_t) override {}
 };
+
+/// The cross-check compares the envelope against the values the executor will actually use
+/// (evmTx, built by toEvmoneTransaction from the mirror) — never the raw mirror strings.
+/// Unset fee mirrors are filled to match the envelope helpers in this file (A9-15); a test
+/// that forges a fee must set the corresponding FakeTx field first.
+evmone::state::Transaction evmTxOf(FakeTx& tx)
+{
+    constexpr uint64_t kEip1559Fee = 30'000'000'000ULL;
+    constexpr uint64_t kLegacyGasPrice = 1'000'000'000ULL;
+    if (tx.m_kind == 0 || tx.m_kind == 1)
+    {
+        if (!tx.m_gasPrice.has_value())
+        {
+            tx.m_gasPrice = kLegacyGasPrice;
+        }
+    }
+    else
+    {
+        if (!tx.m_maxFeePerGas.has_value())
+        {
+            tx.m_maxFeePerGas = kEip1559Fee;
+        }
+        if (!tx.m_maxPriorityFeePerGas.has_value())
+        {
+            tx.m_maxPriorityFeePerGas = kEip1559Fee;
+        }
+        if (tx.m_kind == 3 && !tx.m_maxFeePerBlobGas.has_value())
+        {
+            tx.m_maxFeePerBlobGas = 1;
+        }
+    }
+    return toEvmoneTransaction(tx);
+}
 
 /// Build a canonical EIP-1559 (0x02) envelope: 0x02 || rlp([chainId, nonce, prio, maxFee,
 /// gasLimit, to, value, data, accessList]).
@@ -332,8 +358,7 @@ bcos::bytes rlpAccessList(bcos::protocol::Web3AccessList const& list)
         bcos::bytes keysPayload;
         for (auto const& key : entry.storageKeys)
         {
-            auto encoded = stringItem(
-                bcos::bytes(key.data(), key.data() + key.size()));
+            auto encoded = stringItem(bcos::bytes(key.data(), key.data() + key.size()));
             keysPayload.insert(keysPayload.end(), encoded.begin(), encoded.end());
         }
         bcos::bytes keys;
@@ -432,6 +457,9 @@ bcos::bytes blobEnvelopeWithHashes(uint64_t chainId, uint64_t nonce, uint64_t ga
     append(rlpAccessList(accessList));
     append(intItem(1));  // maxFeePerBlobGas
     append(rlpHashList(blobHashes));
+    append(intItem(0));  // yParity
+    append(intItem(1));  // r
+    append(intItem(1));  // s
 
     bcos::bytes out{static_cast<bcos::byte>(0x03)};
     rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
@@ -719,6 +747,73 @@ BOOST_AUTO_TEST_CASE(MirrorGasLimitDivergenceRejected)
     auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
     BOOST_REQUIRE(mismatch.has_value());
     BOOST_CHECK(std::string(*mismatch).find("gasLimit mismatch") != std::string::npos);
+}
+
+// A9-15: forged mirror fee fields must be rejected with the fee-specific message.
+BOOST_AUTO_TEST_CASE(MirrorMaxFeePerGasDivergenceRejected)
+{
+    FakeTx tx;
+    tx.m_extraBytes = eip1559Envelope(
+        10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_value = bcos::u256{5};
+    tx.m_maxFeePerGas = bcos::u256{30'000'000'001ULL};  // envelope says 30 gwei
+    tx.m_maxPriorityFeePerGas = bcos::u256{30'000'000'000ULL};
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("maxFeePerGas mismatch") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(MirrorMaxPriorityFeePerGasDivergenceRejected)
+{
+    FakeTx tx;
+    tx.m_extraBytes = eip1559Envelope(
+        10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_value = bcos::u256{5};
+    tx.m_maxFeePerGas = bcos::u256{30'000'000'000ULL};
+    tx.m_maxPriorityFeePerGas = bcos::u256{1};
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("maxPriorityFeePerGas mismatch") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(MirrorGasPriceDivergenceRejected)
+{
+    FakeTx tx;
+    tx.m_kind = 0;
+    tx.m_extraBytes =
+        legacyEnvelope(7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_value = bcos::u256{5};
+    tx.m_gasPrice = bcos::u256{1'000'000'001ULL};  // envelope says 1 gwei
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("gasPrice mismatch") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(MirrorMaxFeePerBlobGasDivergenceRejected)
+{
+    FakeTx tx;
+    tx.m_kind = 3;
+    tx.m_extraBytes = blobOrAuthEnvelope(
+        0x03, 10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_value = bcos::u256{5};
+    tx.m_maxFeePerGas = bcos::u256{30'000'000'000ULL};
+    tx.m_maxPriorityFeePerGas = bcos::u256{30'000'000'000ULL};
+    tx.m_maxFeePerBlobGas = bcos::u256{2};  // envelope says 1
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("maxFeePerBlobGas mismatch") != std::string::npos);
 }
 
 // Round-12 K: a forged mirror data must be rejected with the data-specific message. The FakeTx
@@ -1114,18 +1209,16 @@ BOOST_AUTO_TEST_CASE(BlockPathRejectsUnboundAuthorizationList)
     BOOST_CHECK_EQUAL(*gate, "authorizationList is not bound to the signed envelope");
 }
 
-// Round-11 F3: a 0x04 (set_code) transaction must be rejected even with an EMPTY mirror list —
-// the block producer could strip the delegations while the envelope still says 0x04. The type
-// byte is envelope-bound (envelopeExecutionFieldsMismatch runs before this gate on both block
-// paths), so the selector is not the forgeable side of the boundary.
-BOOST_AUTO_TEST_CASE(BlockPathRejectsSetCodeWithEmptyMirrorList)
+// Round-11 F3: a stripped non-empty authorizationList on 0x04 is caught by
+// envelopeExecutionFieldsMismatch (bindEnvelopeAuthorizationList). An empty mirror on 0x04 is
+// deferred to opValidate (EMPTY_AUTHORIZATION_LIST) — this gate only rejects a non-empty list
+// on non-0x04 txs whose signers are not envelope-bound yet.
+BOOST_AUTO_TEST_CASE(BlockPathSetCodeEmptyMirrorListDeferredToOpValidate)
 {
     evmone::state::Transaction setCodeTx;
     setCodeTx.type = evmone::state::Transaction::Type::set_code;
-    BOOST_CHECK(setCodeTx.authorization_list.empty());  // the strip-the-delegations attack shape
-    auto const gate = blockPathUnboundAuthorizationList(setCodeTx);
-    BOOST_REQUIRE(gate.has_value());
-    BOOST_CHECK_EQUAL(*gate, "authorizationList is not bound to the signed envelope");
+    BOOST_CHECK(setCodeTx.authorization_list.empty());
+    BOOST_CHECK(!blockPathUnboundAuthorizationList(setCodeTx).has_value());
 }
 
 // The full accessList bind: a mirror STRIPPED against a non-empty envelope list must be
@@ -1156,9 +1249,9 @@ BOOST_AUTO_TEST_CASE(EnvelopeAccessListFullBindPasses)
 {
     FakeTx tx;
     bcos::protocol::Web3AccessList envelopeList;
-    envelopeList.push_back(bcos::protocol::Web3AccessListEntry{
-        .account = bcos::Address(std::string(40, '1')),
-        .storageKeys = {bcos::h256(1), bcos::h256(2)}});
+    envelopeList.push_back(
+        bcos::protocol::Web3AccessListEntry{.account = bcos::Address(std::string(40, '1')),
+            .storageKeys = {bcos::h256(1), bcos::h256(2)}});
     envelopeList.push_back(bcos::protocol::Web3AccessListEntry{
         .account = bcos::Address(std::string(40, '2')), .storageKeys = {}});
     tx.m_extraBytes = eip1559EnvelopeWithAccessList(10, 7, 5000000,
@@ -1256,19 +1349,18 @@ BOOST_AUTO_TEST_CASE(ShortType03EnvelopeFewerFieldsRejected)
         return out;
     };
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
-    append(intItem(10));            // chainId
-    append(intItem(7));             // nonce
-    append(intItem(30000000000));   // maxPriorityFeePerGas
-    append(intItem(30000000000));   // maxFeePerGas
-    append(intItem(5000000));       // gasLimit
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(10));           // chainId
+    append(intItem(7));            // nonce
+    append(intItem(30000000000));  // maxPriorityFeePerGas
+    append(intItem(30000000000));  // maxFeePerGas
+    append(intItem(5000000));      // gasLimit
     append(item(bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7")));  // to
-    append(intItem(5));             // value
-    append(item({0xde}));           // data
-    payload.push_back(0xc0);        // accessList (idx 8)
-    append(intItem(1));             // maxFeePerBlobGas (idx 9) — no idx 10 follows
+    append(intItem(5));                                                       // value
+    append(item({0xde}));                                                     // data
+    payload.push_back(0xc0);                                                  // accessList (idx 8)
+    append(intItem(1));  // maxFeePerBlobGas (idx 9) — no idx 10 follows
 
     bcos::bytes envelope{static_cast<bcos::byte>(0x03)};
     rlp::encodeHeader(envelope, {.isList = true, .payloadLength = payload.size()});
@@ -1313,17 +1405,16 @@ BOOST_AUTO_TEST_CASE(TruncatedAccessListAddressRejected)
     accessListItem.insert(accessListItem.end(), listPayload.begin(), listPayload.end());
 
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
-    append(intItem(10));          // chainId
-    append(intItem(7));           // nonce
-    append(intItem(1000000000));  // gasPrice
-    append(intItem(5000000));     // gasLimit
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(10));                                                      // chainId
+    append(intItem(7));                                                       // nonce
+    append(intItem(1000000000));                                              // gasPrice
+    append(intItem(5000000));                                                 // gasLimit
     append(item(bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7")));  // to
-    append(intItem(5));           // value
-    append(item({0xde}));         // data
-    append(accessListItem);       // accessList (idx 7 for 0x01)
+    append(intItem(5));                                                       // value
+    append(item({0xde}));                                                     // data
+    append(accessListItem);  // accessList (idx 7 for 0x01)
     bcos::bytes envelope{static_cast<bcos::byte>(0x01)};
     rlp::encodeHeader(envelope, {.isList = true, .payloadLength = payload.size()});
     envelope.insert(envelope.end(), payload.begin(), payload.end());
@@ -1364,20 +1455,19 @@ BOOST_AUTO_TEST_CASE(TruncatedBlobHashRejected)
     blobListItem.insert(blobListItem.end(), hashItem.begin(), hashItem.end());
 
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
-    append(intItem(10));            // chainId
-    append(intItem(7));             // nonce
-    append(intItem(30000000000));   // maxPriorityFeePerGas
-    append(intItem(30000000000));   // maxFeePerGas
-    append(intItem(5000000));       // gasLimit
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(10));           // chainId
+    append(intItem(7));            // nonce
+    append(intItem(30000000000));  // maxPriorityFeePerGas
+    append(intItem(30000000000));  // maxFeePerGas
+    append(intItem(5000000));      // gasLimit
     append(item(bcos::fromHex("811a752c8cd697e3cb27279c330ed1ada745a8d7")));  // to
-    append(intItem(5));             // value
-    append(item({0xde}));           // data
-    payload.push_back(0xc0);        // accessList
-    append(intItem(1));             // maxFeePerBlobGas
-    append(blobListItem);           // blobVersionedHashes (idx 10)
+    append(intItem(5));                                                       // value
+    append(item({0xde}));                                                     // data
+    payload.push_back(0xc0);                                                  // accessList
+    append(intItem(1));                                                       // maxFeePerBlobGas
+    append(blobListItem);  // blobVersionedHashes (idx 10)
     bcos::bytes envelope{static_cast<bcos::byte>(0x03)};
     rlp::encodeHeader(envelope, {.isList = true, .payloadLength = payload.size()});
     envelope.insert(envelope.end(), payload.begin(), payload.end());

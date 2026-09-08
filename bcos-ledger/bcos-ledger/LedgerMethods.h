@@ -189,8 +189,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
         storage::Entry txEntry;
         txEntry.set(std::move(pending.encoded));
         co_await storage2::writeOne(storage,
-            executor_v1::StateKey{
-                SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(pending.hash)},
+            executor_v1::StateKey{SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(pending.hash)},
             std::move(txEntry));
 
         if (pending.tx)

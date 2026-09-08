@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "EngineMPTStateRoot.h"
 #include "EngineServiceCommon.h"
 #include "EngineTracker.h"
 
@@ -225,9 +226,7 @@ private:
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
         std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view,
-        std::vector<bcos::bytes> const& decodedForcedTxs) const;
-
-    task::Task<h256> calculateStateRoot(ViewType& view, uint32_t blockVersion) const;
+        std::vector<bcos::bytes> decodedForcedTxs) const;
 
     EngineTracker m_tracker;
     std::unordered_map<PayloadID, EthPayloadArtifacts<ViewType>> m_artifacts;

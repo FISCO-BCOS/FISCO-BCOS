@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "EngineStorageCommit.h"
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/indirect.hpp>
@@ -188,7 +189,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     auto payloadId = *payloadIdOpt;
     auto nextBlockNumber = *headBlockNumber + 1;
     auto built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
-        nextBlockNumber, std::move(sealedTxs), view, decodedForcedTxs);
+        nextBlockNumber, std::move(sealedTxs), view, std::move(decodedForcedTxs));
 
     auto commonEntry = std::make_shared<BuiltPayload>();
     commonEntry->version = engine_common::payloadShapeVersion(version);
@@ -246,24 +247,27 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         auto status = PayloadValidationStatus::Invalid;
         co_return engine_common::makeStatus(status, std::nullopt, validationError);
     }
-    if (version <= 2 && request.parentBeaconBlockRoot.has_value())
+    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        request.parentBeaconBlockRoot.has_value())
     {
         co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
             std::string("parentBeaconBlockRoot is only valid for newPayloadV3 and later"));
     }
-    if (version >= 3 && !request.parentBeaconBlockRoot.has_value())
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+        !request.parentBeaconBlockRoot.has_value())
     {
         co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
             std::string("parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and "
                         "later"));
     }
-    if (version >= 3 && !request.expectedBlobVersionedHashes.empty())
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+        !request.expectedBlobVersionedHashes.empty())
     {
         co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
             std::string("expectedBlobVersionedHashes must be empty (L2 forbids blob "
                         "transactions)"));
     }
-    if (version >= 4)
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
     {
         if (!request.executionRequests.has_value() || !request.executionRequests->empty())
         {
@@ -276,6 +280,14 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     BuiltPayloadPtr cached;
     PayloadID payloadId;
     std::optional<EthPayloadArtifacts<ViewType>> localArtifact;
+    enum class NewPayloadMiss
+    {
+        None,
+        ParentUnknown,
+        NotBuiltHere,
+        CacheMiss,
+    };
+    auto miss = NewPayloadMiss::None;
     {
         auto guard = m_tracker.lockExclusive();
         auto const& forkchoiceState = guard.forkchoiceState();
@@ -283,31 +295,50 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                            guard.payloadIdForHash(request.executionPayload.parentHash).has_value();
         if (!parentKnown)
         {
+            miss = NewPayloadMiss::ParentUnknown;
+        }
+        else if (auto existingId = guard.payloadIdForHash(request.executionPayload.blockHash);
+                 !existingId)
+        {
+            miss = NewPayloadMiss::NotBuiltHere;
+        }
+        else
+        {
+            payloadId = *existingId;
+            cached = guard.findPayload(payloadId);
+            if (!cached)
+            {
+                miss = NewPayloadMiss::CacheMiss;
+            }
+        }
+    }
+    if (miss != NewPayloadMiss::None)
+    {
+        if (auto hashError = detail::matchReconstructedEthBlockHash(
+                m_blockFactory->blockHeaderFactory(), request.executionPayload,
+                request.parentBeaconBlockRoot, detail::ethBlockVersionForApi(version));
+            hashError.has_value())
+        {
+            co_return engine_common::makeStatus(
+                PayloadValidationStatus::InvalidBlockHash, std::nullopt, hashError);
+        }
+        if (miss == NewPayloadMiss::ParentUnknown)
+        {
             detail::warnSyncingRateLimited<detail::c_newPayloadParentUnknown>(
                 "newPayload parent unknown; answering SYNCING",
                 request.executionPayload.parentHash);
-            co_return engine_common::makeStatus(
-                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
-
-        auto existingId = guard.payloadIdForHash(request.executionPayload.blockHash);
-        if (!existingId)
+        else if (miss == NewPayloadMiss::NotBuiltHere)
         {
-            // #5468 / finding E: op-geth executes (InsertBlockWithoutSetHead) before VALID.
-            // An external payload this node did not build is not executed here yet.
             detail::warnSyncingRateLimited<detail::c_newPayloadNotBuiltHere>(
                 "newPayload block not built here; answering SYNCING",
                 request.executionPayload.blockHash);
-            co_return engine_common::makeStatus(
-                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
-        payloadId = *existingId;
-        cached = guard.findPayload(payloadId);
-    }
-    if (!cached)
-    {
-        detail::warnSyncingRateLimited<detail::c_newPayloadCacheMiss>(
-            "newPayload cache miss; answering SYNCING", request.executionPayload.blockHash);
+        else
+        {
+            detail::warnSyncingRateLimited<detail::c_newPayloadCacheMiss>(
+                "newPayload cache miss; answering SYNCING", request.executionPayload.blockHash);
+        }
         co_return engine_common::makeStatus(
             PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
     }
@@ -319,7 +350,6 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         co_return engine_common::makeStatus(
             PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
     }
-    bool viewPushed = false;
     {
         auto guard = m_tracker.lockExclusive();
         auto artifactIt = m_artifacts.find(payloadId);
@@ -340,7 +370,6 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             {
                 m_globalStateStorage.pushView(std::move(*artifactIt->second.view));
                 artifactIt->second.view.reset();
-                viewPushed = true;
             }
             if (m_ledger && artifactIt->second.header)
             {
@@ -397,51 +426,16 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         {
             co_await m_globalStateStorage.mergeToBackends(prewriteStorage);
         }
-        // The drain loop then removes every remaining queued layer: one left behind
-        // by an abandoned failed merge would otherwise make every later commit merge
-        // one-behind, leaving the newest payload's state queued in-memory — lost on
-        // restart — though it answered VALID.
-        for (;;)
-        {
-            bool drained = false;
-            try
-            {
-                co_await m_globalStateStorage.mergeBackStorage();
-                drained = true;
-            }
-            catch (bcos::storage2::NotExistsImmutableStorageError const&)
-            {
-                // Queue empty — the drain is complete.
-            }
-            if (!drained)
-            {
-                break;
-            }
-        }
+        // Drain remaining queued layers (A7-2). An abandoned failed merge would
+        // otherwise make every later commit merge one-behind, leaving the newest
+        // payload's state queued in-memory — lost on restart — though it answered VALID.
+        co_await engine_common::drainQueuedLayers(m_globalStateStorage);
     }
-    else if (viewPushed)
+    else
     {
-        // A pushed view without durable work: the queued state layer must still
-        // drain into the backends — the merge must not depend on ledger persistence
-        // (CI-found: the pushed view stayed queued in memory and every committed
-        // balance was lost).
-        for (;;)
-        {
-            bool drained = false;
-            try
-            {
-                co_await m_globalStateStorage.mergeBackStorage();
-                drained = true;
-            }
-            catch (bcos::storage2::NotExistsImmutableStorageError const&)
-            {
-                // Queue empty — the drain is complete.
-            }
-            if (!drained)
-            {
-                break;
-            }
-        }
+        // No-ledger (or no-header) path: always drain (A7-1). Empty queue is
+        // NotExistsImmutableStorageError and drainQueuedLayers returns.
+        co_await engine_common::drainQueuedLayers(m_globalStateStorage);
     }
 
     // Fail-closed guard (finding AI): if no local artifact was available above, either
@@ -488,7 +482,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
     const PayloadID& payloadId, std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
     std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view,
-    std::vector<bcos::bytes> const& decodedForcedTxs) const
+    std::vector<bcos::bytes> decodedForcedTxs) const
 {
     std::vector<EngineTransaction> engineTransactions;
     engineTransactions.reserve(
@@ -496,10 +490,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         sealedTxs.size());
     if (payloadAttributes.transactions.has_value())
     {
-        for (auto const& raw : decodedForcedTxs)
+        for (auto& raw : decodedForcedTxs)
         {
             engineTransactions.push_back(EngineTransaction{
-                .raw = raw,
+                .raw = std::move(raw),
                 .decoded = nullptr,
             });
         }
@@ -629,7 +623,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
         emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
         emptyHeader->setExtraData(std::move(extraData));
-        emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
+        co_await engine_common::resolveEngineBlockStateRoot(view, *emptyHeader, ledgerConfig,
+            *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
         emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
         emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
         emptyHeader->setGasUsed(0);
@@ -721,8 +716,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
     }
 
-    h256 stateRoot = co_await calculateStateRoot(view, blockHeader->version());
-    blockHeader->setStateRoot(stateRoot);
+    h256 stateRoot = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
+        ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
     blockHeader->setReceiptsRoot(receiptRoot);
     blockHeader->setTxsRoot(txRoot);
     blockHeader->setGasUsed(totalGasUsed);
@@ -740,38 +735,6 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
         .header = std::move(blockHeader),
         .receipts = std::move(receipts)};
-}
-
-template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
-    requires executor_v1::TransactionExecutor<ExecutorType,
-                 typename GlobalStateStorageType::ViewType> &&
-             scheduler_v1::TransactionScheduler<SchedulerType,
-                 typename GlobalStateStorageType::ViewType, ExecutorType,
-                 std::vector<protocol::Transaction::Ptr>>
-task::Task<h256> EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
-    SchedulerType>::calculateStateRoot(ViewType& view, uint32_t blockVersion) const
-{
-    auto range = co_await storage2::range(view);
-    h256 totalHash;
-    while (auto keyValue = co_await range.next())
-    {
-        auto& [key, value] = *keyValue;
-        executor_v1::StateKeyView viewKey(key);
-        auto [tableName, keyName] = viewKey.get();
-
-        storage::Entry entry;
-        if (auto* e = std::get_if<storage::Entry>(std::addressof(value)))
-        {
-            entry = *e;
-        }
-        else
-        {
-            entry.setStatus(storage::Entry::DELETED);
-        }
-        totalHash ^= entry.hash(
-            tableName, keyName, *m_blockFactory->cryptoSuite()->hashImpl(), blockVersion);
-    }
-    co_return totalHash;
 }
 
 }  // namespace bcos::engine

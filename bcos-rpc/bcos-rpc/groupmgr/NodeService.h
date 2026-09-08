@@ -24,6 +24,7 @@
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/engine/AnyEngineService.h>
+#include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/multigroup/ChainNodeInfo.h>
 #include <bcos-framework/multigroup/GroupInfo.h>
@@ -36,8 +37,8 @@
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <functional>
 #include <servant/Application.h>
+#include <functional>
 #include <utility>
 
 namespace bcos::txpool
@@ -144,6 +145,14 @@ public:
     }
     protocol::BlockNumber finalizedBlockDepth() const noexcept { return m_finalizedBlockDepth; }
 
+    /// OP Stack DA throttling caps (miner_setMaxDASize writer / payload-build consumer). Unset on
+    /// Ethereum-only nodes.
+    void setDaCaps(std::shared_ptr<bcos::engine::DACaps> caps) noexcept
+    {
+        m_daCaps = std::move(caps);
+    }
+    std::shared_ptr<bcos::engine::DACaps> daCaps() const noexcept { return m_daCaps; }
+
     void setLedgerPrx(bcostars::LedgerServicePrx const& _ledgerPrx) { m_ledgerPrx = _ledgerPrx; }
 
     bool unreachable()
@@ -177,6 +186,9 @@ private:
 
     /// Raw pointer to the single-node-consensus mempool (see setMemPool for lifetime).
     bcos::txpool::MemPoolImpl* m_memPool = nullptr;
+
+    /// Shared OP DA caps (see setDaCaps); nullptr on Ethereum-only nodes.
+    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
 
     bcostars::LedgerServicePrx m_ledgerPrx;
 };

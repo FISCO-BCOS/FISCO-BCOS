@@ -107,8 +107,9 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     std::cout << "#### test case3" << std::endl;
 
     std::promise<std::tuple<Error::Ptr, bool>> promise6;
-    _txpool->asyncVerifyBlock(_faker->nodeID(), block,
-        [&](Error::Ptr _error, bool _result) { promise6.set_value({std::move(_error), _result}); });
+    _txpool->asyncVerifyBlock(_faker->nodeID(), block, [&](Error::Ptr _error, bool _result) {
+        promise6.set_value({std::move(_error), _result});
+    });
     std::tie(e, r) = promise6.get_future().get();
     BOOST_TEST(e->errorCode() == CommonError::TransactionsMissing);
     BOOST_TEST(r == false);
@@ -129,8 +130,9 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     bcos::bytes data;
     block->encode(data);
     std::promise<std::tuple<Error::Ptr, bool>> promise7;
-    _txpool->asyncVerifyBlock(_faker->nodeID(), block,
-        [&](Error::Ptr _error, bool _result) { promise7.set_value({std::move(_error), _result}); });
+    _txpool->asyncVerifyBlock(_faker->nodeID(), block, [&](Error::Ptr _error, bool _result) {
+        promise7.set_value({std::move(_error), _result});
+    });
     std::tie(e, r) = promise7.get_future().get();
     // FIXME: duplicate tx in block, verify failed
     BOOST_TEST(e->errorCode() == CommonError::VerifyProposalFailed);

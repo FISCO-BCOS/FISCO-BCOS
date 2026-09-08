@@ -9,13 +9,13 @@
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <concepts>
+#include <deque>
 #include <functional>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/map.hpp>
 #include <range/v3/view/zip.hpp>
 #include <type_traits>
 #include <variant>
-#include <deque>
 
 namespace bcos::storage2
 {
@@ -596,6 +596,27 @@ public:
         {
             m_storages.pop_front();
         }
+    }
+
+    /// Oldest pending layer, discarded without a backend write (A8-1 / A8-4).
+    /// No production caller at this head: the engine drains queued layers via
+    /// mergeBackStorage (engine_common::drainQueuedLayers) and does not yet discard
+    /// abandoned ones. Kept for the commit-serial work (A8-1/A8-4/A7-4) that consumes it.
+    void popBackStorage()
+    {
+        std::unique_lock lock(m_listMutex);
+        if (!m_storages.empty())
+        {
+            m_storages.pop_back();
+        }
+    }
+
+    /// Queued-layer depth; same status as popBackStorage (test-exercised, no production
+    /// caller yet). Const-correct callers can use it once the commit serial lands.
+    std::size_t pendingLayerCount()
+    {
+        std::unique_lock lock(m_listMutex);
+        return m_storages.size();
     }
 
 private:

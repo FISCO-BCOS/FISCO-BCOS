@@ -156,8 +156,15 @@ inline const evmc::bytes32 OP_EMPTY_REQUESTS_HASH = [] {
     // the same value the engine header builders stamp (EngineServiceCommon.h
     // c_emptyRequestsHash), cast here into the seal's native type. Both are
     // keccak256(rlp(header))-critical, so the hex must have exactly one home.
-    auto raw = bcos::fromHex(std::string{bcos::engine::c_emptyRequestsHashHex});
+    // 0x + 64 hex digits; a wrong-length edit must fail at compile time (A9-3).
+    static_assert(bcos::engine::c_emptyRequestsHashHex.size() == 66,
+        "c_emptyRequestsHashHex must be 0x plus 32 bytes of hex");
+    auto const raw = bcos::fromHex(std::string{bcos::engine::c_emptyRequestsHashHex});
     evmc::bytes32 hash{};
+    if (raw.size() != sizeof(hash.bytes))
+    {
+        throw std::logic_error("c_emptyRequestsHashHex must decode to exactly 32 bytes");
+    }
     std::copy(raw.begin(), raw.end(), hash.bytes);
     return hash;
 }();

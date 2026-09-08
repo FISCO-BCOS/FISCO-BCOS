@@ -14,16 +14,18 @@
  *  limitations under the License.
  *
  * @file EngineServiceImpl.h
- * @brief Engine API template still constructed by EngineServiceInitializer.
+ * @brief Shared Engine API template: Tracker, PayloadCache, and engine_common helpers.
  *
- * This extract adds Tracker / PayloadCache / engine_common beside the live
- * template. It does not cut production over: Initializer still instantiates
- * EngineServiceImpl. EthEngineService / OpEngineService are later PRs.
+ * Production nodes wire EthEngineService / OpEngineService through EngineServiceInitializer
+ * (see Initializer::init). This header keeps the original EngineServiceImpl template for
+ * reuse and unit tests.
  */
 
 #pragma once
 
+#include "EngineMPTStateRoot.h"
 #include "EngineServiceCommon.h"
+#include "EngineStorageCommit.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/engine/EngineService.h"
@@ -37,7 +39,6 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include <bcos-framework/storage2/MultiLayerStorage.h>
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/BoostLog.h"
@@ -45,6 +46,7 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <atomic>
@@ -109,9 +111,6 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 
-/// Hash-relevant fields vs the locally built payload (op-geth ExecutableDataToBlock).
-/// Optional V3 fields are compared only when both sides have them (finding BL).
-/// Cache-miss (unexecuted external body) is SYNCING, not VALID — #5468.
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
 
@@ -186,10 +185,11 @@ public:
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
+        std::vector<bcos::bytes> decodedForcedTxs;
         if (payloadAttributes != nullptr)
         {
-            if (auto validationError =
-                    engine_common::validatePayloadAttributes(*payloadAttributes, version);
+            if (auto validationError = engine_common::validatePayloadAttributes(
+                    *payloadAttributes, version, &decodedForcedTxs);
                 validationError.has_value())
             {
                 ForkchoiceUpdatedResult result{
@@ -318,7 +318,7 @@ public:
         auto payloadId = nextPayloadID();
         auto nextBlockNumber = *headBlockNumber + 1;
         auto built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
-            nextBlockNumber, std::move(sealedTxs), view);
+            nextBlockNumber, std::move(sealedTxs), view, std::move(decodedForcedTxs));
         PayloadEntry entry{
             .version = version,
             .executionPayload = std::move(built.executionPayload),
@@ -470,18 +470,21 @@ private:
             co_return engine_common::makeStatus(
                 PayloadValidationStatus::Invalid, std::nullopt, validationError);
         }
-        if (version <= 2 && request.parentBeaconBlockRoot.has_value())
+        if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+            request.parentBeaconBlockRoot.has_value())
         {
             co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string("parentBeaconBlockRoot is only valid for newPayloadV3 and later"));
         }
-        if (version >= 3 && !request.parentBeaconBlockRoot.has_value())
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+            !request.parentBeaconBlockRoot.has_value())
         {
             co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string(
                     "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and later"));
         }
-        if (version >= 3 && !request.expectedBlobVersionedHashes.empty())
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+            !request.expectedBlobVersionedHashes.empty())
         {
             // op-geth checks expectedBlobVersionedHashes against the blob hashes carried by
             // the payload's OWN transactions and answers INVALID on any length or element
@@ -504,7 +507,7 @@ private:
                 std::string("expectedBlobVersionedHashes must be empty (L2 forbids blob "
                             "transactions)"));
         }
-        if (version >= 4)
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
         {
             // Present-but-empty, not "absent or empty": op-geth's NewPayloadV4 rejects a
             // nil executionRequests outright ("nil executionRequests post-prague",
@@ -530,24 +533,31 @@ private:
         typename GlobalStateStorageType::MutableStorage prewriteStorage;
         protocol::Block::Ptr persistBlock;
         std::shared_ptr<protocol::ConstTransactions> blockTxs;
-        bool viewPushed = false;
         {
             std::unique_lock lock(x_state);
             auto parentKnown =
                 request.executionPayload.parentHash == m_forkchoiceState.headBlockHash ||
                 m_blockHashToPayloadId.contains(request.executionPayload.parentHash);
-            if (!parentKnown)
-            {
-                co_return engine_common::makeStatus(
-                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
-            }
-
             auto payloadIdIt = m_blockHashToPayloadId.find(request.executionPayload.blockHash);
-            if (payloadIdIt == m_blockHashToPayloadId.end())
+            auto builtIt = (payloadIdIt == m_blockHashToPayloadId.end()) ?
+                               m_payloadCache.end() :
+                               m_payloadCache.find(payloadIdIt->second);
+            bool const cacheHit = parentKnown && builtIt != m_payloadCache.end();
+            if (!cacheHit)
             {
-                // #5468 / finding E: unexecuted external payload. op-geth executes
-                // before VALID; we must not store the CL body and answer VALID.
-                // This leftover service has no EL sync, so SYNCING is terminal.
+                if (auto hashError = detail::matchReconstructedEthBlockHash(
+                        m_blockFactory->blockHeaderFactory(), request.executionPayload,
+                        request.parentBeaconBlockRoot, detail::ethBlockVersionForApi(version));
+                    hashError.has_value())
+                {
+                    co_return engine_common::makeStatus(
+                        PayloadValidationStatus::InvalidBlockHash, std::nullopt, hashError);
+                }
+                if (!parentKnown)
+                {
+                    co_return engine_common::makeStatus(
+                        PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+                }
                 // Rate-limit the warning so a retrying CL cannot flood the log.
                 static std::atomic<std::chrono::steady_clock::time_point> lastWarn{
                     std::chrono::steady_clock::time_point{}};
@@ -559,19 +569,13 @@ private:
                 {
                     BCOS_LOG(WARNING)
                         << LOG_BADGE("EngineService")
-                        << LOG_DESC("newPayload cache miss; answering SYNCING (#5468, no EL sync)")
+                        << LOG_DESC("newPayload cache miss; answering SYNCING")
                         << LOG_KV("blockHash", request.executionPayload.blockHash.hex());
                 }
                 co_return engine_common::makeStatus(
                     PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
             }
             payloadId = payloadIdIt->second;
-            auto builtIt = m_payloadCache.find(payloadId);
-            if (builtIt == m_payloadCache.end())
-            {
-                co_return engine_common::makeStatus(
-                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
-            }
             if (auto mismatch = detail::compareWithBuiltPayload(
                     request.executionPayload, builtIt->second.executionPayload))
             {
@@ -597,7 +601,6 @@ private:
                 if (it->second.view)
                 {
                     m_globalStateStorage.get().pushView(std::move(*it->second.view));
-                    viewPushed = true;
                 }
                 it->second.view.reset();
                 if (m_ledger && it->second.header)
@@ -681,47 +684,13 @@ private:
             {
                 co_await m_globalStateStorage.get().mergeToBackends(prewriteStorage);
             }
-            for (;;)
-            {
-                bool drained = false;
-                try
-                {
-                    co_await m_globalStateStorage.get().mergeBackStorage();
-                    drained = true;
-                }
-                catch (bcos::storage2::NotExistsImmutableStorageError const&)
-                {
-                    // Queue empty — the drain is complete.
-                }
-                if (!drained)
-                {
-                    break;
-                }
-            }
+            co_await engine_common::drainQueuedLayers(m_globalStateStorage.get());
         }
-        else if (viewPushed)
+        else
         {
-            // A pushed view without durable work (no ledger instance / no header):
-            // the queued state layer must still drain into the backends — the
-            // merge must not depend on ledger persistence (CI-found: the pushed
-            // view stayed queued in memory and every committed balance was lost).
-            for (;;)
-            {
-                bool drained = false;
-                try
-                {
-                    co_await m_globalStateStorage.get().mergeBackStorage();
-                    drained = true;
-                }
-                catch (bcos::storage2::NotExistsImmutableStorageError const&)
-                {
-                    // Queue empty — the drain is complete.
-                }
-                if (!drained)
-                {
-                    break;
-                }
-            }
+            // No-ledger (or no-header) path: always drain (A7-1). Empty queue is
+            // NotExistsImmutableStorageError and drainQueuedLayers returns.
+            co_await engine_common::drainQueuedLayers(m_globalStateStorage.get());
         }
 
         {
@@ -757,7 +726,8 @@ private:
     bcos::task::Task<BuildPayloadResult> buildPayload(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
         std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
-        std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
+        std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view,
+        std::vector<bcos::bytes> decodedForcedTxs) const
     {
         // Dual carrier: every sealed transaction is stored with both its raw EIP-2718
         // bytes (the wire form getPayload returns) and the decoded executable form (used
@@ -775,7 +745,7 @@ private:
         // exclusion only ever triggers for in-process callers.
         std::vector<EngineTransaction> engineTransactions;
         engineTransactions.reserve(
-            payloadAttributes.transactions.value_or(std::vector<std::string>{}).size() +
+            (payloadAttributes.transactions ? payloadAttributes.transactions->size() : 0) +
             sealedTxs.size());
         // Forced transactions (OP attributes.transactions) come FIRST, in the order the
         // CL gave them — this is the only OP-sanctioned path for deposits. Their raw
@@ -788,10 +758,12 @@ private:
         // canonical keccak256(raw) hash, but are not executed and do not advance state.
         if (payloadAttributes.transactions.has_value())
         {
-            for (auto const& forcedHex : *payloadAttributes.transactions)
+            // Reuse validatePayloadAttributes' decoded bodies (A8-2). A second
+            // fromHex here would allocate the same EIP-2718 bytes again.
+            for (auto& raw : decodedForcedTxs)
             {
                 engineTransactions.push_back(EngineTransaction{
-                    .raw = fromHex(forcedHex),
+                    .raw = std::move(raw),
                     .decoded = nullptr,
                 });
             }
@@ -995,7 +967,8 @@ private:
             // Must precede calculateHash: extraData is part of the Tars header hash
             // (bcos-tars-protocol/impl/TarsHashable.h).
             emptyHeader->setExtraData(std::move(extraData));
-            emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
+            co_await engine_common::resolveEngineBlockStateRoot(view, *emptyHeader, ledgerConfig,
+                *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
             // An empty block's transaction/receipt tries are the canonical empty-trie root, not
             // the all-zero hash (validateHeader rejects a zero receiptsRoot/txsRoot).
             emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
@@ -1120,13 +1093,13 @@ private:
             }
         }
 
-        // Step 2g: Compute state root (MPT over state storage)
-        h256 stateRoot = co_await calculateStateRoot(view, blockHeader->version());
+        // Step 2g: Compute state root (MPT when enabled, otherwise legacy XOR fold).
+        h256 stateRoot = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
+            ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
 
         // Step 2h: Set computed values in the block header and calculate the block hash.
         // The header timestamp stays in milliseconds throughout (the executor consumed it in
         // milliseconds above); EthBlockHeader converts to seconds at the RLP boundary.
-        blockHeader->setStateRoot(stateRoot);
         blockHeader->setReceiptsRoot(receiptRoot);
         blockHeader->setTxsRoot(txRoot);
         blockHeader->setGasUsed(totalGasUsed);
@@ -1148,38 +1121,6 @@ private:
             .header = std::move(blockHeader),
             .receipts = std::move(receipts)};
     }
-
-    /// Compute state root by iterating over storage and XOR-ing entry hashes.
-    /// This is a simplified MPT approximation; for full correctness use
-    /// scheduler_v1::calculateStateRoot from BaselineScheduler.h.
-    /// TODO: Replace with scheduler_v1::calculateStateRoot from BaselineScheduler.h
-    /// once MPTStorage is available. The XOR approach is not collision-resistant
-    /// and is a consensus risk for production use.
-    task::Task<h256> calculateStateRoot(ViewType& view, uint32_t blockVersion) const
-    {
-        auto range = co_await storage2::range(view);
-        h256 totalHash;
-        while (auto keyValue = co_await range.next())
-        {
-            auto& [key, value] = *keyValue;
-            executor_v1::StateKeyView viewKey(key);
-            auto [tableName, keyName] = viewKey.get();
-
-            storage::Entry entry;
-            if (auto* e = std::get_if<storage::Entry>(std::addressof(value)))
-            {
-                entry = *e;
-            }
-            else
-            {
-                entry.setStatus(storage::Entry::DELETED);
-            }
-            totalHash ^= entry.hash(
-                tableName, keyName, *m_blockFactory->cryptoSuite()->hashImpl(), blockVersion);
-        }
-        co_return totalHash;
-    }
-
 
     void updateTrackedBlockNumbers(std::optional<bcos::protocol::BlockNumber> safeBlockNumber,
         std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber)

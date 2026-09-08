@@ -64,8 +64,13 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     for (size_t i = 0; i < receiptLog.size(); i++)
     {
         Json::Value log;
-        auto address = std::string(receiptLog[i].address());
-        toChecksumAddress(address, bcos::crypto::keccak256Hash(bcos::bytesConstRef(address)).hex());
+        auto const addrView = receiptLog[i].address();
+        std::string address = bcos::toHex(addrView);
+        toChecksumAddress(
+            address, bcos::crypto::keccak256Hash(
+                         bcos::bytesConstRef(
+                             reinterpret_cast<const bcos::byte*>(addrView.data()), addrView.size()))
+                         .hex());
         log["address"] = "0x" + std::move(address);
         log["topics"] = Json::arrayValue;
         for (const auto& topic : receiptLog[i].topics())
@@ -76,7 +81,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         log["logIndex"] = toQuantity(logIndex + i);
         log["blockNumber"] = toQuantity(blockNumber);
         log["blockHash"] = blockHashHex;
-        log["transactionIndex"] = toQuantity(transactionIndex);
+        log["transactionIndex"] = transactionIndex;
         log["transactionHash"] = txHashHex;
         log["removed"] = false;
         result["logs"].append(std::move(log));

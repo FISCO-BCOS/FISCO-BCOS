@@ -978,7 +978,7 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
                     foundInFromMap = true;
                 }
                 else if (TxsMap::ReadAccessor toAccessor;
-                    toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
+                         toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
                 {
                     transaction = toAccessor.value();
                 }

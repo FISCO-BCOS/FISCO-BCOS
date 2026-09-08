@@ -268,7 +268,7 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                    decltype(_generatedNodeID) _generatedNodeID, decltype(encodedData) _encodedData,
                    decltype(_missedTxs) _missedTxs, decltype(_verifiedProposal) _verifiedProposal,
                    decltype(_onVerifyFinished) _onVerifyFinished) mutable
-                   -> task::Task<void> {
+        -> task::Task<void> {
         // result is declared outside the try so the catch below can still log the peer on a
         // synchronous send failure
         bcos::front::SendResult result;
@@ -320,7 +320,7 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
             }
         }
     }(front, self, startT, networkTimeout, protocolID, std::move(_generatedNodeID),
-                       std::move(encodedData), _missedTxs, _verifiedProposal, _onVerifyFinished));
+            std::move(encodedData), _missedTxs, _verifiedProposal, _onVerifyFinished));
 }
 
 void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data,

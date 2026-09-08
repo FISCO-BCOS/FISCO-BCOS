@@ -23,6 +23,7 @@
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-framework/protocol/BlockHeaderFactory.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <evmc/evmc.h>
 
@@ -64,13 +65,35 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
-/// Hash-relevant fields vs the locally built payload (op-geth ExecutableDataToBlock).
-/// Keep-local-body (BL): optional V3 fields (withdrawalsRoot / blobGasUsed /
-/// excessBlobGas) are compared only when both sides have them. Presence XOR
-/// (omit vs value) is not a mismatch.
+/// Compare a submitted payload against the locally built copy. Required fields
+/// must match. Omitting withdrawalsRoot is equivalent to the empty trie;
+/// omitting blobGasUsed / excessBlobGas is a mismatch. blockAccessList and
+/// slotNumber are compared only when both sides carry them.
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
 bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
+/// Header fork implied by the Engine API method version (used on cache miss).
+inline bcos::protocol::EthBlockVersion ethBlockVersionForApi(std::uint32_t version)
+{
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
+    {
+        return bcos::protocol::EthBlockVersion::PRAGUE;
+    }
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
+    {
+        return bcos::protocol::EthBlockVersion::CANCUN;
+    }
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
+    {
+        return bcos::protocol::EthBlockVersion::SHANGHAI;
+    }
+    return bcos::protocol::EthBlockVersion::LONDON;
+}
+/// Rebuild the Eth header from submitted fields and require hash == payload.blockHash.
+std::optional<std::string> matchReconstructedEthBlockHash(
+    const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
+    const std::optional<bcos::h256>& parentBeaconBlockRoot,
+    bcos::protocol::EthBlockVersion forkVersion);
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
     std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion);
 

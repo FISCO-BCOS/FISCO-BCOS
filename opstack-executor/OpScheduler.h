@@ -372,6 +372,31 @@ public:
         auto view = this->m_multiLayerStorage->fork();
         bcos::ledger::Features features;
         co_await bcos::ledger::readFromStorage(features, view, number);
+        if (features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat) &&
+            keyOwned == bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE)
+        {
+            auto const blockNumber =
+                co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
+            auto block = co_await bcos::ledger::getBlockData(
+                view, blockNumber, bcos::ledger::HEADER, *m_blockFactory);
+            auto const stateRoot = block->blockHeader()->stateRoot();
+            if (stateRoot != bcos::crypto::HashType{})
+            {
+                using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType>;
+                HistoricalBackend historicalBackend(view, stateRoot);
+                storage2::View<typename MultiLayerStorage::MutableStorage, void, HistoricalBackend>
+                    historicalView(std::addressof(historicalBackend));
+                bcos::ledger::account::EVMAccount<decltype(historicalView)> account(historicalView,
+                    addressOwned, features.get(bcos::ledger::Features::Flag::feature_raw_address));
+                if (auto nonce = co_await account.nonce())
+                {
+                    storage::Entry entry;
+                    entry.set(*nonce);
+                    co_return entry;
+                }
+                co_return std::nullopt;
+            }
+        }
         bcos::ledger::account::EVMAccount account(
             view, addressOwned, features.get(bcos::ledger::Features::Flag::feature_raw_address));
         co_return co_await account.storageEntry(keyOwned);
@@ -1307,6 +1332,10 @@ private:
             {
                 error << bcos::engine::OpRejectIsCapacity{true};
             }
+            if (opErr.validateErrorCode)
+            {
+                error << bcos::engine::OpValidateErrorCode{opErr.validateErrorCode};
+            }
         }
         catch (...)
         {}
@@ -1481,6 +1510,22 @@ private:
         view.newMutable();
         auto blockNumber =
             co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
+
+        bcos::ledger::Features features;
+        co_await bcos::ledger::readFromStorage(features, view, blockNumber);
+        // Scenario B (OP / feature_l2_ethereum_compat): balances live in committed MPT only.
+        // The flat committed plane has no ACCOUNT_BALANCE rows, so route latest eth_call /
+        // estimateGas through the same MPT view as historical calls.
+        if (features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat))
+        {
+            auto [err, receipt] = co_await coCallAtBlock(std::move(transaction), blockNumber);
+            if (err)
+            {
+                BOOST_THROW_EXCEPTION(*err);
+            }
+            co_return receipt;
+        }
+
         auto block = co_await bcos::ledger::getBlockData(
             view, blockNumber, bcos::ledger::HEADER, *m_blockFactory);
         // blockHeader() returns a shared_ptr by value; keep it alive.
@@ -1492,8 +1537,6 @@ private:
         auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
         ledgerConfig->setBlockNumber(blockNumber);
         ledgerConfig->setTimestamp(header.timestamp());
-        bcos::ledger::Features features;
-        co_await bcos::ledger::readFromStorage(features, view, blockNumber);
         ledgerConfig->setFeatures(features);
         ledgerConfig->setEVMCRevision(cfg.rev);
 
@@ -1518,16 +1561,19 @@ private:
                         latestNumber)),
                 protocol::TransactionReceipt::Ptr{nullptr}};
         }
-        if (blockNumber == latestNumber)
+
+        bcos::ledger::Features features;
+        co_await bcos::ledger::readFromStorage(features, latestView, blockNumber);
+
+        if (blockNumber == latestNumber &&
+            !features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat))
         {
-            // Latest height: reuse coCallLatest.
+            // Scenario A / flat-storage chains: latest == coCallLatest.
             co_return std::tuple{
                 Error::Ptr{nullptr}, co_await coCallLatest(std::move(transaction))};
         }
 
-        // Historical call needs feature_l2_ethereum_compat (full-fidelity MPT).
-        bcos::ledger::Features features;
-        co_await bcos::ledger::readFromStorage(features, latestView, blockNumber);
+        // Historical (and scenario-B latest) calls need feature_l2_ethereum_compat.
         if (!features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat))
         {
             co_return std::tuple{

@@ -33,6 +33,7 @@ add_library(init
     LedgerInitializer.cpp
     GlobalStateStorageInitializer.cpp MultiVersionScheduler.cpp
     BaselineSchedulerInst.cpp
+    OpEngineServiceInstantiate.cpp
 )
 target_link_libraries(init PUBLIC
     protocol_init
@@ -43,6 +44,8 @@ target_link_libraries(init PUBLIC
     engine
     ledger
     transaction-scheduler transaction-executor
+    bcosevm::opstack
+    opstack-executor
     ethereum-executor
     scheduler storage executor rpc
     bcos-boostssl
