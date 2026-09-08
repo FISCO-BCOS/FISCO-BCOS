@@ -4,28 +4,18 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/Bloom.h>
 
 #include <range/v3/view/enumerate.hpp>
 
 namespace
 {
-/// OP-Stack blocks are stored as NON_ETH BlockHeaders (EthBlockVersion::NON_ETH) but their
-/// identity hash and RPC shape follow the Ethereum RLP header (op-geth / op-node). Ledger
-/// indexes them by EthBlockHeader::computeHash via blockHashOverride; native FISCO NON_ETH
-/// headers lack the Shanghai+ fork fields OP always stamps.
-bool isOpEthereumBlock(const bcos::protocol::BlockHeader& header)
-{
-    if (header.ethBlockVersion() != bcos::protocol::EthBlockVersion::NON_ETH)
-    {
-        return false;
-    }
-    return header.withdrawalsRoot().has_value() && header.baseFee().has_value();
-}
-
+/// isOpEthereumBlock lives in web3jsonrpc/utils/util.h — the fee-history base-fee read
+/// needs the same predicate, and two copies drifted once already.
 bcos::crypto::HashType blockIdentityHash(const bcos::protocol::BlockHeader& header)
 {
-    if (isOpEthereumBlock(header))
+    if (bcos::rpc::isOpEthereumBlock(header))
     {
         return bcos::protocol::EthBlockHeader::computeHash(header);
     }

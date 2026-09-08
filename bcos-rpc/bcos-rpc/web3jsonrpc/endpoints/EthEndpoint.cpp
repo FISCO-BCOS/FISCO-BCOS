@@ -1373,7 +1373,11 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
         }
     }
 
-    auto const opStackMode = m_nodeService->daCaps() != nullptr;
+    // The OP base-fee rule is keyed on the chain's L2 flag (feature_l2_ethereum_compat) —
+    // the same canonical source the MPT paths above use — not on the DA-cap object, which
+    // is a DA-throttling handshake that only coincides with OP mode today.
+    auto const opStackMode = co_await ledger::getFeature(
+        *m_nodeService->ledger(), ledger::Features::Flag::feature_l2_ethereum_compat, newestBlock);
     auto result = co_await buildFeeHistory(*m_nodeService->ledger(), newestBlock,
         static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode);
     buildJsonContent(result, response);

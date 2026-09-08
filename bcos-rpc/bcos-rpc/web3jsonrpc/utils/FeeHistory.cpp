@@ -1,6 +1,20 @@
 /**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file FeeHistory.cpp
+ * @brief eth_feeHistory: EIP-1559 history on Ethereum-mode chains, OP base-fee rules on OP Stack.
  */
 
 #include "FeeHistory.h"
@@ -29,19 +43,6 @@ constexpr std::uint32_t c_eth1559Denominator = 8;
 bool versionAtLeast(bcos::protocol::EthBlockVersion version, bcos::protocol::EthBlockVersion fork)
 {
     return static_cast<std::uint8_t>(version) >= static_cast<std::uint8_t>(fork);
-}
-
-bcos::u256 headerBaseFee(bcos::protocol::BlockHeader const& header)
-{
-    if (header.ethBlockVersion() == bcos::protocol::EthBlockVersion::NON_ETH)
-    {
-        return 0;
-    }
-    if (!versionAtLeast(header.ethBlockVersion(), bcos::protocol::EthBlockVersion::LONDON))
-    {
-        return 0;
-    }
-    return header.baseFee().value_or(0);
 }
 
 bool isJovianOpParent(bcos::protocol::BlockHeader const& parent)
@@ -79,6 +80,22 @@ std::vector<bcos::u256> collectPriorityFees(bcos::protocol::Block const& block, 
     return tips;
 }
 }  // namespace
+
+bcos::u256 bcos::rpc::blockBaseFee(bcos::protocol::BlockHeader const& header)
+{
+    // OP-Stack headers are NON_ETH yet carry a real base fee (rebuildOpEthHeader
+    // deliberately leaves ethBlockVersion NON_ETH). Check that case before the NON_ETH
+    // short-circuit, which is for native FISCO headers that have no base fee at all.
+    if (isOpEthereumBlock(header))
+    {
+        return header.baseFee().value_or(0);
+    }
+    if (!versionAtLeast(header.ethBlockVersion(), bcos::protocol::EthBlockVersion::LONDON))
+    {
+        return 0;
+    }
+    return header.baseFee().value_or(0);
+}
 
 bcos::u256 bcos::rpc::calcEthNextBaseFee(bcos::protocol::BlockHeader const& parent)
 {
@@ -131,7 +148,7 @@ bcos::u256 bcos::rpc::calcOpNextBaseFee(bcos::protocol::BlockHeader const& paren
     {
         // Genesis-adjacent OP parents may not yet carry Holocene extraData; keep the last base
         // fee instead of failing the whole eth_feeHistory call.
-        return headerBaseFee(parent);
+        return blockBaseFee(parent);
     }
 }
 
@@ -205,12 +222,12 @@ bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInt
         auto const& header = *block->blockHeader();
         lastHeader = block->blockHeader();
 
-        baseFees.append(toQuantity(headerBaseFee(header)));
+        baseFees.append(toQuantity(blockBaseFee(header)));
         gasRatios.append(gasUsedRatio(header));
 
         if (wantRewards)
         {
-            auto const tips = collectPriorityFees(*block, headerBaseFee(header));
+            auto const tips = collectPriorityFees(*block, blockBaseFee(header));
             auto const row = pickRewardPercentiles(tips, rewardPercentiles);
             Json::Value rewardRow(Json::arrayValue);
             for (auto const& tip : row)

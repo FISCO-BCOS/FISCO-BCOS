@@ -32,6 +32,12 @@
 namespace bcos::rpc
 {
 
+/// Base fee a block header carries, as the eth_feeHistory history array reports it.
+/// 0 for native FISCO NON_ETH headers and for pre-London Eth headers. OP-Stack headers
+/// are NON_ETH yet carry a real base fee (see isOpEthereumBlock), so they must NOT take
+/// the NON_ETH short-circuit — that reported 0x0 for every OP block.
+bcos::u256 blockBaseFee(bcos::protocol::BlockHeader const& header);
+
 /// Ethereum L1 next-block base fee (EIP-1559, elasticity 2, denominator 8).
 bcos::u256 calcEthNextBaseFee(bcos::protocol::BlockHeader const& parent);
 
