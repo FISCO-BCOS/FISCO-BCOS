@@ -369,161 +369,32 @@ bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
     co_return co_await awaitable;
 }
 
-static bcos::task::Task<std::tuple<std::string, bcos::protocol::BlockNumber>>
-getSystemConfigOrDefault(
-    bcos::ledger::LedgerInterface& ledger, std::string_view key, std::string defaultValue)
-{
-    try
-    {
-        auto config = co_await bcos::ledger::getSystemConfig(ledger, key);
-        if (!config)
-        {
-            LEDGER2_LOG(DEBUG) << "Get " << key << " failed, use default value"
-                               << LOG_KV("defaultValue", defaultValue);
-            co_return std::tuple<std::string, bcos::protocol::BlockNumber>{defaultValue, 0};
-        }
-        auto [value, blockNumber] = *config;
-        co_return std::tuple<std::string, bcos::protocol::BlockNumber>{value, blockNumber};
-    }
-    catch (std::exception& e)
-    {
-        LEDGER2_LOG(DEBUG) << "Get " << key << " failed, use default value"
-                           << LOG_KV("defaultValue", defaultValue);
-        co_return std::tuple<std::string, bcos::protocol::BlockNumber>{defaultValue, 0};
-    }
-}
-
-static bcos::task::Task<std::tuple<int64_t, bcos::protocol::BlockNumber>> getSystemConfigOrDefault(
-    bcos::ledger::LedgerInterface& ledger, std::string_view key, int64_t defaultValue)
-{
-    auto [value, blockNumber] = co_await getSystemConfigOrDefault(ledger, key, "");
-    if (value.empty())
-    {
-        co_return std::make_tuple(defaultValue, 0);
-    }
-    co_return std::make_tuple(boost::lexical_cast<int64_t>(value), blockNumber);
-}
-
 bcos::task::Task<void> bcos::ledger::tag_invoke(
     ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger, LedgerConfig& ledgerConfig)
 {
+    // Fetch-then-assemble shape mirrors the storage2-view getLedgerConfig overload in
+    // LedgerMethods.h: resolve all inputs (at THIS path's block basis — sysConfigs /
+    // features effective at blockNumber + 1) and delegate the shared, consensus-relevant
+    // assembly to applyLedgerConfig so the two paths cannot drift from each other.
     auto nodeList = co_await getNodeList(ledger, {});
-    ledgerConfig.setConsensusNodeList(::ranges::views::filter(nodeList, [](auto& node) {
-        return node.type == consensus::Type::consensus_sealer;
-    }) | ::ranges::to<std::vector>());
-    ledgerConfig.setObserverNodeList(::ranges::views::filter(nodeList, [](auto& node) {
-        return node.type == consensus::Type::consensus_observer;
-    }) | ::ranges::to<std::vector>());
 
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
     auto sysConfig = co_await ledger.fetchAllSystemConfigs(blockNumber + 1);
 
-    if (auto txLimitConfig = sysConfig.get(ledger::SystemConfig::tx_count_limit))
-    {
-        ledgerConfig.setBlockTxCountLimit(
-            boost::lexical_cast<uint64_t>(txLimitConfig.value().first));
-    }
-    if (auto ledgerSwitchPeriodConfig =
-            sysConfig.get(ledger::SystemConfig::consensus_leader_period))
-    {
-        ledgerConfig.setLeaderSwitchPeriod(
-            boost::lexical_cast<uint64_t>(ledgerSwitchPeriodConfig.value().first));
-    }
-    auto txGasLimit = sysConfig.getOrDefault(ledger::SystemConfig::tx_gas_limit, "0");
-    ledgerConfig.setGasLimit({boost::lexical_cast<uint64_t>(txGasLimit.first), txGasLimit.second});
-
-    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::compatibility_version))
-    {
-        ledgerConfig.setCompatibilityVersion(tool::toVersionNumber(versionConfig.value().first));
-    }
-    auto gasPrice = sysConfig.getOrDefault(ledger::SystemConfig::tx_gas_price, "0x0");
-    ledgerConfig.setGasPrice(std::make_tuple(gasPrice.first, gasPrice.second));
-
-    // Excess blob gas (EIP-4844) — consumed only by the pure-Ethereum EthereumExecutor
-    // (executor_version=2) to derive the blob base fee. Persisted at genesis by
-    // Ledger::buildGenesisBlock from tx.excess_blob_gas; when absent the executor defaults
-    // to an excess of 0 (blob base fee 1).
-    if (auto excessBlobGas = sysConfig.get(ledger::SystemConfig::excess_blob_gas); excessBlobGas)
-    {
-        ledgerConfig.setExcessBlobGas(boost::lexical_cast<uint64_t>(excessBlobGas.value().first));
-    }
-
-    // Get block header to retrieve timestamp
+    // Timestamp from the block header; hash from the SYS_NUMBER_2_HASH row (works for OP
+    // headers whose in-memory BlockHeader::hash() would throw).
+    std::optional<int64_t> timestamp;
     auto block = co_await getBlockData(ledger, blockNumber, HEADER);
     if (block && block->blockHeader())
     {
-        ledgerConfig.setTimestamp(block->blockHeader()->timestamp());
-        // ledgerConfig.setHash(block->blockHeader()->hash());
+        timestamp = block->blockHeader()->timestamp();
     }
-    ledgerConfig.setBlockNumber(blockNumber);
-    ledgerConfig.setHash(co_await getBlockHash(ledger, blockNumber));
-    ledgerConfig.setFeatures(co_await getFeatures(ledger));
+    auto blockHash = co_await getBlockHash(ledger, blockNumber);
+    auto features = co_await getFeatures(ledger);
 
-    auto enableRPBFT =
-        (sysConfig.getOrDefault(ledger::SystemConfig::feature_rpbft, "0").first == "1");
-    ledgerConfig.setConsensusType(
-        std::string(enableRPBFT ? ledger::RPBFT_CONSENSUS_TYPE : ledger::PBFT_CONSENSUS_TYPE));
-    if (enableRPBFT)
-    {
-        ledgerConfig.setCandidateSealerNodeList(::ranges::views::filter(nodeList, [](auto& node) {
-            return node.type == consensus::Type::consensus_candidate_sealer;
-        }) | ::ranges::to<std::vector>());
-
-        auto epochSealer =
-            sysConfig.getOrDefault(ledger::SystemConfig::feature_rpbft_epoch_sealer_num,
-                std::to_string(DEFAULT_EPOCH_SEALER_NUM));
-        ledgerConfig.setEpochSealerNum(
-            {boost::lexical_cast<uint64_t>(epochSealer.first), epochSealer.second});
-
-        auto epochBlock =
-            sysConfig.getOrDefault(ledger::SystemConfig::feature_rpbft_epoch_block_num,
-                std::to_string(DEFAULT_EPOCH_BLOCK_NUM));
-        ledgerConfig.setEpochBlockNum(
-            {boost::lexical_cast<uint64_t>(epochBlock.first), epochBlock.second});
-        ledgerConfig.setNotifyRotateFlagInfo(std::get<0>(co_await getSystemConfigOrDefault(
-            ledger, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, DEFAULT_INTERNAL_NOTIFY_FLAG)));
-    }
-    auto auth = sysConfig.getOrDefault(ledger::SystemConfig::auth_check_status, "0");
-    ledgerConfig.setAuthCheckStatus(boost::lexical_cast<uint32_t>(auth.first));
-    auto [chainId, _] = sysConfig.getOrDefault(ledger::SystemConfig::web3_chain_id, "0");
-    // Fail-stop on a malformed value (InvalidWeb3ChainIdConfig), same policy as
-    // evmc_revision below: CHAINID is contract-visible execution semantics and the
-    // admission side already rejects the same value, so silently serving 0 is a
-    // silent-divergence hazard. Absent config arrives as the "0" default and parses fine.
-    ledgerConfig.setChainId(bcos::toEvmC(ledger::parseConfiguredWeb3ChainId(chainId)));
-    ledgerConfig.setBalanceTransfer(
-        sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
-
-    int executorVersion = 0;
-    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
-    {
-        executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
-        ledgerConfig.setExecutorVersion(executorVersion);
-    }
-
-    // EVMC revision — consumed only by the pure-Ethereum EthereumExecutor
-    // (executor_version=2); v0/v1 schedulers never read evmcRevision()/evmcRevisionForBlock(),
-    // so a non-v2 chain is left untouched (no implicit default injection, which would be an
-    // unnoticed behavior change if a future v0/v1 path started reading it). For v2, an
-    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock).
-    // A v2 chain WITHOUT one stays UNCONFIGURED here (no binary-side default injected): the
-    // consumers fail closed — EthereumExecutor throws EvmcRevisionNotConfigured and
-    // EngineService buildPayload throws UnsupportedFork — rather than hash state or block
-    // headers under a fork the chain never configured. The initializer already refuses to
-    // boot such a chain, so this branch only fires on corrupt/legacy state.
-    //
-    // No per-call logging here: getLedgerConfig sits on the per-block / per-RPC hot path.
-    // The effective revision is parsed and logged once at startup (Initializer), which the
-    // CI pins and where a corrupt value becomes a boot refusal.
-    if (executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION)
-    {
-        if (auto evmcRevision = sysConfig.get(ledger::SystemConfig::evmc_revision); evmcRevision)
-        {
-            // A corrupt persisted value halts loudly (InvalidEVMCRevisionConfig) instead of
-            // silently running a compile-time default that could differ between binaries.
-            ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
-        }
-    }
+    applyLedgerConfig(ledgerConfig, nodeList, sysConfig, features, blockNumber, timestamp,
+        std::optional<crypto::HashType>{blockHash});
+    co_return;
 }
 
 bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
