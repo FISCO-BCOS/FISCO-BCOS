@@ -1209,18 +1209,16 @@ BOOST_AUTO_TEST_CASE(BlockPathRejectsUnboundAuthorizationList)
     BOOST_CHECK_EQUAL(*gate, "authorizationList is not bound to the signed envelope");
 }
 
-// Round-11 F3: a 0x04 (set_code) transaction must be rejected even with an EMPTY mirror list —
-// the block producer could strip the delegations while the envelope still says 0x04. The type
-// byte is envelope-bound (envelopeExecutionFieldsMismatch runs before this gate on both block
-// paths), so the selector is not the forgeable side of the boundary.
-BOOST_AUTO_TEST_CASE(BlockPathRejectsSetCodeWithEmptyMirrorList)
+// Round-11 F3: a stripped non-empty authorizationList on 0x04 is caught by
+// envelopeExecutionFieldsMismatch (bindEnvelopeAuthorizationList). An empty mirror on 0x04 is
+// deferred to opValidate (EMPTY_AUTHORIZATION_LIST) — this gate only rejects a non-empty list
+// on non-0x04 txs whose signers are not envelope-bound yet.
+BOOST_AUTO_TEST_CASE(BlockPathSetCodeEmptyMirrorListDeferredToOpValidate)
 {
     evmone::state::Transaction setCodeTx;
     setCodeTx.type = evmone::state::Transaction::Type::set_code;
-    BOOST_CHECK(setCodeTx.authorization_list.empty());  // the strip-the-delegations attack shape
-    auto const gate = blockPathUnboundAuthorizationList(setCodeTx);
-    BOOST_REQUIRE(gate.has_value());
-    BOOST_CHECK_EQUAL(*gate, "authorizationList is not bound to the signed envelope");
+    BOOST_CHECK(setCodeTx.authorization_list.empty());
+    BOOST_CHECK(!blockPathUnboundAuthorizationList(setCodeTx).has_value());
 }
 
 // The full accessList bind: a mirror STRIPPED against a non-empty envelope list must be
