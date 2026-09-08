@@ -287,22 +287,11 @@ TransactionStatus MemoryStorage::committedNonceStatus(Transaction const& _tx) co
 TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 {
     auto txHash = _tx->hash();
-    // Issue #5318: transactions on this path come from another node's proposal and bypass
-    // validateTransaction(), so re-check `to` here — otherwise a proposal carrying a
-    // malformed `to` is imported, passes verification and deterministically fails
-    // execution, halting consensus. Rejecting it fails the proposal verification instead,
-    // and PBFT view-changes to a leader with a clean proposal.
-    if (!txvalidator::isValidToField(_tx->to()))
-    {
-        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for malformed to field")
-                            << LOG_KV("to", _tx->to()) << LOG_KV("importTxHash", txHash.abridged())
-                            << LOG_KV("importBatchId", _tx->batchId())
-                            << LOG_KV("importBatchHash", _tx->batchHash().abridged());
-        return TransactionStatus::Malformed;
-    }
-    // the transaction has already onChain, reject it
-    // check ledger tx
-    // check web3 tx
+    // Everything a proposal is held to runs inside verify(), under ProposalVerification. That
+    // includes the `to` format (issue #5318: a malformed `to` that reaches a block fails
+    // execution deterministically and halts consensus), which this function re-checked by hand
+    // while it bypassed the pool's validator. It no longer bypasses anything, and the gate's
+    // ToFieldFormat is the one copy of that rule.
     TransactionStatus result = TransactionStatus::None;
     try
     {
@@ -477,8 +466,8 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     }
 
     // All validations passed — now insert nonce atomically before inserting the transaction.
-    // Nonce insertion is done here (not inside verify()) so that failures in validateTransaction()
-    // or validateChainId() cannot leave a stale nonce in the pool (FIB-50).
+    // Nonce insertion is done here (not inside verify()) so that a refusal from verify() cannot
+    // leave a stale nonce in the pool (FIB-50).
     // Atomic check-and-reserve: insert() returns false when the nonce already exists,
     // eliminating the TOCTOU window between separate checkNonce() + insert() calls (FIB-51).
     if (m_config->checkTransactionSignature())

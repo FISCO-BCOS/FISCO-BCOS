@@ -93,9 +93,10 @@ BOOST_AUTO_TEST_CASE(acceptValidTo)
 
 BOOST_AUTO_TEST_CASE(enforceImportRejectsInvalidTo)
 {
-    // proposal verification path: a transaction missing from the local pool is imported
-    // via MemoryStorage::enforceSubmitTransaction, which bypasses validateTransaction() —
-    // a malicious/unfixed leader could otherwise smuggle a malformed `to` into a block
+    // proposal verification path: a transaction missing from the local pool is imported via
+    // MemoryStorage::enforceSubmitTransaction, whose verify() call runs the `to` rule under
+    // ProposalVerification — a malicious/unfixed leader could otherwise smuggle a malformed
+    // `to` into a block
     auto hashImpl = std::make_shared<Keccak256>();
     auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);

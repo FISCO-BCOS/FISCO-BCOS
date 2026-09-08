@@ -9,6 +9,7 @@
 #include "TxPoolFixture.h"
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-utilities/Exceptions.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -27,9 +28,14 @@ BOOST_AUTO_TEST_CASE(holderSetAfterThePoolIsBuiltIsRefused)
     BOOST_CHECK_NO_THROW(factory->setLedgerConfigState(m_ledgerConfigState));
     auto txpool = factory->createTxPool(*ioServicePool->getIOService(), ioServicePool);
     BOOST_REQUIRE(txpool);
-    // After: the pool's validator holds the first holder and cannot switch.
-    BOOST_CHECK_THROW(factory->setLedgerConfigState(std::make_shared<ledger::LedgerConfigState>()),
-        InvalidParameter);
+    // After: the pool's validator holds the first holder and cannot switch. The message is
+    // pinned too, so the case cannot be satisfied by some other InvalidParameter on the path.
+    BOOST_CHECK_EXCEPTION(
+        factory->setLedgerConfigState(std::make_shared<ledger::LedgerConfigState>()),
+        InvalidParameter, [](InvalidParameter const& e) {
+            return boost::diagnostic_information(e).find("must precede createTxPool") !=
+                   std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

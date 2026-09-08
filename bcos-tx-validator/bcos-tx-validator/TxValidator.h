@@ -72,9 +72,11 @@ using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 /// for submission and the peer fetch, enforceSubmitTransaction for proposal verification -- and
 /// the mempool's RPC ingress follows in #5555.
 ///
-/// It OWNS the nonce checkers rather than reaching them through callbacks. Nonce admission is
-/// the same question at every ingress, and routing it through a per-caller hook is how the pool
-/// and the RPC layer came to disagree about it in the first place.
+/// It holds the nonce checkers itself rather than reaching them through callbacks. The pool
+/// shares the same instances -- it reserves and clears nonces without going near admission --
+/// but the admission question is asked here. Nonce admission is the same question at every
+/// ingress, and routing it through a per-caller hook is how the pool and the RPC layer came to
+/// disagree about it in the first place.
 class TxValidator
 {
 public:

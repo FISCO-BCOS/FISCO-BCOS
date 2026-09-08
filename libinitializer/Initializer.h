@@ -23,6 +23,7 @@
 #include "PBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
+#include "bcos-framework/ledger/LedgerConfigState.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
