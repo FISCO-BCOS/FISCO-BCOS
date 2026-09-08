@@ -54,6 +54,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
@@ -1263,6 +1264,7 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockGasPoolFullTagsCapacity)
     BOOST_REQUIRE_MESSAGE(capacity != nullptr && *capacity,
         "executeBlock pool-full must tag OpRejectIsCapacity=true (no-evict)");
     BOOST_CHECK(boost::get_error_info<bcos::engine::OpCulpritTxHash>(*out.err) != nullptr);
+    BOOST_CHECK(!bcos::engine::validateErrorCodeFromError(*out.err).has_value());
     BOOST_CHECK(out.header == nullptr);
 }
 
@@ -1382,6 +1384,18 @@ BOOST_AUTO_TEST_CASE(ClassifyExceptionMapping)
     auto unknown = f.scheduler->classifyException(
         std::make_exception_ptr(std::runtime_error{"generic ethereum-mode fault"}));
     BOOST_CHECK_EQUAL(unknown, bcos::scheduler::SchedulerError::UnknownError);
+}
+
+BOOST_AUTO_TEST_CASE(ValidateErrorCodeRoundTripsOnError)
+{
+    std::error_code const code{7, std::generic_category()};
+    bcos::Error error;
+    BOOST_CHECK(!bcos::engine::validateErrorCodeFromError(error).has_value());
+    error << bcos::engine::OpValidateErrorCode{code};
+    auto const got = bcos::engine::validateErrorCodeFromError(error);
+    BOOST_REQUIRE(got.has_value());
+    BOOST_CHECK_EQUAL(got->value(), 7);
+    BOOST_CHECK(*got == code);
 }
 
 /// A storage-read fault during block execution rejects the whole block as OpStorageFault: the
@@ -2597,8 +2611,8 @@ BOOST_AUTO_TEST_CASE(CommitAfterResetReportsUnknownErrorNotConsensusRejected)
         });
     BOOST_REQUIRE(called);
     BOOST_REQUIRE(commitErr != nullptr);
-    BOOST_CHECK_EQUAL(commitErr->errorCode(),
-        static_cast<int>(bcos::scheduler::SchedulerError::UnknownError));
+    BOOST_CHECK_EQUAL(
+        commitErr->errorCode(), static_cast<int>(bcos::scheduler::SchedulerError::UnknownError));
     BOOST_CHECK_NE(commitErr->errorCode(),
         static_cast<int>(bcos::scheduler::SchedulerError::OpConsensusRejected));
     BOOST_CHECK(commitErr->errorMessage().find("Unexpected empty results") != std::string::npos);

@@ -20,6 +20,7 @@
 #include "OpEngineService.h"
 
 #include <bcos-codec/rlp/RLPDecode.h>
+#include <bcos-framework/engine/NumericBounds.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -88,15 +89,13 @@ std::vector<std::string> supportedOpCapabilities()
     // unimplemented (Endpoint -38005) and absent upstream.
     static const std::vector<std::string> caps{"engine_exchangeCapabilities",
         "engine_forkchoiceUpdatedV1", "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3",
-        "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
-        "engine_newPayloadV4"};
+        "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5", "engine_newPayloadV4"};
     return caps;
 }
 
 std::optional<std::uint64_t> narrowU256ToU64(const u256& value)
 {
-    static const u256 maxU64(std::numeric_limits<std::uint64_t>::max());
-    if (value > maxU64)
+    if (!bcos::engine::u256FitsUint64(value))
     {
         return std::nullopt;
     }
@@ -184,6 +183,8 @@ std::optional<std::string> validateOpNewPayloadRequest(
     }
     if (!payload.withdrawalsRoot.has_value())
     {
+        // Presence only: OP withdrawalsRoot is the MessagePasser storage root, not
+        // the empty-withdrawals trie Eth's withdrawalsRootFor() stamps (A9-14).
         return std::string("withdrawalsRoot is required on the OP path (Isthmus+)");
     }
     if (!payload.excessBlobGas.has_value() || *payload.excessBlobGas != 0)
@@ -259,8 +260,7 @@ std::optional<std::string> validateOpNewPayloadRequest(
     // Isthmus contract than the wire — executionRequests must be present and empty.
     if (!request.executionRequests.has_value() || !request.executionRequests->empty())
     {
-        return std::string(
-            "executionRequests must be a present-but-empty list on the OP path");
+        return std::string("executionRequests must be a present-but-empty list on the OP path");
     }
     return std::nullopt;
 }

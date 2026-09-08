@@ -136,99 +136,6 @@ static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint6
     return tx;
 }
 
-task::Task<void> writeBlockNumberToStorage(RealGlobalStateBackendStorage& backendStorage,
-    const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
-{
-    storage::Entry entry;
-    entry.set(boost::lexical_cast<std::string>(blockNumber));
-    co_await bcos::storage2::writeOne(backendStorage,
-        bcos::executor_v1::StateKey{
-            ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
-        std::move(entry));
-}
-
-task::Task<void> writeCanonicalHashToStorage(RealGlobalStateBackendStorage& backendStorage,
-    bcos::protocol::BlockNumber blockNumber, const h256& blockHash)
-{
-    storage::Entry entry;
-    entry.set(blockHash.asBytes());
-    co_await bcos::storage2::writeOne(backendStorage,
-        bcos::executor_v1::StateKey{
-            ledger::SYS_NUMBER_2_HASH, boost::lexical_cast<std::string>(blockNumber)},
-        std::move(entry));
-}
-
-struct RealGlobalStateStorageFixture
-{
-    RealGlobalStateBackendStorage backendStorage;
-    RealGlobalCheckpointBackend checkpointBackend{backendStorage};
-    RealGlobalStateStorage storage{checkpointBackend};
-
-    explicit RealGlobalStateStorageFixture(
-        evmc_revision rev = EVMC_CANCUN, bool writeEvmcRevision = true)
-    {
-        writeSysConfig(magic_enum::enum_name(ledger::SystemConfig::executor_version),
-            std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
-        if (writeEvmcRevision)
-        {
-            writeSysConfig(
-                ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(rev, {}));
-        }
-    }
-
-    void setBlockNumber(const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
-    {
-        task::syncWait(writeBlockNumberToStorage(backendStorage, blockHash, blockNumber));
-    }
-
-    void setCanonicalBlock(const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
-    {
-        setBlockNumber(blockHash, blockNumber);
-        task::syncWait(writeCanonicalHashToStorage(backendStorage, blockNumber, blockHash));
-    }
-
-    void setNonce(std::string_view sender, std::string nonce)
-    {
-        evmc_address addr{};
-        std::copy_n(sender.begin(), std::min(sender.size(), sizeof(addr.bytes)), addr.bytes);
-        ledger::account::EVMAccount account{backendStorage, addr, false};
-        task::syncWait(account.setNonce(std::move(nonce)));
-    }
-
-private:
-    void writeSysConfig(std::string_view key, std::string value)
-    {
-        storage::Entry entry;
-        entry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), 0}));
-        task::syncWait(storage2::writeOne(backendStorage,
-            bcos::executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
-    }
-};
-
-void setForkchoiceBlockNumbers(RealGlobalStateStorageFixture& storageFixture,
-    const ForkchoiceState& forkchoiceState, bcos::protocol::BlockNumber headBlockNumber,
-    bcos::protocol::BlockNumber safeBlockNumber, bcos::protocol::BlockNumber finalizedBlockNumber)
-{
-    // One number → one canonical hash. Distinct hashes at the same height overwrite
-    // NUMBER_2_HASH and fail R3-F4's fail-closed check. Legacy fixtures that reused a
-    // height for makeForkchoiceState()'s three hashes get finalized < safe < head.
-    if (forkchoiceState.headBlockHash != forkchoiceState.safeBlockHash &&
-        headBlockNumber == safeBlockNumber)
-    {
-        BOOST_REQUIRE_GE(headBlockNumber, 1);
-        safeBlockNumber = headBlockNumber - 1;
-    }
-    if (forkchoiceState.headBlockHash != forkchoiceState.finalizedBlockHash &&
-        (headBlockNumber == finalizedBlockNumber || safeBlockNumber == finalizedBlockNumber))
-    {
-        BOOST_REQUIRE_GE(std::min(safeBlockNumber, headBlockNumber), 1);
-        finalizedBlockNumber = std::min(safeBlockNumber, headBlockNumber) - 1;
-    }
-    storageFixture.setCanonicalBlock(forkchoiceState.headBlockHash, headBlockNumber);
-    storageFixture.setCanonicalBlock(forkchoiceState.safeBlockHash, safeBlockNumber);
-    storageFixture.setCanonicalBlock(forkchoiceState.finalizedBlockHash, finalizedBlockNumber);
-}
-
 struct ServicePair
 {
     MemPoolImpl legacyMemPool;
@@ -252,50 +159,6 @@ struct ServicePair
     {}
 };
 
-ForkchoiceState makeForkchoiceState()
-{
-    return {h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
-        h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
-        h256("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")};
-}
-
-PayloadAttributes makePayloadAttributesV2()
-{
-    PayloadAttributes payloadAttributes;
-    payloadAttributes.timestamp = c_timestamp;
-    payloadAttributes.prevRandao =
-        h256("1111111111111111111111111111111111111111111111111111111111111111");
-    payloadAttributes.suggestedFeeRecipient = Address("1234567890abcdef1234567890abcdef12345678");
-    // release validatePayloadAttributes rejects non-empty withdrawals until the trie root
-    // is computed; match EngineServiceTest / Karst fixtures with an empty list.
-    payloadAttributes.withdrawals = std::vector<WithdrawalV1>{};
-    return payloadAttributes;
-}
-
-PayloadAttributes makePayloadAttributesV3()
-{
-    auto payloadAttributes = makePayloadAttributesV2();
-    payloadAttributes.parentBeaconBlockRoot =
-        h256("2222222222222222222222222222222222222222222222222222222222222222");
-    return payloadAttributes;
-}
-
-PayloadAttributes makeKarstPayloadAttributes()
-{
-    auto payloadAttributes = makePayloadAttributesV3();
-    payloadAttributes.withdrawals = std::vector<WithdrawalV1>{};
-    return payloadAttributes;
-}
-
-NewPayloadRequest makeNewPayloadRequestV3(const ExecutionPayload& executionPayload)
-{
-    NewPayloadRequest request;
-    request.executionPayload = executionPayload;
-    request.parentBeaconBlockRoot =
-        h256("5555555555555555555555555555555555555555555555555555555555555555");
-    return request;
-}
-
 void checkForkchoiceParity(
     ForkchoiceUpdatedResult const& legacyResult, ForkchoiceUpdatedResult const& newResult)
 {
@@ -305,7 +168,8 @@ void checkForkchoiceParity(
         legacyResult.payloadStatus.latestValidHash == newResult.payloadStatus.latestValidHash);
     BOOST_CHECK(
         legacyResult.payloadStatus.validationError == newResult.payloadStatus.validationError);
-    // Payload ID parity checks presence only, not the ID string.
+    // Leftover Impl mint sequential IDs (`encodePayloadSequence`); Eth derives
+    // op-geth payload IDs. Presence is the parity invariant (A8-6).
     BOOST_CHECK_EQUAL(legacyResult.payloadId.has_value(), newResult.payloadId.has_value());
 }
 
@@ -1660,8 +1524,8 @@ BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
             {
                 writerReady.count_down();
                 permission.wait();
-                committed.count_down();
                 auto guard = tracker.lockExclusive();
+                committed.count_down();
                 h256 writerHash(0x99);
                 PayloadID writerPayloadId = "0xcafebabe";
                 auto entry = std::make_shared<BuiltPayload>();
@@ -1682,9 +1546,10 @@ BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
 
         writerReady.wait();
         permission.count_down();
-        committed.wait();
+        // Still holding shared: the writer is blocked in lockExclusive (A8-5).
         BOOST_CHECK(!writerFinished.load(std::memory_order_acquire));
     }
+    committed.wait();
 
     writer->join();
     if (writerError)
@@ -1725,8 +1590,8 @@ BOOST_AUTO_TEST_CASE(wire_round_trip_through_engine_helper)
     BOOST_REQUIRE(built);
     BOOST_REQUIRE(built->parentBeaconBlockRoot.has_value());
 
-    for (auto const& [version, label] :
-        {std::pair{ApiVersion::V3, "V3"}, std::pair{ApiVersion::V5, "V5"}})
+    for (auto const& [version, label] : {std::pair{ApiVersion::V3, "V3"},
+             std::pair{ApiVersion::V4, "V4"}, std::pair{ApiVersion::V5, "V5"}})
     {
         auto ep = bcos::rpc::serializeExecutionPayload(built->executionPayload, version);
         Json::Value params(Json::arrayValue);

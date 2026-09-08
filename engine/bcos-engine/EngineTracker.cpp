@@ -24,6 +24,7 @@
 
 #include <bcos-utilities/Exceptions.h>
 #include <stdexcept>
+#include <thread>
 
 namespace bcos::engine
 {
@@ -224,6 +225,12 @@ void EngineTracker::ExclusiveAccess::requireOwner() const
             InvalidGuardState{} << bcos::errinfo_comment{"EngineTracker::ExclusiveAccess used "
                                                          "after move or without owning its lock"});
     }
+    if (m_threadId != std::this_thread::get_id())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidGuardState{} << bcos::errinfo_comment{
+                "EngineTracker::ExclusiveAccess unlocked or used on a different thread"});
+    }
 }
 
 void EngineTracker::SharedAccess::requireOwner() const
@@ -233,6 +240,12 @@ void EngineTracker::SharedAccess::requireOwner() const
         BOOST_THROW_EXCEPTION(
             InvalidGuardState{} << bcos::errinfo_comment{"EngineTracker::SharedAccess used after "
                                                          "move or without owning its lock"});
+    }
+    if (m_threadId != std::this_thread::get_id())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidGuardState{} << bcos::errinfo_comment{
+                "EngineTracker::SharedAccess unlocked or used on a different thread"});
     }
 }
 

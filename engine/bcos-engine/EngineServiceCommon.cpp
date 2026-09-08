@@ -160,31 +160,36 @@ std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& pa
     {
         return std::string("withdrawals are not part of PayloadAttributesV1");
     }
-    if (version <= 2 && payloadAttributes.parentBeaconBlockRoot.has_value())
+    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        payloadAttributes.parentBeaconBlockRoot.has_value())
     {
         return std::string("parentBeaconBlockRoot is only valid for PayloadAttributesV3");
     }
-    if (version >= 2 && !payloadAttributes.withdrawals.has_value())
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        !payloadAttributes.withdrawals.has_value())
     {
         return std::string("withdrawals are required for PayloadAttributesV2 and V3");
     }
-    if (version >= 2 && payloadAttributes.withdrawals.has_value() &&
-        !payloadAttributes.withdrawals->empty())
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        payloadAttributes.withdrawals.has_value() && !payloadAttributes.withdrawals->empty())
     {
         return std::string(
             "non-empty withdrawals are not supported until the withdrawals trie root is "
             "computed");
     }
-    if (version >= 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+        !payloadAttributes.parentBeaconBlockRoot.has_value())
     {
         // op-geth ForkchoiceUpdatedV3/V4 both reject missing BeaconRoot when attrs present.
         return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3 and later");
     }
-    if (version <= 2 && payloadAttributes.eip1559Params.has_value())
+    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        payloadAttributes.eip1559Params.has_value())
     {
         return std::string("eip1559Params is only valid for PayloadAttributesV3");
     }
-    if (version <= 2 && payloadAttributes.minBaseFee.has_value())
+    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        payloadAttributes.minBaseFee.has_value())
     {
         return std::string("minBaseFee is only valid for PayloadAttributesV3");
     }
@@ -278,8 +283,7 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes)
     }
     if (payloadAttributes.eip1559Params->size() != c_eip1559ParamsBytes)
     {
-        BOOST_THROW_EXCEPTION(InvalidEngineEncoding{} <<
-                              bcos::errinfo_comment{
+        BOOST_THROW_EXCEPTION(InvalidEngineEncoding{} << bcos::errinfo_comment{
                                   "encodeOptimismExtraData requires exactly 8 bytes of "
                                   "eip1559Params"});
     }
@@ -326,12 +330,13 @@ std::optional<std::string> validateExecutionPayload(
     {
         return std::string("withdrawals are not part of ExecutionPayloadV1");
     }
-    if (version >= 2 && !executionPayload.withdrawals.has_value())
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        !executionPayload.withdrawals.has_value())
     {
         return std::string("withdrawals are required for ExecutionPayloadV2 and later");
     }
-    if (version >= 2 && executionPayload.withdrawals.has_value() &&
-        !executionPayload.withdrawals->empty())
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        executionPayload.withdrawals.has_value() && !executionPayload.withdrawals->empty())
     {
         // Mirror validatePayloadAttributes: this node cannot compute a real withdrawals
         // trie root (empty-trie placeholder), so a non-empty list is uncommittable at
@@ -340,17 +345,17 @@ std::optional<std::string> validateExecutionPayload(
             "non-empty withdrawals are not supported until the withdrawals trie root is "
             "computed");
     }
-    if (version <= 2 &&
+    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
         (executionPayload.blobGasUsed.has_value() || executionPayload.excessBlobGas.has_value()))
     {
         return std::string("blob gas fields are only valid for ExecutionPayloadV3 and later");
     }
-    if (version >= 3 &&
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
         (!executionPayload.blobGasUsed.has_value() || !executionPayload.excessBlobGas.has_value()))
     {
         return std::string("blob gas fields are required for ExecutionPayloadV3 and later");
     }
-    if (version >= 4)
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
     {
         if (!executionPayload.withdrawalsRoot.has_value())
         {
@@ -372,7 +377,8 @@ std::optional<std::string> validateExecutionPayload(
     // Holocene/Jovian shape below would otherwise accept a 9/17-byte extraData here
     // while the attributes side rejects eip1559Params at V3- — same fork window,
     // same rule (predicate symmetry).
-    if (version <= 2 && !executionPayload.extraData.empty())
+    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        !executionPayload.extraData.empty())
     {
         return std::string("extraData must be empty for ExecutionPayloadV1/V2 (pre-Holocene)");
     }
@@ -495,8 +501,8 @@ std::optional<std::string> compareWithBuiltPayload(
     // optionalMismatch only fires when BOTH sides carry the field and they differ. A
     // drop (built present, echo absent) is tolerated — the wire dialect cannot express
     // these fields, so an honest echo never carries them.
-    if (auto error = optionalMismatch(
-            "blockAccessList", submitted.blockAccessList, built.blockAccessList))
+    if (auto error =
+            optionalMismatch("blockAccessList", submitted.blockAccessList, built.blockAccessList))
     {
         return error;
     }

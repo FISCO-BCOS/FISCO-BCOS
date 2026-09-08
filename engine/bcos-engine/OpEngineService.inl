@@ -19,16 +19,16 @@
 
 #pragma once
 
-// This is the DEFINITION half of the split: OpEngineService.h is declarations-only so an
-// installed consumer of the declarations needs no rlp-protocol include dirs (engine links
-// rlp-protocol PRIVATE and does not propagate them). Including this .inl is the opt-in
-// instantiation point — the template's members use bcos::protocol::EthBlockHeader::computeHash
-// (a non-dependent name) and bcos::evm::opstack::estimatedDaSize, so instantiating TUs need
-// rlp-protocol and bcos-evm-opstack include dirs and link both (in-tree instantiators do).
+// This is the DEFINITION half of the split: OpEngineService.h is declarations-only.
+// Including this .inl is the opt-in instantiation point — members use
+// EthBlockHeader::computeHash and bcos::evm::opstack::estimatedDaSize. engine links
+// rlp-protocol PUBLIC so installed consumers inherit the include dirs (A8-13);
+// instantiators still need to link bcos-evm-opstack.
 #include "OpEngineService.h"
 #include <bcos-evm/opstack/RollupCost.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 
+#include <iterator>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/view/transform.hpp>
 
@@ -132,13 +132,25 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         }
     }
 
+    if (forkchoiceState.headBlockHash == bcos::h256{})
+    {
+        // op-geth: "Forkchoice requested update to zero hash" → STATUS_INVALID.
+        // SYNCING would tell the CL to wait on sync for a malformed request (A9-7).
+        co_return ForkchoiceUpdatedResult{
+            .payloadStatus = makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                std::string("Forkchoice requested update to zero hash")),
+            .payloadId = std::nullopt,
+        };
+    }
+
     auto view = m_globalStateStorage.fork();
     auto headBlockNumber = co_await bcos::ledger::getBlockNumber(
         view, forkchoiceState.headBlockHash, bcos::ledger::fromStorage);
     // All-zero safe/finalized hashes are the Engine-API "not set" value: skip number
     // resolution and canonical checks for that field (op-geth SetSafe/SetFinalized are
-    // only called for non-zero hashes). A missing HEAD is SYNCING; a non-zero
-    // unresolvable safe/finalized is InvalidForkchoiceState (op-geth, finding BJ).
+    // only called for non-zero hashes). A missing non-zero HEAD is SYNCING; a
+    // zero HEAD is INVALID (A9-7). A non-zero unresolvable safe/finalized is
+    // InvalidForkchoiceState (op-geth, finding BJ).
     bool const safeSet = forkchoiceState.safeBlockHash != bcos::h256{};
     bool const finalizedSet = forkchoiceState.finalizedBlockHash != bcos::h256{};
     auto safeBlockNumber = safeSet ? co_await bcos::ledger::getBlockNumber(view,
@@ -213,7 +225,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
     }
 
     co_return co_await buildOpPayload(
-        forkchoiceState, *payloadAttributes, version, *headBlockNumber + 1, decodedForcedTxs);
+        forkchoiceState, *payloadAttributes, version, *headBlockNumber + 1,
+        std::move(decodedForcedTxs));
 }
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
@@ -221,7 +234,7 @@ task::Task<ForkchoiceUpdatedResult>
 OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayload(
     const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
     std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
-    std::vector<bcos::bytes> const& decodedForcedTxs)
+    std::vector<bcos::bytes> decodedForcedTxs)
 {
     // Same policy as EthEngineService (option B): deterministic derivePayloadId, not a
     // process-local sequence counter. Reuse validate's decoded forced txs (finding AE).
@@ -286,8 +299,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     }
     if (payloadAttributes.transactions.has_value())
     {
-        forcedEnvelopes.insert(
-            forcedEnvelopes.end(), decodedForcedTxs.begin(), decodedForcedTxs.end());
+        forcedEnvelopes.insert(forcedEnvelopes.end(),
+            std::make_move_iterator(decodedForcedTxs.begin()),
+            std::make_move_iterator(decodedForcedTxs.end()));
     }
 
     std::vector<std::pair<crypto::HashType, bytes>> sealedEnvelopes;
@@ -670,15 +684,15 @@ template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
                 builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
                     commitError = std::move(error);
                 });
-            if (commitError)
-            {
-                co_return mapDelegateError(*commitError, std::nullopt);
-            }
+            if (!commitError)
             {
                 std::lock_guard lock(m_lastExecutedHeaderMutex);
                 m_lastExecutedHeader = builtHeader;
+                co_return makeStatus(
+                    PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
             }
-            co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
+            // Built pending was dropped or replaced: fall through to execute+commit
+            // instead of answering -32603 on every retry of a still-valid payload (A9-2).
         }
     }
 
@@ -820,8 +834,11 @@ template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
     }
     if (!executedHeader || !executedHeader->withdrawalsRoot().has_value())
     {
-        co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-            std::string("executed header is missing withdrawalsRoot"));
+        // Presence of withdrawalsRoot is stamped by this node's scheduler, not the
+        // CL payload. A missing field is a node-internal fault (-32603), never a
+        // consensus INVALID the CL would discard (A9-6).
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                  "executed header is missing withdrawalsRoot"});
     }
     if (executedHeader->withdrawalsRoot() != payload.withdrawalsRoot)
     {

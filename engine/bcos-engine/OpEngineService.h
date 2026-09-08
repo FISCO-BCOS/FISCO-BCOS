@@ -230,8 +230,7 @@ private:
 
     task::Task<ForkchoiceUpdatedResult> buildOpPayload(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, std::uint32_t version,
-        bcos::protocol::BlockNumber nextBlockNumber,
-        std::vector<bcos::bytes> const& decodedForcedTxs);
+        bcos::protocol::BlockNumber nextBlockNumber, std::vector<bcos::bytes> decodedForcedTxs);
 
     task::Task<PayloadStatus> handleOpNewPayload(
         const NewPayloadRequest& request, std::uint32_t version);

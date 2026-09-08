@@ -13,14 +13,11 @@ add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-engine>)
-# PRIVATE + static library: consumers still link rlp-protocol transitively
-# ($<LINK_ONLY:...>); only the include dirs stay unpropagated. The split keeps the
-# installed pair consistent with that: OpEngineService.h is declarations-only (no
-# rlp-protocol include, no .inl include), and OpEngineService.inl is the opt-in definition
-# half — instantiating the template requires rlp-protocol and bcos-evm-opstack include
-# dirs (in-tree instantiators link both).
+# PUBLIC rlp-protocol: EthEngineService.h includes EthEngineService.inl, and the
+# installed OpEngineService.inl uses <bcos-rlp-protocol/EthBlockHeader.h>. PRIVATE
+# would drop include dirs for consumers that instantiate the templates (A8-13).
 target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec
-    PRIVATE rlp-protocol)
+    rlp-protocol)
 set_target_properties(engine PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)

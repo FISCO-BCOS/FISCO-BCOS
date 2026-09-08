@@ -6,6 +6,8 @@
 // OpConsensusError classification (never std::bad_optional_access — the INVALID/-32603 boundary
 // depends on it), and classifyTxType's EIP-2718 type-byte mapping.
 
+#include <bcos-framework/engine/Constants.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <opstack-executor/OpCommon.h>
 
 #include <boost/test/unit_test.hpp>
@@ -27,6 +29,15 @@ const bcos::u256 kU256Max = ~bcos::u256{0};
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpCommonTest)
+
+BOOST_AUTO_TEST_CASE(EmptyRequestsHashDecodesTo32Bytes)
+{
+    // A9-3 — OP_EMPTY_REQUESTS_HASH and the engine header stamp share this hex.
+    // A truncated edit must not silently produce a short evmc::bytes32.
+    static_assert(bcos::engine::c_emptyRequestsHashHex.size() == 66);
+    auto const raw = bcos::fromHex(std::string{bcos::engine::c_emptyRequestsHashHex});
+    BOOST_CHECK_EQUAL(raw.size(), 32);
+}
 
 BOOST_AUTO_TEST_CASE(NarrowGasUsedAcceptsInt64Range)
 {

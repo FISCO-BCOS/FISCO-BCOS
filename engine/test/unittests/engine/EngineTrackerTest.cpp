@@ -35,6 +35,7 @@
 #include <barrier>
 #include <chrono>
 #include <condition_variable>
+#include <exception>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
@@ -610,6 +611,30 @@ BOOST_AUTO_TEST_CASE(engine_tracker_moved_from_exclusive_access_is_dead)
     checkExceptionMessage<InvalidGuardState>([&]() { guard.findPayload("0x01"); },
         "EngineTracker::ExclusiveAccess used after move or without owning its lock");
     BOOST_CHECK(moved.findPayload("0x01") == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_exclusive_access_used_on_other_thread_throws)
+{
+    // A7-5 — method use on a foreign thread throws. Destroy / move of a live
+    // guard on a foreign thread std::terminate()s (cannot throw from noexcept
+    // move or a destructor); that path is not exercised here.
+    EngineTracker tracker;
+    auto guard = tracker.lockExclusive();
+    std::exception_ptr ep;
+    std::thread worker([&] {
+        try
+        {
+            (void)guard.findPayload("0x01");
+        }
+        catch (...)
+        {
+            ep = std::current_exception();
+        }
+    });
+    worker.join();
+    BOOST_REQUIRE(ep);
+    checkExceptionMessage<InvalidGuardState>([&]() { std::rethrow_exception(ep); },
+        "EngineTracker::ExclusiveAccess unlocked or used on a different thread");
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_unknown)

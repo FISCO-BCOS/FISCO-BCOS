@@ -9,13 +9,13 @@
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <concepts>
+#include <deque>
 #include <functional>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/map.hpp>
 #include <range/v3/view/zip.hpp>
 #include <type_traits>
 #include <variant>
-#include <deque>
 
 namespace bcos::storage2
 {
@@ -596,6 +596,22 @@ public:
         {
             m_storages.pop_front();
         }
+    }
+
+    /// Oldest pending layer, discarded without a backend write (A8-1 / A8-4).
+    void popBackStorage()
+    {
+        std::unique_lock lock(m_listMutex);
+        if (!m_storages.empty())
+        {
+            m_storages.pop_back();
+        }
+    }
+
+    std::size_t pendingLayerCount()
+    {
+        std::unique_lock lock(m_listMutex);
+        return m_storages.size();
     }
 
 private:

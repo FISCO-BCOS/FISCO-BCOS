@@ -21,9 +21,8 @@ using namespace bcostars::protocol;
 
 namespace bcos::test
 {
-// Guards throw domain-typed exceptions (InvalidEngineEncoding) or bare
-// std::invalid_argument (calcOpBaseFee's parameter guards, pre-existing); match
-// what() to tell them apart either way.
+// Guards throw InvalidEngineEncoding (A7-3: one exception type for shape and
+// overflow). Match what() so the message still pins the failing arm.
 static void expectThrowMessage(const std::function<void()>& call, std::string_view expectedText)
 {
     bool threw = false;
@@ -37,8 +36,7 @@ static void expectThrowMessage(const std::function<void()>& call, std::string_vi
         BOOST_CHECK_MESSAGE(std::string_view(e.what()).find(expectedText) != std::string_view::npos,
             "expected \"" << expectedText << "\" in what(): " << e.what());
     }
-    BOOST_CHECK_MESSAGE(
-        threw, "expected an exception containing \"" << expectedText << "\"");
+    BOOST_CHECK_MESSAGE(threw, "expected an exception containing \"" << expectedText << "\"");
 }
 
 namespace

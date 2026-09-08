@@ -1332,6 +1332,10 @@ private:
             {
                 error << bcos::engine::OpRejectIsCapacity{true};
             }
+            if (opErr.validateErrorCode)
+            {
+                error << bcos::engine::OpValidateErrorCode{opErr.validateErrorCode};
+            }
         }
         catch (...)
         {}

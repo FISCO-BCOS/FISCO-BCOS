@@ -23,14 +23,19 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <boost/throw_exception.hpp>
 #include <cstdint>
 #include <optional>
 #include <span>
-#include <stdexcept>
+#include <string>
 #include <utility>
 
 namespace bcos::engine
 {
+[[noreturn]] inline void throwOpBaseFeeError(std::string message)
+{
+    BOOST_THROW_EXCEPTION(InvalidEngineEncoding{} << bcos::errinfo_comment{std::move(message)});
+}
 
 /// Canyon EIP-1559 parameters (op-geth params/config.go).
 inline constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
@@ -107,7 +112,7 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
     std::span<const bcos::byte> extra{extraView.data(), extraView.size()};
     if (auto shapeError = validateOpExtraDataShape(extra, /*allowEmpty=*/false))
     {
-        throw std::invalid_argument("OP parent extraData " + *shapeError);
+        throwOpBaseFeeError("OP parent extraData " + *shapeError);
     }
     auto [denominator32, elasticity32] =
         decodeEip1559Params(extra.subspan(1, c_eip1559ParamsBytes));
@@ -126,7 +131,7 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
     bcos::u256 const gasTarget = parent.gasLimit() / elasticity;
     if (gasTarget == 0) [[unlikely]]
     {
-        throw std::invalid_argument("invalid OP base-fee parameters: zero gas target");
+        throwOpBaseFeeError("invalid OP base-fee parameters: zero gas target");
     }
 
     // Jovian meters max(gasUsed, blobGasUsed DA footprint). op-geth dereferences
@@ -137,7 +142,7 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
     {
         if (!parent.blobGasUsed().has_value())
         {
-            throw std::invalid_argument("Jovian OP parent header is missing blobGasUsed");
+            throwOpBaseFeeError("Jovian OP parent header is missing blobGasUsed");
         }
         if (*parent.blobGasUsed() > gasMetered)
         {
@@ -150,7 +155,7 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
     // next block at 0.
     if (!parent.baseFee().has_value())
     {
-        throw std::invalid_argument("OP parent header is missing baseFee");
+        throwOpBaseFeeError("OP parent header is missing baseFee");
     }
     bcos::u256 const parentBaseFee = *parent.baseFee();
     // op-geth computes with unbounded big.Int; guard the fixed-width u256 multiply
@@ -170,7 +175,7 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
         bcos::u256 const delta = gasMetered - gasTarget;
         if (parentBaseFee > u256Max / delta) [[unlikely]]
         {
-            throw std::invalid_argument("OP base-fee delta computation overflows u256");
+            throwOpBaseFeeError("OP base-fee delta computation overflows u256");
         }
         bcos::u256 deltaFee = parentBaseFee * delta;
         deltaFee /= gasTarget;
@@ -180,7 +185,7 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
         // would wrap exactly here, where big.Int would keep going.
         if (result < parentBaseFee) [[unlikely]]
         {
-            throw std::invalid_argument("OP base-fee increase overflows u256");
+            throwOpBaseFeeError("OP base-fee increase overflows u256");
         }
     }
     else
@@ -189,7 +194,7 @@ inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool 
         bcos::u256 const delta = gasTarget - gasMetered;
         if (parentBaseFee > u256Max / delta) [[unlikely]]
         {
-            throw std::invalid_argument("OP base-fee delta computation overflows u256");
+            throwOpBaseFeeError("OP base-fee delta computation overflows u256");
         }
         bcos::u256 deltaFee = parentBaseFee * delta;
         deltaFee /= gasTarget;

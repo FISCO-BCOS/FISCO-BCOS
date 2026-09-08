@@ -19,6 +19,7 @@
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <optional>
+#include <system_error>
 
 namespace bcos::engine
 {
@@ -62,6 +63,10 @@ using OpCulpritTxHash = boost::error_info<struct OpCulpritTxHashTag, bcos::h256>
 /// Named separately from executor_v1::opstack::OpBlockGasPoolFull (the prepare-time exception).
 using OpRejectIsCapacity = boost::error_info<struct OpRejectIsCapacityTag, bool>;
 
+/// opValidate table classification from OpConsensusError::validateErrorCode (A9-4).
+/// Empty/default error_code is not attached. Never route this through the message text.
+using OpValidateErrorCode = boost::error_info<struct OpValidateErrorCodeTag, std::error_code>;
+
 /// Consumed by OpEngineService (#5549) to classify execute-reject culprits; unused
 /// within #5547 itself.
 [[nodiscard]] inline std::optional<bcos::h256> culpritTxHashFromError(boost::exception const& error)
@@ -69,6 +74,16 @@ using OpRejectIsCapacity = boost::error_info<struct OpRejectIsCapacityTag, bool>
     if (auto const* hash = boost::get_error_info<OpCulpritTxHash>(error))
     {
         return *hash;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] inline std::optional<std::error_code> validateErrorCodeFromError(
+    boost::exception const& error)
+{
+    if (auto const* code = boost::get_error_info<OpValidateErrorCode>(error))
+    {
+        return *code;
     }
     return std::nullopt;
 }

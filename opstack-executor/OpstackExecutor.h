@@ -24,6 +24,7 @@
 #include "opstack-executor/Storage2State.h"    // Storage2State / SharedErrorSlot
 #include <bcos-codec/rlp/Common.h>     // BYTES_HEAD_BASE (consensus deposit-envelope decode)
 #include <bcos-codec/rlp/RLPDecode.h>  // decodeHeader / decode / decodeItems
+#include <bcos-rlp-protocol/Web3Transaction.h>  // AuthorizationListEntry decode (EIP-7702 bind)
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>   // isTypedWeb3Envelope (header-only)
 #include <bcos-utilities/BoostLog.h>            // BCOS_LOG
 #include <bcos-utilities/DataConvertUtility.h>  // safeFromHex / safeFromQuantity
@@ -394,6 +395,49 @@ namespace engine = bcos::evm::engine;
     return std::nullopt;
 }
 
+/// Full authorizationList bind for 0x04: decode each signed tuple from the envelope and require
+/// element-wise equality with the mirror on chain_id/address/nonce/yParity/r/s. Signer recovery
+/// stays in processAuthorizationList at execution time — the mirror's signer field is not trusted.
+[[nodiscard]] inline std::optional<std::string> bindEnvelopeAuthorizationList(
+    bcos::bytesConstRef listPayload, bool isList,
+    std::vector<evmone::state::Authorization> const& mirror)
+{
+    namespace rlp = bcos::codec::rlp;
+    if (!isList)
+        return "authorizationList field is an RLP string";
+    bcos::bytesRef walker(const_cast<bcos::byte*>(listPayload.data()), listPayload.size());
+    size_t count = 0;
+    while (!walker.empty())
+    {
+        bcos::rpc::AuthorizationListEntry entry{};
+        if (auto err = rlp::decode(walker, entry); err != nullptr)
+            return "authorizationList entry is malformed";
+        if (count >= mirror.size())
+            return "authorizationList is not bound to the signed envelope";
+        const auto& m = mirror[count];
+        if (eth::toIntxU256(entry.chainId) != m.chain_id)
+            return "authorizationList is not bound to the signed envelope";
+        if (entry.address.size() < sizeof(evmc_address))
+            return "authorizationList address is malformed";
+        evmc::address envAddr{};
+        std::memcpy(envAddr.bytes, entry.address.data(), sizeof(envAddr.bytes));
+        if (envAddr != m.addr)
+            return "authorizationList is not bound to the signed envelope";
+        if (entry.nonce != m.nonce)
+            return "authorizationList is not bound to the signed envelope";
+        if (intx::uint256{entry.yParity} != m.v)
+            return "authorizationList is not bound to the signed envelope";
+        if (eth::toIntxU256(entry.r) != m.r)
+            return "authorizationList is not bound to the signed envelope";
+        if (eth::toIntxU256(entry.s) != m.s)
+            return "authorizationList is not bound to the signed envelope";
+        ++count;
+    }
+    if (count != mirror.size())
+        return "authorizationList is not bound to the signed envelope";
+    return std::nullopt;
+}
+
 /// (legacy = bare list; typed 0x01..0x04 = type byte + list, field order per EIP-2718/2930/1559).
 /// BOUND COVERAGE: type byte, nonce, gasLimit, to, value, data, and FULL element-wise binds of
 /// accessList (0x01 idx 7, 0x02/0x03/0x04 idx 8) and blobVersionedHashes (0x03 idx 10; 0x02 only
@@ -401,15 +445,17 @@ namespace engine = bcos::evm::engine;
 /// signature). The envelope's own lists are decoded and compared against the mirror: a mirror
 /// stripped against a non-empty envelope list no longer passes (it would execute the signed
 /// envelope without its warm slots / blob accounting), and a non-empty mirror list must echo the
-/// envelope exactly. Empty == empty stays legal. Fee fields and sender (ecrecover) stay unbound
-/// until part-5, as does the authorizationList (same posture as before).
+/// envelope exactly. Empty == empty stays legal. Fee fields (gasPrice / maxPriorityFeePerGas /
+/// maxFeePerGas / maxFeePerBlobGas) are bound against the signed envelope (A9-15). Sender
+/// (ecrecover) and authorizationList signers stay unbound until part-5; the block path rejects
+/// a missing sender and a non-empty authorizationList on non-0x04 txs until then.
 /// The envelope-bytes core below is shared by the per-tx path (m_prepare) and the block path
-/// (processOpBlock). Unbound fields are not trusted as a signature: the block path rejects
-/// a missing sender and a non-empty authorizationList until ecrecover lands in part-5.
+/// (processOpBlock).
 [[nodiscard]] inline std::optional<std::string> envelopeExecutionFieldsMismatch(
     bcos::bytesConstRef extraBytes, evmone::state::Transaction const& evmTx)
 {
     namespace rlp = bcos::codec::rlp;
+    namespace eth = bcos::executor_v1::eth;
     if (extraBytes.empty())
         return "empty extraTransactionBytes";
 
@@ -447,15 +493,22 @@ namespace engine = bcos::evm::engine;
     // pre-check is a more specific error, not a substitute for a truncating decoder.
     std::optional<bcos::bytesRef> nonceItem, gasItem, valueItem;
     std::optional<size_t> noncePlen, gasPlen, valuePlen;
+    std::optional<bcos::bytesRef> gasPriceItem, prioFeeItem, maxFeeItem, blobFeeItem;
+    std::optional<size_t> gasPricePlen, prioFeePlen, maxFeePlen, blobFeePlen;
     std::optional<bcos::bytesRef> toPayload, dataPayload;
-    std::optional<bcos::bytesRef> accessListPayload, blobPayload;
+    std::optional<bcos::bytesRef> accessListPayload, blobPayload, authorizationListPayload;
     bool nonceIsList = false;
     bool gasIsList = false;
     bool valueIsList = false;
+    bool gasPriceIsList = false;
+    bool prioFeeIsList = false;
+    bool maxFeeIsList = false;
+    bool blobFeeIsList = false;
     bool toIsList = false;
     bool dataIsList = false;
     bool accessListIsList = false;
     bool blobIsList = false;
+    bool authorizationListIsList = false;
     // Bind field indices: accessList at 7 (0x01) / 8 (0x02/0x03/0x04); 0x7e deposits and
     // legacy carry no accessList field. blobVersionedHashes candidate at 10 (0x02/0x03 —
     // only consumed for 0x03, or 0x02 with the 4844 extension).
@@ -463,6 +516,14 @@ namespace engine = bcos::evm::engine;
     size_t const accessListIdx =
         !typed || envelopeKind == 0x7e ? c_noField : (envelopeKind == 0x01 ? 7 : 8);
     size_t const blobIdx = envelopeKind == 0x02 || envelopeKind == 0x03 ? 10 : c_noField;
+    size_t const authorizationListIdx = envelopeKind == 0x04 ? 9 : c_noField;
+    // Fee indices (A9-15). Deposits have none. Sender stays unbound (part-5 ecrecover).
+    size_t const gasPriceIdx = envelopeKind == 0x7e ?
+                                   c_noField :
+                                   (!typed ? size_t{1} : (envelopeKind == 0x01 ? 2 : c_noField));
+    size_t const prioFeeIdx = typed && envelopeKind >= 0x02 && envelopeKind <= 0x04 ? 2 : c_noField;
+    size_t const maxFeeIdx = typed && envelopeKind >= 0x02 && envelopeKind <= 0x04 ? 3 : c_noField;
+    size_t const blobFeeIdx = envelopeKind == 0x03 ? 9 : c_noField;
     size_t idx = 0;
     while (!walker.empty())
     {
@@ -484,6 +545,30 @@ namespace engine = bcos::evm::engine;
             gasItem = wholeItem;
             gasPlen = itemHeader.payloadLength;
             gasIsList = itemHeader.isList;
+        }
+        if (idx == gasPriceIdx)
+        {
+            gasPriceItem = wholeItem;
+            gasPricePlen = itemHeader.payloadLength;
+            gasPriceIsList = itemHeader.isList;
+        }
+        if (idx == prioFeeIdx)
+        {
+            prioFeeItem = wholeItem;
+            prioFeePlen = itemHeader.payloadLength;
+            prioFeeIsList = itemHeader.isList;
+        }
+        if (idx == maxFeeIdx)
+        {
+            maxFeeItem = wholeItem;
+            maxFeePlen = itemHeader.payloadLength;
+            maxFeeIsList = itemHeader.isList;
+        }
+        if (idx == blobFeeIdx)
+        {
+            blobFeeItem = wholeItem;
+            blobFeePlen = itemHeader.payloadLength;
+            blobFeeIsList = itemHeader.isList;
         }
         if (idx == valueIdx)
         {
@@ -511,14 +596,22 @@ namespace engine = bcos::evm::engine;
             blobPayload = payload;
             blobIsList = itemHeader.isList;
         }
+        if (idx == authorizationListIdx)
+        {
+            authorizationListPayload = payload;
+            authorizationListIsList = itemHeader.isList;
+        }
         walker = walker.getCroppedData(itemHeader.payloadLength);
         ++idx;
     }
     if (!nonceItem || !gasItem || !valueItem || !toPayload || !dataPayload ||
+        (gasPriceIdx != c_noField && !gasPriceItem) || (prioFeeIdx != c_noField && !prioFeeItem) ||
+        (maxFeeIdx != c_noField && !maxFeeItem) || (blobFeeIdx != c_noField && !blobFeeItem) ||
         (typed && envelopeKind != 0x7e && !accessListPayload) ||
         // A type-0x03 envelope must carry blobVersionedHashes (idx 10): without this arm a
         // 9/10-item 0x03 passed the guard and dereferenced a disengaged blobPayload below.
-        (typed && envelopeKind == 0x03 && !blobPayload))
+        (typed && envelopeKind == 0x03 && !blobPayload) ||
+        (typed && envelopeKind == 0x04 && !authorizationListPayload))
         return "envelope has fewer fields than the type requires";
 
     // nonce (uint64). rlp::decode rejects over-wide payloads (UnexpectedLength); the plen
@@ -553,6 +646,53 @@ namespace engine = bcos::evm::engine;
             return "gasLimit decode failed";
         if (static_cast<uint64_t>(evmTx.gas_limit) != envGas)
             return "gasLimit mismatch";
+    }
+    // Fee fields (A9-15): bind the signed envelope to the mirror the executor will charge.
+    {
+        auto bindUint256 = [](char const* name, bool isList,
+                               std::optional<bcos::bytesRef> const& item,
+                               std::optional<size_t> const& plen,
+                               intx::uint256 const& mirror) -> std::optional<std::string> {
+            if (!item)
+                return std::string(name) + " missing from envelope";
+            if (isList)
+                return std::string(name) + " field is an RLP list";
+            if (!integerPayloadLength(*item).has_value())
+                return std::string(name) + " is not a canonical integer";
+            if (*plen > sizeof(intx::uint256))
+                return std::string(name) + " over-wide";
+            bcos::u256 env{};
+            bcos::bytesRef cursor = *item;
+            if (auto e = rlp::decode(cursor, env); e != nullptr)
+                return std::string(name) + " decode failed";
+            if (eth::toIntxU256(env) != mirror)
+                return std::string(name) + " mismatch";
+            return std::nullopt;
+        };
+        if (gasPriceIdx != c_noField)
+        {
+            if (auto err = bindUint256(
+                    "gasPrice", gasPriceIsList, gasPriceItem, gasPricePlen, evmTx.max_gas_price))
+                return err;
+        }
+        if (prioFeeIdx != c_noField)
+        {
+            if (auto err = bindUint256("maxPriorityFeePerGas", prioFeeIsList, prioFeeItem,
+                    prioFeePlen, evmTx.max_priority_gas_price))
+                return err;
+        }
+        if (maxFeeIdx != c_noField)
+        {
+            if (auto err = bindUint256(
+                    "maxFeePerGas", maxFeeIsList, maxFeeItem, maxFeePlen, evmTx.max_gas_price))
+                return err;
+        }
+        if (blobFeeIdx != c_noField)
+        {
+            if (auto err = bindUint256("maxFeePerBlobGas", blobFeeIsList, blobFeeItem, blobFeePlen,
+                    evmTx.max_blob_gas_price))
+                return err;
+        }
     }
     // to (20-byte address, or empty for contract creation)
     {
@@ -621,6 +761,16 @@ namespace engine = bcos::evm::engine;
     else if (!evmTx.blob_hashes.empty())
     {
         return "blobVersionedHashes is not bound to the signed envelope";
+    }
+    if (envelopeKind == 0x04)
+    {
+        if (auto err = bindEnvelopeAuthorizationList(
+                *authorizationListPayload, authorizationListIsList, evmTx.authorization_list))
+            return err;
+    }
+    else if (!evmTx.authorization_list.empty())
+    {
+        return "authorizationList is not bound to the signed envelope";
     }
     return std::nullopt;
 }
@@ -753,16 +903,14 @@ namespace engine = bcos::evm::engine;
 }
 
 /// Block-path only: 7702 authorizationList[].signer is copied from the tars mirror and is
-/// not recovered from the signed envelope (part-5 ecrecover). A non-empty list would let
-/// processAuthorizationList apply unbound signers. A set_code (0x04) transaction is rejected
-/// regardless of the mirror list: an empty mirror list would otherwise let the block producer
-/// strip the delegations while the envelope (whose type byte is bound by
-/// envelopeExecutionFieldsMismatch before this gate runs on both block paths) still says 0x04.
+/// not recovered from the signed envelope (part-5 ecrecover). A non-empty list on a non-0x04
+/// tx would let processAuthorizationList apply unbound signers. set_code (0x04) tuples are
+/// bound by envelopeExecutionFieldsMismatch; empty-list rejection is opValidate's job.
 /// Used by both m_prepare and processOpBlock.
 [[nodiscard]] inline std::optional<std::string> blockPathUnboundAuthorizationList(
     evmone::state::Transaction const& evmTx)
 {
-    if (evmTx.type == evmone::state::Transaction::Type::set_code ||
+    if (evmTx.type != evmone::state::Transaction::Type::set_code &&
         !evmTx.authorization_list.empty())
         return "authorizationList is not bound to the signed envelope";
     return std::nullopt;
@@ -1466,11 +1614,10 @@ private:
         auto evmTx = eth::toEvmoneTransaction(transaction);
         // TRUST BOUNDARY (envelope↔mirror gate, below): the execution fields come from the tars
         // mirror, so they are bound against the signed envelope by
-        // envelopeExecutionFieldsMismatch — type byte, nonce, gasLimit, to, value, data, and
-        // full element-wise binds of accessList / blobVersionedHashes are fail-closed
+        // envelopeExecutionFieldsMismatch — type byte, nonce, gasLimit, fees, to, value, data,
+        // and full element-wise binds of accessList / blobVersionedHashes are fail-closed
         // (OpConsensusError) on both the scheduler and block paths. NOT bound at this head:
-        // sender (needs ecrecover), the fee fields, and the authorizationList (still
-        // reject-if-non-empty). ecrecover of sender/auth signers is part-5.
+        // sender (needs ecrecover) and authorizationList signers. ecrecover is part-5.
         // eth_call (call=true) simulates without fee constraints — op-geth's eth_call does
         // not enforce max_gas_price >= base_fee. A pricing-less call (e.g. the RPC default
         // 2 gwei cap) would fail MAX_FEE_PER_GAS_TOO_LOW once the OP base fee exceeds it, so
