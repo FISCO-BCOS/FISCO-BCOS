@@ -1,5 +1,21 @@
-// FISCO BCOS
-// SPDX-License-Identifier: Apache-2.0
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpSchedulerSeamSmokeTest.cpp
+ * @brief OpSchedulerSeam smoke tests
+ */
 
 // OpSchedulerSeamSmokeTest — minimal compile-and-run verification that the ported
 // `bcos::evm::engine::OpSchedulerSeam` header instantiates against the current branch's types and
@@ -28,34 +44,13 @@
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
 namespace memory_storage = bcos::storage2::memory_storage;
+namespace testutil = bcos::evm::engine::testutil;
+namespace op = bcos::evm::opstack;
 
 namespace
 {
-// Minimal CheckpointStorage stub — per-file local copy (the source-branch fixture's rationale:
-// do not cross-include another module's test-private header).
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
+using bcos::evm::engine::testutil::TrivialCheckpointStorage;
 
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
-    Storage& open() & { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const& /*unused*/) &
-    {
-        std::abort();  // this fixture never needs historical checkpoints.
-    }
-    void createCheckpoint(Storage& /*unused*/, CheckpointName const& /*unused*/) {}
-    void deleteCheckpoint(CheckpointName const& /*unused*/) {}
-    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-};
 
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
@@ -67,8 +62,6 @@ using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBa
 using ViewType = typename MLS::ViewType;
 
 // Named selectors so BOOST_CHECK_EQUAL_COLLECTIONS does not dangle temporaries.
-constexpr std::array<uint8_t, 4> kIsthmusSelector{0x09, 0x89, 0x99, 0xbe};
-constexpr std::array<uint8_t, 4> kJovianSelector{0x3d, 0xb6, 0xbe, 0x2b};
 
 /// Fully populated L1 info (snapshot + SystemConfig) for the offset pins.
 bcos::evm::opstack::L1BlockInfo filledL1Info()
@@ -154,10 +147,20 @@ BOOST_AUTO_TEST_CASE(SynthesizeRefusesUnsetL1BlockInfo)
     BOOST_CHECK_THROW((void)scheduler.synthesizeL1AttributesEnvelope(), std::invalid_argument);
 }
 
-BOOST_AUTO_TEST_CASE(SynthesizeRefusesZeroSystemConfig)
+/// isUnsetSystemConfig is a disjunction (baseFeeScalar == 0 || is_zero(batcherHash)); each
+/// operand is zeroed on its own so an && regression fails one of the two cases.
+BOOST_AUTO_TEST_CASE(SynthesizeRefusesZeroBaseFeeScalar)
 {
     auto l1Info = filledL1Info();
     l1Info.baseFeeScalar = 0;
+    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
+        bcos::evm::opstack::OpForkFlags{.jovianActive = false}, l1Info);
+    BOOST_CHECK_THROW((void)scheduler.synthesizeL1AttributesEnvelope(), std::invalid_argument);
+}
+
+BOOST_AUTO_TEST_CASE(SynthesizeRefusesZeroBatcherHash)
+{
+    auto l1Info = filledL1Info();
     std::fill(l1Info.batcherHash.bytes, l1Info.batcherHash.bytes + 32, 0);
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
         bcos::evm::opstack::OpForkFlags{.jovianActive = false}, l1Info);
@@ -178,11 +181,13 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
     BOOST_CHECK(*dep.to == bcos::evm::opstack::OP_L1_BLOCK);
     BOOST_CHECK(!dep.mint.has_value());
     BOOST_CHECK(dep.value == intx::uint256{0});
-    BOOST_CHECK_EQUAL(dep.gas_limit, bcos::evm::opstack::c_l1InfoDepositGas);
+    // Literal, not c_l1InfoDepositGas: synthesizeL1AttributesDeposit sets the field FROM that
+    // constant, so comparing against it cannot detect a wrong value (op-geth L1InfoDepositGas).
+    BOOST_CHECK_EQUAL(dep.gas_limit, 1'000'000);
     BOOST_CHECK(!dep.is_system_tx);
     BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::IsthmusL1AttributesLen);
-    BOOST_CHECK_EQUAL_COLLECTIONS(
-        dep.data.begin(), dep.data.begin() + 4, kIsthmusSelector.begin(), kIsthmusSelector.end());
+    BOOST_CHECK(std::equal(op::IsthmusL1AttributesSelector.begin(),
+        op::IsthmusL1AttributesSelector.end(), dep.data.begin()));
 
     // sourceHash = keccak(bytes32(1) || keccak(l1Hash || bytes32(seq))).
     std::array<uint8_t, 64> innerInput{};
@@ -213,41 +218,22 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
     BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::JovianL1AttributesLen);
     auto const& calldata = dep.data;
 
-    auto checkBE = [&](size_t offset, uint64_t value) {
-        std::array<uint8_t, 8> be{};
-        bcos::toBigEndian(value, be);
-        BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
-            calldata.begin() + static_cast<ptrdiff_t>(offset + be.size()), be.begin(), be.end());
-    };
-    auto checkBE256 = [&](size_t offset, intx::uint256 const& value) {
-        std::array<uint8_t, 32> be{};
-        intx::be::store(std::span<uint8_t, 32>(be.data(), be.size()), value);
-        BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
-            calldata.begin() + static_cast<ptrdiff_t>(offset + be.size()), be.begin(), be.end());
-    };
-    auto checkU32 = [&](size_t offset, uint32_t value) {
-        std::array<uint8_t, 4> be{static_cast<uint8_t>(value >> 24),
-            static_cast<uint8_t>(value >> 16), static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value)};
-        BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
-            calldata.begin() + static_cast<ptrdiff_t>(offset + 4), be.begin(), be.end());
-    };
     // Selector [0:4].
-    BOOST_CHECK_EQUAL_COLLECTIONS(
-        calldata.begin(), calldata.begin() + 4, kJovianSelector.begin(), kJovianSelector.end());
-    checkU32(4, l1Info.baseFeeScalar);
-    checkU32(8, l1Info.blobBaseFeeScalar);
-    checkBE(12, l1Info.sequenceNumber);  // seq
-    checkBE(20, l1Info.time);            // l1 time
-    checkBE(28, l1Info.number);          // l1 number
-    checkBE256(36, l1Info.baseFee);      // l1 baseFee
-    checkBE256(68, l1Info.blobBaseFee);  // l1 blobBaseFee
+    BOOST_CHECK(std::equal(op::JovianL1AttributesSelector.begin(),
+        op::JovianL1AttributesSelector.end(), calldata.begin()));
+    testutil::checkU32(calldata, 4, l1Info.baseFeeScalar);
+    testutil::checkU32(calldata, 8, l1Info.blobBaseFeeScalar);
+    testutil::checkBE(calldata, 12, l1Info.sequenceNumber);  // seq
+    testutil::checkBE(calldata, 20, l1Info.time);            // l1 time
+    testutil::checkBE(calldata, 28, l1Info.number);          // l1 number
+    testutil::checkBE256(calldata, 36, l1Info.baseFee);      // l1 baseFee
+    testutil::checkBE256(calldata, 68, l1Info.blobBaseFee);  // l1 blobBaseFee
     BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + 100, calldata.begin() + 132, hashBytes.begin(),
         hashBytes.end());  // l1 blockHash
     BOOST_CHECK_EQUAL_COLLECTIONS(
         calldata.begin() + 132, calldata.begin() + 164, batcherBytes.begin(), batcherBytes.end());
-    checkU32(164, l1Info.operatorFeeScalar);
-    checkBE(168, l1Info.operatorFeeConstant);
+    testutil::checkU32(calldata, 164, l1Info.operatorFeeScalar);
+    testutil::checkBE(calldata, 168, l1Info.operatorFeeConstant);
 }
 
 BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
@@ -266,40 +252,21 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
     BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::IsthmusL1AttributesLen);
     auto const& calldata = dep.data;
 
-    auto checkBE = [&](size_t offset, uint64_t value) {
-        std::array<uint8_t, 8> be{};
-        bcos::toBigEndian(value, be);
-        BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
-            calldata.begin() + static_cast<ptrdiff_t>(offset + be.size()), be.begin(), be.end());
-    };
-    auto checkBE256 = [&](size_t offset, intx::uint256 const& value) {
-        std::array<uint8_t, 32> be{};
-        intx::be::store(std::span<uint8_t, 32>(be.data(), be.size()), value);
-        BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
-            calldata.begin() + static_cast<ptrdiff_t>(offset + be.size()), be.begin(), be.end());
-    };
-    auto checkU32 = [&](size_t offset, uint32_t value) {
-        std::array<uint8_t, 4> be{static_cast<uint8_t>(value >> 24),
-            static_cast<uint8_t>(value >> 16), static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value)};
-        BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
-            calldata.begin() + static_cast<ptrdiff_t>(offset + 4), be.begin(), be.end());
-    };
-    BOOST_CHECK_EQUAL_COLLECTIONS(
-        calldata.begin(), calldata.begin() + 4, kIsthmusSelector.begin(), kIsthmusSelector.end());
-    checkU32(4, l1Info.baseFeeScalar);
-    checkU32(8, l1Info.blobBaseFeeScalar);
-    checkBE(12, l1Info.sequenceNumber);
-    checkBE(20, l1Info.time);
-    checkBE(28, l1Info.number);
-    checkBE256(36, l1Info.baseFee);
-    checkBE256(68, l1Info.blobBaseFee);
+    BOOST_CHECK(std::equal(op::IsthmusL1AttributesSelector.begin(),
+        op::IsthmusL1AttributesSelector.end(), calldata.begin()));
+    testutil::checkU32(calldata, 4, l1Info.baseFeeScalar);
+    testutil::checkU32(calldata, 8, l1Info.blobBaseFeeScalar);
+    testutil::checkBE(calldata, 12, l1Info.sequenceNumber);
+    testutil::checkBE(calldata, 20, l1Info.time);
+    testutil::checkBE(calldata, 28, l1Info.number);
+    testutil::checkBE256(calldata, 36, l1Info.baseFee);
+    testutil::checkBE256(calldata, 68, l1Info.blobBaseFee);
     BOOST_CHECK_EQUAL_COLLECTIONS(
         calldata.begin() + 100, calldata.begin() + 132, hashBytes.begin(), hashBytes.end());
     BOOST_CHECK_EQUAL_COLLECTIONS(
         calldata.begin() + 132, calldata.begin() + 164, batcherBytes.begin(), batcherBytes.end());
-    checkU32(164, l1Info.operatorFeeScalar);
-    checkBE(168, l1Info.operatorFeeConstant);
+    testutil::checkU32(calldata, 164, l1Info.operatorFeeScalar);
+    testutil::checkBE(calldata, 168, l1Info.operatorFeeConstant);
 }
 
 BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayout)
@@ -312,8 +279,8 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayout)
     auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
         bcos::bytesConstRef(env.data(), env.size()));
     BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::JovianL1AttributesLen);
-    BOOST_CHECK_EQUAL_COLLECTIONS(
-        dep.data.begin(), dep.data.begin() + 4, kJovianSelector.begin(), kJovianSelector.end());
+    BOOST_CHECK(std::equal(op::JovianL1AttributesSelector.begin(),
+        op::JovianL1AttributesSelector.end(), dep.data.begin()));
     // [176:178] DA-footprint scalar is zero.
     BOOST_CHECK_EQUAL(dep.data[176], 0);
     BOOST_CHECK_EQUAL(dep.data[177], 0);

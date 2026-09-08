@@ -87,6 +87,30 @@ BOOST_AUTO_TEST_CASE(RejectsDepositTxOnTheNonDepositPath)
 // 交易会给 receipts root 贡献一个带该前缀、却按 legacy 规则定价的叶子。
 //
 // 因此拒绝必须是白名单。只黑名单 0x7E 的实现能通过上面那条用例，却通不过这一条。
+/// The 0x04 empty-authorizationList gate lives in validate_transaction
+/// (state.cpp: `if (tx.authorization_list.empty()) return EMPTY_AUTHORIZATION_LIST;`), not in
+/// the executor's block path: blockPathUnboundAuthorizationList deliberately defers the empty
+/// list here. This pins that compensating check for the strip-the-delegations shape, which the
+/// executor suite can no longer exercise (its 0x04 gate now only rejects a non-empty list on a
+/// non-0x04 tx).
+BOOST_AUTO_TEST_CASE(RejectsSetCodeTxWithEmptyAuthorizationList)
+{
+    test::TestState ts;
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    auto tx = baseTx();
+    tx.type = state::Transaction::Type::set_code;
+    tx.to = 0x0000000000000000000000000000000000001234_address;
+    BOOST_REQUIRE(tx.authorization_list.empty());  // the stripped-delegations shape
+
+    const std::vector<uint8_t> env{0x04, 0xc0};
+    const auto r = opValidate(
+        ts, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
+    BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
+    BOOST_CHECK_EQUAL(
+        std::get<std::error_code>(r), state::make_error_code(state::EMPTY_AUTHORIZATION_LIST));
+}
+
 BOOST_AUTO_TEST_CASE(RejectsEveryOutOfEnumTxType)
 {
     test::TestState ts;
