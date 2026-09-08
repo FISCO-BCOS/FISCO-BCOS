@@ -68,9 +68,9 @@ struct AccountState
 using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 
 /// The one place a transaction is judged admissible, for every ingress: Web3 JSON-RPC, P2P, and
-/// block-proposal verification. As of this commit no ingress calls it yet -- the pool still runs
-/// txpool::TxValidator, and the callers move over in the wiring commits that follow. Read the
-/// sentence above as what this class is for, not as a claim about who calls it today.
+/// block-proposal verification. The pool's two ingresses call it -- verifyAndSubmitTransaction
+/// for submission and the peer fetch, enforceSubmitTransaction for proposal verification -- and
+/// the mempool's RPC ingress follows in #5555.
 ///
 /// It OWNS the nonce checkers rather than reaching them through callbacks. Nonce admission is
 /// the same question at every ingress, and routing it through a per-caller hook is how the pool
@@ -96,6 +96,9 @@ public:
     /// the chain's block limit. Until it is bound there is nothing to check a BCOS nonce against,
     /// and that check passes.
     void setLedgerNonceChecker(std::shared_ptr<LedgerNonceChecker> ledgerNonceChecker);
+    /// The checker bound above, null until then. The pool clears committed nonces from, and
+    /// re-checks at seal time against, the instance it reads here -- one holder, not a copy.
+    std::shared_ptr<LedgerNonceChecker> ledgerNonceChecker() const;
 
     /// Also bound after construction -- the scheduler does not exist yet when the pools are
     /// built. Until it is bound, and in engine-driven mode where there is none, the balance check

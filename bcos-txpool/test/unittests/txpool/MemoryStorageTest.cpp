@@ -104,7 +104,6 @@ struct MemoryStorageFixture
             /*checkSig*/ false)),
         storage(config, *ioServicePool->getIOService())
     {
-        config->setLedgerNonceChecker(ledgerNonceChecker);
         txValidator->setLedgerNonceChecker(ledgerNonceChecker);
 
         // txvalidator::LedgerNonceChecker: set all methods to no-op implementations
@@ -1141,7 +1140,6 @@ BOOST_AUTO_TEST_CASE(FIB50_NonceNotInsertedOnValidationFailure)
     auto v = makeAdmissionValidator(nullptr, nc, web3Checker, groupId, chainId);
     auto cfg = std::make_shared<TxPoolConfig>(
         v, nullptr, nullptr, nullptr, nc, web3Checker, 1000, 1024, /*checkSig=*/true);
-    cfg->setLedgerNonceChecker(lnc);
     v->setLedgerNonceChecker(lnc);
     MemoryStorage stor(cfg, *ioServicePool->getIOService());
 

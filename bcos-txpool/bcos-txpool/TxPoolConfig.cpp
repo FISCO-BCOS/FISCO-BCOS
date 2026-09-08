@@ -39,12 +39,7 @@ bcos::txvalidator::Web3NonceChecker::Ptr bcos::txpool::TxPoolConfig::web3NonceCh
 }
 bcos::txvalidator::LedgerNonceChecker::Ptr bcos::txpool::TxPoolConfig::ledgerNonceChecker()
 {
-    return m_ledgerNonceChecker;
-}
-void bcos::txpool::TxPoolConfig::setLedgerNonceChecker(
-    bcos::txvalidator::LedgerNonceChecker::Ptr _ledgerNonceChecker)
-{
-    m_ledgerNonceChecker = std::move(_ledgerNonceChecker);
+    return m_txValidator->ledgerNonceChecker();
 }
 bcos::protocol::TransactionSubmitResultFactory::Ptr bcos::txpool::TxPoolConfig::txResultFactory()
 {

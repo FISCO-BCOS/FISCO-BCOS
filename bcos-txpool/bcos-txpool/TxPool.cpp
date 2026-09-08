@@ -649,9 +649,9 @@ void TxPool::init()
     auto ledgerNonceChecker = std::make_shared<txvalidator::LedgerNonceChecker>(
         nonceList, ledgerConfig->blockNumber(), blockLimit, m_checkBlockLimit);
 
-    // The same instance on both sides: the pool clears committed nonces through it on every
-    // block, and admission checks against the history the pool just replayed from the ledger.
-    m_config->setLedgerNonceChecker(ledgerNonceChecker);
+    // Bound on the validator only. The pool reaches the same instance through
+    // TxPoolConfig::ledgerNonceChecker, so the commit path clears exactly the history admission
+    // checks against -- one holder, nothing to keep in step.
     m_config->txValidator()->setLedgerNonceChecker(ledgerNonceChecker);
     TXPOOL_LOG(INFO) << LOG_DESC("init txs validator success");
 

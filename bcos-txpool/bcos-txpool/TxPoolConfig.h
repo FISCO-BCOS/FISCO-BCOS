@@ -56,9 +56,11 @@ public:
     /// the insert path reserves a nonce here and the commit path clears it, both without going
     /// near admission.
     txvalidator::Web3NonceChecker::Ptr web3NonceChecker();
+    /// The exception to the rule above: the validator owns this one, bound in TxPool::init once
+    /// the pool has replayed the chain's nonce history. Forwarded here so the commit path clears
+    /// committed nonces from, and the seal path re-checks against, the instance admission uses.
+    /// Null before init.
     txvalidator::LedgerNonceChecker::Ptr ledgerNonceChecker();
-    /// Bound once the pool has replayed the chain's nonce history, which needs the block limit.
-    void setLedgerNonceChecker(txvalidator::LedgerNonceChecker::Ptr _ledgerNonceChecker);
 
     bcos::protocol::TransactionSubmitResultFactory::Ptr txResultFactory();
 
@@ -74,7 +76,6 @@ public:
 private:
     std::shared_ptr<txvalidator::TxValidator> m_txValidator;
     txvalidator::Web3NonceChecker::Ptr m_web3NonceChecker;
-    txvalidator::LedgerNonceChecker::Ptr m_ledgerNonceChecker;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;

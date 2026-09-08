@@ -155,6 +155,12 @@ void TxValidator::setLedgerNonceChecker(std::shared_ptr<LedgerNonceChecker> ledg
     m_ledgerNonceChecker = std::move(ledgerNonceChecker);
 }
 
+std::shared_ptr<LedgerNonceChecker> TxValidator::ledgerNonceChecker() const
+{
+    ReadGuard guard(x_lateBound);
+    return m_ledgerNonceChecker;
+}
+
 void TxValidator::setScheduler(std::weak_ptr<scheduler::SchedulerInterface> scheduler)
 {
     WriteGuard guard(x_lateBound);
