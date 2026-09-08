@@ -30,6 +30,7 @@
 #include "bcos-utilities/Common.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <boost/test/unit_test.hpp>
+#include <optional>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -145,8 +146,14 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, const std
         input, nonce, blockLimit, chainId, groupId);
 }
 
+/// @p gasLimit and @p chainId are free variables because two of the rules a proposal is held to
+/// -- the chain id and the intrinsic-gas floor -- can only be violated by a transaction that
+/// carries a value for them. Without @p chainId the preimage is the 6-item pre-EIP-155 form, which
+/// claims no chain; with one it is the 9-item EIP-155 form [.., chainId, 0, 0], the shape
+/// takeToTarsTransaction stores for a protected legacy transaction.
 inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string nonce,
-    crypto::KeyPairInterface::UniquePtr const& key, std::string inputStr = "testTransaction")
+    crypto::KeyPairInterface::UniquePtr const& key, std::string inputStr = "testTransaction",
+    uint64_t gasLimit = 21000, std::optional<uint64_t> chainId = std::nullopt)
 {
     bcostars::Transaction transaction;
 
@@ -157,7 +164,8 @@ inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string no
     transaction.type = static_cast<tars::Char>(protocol::TransactionType::Web3Transaction);
     // extraTransactionBytes must be a genuine Web3 signing preimage: since FIB-New1, verify()
     // recomputes the canonical txHash from it by RLP splicing, so arbitrary bytes are rejected.
-    // Build a minimal legacy (pre-EIP-155) preimage rlp([nonce, gasPrice, gas, to, value, data]).
+    // Build a minimal legacy preimage: rlp([nonce, gasPrice, gas, to, value, data]), with
+    // chainId, 0, 0 appended under EIP-155.
     //
     // The preimage MUST carry the caller's nonce, not a random one. Admission normalizes a Web3
     // transaction's tars mirror from its signed envelope, so an envelope that disagrees with the
@@ -168,8 +176,17 @@ inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string no
     auto toAddress = key->address(_cryptoSuite->hashImpl()).asBytes();
     std::string data = "extraData" + std::to_string(random());
     bcos::bytes preimage;
-    bcos::codec::rlp::encode(preimage, nonceValue, static_cast<uint64_t>(1),
-        static_cast<uint64_t>(21000), toAddress, static_cast<uint64_t>(0), data);
+    if (chainId)
+    {
+        bcos::codec::rlp::encode(preimage, nonceValue, static_cast<uint64_t>(1), gasLimit,
+            toAddress, static_cast<uint64_t>(0), data, *chainId, static_cast<uint64_t>(0),
+            static_cast<uint64_t>(0));
+    }
+    else
+    {
+        bcos::codec::rlp::encode(preimage, nonceValue, static_cast<uint64_t>(1), gasLimit,
+            toAddress, static_cast<uint64_t>(0), data);
+    }
     transaction.extraTransactionBytes.assign(preimage.begin(), preimage.end());
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
