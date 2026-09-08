@@ -606,7 +606,8 @@ BOOST_AUTO_TEST_CASE(LatestBalanceFromMPTOnScenarioB)
 
     buildTrie();
     wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+    // "latest" resolves to the tip block, not an arbitrary historical height.
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
 
     auto resp = getBalance(address.hexPrefixed(), "latest");
     BOOST_TEST(!resp.isMember("error"));
