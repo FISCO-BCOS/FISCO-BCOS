@@ -179,7 +179,7 @@ jobs:
         # (which loads it by path) needs pyyaml too. pytest runs the suite.
         # eth-hash / py-trie / rlp are the independent oracle the op-e2e pure tests
         # cross-check withdraw_claim's ABI/Merkle decoding against.
-        run: python3 -m pip install --upgrade pip pyyaml pytest eth-hash py-trie rlp
+        run: python3 -m pip install --upgrade pip pyyaml pytest eth-hash 'py-trie<1.0' rlp
       - name: Run pytest
         run: python3 -m pytest test_build_allocs.py test_gen_rollup_config.py test_gen_eth_header_fixture.py -v
       - name: Run op-e2e pure tests

@@ -1,5 +1,5 @@
 # Python deps for tools/op-e2e (withdraw_claim.py MPT proof helpers).
 pyyaml>=6.0
 eth-hash>=0.5
-py-trie>=0.4
+py-trie>=0.4,<1.0
 rlp>=3.0
