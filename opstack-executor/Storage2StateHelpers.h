@@ -1,21 +1,5 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file Storage2StateHelpers.h
- * @brief Pure static helpers for the Storage2State block bridge
- */
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 #pragma once
 
 // Pure static helpers for the Storage2State block bridge (split out of Storage2State.h).
@@ -41,7 +25,7 @@ namespace bcos::evm::evmstate
 /// Fixed length (32 bytes) of a raw storage-slot key in an account table, used to distinguish
 /// slot keys (evmc::bytes32) from the known short field names in ACCOUNT_TABLE_FIELDS during the
 /// has_storage range-seek probe.
-inline constexpr std::size_t c_storageSlotKeySize = sizeof(evmc_bytes32::bytes);
+inline constexpr std::size_t kStorageSlotKeySize = sizeof(evmc_bytes32::bytes);
 
 /// Value-variant discrimination (Critical): storage2 logical deletion means range() merges do
 /// NOT filter tombstones — a raw range item's value is the full

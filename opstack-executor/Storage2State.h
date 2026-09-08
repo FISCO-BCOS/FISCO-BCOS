@@ -1,21 +1,5 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file Storage2State.h
- * @brief evmone StateView over the storage2 StateKey space
- */
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 #pragma once
 
 // Storage2State — evmone::state::StateView over the storage2 (StateKey/EVMAccount) key space.
@@ -560,7 +544,7 @@ private:
             if (!content.has_value())
                 continue;  // skip tombstone (a logically-deleted slot must not resurrect)
 
-            if (fieldKey.size() != c_storageSlotKeySize)
+            if (fieldKey.size() != kStorageSlotKeySize)
                 throw std::runtime_error(
                     "Storage2State::fetchAllStorage: unknown key in account table '" + tableName +
                     "' (neither a known ACCOUNT_TABLE_FIELDS name nor a 32-byte storage slot "
@@ -711,8 +695,8 @@ private:
             // overflow behaviour of some conversion (repo precedent: convert_to<int64_t> silently
             // truncates out-of-range values).
             auto nonceValue = intx::from_string<intx::uint256>(std::string(nonceEntry->get()));
-            static constexpr intx::uint256 c_maxUint64{std::numeric_limits<uint64_t>::max()};
-            if (nonceValue > c_maxUint64)
+            static constexpr intx::uint256 maxUint64{std::numeric_limits<uint64_t>::max()};
+            if (nonceValue > maxUint64)
                 throw std::overflow_error(
                     "Storage2State::fetchAccount: nonce exceeds uint64_t range (silent-"
                     "truncation guard, design §4.3)");
@@ -785,7 +769,7 @@ private:
             auto [table, fieldKey] = view.get();
             if (table != tableName)
                 co_return false;
-            if (fieldKey.size() == c_storageSlotKeySize)
+            if (fieldKey.size() == kStorageSlotKeySize)
             {
                 if (auto content = liveContent(rawValue);
                     content.has_value() && !isZeroSlotValue(*content))

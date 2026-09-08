@@ -1,21 +1,3 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file OpBlockExecute.h
- * @brief OP block execution types, block-pre steps and finalization helpers
- */
 #pragma once
 
 #include <bcos-codec/rlp/RLPEncode.h>
@@ -26,7 +8,6 @@
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/engine/Constants.h>
-#include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockFactory.h>
@@ -182,11 +163,7 @@ inline const evmc::bytes32 OP_EMPTY_REQUESTS_HASH = [] {
     evmc::bytes32 hash{};
     if (raw.size() != sizeof(hash.bytes))
     {
-        // This runs in a namespace-scope dynamic initializer, so the throw terminates before
-        // main() — which is the intent: a malformed consensus constant must not boot a node.
-        // The type is the framework's startup/wiring fault, not a bare std::logic_error.
-        BOOST_THROW_EXCEPTION(bcos::engine::InvalidEngineConfig{} << bcos::errinfo_comment(
-                                  "c_emptyRequestsHashHex must decode to exactly 32 bytes"));
+        throw std::logic_error("c_emptyRequestsHashHex must decode to exactly 32 bytes");
     }
     std::copy(raw.begin(), raw.end(), hash.bytes);
     return hash;
@@ -346,13 +323,13 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
         throw OpStorageError("pre-block system-call poisoned: " + stateView.firstError());
 
     // (2) deposit-first content check + Jovian shape (type-byte classification, no raw-tx parse).
-    constexpr uint8_t c_depositTypeByte = static_cast<uint8_t>(op::kDepositTxType);
+    constexpr uint8_t kDepositTypeByte = 0x7e;
     if (rawTxBytes.empty())
         throw OpConsensusError("op block: missing L1 attributes deposit (empty block)");
     // Empty-envelope guard: the first envelope must be non-empty before its type byte is read
     // (and before raw.back()[0] below). A block with NO deposit at all stays a hard reject: the
     // L1-attributes deposit seeds the block's fee/DA context and deposits[0] is read below.
-    if (rawTxBytes[0].empty() || rawTxBytes[0][0] != c_depositTypeByte || deposits.empty())
+    if (rawTxBytes[0].empty() || rawTxBytes[0][0] != kDepositTypeByte || deposits.empty())
         throw OpConsensusError("op block: no deposit transaction to seed the block");
     // First deposit is not L1 attributes: warn only. op-geth/op-reth accept this at validation.
     if (!op::isL1AttributesTx(deposits[0]))
@@ -366,7 +343,7 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
         // (core/types/rollup_cost.go:563-577): iterating every envelope would be stricter than
         // the reference client. Empty trailing envelope is treated as non-deposit.
         bool const lastTxIsDeposit =
-            !rawTxBytes.back().empty() && rawTxBytes.back()[0] == c_depositTypeByte;
+            !rawTxBytes.back().empty() && rawTxBytes.back()[0] == kDepositTypeByte;
         op::validateJovianL1AttributesShape(
             std::span<uint8_t const>{data.data(), data.size()}, lastTxIsDeposit, cfg);
         if (auto scalar =

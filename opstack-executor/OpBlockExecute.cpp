@@ -1,21 +1,3 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file OpBlockExecute.cpp
- * @brief OP block execution: processOpBlock, finalize, seal and receipts-root encoding
- */
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-evm/adapter/StateDiffSanitize.h>
@@ -147,18 +129,6 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 catch (const OpConsensusError&)
                 {
                     throw;
-                }
-                catch (const OpDepositGasLimitReached& e)
-                {
-                    // Over-budget deposit is a capacity fault, not a poisoned tx: the same
-                    // classification rethrowExecError gives it on the per-tx path (the module
-                    // test ExecuteBlockDepositOverBudgetTagsCapacity asserts that tag). A
-                    // deposit has no signed envelope, so no culprit hash can accompany it —
-                    // the tag is the only signal the two lanes can agree on.
-                    OpConsensusError err(
-                        std::string("op block: deposit execution failed: ") + e.what());
-                    err.capacity = true;
-                    throw err;
                 }
                 catch (const std::runtime_error& e)
                 {

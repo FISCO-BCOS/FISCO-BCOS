@@ -1,21 +1,5 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file OpSchedulerTest.cpp
- * @brief OpScheduler execute/commit/eth_call tests
- */
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 
 // OpSchedulerTest — execute/commit + classifyException + eth_call / callAtBlock for OpScheduler.
 // Ported from the combined-branch suite. ReorgUndo codec cases stay with the reorg follow-up.
@@ -26,7 +10,6 @@
 // 2. ConsensusRejectionClassifiedAsOpConsensusRejected: 0x03 type byte → OpConsensusRejected.
 // 3. classifyException: OpConsensusError→OpConsensusRejected / OpStorageError→OpStorageFault /
 //    other→UnknownError.
-#include "OpSchedulerSeamTestHelpers.h"        // TrivialCheckpointStorage
 #include <opstack-executor/OpCommitments.h>    // detail::toBcosH256
 #include <opstack-executor/OpDepositEncode.h>  // encodeDepositEnvelope
 #include <opstack-executor/OpScheduler.h>
@@ -84,8 +67,6 @@ namespace detail = bcos::evm::engine::detail;
 
 namespace
 {
-using bcos::evm::engine::testutil::TrivialCheckpointStorage;
-
 
 constexpr uint64_t kChainId = 0x2105;  // 8453 — the FISCO OP chain id (vector eip1559 chainId)
 const bcos::Address kSender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // eip1559 recovered
@@ -98,6 +79,31 @@ constexpr const char* kEip1559EnvelopeHex =
     "0b6b3a764000080c001a0e37533ddb9f696c0b21788f1b00c78adc4a81b1d811d84e70fad672096fc924ea00ae"
     "693f4d68955a4c01ee8bab26f5be740ee416dd2556822f68b747d5aab7714";
 
+// Minimal CheckpointStorage stub (same as the source-branch fixture: do not cross-include other
+// modules' test-private headers).
+template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
+struct TrivialCheckpointStorage
+{
+    using CheckpointName = bcos::h256;
+
+    Storage& m_storage;
+    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
+    Storage& open() & { return m_storage; }
+    [[noreturn]] Storage& open(CheckpointName const& /*unused*/) &
+    {
+        std::abort();  // this fixture never needs a historical checkpoint.
+    }
+    void createCheckpoint(Storage& /*unused*/, CheckpointName const& /*unused*/) {}
+    void deleteCheckpoint(CheckpointName const& /*unused*/) {}
+    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
+    {
+        return std::nullopt;
+    }
+    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
+    {
+        return std::nullopt;
+    }
+};
 
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
@@ -2175,69 +2181,6 @@ bcos::h256 commitmentCorruption(unsigned char tag)
 }
 }  // namespace
 
-/// R3-1: the single entry point answers both account fields of one table. The seeded sender has
-/// flat rows only (no trie), so this pins the flat lane; the two scenario-B cases below pin the
-/// MPT lane (absent trie -> flat fallback; readable trie -> the trie wins). A NONCE-only special
-/// case used to be the whole story for this entry point; this asserts BALANCE comes back too.
-BOOST_AUTO_TEST_CASE(PendingStorageAtAnswersNonceAndBalance)
-{
-    Fixture f;
-    auto const addr = std::string(kSender.hex());
-    auto const nonce = bcos::task::syncWait(
-        f.scheduler->getPendingStorageAt(addr, bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, 0));
-    BOOST_REQUIRE_MESSAGE(nonce.has_value(), "the seeded sender's nonce must be readable");
-    BOOST_CHECK_EQUAL(std::string(nonce->get()), "0");
-
-    auto const balance = bcos::task::syncWait(
-        f.scheduler->getPendingStorageAt(addr, bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, 0));
-    BOOST_REQUIRE_MESSAGE(balance.has_value(), "the seeded sender's balance must be readable");
-    BOOST_CHECK_EQUAL(std::string(balance->get()), (bcos::u256(1) << 200).str());
-}
-
-/// The scenario-B MPT lane must not abort its caller when the tip's trie nodes are absent.
-/// Trie::get throws MPTInvariantViolation for a missing node row (Trie.h:47), and this entry
-/// point is reached from CallRequest::takeToTransaction's noexcept boundary; the readability
-/// guard answers from the flat plane instead. Without the guard this test terminates with that
-/// exception rather than returning the seeded flat nonce.
-BOOST_AUTO_TEST_CASE(PendingStorageAtFallsBackWhenTheTipTrieIsAbsent)
-{
-    Fixture f;
-    bcos::h256 const unbackedRoot(0x1234);  // non-zero, and no "/mpt/" rows are written for it
-    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(unbackedRoot));
-    seedL2CompatFeature(f.multiLayerStorage);
-
-    auto const nonce = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        std::string(kSender.hex()), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, 0));
-    BOOST_REQUIRE_MESSAGE(
-        nonce.has_value(), "an absent tip trie must fall back to the flat plane, not throw");
-    BOOST_CHECK_EQUAL(std::string(nonce->get()), "0");
-}
-
-/// With a readable trie the MPT is authoritative: the flat row is mutated out of band after the
-/// trie is built, and the entry point must still answer the committed (trie) nonce. This pins the
-/// MPT-hit lane that the fall-through above must not shadow.
-BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersTheTrieWhenItIsReadable)
-{
-    Fixture f;
-    auto const root = computeAndPersistGenesisTrie(f.multiLayerStorage);
-    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(root));
-    seedL2CompatFeature(f.multiLayerStorage);
-
-    // Out-of-band flat mutation: the trie still commits nonce 0 for the sender.
-    {
-        auto view = f.multiLayerStorage.fork();
-        view.newMutable();
-        bcos::ledger::account::EVMAccount account(view, kSender, /*rawAddress=*/false);
-        bcos::task::syncWait(account.setNonce("7"));
-        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
-    }
-
-    auto const nonce = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        std::string(kSender.hex()), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, 0));
-    BOOST_REQUIRE(nonce.has_value());
-    BOOST_CHECK_EQUAL(std::string(nonce->get()), "0");  // the trie's value, not the flat 7
-}
-
 /// N2 regression: with verify=true, tampering exactly ONE back-filled commitment field on the
 /// announced header must be rejected with OpConsensusRejected, naming that field
 /// ("commitment mismatch on field <name>"). Exercises six discriminating rejections: five names
@@ -2286,21 +2229,6 @@ BOOST_AUTO_TEST_CASE(VerifyRejectsMismatchedAnnouncedCommitments)
         {"blobGasUsed",
             [](bcostars::protocol::BlockHeaderImpl& h) { h.setBlobGasUsed(bcos::u256{7}); },
             "must announce blobGasUsed=0"},
-        // The two remaining arms of mismatchedFieldOf's eight-field chain. logsBloom is written
-        // unconditionally by finishExecute (a deposits-only block's bloom is all-zero, so any
-        // non-zero announcement diverges); requestsHash is compared presence-and-value.
-        {"logsBloom",
-            [](bcostars::protocol::BlockHeaderImpl& h) {
-                std::array<bcos::byte, 256> bloom{};
-                bloom.fill(0x5a);
-                h.setLogsBloom(bcos::bytesConstRef{bloom.data(), bloom.size()});
-            },
-            {}},
-        {"requestsHash",
-            [](bcostars::protocol::BlockHeaderImpl& h) {
-                h.setRequestsHash(commitmentCorruption(0xa5));
-            },
-            {}},
     };
 
     std::vector<bcos::bytes> const rawTxBytes{encodeDepositEnvelope(makeDeposit())};

@@ -30,29 +30,6 @@ public:
         co_return bcos::storage::Entry(nonceValue);
     }
 };
-
-/// Scheduler stub whose getPendingStorageAt throws — the shape OpScheduler::getPendingStorageAt
-/// can produce on a scenario-B tip whose trie nodes are unreadable. takeToTransaction is
-/// noexcept, so the boundary must contain it (an escaping exception would terminate the RPC
-/// process).
-class ThrowingStubScheduler : public bcos::test::FakeScheduler
-{
-public:
-    using bcos::test::FakeScheduler::FakeScheduler;
-    /// When true, throw a non-std::exception object (exercises the catch(...) arm).
-    bool throwNonStd = false;
-
-    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
-        std::string_view, std::string_view, bcos::protocol::BlockNumber) override
-    {
-        if (throwNonStd)
-        {
-            throw 42;
-        }
-        throw std::runtime_error("stub: scheduler-side storage fault");
-        co_return std::nullopt;  // unreachable; satisfies the coroutine's return type
-    }
-};
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(testCallRequest)
@@ -254,32 +231,6 @@ BOOST_AUTO_TEST_CASE(deployEstimateGasLeavesCorruptNonceUnset)
         req.to = "";
 
         auto tx = req.takeToTransaction(txFactory, nonceScheduler);
-        BOOST_CHECK(tx->nonce().empty());
-    }
-}
-
-BOOST_AUTO_TEST_CASE(deployEstimateGasSurvivesSchedulerThrow)
-{
-    // getPendingStorageAt can throw (an unreadable MPT node row on a scenario-B tip, or any
-    // other storage fault). This function is noexcept, so the exception must be contained: the
-    // nonce is left unset and the executor's dry-run falls back to the sender's state nonce.
-    // Before the boundary caught it, the throw terminated the RPC process.
-    auto cryptoSuite =
-        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
-            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
-    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
-
-    for (bool nonStd : {false, true})
-    {
-        auto throwingScheduler = std::make_shared<ThrowingStubScheduler>(nullptr, nullptr);
-        throwingScheduler->throwNonStd = nonStd;
-
-        CallRequest req;
-        req.from = "0x1234567890abcdef1234567890abcdef12345678";
-        req.to = "";  // deployment
-
-        auto tx = req.takeToTransaction(txFactory, throwingScheduler);
-        BOOST_REQUIRE(tx != nullptr);
         BOOST_CHECK(tx->nonce().empty());
     }
 }

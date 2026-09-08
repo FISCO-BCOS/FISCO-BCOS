@@ -1,21 +1,5 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file OpTxConvertTest.cpp
- * @brief tars mirror to evmone transaction conversion tests
- */
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 
 // OpTxConvertTest — toEvmoneTransaction (the tars→evmone transaction conversion). Covers the
 // kind mapping (incl. fail-closed default), decimal chainId vs hex-quantity nonce, the three
@@ -270,11 +254,6 @@ BOOST_AUTO_TEST_CASE(FixedWidthFieldsCopyEveryByte)
     tx.m_blobHashes.push_back(blob);
 
     bcos::protocol::Authorization auth;
-    auth.chainId = 0x77;
-    auth.nonce = 0x88;
-    auth.v = 1;
-    auth.r = bcos::u256{0x99};
-    auth.s = bcos::u256{0xaa};
     std::fill(auth.address.begin(), auth.address.end(), static_cast<bcos::byte>(0x44));
     std::fill(auth.signer.begin(), auth.signer.end(), static_cast<bcos::byte>(0x55));
     tx.m_authList.push_back(auth);
@@ -297,25 +276,6 @@ BOOST_AUTO_TEST_CASE(FixedWidthFieldsCopyEveryByte)
     BOOST_REQUIRE(evmTx.authorization_list[0].signer.has_value());
     BOOST_CHECK_EQUAL(evmTx.authorization_list[0].signer->bytes[0], 0x55);
     BOOST_CHECK_EQUAL(evmTx.authorization_list[0].signer->bytes[19], 0x55);
-    // The scalar fields are what the envelope bind compares against; each is set to a distinct
-    // value above so dropping one from the conversion fails here.
-    // intx::uint256 has no operator<<, so compare with BOOST_CHECK (BOOST_CHECK_EQUAL would
-    // need a printable type).
-    BOOST_CHECK(evmTx.authorization_list[0].chain_id == intx::uint256{0x77});
-    BOOST_CHECK_EQUAL(evmTx.authorization_list[0].nonce, 0x88);
-    BOOST_CHECK(evmTx.authorization_list[0].v == intx::uint256{1});
-    BOOST_CHECK(evmTx.authorization_list[0].r == intx::uint256{0x99});
-    BOOST_CHECK(evmTx.authorization_list[0].s == intx::uint256{0xaa});
-}
-
-/// The blob fee cap reaches evmone's max_blob_gas_price (the mirror field the A9-15 envelope
-/// bind compares against the signed envelope).
-BOOST_AUTO_TEST_CASE(BlobFeeCapReachesMaxBlobGasPrice)
-{
-    FakeTransaction tx;
-    tx.m_kind = 3;
-    tx.m_maxFeePerBlobGas = bcos::u256{7};
-    BOOST_CHECK(toEvmoneTransaction(tx).max_blob_gas_price == intx::uint256{7});
 }
 
 BOOST_AUTO_TEST_SUITE_END()

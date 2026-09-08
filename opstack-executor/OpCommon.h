@@ -1,26 +1,9 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file OpCommon.h
- * @brief OP block types, error classes and header conversions
- */
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 #pragma once
 
 // OP block types and header conversions. Commitment comparison lives in OpCommitments.h.
 
-#include <bcos-evm/opstack/OpTransition.h>  // kDepositTxType (classifyTxType's single home)
 #include <bcos-framework/engine/NumericBounds.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
@@ -92,8 +75,8 @@ struct OpBlockSeal
 /// Bounds-checked u256→int64 narrowing (a corrupt receipt must not wrap the gas pool).
 [[nodiscard]] inline int64_t narrowGasUsed(const bcos::u256& gasUsed)
 {
-    static const bcos::u256 c_maxInt64(std::numeric_limits<int64_t>::max());
-    if (gasUsed > c_maxInt64)
+    static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
+    if (gasUsed > kMaxInt64)
         // Classified as OpConsensusError (INVALID), never a bare runtime_error escaping the
         // INVALID/-32603 boundary (test: NarrowGasUsedRejectsAboveInt64).
         throw OpConsensusError("op block: receipt gasUsed exceeds int64_t range");
@@ -122,15 +105,13 @@ struct OpBlockSeal
 /// (the deposit loop) keep their own guard.
 [[nodiscard]] constexpr uint8_t classifyTxType(uint8_t typeByte) noexcept
 {
-    // The deposit type byte has exactly one home (OpTransition.h's kDepositTxType): it is the
-    // type prefix of the deposit receipt leaf, so a local copy would be a second definition of
-    // a keccak256(rlp(header))-critical value.
-    constexpr uint8_t c_rlpListBase = 0xc0;  // legacy RLP list prefix
-    if (typeByte == static_cast<uint8_t>(kDepositTxType))
+    constexpr uint8_t kDepositTypeByte = 0x7e;  // kDepositTxType (OpTransition.h)
+    constexpr uint8_t kRlpListBase = 0xc0;      // legacy RLP list prefix
+    if (typeByte == kDepositTypeByte)
     {
         return typeByte;  // deposit stored as its own type byte
     }
-    if (typeByte >= c_rlpListBase)
+    if (typeByte >= kRlpListBase)
     {
         return 0;  // legacy
     }
@@ -201,8 +182,8 @@ inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
 /// through the uint64_t→int64_t conversion, silently defeating the guard on the signed field.
 inline int64_t narrowU256ToI64(const bcos::u256& v, const char* fieldName)
 {
-    static const bcos::u256 c_maxI64(std::numeric_limits<int64_t>::max());
-    if (v > c_maxI64)
+    static const bcos::u256 kMaxI64(std::numeric_limits<int64_t>::max());
+    if (v > kMaxI64)
         throw OpConsensusError(std::string("field exceeds int64_t range: ") + fieldName);
     return static_cast<int64_t>(v);
 }

@@ -21,8 +21,6 @@
 #include "CallRequest.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-task/Wait.h"
-#include <bcos-utilities/BoostLog.h>
-#include <boost/exception/diagnostic_information.hpp>
 #include <algorithm>
 
 using namespace bcos;
@@ -37,48 +35,29 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     {
         // eth_estimateGas / eth_call: match the sender's committed nonce so validation
         // does not reject with NONCE_TOO_LOW (deploy was the only case wired before).
-        // This function is noexcept, so the scheduler call is guarded too: a storage-side
-        // throw (e.g. an unreadable MPT node on a scenario-B tip) must leave the nonce
-        // unset and let the executor read the sender's state nonce, exactly like the
-        // unparseable-row path below — never terminate the RPC process.
-        try
+        if (const auto entry = task::syncWait(scheduler->getPendingStorageAt(
+                bcos::precompiled::trimHexPrefix(from.value()), "nonce", 0)))
         {
-            if (const auto entry = task::syncWait(scheduler->getPendingStorageAt(
-                    bcos::precompiled::trimHexPrefix(from.value()), "nonce", 0)))
+            // FISCO stores account nonces as DECIMAL strings (EVMAccount writes
+            // convert_to<std::string>(); StorageStateView reads them unprefixed),
+            // and the transaction nonce is parsed as HEX downstream — both
+            // bcosTransactionToEvmone (safeFromQuantity) and TransactionExecutorImpl
+            // (hex2u) treat it as hex. So the stored decimal must be converted to a
+            // hex quantity here, otherwise a deployment eth_estimateGas at nonce >= 10
+            // gets its decimal "12" misread as hex 0x12 = 18 (NONCE_TOO_HIGH). 0-9
+            // coincide in both bases, which is why only the 11th+ deployment would break.
+            //
+            // The all-digits guard keeps this noexcept-safe: bcos::u256 throws on an
+            // unparseable string (std::terminate out of noexcept), and an empty or
+            // non-numeric stored nonce is left unset (empty nonce string) — a corrupt
+            // row falls back to the executor reading the sender's state nonce rather
+            // than aborting the RPC.
+            if (auto const raw = entry->get();
+                !raw.empty() &&
+                std::all_of(raw.begin(), raw.end(), [](char c) { return c >= '0' && c <= '9'; }))
             {
-                // FISCO stores account nonces as DECIMAL strings (EVMAccount writes
-                // convert_to<std::string>(); StorageStateView reads them unprefixed),
-                // and the transaction nonce is parsed as HEX downstream — both
-                // bcosTransactionToEvmone (safeFromQuantity) and TransactionExecutorImpl
-                // (hex2u) treat it as hex. So the stored decimal must be converted to a
-                // hex quantity here, otherwise a deployment eth_estimateGas at nonce >= 10
-                // gets its decimal "12" misread as hex 0x12 = 18 (NONCE_TOO_HIGH). 0-9
-                // coincide in both bases, which is why only the 11th+ deployment would break.
-                //
-                // The all-digits guard keeps this noexcept-safe: bcos::u256 throws on an
-                // unparseable string (std::terminate out of noexcept), and an empty or
-                // non-numeric stored nonce is left unset (empty nonce string) — a corrupt
-                // row falls back to the executor reading the sender's state nonce rather
-                // than aborting the RPC.
-                if (auto const raw = entry->get();
-                    !raw.empty() && std::all_of(raw.begin(), raw.end(),
-                                        [](char c) { return c >= '0' && c <= '9'; }))
-                {
-                    nonce = toQuantity(bcos::u256(raw));
-                }
+                nonce = toQuantity(bcos::u256(raw));
             }
-        }
-        catch (std::exception const& e)
-        {
-            BCOS_LOG(WARNING) << LOG_BADGE("CallRequest")
-                              << LOG_DESC("getPendingStorageAt failed, nonce left unset")
-                              << LOG_KV("detail", boost::diagnostic_information(e));
-        }
-        catch (...)
-        {
-            BCOS_LOG(WARNING)
-                << LOG_BADGE("CallRequest")
-                << LOG_DESC("getPendingStorageAt threw a non-std exception, nonce left unset");
         }
     }
     uint64_t gasLimit = gas.value_or(0);

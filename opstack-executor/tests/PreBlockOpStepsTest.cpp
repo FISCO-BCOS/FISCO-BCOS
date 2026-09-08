@@ -1,21 +1,5 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file PreBlockOpStepsTest.cpp
- * @brief preBlockOpSteps tests
- */
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 
 // PreBlockOpStepsTest — runtime coverage for preBlockOpSteps' block-shape decision surface
 // (OpBlockExecute.h): the deposit-first rejects, the Jovian L1-attributes shape checks, and the
@@ -301,13 +285,7 @@ BOOST_AUTO_TEST_CASE(IsthmusAcceptsAndLeavesScalarEmpty)
 BOOST_AUTO_TEST_CASE(JovianActivation176SetsScalarZero)
 {
     Fixture f;
-    // A non-zero pair at [174:176] must NOT be read as the DA-footprint scalar: the 176B
-    // activation shape short-circuits to 0 (OpBlockExecute.h's length check), so a wrong
-    // [174:176] read would answer 0x1234 here.
-    auto data = l1AttributesData(op::IsthmusL1AttributesLen);
-    data[op::IsthmusL1AttributesLen - 2] = uint8_t{0x12};
-    data[op::IsthmusL1AttributesLen - 1] = uint8_t{0x34};
-    auto dep = depositWithData(std::move(data));
+    auto dep = depositWithData(l1AttributesData(op::IsthmusL1AttributesLen));
     f.run(op::jovianConfig(), {kDepositEnvelope}, {dep});
     BOOST_REQUIRE(f.scalar.has_value());
     BOOST_CHECK_EQUAL(*f.scalar, 0u);

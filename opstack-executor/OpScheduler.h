@@ -1,21 +1,5 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file OpScheduler.h
- * @brief OP scheduler: execute/commit/probe, the eth_call lanes and the storage seam
- */
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 #pragma once
 
 // OpScheduler — SchedulerInterface for OP. Linear only: blockGasLeft, state-diff
@@ -396,52 +380,21 @@ public:
             auto block = co_await bcos::ledger::getBlockData(
                 view, blockNumber, bcos::ledger::HEADER, *m_blockFactory);
             auto const stateRoot = block->blockHeader()->stateRoot();
-            // Same precondition the historical lane (coCallAtBlock) applies before touching the
-            // trie: Trie::get throws MPTInvariantViolation when a referenced node row is absent,
-            // and an exception here escapes through CallRequest::takeToTransaction's noexcept
-            // boundary and terminates the RPC process. This entry point asks a "pending"
-            // question, so an unreadable trie is answered from the flat plane — unlike the
-            // historical lane, which must refuse rather than serve today's state.
-            bool const trieReadable =
-                stateRoot == bcos::ledger::mpt::emptyRootHash() ||
-                co_await storage2::existsOne(view, storage2::mptNodeStateKey(stateRoot));
-            if (stateRoot != bcos::crypto::HashType{} && trieReadable)
+            if (stateRoot != bcos::crypto::HashType{})
             {
-                try
+                using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType>;
+                HistoricalBackend historicalBackend(view, stateRoot);
+                storage2::View<typename MultiLayerStorage::MutableStorage, void, HistoricalBackend>
+                    historicalView(std::addressof(historicalBackend));
+                bcos::ledger::account::EVMAccount<decltype(historicalView)> account(historicalView,
+                    addressOwned, features.get(bcos::ledger::Features::Flag::feature_raw_address));
+                if (auto nonce = co_await account.nonce())
                 {
-                    using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType>;
-                    HistoricalBackend historicalBackend(view, stateRoot);
-                    storage2::View<typename MultiLayerStorage::MutableStorage, void,
-                        HistoricalBackend>
-                        historicalView(std::addressof(historicalBackend));
-                    bcos::ledger::account::EVMAccount<decltype(historicalView)> account(
-                        historicalView, addressOwned,
-                        features.get(bcos::ledger::Features::Flag::feature_raw_address));
-                    if (auto nonce = co_await account.nonce())
-                    {
-                        storage::Entry entry;
-                        entry.set(*nonce);
-                        co_return entry;
-                    }
-                    // MPT miss: fall through to the flat plane instead of answering "absent". A
-                    // trie-only account (genesis import) has no flat row either, so the fallback
-                    // is a no-op there; an execution-written account keeps its row, so a key
-                    // present in either plane is still answered (an MPT hit stays authoritative).
+                    storage::Entry entry;
+                    entry.set(*nonce);
+                    co_return entry;
                 }
-                catch (const bcos::ledger::mpt::MPTInvariantViolation& e)
-                {
-                    // A partial trie (root present, a deeper node pruned) still throws; answer
-                    // from the flat plane rather than aborting the caller.
-                    OP_SCHEDULER_LOG(WARNING)
-                        << LOG_DESC("getPendingStorageAt: MPT read failed, using the flat plane")
-                        << LOG_KV("stateRoot", stateRoot.hex()) << LOG_KV("detail", e.what());
-                }
-                catch (const bcos::ledger::mpt::MPTDecodeError& e)
-                {
-                    OP_SCHEDULER_LOG(WARNING)
-                        << LOG_DESC("getPendingStorageAt: MPT decode failed, using the flat plane")
-                        << LOG_KV("stateRoot", stateRoot.hex()) << LOG_KV("detail", e.what());
-                }
+                co_return std::nullopt;
             }
         }
         bcos::ledger::account::EVMAccount account(
@@ -1419,19 +1372,6 @@ public:
         catch (const bcos::ledger::mpt::MPTDecodeError&)
         {
             return scheduler::SchedulerError::OpStorageFault;
-        }
-        catch (const bcos::Error& e)
-        {
-            // coCallAtBlock reports refusals as a RETURNED bcos::Error carrying a SchedulerError
-            // code, and coCallLatest's scenario-B latest lane rethrows that object. Recover the
-            // carried code instead of degrading an actionable refusal to UnknownError.
-            auto const code = e.errorCode();
-            if (code >= static_cast<int64_t>(scheduler::SchedulerError::UnknownError) &&
-                code <= static_cast<int64_t>(scheduler::SchedulerError::OpStorageFault))
-            {
-                return static_cast<scheduler::SchedulerError>(code);
-            }
-            return scheduler::SchedulerError::UnknownError;
         }
         catch (...)
         {

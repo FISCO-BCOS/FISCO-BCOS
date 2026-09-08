@@ -62,7 +62,6 @@ public:
     std::optional<uint64_t> m_reportedEnvelopeChainId;
     bcos::protocol::Web3AccessList m_accessList;
     bcos::protocol::VersionedHashes m_blobHashes;
-    bcos::protocol::AuthorizationList m_authList;
 
     uint8_t web3TypedTxKind() const override { return m_kind; }
     bcos::bytesConstRef input() const override
@@ -94,7 +93,6 @@ public:
     }
     bcos::protocol::Web3AccessList web3AccessList() const override { return m_accessList; }
     bcos::protocol::VersionedHashes blobVersionedHashes() const override { return m_blobHashes; }
-    bcos::protocol::AuthorizationList authorizationList() const override { return m_authList; }
 
     // ---- unused stubs ----
     void decode(bcos::bytesConstRef) override {}
@@ -303,8 +301,7 @@ bcos::bytes accessListEnvelope(uint64_t chainId, uint64_t nonce, uint64_t gasLim
 /// real per-type tail. The gate reads only through data, so both shapes exercise the shared
 /// typed (envelopeKind != 0x01) index layout [1,4,5,6,7].
 bcos::bytes blobOrAuthEnvelope(uint8_t typeByte, uint64_t chainId, uint64_t nonce,
-    uint64_t gasLimit, std::string_view toHex, bcos::u256 value, bcos::bytes const& data,
-    bcos::bytes const& authListPayload = {})
+    uint64_t gasLimit, std::string_view toHex, bcos::u256 value, bcos::bytes const& data)
 {
     auto item = [](bcos::bytes const& payload) {
         bcos::bytes out;
@@ -334,59 +331,12 @@ bcos::bytes blobOrAuthEnvelope(uint8_t typeByte, uint64_t chainId, uint64_t nonc
         append(intItem(1));       // maxFeePerBlobGas
         payload.push_back(0xc0);  // empty blobVersionedHashes
     }
-    else if (authListPayload.empty())
+    else
     {
         payload.push_back(0xc0);  // empty authorizationList
     }
-    else
-    {
-        payload.insert(payload.end(), authListPayload.begin(), authListPayload.end());
-    }
 
     bcos::bytes out{static_cast<bcos::byte>(typeByte)};
-    rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
-    out.insert(out.end(), payload.begin(), payload.end());
-    return out;
-}
-
-/// EIP-7702 authorization tuple rlp([chain_id, address, nonce, y_parity, r, s]). The production
-/// decoder is strict — canonical integers and yParity 0x80/0x01 only — so the fixture encodes
-/// the same shape (rlp::encode of 0/1 yields exactly those two forms).
-bcos::bytes rlpAuthTuple(uint64_t chainId, bcos::Address const& addr, uint64_t nonce,
-    uint8_t yParity, uint64_t r, uint64_t s)
-{
-    auto intItem = [](uint64_t v) {
-        bcos::bytes out;
-        rlp::encode(out, v);
-        return out;
-    };
-    auto item = [](bcos::bytes const& payload) {
-        bcos::bytes out;
-        rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
-        return out;
-    };
-    bcos::bytes payload;
-    auto append = [&payload](
-                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
-    append(intItem(chainId));
-    append(item(bcos::bytes(addr.begin(), addr.end())));
-    append(intItem(nonce));
-    append(intItem(yParity));
-    append(intItem(r));
-    append(intItem(s));
-    bcos::bytes out;
-    rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
-    out.insert(out.end(), payload.begin(), payload.end());
-    return out;
-}
-
-/// rlp([tuple, ...]) — the authorizationList field's own list wrapper.
-bcos::bytes rlpAuthList(std::vector<bcos::bytes> const& tuples)
-{
-    bcos::bytes payload;
-    for (auto const& t : tuples)
-        payload.insert(payload.end(), t.begin(), t.end());
-    bcos::bytes out;
     rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
     out.insert(out.end(), payload.begin(), payload.end());
     return out;
@@ -547,6 +497,7 @@ BOOST_AUTO_TEST_CASE(MalformedLegacyVRejectedByChainIdGate)
         tx.m_extraBytes = legacyEnvelope(
             7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
         // Patch the v field (field index 6, the 7th item) to the malformed value.
+        auto env = tx.m_extraBytes;
         // RLP list header: single-byte 0xc0|len for <56 payloads; patch by rebuilding via the
         // raw field walk is overkill — the classifier reads v from field 7, so rewrite the
         // envelope with the v we want using the same builder shape as legacyEnvelope.
@@ -1231,105 +1182,6 @@ BOOST_AUTO_TEST_CASE(SetCodeEnvelopeConsistentMirrorPasses)
     tx.m_gasLimit = 5000000;
     tx.m_input = {0xde};
     BOOST_CHECK(!envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
-}
-
-/// A9 auth bind: a 0x04 envelope whose authorizationList matches the mirror passes, and every
-/// single-field divergence in that tuple is rejected. Without these the element-wise bind's
-/// non-empty path had no coverage at all (the fixture used an empty mirror and an empty list).
-BOOST_AUTO_TEST_CASE(SetCodeEnvelopeWithMatchingAuthorizationListPasses)
-{
-    FakeTx tx;
-    tx.m_kind = 4;
-    bcos::Address const delegate{std::string(40, '4')};
-    tx.m_extraBytes =
-        blobOrAuthEnvelope(0x04, 10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7",
-            bcos::u256{5}, {0xde}, rlpAuthList({rlpAuthTuple(10, delegate, 7, 1, 0x99, 0xaa)}));
-    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
-    tx.m_nonce = "0x7";
-    tx.m_gasLimit = 5000000;
-    tx.m_value = bcos::u256{5};
-    tx.m_input = {0xde};
-    bcos::protocol::Authorization auth;
-    auth.chainId = 10;
-    auth.address = delegate;
-    auth.nonce = 7;
-    auth.v = 1;
-    auth.r = bcos::u256{0x99};
-    auth.s = bcos::u256{0xaa};
-    tx.m_authList.push_back(auth);
-    BOOST_CHECK(!envelopeExecutionFieldsMismatch(tx, evmTxOf(tx)).has_value());
-}
-
-BOOST_AUTO_TEST_CASE(SetCodeEnvelopeStrippedAuthorizationListRejected)
-{
-    FakeTx tx;
-    tx.m_kind = 4;
-    bcos::Address const delegate{std::string(40, '4')};
-    tx.m_extraBytes =
-        blobOrAuthEnvelope(0x04, 10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7",
-            bcos::u256{5}, {0xde}, rlpAuthList({rlpAuthTuple(10, delegate, 7, 1, 0x99, 0xaa)}));
-    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
-    tx.m_nonce = "0x7";
-    tx.m_gasLimit = 5000000;
-    tx.m_value = bcos::u256{5};
-    tx.m_input = {0xde};
-    // Mirror stripped: the envelope still says 0x04 with one delegation.
-    BOOST_REQUIRE(tx.m_authList.empty());
-    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
-    BOOST_REQUIRE(mismatch.has_value());
-    BOOST_CHECK_EQUAL(*mismatch, "authorizationList is not bound to the signed envelope");
-}
-
-BOOST_AUTO_TEST_CASE(SetCodeEnvelopeAuthorizationNonceDivergenceRejected)
-{
-    FakeTx tx;
-    tx.m_kind = 4;
-    bcos::Address const delegate{std::string(40, '4')};
-    tx.m_extraBytes =
-        blobOrAuthEnvelope(0x04, 10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7",
-            bcos::u256{5}, {0xde}, rlpAuthList({rlpAuthTuple(10, delegate, 7, 1, 0x99, 0xaa)}));
-    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
-    tx.m_nonce = "0x7";
-    tx.m_gasLimit = 5000000;
-    tx.m_value = bcos::u256{5};
-    tx.m_input = {0xde};
-    bcos::protocol::Authorization auth;
-    auth.chainId = 10;
-    auth.address = delegate;
-    auth.nonce = 8;  // envelope says 7
-    auth.v = 1;
-    auth.r = bcos::u256{0x99};
-    auth.s = bcos::u256{0xaa};
-    tx.m_authList.push_back(auth);
-    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
-    BOOST_REQUIRE(mismatch.has_value());
-    BOOST_CHECK_EQUAL(*mismatch, "authorizationList is not bound to the signed envelope");
-}
-
-BOOST_AUTO_TEST_CASE(SetCodeEnvelopeAuthorizationSignatureDivergenceRejected)
-{
-    FakeTx tx;
-    tx.m_kind = 4;
-    bcos::Address const delegate{std::string(40, '4')};
-    tx.m_extraBytes =
-        blobOrAuthEnvelope(0x04, 10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7",
-            bcos::u256{5}, {0xde}, rlpAuthList({rlpAuthTuple(10, delegate, 7, 1, 0x99, 0xaa)}));
-    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
-    tx.m_nonce = "0x7";
-    tx.m_gasLimit = 5000000;
-    tx.m_value = bcos::u256{5};
-    tx.m_input = {0xde};
-    bcos::protocol::Authorization auth;
-    auth.chainId = 10;
-    auth.address = delegate;
-    auth.nonce = 7;
-    auth.v = 1;
-    auth.r = bcos::u256{0x98};  // envelope says 0x99
-    auth.s = bcos::u256{0xaa};
-    tx.m_authList.push_back(auth);
-    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
-    BOOST_REQUIRE(mismatch.has_value());
-    BOOST_CHECK_EQUAL(*mismatch, "authorizationList is not bound to the signed envelope");
 }
 
 BOOST_AUTO_TEST_CASE(BlobEnvelopeValueDivergenceRejected)

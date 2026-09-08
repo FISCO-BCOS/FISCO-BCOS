@@ -1,21 +1,6 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file OpstackExecutor.h
- * @brief OP Stack transaction executor: per-tx prepare/execute/writeback and the envelope gates
- */
+/// @file OpstackExecutor.h
+/// @brief OP Stack (Optimism L2) transaction executor based on bcos-evm/opstack.
+///
 /// Implements the bcos::executor_v1::TransactionExecutor concept (ExecuteContext with
 /// prepare/execute/finish): opValidate + opTransition for NORMAL transactions, runDeposit for
 /// 0x7E deposits, finalizeOpBlock for block finalize. The caller passes an already-decoded
@@ -432,11 +417,8 @@ namespace engine = bcos::evm::engine;
         const auto& m = mirror[count];
         if (eth::toIntxU256(entry.chainId) != m.chain_id)
             return "authorizationList is not bound to the signed envelope";
-        // bcos::Address is a fixed-width h160, so the decoded address is always 20 bytes —
-        // a type property, not a runtime condition. The accessList bind checks the RLP payload
-        // width because there the field is a raw byte string; the two must not share a predicate.
-        static_assert(bcos::Address::SIZE == sizeof(evmc_address),
-            "bcos::Address and evmc::address must both be 20 bytes for this memcpy");
+        if (entry.address.size() < sizeof(evmc_address))
+            return "authorizationList address is malformed";
         evmc::address envAddr{};
         std::memcpy(envAddr.bytes, entry.address.data(), sizeof(envAddr.bytes));
         if (envAddr != m.addr)
@@ -541,9 +523,7 @@ namespace engine = bcos::evm::engine;
                                    (!typed ? size_t{1} : (envelopeKind == 0x01 ? 2 : c_noField));
     size_t const prioFeeIdx = typed && envelopeKind >= 0x02 && envelopeKind <= 0x04 ? 2 : c_noField;
     size_t const maxFeeIdx = typed && envelopeKind >= 0x02 && envelopeKind <= 0x04 ? 3 : c_noField;
-    // 0x03 always carries maxFeePerBlobGas at idx 9; a 0x02 envelope carries it only with the
-    // 4844-in-1559 extension, so the bind below is gated on blobFieldsPresent (idx >= 14).
-    size_t const blobFeeIdx = envelopeKind == 0x02 || envelopeKind == 0x03 ? 9 : c_noField;
+    size_t const blobFeeIdx = envelopeKind == 0x03 ? 9 : c_noField;
     size_t idx = 0;
     while (!walker.empty())
     {
@@ -626,10 +606,7 @@ namespace engine = bcos::evm::engine;
     }
     if (!nonceItem || !gasItem || !valueItem || !toPayload || !dataPayload ||
         (gasPriceIdx != c_noField && !gasPriceItem) || (prioFeeIdx != c_noField && !prioFeeItem) ||
-        (maxFeeIdx != c_noField && !maxFeeItem) ||
-        // 0x03 only: a plain 0x02 (9 items) has no idx 9 fee, so requiring it here would
-        // reject every valid 0x02. The 0x02+4844 shape is gated at bind time instead.
-        (envelopeKind == 0x03 && !blobFeeItem) ||
+        (maxFeeIdx != c_noField && !maxFeeItem) || (blobFeeIdx != c_noField && !blobFeeItem) ||
         (typed && envelopeKind != 0x7e && !accessListPayload) ||
         // A type-0x03 envelope must carry blobVersionedHashes (idx 10): without this arm a
         // 9/10-item 0x03 passed the guard and dereferenced a disengaged blobPayload below.
@@ -670,12 +647,6 @@ namespace engine = bcos::evm::engine;
         if (static_cast<uint64_t>(evmTx.gas_limit) != envGas)
             return "gasLimit mismatch";
     }
-    // blobVersionedHashes: 0x03 always has the field; 0x02 only with the 4844 extension
-    // (>= 14 items — below that idx 10 is the signature and must not be read). 0x01/0x04
-    // have no blob fields at all. Computed before the fee binds because maxFeePerBlobGas's
-    // 0x02 arm is gated on this same shape predicate.
-    bool const blobFieldsPresent = envelopeKind == 0x03 || (envelopeKind == 0x02 && idx >= 14);
-
     // Fee fields (A9-15): bind the signed envelope to the mirror the executor will charge.
     {
         auto bindUint256 = [](char const* name, bool isList,
@@ -716,7 +687,7 @@ namespace engine = bcos::evm::engine;
                     "maxFeePerGas", maxFeeIsList, maxFeeItem, maxFeePlen, evmTx.max_gas_price))
                 return err;
         }
-        if (blobFeeIdx != c_noField && blobFieldsPresent)
+        if (blobFeeIdx != c_noField)
         {
             if (auto err = bindUint256("maxFeePerBlobGas", blobFeeIsList, blobFeeItem, blobFeePlen,
                     evmTx.max_blob_gas_price))
@@ -778,6 +749,10 @@ namespace engine = bcos::evm::engine;
     {
         return "accessList is not bound to the signed envelope";
     }
+    // blobVersionedHashes: 0x03 always has the field; 0x02 only with the 4844 extension
+    // (>= 14 items — below that idx 10 is the signature and must not be read). 0x01/0x04
+    // have no blob fields at all.
+    bool const blobFieldsPresent = envelopeKind == 0x03 || (envelopeKind == 0x02 && idx >= 14);
     if (blobFieldsPresent)
     {
         if (auto err = bindEnvelopeBlobHashes(*blobPayload, blobIsList, evmTx.blob_hashes))

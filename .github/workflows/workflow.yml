@@ -571,6 +571,9 @@ jobs:
           name: fisco-bcos-l2-ubuntu
           path: build/fisco-bcos-air
 
+      - name: Ensure fisco-bcos executable
+        run: chmod +x build/fisco-bcos-air/fisco-bcos
+
       - name: Install C2 system packages
         run: |
           sudo apt update
