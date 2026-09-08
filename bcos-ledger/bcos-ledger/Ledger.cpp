@@ -599,6 +599,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                    int32_t blockFlag,
                    std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> callback)
                    -> task::Task<void> {
+        bcos::protocol::Block::Ptr block;
         try
         {
             // Delegate the block assembly to the shared two-storage getBlockData
@@ -606,7 +607,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
             // number come from the state storage, tx / receipt rows from the block storage
             // (== state storage unless a separate block storage is enabled). This replaces
             // the per-table async fetchers while keeping the reads on the storage2 path.
-            auto block = co_await ledger::getBlockDataFromStorages(*self.m_stateStorage,
+            block = co_await ledger::getBlockDataFromStorages(*self.m_stateStorage,
                 *self.getBlockStorage(), blockNumber, blockFlag, *self.m_blockFactory);
 
             if (block && ((blockFlag & RECEIPTS) != 0))
@@ -627,7 +628,6 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                 }
                 block->setLogsBloom(bcos::bytesConstRef(logsBloom.data(), logsBloom.size()));
             }
-            callback(nullptr, std::move(block));
         }
         catch (bcos::Error const& e)
         {
@@ -635,6 +635,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
             LEDGER_LOG(DEBUG) << "GetBlockDataByNumber request failed!" << LOG_KV("number", blockNumber)
                               << LOG_KV("code", e.errorCode()) << LOG_KV("msg", e.errorMessage());
             callback(BCOS_ERROR_WITH_PREV_PTR(e.errorCode(), e.errorMessage(), e), nullptr);
+            co_return;
         }
         catch (std::exception& e)
         {
@@ -645,7 +646,11 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
             callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::CollectAsyncCallbackError,
                          "Get block failed with errors!", e),
                 nullptr);
+            co_return;
         }
+        // Invoked outside the try so a throwing consumer callback cannot be caught
+        // above and re-invoked with an error.
+        callback(nullptr, std::move(block));
     }(*this, _blockNumber, _blockFlag, std::move(_onGetBlock)));
 }
 
@@ -995,8 +1000,10 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
             // historical async contract is preserved on top: a missing row surfaces as
             // GetStorageError, and a config whose enableNumber is beyond the block that is
             // currently being executed (latest + 1) is reported as "not available yet".
-            auto blockNumber =
-                co_await ledger::getCurrentBlockNumber(*self.m_stateStorage, fromStorage);
+            // The LedgerInterface overload of getCurrentBlockNumber is used (rather than
+            // the storage2 -1-fallback variant) so a missing current-number row still
+            // fails closed with GetStorageError, as asyncGetBlockNumber did.
+            auto blockNumber = co_await ledger::getCurrentBlockNumber(self);
             auto config = co_await ledger::getSystemConfig(*self.m_stateStorage, key);
             if (!config)
             {

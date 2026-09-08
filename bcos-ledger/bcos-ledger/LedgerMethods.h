@@ -126,7 +126,10 @@ inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
 
         bcos::bytes encoded;
         tx->encode(encoded);
-        out.push_back(EncodedBlockTransaction{tx->hash(), std::move(encoded), tx});
+        // Only externally owned transactions may be marked persisted after the write;
+        // for inline transactions tx points into the per-iteration anyTx holder and
+        // must not escape the loop.
+        out.push_back(EncodedBlockTransaction{tx->hash(), std::move(encoded), blockTxs ? tx : nullptr});
     }
     return out;
 }
