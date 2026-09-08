@@ -19,15 +19,16 @@
 
 #include "EngineServiceCommon.h"
 
-// Matches op-geth Engine API behavior.
+// Upstream pin: op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
 // (eth/catalyst/api.go GetPayloadVn / forkchoiceUpdated, miner/payload_building.go).
 
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/engine/Errors.h"
 #include "bcos-framework/engine/OpBaseFee.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "engine/bcos-engine/PayloadId.h"
-#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <boost/assert.hpp>
 #include <boost/throw_exception.hpp>
@@ -50,7 +51,7 @@ bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payl
     case ApiVersion::V3:
         // GetPayloadV3 answers only PayloadV3 builds (op-geth passes
         // []engine.PayloadVersion{engine.PayloadV3}); V1/V2-tagged entries cannot
-        // render the V3 wire shape (blob-gas pair, beacon root) -.
+        // render the V3 wire shape (blob-gas pair, beacon root) - finding AN.
         return payloadVersion == 3;
     case ApiVersion::V4:
         // Match release EngineServiceImpl: GetPayloadV4 accepts only PayloadV3 builds
@@ -130,7 +131,7 @@ std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& pa
         for (std::size_t i = 0; i < payloadAttributes.transactions->size(); ++i)
         {
             auto const& hexTx = (*payloadAttributes.transactions)[i];
-            // reject on hex length before fromHex allocates the body.
+            // Finding BY: reject on hex length before fromHex allocates the body.
             auto const estimated = decodedHexByteCount(hexTx);
             if (estimated > c_maxForcedTxBytes || totalBytes > c_maxForcedTxBytes - estimated)
             {
@@ -161,36 +162,31 @@ std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& pa
     {
         return std::string("withdrawals are not part of PayloadAttributesV1");
     }
-    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
-        payloadAttributes.parentBeaconBlockRoot.has_value())
+    if (version <= 2 && payloadAttributes.parentBeaconBlockRoot.has_value())
     {
         return std::string("parentBeaconBlockRoot is only valid for PayloadAttributesV3");
     }
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
-        !payloadAttributes.withdrawals.has_value())
+    if (version >= 2 && !payloadAttributes.withdrawals.has_value())
     {
         return std::string("withdrawals are required for PayloadAttributesV2 and V3");
     }
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
-        payloadAttributes.withdrawals.has_value() && !payloadAttributes.withdrawals->empty())
+    if (version >= 2 && payloadAttributes.withdrawals.has_value() &&
+        !payloadAttributes.withdrawals->empty())
     {
         return std::string(
             "non-empty withdrawals are not supported until the withdrawals trie root is "
             "computed");
     }
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
-        !payloadAttributes.parentBeaconBlockRoot.has_value())
+    if (version >= 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
     {
         // op-geth ForkchoiceUpdatedV3/V4 both reject missing BeaconRoot when attrs present.
         return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3 and later");
     }
-    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
-        payloadAttributes.eip1559Params.has_value())
+    if (version <= 2 && payloadAttributes.eip1559Params.has_value())
     {
         return std::string("eip1559Params is only valid for PayloadAttributesV3");
     }
-    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
-        payloadAttributes.minBaseFee.has_value())
+    if (version <= 2 && payloadAttributes.minBaseFee.has_value())
     {
         return std::string("minBaseFee is only valid for PayloadAttributesV3");
     }
@@ -331,13 +327,12 @@ std::optional<std::string> validateExecutionPayload(
     {
         return std::string("withdrawals are not part of ExecutionPayloadV1");
     }
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
-        !executionPayload.withdrawals.has_value())
+    if (version >= 2 && !executionPayload.withdrawals.has_value())
     {
         return std::string("withdrawals are required for ExecutionPayloadV2 and later");
     }
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
-        executionPayload.withdrawals.has_value() && !executionPayload.withdrawals->empty())
+    if (version >= 2 && executionPayload.withdrawals.has_value() &&
+        !executionPayload.withdrawals->empty())
     {
         // Mirror validatePayloadAttributes: this node cannot compute a real withdrawals
         // trie root (empty-trie placeholder), so a non-empty list is uncommittable at
@@ -346,17 +341,17 @@ std::optional<std::string> validateExecutionPayload(
             "non-empty withdrawals are not supported until the withdrawals trie root is "
             "computed");
     }
-    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+    if (version <= 2 &&
         (executionPayload.blobGasUsed.has_value() || executionPayload.excessBlobGas.has_value()))
     {
         return std::string("blob gas fields are only valid for ExecutionPayloadV3 and later");
     }
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+    if (version >= 3 &&
         (!executionPayload.blobGasUsed.has_value() || !executionPayload.excessBlobGas.has_value()))
     {
         return std::string("blob gas fields are required for ExecutionPayloadV3 and later");
     }
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
+    if (version >= 4)
     {
         if (!executionPayload.withdrawalsRoot.has_value())
         {
@@ -374,9 +369,11 @@ std::optional<std::string> validateExecutionPayload(
         // and no in-tree builder fills them — requiring their presence would reject
         // every honest newPayloadV4, including echoes of this node's own builds.
     }
-    // Pre-Holocene payloads must carry empty extraData.
-    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
-        !executionPayload.extraData.empty())
+    // finding N4: pre-Holocene payloads (V1/V2) carry an empty extraData; the OP
+    // Holocene/Jovian shape below would otherwise accept a 9/17-byte extraData here
+    // while the attributes side rejects eip1559Params at V3- — same fork window,
+    // same rule (predicate symmetry).
+    if (version <= 2 && !executionPayload.extraData.empty())
     {
         return std::string("extraData must be empty for ExecutionPayloadV1/V2 (pre-Holocene)");
     }
@@ -493,6 +490,10 @@ std::optional<std::string> compareWithBuiltPayload(
             return mismatch("withdrawalsRoot");
         }
     }
+    // The withdrawals LIST is the field withdrawalsRoot commits to: the root arm
+    // above alone lets a tampered list through whenever both sides omit the root
+    // (V2/V3 wire) or the submitted root is copied from the build. Compare the
+    // lists directly — an honest echo always carries the built list.
     if (submitted.withdrawals != built.withdrawals)
     {
         return mismatch("withdrawals");
@@ -506,6 +507,8 @@ std::optional<std::string> compareWithBuiltPayload(
     {
         return error;
     }
+    // V4 optional fields follow the presence-XOR rule like blobGasUsed/excessBlobGas:
+    // optionalPresentMismatch only fires when BOTH sides carry the field and they differ.
     if (auto error = optionalPresentMismatch(
             "blockAccessList", submitted.blockAccessList, built.blockAccessList))
     {
@@ -526,13 +529,19 @@ bcos::h256 transactionsRootFromPayload(const ExecutionPayload& payload)
     {
         return bcos::ledger::mpt::emptyRootHash();
     }
-    std::vector<bcos::bytesConstRef> rawEnvelopes;
-    rawEnvelopes.reserve(payload.transactions.size());
+    bcos::crypto::Keccak256 hashImpl;
+    auto hasher = hashImpl.hasher();
+    bcos::crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(hasher.clone());
+    std::vector<bcos::h256> txHashes;
+    txHashes.reserve(payload.transactions.size());
     for (auto const& tx : payload.transactions)
     {
-        rawEnvelopes.push_back(bcos::ref(tx.raw));
+        txHashes.push_back(
+            tx.decoded ? tx.decoded->hash() : bcos::crypto::keccak256Hash(bcos::ref(tx.raw)));
     }
-    return bcos::ledger::mpt::calculateTransactionsRoot(rawEnvelopes);
+    std::vector<bcos::h256> merkleTrie;
+    merkle.generateMerkle(txHashes, merkleTrie);
+    return merkleTrie.empty() ? bcos::ledger::mpt::emptyRootHash() : merkleTrie.back();
 }
 }  // namespace
 
