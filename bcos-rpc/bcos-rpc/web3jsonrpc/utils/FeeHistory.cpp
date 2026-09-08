@@ -165,17 +165,15 @@ std::vector<bcos::u256> bcos::rpc::pickRewardPercentiles(
     for (double percentile : percentiles)
     {
         auto const clamped = std::clamp(percentile, 0.0, 100.0);
-        auto const idx = sortedTips.empty() ?
-                             0 :
-                             static_cast<std::size_t>((sortedTips.size() - 1) * clamped / 100.0);
-        rewards.push_back(sortedTips[std::min(idx, sortedTips.size() - 1)]);
+        auto const idx = static_cast<std::size_t>((sortedTips.size() - 1) * clamped / 100.0);
+        rewards.push_back(sortedTips[idx]);
     }
     return rewards;
 }
 
 bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInterface& ledger,
     bcos::protocol::BlockNumber newestBlock, std::size_t blockCount,
-    std::vector<double> rewardPercentiles, bool opStackMode)
+    std::vector<double> const& rewardPercentiles, bool opStackMode)
 {
     blockCount = std::min(blockCount, c_maxFeeHistoryBlocks);
     if (blockCount == 0)

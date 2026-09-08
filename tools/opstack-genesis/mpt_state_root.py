@@ -99,7 +99,8 @@ def common_prefix_len(a, b):
 
 def hex_prefix_encode(nibbles, is_leaf):
     """Hex-Prefix (compact) encoding, Yellow Paper Appendix C. nibbles: [0..15]."""
-    assert len(nibbles) > 0
+    if not nibbles:
+        raise ValueError("hex-prefix encoding requires at least one nibble")
     odd = len(nibbles) % 2 == 1
     first = (0x20 if is_leaf else 0) | (0x10 if odd else 0)
     out = bytearray()

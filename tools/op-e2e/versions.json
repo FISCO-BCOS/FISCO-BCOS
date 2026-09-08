@@ -1,8 +1,8 @@
 {
   "comment": "C2 e2e pinned version manifest. Future e2e runs must use this baseline. setup_c2.sh collects OBSERVED versions into $C2/versions.json at the end of every run and diffs them against this file: the monorepo commit and on-chain contract versions are ENFORCED (mismatch aborts; escape hatch SKIP_VERSION_CHECK=1), anvil/go versions warn only, the FISCO-BCOS EL commit is recorded not enforced (it moves with active development).",
   "op_monorepo": {
-    "commit": "5f90f749caea14398554afb75062f7111b1fc554",
-    "describe": "v1.19.2-1-g5f90f749ca",
+    "commit": "da197e45ed44b9fca258b3b0d0709e8dfca1c7cd",
+    "describe": "v1.19.2",
     "go": "go1.26.4",
     "build_targets": {
       "op-node": "./op-node/cmd",

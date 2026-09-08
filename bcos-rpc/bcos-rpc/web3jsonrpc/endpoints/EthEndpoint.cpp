@@ -1375,7 +1375,7 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
 
     auto const opStackMode = m_nodeService->daCaps() != nullptr;
     auto result = co_await buildFeeHistory(*m_nodeService->ledger(), newestBlock,
-        static_cast<std::size_t>(*blockCountParsed), std::move(rewardPercentiles), opStackMode);
+        static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode);
     buildJsonContent(result, response);
 }
 

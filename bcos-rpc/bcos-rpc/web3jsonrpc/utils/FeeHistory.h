@@ -51,6 +51,6 @@ std::vector<bcos::u256> pickRewardPercentiles(
 /// prediction for the trailing entry (and OP parent metering on Jovian parents).
 bcos::task::Task<Json::Value> buildFeeHistory(bcos::ledger::LedgerInterface& ledger,
     bcos::protocol::BlockNumber newestBlock, std::size_t blockCount,
-    std::vector<double> rewardPercentiles, bool opStackMode);
+    std::vector<double> const& rewardPercentiles, bool opStackMode);
 
 }  // namespace bcos::rpc

@@ -42,6 +42,14 @@ PY
 OP_COMMIT="$(read_op_pin)"
 [[ "$OP_COMMIT" =~ ^[0-9a-f]{40}$ ]] || die "invalid op_monorepo.commit in versions.json"
 
+prepare_op_monorepo_for_go_build() {
+  git -C "$OP_MONOREPO" submodule update --init superchain-registry
+  if ! command -v yq >/dev/null; then
+    die "yq not on PATH (required to build optimism superchain-configs.zip)"
+  fi
+  bash "$OP_MONOREPO/op-core/superchain/sync-superchain.sh"
+}
+
 mkdir -p "$BIN_DIR"
 
 if [[ "${SKIP_OP_BUILD:-0}" != "1" ]]; then
@@ -52,6 +60,7 @@ if [[ "${SKIP_OP_BUILD:-0}" != "1" ]]; then
   git -C "$OP_MONOREPO" fetch --depth=1 origin "$OP_COMMIT" 2>/dev/null \
     || git -C "$OP_MONOREPO" fetch origin
   git -C "$OP_MONOREPO" checkout -q "$OP_COMMIT"
+  prepare_op_monorepo_for_go_build
 
   log "building op-deployer, op-node, op-batcher…"
   (cd "$OP_MONOREPO" && go build -o "$BIN_DIR/op-deployer" ./op-deployer/cmd/op-deployer)

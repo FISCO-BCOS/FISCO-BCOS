@@ -16,7 +16,7 @@ _SPEC.loader.exec_module(_FIXTURE)
 
 # keccak256 is re-exported by mpt_state_root (build-allocs.py has a hyphenated filename and
 # cannot be imported as a module).
-from mpt_state_root import compute_storage_root, keccak256  # noqa: E402
+from mpt_state_root import compute_storage_root  # noqa: E402
 
 PASSER = "0x4200000000000000000000000000000000000016"
 
