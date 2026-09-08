@@ -43,32 +43,17 @@ HeaderChain::HeaderChain(uint64_t _nextNumber,
     m_maxHeadersPerRequest(_maxHeadersPerRequest)
 {}
 
-std::vector<HeaderWithHash> HeaderChain::requestHeaders(
-    rlpx::Session& _session, uint64_t _amount)
+namespace
 {
-    if (_amount == 0)
-    {
-        return {};
-    }
-    _amount = std::min(_amount, m_maxHeadersPerRequest);
-
-    eth::GetBlockHeadersMessage request;
-    request.requestId = ++m_requestId;
-    request.originNumber = m_nextNumber;
-    request.amount = _amount;
-    request.skip = 0;
-    request.reverse = false;
-    auto requestRlp = eth::encodeGetBlockHeaders(request);
-    BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain")
-                    << "sent GetBlockHeaders id=" << request.requestId
-                    << " origin=" << request.originNumber << " amount=" << _amount;
-    _session.sendMessage(
-        rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)),
-            std::move(requestRlp)});
-
-    // Loop until we get the BlockHeaders response, answering Ping along the way
-    // (peers ping us periodically; ignoring a Ping makes geth mark us "useless").
-    std::vector<HeaderWithHash> out;
+// Shared reply loop: wait for the BlockHeaders reply carrying `_requestId`,
+// answering Ping along the way (ignoring a Ping makes geth mark us "useless")
+// and discarding peer broadcasts (NewBlockHashes/Transactions/NewBlock/
+// NewPooledTransactionHashes) that arrive while we wait. Throws on any protocol
+// violation (request-id mismatch, more headers than requested, disconnect).
+// Returns the raw wire encodings of the replied headers (0.._amount).
+std::vector<bcos::bytes> recvBlockHeadersReply(
+    rlpx::Session& _session, uint64_t _requestId, uint64_t _amount)
+{
     int ignoredBroadcasts = 0;
     while (true)
     {
@@ -120,22 +105,52 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
         }
         auto headers = eth::decodeBlockHeaders(
             bytesConstRef(response.data.data(), response.data.size()));
-        if (headers.requestId != request.requestId)
+        if (headers.requestId != _requestId)
         {
             throw std::runtime_error("HeaderChain: request id mismatch");
         }
-        if (headers.headers.size() > request.amount)
+        if (headers.headers.size() > _amount)
         {
             throw std::runtime_error("HeaderChain: peer returned more headers than requested");
         }
+        return std::move(headers.headers);
+    }
+}
+}  // namespace
 
-        out.reserve(headers.headers.size());
-        for (size_t i = 0; i < headers.headers.size(); ++i)
-        {
-            HeaderWithHash header;
-            header.rlp = headers.headers[i];
-            bcos::protocol::EthBlockHeader ethHeader;
-            if (auto err = ethHeader.rlpDecode(bytesConstRef(header.rlp.data(), header.rlp.size())))
+std::vector<HeaderWithHash> HeaderChain::requestHeaders(
+    rlpx::Session& _session, uint64_t _amount)
+{
+    if (_amount == 0)
+    {
+        return {};
+    }
+    _amount = std::min(_amount, m_maxHeadersPerRequest);
+
+    eth::GetBlockHeadersMessage request;
+    request.requestId = ++m_requestId;
+    request.originNumber = m_nextNumber;
+    request.amount = _amount;
+    request.skip = 0;
+    request.reverse = false;
+    auto requestRlp = eth::encodeGetBlockHeaders(request);
+    BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain")
+                    << "sent GetBlockHeaders id=" << request.requestId
+                    << " origin=" << request.originNumber << " amount=" << _amount;
+    _session.sendMessage(
+        rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)),
+            std::move(requestRlp)});
+
+    auto wireHeaders = recvBlockHeadersReply(_session, request.requestId, _amount);
+
+    std::vector<HeaderWithHash> out;
+    out.reserve(wireHeaders.size());
+    for (size_t i = 0; i < wireHeaders.size(); ++i)
+    {
+        HeaderWithHash header;
+        header.rlp = std::move(wireHeaders[i]);
+        bcos::protocol::EthBlockHeader ethHeader;
+        if (auto err = ethHeader.rlpDecode(bytesConstRef(header.rlp.data(), header.rlp.size())))
         {
             throw std::runtime_error("HeaderChain: header RLP decode failed");
         }
@@ -180,9 +195,49 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
             }
         }
         out.push_back(std::move(header));
-        }
-        return out;
     }
+    return out;
+}
+
+std::optional<HeaderWithHash> HeaderChain::requestHeaderByHash(
+    rlpx::Session& _session, bcos::h256 const& _hash)
+{
+    eth::GetBlockHeadersMessage request;
+    request.requestId = ++m_requestId;
+    request.originHash = _hash;
+    request.amount = 1;
+    request.skip = 0;
+    request.reverse = false;
+    auto requestRlp = eth::encodeGetBlockHeaders(request);
+    BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain")
+                    << "sent GetBlockHeaders(id=" << request.requestId
+                    << ") by hash origin=" << _hash.hex().substr(0, 18) << " amount=1";
+    _session.sendMessage(
+        rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)),
+            std::move(requestRlp)});
+
+    auto wireHeaders = recvBlockHeadersReply(_session, request.requestId, 1);
+    if (wireHeaders.empty())
+    {
+        // The peer does not know the hash (or chose not to serve it).
+        return std::nullopt;
+    }
+    HeaderWithHash header;
+    header.rlp = std::move(wireHeaders[0]);
+    bcos::protocol::EthBlockHeader ethHeader;
+    if (auto err = ethHeader.rlpDecode(bytesConstRef(header.rlp.data(), header.rlp.size())))
+    {
+        throw std::runtime_error("HeaderChain: header RLP decode failed");
+    }
+    header.header = ethHeader.data();
+    header.hash = bcos::crypto::keccak256Hash(
+        bytesConstRef(header.rlp.data(), header.rlp.size()));
+    if (header.hash != _hash)
+    {
+        throw std::runtime_error(
+            "HeaderChain: peer returned a header for the wrong hash (fork or reorg)");
+    }
+    return header;
 }
 
 void HeaderChain::advance(uint64_t _count, HeaderWithHash const& _lastHeader)

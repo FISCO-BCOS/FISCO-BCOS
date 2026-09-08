@@ -24,6 +24,7 @@
 #include "Block.h"
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-utilities/Common.h>
+#include <limits>
 #include <string>
 
 namespace bcos::devp2p::sync
@@ -35,28 +36,44 @@ constexpr uint64_t kElasticityMultiplier = 2;
 constexpr uint64_t kBaseFeeMaxChangeDenominator = 8;
 constexpr u256 kInitialBaseFee{1000000000};  // 1 gwei
 constexpr uint64_t kMaxExtraDataSize = 32;
-constexpr uint64_t kGasPerBlob = 1U << 17;  // 131072
+constexpr uint64_t kGasPerBlob = 1U << 17;  // 131072 (BlobTxBlobGasPerBlob)
+constexpr uint64_t kBlobBaseCost = 1U << 13;  // 8192 (EIP-7918 reserve-price factor)
 
-// EIP-7840 blob schedule (target/max blob gas per block) per fork. Keep in sync
+// EIP-7840 blob schedule (target/max blob gas per block + the blob base-fee
+// update fraction of the block at that timestamp) per fork. Values match geth's
+// BlobScheduleConfig (Cancun 3/6 @3338477, Prague 6/9 @5007716, BPO1 9/14
+// @8832827, BPO2 14/21 @13739630); Osaka keeps the Prague schedule — EIP-7918
+// changes only the excess-blob-gas UPDATE rule, not target/max. Keep in sync
 // with CANCUN_BLOB_PARAMS / PRAGUE_BLOB_PARAMS in
 // ethereum-executor/EthereumTransition.h.
 struct BlobSchedule
 {
-    uint64_t targetBlobGas;
-    uint64_t maxBlobGas;
+    uint64_t targetBlobGas;            // target blob gas per block
+    uint64_t maxBlobGas;               // maximum blob gas per block
+    uint64_t baseFeeUpdateFraction;    // EIP-4844/7840 blob fee update fraction
 };
-constexpr BlobSchedule kCancunBlobSchedule{3 * kGasPerBlob, 6 * kGasPerBlob};
-constexpr BlobSchedule kPragueBlobSchedule{6 * kGasPerBlob, 9 * kGasPerBlob};
+constexpr BlobSchedule kCancunBlobSchedule{3 * kGasPerBlob, 6 * kGasPerBlob, 3338477};
+constexpr BlobSchedule kPragueBlobSchedule{6 * kGasPerBlob, 9 * kGasPerBlob, 5007716};
+// Osaka keeps the Prague schedule (EIP-7918 only changes the excess update rule).
+constexpr BlobSchedule kOsakaBlobSchedule = kPragueBlobSchedule;
+constexpr BlobSchedule kBpo1BlobSchedule{9 * kGasPerBlob, 14 * kGasPerBlob, 8832827};
+constexpr BlobSchedule kBpo2BlobSchedule{14 * kGasPerBlob, 21 * kGasPerBlob, 13739630};
 
 // Minimal chain configuration for header validation (timestamp-based forks).
 struct ChainConfig
 {
     uint64_t chainId{1};
-    // Fork activation timestamps; 0 means "active from genesis".
+    // Fork activation timestamps; 0 means "active from genesis". The post-Prague
+    // tail (osaka/bpo1/bpo2) defaults to UINT64_MAX ("not yet active") — matching
+    // NodeConfig's readOptionalTs semantics for absent tail keys — so a config
+    // that does not schedule them validates with the pre-Osaka rules.
     uint64_t londonTime{0};
     uint64_t shanghaiTime{0};
     uint64_t cancunTime{0};
     uint64_t pragueTime{0};
+    uint64_t osakaTime{std::numeric_limits<uint64_t>::max()};
+    uint64_t bpo1Time{std::numeric_limits<uint64_t>::max()};
+    uint64_t bpo2Time{std::numeric_limits<uint64_t>::max()};
     // First PoS (merge) block number. Blocks below it are PoW and keep their
     // PoW difficulty/ommers; blocks at or above it must satisfy PoS rules
     // (difficulty == 0, no ommers). 0 (default) means "no merge yet": every
@@ -88,12 +105,19 @@ inline bool isForkActive(uint64_t _forkTime, int64_t _timestamp)
     return _forkTime == 0 || static_cast<uint64_t>(_timestamp) >= _forkTime;
 }
 
-// EIP-7840: the blob schedule in effect for the block at `_timestamp`.
-// TODO: Osaka (EIP-7918) also changes the excess-blob-gas update rule (base-fee
-// floor); add an osakaTime field to ChainConfig and branch here once the
-// initializer can supply the Osaka activation time.
+// EIP-7840: the blob schedule in effect for the block at `_timestamp`. Cancun /
+// Prague / BPO1 / BPO2 are keyed on their activation timestamps; Osaka keeps the
+// Prague schedule — EIP-7918 changes only the excess-blob-gas UPDATE rule.
 inline BlobSchedule blobScheduleFor(ChainConfig const& _config, int64_t _timestamp)
 {
+    if (isForkActive(_config.bpo2Time, _timestamp))
+    {
+        return kBpo2BlobSchedule;
+    }
+    if (isForkActive(_config.bpo1Time, _timestamp))
+    {
+        return kBpo1BlobSchedule;
+    }
     if (isForkActive(_config.pragueTime, _timestamp))
     {
         return kPragueBlobSchedule;
@@ -121,15 +145,61 @@ inline u256 computeNextBaseFee(bcos::protocol::EthBlockHeaderData const& _parent
     return expected > delta ? expected - delta : 0;
 }
 
-// EIP-4844: the excess blob gas of the next block (the block after `_parent`),
-// under the blob schedule active at that block.
-inline u256 computeNextExcessBlobGas(
-    bcos::protocol::EthBlockHeaderData const& _parent, BlobSchedule const& _schedule)
+// EIP-4844 fake_exponential: floor(factor * e^(numerator/denominator)) via the
+// truncated Taylor series. Port of geth's fakeExponential; the values that reach
+// header validation (excess blob gas, update fraction) are far below u256
+// overflow, so no wider accumulator is needed.
+inline u256 fakeExponential(
+    u256 const& _factor, u256 const& _numerator, u256 const& _denominator)
 {
-    u256 parentExcess = _parent.excessBlobGas.value_or(0);
-    u256 parentBlobGasUsed = _parent.blobGasUsed.value_or(0);
-    u256 total = parentBlobGasUsed + parentExcess;
-    return total > _schedule.targetBlobGas ? total - _schedule.targetBlobGas : 0;
+    u256 output = 0;
+    u256 acc = _factor;
+    u256 i = 1;
+    while (acc > 0)
+    {
+        output += acc;
+        acc = acc * _numerator / (_denominator * i);
+        ++i;
+    }
+    return output;
+}
+
+// EIP-4844 / EIP-7918: the excess blob gas of the next block (the block after
+// `_parent`), under the blob schedule active at that block. From Osaka on,
+// EIP-7918 replaces the plain target-delta rule whenever the blob fee is below a
+// "reserve price" (8192 * baseFee > 131072 * blobBaseFee): the excess then grows
+// by parentBlobGasUsed * (max - target) / max so the blob base fee keeps
+// converging instead of stalling at the floor. Port of geth's
+// consensus/misc/eip4844 calcExcessBlobGas.
+inline u256 computeNextExcessBlobGas(bcos::protocol::EthBlockHeaderData const& _parent,
+    BlobSchedule const& _schedule, bool _osakaActive)
+{
+    u256 const parentExcess = _parent.excessBlobGas.value_or(0);
+    u256 const parentBlobGasUsed = _parent.blobGasUsed.value_or(0);
+    u256 const total = parentBlobGasUsed + parentExcess;
+    u256 const targetGas = _schedule.targetBlobGas;
+    if (total < targetGas)
+    {
+        return 0;
+    }
+    if (_osakaActive)
+    {
+        // reservePrice = BlobBaseCost(8192) * baseFee; blobPrice =
+        // blobBaseFee(excess) * BlobTxBlobGasPerBlob(131072) — geth's
+        // BlobConfig.blobPrice.
+        u256 const reservePrice = kBlobBaseCost * _parent.baseFee.value_or(0);
+        u256 const blobPrice =
+            fakeExponential(u256{1}, parentExcess, _schedule.baseFeeUpdateFraction) *
+            kGasPerBlob;
+        if (reservePrice > blobPrice)
+        {
+            u256 const scaledExcess =
+                parentBlobGasUsed * (_schedule.maxBlobGas - _schedule.targetBlobGas) /
+                _schedule.maxBlobGas;
+            return parentExcess + scaledExcess;
+        }
+    }
+    return total - targetGas;
 }
 
 namespace detail
@@ -192,9 +262,11 @@ inline std::optional<std::string> validateBlobGas(
                 return "excessBlobGas must be zero at Cancun activation";
             }
         }
-        else if (*_header.excessBlobGas != computeNextExcessBlobGas(_parent, schedule))
+        else if (*_header.excessBlobGas !=
+                 computeNextExcessBlobGas(_parent, schedule,
+                     isForkActive(_config.osakaTime, _header.timestamp)))
         {
-            return "excessBlobGas does not match the EIP-4844 recomputation";
+            return "excessBlobGas does not match the EIP-4844/7918 recomputation";
         }
     }
     return std::nullopt;
@@ -202,7 +274,10 @@ inline std::optional<std::string> validateBlobGas(
 
 // Fork-gated field presence (geth's VerifyHeader fails closed: a header that is
 // missing a field its active fork requires is INVALID, not "skipped"). London's
-// baseFee presence is checked in validateBaseFee; this covers Shanghai/Cancun.
+// baseFee presence is checked in validateBaseFee; this covers Shanghai/Cancun and
+// Prague's requestsHash. The VALUE of requestsHash (EIP-7685) is verified by the
+// block verifier against the executed request list once that lands — presence here
+// is the fail-closed gate so a peer cannot serve a post-Prague header that omits it.
 inline std::optional<std::string> validateForkFieldPresence(
     bcos::protocol::EthBlockHeaderData const& _header, ChainConfig const& _config)
 {
@@ -225,6 +300,10 @@ inline std::optional<std::string> validateForkFieldPresence(
         {
             return "missing parentBeaconBlockRoot (Cancun active)";
         }
+    }
+    if (isForkActive(_config.pragueTime, _header.timestamp) && !_header.requestsHash.has_value())
+    {
+        return "missing requestsHash (Prague active)";
     }
     return std::nullopt;
 }

@@ -69,6 +69,9 @@ tools/BcosProBuilder/generated**
 tools/BcosAirBuilder/*
 *.log
 
+# CI clones FISCO-BCOS/console here (tools/.ci/ci_check_air.sh); never track it
+tools/console/
+
 # t8n reference vectors: regenerated on demand (see t8n/generator/regen.sh) and by CI
 # (composite action .github/actions/opstack-t8n-regen). Only the non-generated contract
 # files (manifest.txt, *.md, SHA256SUMS) and the generator itself are tracked.

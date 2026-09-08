@@ -59,12 +59,14 @@ PoSPair makeValidPair()
     child.gasLimit = 30000000;
     child.gasUsed = 21000;
     child.baseFee = computeNextBaseFee(parent);  // 875175000 (golden)
-    // Shanghai/Cancun fields are mandatory once those forks are active (the
-    // default config activates every fork from genesis).
+    // Shanghai/Cancun/Prague fields are mandatory once those forks are active (the
+    // default config activates every fork from genesis; Osaka/BPO are NOT active by
+    // default — ChainConfig defaults them to UINT64_MAX, "not yet active").
     child.withdrawalsHash = h256{};
     child.blobGasUsed = u256(0);
-    child.excessBlobGas = computeNextExcessBlobGas(parent, kCancunBlobSchedule);  // 0
+    child.excessBlobGas = computeNextExcessBlobGas(parent, kCancunBlobSchedule, false);  // 0
     child.parentBeaconRoot = h256{};
+    child.requestsHash = h256{};
 
     p.config.chainId = 1;  // London active from genesis (londonTime = 0)
     return p;
@@ -91,19 +93,153 @@ BOOST_AUTO_TEST_CASE(baseFeeGoldenVector)
 BOOST_AUTO_TEST_CASE(excessBlobGasGoldenVectors)
 {
     // Verified against an independent Python computation (EIP-4844, Cancun
-    // schedule: target 3 blobs per block).
+    // schedule: target 3 blobs per block, Osaka NOT active).
     auto parent = makeValidPair().parent;
     parent.excessBlobGas = u256(0);
     parent.blobGasUsed = u256(2 * kGasPerBlob);  // 262144
-    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kCancunBlobSchedule), u256(0));
+    BOOST_CHECK_EQUAL(
+        computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(0));
 
     parent.excessBlobGas = u256(200000);
     parent.blobGasUsed = u256(2 * kGasPerBlob);
-    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kCancunBlobSchedule), u256(68928));
+    BOOST_CHECK_EQUAL(
+        computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(68928));
 
     parent.excessBlobGas = u256(0);
     parent.blobGasUsed = u256(0);
-    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kCancunBlobSchedule), u256(0));
+    BOOST_CHECK_EQUAL(
+        computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(0));
+}
+
+// EIP-7918 (Osaka): when the blob fee sits below the reserve price
+// (8192 * baseFee > 131072 * blobBaseFee), the excess grows by
+// used * (max - target) / max instead of the plain target delta.
+// Vectors verified against an independent Python port of geth's
+// consensus/misc/eip4844 calcExcessBlobGas.
+BOOST_AUTO_TEST_CASE(eip7918ExcessBlobGasGoldenVectors)
+{
+    auto parent = makeValidPair().parent;
+    parent.excessBlobGas = u256(0);
+    parent.blobGasUsed = u256(4 * kGasPerBlob);  // over the Cancun target (3)
+    parent.baseFee = u256(1000000000);
+
+    // Osaka active: reserve 8.192e12 > blob price (~1.3e5) -> EIP-7918 branch.
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kCancunBlobSchedule, true), u256(262144));
+    // Osaka inactive: plain EIP-4844 delta (4 blobs - 3 target).
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(131072));
+
+    // Blob fee ABOVE the reserve price: even under Osaka the original EIP-4844
+    // rule applies. parent excess 30e6 -> blobBaseFee 6816 -> blob price
+    // 6816 * 131072 = 893386752 > reserve 8192 * 100000 = 819200000.
+    auto p2 = makeValidPair().parent;
+    p2.excessBlobGas = u256(30000000);
+    p2.blobGasUsed = u256(2 * kGasPerBlob);
+    p2.baseFee = u256(100000);
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(p2, kCancunBlobSchedule, true), u256(29868928));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(p2, kCancunBlobSchedule, false), u256(29868928));
+}
+
+// EIP-7840 schedule progression past Prague: BPO1 (9/14), BPO2 (14/21).
+// The same parent yields different expected excess per active schedule.
+// Vectors verified against an independent Python port of geth's calcExcessBlobGas.
+BOOST_AUTO_TEST_CASE(postOsakaBlobScheduleGoldenVectors)
+{
+    // 12 blobs used: above the Prague target (6) and BPO1 target (9), below the
+    // BPO2 target (14). baseFee 1e9 keeps the EIP-7918 reserve-price condition true.
+    auto parent = makeValidPair().parent;
+    parent.excessBlobGas = u256(0);
+    parent.blobGasUsed = u256(12 * kGasPerBlob);
+    parent.baseFee = u256(1000000000);
+
+    // Prague schedule (also Osaka): 12-6 = 6 blobs under the old rule, but
+    // EIP-7918 scales by (9-6)/9 = 1/3 of the used gas.
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kPragueBlobSchedule, true), u256(524288));
+    // BPO1: 12 used vs target 9 -> EIP-7918 scaled by (14-9)/14.
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kBpo1BlobSchedule, true), u256(561737));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kBpo1BlobSchedule, false), u256(393216));
+    // BPO2: 12 used is below the target 14 -> excess resets to 0.
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kBpo2BlobSchedule, true), u256(0));
+
+    // 10 blobs: over BPO1's target (9), under BPO2's (14).
+    auto p2 = makeValidPair().parent;
+    p2.excessBlobGas = u256(0);
+    p2.blobGasUsed = u256(10 * kGasPerBlob);
+    p2.baseFee = u256(1000000000);
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(p2, kBpo1BlobSchedule, true), u256(468114));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(p2, kBpo2BlobSchedule, true), u256(0));
+}
+
+// A full post-Osaka / BPO2 header validates end to end: the validator selects the
+// BPO2 schedule by timestamp and applies EIP-7918 from Osaka on.
+BOOST_AUTO_TEST_CASE(postBpo2HeaderValidates)
+{
+    auto p = makeValidPair();
+    // Sepolia-style tail: osaka/bpo1/bpo2 activate before the child block.
+    p.config.pragueTime = 1600000000;
+    p.config.osakaTime = 1600000000;
+    p.config.bpo1Time = 1600000001;
+    p.config.bpo2Time = 1600000001;
+    // Parent carries 12 blobs of usage with a non-zero excess.
+    p.parent.excessBlobGas = u256(2000000);
+    p.parent.blobGasUsed = u256(12 * kGasPerBlob);
+    p.parent.baseFee = u256(1000000000);
+    // Child has no blobs; its excess is recomputed under BPO2 + EIP-7918.
+    p.child.excessBlobGas =
+        computeNextExcessBlobGas(p.parent, kBpo2BlobSchedule, /*osaka=*/true);
+    p.child.blobGasUsed = u256(0);
+    auto result = validateHeaderPoS(p.child, p.parent, p.config);
+    BOOST_CHECK(result.valid);
+    if (!result.valid)
+    {
+        BOOST_TEST_MESSAGE("postBpo2HeaderValidates: " << result.error);
+    }
+
+    // Wrong excess is rejected (catches a validator stuck on the Prague schedule).
+    auto bad = p;
+    bad.child.excessBlobGas = u256(0);
+    auto rejected = validateHeaderPoS(bad.child, bad.parent, bad.config);
+    BOOST_CHECK(!rejected.valid);
+    BOOST_CHECK(rejected.error.find("excessBlobGas") != std::string::npos);
+
+    // 15 blobs fit under the BPO2 max (21) but exceed the BPO1 max (14).
+    auto pMax = makeValidPair();
+    pMax.config.pragueTime = 1600000000;
+    pMax.config.osakaTime = 1600000000;
+    pMax.config.bpo1Time = 1600000001;
+    pMax.config.bpo2Time = 1600000002;  // still BPO1 at the child block
+    pMax.parent.excessBlobGas = u256(0);
+    pMax.parent.blobGasUsed = u256(0);
+    pMax.child.blobGasUsed = u256(15 * kGasPerBlob);  // over BPO1 max (14)
+    pMax.child.excessBlobGas = u256(0);
+    auto overBpo1 = validateHeaderPoS(pMax.child, pMax.parent, pMax.config);
+    BOOST_CHECK(!overBpo1.valid);
+
+    pMax.config.bpo2Time = 1600000001;  // BPO2 active at the child: max 21
+    auto underBpo2 = validateHeaderPoS(pMax.child, pMax.parent, pMax.config);
+    BOOST_CHECK(underBpo2.valid);
+}
+
+// F7: Prague must be fail-closed on requestsHash like Shanghai/Cancun fields.
+BOOST_AUTO_TEST_CASE(rejectsMissingRequestsHashWhenPragueActive)
+{
+    auto p = makeValidPair();
+    p.child.requestsHash.reset();
+    auto result = validateHeaderPoS(p.child, p.parent, p.config);
+    BOOST_CHECK(!result.valid);
+    BOOST_CHECK(result.error.find("requestsHash") != std::string::npos);
+
+    // Pre-Prague the field is genuinely absent: not an error.
+    auto p2 = makeValidPair();
+    p2.config.shanghaiTime = 1600000002;
+    p2.config.cancunTime = 1600000002;
+    p2.config.pragueTime = 1600000002;  // activates after the child block
+    p2.child.withdrawalsHash.reset();
+    p2.child.blobGasUsed.reset();
+    p2.child.excessBlobGas.reset();
+    p2.child.parentBeaconRoot.reset();
+    p2.child.requestsHash.reset();
+    auto ok = validateHeaderPoS(p2.child, p2.parent, p2.config);
+    BOOST_CHECK(ok.valid);
 }
 
 BOOST_AUTO_TEST_CASE(rejectsNonZeroDifficulty)
@@ -295,7 +431,8 @@ BOOST_AUTO_TEST_CASE(excessBlobGasValidation)
     p.config.pragueTime = 1600000002;
     p.parent.excessBlobGas = u256(200000);
     p.parent.blobGasUsed = u256(2 * kGasPerBlob);
-    p.child.excessBlobGas = computeNextExcessBlobGas(p.parent, kCancunBlobSchedule);  // 68928
+    p.child.excessBlobGas =
+        computeNextExcessBlobGas(p.parent, kCancunBlobSchedule, false);  // 68928
     auto result = validateHeaderPoS(p.child, p.parent, p.config);
     BOOST_CHECK(result.valid);
 
@@ -348,8 +485,9 @@ BOOST_AUTO_TEST_CASE(pragueExcessBlobGasRecomputation)
     parent.excessBlobGas = u256(0);
     parent.blobGasUsed = u256(5 * kGasPerBlob);
     BOOST_CHECK_EQUAL(
-        computeNextExcessBlobGas(parent, kCancunBlobSchedule), u256(2 * kGasPerBlob));
-    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kPragueBlobSchedule), u256(0));
+        computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(2 * kGasPerBlob));
+    BOOST_CHECK_EQUAL(
+        computeNextExcessBlobGas(parent, kPragueBlobSchedule, false), u256(0));
 
     // The validator picks the schedule by the child header timestamp.
     auto p = makeValidPair();

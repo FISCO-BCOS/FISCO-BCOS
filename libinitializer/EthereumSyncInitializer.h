@@ -242,7 +242,8 @@ private:
         // fails with "parent hash mismatch (fork or reorg)".
         INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: resuming from local head")
                               << LOG_KV("headNumber", current)
-                              << LOG_KV("headHash", anchorHeaderHash(head).hex().substr(0, 18))
+                              << LOG_KV("headHash",
+                                  bcos::devp2p::sync::headerHash(head).hex().substr(0, 18))
                               << LOG_KV("resumeFrom", current + 1);
         return {
             static_cast<uint64_t>(current + 1), head, head, genesisHeader};
@@ -256,6 +257,13 @@ private:
         config.shanghaiTime = m_nodeConfig->ethereumForkShanghaiTime();
         config.cancunTime = m_nodeConfig->ethereumForkCancunTime();
         config.pragueTime = m_nodeConfig->ethereumForkPragueTime();
+        // Post-Prague tail: drives the EIP-7840 blob schedule (BPO1/BPO2) and the
+        // EIP-7918 excess-blob-gas update rule from Osaka on. NodeConfig returns
+        // UINT64_MAX ("not yet active") for unscheduled tail forks, which
+        // ChainConfig interprets as "pre-Osaka rules".
+        config.osakaTime = m_nodeConfig->ethereumForkOsakaTime();
+        config.bpo1Time = m_nodeConfig->ethereumForkBpo1Time();
+        config.bpo2Time = m_nodeConfig->ethereumForkBpo2Time();
         // Blocks before the merge are PoW (non-zero difficulty, ommers allowed);
         // from the merge block onward the chain is PoS. 0 = PoS from genesis.
         config.mergeBlock = m_nodeConfig->ethereumMergeBlock();
@@ -296,32 +304,12 @@ private:
                 return {hash, mergeBlock};
             }
         }
-        // Timestamp-based forks, chained in activation order; only chain in the ones
-        // the local head has passed, and announce the first not-yet-passed one.
-        auto addIfPassed = [&](uint64_t fork) {
-            if (fork > 0 && fork <= _localHeadTime)
-            {
-                hash = bcos::devp2p::eth::forkIdAddForkPoint(hash, fork);
-                return true;
-            }
-            return false;
-        };
-        for (uint64_t fork : {m_nodeConfig->ethereumForkShanghaiTime(),
-                 m_nodeConfig->ethereumForkCancunTime(),
-                 m_nodeConfig->ethereumForkPragueTime(),
-                 m_nodeConfig->ethereumForkOsakaTime(),
-                 m_nodeConfig->ethereumForkBpo1Time(),
-                 m_nodeConfig->ethereumForkBpo2Time()})
-        {
-            if (!addIfPassed(fork))
-            {
-                if (fork > 0)
-                {
-                    return {hash, fork};
-                }
-            }
-        }
-        return {hash, 0};
+        // Timestamp-based forks, chained in activation order; an unscheduled tail
+        // fork (UINT64_MAX) ends the ladder with next = 0 (see forkIdFromTimeLadder).
+        return bcos::devp2p::eth::forkIdFromTimeLadder(hash, _localHeadTime,
+            {m_nodeConfig->ethereumForkShanghaiTime(), m_nodeConfig->ethereumForkCancunTime(),
+                m_nodeConfig->ethereumForkPragueTime(), m_nodeConfig->ethereumForkOsakaTime(),
+                m_nodeConfig->ethereumForkBpo1Time(), m_nodeConfig->ethereumForkBpo2Time()});
     }
 
     scheduler_v1::EvmcForkTimestamps evmcForkSchedule() const
@@ -476,7 +464,7 @@ private:
         if (block && block->blockHeader())
         {
             bcos::protocol::EthBlockHeader localHeader(*block->blockHeader());
-            localHash = anchorHeaderHash(localHeader.data());
+            localHash = bcos::devp2p::sync::headerHash(localHeader.data());
         }
         if (localHash != _checkpoint.hash)
         {
@@ -577,8 +565,8 @@ private:
                         auto clientConfig = peer;
                         clientConfig.clientId = "FISCO-BCOS-EL/v0.1.0";
                         clientConfig.networkId = chainId;
-                        clientConfig.genesisHash = anchorHeaderHash(genesisHeader);
-                        clientConfig.headHash = anchorHeaderHash(anchor);
+                        clientConfig.genesisHash = bcos::devp2p::sync::headerHash(genesisHeader);
+                        clientConfig.headHash = bcos::devp2p::sync::headerHash(anchor);
                         // totalDifficulty: minimal big-endian u256(0). An EMPTY byte
                         // string RLP-encodes as 0x80 (the canonical RLP integer 0); a
                         // single {0} would encode as 0x00 (non-canonical, rejected by
@@ -610,14 +598,54 @@ private:
                         bcos::devp2p::sync::BlockExchange exchange(
                             resume.startNumber, anchor, devp2pConfig,
                             m_nodeConfig->ethereumMaxBatchSize());
-                        INITIALIZER_LOG(INFO)
-                            << LOG_DESC("EL sync: starting download")
-                            << LOG_KV("startNumber", resume.startNumber)
-                            << LOG_KV("batch", m_nodeConfig->ethereumMaxBatchSize());
 
                         auto prevHeader = resume.prevHeader;
-                        exchange.downloadRange(established.session,
-                            std::numeric_limits<uint64_t>::max(),
+                        // Resolve the peer's head NUMBER from its announced head hash
+                        // (eth/68 hands us only the hash; one GetBlockHeaders-by-hash
+                        // round trip, amount 1 — shares the exchange's request ids).
+                        auto peerHead = exchange.requestHeaderByHash(
+                            established.session, established.peerStatus.headHash);
+                        // Finality lag (two epochs): download only up to 64 blocks
+                        // behind the peer head. A block committed at the RAW tip is
+                        // vulnerable to a routine 1-2-block tip reorg — which the
+                        // three-strike detector below would then turn into a FATAL
+                        // stop plus a manual rollback on the next round. Keeping the
+                        // committed anchor under the finality lag makes a routine
+                        // reorg harmless (the next round simply downloads the new
+                        // tip). Real rollback stays a follow-up.
+                        constexpr uint64_t c_finalityLag = 64;
+                        uint64_t downloadEnd = 0;
+                        if (peerHead)
+                        {
+                            downloadEnd = peerHead->number() > c_finalityLag ?
+                                              peerHead->number() - c_finalityLag :
+                                              0;
+                        }
+                        if (!peerHead || downloadEnd < resume.startNumber)
+                        {
+                            // No safe download window: the peer is behind us, did not
+                            // serve the by-hash lookup, or we are already inside the
+                            // finality window (caught up). Leave the committed chain
+                            // untouched and try the next bootnode / retry next round.
+                            INITIALIZER_LOG(INFO)
+                                << LOG_DESC("EL sync: no safe download window")
+                                << LOG_KV("startNumber", resume.startNumber)
+                                << LOG_KV("peerHeadNumber", peerHead ? peerHead->number() : 0)
+                                << LOG_KV("peerHeadHash",
+                                    established.peerStatus.headHash.hex().substr(0, 18));
+                            continue;
+                        }
+                        uint64_t const downloadCount = downloadEnd - resume.startNumber + 1;
+                        INITIALIZER_LOG(INFO)
+                            << LOG_DESC("EL sync: starting bounded download")
+                            << LOG_KV("startNumber", resume.startNumber)
+                            << LOG_KV("downloadEnd", downloadEnd)
+                            << LOG_KV("downloadCount", downloadCount)
+                            << LOG_KV("peerHead", peerHead->number())
+                            << LOG_KV("finalityLag", c_finalityLag)
+                            << LOG_KV("batch", m_nodeConfig->ethereumMaxBatchSize());
+
+                        exchange.downloadRange(established.session, downloadCount,
                             [&](bcos::devp2p::sync::Block const& block) {
                                 if (!m_running.load())
                                 {
@@ -738,13 +766,6 @@ private:
                 std::this_thread::sleep_for(std::chrono::seconds(3));
             }
         }
-    }
-
-    static bcos::h256 anchorHeaderHash(bcos::protocol::EthBlockHeaderData const& h)
-    {
-        bcos::bytes rlp;
-        bcos::codec::rlp::encode(rlp, h);
-        return bcos::crypto::keccak256Hash(bcos::bytesConstRef(rlp.data(), rlp.size()));
     }
 
     bcos::tool::NodeConfig::Ptr m_nodeConfig;

@@ -99,6 +99,15 @@ public:
     uint64_t nextNumber() const { return m_headerChain.nextNumber(); }
     bcos::h256 headHash() const { return m_headerChain.anchorHash(); }
 
+    // Resolve a single header by hash (e.g. the peer's announced head) without
+    // moving the download anchor. Returns nullopt when the peer does not know
+    // the hash. Shares the request-id counter with the download requests.
+    std::optional<HeaderWithHash> requestHeaderByHash(
+        rlpx::Session& _session, bcos::h256 const& _hash)
+    {
+        return m_headerChain.requestHeaderByHash(_session, _hash);
+    }
+
 private:
     HeaderChain m_headerChain;
     BodySequence m_bodySequence;

@@ -46,13 +46,15 @@ public:
     TxValidator(txvalidator::NonceCheckerInterface::Ptr _txPoolNonceChecker,
         txvalidator::Web3NonceChecker::Ptr _web3NonceChecker,
         bcos::crypto::CryptoSuite::Ptr _cryptoSuite, std::string _groupId, std::string _chainId,
-        std::weak_ptr<bcos::scheduler::SchedulerInterface> _scheduler = {})
+        std::weak_ptr<bcos::scheduler::SchedulerInterface> _scheduler = {},
+        bool _rejectNativeTxOnV2Chain = false)
       : m_txPoolNonceChecker(std::move(_txPoolNonceChecker)),
         m_web3NonceChecker(std::move(_web3NonceChecker)),
         m_cryptoSuite(std::move(_cryptoSuite)),
         m_groupId(std::move(_groupId)),
         m_chainId(std::move(_chainId)),
-        m_scheduler(std::move(_scheduler))
+        m_scheduler(std::move(_scheduler)),
+        m_rejectNativeTxOnV2Chain(_rejectNativeTxOnV2Chain)
     {}
     ~TxValidator() override = default;
 
@@ -116,11 +118,16 @@ private:
     // check the transaction nonce in ledger, maintenance block number to nonce list mapping, and
     // nonce list which already committed to ledger
     txvalidator::LedgerNonceChecker::Ptr m_ledgerNonceChecker;
-    // only check nonce for web3 transaction
+    // Only used to check nonce for web3 transaction
     txvalidator::Web3NonceChecker::Ptr m_web3NonceChecker;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     std::string m_groupId;
     std::string m_chainId;
     std::weak_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
+    // executor_version >= 2 chains (the pure-Ethereum executor) seal ONLY Web3
+    // transactions — a native BCOS transaction cannot be committed to the Ethereum
+    // tx trie, so the leader's finishExecute would throw and block production would
+    // halt. When true, verify() refuses native transactions at admission instead.
+    bool m_rejectNativeTxOnV2Chain = false;
 };
 }  // namespace bcos::txpool

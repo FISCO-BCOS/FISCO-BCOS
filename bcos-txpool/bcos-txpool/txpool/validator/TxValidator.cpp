@@ -67,6 +67,14 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
     }
     if (_tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
     {
+        // An executor_version >= 2 (pure-Ethereum) chain seals ONLY Web3
+        // transactions: a native BCOS transaction has no EIP-2718 wire form, so
+        // committing one would make finishExecute's calculateEthereumTransactionRoot
+        // throw and abandon the block — halting production. Refuse at admission.
+        if (m_rejectNativeTxOnV2Chain)
+        {
+            return TransactionStatus::TxTypeNotSupported;
+        }
         // check groupId and chainId
         if (_tx.groupId() != m_groupId) [[unlikely]]
         {

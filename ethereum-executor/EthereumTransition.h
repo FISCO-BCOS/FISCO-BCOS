@@ -38,6 +38,16 @@ using evm::make_error_code;
 // EIP-7840 blob schedule constants (target, max, base_fee_update_fraction).
 // Shared by EthereumExecutor (blob_gas_left for validation) and the block-info
 // builder (blob_base_fee computation) so the two cannot drift.
+//
+// Osaka keeps the Prague schedule (EIP-7918 changes only the excess-blob-gas
+// UPDATE rule, which evmone's calc_excess_blob_gas already implements for
+// rev >= EVMC_OSAKA). The post-Osaka BPO1 (9/14) / BPO2 (14/21) schedules of
+// EIP-7840 are NOT reachable here yet: execution maxes out at EVMC_OSAKA (the
+// verifier's timestamp->revision ladder and evmc itself have no BPO revision),
+// so a block past BPO1/BPO2 with blobs would be executed with Osaka fees. This
+// is a known limitation (tracked with the BPO1/BPO2 header-validation support
+// in bcos-devp2p/sync/HeaderValidator.h: kBpo1BlobSchedule 9/14 @8832827,
+// kBpo2BlobSchedule 14/21 @13739630).
 inline constexpr evm::BlobParams PRAGUE_BLOB_PARAMS{.target = 6,
     .max = 9,
     .base_fee_update_fraction = 5007716};

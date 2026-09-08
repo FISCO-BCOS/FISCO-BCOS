@@ -62,6 +62,13 @@ public:
     // PoS field rules. Throws on any protocol violation.
     std::vector<HeaderWithHash> requestHeaders(rlpx::Session& _session, uint64_t _amount);
 
+    // Request a SINGLE header by hash (eth/68 originHash) — used to resolve the
+    // peer's announced head hash to a block number before a bounded download.
+    // Does not move the download anchor or validate against it. Returns nullopt
+    // when the peer does not know the hash.
+    std::optional<HeaderWithHash> requestHeaderByHash(
+        rlpx::Session& _session, bcos::h256 const& _hash);
+
     // Advance the anchor past `_count` downloaded headers.
     void advance(uint64_t _count, HeaderWithHash const& _lastHeader);
 

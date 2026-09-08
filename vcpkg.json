@@ -55,7 +55,6 @@
     "rapidhash",
     "proxy",
     "hsm-crypto",
-    "snappy",
     {
       "name": "tarscpp",
       "version>=": "3.0.3-3"

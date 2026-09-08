@@ -290,7 +290,8 @@ inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 /// commits; no cross-commit compatibility is guaranteed for a chain that ran v2 on a
 /// pre-release binary. Before any formal release ships with v2 selectable, this gate must
 /// be re-hung on a proper feature flag / activation block height (Features::Flag) instead
-/// of a bare version compare.
+/// of a bare version compare — tracked in
+/// https://github.com/FISCO-BCOS/FISCO-BCOS/issues/5563.
 inline constexpr int ETHEREUM_EXECUTOR_VERSION = 2;
 
 /// The executor version that selects the OP-Stack OpSchedulerSeam (op composition root).
