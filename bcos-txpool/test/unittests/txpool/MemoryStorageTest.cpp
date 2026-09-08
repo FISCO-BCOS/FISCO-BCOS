@@ -1322,4 +1322,42 @@ BOOST_AUTO_TEST_CASE(proposalVerificationReadsNothingFromTheLedger)
     BOOST_CHECK(accepted);
 }
 
+// The pool path's counterpart. Unlike proposal verification, pool admission of a Web3 transaction
+// reads the sender's account, so a storage fault CAN reach it, and verify() throws on one by
+// contract. verifyAndSubmitTransaction has three callers, and each gave that exception a
+// different ceiling -- the RPC client's error body, await_suspend's Malformed, the ledger fetch
+// callback it escaped from -- none of them an admission verdict. Pinned here: the account read
+// throws, the transaction is refused with Unknown rather than thrown, and its nonce was never
+// reserved, because the fault came before the reservation. Negative control: without the catch
+// in verifyAndSubmitTransaction the first check fails on the escaping runtime_error.
+BOOST_AUTO_TEST_CASE(poolAdmissionRefusesInsteadOfThrowingOnAStorageFault)
+{
+    fakeit::When(Method(mockLedger, getStorageState))
+        .AlwaysDo([](std::string_view,
+                      protocol::BlockNumber) -> task::Task<std::optional<ledger::StorageState>> {
+            throw std::runtime_error("storage unavailable");
+        });
+    // A nonce checker over the faulting ledger: the committed-nonce read is the first thing
+    // readAccountState does, and it goes through this checker's getStorageState. Nothing before
+    // it touches the ledger (normalize and the gate stage are pure; the chain view is the
+    // snapshot), so this is the read that throws.
+    auto faultingWeb3Nonces = std::make_shared<bcos::txvalidator::Web3NonceChecker>(ledger);
+    auto validator = makeAdmissionValidator(ledger, txPoolNonceChecker, faultingWeb3Nonces);
+    auto configSig = std::make_shared<TxPoolConfig>(validator, nullptr, nullptr, ledger,
+        txPoolNonceChecker, faultingWeb3Nonces, /*blockLimit*/ 1000, /*poolLimit*/ 1024,
+        /*checkSig*/ true);
+    MemoryStorage storageSig(configSig, *ioServicePool->getIOService());
+
+    auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+        std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
+    auto key = cryptoSuite->signatureImpl()->generateKeyPair();
+    auto tx = bcos::test::fakeWeb3Tx(cryptoSuite, "7", key);
+
+    TransactionStatus status = TransactionStatus::None;
+    BOOST_CHECK_NO_THROW(status = storageSig.verifyAndSubmitTransaction(tx, nullptr, true, true));
+    BOOST_CHECK(status == TransactionStatus::Unknown);
+    BOOST_CHECK(!storageSig.exists(tx->hash()));
+    BOOST_CHECK(!task::syncWait(faultingWeb3Nonces->existsMemoryNonce(tx->sender(), tx->nonce())));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

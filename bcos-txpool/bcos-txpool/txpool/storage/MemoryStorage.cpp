@@ -438,13 +438,37 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     //
     // syncWait, not co_await: verifyAndSubmitTransaction returns TransactionStatus and is called
     // synchronously from the submit path. Turning the whole chain into a coroutine would also mean
-    // re-examining whether TxPool's verifier pool can starve on a suspended task.
+    // re-examining what a suspended admission does to the threads that call this synchronously.
     const auto policy = m_config->checkTransactionSignature() ?
                             txvalidator::SignaturePolicy::Required :
                             txvalidator::SignaturePolicy::Disabled;
-    if (auto status = task::syncWait(m_config->txValidator()->verify(
+    TransactionStatus status = TransactionStatus::None;
+    try
+    {
+        status = task::syncWait(m_config->txValidator()->verify(
             *transaction, txvalidator::AdmissionContext::PoolAdmission, policy));
-        status != TransactionStatus::None)
+    }
+    catch (...)
+    {
+        // verify() throws, by contract, when the data it needs cannot be read (TxValidator.h),
+        // and on this path it does read: a Web3 sender's account. The same catch as
+        // enforceSubmitTransaction, for the same reason -- a storage fault is not a verdict on
+        // the transaction. Without it, each caller turned the fault into a different wrong
+        // answer. submitTransaction's await_ready branch (waitForReceipt = false: the Web3 RPC
+        // default) let it leave through co_await, so the client received the raw diagnostic
+        // string; its await_suspend branch (waitForReceipt = true: BCOS JSON-RPC, tars RPC)
+        // caught it and reported Malformed, a verdict on a transaction never judged; and
+        // batchImportTxs let it abort the whole batch -- on the ledger-fetch path (requestMissedTxs
+        // with no proposal) out of the asyncGetBatchTxsByHashList callback, which has no catch,
+        // so the fetch's completion callback never ran. Refusing here gives all three one
+        // fail-closed answer, and the reservation below never happens for a transaction that
+        // was not judged.
+        TXPOOL_LOG(ERROR) << LOG_DESC("admission could not be decided")
+                          << LOG_KV("txHash", transaction->hash().abridged())
+                          << LOG_KV("reason", boost::current_exception_diagnostic_information());
+        return TransactionStatus::Unknown;
+    }
+    if (status != TransactionStatus::None)
     {
         return status;
     }
