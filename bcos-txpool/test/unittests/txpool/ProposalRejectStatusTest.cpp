@@ -37,6 +37,15 @@ namespace
 constexpr uint64_t c_chainId = 5;
 constexpr uint64_t c_enoughGas = 100000;
 
+/// enforceSubmitTransaction is protected; the proposal path reaches it through
+/// batchVerifyAndSubmitTransaction. Exposed so the cases can pin the status it reports, not only
+/// the bool the batch reduces it to.
+struct ProbeStorage : MemoryStorage
+{
+    using MemoryStorage::enforceSubmitTransaction;
+    using MemoryStorage::MemoryStorage;
+};
+
 struct ProposalRejectFixture
 {
     ProposalRejectFixture()
@@ -59,7 +68,14 @@ struct ProposalRejectFixture
         auto config = std::make_shared<TxPoolConfig>(validator, nullptr, nullptr, ledger,
             txPoolNonceChecker, web3NonceChecker, /*blockLimit*/ 1000, /*poolLimit*/ 1024,
             /*checkSig*/ true);
-        storage = std::make_unique<MemoryStorage>(config, *ioServicePool->getIOService());
+        storage = std::make_unique<ProbeStorage>(config, *ioServicePool->getIOService());
+    }
+
+    /// The status enforceSubmitTransaction reports for one such transaction.
+    TransactionStatus enforceStatus(uint64_t chainId, uint64_t gasLimit)
+    {
+        return storage->enforceSubmitTransaction(
+            fakeWeb3Tx(cryptoSuite, "8", key, "probe", gasLimit, chainId));
     }
 
     /// One proposal transaction signed for @p chainId with @p gasLimit, through the path a
@@ -76,7 +92,7 @@ struct ProposalRejectFixture
         std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
     KeyPairInterface::UniquePtr key = cryptoSuite->signatureImpl()->generateKeyPair();
     IOServicePool::Ptr ioServicePool = std::make_shared<IOServicePool>(1, "proposalReject");
-    std::unique_ptr<MemoryStorage> storage;
+    std::unique_ptr<ProbeStorage> storage;
     HashType lastHash;
 };
 }  // namespace
@@ -87,18 +103,21 @@ BOOST_FIXTURE_TEST_SUITE(ProposalRejectStatusTest, ProposalRejectFixture)
 // below is the status under test and not the fixture.
 BOOST_AUTO_TEST_CASE(proposalWithTheChainsIdAndEnoughGasIsAccepted)
 {
+    BOOST_CHECK(enforceStatus(c_chainId, c_enoughGas) == TransactionStatus::None);
     BOOST_CHECK(proposalAccepted(c_chainId, c_enoughGas));
     BOOST_CHECK(storage->exists(lastHash));
 }
 
 BOOST_AUTO_TEST_CASE(proposalCarryingAForeignChainIdIsRefused)
 {
+    BOOST_CHECK(enforceStatus(c_chainId + 1, c_enoughGas) == TransactionStatus::InvalidChainId);
     BOOST_CHECK(!proposalAccepted(c_chainId + 1, c_enoughGas));
     BOOST_CHECK(!storage->exists(lastHash));
 }
 
 BOOST_AUTO_TEST_CASE(proposalCarryingUnderIntrinsicGasIsRefused)
 {
+    BOOST_CHECK(enforceStatus(c_chainId, 20000) == TransactionStatus::OutOfGasLimit);
     BOOST_CHECK(!proposalAccepted(c_chainId, 20000));  // below the 21000 base cost
     BOOST_CHECK(!storage->exists(lastHash));
 }

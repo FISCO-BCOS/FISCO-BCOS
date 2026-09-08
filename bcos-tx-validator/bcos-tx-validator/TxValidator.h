@@ -67,16 +67,21 @@ struct AccountState
 /// catching binary-wide -- into every module that admits a transaction.
 using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 
-/// The one place a transaction is judged admissible, for every ingress: Web3 JSON-RPC, P2P, and
-/// block-proposal verification. The pool's two ingresses call it -- verifyAndSubmitTransaction
-/// for submission and the peer fetch, enforceSubmitTransaction for proposal verification -- and
-/// the mempool's RPC ingress follows in #5555.
+/// The one place a transaction is judged admissible, for every ingress of the transaction pool:
+/// JSON-RPC (BCOS and Web3), P2P, and block-proposal verification. The pool's two ingresses call
+/// it -- verifyAndSubmitTransaction for submission and the peer fetch, enforceSubmitTransaction
+/// for proposal verification.
 ///
-/// It holds the nonce checkers itself rather than reaching them through callbacks. The pool
-/// shares the same instances -- it reserves and clears nonces without going near admission --
-/// but the admission question is asked here. Nonce admission is the same question at every
-/// ingress, and routing it through a per-caller hook is how the pool and the RPC layer came to
-/// disagree about it in the first place.
+/// NOT yet the engine-driven mempool. On a node with single-node consensus or the OP engine RPC,
+/// EthEndpoint::sendRawTransaction refuses blob and deposit envelopes, recovers the signature and
+/// checks the EIP-155 chain id inline, then hands the transaction to MemPoolImpl::add; neither
+/// runs verify(). #5555 wires that ingress.
+///
+/// It holds pointers to the shared nonce checkers rather than owning them: the pool reserves and
+/// clears nonces through the same instances without going near admission, and the admission
+/// question is asked here. Nonce admission is the same question at every ingress, and routing it
+/// through a per-caller hook is how the pool and the RPC layer came to disagree about it in the
+/// first place.
 class TxValidator
 {
 public:

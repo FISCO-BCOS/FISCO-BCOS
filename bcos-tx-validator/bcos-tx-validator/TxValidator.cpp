@@ -484,6 +484,11 @@ TransactionStatus checkWeb3NonceWindow(StateInputs const& in)
     // rule itself is Web3NonceChecker's, and the pool's re-checks of pooled transactions run the
     // same function over the same cached read (committedNonceStatus -> checkWeb3Nonce), so
     // admission and re-check cannot disagree about a nonce.
+    //
+    // No length gate on the nonce string here, unlike checkWeb3Nonce's FIB-57 cap: every check
+    // runs after normalize(), which wrote this string from the envelope's uint64 nonce
+    // (Web3TarsBridge.cpp:161), so it is at most 18 characters. The cap guards the public string
+    // overload, which takes whatever it is handed.
     auto const& senderNonce = in.sender.value().nonce;
     if (!senderNonce.has_value())
     {
@@ -502,9 +507,9 @@ TransactionStatus checkWeb3NonceWindow(StateInputs const& in)
 
 TransactionStatus checkInitCodeSize(StateInputs const& in)
 {
-    // EIP-3860 applies to contract CREATION only. The current implementation keys on transaction
-    // type alone, so a 60000-byte call to a deployed contract is wrongly rejected with
-    // MaxInitCodeSizeExceeded.
+    // EIP-3860 applies to contract CREATION only, so this keys on an empty `to`. The pool-side
+    // validator this replaced keyed on transaction type alone, and rejected a 60000-byte call to
+    // a deployed contract with MaxInitCodeSizeExceeded.
     if (in.chain.revision.has_value() && *in.chain.revision >= EVMC_SHANGHAI &&
         in.tx.to().empty() && in.tx.input().size() > MAX_INITCODE_SIZE)
     {
