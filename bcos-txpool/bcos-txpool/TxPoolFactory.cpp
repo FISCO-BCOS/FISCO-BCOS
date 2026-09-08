@@ -25,6 +25,7 @@
 #include "txpool/storage/MemoryStorage.h"
 #include <bcos-tx-validator/TxPoolNonceChecker.h>
 #include <bcos-tx-validator/Web3NonceChecker.h>
+#include <bcos-utilities/Exceptions.h>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -97,6 +98,15 @@ void TxPoolFactory::setScheduler(std::shared_ptr<bcos::scheduler::SchedulerInter
 
 void TxPoolFactory::setLedgerConfigState(bcos::ledger::LedgerConfigState::Ptr ledgerConfigState)
 {
+    if (m_txpool)
+    {
+        // The validator took the holder at construction and has no way to switch. Accepting a
+        // new one here would leave admission reading a holder nobody publishes into, and every
+        // EIP-155 transaction refused for a chain id that is "not configured", with nothing in
+        // the log to say why. A wiring-order mistake, so it fails where it is made.
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "TxPoolFactory::setLedgerConfigState must precede createTxPool"));
+    }
     if (ledgerConfigState)
     {
         m_ledgerConfigState = std::move(ledgerConfigState);

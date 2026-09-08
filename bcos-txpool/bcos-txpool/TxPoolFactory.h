@@ -48,7 +48,8 @@ public:
     void setScheduler(std::shared_ptr<bcos::scheduler::SchedulerInterface> _scheduler);
 
     /// Must be called before createTxPool: the admission validator takes the holder at
-    /// construction and reads through it for the life of the pool.
+    /// construction and reads through it for the life of the pool. Once the pool exists this
+    /// throws InvalidParameter rather than accept a holder that pool would never read.
     void setLedgerConfigState(bcos::ledger::LedgerConfigState::Ptr ledgerConfigState);
 
 private:

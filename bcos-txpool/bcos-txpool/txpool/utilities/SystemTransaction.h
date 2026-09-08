@@ -55,6 +55,4 @@ inline bool isSystemTransaction(protocol::Transaction const& tx)
     boost::algorithm::to_lower(lower);
     return precompiled::contains(bcos::precompiled::c_systemTxsAddress, std::string_view{lower});
 }
-
-// Trigger a transaction cleanup operation every 3s
 }  // namespace bcos::txpool
