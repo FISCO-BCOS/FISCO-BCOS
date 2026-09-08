@@ -65,19 +65,29 @@ double gasUsedRatio(bcos::protocol::BlockHeader const& header)
     return std::clamp(ratio, 0.0, 1.0);
 }
 
-std::vector<bcos::u256> collectPriorityFees(bcos::protocol::Block const& block, bcos::u256 baseFee)
+std::vector<GasWeightedPriorityFee> collectPriorityFeeSamples(
+    bcos::protocol::Block const& block, bcos::u256 baseFee)
 {
-    std::vector<bcos::u256> tips;
+    std::vector<GasWeightedPriorityFee> samples;
     for (auto const& tx : block.transactions())
     {
         auto const tip = effectivePriorityFeePerGas(*tx, baseFee);
-        if (tip > 0)
+        if (tip <= 0)
         {
-            tips.push_back(tip);
+            continue;
         }
+        auto const gas = static_cast<std::uint64_t>(tx->gasLimit());
+        if (gas == 0)
+        {
+            continue;
+        }
+        samples.push_back(GasWeightedPriorityFee{tip, gas});
     }
-    std::sort(tips.begin(), tips.end());
-    return tips;
+    std::sort(samples.begin(), samples.end(),
+        [](GasWeightedPriorityFee const& left, GasWeightedPriorityFee const& right) {
+            return left.tip < right.tip;
+        });
+    return samples;
 }
 }  // namespace
 
@@ -170,20 +180,41 @@ bcos::u256 bcos::rpc::effectivePriorityFeePerGas(
 }
 
 std::vector<bcos::u256> bcos::rpc::pickRewardPercentiles(
-    std::vector<bcos::u256> const& sortedTips, std::span<double const> percentiles)
+    std::vector<GasWeightedPriorityFee> const& samples, std::span<double const> percentiles)
 {
     std::vector<bcos::u256> rewards;
     rewards.reserve(percentiles.size());
-    if (sortedTips.empty())
+    if (samples.empty())
     {
         rewards.assign(percentiles.size(), 0);
         return rewards;
     }
+    std::uint64_t totalGas = 0;
+    for (auto const& sample : samples)
+    {
+        totalGas += sample.gas;
+    }
     for (double percentile : percentiles)
     {
         auto const clamped = std::clamp(percentile, 0.0, 100.0);
-        auto const idx = static_cast<std::size_t>((sortedTips.size() - 1) * clamped / 100.0);
-        rewards.push_back(sortedTips[idx]);
+        if (totalGas == 0)
+        {
+            rewards.push_back(0);
+            continue;
+        }
+        auto const threshold = static_cast<double>(totalGas) * clamped / 100.0;
+        std::uint64_t cumulativeGas = 0;
+        bcos::u256 reward = samples.back().tip;
+        for (auto const& sample : samples)
+        {
+            cumulativeGas += sample.gas;
+            reward = sample.tip;
+            if (static_cast<double>(cumulativeGas) >= threshold)
+            {
+                break;
+            }
+        }
+        rewards.push_back(reward);
     }
     return rewards;
 }
@@ -227,8 +258,8 @@ bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInt
 
         if (wantRewards)
         {
-            auto const tips = collectPriorityFees(*block, blockBaseFee(header));
-            auto const row = pickRewardPercentiles(tips, rewardPercentiles);
+            auto const samples = collectPriorityFeeSamples(*block, blockBaseFee(header));
+            auto const row = pickRewardPercentiles(samples, rewardPercentiles);
             Json::Value rewardRow(Json::arrayValue);
             for (auto const& tip : row)
             {

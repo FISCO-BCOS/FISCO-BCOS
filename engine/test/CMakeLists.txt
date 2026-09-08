@@ -20,7 +20,7 @@ find_package(Boost REQUIRED unit_test_framework)
 find_package(jsoncpp CONFIG REQUIRED)
 
 target_link_libraries(${TEST_BINARY_NAME} PUBLIC
-    engine mempool protocol-tars rlp-protocol opstack-executor ledger rpc
+    engine mempool protocol-tars rlp-protocol opstack-executor ledger rpc transaction-scheduler
     jsoncpp_static Boost::unit_test_framework)
 
 # S6: GoldenSample / t8n corpus. The vectors and golden/engine/ files are tracked in-tree
@@ -52,6 +52,8 @@ set_source_files_properties(
     "unittests/engine/OpEngineReviewFixTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties(
     "unittests/engine/EthEngineServiceParityTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties(
+    "unittests/engine/EthEngineServiceMPTStateRootTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties(
     "unittests/engine/EthEngineServiceTransactionalTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")

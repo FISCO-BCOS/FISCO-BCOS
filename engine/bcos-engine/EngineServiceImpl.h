@@ -14,15 +14,16 @@
  *  limitations under the License.
  *
  * @file EngineServiceImpl.h
- * @brief Engine API template still constructed by EngineServiceInitializer.
+ * @brief Shared Engine API template: Tracker, PayloadCache, and engine_common helpers.
  *
- * This extract adds Tracker / PayloadCache / engine_common beside the live
- * template. It does not cut production over: Initializer still instantiates
- * EngineServiceImpl. EthEngineService / OpEngineService are later PRs.
+ * Production nodes wire EthEngineService / OpEngineService through EngineServiceInitializer
+ * (see Initializer::init). This header keeps the original EngineServiceImpl template for
+ * reuse and unit tests.
  */
 
 #pragma once
 
+#include "EngineMPTStateRoot.h"
 #include "EngineServiceCommon.h"
 #include "EngineStorageCommit.h"
 #include "bcos-crypto/hash/Keccak256.h"
@@ -966,7 +967,8 @@ private:
             // Must precede calculateHash: extraData is part of the Tars header hash
             // (bcos-tars-protocol/impl/TarsHashable.h).
             emptyHeader->setExtraData(std::move(extraData));
-            emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
+            co_await engine_common::resolveEngineBlockStateRoot(view, *emptyHeader, ledgerConfig,
+                *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
             // An empty block's transaction/receipt tries are the canonical empty-trie root, not
             // the all-zero hash (validateHeader rejects a zero receiptsRoot/txsRoot).
             emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
@@ -1091,13 +1093,13 @@ private:
             }
         }
 
-        // Step 2g: Compute state root (MPT over state storage)
-        h256 stateRoot = co_await calculateStateRoot(view, blockHeader->version());
+        // Step 2g: Compute state root (MPT when enabled, otherwise legacy XOR fold).
+        h256 stateRoot = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
+            ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
 
         // Step 2h: Set computed values in the block header and calculate the block hash.
         // The header timestamp stays in milliseconds throughout (the executor consumed it in
         // milliseconds above); EthBlockHeader converts to seconds at the RLP boundary.
-        blockHeader->setStateRoot(stateRoot);
         blockHeader->setReceiptsRoot(receiptRoot);
         blockHeader->setTxsRoot(txRoot);
         blockHeader->setGasUsed(totalGasUsed);
@@ -1119,38 +1121,6 @@ private:
             .header = std::move(blockHeader),
             .receipts = std::move(receipts)};
     }
-
-    /// Compute state root by iterating over storage and XOR-ing entry hashes.
-    /// This is a simplified MPT approximation; for full correctness use
-    /// scheduler_v1::calculateStateRoot from BaselineScheduler.h.
-    /// TODO: Replace with scheduler_v1::calculateStateRoot from BaselineScheduler.h
-    /// once MPTStorage is available. The XOR approach is not collision-resistant
-    /// and is a consensus risk for production use.
-    task::Task<h256> calculateStateRoot(ViewType& view, uint32_t blockVersion) const
-    {
-        auto range = co_await storage2::range(view);
-        h256 totalHash;
-        while (auto keyValue = co_await range.next())
-        {
-            auto& [key, value] = *keyValue;
-            executor_v1::StateKeyView viewKey(key);
-            auto [tableName, keyName] = viewKey.get();
-
-            storage::Entry entry;
-            if (auto* e = std::get_if<storage::Entry>(std::addressof(value)))
-            {
-                entry = *e;
-            }
-            else
-            {
-                entry.setStatus(storage::Entry::DELETED);
-            }
-            totalHash ^= entry.hash(
-                tableName, keyName, *m_blockFactory->cryptoSuite()->hashImpl(), blockVersion);
-        }
-        co_return totalHash;
-    }
-
 
     void updateTrackedBlockNumbers(std::optional<bcos::protocol::BlockNumber> safeBlockNumber,
         std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber)

@@ -623,7 +623,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
         emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
         emptyHeader->setExtraData(std::move(extraData));
-        emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
+        co_await engine_common::resolveEngineBlockStateRoot(view, *emptyHeader, ledgerConfig,
+            *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
         emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
         emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
         emptyHeader->setGasUsed(0);
@@ -715,8 +716,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
     }
 
-    h256 stateRoot = co_await calculateStateRoot(view, blockHeader->version());
-    blockHeader->setStateRoot(stateRoot);
+    h256 stateRoot = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
+        ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
     blockHeader->setReceiptsRoot(receiptRoot);
     blockHeader->setTxsRoot(txRoot);
     blockHeader->setGasUsed(totalGasUsed);
@@ -734,38 +735,6 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
         .header = std::move(blockHeader),
         .receipts = std::move(receipts)};
-}
-
-template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
-    requires executor_v1::TransactionExecutor<ExecutorType,
-                 typename GlobalStateStorageType::ViewType> &&
-             scheduler_v1::TransactionScheduler<SchedulerType,
-                 typename GlobalStateStorageType::ViewType, ExecutorType,
-                 std::vector<protocol::Transaction::Ptr>>
-task::Task<h256> EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
-    SchedulerType>::calculateStateRoot(ViewType& view, uint32_t blockVersion) const
-{
-    auto range = co_await storage2::range(view);
-    h256 totalHash;
-    while (auto keyValue = co_await range.next())
-    {
-        auto& [key, value] = *keyValue;
-        executor_v1::StateKeyView viewKey(key);
-        auto [tableName, keyName] = viewKey.get();
-
-        storage::Entry entry;
-        if (auto* e = std::get_if<storage::Entry>(std::addressof(value)))
-        {
-            entry = *e;
-        }
-        else
-        {
-            entry.setStatus(storage::Entry::DELETED);
-        }
-        totalHash ^= entry.hash(
-            tableName, keyName, *m_blockFactory->cryptoSuite()->hashImpl(), blockVersion);
-    }
-    co_return totalHash;
 }
 
 }  // namespace bcos::engine

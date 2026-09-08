@@ -28,7 +28,7 @@
 #   - eth_genesis_header.timestamp 用秒(L1 时间戳;C++ 侧 ×1000 存内部毫秒)
 #   - [features] feature_op_jovian=true(否则 9B extraData,op-node 拒绝)
 #   - op-node: --l1.beacon.ignore + --rollup.l1-chain-config(anvil 需 cancunTime)
-set -eu
+set -euo pipefail
 
 # Repo root from this script's own location (tools/op-e2e) so the defaults below work
 # on any checkout. Every path stays env-overridable.
@@ -471,7 +471,10 @@ req = urllib.request.Request('http://127.0.0.1:$FISCO_WEB3',
 print(json.loads(urllib.request.urlopen(req, timeout=10).read())['result'])
 ")
   log "op-node 启动(PID $(cat "$C2/op-node.pid"),L2 block=$BN)"
-  [ "$BN" != "0x0" ] && log "✅ C2 出块中!deposit/withdraw 闭环可用"
+  if [ "$BN" = "0x0" ] || [ "$BN" = "0" ]; then
+    die "op-node 未推进 L2 出块(eth_blockNumber=$BN);检查 op-node.log / FISCO engine RPC"
+  fi
+  log "✅ C2 出块中!deposit/withdraw 闭环可用"
 fi
 
 # ---------- 7. op-batcher ----------

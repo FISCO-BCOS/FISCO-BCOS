@@ -119,11 +119,13 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
 {
     // Runtime callers are the two commit callbacks (LedgerStorage::onStableCheckPointCommitted
     // and DownloadingQueue), which catch-and-log a throw and then stop advancing. A governance
-    // tx that writes an unwired executor_version must therefore NOT make this throw: slot 3 is
-    // null on every non-OP node, and one signed tx would otherwise halt the chain permanently.
+    // tx that writes an unwired executor_version must therefore NOT make this throw: an unwired
+    // slot (e.g. OP executor on a non-OP node) would otherwise halt the chain permanently.
     // Keep running on a wired scheduler and make the misconfiguration loud. The hard failure
-    // for executor_version>=3 without the OP wiring belongs at boot, and lives in
-    // Initializer::init's opStackMode gate.
+    // for executor_version>=3 without the OP wiring belongs at boot (Initializer::init).
+    auto const onChainVersion = ledgerConfig && ledgerConfig->executorVersion() > 0 ?
+                                    ledgerConfig->executorVersion() :
+                                    version;
     if (version < 0)
     {
         BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported()
@@ -144,7 +146,17 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     {
         INITIALIZER_LOG(ERROR)
             << LOG_DESC("executor_version has no wired scheduler; keeping the current executor")
-            << LOG_KV("requested", version) << LOG_KV("keeping", m_currentIndex);
+            << LOG_KV("requested", version) << LOG_KV("onChain", onChainVersion)
+            << LOG_KV("keeping", m_currentIndex)
+            << LOG_DESC(
+                   "align genesis/boot config with on-chain executor_version or enable the "
+                   "matching engine wiring (OP mode / single-node consensus)");
+        if (onChainVersion != m_currentIndex)
+        {
+            INITIALIZER_LOG(ERROR)
+                << LOG_DESC("executor_version drift: on-chain config != runtime executor")
+                << LOG_KV("onChain", onChainVersion) << LOG_KV("runtime", m_currentIndex);
+        }
         return;
     }
     if (selected != static_cast<size_t>(version))
@@ -152,9 +164,19 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
         INITIALIZER_LOG(ERROR) << LOG_DESC(
                                       "executor_version above the wired set; running the newest "
                                       "wired executor")
-                               << LOG_KV("requested", version) << LOG_KV("selected", selected);
+                               << LOG_KV("requested", version) << LOG_KV("selected", selected)
+                               << LOG_KV("onChain", onChainVersion);
     }
     m_currentIndex = static_cast<int>(selected);
+    if (onChainVersion != m_currentIndex)
+    {
+        INITIALIZER_LOG(ERROR)
+            << LOG_DESC("executor_version drift: on-chain config != runtime executor")
+            << LOG_KV("onChain", onChainVersion) << LOG_KV("runtime", m_currentIndex)
+            << LOG_DESC(
+                   "governance wrote a version this node cannot wire; blocks still execute on "
+                   "the runtime executor above");
+    }
 }
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::scheduler(
     int version)

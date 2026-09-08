@@ -56,7 +56,8 @@ namespace
 // Whole-second milliseconds (1700000000s): every Eth header produced by finalizeEthBlockHeader
 // must satisfy validateHeader's "timestamp is a whole number of seconds" check, so a fixture
 // timestamp with sub-second milliseconds would make every build path throw.
-// Value lives once in EthServiceStubs.h (c_defaultPayloadTimestamp, imported below).
+constexpr std::uint64_t c_defaultPayloadTimestamp = 1700000000ULL * 1000ULL;
+constexpr std::uint64_t c_timestamp = c_defaultPayloadTimestamp;
 constexpr bcos::protocol::BlockNumber c_initialBlockNumber = 5;
 constexpr bcos::protocol::BlockNumber c_trackedInitialBlockNumber = 10;
 constexpr bcos::protocol::BlockNumber c_trackedNextBlockNumber = 11;

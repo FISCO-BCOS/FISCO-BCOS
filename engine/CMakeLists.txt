@@ -13,6 +13,9 @@ add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-engine>)
+target_include_directories(engine PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/transaction-scheduler>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/bcos-storage>)
 # PUBLIC rlp-protocol: EthEngineService.h includes EthEngineService.inl, and the
 # installed OpEngineService.inl uses <bcos-rlp-protocol/EthBlockHeader.h>. PRIVATE
 # would drop include dirs for consumers that instantiate the templates (A8-13).
