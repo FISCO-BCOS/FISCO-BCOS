@@ -22,8 +22,12 @@
 # point at the c2b range for the isolated instance).
 set -uo pipefail   # NOT -e: scenarios must run their own asserts and report
 
+# Repo root from this script's location so the FISCO_BIN default works on any checkout.
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd "${SELF_DIR}/../.." && pwd)}"
+
 C2="${C2:-/tmp/c2}"
-FISCO_BIN="${FISCO_BIN:-/Users/octopus/octo/code/FISCO-BCOS/build/fisco-bcos-air/fisco-bcos}"
+FISCO_BIN="${FISCO_BIN:-${REPO_ROOT}/build/fisco-bcos-air/fisco-bcos}"
 ANVIL_PORT="${ANVIL_PORT:-8549}"
 FISCO_WEB3="${FISCO_WEB3:-8555}"
 FISCO_ENGINE="${FISCO_ENGINE:-8566}"

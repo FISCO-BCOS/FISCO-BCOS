@@ -85,15 +85,29 @@ if [[ ! -d "${REPO_ROOT}/bcos-l2-contracts/out" ]]; then
   (cd "${REPO_ROOT}/bcos-l2-contracts" && forge build)
 fi
 
-python3 -m pip install --quiet -r "${REPO_ROOT}/tools/.ci/c2-e2e-requirements.txt"
+# Python deps for the op-e2e helpers (pyyaml / eth-hash / py-trie / rlp). The runner's
+# system python3 is PEP-668 externally-managed, so a plain `python3 -m pip install`
+# fails there; mirror workflow.yml's fallback chain. A real failure still aborts.
+REQS="${REPO_ROOT}/tools/.ci/c2-e2e-requirements.txt"
+python3 -m pip install --quiet -r "$REQS" 2>/dev/null \
+  || pip3 install --quiet -r "$REQS" 2>/dev/null \
+  || pip3 install --break-system-packages --quiet -r "$REQS"
+python3 -c "import yaml, eth_hash, trie, rlp" 2>/dev/null \
+  || die "C2 python deps unavailable after install (pyyaml/eth-hash/py-trie/rlp)"
 
 export NO_PROXY="${NO_PROXY:-127.0.0.1,localhost}"
 export no_proxy="${no_proxy:-127.0.0.1,localhost}"
 
 log "running withdraw_e2e_ephemeral (CONTEST=${CONTEST} XDM=${XDM})…"
+# MONOREPO/L2CONTRACTS/FISCO_REPO are what setup_c2.sh (reached through
+# withdraw_e2e_ephemeral.sh) reads; its own defaults are repo-relative, but the
+# monorepo clone and the contracts dir are CI-layout specific, so pin them here.
 BIN_DIR="$BIN_DIR" \
 FISCO_BIN="$FISCO_BIN" \
 OPGEN="${REPO_ROOT}/tools/opstack-genesis" \
+MONOREPO="$OP_MONOREPO" \
+L2CONTRACTS="${REPO_ROOT}/bcos-l2-contracts" \
+FISCO_REPO="$REPO_ROOT" \
 OP_NODE_EXTRA_FLAGS="--p2p.disable" \
 CONTEST="$CONTEST" \
 XDM="$XDM" \
