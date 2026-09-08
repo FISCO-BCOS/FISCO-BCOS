@@ -280,6 +280,14 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     BuiltPayloadPtr cached;
     PayloadID payloadId;
     std::optional<EthPayloadArtifacts<ViewType>> localArtifact;
+    enum class NewPayloadMiss
+    {
+        None,
+        ParentUnknown,
+        NotBuiltHere,
+        CacheMiss,
+    };
+    auto miss = NewPayloadMiss::None;
     {
         auto guard = m_tracker.lockExclusive();
         auto const& forkchoiceState = guard.forkchoiceState();
@@ -287,31 +295,50 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                            guard.payloadIdForHash(request.executionPayload.parentHash).has_value();
         if (!parentKnown)
         {
+            miss = NewPayloadMiss::ParentUnknown;
+        }
+        else if (auto existingId = guard.payloadIdForHash(request.executionPayload.blockHash);
+                 !existingId)
+        {
+            miss = NewPayloadMiss::NotBuiltHere;
+        }
+        else
+        {
+            payloadId = *existingId;
+            cached = guard.findPayload(payloadId);
+            if (!cached)
+            {
+                miss = NewPayloadMiss::CacheMiss;
+            }
+        }
+    }
+    if (miss != NewPayloadMiss::None)
+    {
+        if (auto hashError = detail::matchReconstructedEthBlockHash(
+                m_blockFactory->blockHeaderFactory(), request.executionPayload,
+                request.parentBeaconBlockRoot, detail::ethBlockVersionForApi(version));
+            hashError.has_value())
+        {
+            co_return engine_common::makeStatus(
+                PayloadValidationStatus::InvalidBlockHash, std::nullopt, hashError);
+        }
+        if (miss == NewPayloadMiss::ParentUnknown)
+        {
             detail::warnSyncingRateLimited<detail::c_newPayloadParentUnknown>(
                 "newPayload parent unknown; answering SYNCING",
                 request.executionPayload.parentHash);
-            co_return engine_common::makeStatus(
-                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
-
-        auto existingId = guard.payloadIdForHash(request.executionPayload.blockHash);
-        if (!existingId)
+        else if (miss == NewPayloadMiss::NotBuiltHere)
         {
-            // #5468 / finding E: op-geth executes (InsertBlockWithoutSetHead) before VALID.
-            // An external payload this node did not build is not executed here yet.
             detail::warnSyncingRateLimited<detail::c_newPayloadNotBuiltHere>(
                 "newPayload block not built here; answering SYNCING",
                 request.executionPayload.blockHash);
-            co_return engine_common::makeStatus(
-                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
-        payloadId = *existingId;
-        cached = guard.findPayload(payloadId);
-    }
-    if (!cached)
-    {
-        detail::warnSyncingRateLimited<detail::c_newPayloadCacheMiss>(
-            "newPayload cache miss; answering SYNCING", request.executionPayload.blockHash);
+        else
+        {
+            detail::warnSyncingRateLimited<detail::c_newPayloadCacheMiss>(
+                "newPayload cache miss; answering SYNCING", request.executionPayload.blockHash);
+        }
         co_return engine_common::makeStatus(
             PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
     }

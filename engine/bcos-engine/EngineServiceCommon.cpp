@@ -23,6 +23,7 @@
 // (eth/catalyst/api.go GetPayloadVn / forkchoiceUpdated, miner/payload_building.go).
 
 #include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/engine/Errors.h"
 #include "bcos-framework/engine/OpBaseFee.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
@@ -34,6 +35,7 @@
 #include <algorithm>
 #include <span>
 #include <stdexcept>
+#include <vector>
 
 namespace bcos::engine::engine_common
 {
@@ -392,21 +394,25 @@ std::optional<std::string> validateExecutionPayload(
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built)
 {
-    // op-geth ExecutableDataToBlock re-derives keccak256(rlp(header)) from every
-    // hash-relevant field. Compare the fields this node actually built (cache hit).
-    // Keep-local-body (finding BL): optional V3 fields are compared only when
-    // BOTH sides have them. Presence XOR is not INVALID — GetPayloadV3 may omit
-    // a field the local payload still carries, and the CL is echoing the hash.
     auto mismatch = [](char const* field) {
         return std::string("executionPayload.") + field +
                " does not match the payload this node built under the submitted blockHash";
     };
-    // Presence XOR is not a mismatch. GetPayloadV3 may omit a V4-only field the
-    // in-memory payload still carries; a V2 body may omit blob-gas that a later
-    // cache entry filled. Only a present-vs-present value disagreement is INVALID.
-    auto optionalMismatch = [&](char const* field, auto const& submittedField,
-                                auto const& builtField) -> std::optional<std::string> {
+    auto optionalPresentMismatch = [&](char const* field, auto const& submittedField,
+                                       auto const& builtField) -> std::optional<std::string> {
         if (submittedField.has_value() && builtField.has_value() && *submittedField != *builtField)
+        {
+            return mismatch(field);
+        }
+        return std::nullopt;
+    };
+    auto optionalHashPresence = [&](char const* field, auto const& submittedField,
+                                    auto const& builtField) -> std::optional<std::string> {
+        if (submittedField.has_value() != builtField.has_value())
+        {
+            return mismatch(field);
+        }
+        if (submittedField.has_value() && *submittedField != *builtField)
         {
             return mismatch(field);
         }
@@ -475,42 +481,139 @@ std::optional<std::string> compareWithBuiltPayload(
             return mismatch("transactions");
         }
     }
-    if (auto error =
-            optionalMismatch("withdrawalsRoot", submitted.withdrawalsRoot, built.withdrawalsRoot))
+    if (submitted.withdrawalsRoot.has_value() && built.withdrawalsRoot.has_value())
     {
-        return error;
+        if (*submitted.withdrawalsRoot != *built.withdrawalsRoot)
+        {
+            return mismatch("withdrawalsRoot");
+        }
     }
-    // The withdrawals LIST is the field withdrawalsRoot commits to: the root arm
-    // above alone lets a tampered list through whenever both sides omit the root
-    // (V2/V3 wire) or the submitted root is copied from the build. Compare the
-    // lists directly — an honest echo always carries the built list.
+    else if (submitted.withdrawalsRoot.has_value() != built.withdrawalsRoot.has_value())
+    {
+        auto const& present = submitted.withdrawalsRoot.has_value() ? *submitted.withdrawalsRoot :
+                                                                      *built.withdrawalsRoot;
+        if (present != withdrawalsRootFor(submitted))
+        {
+            return mismatch("withdrawalsRoot");
+        }
+    }
     if (submitted.withdrawals != built.withdrawals)
     {
         return mismatch("withdrawals");
     }
-    if (auto error = optionalMismatch("blobGasUsed", submitted.blobGasUsed, built.blobGasUsed))
+    if (auto error = optionalHashPresence("blobGasUsed", submitted.blobGasUsed, built.blobGasUsed))
     {
         return error;
     }
     if (auto error =
-            optionalMismatch("excessBlobGas", submitted.excessBlobGas, built.excessBlobGas))
+            optionalHashPresence("excessBlobGas", submitted.excessBlobGas, built.excessBlobGas))
     {
         return error;
     }
-    // V4 optional fields follow the presence-XOR rule like blobGasUsed/excessBlobGas:
-    // optionalMismatch only fires when BOTH sides carry the field and they differ. A
-    // drop (built present, echo absent) is tolerated — the wire dialect cannot express
-    // these fields, so an honest echo never carries them.
-    if (auto error =
-            optionalMismatch("blockAccessList", submitted.blockAccessList, built.blockAccessList))
+    if (auto error = optionalPresentMismatch(
+            "blockAccessList", submitted.blockAccessList, built.blockAccessList))
     {
         return error;
     }
-    if (auto error = optionalMismatch("slotNumber", submitted.slotNumber, built.slotNumber))
+    if (auto error = optionalPresentMismatch("slotNumber", submitted.slotNumber, built.slotNumber))
     {
         return error;
     }
     return std::nullopt;
+}
+
+namespace
+{
+bcos::h256 transactionsRootFromPayload(const ExecutionPayload& payload)
+{
+    if (payload.transactions.empty())
+    {
+        return bcos::ledger::mpt::emptyRootHash();
+    }
+    bcos::crypto::Keccak256 hashImpl;
+    auto hasher = hashImpl.hasher();
+    bcos::crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(hasher.clone());
+    std::vector<bcos::h256> txHashes;
+    txHashes.reserve(payload.transactions.size());
+    for (auto const& tx : payload.transactions)
+    {
+        txHashes.push_back(
+            tx.decoded ? tx.decoded->hash() : bcos::crypto::keccak256Hash(bcos::ref(tx.raw)));
+    }
+    std::vector<bcos::h256> merkleTrie;
+    merkle.generateMerkle(txHashes, merkleTrie);
+    return merkleTrie.empty() ? bcos::ledger::mpt::emptyRootHash() : merkleTrie.back();
+}
+}  // namespace
+
+std::optional<std::string> matchReconstructedEthBlockHash(
+    const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
+    const std::optional<bcos::h256>& parentBeaconBlockRoot,
+    bcos::protocol::EthBlockVersion forkVersion)
+{
+    if (!factory)
+    {
+        return std::string("blockHash does not match the reconstructed block header");
+    }
+    try
+    {
+        auto header = factory->createBlockHeader();
+        const auto number = payload.blockNumber;
+        header->setNumber(number);
+        header->setTimestamp(static_cast<int64_t>(payload.timestamp));
+        header->setParentInfo(
+            bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = payload.parentHash});
+        header->setCoinbase(payload.feeRecipient);
+        header->setStateRoot(payload.stateRoot);
+        header->setTxsRoot(transactionsRootFromPayload(payload));
+        header->setReceiptsRoot(payload.receiptsRoot);
+        header->setLogsBloom(
+            bcos::bytesConstRef(payload.logsBloom.data(), payload.logsBloom.size()));
+        header->setGasLimit(payload.gasLimit);
+        header->setGasUsed(payload.gasUsed);
+        header->setExtraData(payload.extraData);
+        header->setPrevRandao(payload.prevRandao);
+        header->setBaseFee(payload.baseFeePerGas);
+        header->setUncleHash(engine_common::c_emptyOmmersHash);
+        header->setDifficulty(bcos::u256(0));
+        header->setNonce(engine_common::c_posNonce);
+
+        if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)
+        {
+            header->setWithdrawalsRoot(
+                payload.withdrawalsRoot.value_or(withdrawalsRootFor(payload)));
+        }
+        if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN)
+        {
+            if (!payload.blobGasUsed.has_value() || !payload.excessBlobGas.has_value() ||
+                !parentBeaconBlockRoot.has_value())
+            {
+                return std::string("blockHash does not match the reconstructed block header");
+            }
+            header->setBlobGasUsed(*payload.blobGasUsed);
+            header->setExcessBlobGas(*payload.excessBlobGas);
+            header->setParentBeaconBlockRoot(*parentBeaconBlockRoot);
+        }
+        if (forkVersion >= bcos::protocol::EthBlockVersion::PRAGUE)
+        {
+            header->setRequestsHash(engine_common::c_emptyRequestsHash);
+        }
+
+        header->setEthBlockVersion(forkVersion);
+        if (auto error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header))
+        {
+            return std::string("blockHash does not match the reconstructed block header");
+        }
+        if (header->hash() != payload.blockHash)
+        {
+            return std::string("blockHash does not match the reconstructed block header");
+        }
+        return std::nullopt;
+    }
+    catch (...)
+    {
+        return std::string("blockHash does not match the reconstructed block header");
+    }
 }
 
 bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev)

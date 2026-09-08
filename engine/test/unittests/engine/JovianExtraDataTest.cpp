@@ -357,11 +357,17 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)
     strippedExtraData.extraData.clear();
     BOOST_CHECK(engine::detail::compareWithBuiltPayload(strippedExtraData, built).has_value());
 
-    // V3 wire may omit withdrawalsRoot; that is not a mismatch.
     auto withoutWithdrawalsRoot = built;
     withoutWithdrawalsRoot.withdrawalsRoot = std::nullopt;
     BOOST_CHECK(
         !engine::detail::compareWithBuiltPayload(withoutWithdrawalsRoot, built).has_value());
+    auto withForeignRoot = built;
+    withForeignRoot.withdrawalsRoot = h256(1);
+    auto omittedForeign = withForeignRoot;
+    omittedForeign.withdrawalsRoot = std::nullopt;
+    auto omitError = engine::detail::compareWithBuiltPayload(omittedForeign, withForeignRoot);
+    BOOST_REQUIRE(omitError.has_value());
+    BOOST_CHECK_NE(omitError->find("withdrawalsRoot"), std::string::npos);
 
     auto alteredTransaction = built;
     alteredTransaction.transactions[1].raw = bytes{0x02, 0x04};
@@ -453,22 +459,31 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_every_hash_relevant_fiel
         BOOST_CHECK_NE(err->find("transactions"), std::string::npos);
     }
 
-    // V3-omitted optionals are not mismatches (missing vs present-zero semantics).
     {
         auto stripped = built;
         stripped.withdrawalsRoot = std::nullopt;
-        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        auto rootError = engine::detail::compareWithBuiltPayload(stripped, built);
+        BOOST_REQUIRE(rootError.has_value());
+        BOOST_CHECK_NE(rootError->find("withdrawalsRoot"), std::string::npos);
+        stripped = built;
+        stripped.withdrawalsRoot = engine::detail::withdrawalsRootFor(built);
+        auto emptyRoot = built;
+        emptyRoot.withdrawalsRoot = std::nullopt;
+        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(emptyRoot, stripped).has_value());
+        stripped = built;
         stripped.blobGasUsed = std::nullopt;
-        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        auto blobError = engine::detail::compareWithBuiltPayload(stripped, built);
+        BOOST_REQUIRE(blobError.has_value());
+        BOOST_CHECK_NE(blobError->find("blobGasUsed"), std::string::npos);
+        stripped = built;
         stripped.excessBlobGas = std::nullopt;
-        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        auto excessError = engine::detail::compareWithBuiltPayload(stripped, built);
+        BOOST_REQUIRE(excessError.has_value());
+        BOOST_CHECK_NE(excessError->find("excessBlobGas"), std::string::npos);
     }
 }
 
-// Finding BL: keep-local-body contract. Optional V3 fields are compared only
-// when both sides have them. Presence XOR (omit vs value, either direction) is
-// not a mismatch; only present-vs-present disagreement is INVALID.
-BOOST_AUTO_TEST_CASE(compare_absent_optional_keeps_local_body)
+BOOST_AUTO_TEST_CASE(compare_absent_optional_follows_reconstructed_hash)
 {
     auto built = makePayloadWithTransactions(
         fromHexWithPrefix("0x01000000fa000000060000000000000000"), {{0x7e, 0x01}});
@@ -483,23 +498,31 @@ BOOST_AUTO_TEST_CASE(compare_absent_optional_keeps_local_body)
 
     // Both absent.
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(omitted, omitted).has_value());
-    // Submitted omit vs built present (GetPayloadV3 echo of a V4-capable local body).
-    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(omitted, built).has_value());
-    // Submitted present vs built omit (reverse XOR; omit vs value, not both-have).
-    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(built, omitted).has_value());
+    // Submitted omit vs built present non-empty-trie root / present blob-gas.
+    BOOST_CHECK(engine::detail::compareWithBuiltPayload(omitted, built).has_value());
+    BOOST_CHECK(engine::detail::compareWithBuiltPayload(built, omitted).has_value());
     // Both present and equal.
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(built, built).has_value());
 
-    // Per-field omit vs present still ACCEPT; only a value disagreement INVALID.
     {
         auto stripped = built;
         stripped.withdrawalsRoot = std::nullopt;
-        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        auto rootError = engine::detail::compareWithBuiltPayload(stripped, built);
+        BOOST_REQUIRE(rootError.has_value());
+        BOOST_CHECK_NE(rootError->find("withdrawalsRoot"), std::string::npos);
+        stripped = built;
         stripped.blobGasUsed = std::nullopt;
-        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        BOOST_CHECK(engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        stripped = built;
         stripped.excessBlobGas = std::nullopt;
-        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        BOOST_CHECK(engine::detail::compareWithBuiltPayload(stripped, built).has_value());
     }
+
+    auto emptyTrie = built;
+    emptyTrie.withdrawalsRoot = engine::detail::withdrawalsRootFor(built);
+    auto omitEmpty = emptyTrie;
+    omitEmpty.withdrawalsRoot = std::nullopt;
+    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(omitEmpty, emptyTrie).has_value());
 
     auto disagreedRoot = built;
     disagreedRoot.withdrawalsRoot = h256(2);

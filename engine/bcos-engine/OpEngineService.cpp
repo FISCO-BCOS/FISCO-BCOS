@@ -151,9 +151,10 @@ std::optional<std::string> validateOpPayloadAttributes(
 }
 
 std::optional<std::string> validateOpNewPayloadRequest(
-    const NewPayloadRequest& request, bool jovianActive)
+    const NewPayloadRequest& request, bool jovianActive, bool isthmusActive)
 {
     const auto& payload = request.executionPayload;
+    bool const isthmus = isthmusActive || jovianActive;
 
     // release ExecutionPayload uses a single carrier: transactions[i].raw (no dual
     // rawTransactions mirror). Empty list is valid (deposit-only / empty blocks).
@@ -181,11 +182,16 @@ std::optional<std::string> validateOpNewPayloadRequest(
     {
         return std::string("parentBeaconBlockRoot must be a 32-byte hash for newPayloadV4");
     }
-    if (!payload.withdrawalsRoot.has_value())
+    if (isthmus)
     {
-        // Presence only: OP withdrawalsRoot is the MessagePasser storage root, not
-        // the empty-withdrawals trie Eth's withdrawalsRootFor() stamps (A9-14).
-        return std::string("withdrawalsRoot is required on the OP path (Isthmus+)");
+        if (!payload.withdrawalsRoot.has_value())
+        {
+            return std::string("withdrawalsRoot is required on the OP path (Isthmus+)");
+        }
+    }
+    else if (payload.withdrawalsRoot.has_value())
+    {
+        return std::string("non-nil withdrawalsRoot pre-Isthmus");
     }
     if (!payload.excessBlobGas.has_value() || *payload.excessBlobGas != 0)
     {

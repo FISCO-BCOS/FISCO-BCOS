@@ -95,8 +95,9 @@ inline std::optional<std::string> requireL1AttributesDeposit(
     }
     return std::nullopt;
 }
+/// Jovian implies Isthmus. Default isthmusActive is true.
 std::optional<std::string> validateOpNewPayloadRequest(
-    const NewPayloadRequest& request, bool jovianActive);
+    const NewPayloadRequest& request, bool jovianActive, bool isthmusActive = true);
 void applyOpHeaderConstants(bcos::protocol::BlockHeader& header);
 bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,

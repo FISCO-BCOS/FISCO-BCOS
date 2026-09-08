@@ -110,9 +110,6 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 
-/// Hash-relevant fields vs the locally built payload (op-geth ExecutableDataToBlock).
-/// Optional V3 fields are compared only when both sides have them (finding BL).
-/// Cache-miss (unexecuted external body) is SYNCING, not VALID — #5468.
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
 
@@ -540,18 +537,26 @@ private:
             auto parentKnown =
                 request.executionPayload.parentHash == m_forkchoiceState.headBlockHash ||
                 m_blockHashToPayloadId.contains(request.executionPayload.parentHash);
-            if (!parentKnown)
-            {
-                co_return engine_common::makeStatus(
-                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
-            }
-
             auto payloadIdIt = m_blockHashToPayloadId.find(request.executionPayload.blockHash);
-            if (payloadIdIt == m_blockHashToPayloadId.end())
+            auto builtIt = (payloadIdIt == m_blockHashToPayloadId.end()) ?
+                               m_payloadCache.end() :
+                               m_payloadCache.find(payloadIdIt->second);
+            bool const cacheHit = parentKnown && builtIt != m_payloadCache.end();
+            if (!cacheHit)
             {
-                // #5468 / finding E: unexecuted external payload. op-geth executes
-                // before VALID; we must not store the CL body and answer VALID.
-                // This leftover service has no EL sync, so SYNCING is terminal.
+                if (auto hashError = detail::matchReconstructedEthBlockHash(
+                        m_blockFactory->blockHeaderFactory(), request.executionPayload,
+                        request.parentBeaconBlockRoot, detail::ethBlockVersionForApi(version));
+                    hashError.has_value())
+                {
+                    co_return engine_common::makeStatus(
+                        PayloadValidationStatus::InvalidBlockHash, std::nullopt, hashError);
+                }
+                if (!parentKnown)
+                {
+                    co_return engine_common::makeStatus(
+                        PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+                }
                 // Rate-limit the warning so a retrying CL cannot flood the log.
                 static std::atomic<std::chrono::steady_clock::time_point> lastWarn{
                     std::chrono::steady_clock::time_point{}};
@@ -563,19 +568,13 @@ private:
                 {
                     BCOS_LOG(WARNING)
                         << LOG_BADGE("EngineService")
-                        << LOG_DESC("newPayload cache miss; answering SYNCING (#5468, no EL sync)")
+                        << LOG_DESC("newPayload cache miss; answering SYNCING")
                         << LOG_KV("blockHash", request.executionPayload.blockHash.hex());
                 }
                 co_return engine_common::makeStatus(
                     PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
             }
             payloadId = payloadIdIt->second;
-            auto builtIt = m_payloadCache.find(payloadId);
-            if (builtIt == m_payloadCache.end())
-            {
-                co_return engine_common::makeStatus(
-                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
-            }
             if (auto mismatch = detail::compareWithBuiltPayload(
                     request.executionPayload, builtIt->second.executionPayload))
             {

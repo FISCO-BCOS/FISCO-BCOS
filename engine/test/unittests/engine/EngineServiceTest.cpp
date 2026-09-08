@@ -985,9 +985,7 @@ BOOST_AUTO_TEST_CASE(new_payload_round_trips_deposit_raw_bytes)
         payload->executionPayload.transactions.size());
 }
 
-/// Parent known (via the locally built hash) but this blockHash was never built:
-/// op-geth would execute first; we must not VALID-store the CL body.
-BOOST_AUTO_TEST_CASE(new_payload_cache_miss_is_syncing)
+BOOST_AUTO_TEST_CASE(new_payload_cache_miss_wrong_hash_is_invalid)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
@@ -1007,8 +1005,10 @@ BOOST_AUTO_TEST_CASE(new_payload_cache_miss_is_syncing)
     request.executionPayload.blockHash =
         h256("6666666666666666666666666666666666666666666666666666666666666666");
     auto status = task::syncWait(engineService.newPayload(request, 3));
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(status.validationError.has_value());
+    BOOST_CHECK_NE(status.validationError->find("blockHash"), std::string::npos);
     BOOST_CHECK(!status.latestValidHash.has_value());
 
     auto stillBuilt = task::syncWait(engineService.getPayload(*result.payloadId, 3));

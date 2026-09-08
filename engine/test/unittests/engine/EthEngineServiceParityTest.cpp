@@ -687,8 +687,10 @@ BOOST_AUTO_TEST_CASE(generic_cache_only_parent_known_matches)
     auto legacyStatus = task::syncWait(pair.legacy.newPayload(legacyRequest, 3));
     auto newStatus = task::syncWait(pair.fresh.newPayload(newRequest, 3));
     checkStatusParity(legacyStatus, newStatus);
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(newStatus.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK_EQUAL(static_cast<int>(newStatus.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(newStatus.validationError.has_value());
+    BOOST_CHECK_NE(newStatus.validationError->find("blockHash"), std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(generic_unknown_parent_syncing_matches)
@@ -716,8 +718,10 @@ BOOST_AUTO_TEST_CASE(generic_unknown_parent_syncing_matches)
     auto legacyStatus = task::syncWait(pair.legacy.newPayload(legacyRequest, 3));
     auto newStatus = task::syncWait(pair.fresh.newPayload(newRequest, 3));
     checkStatusParity(legacyStatus, newStatus);
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(legacyStatus.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK_EQUAL(static_cast<int>(legacyStatus.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(legacyStatus.validationError.has_value());
+    BOOST_CHECK_NE(legacyStatus.validationError->find("blockHash"), std::string::npos);
 }
 
 template <typename Exception>
