@@ -7,7 +7,9 @@
 namespace bcos::scheduler_v1
 {
 
-/// Thrown when setVersion() selects an unsupported executor version or an unwired slot.
+/// Thrown for a negative version, and by scheduler(version)/getScheduler() when the
+/// selected slot is out of range or unwired. setVersion() deliberately does NOT throw on
+/// an unwired slot at runtime — see its definition.
 DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
 
 /// The executor version that selects the pure-Ethereum EthereumExecutor
@@ -57,6 +59,13 @@ public:
     /// eth_call pinned at a block height: forward to the selected scheduler.
     void callAtBlock(protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
+
+    /// Adopt a verify=false probe as the pending block. Forwarded so a caller reaching
+    /// OpScheduler through this wrapper gets its real adopt, not SchedulerInterface's
+    /// re-execute default.
+    void adoptProbeAsPending(bcos::protocol::Block::Ptr block,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>
+            callback) override;
 
     void reset([[maybe_unused]] std::function<void(Error::Ptr)> callback) override;
 
