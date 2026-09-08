@@ -470,34 +470,32 @@ TransactionStatus checkNonceNotMax(StateInputs const& in)
     return TransactionStatus::None;
 }
 
-/// The window below adds DEFAULT_WEB3_NONCE_CHECK_LIMIT to the account nonce in u256, which is
-/// boost::multiprecision::unchecked and would wrap silently near 2^256. That is safe only because
-/// NonceNotMax has already refused any account nonce at or above 2^64 - 1 -- an ordering
-/// dependency between two checks, pinned here so a reorder cannot quietly reopen it.
+/// The window rule (Web3NonceChecker::withinCommittedWindow) adds DEFAULT_WEB3_NONCE_CHECK_LIMIT
+/// to the account nonce in u256, which is boost::multiprecision::unchecked and would wrap
+/// silently near 2^256. That is safe only because NonceNotMax has already refused any account
+/// nonce at or above 2^64 - 1 -- an ordering dependency between two checks, pinned here so a
+/// reorder cannot quietly reopen it.
 static_assert(detail::indexOf(c_stateOrder, Check::NonceNotMax) <
               detail::indexOf(c_stateOrder, Check::Web3NonceWindow));
 
 TransactionStatus checkWeb3NonceWindow(StateInputs const& in)
 {
-    // Lower bound and queue depth are one check: they share a single account-nonce read, and the
-    // existing implementation expresses both in one comparison.
+    // Lower bound and queue depth are one check: they share a single account-nonce read. The
+    // rule itself is Web3NonceChecker's, and the pool's re-checks of pooled transactions run the
+    // same function over the same cached read (committedNonceStatus -> checkWeb3Nonce), so
+    // admission and re-check cannot disagree about a nonce.
     auto const& senderNonce = in.sender.value().nonce;
     if (!senderNonce.has_value())
     {
-        // Account not on chain yet. The existing Web3NonceChecker also declines to judge in this
-        // case (its storage-miss branch falls through without comparing), and matching it keeps
-        // this a pure refactor. Whether an unknown account should instead be treated as nonce 0
-        // is a separate question -- it would tighten queue-flooding behaviour.
+        // Account not on chain yet. Web3NonceChecker declines to judge in this case too
+        // (committedNonce() reports the account absent), and matching it keeps this a pure
+        // refactor. Whether an unknown account should instead be treated as nonce 0 is a
+        // separate question -- it would tighten queue-flooding behaviour.
         return TransactionStatus::None;
     }
-    auto const txNonce = u256(in.tx.nonce());
-    if (txNonce < *senderNonce)
+    if (!Web3NonceChecker::withinCommittedWindow(u256(in.tx.nonce()), *senderNonce))
     {
-        return TransactionStatus::NonceCheckFail;  // already used
-    }
-    if (txNonce > *senderNonce + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
-    {
-        return TransactionStatus::NonceCheckFail;  // too far ahead to queue
+        return TransactionStatus::NonceCheckFail;  // already used, or too far ahead to queue
     }
     return TransactionStatus::None;
 }

@@ -275,6 +275,9 @@ TransactionStatus MemoryStorage::committedNonceStatus(Transaction const& _tx) co
 {
     if (_tx.type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
     {
+        // committedNonce() through the FIB-59 cache, then Web3NonceChecker's window rule: the
+        // same read and the same function as admission's Web3NonceWindow, so what this refuses
+        // is what admission would refuse against the same committed nonce.
         return task::syncWait(m_config->web3NonceChecker()->checkWeb3Nonce(_tx, true));
     }
     // checkNonce covers the block limit as well as the committed nonce.

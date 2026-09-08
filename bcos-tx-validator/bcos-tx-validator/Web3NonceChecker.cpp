@@ -43,10 +43,6 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
         co_return TransactionStatus::NonceCheckFail;
     }
 
-    // sender is bytes view
-    auto const senderHex = toHex(sender);
-    auto nonceU256 = u256(nonce);
-
     // Note:
     // 在以太坊中，nonce是从0开始的，也代表着该地址发交易次数。例如：在存储中存储的是5，那么web3工具从rpc
     // api获取的transactionCount就是5，那么新的交易将从5开始发。
@@ -58,47 +54,28 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     {
         // memory nonce check nonce existence in memory first, if not exist, then check from storage
         TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce mem check fail")
-                          << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonce);
+                          << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", nonce);
         co_return TransactionStatus::NonceCheckFail;
     }
 
-    // Check ledger state nonce cache first; only query the ledger storage on a cache miss to avoid
-    // unconditional expensive I/O on every tx submission (FIB-59)
-    if (auto const nonceInLedger = co_await bcos::storage2::readOne(m_ledgerStateNonces, sender))
+    // The committed window: the account's nonce through the FIB-59 cache, then the one rule the
+    // admission layer's Web3NonceWindow applies to the same read. An account with no on-chain
+    // state is not judged -- see committedNonce().
+    auto const committed = co_await committedNonce(sender);
+    if (committed.has_value() && !withinCommittedWindow(u256(nonce), *committed))
     {
-        // Cache hit: validate against cached value and return without touching storage
-        auto nonceInLedgerValue = nonceInLedger.value();
-        if (nonceU256 < nonceInLedgerValue ||
-            nonceU256 > nonceInLedgerValue + bcos::protocol::DEFAULT_WEB3_NONCE_CHECK_LIMIT)
-        {
-            TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce ledger check fail")
-                              << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonceU256)
-                              << LOG_KV("nonceInLedger", nonceInLedgerValue);
-            co_return TransactionStatus::NonceCheckFail;
-        }
-        co_return TransactionStatus::None;
+        TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce ledger check fail")
+                          << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", nonce)
+                          << LOG_KV("nonceInLedger", *committed);
+        co_return TransactionStatus::NonceCheckFail;
     }
-
-    // Cache miss: query ledger storage
-    if (auto const storageState = co_await m_ledger->getStorageState(senderHex, 0);
-        storageState.has_value())
-    {
-        // nonce in storage is uint string
-        auto const nonceInStorage = u256(storageState.value().nonce);
-        // Monotonic cache update: only raise the cached value, never lower it (FIB-59)
-        co_await storage2::writeOneIf(m_ledgerStateNonces, sender, nonceInStorage,
-            [&](u256 const& existing) { return nonceInStorage > existing; });
-        if (nonceU256 < nonceInStorage ||
-            nonceU256 > nonceInStorage + bcos::protocol::DEFAULT_WEB3_NONCE_CHECK_LIMIT)
-        {
-            TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce storage check fail")
-                              << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonceU256)
-                              << LOG_KV("nonceInStorage", nonceInStorage);
-            co_return TransactionStatus::NonceCheckFail;
-        }
-    }
-    // TODO)): check balance？
     co_return TransactionStatus::None;
+}
+
+bool Web3NonceChecker::withinCommittedWindow(u256 const& txNonce, u256 const& committedNonce)
+{
+    return txNonce >= committedNonce &&
+           txNonce <= committedNonce + bcos::protocol::DEFAULT_WEB3_NONCE_CHECK_LIMIT;
 }
 
 task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
