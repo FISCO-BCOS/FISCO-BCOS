@@ -14,13 +14,23 @@
  * limitations under the License.
  *
  * @file EngineStorageCommit.h
- * @brief Shared engine commit helpers (queued-layer drain) used by the Eth/Op services.
+ * @brief Shared engine commit helpers (queued-layer drain, executable-tx selection, header
+ *        commitments) used by the Eth/Op services.
  */
 
 #pragma once
 
+#include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/engine/RawTransactionDispatch.h>
+#include <bcos-framework/protocol/Transaction.h>
+#include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
+#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-task/Task.h>
+#include <bcos-utilities/Bloom.h>
+#include <bcos-utilities/Common.h>
+#include <cstdint>
+#include <vector>
 
 namespace bcos::engine::engine_common
 {
@@ -46,6 +56,116 @@ task::Task<void> drainQueuedLayers(Storage& storage)
             co_return;
         }
     }
+}
+
+/// The executable transactions of an execution payload, index-parallel with their EIP-2718 type
+/// bytes. Raw-only (forced) entries have no executable form and are skipped. An unsupported
+/// envelope has no type byte at all, so it fails closed here rather than letting the
+/// receipts-root leaf silently lose its prefix.
+struct ExecutableTransactions
+{
+    std::vector<protocol::Transaction::Ptr> transactions;
+    std::vector<std::uint8_t> types;
+};
+
+template <class PayloadTransactions>
+ExecutableTransactions collectExecutableTransactions(PayloadTransactions const& payloadTransactions)
+{
+    ExecutableTransactions out;
+    out.transactions.reserve(payloadTransactions.size());
+    out.types.reserve(payloadTransactions.size());
+    for (auto const& tx : payloadTransactions)
+    {
+        if (tx.decoded == nullptr)
+        {
+            continue;
+        }
+        auto const typeByte = rawTransactionTypeByte(bcos::ref(tx.raw));
+        if (!typeByte.has_value())
+        {
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "execution payload carries an unsupported transaction "
+                                      "envelope"});
+        }
+        out.transactions.push_back(tx.decoded);
+        out.types.push_back(*typeByte);
+    }
+    return out;
+}
+
+/// The Ethereum header commitments over a block's transactions and receipts. Single source for
+/// both engine services: the leaf encoder, the trie construction and the receipt normalization
+/// must not drift, or the two producers commit different block hashes for the same block.
+struct HeaderCommitments
+{
+    bcos::h256 transactionsRoot;
+    bcos::h256 receiptsRoot;
+};
+
+/// Normalizes @p receipts in place, then builds both index-keyed MPT roots. The v2 executor's
+/// receipts carry neither a logsBloom nor a cumulativeGasUsed (a documented limitation) and the
+/// receipts-root leaf commits to both, so the bloom is derived from the logs when absent and the
+/// running gas prefix is filled when the scheduler did not provide one (BaselineScheduler::
+/// finishExecute does both for the PBFT path); a scheduler-provided value stays authoritative.
+/// One receipt per executed transaction — the leaf prefix is the transaction's type byte — so a
+/// count mismatch fails closed instead of indexing @p types out of range.
+template <class PayloadTransactions>
+HeaderCommitments buildHeaderCommitments(PayloadTransactions const& payloadTransactions,
+    std::vector<protocol::TransactionReceipt::Ptr> const& receipts,
+    std::vector<std::uint8_t> const& types)
+{
+    u256 cumulativeGasUsed = 0;
+    for (auto& receipt : receipts)
+    {
+        if (!receipt)
+        {
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
+                                  << bcos::errinfo_comment{"scheduler returned a null receipt"});
+        }
+        if (receipt->logsBloom().empty())
+        {
+            auto const bloom = bcos::getLogsBloom(receipt->logEntries());
+            receipt->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+        }
+        cumulativeGasUsed += receipt->gasUsed();
+        if (receipt->cumulativeGasUsed().empty())
+        {
+            receipt->setCumulativeGasUsed(cumulativeGasUsed.str());
+        }
+    }
+
+    std::vector<bcos::bytesConstRef> rawEnvelopes;
+    rawEnvelopes.reserve(payloadTransactions.size());
+    for (auto const& tx : payloadTransactions)
+    {
+        rawEnvelopes.emplace_back(bcos::ref(tx.raw));
+    }
+
+    HeaderCommitments out;
+    out.transactionsRoot = rawEnvelopes.empty() ?
+                               bcos::ledger::mpt::emptyRootHash() :
+                               bcos::ledger::mpt::calculateTransactionsRoot(rawEnvelopes);
+
+    if (receipts.size() != types.size())
+    {
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                  "scheduler returned a receipt count that does not match the "
+                                  "executed transactions"});
+    }
+    std::vector<bcos::bytes> receiptLeaves;
+    receiptLeaves.reserve(receipts.size());
+    for (std::size_t i = 0; i < receipts.size(); ++i)
+    {
+        receiptLeaves.push_back(bcos::ledger::mpt::encodeReceiptLeaf(*receipts[i], types[i]));
+    }
+    std::vector<bcos::bytesConstRef> receiptLeafRefs;
+    receiptLeafRefs.reserve(receiptLeaves.size());
+    for (auto const& leaf : receiptLeaves)
+    {
+        receiptLeafRefs.emplace_back(leaf.data(), leaf.size());
+    }
+    out.receiptsRoot = bcos::ledger::mpt::calculateReceiptsRoot(receiptLeafRefs);
+    return out;
 }
 
 }  // namespace bcos::engine::engine_common

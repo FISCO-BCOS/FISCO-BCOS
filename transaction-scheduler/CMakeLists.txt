@@ -13,9 +13,11 @@ include(GNUInstallDirs)
 # <bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h> (EngineMPTStateRoot.h, pulled in
 # by the installed EthEngineService.h). The target is deliberately NOT added to the export
 # set: it links bcos-storage, and exporting that would drag RocksDB/zstd into fiscobcosTargets.
-# The engine target advertises these include dirs itself.
+# DESTINATION is the include root like every other module, so the headers land at
+# include/bcos-transaction-scheduler/*.h and resolve through the same -I<prefix>/include the
+# rest of the package uses.
 install(DIRECTORY "bcos-transaction-scheduler"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bcos-transaction-scheduler"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     FILES_MATCHING PATTERN "*.h")
 
 if (TESTS)

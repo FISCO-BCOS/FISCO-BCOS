@@ -13,13 +13,12 @@ file(GLOB_RECURSE SRC_LIST "bcos-engine/*.cpp")
 add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include/bcos-engine>
     # The installed EngineMPTStateRoot.h includes <bcos-transaction-scheduler/...>, and that
-    # header in turn includes <bcos-storage/KeyPrefixes.h>. Both ship as headers in this
-    # package but are not exported CMake targets (exporting transaction-scheduler would drag
-    # RocksDB in through bcos-storage), so advertise their installed include dirs here.
-    $<INSTALL_INTERFACE:include/bcos-transaction-scheduler>
-    $<INSTALL_INTERFACE:include/bcos-storage>)
+    # header in turn includes <bcos-storage/KeyPrefixes.h>. Both packages ship those headers
+    # under the same include root as every other module (include/<module>/...), so no extra
+    # INSTALL_INTERFACE dir is needed — and none is exported as a CMake target, which keeps
+    # RocksDB out of fiscobcosTargets.
+    $<INSTALL_INTERFACE:include/bcos-engine>)
 target_include_directories(engine PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/transaction-scheduler>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/bcos-storage>)

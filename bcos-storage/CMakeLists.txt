@@ -29,7 +29,8 @@ include(GNUInstallDirs)
 # Headers only (the target itself stays out of the export set: RocksDB/zstd must not enter
 # fiscobcosTargets). KeyPrefixes.h is header-only and is included by the installed
 # bcos-transaction-scheduler/MPTNodeStorage.h, which the installed bcos-engine headers reach.
-install(DIRECTORY "bcos-storage" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bcos-storage"
+# DESTINATION is the include root like every other module: include/bcos-storage/*.h.
+install(DIRECTORY "bcos-storage" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     FILES_MATCHING PATTERN "*.h")
 
 if(TESTS)
