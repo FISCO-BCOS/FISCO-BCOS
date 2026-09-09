@@ -271,6 +271,11 @@ task::Task<StagedStoreCommit> stageOneStore(Store const& store, Backend& backend
         auto const policy = expiryBoundaryPolicy(boundaryAfterSeed(boundary, block), expiring);
         auto expired = co_await store.expire(backend, batch, expiring, policy);
         result.retired = std::move(expired.retired);
+        // Moving OUT of an optional leaves it engaged holding a moved-from value — here a
+        // RetiredBlock whose block number is intact and whose key list is empty. Publishing that
+        // would drop the block from the index's block map while leaving its versions behind, so
+        // the second copy is cleared rather than merely documented away.
+        expired.retired.reset();
         result.expired = std::move(expired);
         // The same predicate expire() applies to @p backend before writing the row, evaluated on
         // the boundary value already read above rather than by reading it a second time. A seed
