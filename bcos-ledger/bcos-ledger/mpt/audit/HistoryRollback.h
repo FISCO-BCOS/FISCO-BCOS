@@ -317,9 +317,12 @@ bcos::task::Task<RollbackReport> rollbackTo(Storage& storage, protocol::BlockNum
         // rollback: while the meta row survives, re-running the block is possible).
         //
         // RetentionBoundary::Keep — the default, spelled out because it is the load-bearing half
-        // of the difference from the commit path. This discards from the TOP, so the oldest block
-        // the store can answer for has not moved; advancing here would also refuse the very next
-        // step of this walk.
+        // of the difference from the commit path. That path drops the block leaving the window
+        // from the BOTTOM, so the oldest answerable block moves with it; this walk drops the
+        // newest one, and the oldest is untouched. Advancing here would ratchet the boundary up
+        // to the pre-rollback tip one block at a time (it is a max), and the node would then
+        // refuse every historical read below that height while the pre-images that answer them
+        // are still on disk.
         co_await stateStore.expire(storage, storage, block, history::RetentionBoundary::Keep);
         co_await trieStore.expire(storage, storage, block, history::RetentionBoundary::Keep);
     }
