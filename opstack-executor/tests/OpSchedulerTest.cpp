@@ -332,6 +332,9 @@ struct Fixture
     std::shared_ptr<bcos::ledger::Ledger> ledger;
     bcos::IOServicePool::Ptr ioServicePool{std::make_shared<bcos::IOServicePool>(1)};
     std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> scheduler;
+    /// The node's ONE history object; the scheduler publishes into it on every commit and the
+    /// cases below read its index. Declared after the scheduler so it is destroyed first.
+    std::shared_ptr<bcos::ledger::mpt::history::MPTHistory> mptHistory;
 
     Fixture()
       : legacyLedgerStorage(
@@ -347,7 +350,11 @@ struct Fixture
         // 0 = not retained, so a fixture that wants historical answers has to say so. The
         // depth is wider than any chain these cases drive, so the window guard only fires
         // where a case sets out to fire it.
-        scheduler->setHistoryDepths({.state = kHistoryDepth, .proof = kHistoryDepth});
+        mptHistory = std::make_shared<bcos::ledger::mpt::history::MPTHistory>(
+            bcos::ledger::mpt::history::HistoryDepths{
+                .state = kHistoryDepth, .proof = kHistoryDepth},
+            bcos::ledger::mpt::history::makeHistoryReader(backendStorage));
+        scheduler->setMPTHistory(mptHistory);
     }
 };
 
@@ -1716,19 +1723,16 @@ BOOST_AUTO_TEST_CASE(CallAtBlockCorruptHistoryRowIsStorageFault)
         BOOST_REQUIRE_MESSAGE(outBytes == v1Bytes, "block-0 call must read slot=V1");
     }
 
-    // Overwrite block 1's index row for that slot with an unknown tag byte.
+    // Overwrite block 1's shard row — the row every one of that block's pre-images lives in —
+    // with four bytes of garbage. The in-memory index still points a byte offset into it, so the
+    // read locates a version and then cannot decode it: the shape a corrupt row has under the
+    // optimized layout, where there is no separate index row left to corrupt.
     {
         namespace history = bcos::ledger::mpt::history;
-        auto const table = bcos::ledger::mpt::accountTableName(kContract);
-        bcos::h256 const slotZero{};  // the contract's slot 0 — the row the getter SLOADs
-        std::string const slotRowKey(
-            reinterpret_cast<char const*>(slotZero.data()), bcos::h256::SIZE);
-        bcos::executor_v1::StateKey const flatKey{table, slotRowKey};
         bcos::storage::Entry corrupt;
         corrupt.set(bcos::bytes{0xde, 0xad, 0xbe, 0xef});
         bcos::task::syncWait(bcos::storage2::writeOne(f.backendStorage,
-            bcos::executor_v1::StateKey{history::kStateHistory.index,
-                history::indexRowKey(history::historyKeyOf(flatKey), 1)},
+            bcos::executor_v1::StateKey{history::kStateHistory.shard, history::shardRowKey(1, 0)},
             std::move(corrupt)));
     }
 

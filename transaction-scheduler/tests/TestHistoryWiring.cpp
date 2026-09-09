@@ -16,13 +16,20 @@
  * @file TestHistoryWiring.cpp
  * @brief The commit-time half of the two MPT reverse histories, asserted where it is wired.
  *
- * The single-WriteBatch claim (G3, pathdb spec §9 and §13) is what these cases exist for: a
- * block's flat rows, its trie-node rows, BOTH histories' index and manifest rows, and the
- * expiry deletes of the blocks leaving the two windows must all reach the backend in ONE
- * merge, or a crash can leave the current state advanced with a block's history missing. The
- * counting backend is TestCommitSingleBatch.cpp's technique — shadow MemoryStorage's variadic
- * `merge`, which is the exact call mergeBackStorage makes on the latest backend — extended to
- * record, per merge, whether each key arrived as a write or as a deletion.
+ * Two claims live here.
+ *
+ * The single-WriteBatch claim (G3, pathdb spec §9 and §13): a block's flat rows, its trie-node
+ * rows, BOTH histories' meta and shard rows, and the expiry deletes of the blocks leaving the two
+ * windows must all reach the backend in ONE merge, or a crash can leave the current state
+ * advanced with a block's history missing. The counting backend is TestCommitSingleBatch.cpp's
+ * technique — shadow MemoryStorage's variadic `merge`, which is the exact call mergeBackStorage
+ * makes on the latest backend — extended to record, per merge, whether each key arrived as a
+ * write or as a deletion.
+ *
+ * The publish-after-persist claim (G9): the in-memory query index must learn about a block only
+ * once that merge has landed. Asserted on the two-phase API against the stores the scheduler has
+ * been publishing into — stage, drop, and the index is untouched; stage, merge, publish, and the
+ * block appears.
  *
  * Everything is in an anonymous namespace with HW-prefixed types so this TU's getLedgerConfig
  * tag_invoke stub cannot collide with the other scheduler test TUs under a unity build.
@@ -42,8 +49,10 @@
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/PathKey.h"
 #include "bcos-ledger/mpt/history/HistoryCommit.h"
+#include "bcos-ledger/mpt/history/HistoryRead.h"
 #include "bcos-ledger/mpt/history/HistoryRowCodec.h"
 #include "bcos-ledger/mpt/history/HistoryTables.h"
+#include "bcos-ledger/mpt/history/MPTHistory.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
@@ -99,7 +108,6 @@ struct HWCountingBackend
 
     size_t m_mergeCalls = 0;
     std::vector<std::vector<HWMergedKey>> m_mergedKeySets;
-
     template <class... FromStorages>
     task::AwaitableValue<void> merge(FromStorages&... fromStorages)
     {
@@ -158,12 +166,12 @@ std::vector<std::string> backendRowsOfTable(HWCountingBackend& backend, std::str
     return rows;
 }
 
-/// A manifest row key starts with the block number, big-endian, so a block's rows are exactly
-/// those whose key carries that prefix (HistoryRowCodec.h's layout).
-size_t countManifestsOfBlock(
+/// Every row of one block in a shard table — its meta row (8-byte key) and its shard rows
+/// (10-byte keys), which all start with the same big-endian block number (HistoryRowCodec.h).
+size_t countHistoryRowsOfBlock(
     HWCountingBackend& backend, std::string_view table, protocol::BlockNumber block)
 {
-    auto const prefix = history::manifestRowKey(block, 0).substr(0, sizeof(uint64_t));
+    auto const prefix = history::metaRowKey(block);
     auto const rows = backendRowsOfTable(backend, table);
     return static_cast<size_t>(std::ranges::count_if(
         rows, [&](std::string const& rowKey) { return rowKey.starts_with(prefix); }));
@@ -306,7 +314,7 @@ public:
         g_hwFeatures = features;
 
         mockScheduler.m_plan = &plan;
-        baselineScheduler.setHistoryDepths({.state = kDepth, .proof = kDepth});
+        useDepths(kDepth, kDepth);
         baselineScheduler.setMPTCommitObserver(deltaRecorder);
 
         fakeit::When(Method(mockLedger, asyncPrewriteBlock))
@@ -350,6 +358,32 @@ public:
         baselineScheduler.registerTransactionNotifier(
             [](protocol::BlockNumber, protocol::TransactionSubmitResultsPtr,
                 std::function<void(Error::Ptr)> callback) { callback(nullptr); });
+    }
+
+    /// Give the scheduler a fresh MPTHistory at the requested depths, rebuilt from whatever is
+    /// already on disk — the shape a restart with a changed nodeConfig [storage] has, which is
+    /// the only way depths ever change in production (they are read once, at wiring time).
+    void useDepths(protocol::BlockNumber state, protocol::BlockNumber proof)
+    {
+        mptHistory = std::make_shared<history::MPTHistory>(
+            history::HistoryDepths{.state = state, .proof = proof},
+            history::makeHistoryReader(backendStorage));
+        task::syncWait(mptHistory->rebuild(backendStorage));
+        baselineScheduler.setMPTHistory(mptHistory);
+    }
+
+    /// How many records the state history's index holds for one block, i.e. what the block's
+    /// meta row declares — asserted through the INDEX rather than by re-decoding the shard, so a
+    /// case that checks the count also checks that publishing happened.
+    std::optional<uint32_t> recordedStateCount(protocol::BlockNumber block) const
+    {
+        auto const meta = mptHistory->state().index().blockMeta(block);
+        return meta ? std::optional<uint32_t>{meta->recordCount} : std::nullopt;
+    }
+    std::optional<uint32_t> recordedTrieCount(protocol::BlockNumber block) const
+    {
+        auto const meta = mptHistory->trie().index().blockMeta(block);
+        return meta ? std::optional<uint32_t>{meta->recordCount} : std::nullopt;
     }
 
     /// One flat write per block, to a per-block slot of the same account, so every block has a
@@ -447,6 +481,9 @@ public:
     BaselineScheduler<decltype(multiLayerStorage), HWExecutor, HWWritingScheduler,
         ledger::LedgerInterface>
         baselineScheduler;
+    /// Declared after the scheduler so it outlives it: the scheduler holds a shared_ptr copy, and
+    /// this member is the one the cases read the index through.
+    std::shared_ptr<history::MPTHistory> mptHistory;
 };
 
 }  // namespace
@@ -461,8 +498,8 @@ BOOST_AUTO_TEST_CASE(historyRowsRideTheBlocksSingleMerge)
     runChain(kActivation);  // XOR block: no MPT, no history
     BOOST_REQUIRE_EQUAL(backendStorage.m_mergeCalls, 1);
     auto const& xorMerge = backendStorage.m_mergedKeySets[0];
-    BOOST_CHECK_EQUAL(countInTable(xorMerge, history::kStateHistory.index, false), 0);
-    BOOST_CHECK_EQUAL(countInTable(xorMerge, history::kTrieHistory.index, false), 0);
+    BOOST_CHECK_EQUAL(countInTable(xorMerge, history::kStateHistory.shard, false), 0);
+    BOOST_CHECK_EQUAL(countInTable(xorMerge, history::kTrieHistory.shard, false), 0);
 
     planBlock(kActivation + 1);
     commitOneBlock(executeOneBlock(kActivation + 1));
@@ -471,11 +508,14 @@ BOOST_AUTO_TEST_CASE(historyRowsRideTheBlocksSingleMerge)
     BOOST_REQUIRE_EQUAL(backendStorage.m_mergeCalls, 2);
     auto const& keys = backendStorage.m_mergedKeySets[1];
 
-    // All four history tables are present in that one merge...
-    BOOST_CHECK_GT(countInTable(keys, history::kStateHistory.index, false), 0U);
-    BOOST_CHECK_EQUAL(countInTable(keys, history::kStateHistory.manifest, false), 1U);
-    BOOST_CHECK_GT(countInTable(keys, history::kTrieHistory.index, false), 0U);
-    BOOST_CHECK_EQUAL(countInTable(keys, history::kTrieHistory.manifest, false), 1U);
+    // Both histories are present in that one merge, each as a meta row plus its one shard: this
+    // block's diff is far under the 64 KiB shard cap, so the whole of it is one row. Two rows per
+    // store, whatever the key count — which is the layout change PR-B made.
+    BOOST_CHECK_EQUAL(countInTable(keys, history::kStateHistory.shard, false), 2U);
+    BOOST_CHECK_EQUAL(countInTable(keys, history::kTrieHistory.shard, false), 2U);
+    // The first recorded block also seeds each store's retention boundary, in the same batch.
+    BOOST_CHECK_EQUAL(countInTable(keys, history::kStateHistory.boundary, false), 1U);
+    BOOST_CHECK_EQUAL(countInTable(keys, history::kTrieHistory.boundary, false), 1U);
     // ...alongside the trie-node rows and the flat state rows that block wrote.
     BOOST_CHECK_GT(countInTable(keys, ledger::mpt::kMPTAccountTable, false), 0U);
     auto address = Address{};
@@ -483,29 +523,108 @@ BOOST_AUTO_TEST_CASE(historyRowsRideTheBlocksSingleMerge)
     auto const table = ledger::mpt::accountTableName(address);
     BOOST_CHECK_EQUAL(countInTable(keys, table, false), 2U);
 
-    // The state history recorded exactly the flat rows the block changed, no more.
-    BOOST_CHECK_EQUAL(countInTable(keys, history::kStateHistory.index, false), 2U);
+    // The state history recorded exactly the flat rows the block changed, no more — read back
+    // from the published index, which also proves publishBlockHistory ran.
+    BOOST_REQUIRE(recordedStateCount(kActivation + 1).has_value());
+    BOOST_CHECK_EQUAL(*recordedStateCount(kActivation + 1), 2U);
+    BOOST_CHECK(mptHistory->state().recordedBlock(kActivation + 1));
+    BOOST_CHECK(mptHistory->trie().recordedBlock(kActivation + 1));
+}
+
+/// G9: the index learns about a block exactly when publishBlockHistory runs — not when the rows
+/// are written, and never when the write did not land.
+///
+/// Asserted on the two-phase API directly, against the SAME stores the scheduler has been
+/// publishing into, so the "before" state is a real chain's index rather than a fixture's:
+///
+///  1. stage block first + 1 into a batch of its own. That is byte-for-byte what coCommitBlock
+///     does before the merge, and it is the state a FAILED merge leaves behind: rows in a batch
+///     that never reaches the backend, and a HistoryCommitStage nobody publishes;
+///  2. drop the stage, as a scope exit after a throwing merge does. The index must be untouched —
+///     the block absent, a query for it refused, and a query at the height below it answering
+///     exactly as before;
+///  3. re-stage the same block (the retry), merge the batch, and only then publish. Both flip.
+///
+/// The failure is modelled by dropping the stage rather than by making the backend's merge throw.
+/// That injection was tried and abandoned: an exception raised under a `co_await` does not reach
+/// coCommitBlock's `catch (std::exception&)` on this toolchain, the coroutine frame is never
+/// destroyed, its commit lock is never released, and the process dies at fixture teardown. The
+/// finding is reported separately; what it cannot do is carry this assertion.
+BOOST_AUTO_TEST_CASE(publishingIsWhatMakesAStagedBlockVisible)
+{
+    auto const first = kActivation + 1;  // first MPT block
+    runChain(first);                     // the activation block plus the first MPT block
+
+    // Baseline: the state history covers `first`'s parent, and block first + 1 is not in it.
+    BOOST_REQUIRE(mptHistory->state().recordedBlock(first));
+    BOOST_REQUIRE(!mptHistory->state().recordedBlock(first + 1));
+    auto const versionsBefore = mptHistory->state().index().versionCount();
+    auto const blocksBefore = mptHistory->state().index().blockCount();
+
+    std::map<ledger::mpt::PathKey, std::optional<bcos::bytes>> const noTrieChanges;
+
+    // 1 + 2: staged, then dropped. An empty diff is enough — the block still gets
+    // Meta{shardCount = 1, recordCount = 0} in each store, which is what recordedBlock and
+    // historyCoversBlock answer from.
+    {
+        HWMutableStorage abandonedBatch;
+        auto abandoned = task::syncWait(history::stageBlockHistory(backendStorage, abandonedBatch,
+            first + 1, bcos::h256{}, std::span<StateKey const>{}, noTrieChanges, *mptHistory));
+        BOOST_REQUIRE(abandoned.state.staged.has_value());
+        BOOST_REQUIRE(abandoned.trie.staged.has_value());
+    }  // the batch and the stage go out of scope together, exactly as a failed merge leaves them
+
+    BOOST_CHECK(!mptHistory->state().recordedBlock(first + 1));
+    BOOST_CHECK(!mptHistory->trie().recordedBlock(first + 1));
+    BOOST_CHECK_EQUAL(mptHistory->state().index().versionCount(), versionsBefore);
+    BOOST_CHECK_EQUAL(mptHistory->state().index().blockCount(), blocksBefore);
+    BOOST_CHECK(!history::historyCoversBlock(mptHistory->state(), first, first + 1));
+    BOOST_CHECK(history::historyCoversBlock(mptHistory->state(), first - 1, first));
+    BOOST_CHECK_EQUAL(
+        countHistoryRowsOfBlock(backendStorage, history::kStateHistory.shard, first + 1), 0U);
+
+    // 3: the retry. Same block, fresh batch, merge, then publish — the order coCommitBlock uses.
+    HWMutableStorage batch;
+    auto stage = task::syncWait(history::stageBlockHistory(backendStorage, batch, first + 1,
+        bcos::h256{}, std::span<StateKey const>{}, noTrieChanges, *mptHistory));
+    BOOST_CHECK(!mptHistory->state().recordedBlock(first + 1));
+    task::syncWait(storage2::merge(backendStorage, batch));
+    history::publishBlockHistory(*mptHistory, std::move(stage));
+
+    BOOST_CHECK(mptHistory->state().recordedBlock(first + 1));
+    BOOST_CHECK(mptHistory->trie().recordedBlock(first + 1));
+    BOOST_CHECK(history::historyCoversBlock(mptHistory->state(), first, first + 1));
+    // And what it published is on disk: the block's meta row plus its one shard, per store.
+    BOOST_CHECK_EQUAL(
+        countHistoryRowsOfBlock(backendStorage, history::kStateHistory.shard, first + 1), 2U);
+    BOOST_CHECK_EQUAL(
+        countHistoryRowsOfBlock(backendStorage, history::kTrieHistory.shard, first + 1), 2U);
 }
 
 /// A depth of 0 is "not retained", and it has to mean NOTHING is written — not "written and
 /// immediately expired". The block itself must still commit normally.
 BOOST_AUTO_TEST_CASE(zeroDepthWritesNoHistory)
 {
-    baselineScheduler.setHistoryDepths({.state = 0, .proof = 0});
+    useDepths(0, 0);
     runChain(kActivation + 1);
 
     BOOST_REQUIRE_EQUAL(backendStorage.m_mergeCalls, 2);
     for (auto const& keys : backendStorage.m_mergedKeySets)
     {
-        BOOST_CHECK_EQUAL(countInTable(keys, history::kStateHistory.index, false), 0U);
-        BOOST_CHECK_EQUAL(countInTable(keys, history::kStateHistory.manifest, false), 0U);
-        BOOST_CHECK_EQUAL(countInTable(keys, history::kTrieHistory.index, false), 0U);
-        BOOST_CHECK_EQUAL(countInTable(keys, history::kTrieHistory.manifest, false), 0U);
+        BOOST_CHECK_EQUAL(countInTable(keys, history::kStateHistory.shard, false), 0U);
+        BOOST_CHECK_EQUAL(countInTable(keys, history::kStateHistory.boundary, false), 0U);
+        BOOST_CHECK_EQUAL(countInTable(keys, history::kTrieHistory.shard, false), 0U);
+        BOOST_CHECK_EQUAL(countInTable(keys, history::kTrieHistory.boundary, false), 0U);
     }
     // The MPT block still committed its trie nodes — the depth governs the history, nothing else.
     BOOST_CHECK_GT(
         countInTable(backendStorage.m_mergedKeySets[1], ledger::mpt::kMPTAccountTable, false), 0U);
-    BOOST_CHECK(backendRowsOfTable(backendStorage, history::kTrieHistory.manifest).empty());
+    BOOST_CHECK(backendRowsOfTable(backendStorage, history::kTrieHistory.shard).empty());
+    // And nothing was published either: a store at depth 0 is never rebuilt, so its index stays
+    // Empty and every historical read is refused rather than answered from the current state.
+    BOOST_CHECK(!mptHistory->state().recordedBlock(kActivation + 1));
+    BOOST_CHECK(mptHistory->state().index().state() == ledger::mpt::history::IndexState::Empty);
+    BOOST_CHECK(!history::historyCoversBlock(mptHistory->state(), kActivation, kActivation + 1));
 }
 
 /// The trie history records one entry per position the block touched — PathDiff::preimages,
@@ -519,38 +638,42 @@ BOOST_AUTO_TEST_CASE(trieHistoryEntryCountMatchesThePathDiff)
     auto const recorded = deltaRecorder->m_preimageCounts.find(block);
     BOOST_REQUIRE(recorded != deltaRecorder->m_preimageCounts.end());
     BOOST_REQUIRE_GT(recorded->second, 0U);
-    BOOST_CHECK_EQUAL(
-        countInTable(backendStorage.m_mergedKeySets[1], history::kTrieHistory.index, false),
-        recorded->second);
+    BOOST_REQUIRE(recordedTrieCount(block).has_value());
+    BOOST_CHECK_EQUAL(*recordedTrieCount(block), recorded->second);
 }
 
 /// spec §12: the block leaving each window is expired IN THE COMMITTING BLOCK'S BATCH, so an
-/// index row can never outlive the shard that lists it, crash or no crash. With a depth of 2,
-/// committing block N drops block N-2.
+/// index version can never outlive the shard that holds it, crash or no crash. With a depth of 2,
+/// committing block N drops block N-2 — and the index drops it in the same publish.
 BOOST_AUTO_TEST_CASE(expiryDeletesRideTheSameBatch)
 {
     auto const first = kActivation + 1;  // first MPT block
     runChain(first + 2);                 // first, first+1, first+2 — plus the XOR activation block
 
     // Block first+2's commit expires block first (first+2 - depth). Its deletes are in THAT
-    // merge, not in one of their own.
+    // merge, not in one of their own: the block's meta row and its one shard row, per store.
     auto const& lastMerge = backendStorage.m_mergedKeySets.back();
-    BOOST_CHECK_GT(countInTable(lastMerge, history::kStateHistory.index, true), 0U);
-    BOOST_CHECK_EQUAL(countInTable(lastMerge, history::kStateHistory.manifest, true), 1U);
-    BOOST_CHECK_GT(countInTable(lastMerge, history::kTrieHistory.index, true), 0U);
-    BOOST_CHECK_EQUAL(countInTable(lastMerge, history::kTrieHistory.manifest, true), 1U);
+    BOOST_CHECK_EQUAL(countInTable(lastMerge, history::kStateHistory.shard, true), 2U);
+    BOOST_CHECK_EQUAL(countInTable(lastMerge, history::kTrieHistory.shard, true), 2U);
     // Still one merge per block: expiry added deletes, not a second write path.
     BOOST_CHECK_EQUAL(backendStorage.m_mergeCalls, 4U);
 
-    // And the effect landed: block `first` has no manifest left, the two younger blocks do.
+    // And the effect landed on disk: block `first` has no rows left, the younger blocks do.
     BOOST_CHECK_EQUAL(
-        countManifestsOfBlock(backendStorage, history::kStateHistory.manifest, first), 0U);
+        countHistoryRowsOfBlock(backendStorage, history::kStateHistory.shard, first), 0U);
     BOOST_CHECK_EQUAL(
-        countManifestsOfBlock(backendStorage, history::kTrieHistory.manifest, first), 0U);
+        countHistoryRowsOfBlock(backendStorage, history::kTrieHistory.shard, first), 0U);
     BOOST_CHECK_EQUAL(
-        countManifestsOfBlock(backendStorage, history::kStateHistory.manifest, first + 1), 1U);
+        countHistoryRowsOfBlock(backendStorage, history::kStateHistory.shard, first + 1), 2U);
     BOOST_CHECK_EQUAL(
-        countManifestsOfBlock(backendStorage, history::kTrieHistory.manifest, first + 2), 1U);
+        countHistoryRowsOfBlock(backendStorage, history::kTrieHistory.shard, first + 2), 2U);
+
+    // ...and in memory, in the same publish: the retired block is gone from the index too, so no
+    // lookup can locate a version whose shard row was just deleted.
+    BOOST_CHECK(!mptHistory->state().recordedBlock(first));
+    BOOST_CHECK(!mptHistory->trie().recordedBlock(first));
+    BOOST_CHECK(mptHistory->state().recordedBlock(first + 1));
+    BOOST_CHECK(mptHistory->state().recordedBlock(first + 2));
 }
 
 /// spec §13's retention boundary as the commit path actually writes it, in the two shapes where
@@ -563,6 +686,9 @@ BOOST_AUTO_TEST_CASE(expiryDeletesRideTheSameBatch)
 /// (ii) A raised depth. Once the chain is deep enough for expiry to bite, the boundary tracks
 /// N - H upward; raising H across a restart makes the next commit's N - H jump BACKWARDS. The
 /// boundary must not follow it down, because the blocks in between are already deleted.
+///
+/// Each assertion is made against the DISK row and against the in-memory index, which must agree:
+/// the index applies exactly what the batch wrote.
 BOOST_AUTO_TEST_CASE(retentionBoundaryTracksTheOldestAnswerableBlock)
 {
     auto const first = kActivation + 1;  // the first MPT block, and the first recorded one
@@ -570,15 +696,16 @@ BOOST_AUTO_TEST_CASE(retentionBoundaryTracksTheOldestAnswerableBlock)
     // (i) A window narrower than the chain height, so the first MPT block's own commit ALSO
     // expires block first - depth. That block is far below anything this store ever recorded,
     // and the boundary must stay at the seed rather than follow it down.
-    baselineScheduler.setHistoryDepths({.state = 128, .proof = 128});
+    useDepths(128, 128);
     runChain(first);
     auto const seeded = boundaryOf(history::kStateHistory);
     BOOST_REQUIRE_MESSAGE(seeded.has_value(), "the first recorded block must seed the boundary");
     BOOST_CHECK_EQUAL(*seeded, first - 1);
     BOOST_CHECK_EQUAL(boundaryOf(history::kTrieHistory).value_or(-1), first - 1);
+    BOOST_CHECK_EQUAL(mptHistory->state().index().boundary().value_or(-1), first - 1);
 
     // Two more blocks under a NARROW window: now expiry bites and the boundary climbs with it.
-    baselineScheduler.setHistoryDepths({.state = 1, .proof = 1});
+    useDepths(1, 1);
     planBlock(first + 1);
     commitOneBlock(executeOneBlock(first + 1));
     planBlock(first + 2);
@@ -586,17 +713,23 @@ BOOST_AUTO_TEST_CASE(retentionBoundaryTracksTheOldestAnswerableBlock)
     auto const climbed = boundaryOf(history::kStateHistory);
     BOOST_REQUIRE(climbed.has_value());
     BOOST_CHECK_EQUAL(*climbed, first + 1);  // block first+2 expired first+1
+    BOOST_CHECK_EQUAL(mptHistory->state().index().boundary().value_or(-1), first + 1);
 
     // (ii) The operator raises the depth. block - depth is now well below the boundary, and the
     // boundary must hold: the blocks in between are gone, and claiming them intact would make
     // every query for them answer from the current state.
-    baselineScheduler.setHistoryDepths({.state = 200, .proof = 200});
+    useDepths(200, 200);
     planBlock(first + 3);
     commitOneBlock(executeOneBlock(first + 3));
     auto const held = boundaryOf(history::kStateHistory);
     BOOST_REQUIRE(held.has_value());
     BOOST_CHECK_MESSAGE(*held == first + 1,
         "raising the depth must not walk the boundary back down, got " << *held);
+    BOOST_CHECK_EQUAL(mptHistory->state().index().boundary().value_or(-1), first + 1);
+    // A query below the boundary is refused rather than answered from the current state (G6).
+    BOOST_CHECK_THROW(
+        std::ignore = history::historyCoversBlock(mptHistory->state(), first, first + 3),
+        history::HistoryPruned);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -54,6 +54,8 @@
 #include "bcos-ledger/mpt/Classify.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-ledger/mpt/StorageValueCodec.h"
+#include "bcos-ledger/mpt/history/HistoryRead.h"
+#include "bcos-ledger/mpt/history/MPTHistory.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-storage/CheckpointRocksDBStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
@@ -225,6 +227,7 @@ public:
             *m_ledger, *m_txpool, *m_transactionSubmitResultFactory, *m_hashImpl)
     {
         m_schedulerImpl.m_plan = &m_plan;
+        useHistoryDepths(0, 0);
         m_baselineScheduler.registerBlockNumberNotifier([](protocol::BlockNumber) {});
         m_baselineScheduler.registerTransactionNotifier(
             [](protocol::BlockNumber, protocol::TransactionSubmitResultsPtr,
@@ -463,6 +466,19 @@ public:
         return address;
     }
 
+    /// Give the node a fresh MPTHistory at these retention depths, rebuilt from whatever is
+    /// already on disk — the shape Initializer::init has at startup, and the only way depths ever
+    /// change in production (they are read once, at wiring time). Production injects them from
+    /// nodeConfig [storage]; the default here is 0/0, so a fixture that wants history must ask.
+    void useHistoryDepths(protocol::BlockNumber state, protocol::BlockNumber proof)
+    {
+        m_mptHistory = std::make_shared<ledger::mpt::history::MPTHistory>(
+            ledger::mpt::history::HistoryDepths{.state = state, .proof = proof},
+            ledger::mpt::history::makeHistoryReader(m_multiLayerStorage.latestBackend()));
+        task::syncWait(m_mptHistory->rebuild(m_multiLayerStorage.latestBackend()));
+        m_baselineScheduler.setMPTHistory(m_mptHistory);
+    }
+
     TmpDirGuard m_tmpdir;
     FCCheckpointStorage m_checkpointStorage;
     FCMultiLayerStorage m_multiLayerStorage;
@@ -482,6 +498,10 @@ public:
     scheduler_v1::BaselineScheduler<FCMultiLayerStorage, FCExecutor, FCWritingScheduler,
         bcos::ledger::Ledger>
         m_baselineScheduler;
+    /// The node's ONE history object — the scheduler publishes into it and the RPC harnesses read
+    /// it. Declared after the scheduler so it is destroyed first; the scheduler holds its own
+    /// shared_ptr, and both borrow the backend declared above them.
+    std::shared_ptr<ledger::mpt::history::MPTHistory> m_mptHistory;
 };
 
 }  // namespace bcos::test::fullchain

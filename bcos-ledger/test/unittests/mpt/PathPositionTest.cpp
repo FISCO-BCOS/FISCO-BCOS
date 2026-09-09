@@ -190,8 +190,12 @@ BOOST_AUTO_TEST_CASE(SupersededRootReadsThroughTheTrieHistory)
     auto const rootN1 = blockN1.root;
     BOOST_REQUIRE(rootN != rootN1);
     BOOST_REQUIRE(!blockN1.preimages.empty());
-    bcos::task::syncWait(history::commitBlockHistory(historyBackend, historyBackend,
-        /*block*/ 1, {}, blockN1.preimages, {.state = 0, .proof = 128}));
+    history::MPTHistory mptHistory{{.state = 0, .proof = 128}, nullptr};
+    auto stage = bcos::task::syncWait(history::stageBlockHistory(historyBackend, historyBackend,
+        /*block*/ 1, bcos::h256{}, {}, blockN1.preimages, mptHistory));
+    // The write and the publish are two steps (G9); here they are adjacent because the "batch"
+    // and the "backend" are the same store, so it has already landed by the time we publish.
+    history::publishBlockHistory(mptHistory, std::move(stage));
 
     // The raw node store: the tip reads, the superseded root does not.
     Trie<NodeStorage> const tip(storage, TrieScope::account(), rootN1);
@@ -206,7 +210,8 @@ BOOST_AUTO_TEST_CASE(SupersededRootReadsThroughTheTrieHistory)
     // Through the history plane at block 0, every one of them answers again — and the value is
     // block 0's, which is what makes this more than "it stopped throwing".
     using HistoricalNodes = history::HistoricalNodeStorage<NodeStorage, HistoryBackend>;
-    HistoricalNodes atBlock0(storage, historyBackend, /*block*/ 0, /*tip*/ 1, /*depth*/ 128);
+    HistoricalNodes atBlock0(
+        storage, mptHistory.trie(), historyBackend, /*block*/ 0, /*tip*/ 1, /*depth*/ 128);
     BOOST_CHECK(bcos::task::syncWait(holdsTrieRoot(atBlock0, TrieScope::account(), rootN)));
     Trie<HistoricalNodes> const historicalTrie(atBlock0, TrieScope::account(), rootN);
     auto const valueAt0 = bcos::task::syncWait(historicalTrie.get(keyA));
@@ -217,7 +222,8 @@ BOOST_AUTO_TEST_CASE(SupersededRootReadsThroughTheTrieHistory)
 
     // Out of window: the guard fires before the seek and the read is refused, rather than
     // silently degrading into the current version (spec B.3, G5).
-    HistoricalNodes outOfWindow(storage, historyBackend, /*block*/ 0, /*tip*/ 1, /*depth*/ 1);
+    HistoricalNodes outOfWindow(
+        storage, mptHistory.trie(), historyBackend, /*block*/ 0, /*tip*/ 1, /*depth*/ 1);
     Trie<HistoricalNodes> const prunedTrie(outOfWindow, TrieScope::account(), rootN);
     BOOST_CHECK_THROW(bcos::task::syncWait(prunedTrie.get(keyA)), history::HistoryPruned);
 }

@@ -70,7 +70,7 @@ using namespace bcos::scheduler_v1;
 
 using MWMutableStorage = bcos::test::sharedmock::SharedMutableStorage;
 // The backend is behaviourally a stock flat MemoryStorage: with trie nodes as ordinary
-// path-addressed StateKey rows there is nothing MPT-specific left for a backend to implement.
+// path-addressed StateKey rows, there is nothing MPT-specific left for a backend to implement.
 using MWBackendStorage = bcos::test::sharedmock::SharedBackendStorage;
 using MWCheckpointBackend = bcos::test::sharedmock::SharedCheckpointBackend;
 using MWMultiLayerStorage = bcos::test::sharedmock::SharedMultiLayerStorage;

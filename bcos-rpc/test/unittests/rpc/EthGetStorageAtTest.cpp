@@ -29,6 +29,7 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/history/HistoryCommit.h>
 #include <bcos-ledger/mpt/history/HistoryRead.h>
+#include <bcos-ledger/mpt/history/MPTHistory.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-task/Wait.h>
@@ -86,8 +87,26 @@ public:
     /// "unchanged since B" answer is read from it, so the test plane has to be the same object.
     void wireHistory(bcos::protocol::BlockNumber depth = 128)
     {
-        nodeService->setMPTHistoryReader(mpt::history::makeHistoryReader(m_committed));
-        nodeService->setMPTHistoryDepths({.state = depth, .proof = depth});
+        m_history = std::make_shared<mpt::history::MPTHistory>(
+            mpt::history::HistoryDepths{.state = depth, .proof = depth},
+            mpt::history::makeHistoryReader(m_committed));
+        nodeService->setMPTHistory(m_history);
+        refreshIndex();
+    }
+
+    /// Recompute the in-memory index from whatever is on the plane now.
+    ///
+    /// The helpers below write history rows straight to the committed plane rather than through
+    /// a commit, so nothing publishes them; a rebuild is how the index catches up, and it is the
+    /// same walk Initializer::init runs at startup. Called after every write, so each case's
+    /// query sees an index that describes the rows the case just laid down — including the
+    /// retention boundary, which a query now reads from memory rather than from disk.
+    void refreshIndex()
+    {
+        if (m_history)
+        {
+            task::syncWait(m_history->state().rebuild(m_committed));
+        }
     }
 
     /// Record one block's state-history entries: (row key, the value the row held BEFORE this
@@ -114,8 +133,11 @@ public:
             entries.emplace_back(mpt::history::HistoryEntry{
                 .key = mpt::history::historyKeyOf(keys.back()), .oldValue = view});
         }
-        task::syncWait(mpt::history::StateHistoryStore::put(
-            m_committed, block, entries, /*shardByteCap*/ 64 * 1024));
+        // No blockHash: nothing here reads the Meta row's hash, and a fabricated one would look
+        // like a claim about which chain these rows belong to.
+        task::syncWait(mpt::history::StateHistoryStore{}.put(
+            m_committed, block, bcos::h256{}, entries, /*shardByteCap*/ 64 * 1024));
+        refreshIndex();
     }
 
     /// The retention boundary the commit path seeds with its first recorded block; a query reads
@@ -124,6 +146,7 @@ public:
     {
         task::syncWait(
             mpt::history::StateHistoryStore::writeRetentionBoundary(m_committed, oldestIntact));
+        refreshIndex();
     }
 
     /// A row as it stands NOW on the committed plane — what an unchanged-since-B key resolves to.
@@ -250,6 +273,9 @@ public:
     /// Stands in for the committed state backend: BOTH the history rows and the current flat
     /// rows live here, because that is the one plane a historical read touches.
     StateRowStorage m_committed;
+    /// The node's history object, built by wireHistory(). Null until then, which is the
+    /// "MPT not enabled on this node" case one of the tests below asserts.
+    std::shared_ptr<mpt::history::MPTHistory> m_history;
     LatestStateStorage m_latestState;
     bcos::Address address{std::string("0x00000000000000000000000000000000000000ab")};
     h256 slotA{1U};

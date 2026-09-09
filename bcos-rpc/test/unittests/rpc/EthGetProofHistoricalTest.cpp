@@ -83,16 +83,38 @@ struct EgpEndpointHarness
     rpc::NodeService::Ptr m_nodeService;
     std::unique_ptr<rpc::EthEndpoint> m_endpoint;
 
+    std::shared_ptr<mpt::history::MPTHistory> m_history;
+
+    /// @param depth the retention window this READER runs with, for both stores. It is a
+    ///        separate MPTHistory from the fixture's on purpose: a reader's window is a
+    ///        node-local parameter, so "the chain recorded 128 blocks and this node serves 1"
+    ///        is a real configuration, and it is what the out-of-window cases below set up. The
+    ///        index is rebuilt from the same rows the fixture's commits wrote, exactly as a
+    ///        restart with a changed nodeConfig would.
     EgpEndpointHarness(
-        FullChainFixture& fixture, EgpNodeStorage& nodes, protocol::BlockNumber proofDepth)
+        FullChainFixture& fixture, EgpNodeStorage& nodes, protocol::BlockNumber depth)
     {
         m_nodeService = std::make_shared<rpc::NodeService>(fixture.m_ledger, nullptr,
             fixture.m_txpool, nullptr, nullptr, fixture.m_blockFactory, nullptr);
         m_nodeService->setMPTNodeReader(std::make_shared<rpc::NodeService::MPTNodeReader>(nodes));
-        m_nodeService->setMPTHistoryReader(
+        m_history = std::make_shared<mpt::history::MPTHistory>(
+            mpt::history::HistoryDepths{.state = depth, .proof = depth},
             mpt::history::makeHistoryReader(fixture.m_multiLayerStorage.latestBackend()));
-        m_nodeService->setMPTHistoryDepths({.state = proofDepth, .proof = proofDepth});
+        task::syncWait(m_history->rebuild(fixture.m_multiLayerStorage.latestBackend()));
+        m_nodeService->setMPTHistory(m_history);
         m_endpoint = std::make_unique<rpc::EthEndpoint>(m_nodeService, nullptr, false);
+    }
+
+    /// Re-window this reader with different depths per store, rebuilding the index over the same
+    /// rows. Depths live on the MPTHistory, so changing them means a new one — which is what a
+    /// restart with a changed nodeConfig does.
+    void setDepths(protocol::BlockNumber state, protocol::BlockNumber proof)
+    {
+        auto backend = m_history->backend();
+        m_history = std::make_shared<mpt::history::MPTHistory>(
+            mpt::history::HistoryDepths{.state = state, .proof = proof}, backend);
+        task::syncWait(m_history->rebuild(*backend));
+        m_nodeService->setMPTHistory(m_history);
     }
 
     /// Direct endpoint call with EIP-1186 params; JsonRpcException escapes to the caller.
@@ -150,7 +172,7 @@ struct EgpChain
         fixture.enableFeatureFromBlock("feature_mpt_state_root", 2);
         // Production injects these from nodeConfig [storage]; the scheduler defaults to 0, so a
         // fixture that wants history has to ask for it.
-        fixture.m_baselineScheduler.setHistoryDepths({.state = 128, .proof = 128});
+        fixture.useHistoryDepths(128, 128);
 
         auto const filler = FullChainFixture::makeAddress(0xF1);
         fixture.planBlock(1, {FullChainFixture::balanceRow(account, "1000")});  // XOR era
@@ -183,7 +205,7 @@ BOOST_AUTO_TEST_CASE(ProofAtPastBlockAndAtTipBothVerify)
 
     EgpNodeStorage nodes;
     egpLoadNodes(fixture, nodes);
-    EgpEndpointHarness harness{fixture, nodes, /*proofDepth*/ 128};
+    EgpEndpointHarness harness{fixture, nodes, /*depth*/ 128};
 
     // (i) The tip: unchanged behaviour, the node rows answer directly.
     auto const tipProof = egpProofFromJson(harness.getProof(chain.account.hexPrefixed(), "latest"));
@@ -221,7 +243,7 @@ BOOST_AUTO_TEST_CASE(ProofBeyondTheRetainedWindowIsMinus32004)
     EgpNodeStorage nodes;
     egpLoadNodes(fixture, nodes);
     // depth 1 at tip 5 retains block 5 alone: block 4 is the first block outside.
-    EgpEndpointHarness harness{fixture, nodes, /*proofDepth*/ 1};
+    EgpEndpointHarness harness{fixture, nodes, /*depth*/ 1};
 
     // Positive anchor: the tip is unaffected by the depth.
     BOOST_CHECK_NO_THROW(harness.getProof(chain.account.hexPrefixed(), "latest"));
@@ -240,7 +262,7 @@ BOOST_AUTO_TEST_CASE(ProofBeyondTheRetainedWindowIsMinus32004)
 
     // Widening the window brings the same height back — the refusal is the parameter's doing,
     // not a broken chain.
-    EgpEndpointHarness wide{fixture, nodes, /*proofDepth*/ 128};
+    EgpEndpointHarness wide{fixture, nodes, /*depth*/ 128};
     auto const proof = egpProofFromJson(wide.getProof(chain.account.hexPrefixed(), "0x3"));
     BOOST_CHECK(mpt::verifyProof(chain.header3->stateRoot(), proof).accountValid);
 }
@@ -267,7 +289,7 @@ BOOST_AUTO_TEST_CASE(ProofWithoutRecordedHistoryIsMinus32004)
 
     EgpNodeStorage nodes;
     egpLoadNodes(fixture, nodes);
-    EgpEndpointHarness harness{fixture, nodes, /*proofDepth*/ 128};
+    EgpEndpointHarness harness{fixture, nodes, /*depth*/ 128};
 
     BOOST_CHECK_NO_THROW(harness.getProof(account.hexPrefixed(), "latest"));
     try
@@ -301,7 +323,7 @@ BOOST_AUTO_TEST_CASE(ColdSlotFlatValueIsReadAtTheRequestedBlock)
     FullChainFixture fixture{"egp_cold_slot"};
     fixture.buildGenesis(FullChainFixture::baseGenesis());
     fixture.enableFeatureFromBlock("feature_mpt_state_root", 2);
-    fixture.m_baselineScheduler.setHistoryDepths({.state = 128, .proof = 128});
+    fixture.useHistoryDepths(128, 128);
 
     auto const account = FullChainFixture::makeAddress(0xAC);
     auto const filler = FullChainFixture::makeAddress(0xF1);
@@ -326,7 +348,7 @@ BOOST_AUTO_TEST_CASE(ColdSlotFlatValueIsReadAtTheRequestedBlock)
 
     EgpNodeStorage nodes;
     egpLoadNodes(fixture, nodes);
-    EgpEndpointHarness harness{fixture, nodes, /*proofDepth*/ 128};
+    EgpEndpointHarness harness{fixture, nodes, /*depth*/ 128};
 
     auto const slotHex = slot.hexPrefixed();
     auto const atThree = harness.getProofWithSlots(account.hexPrefixed(), {slotHex}, "0x3");
@@ -355,7 +377,7 @@ BOOST_AUTO_TEST_CASE(ColdSlotOutsideTheStateWindowIsRefused)
     fixture.enableFeatureFromBlock("feature_mpt_state_root", 2);
     // The TRIE history is wide enough to serve the walk; the STATE history is not, so the
     // refusal below is specifically about the flat half.
-    fixture.m_baselineScheduler.setHistoryDepths({.state = 1, .proof = 128});
+    fixture.useHistoryDepths(1, 128);
 
     auto const account = FullChainFixture::makeAddress(0xAC);
     auto const filler = FullChainFixture::makeAddress(0xF1);
@@ -373,8 +395,10 @@ BOOST_AUTO_TEST_CASE(ColdSlotOutsideTheStateWindowIsRefused)
 
     EgpNodeStorage nodes;
     egpLoadNodes(fixture, nodes);
-    EgpEndpointHarness harness{fixture, nodes, /*proofDepth*/ 128};
-    harness.m_nodeService->setMPTHistoryDepths({.state = 1, .proof = 128});
+    // The reader keeps a WIDE trie window and a narrow state one, so the walk is servable and
+    // only the flat half is not — which is the refusal this case is about.
+    EgpEndpointHarness harness{fixture, nodes, /*depth*/ 128};
+    harness.setDepths(/*state*/ 1, /*proof*/ 128);
 
     try
     {

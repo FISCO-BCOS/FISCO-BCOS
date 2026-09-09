@@ -41,6 +41,8 @@
 #include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/Constants.h"
+#include "bcos-ledger/mpt/history/HistoryRead.h"
+#include "bcos-ledger/mpt/history/MPTHistory.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
@@ -188,7 +190,11 @@ public:
         // Both reverse histories retained: production injects these from nodeConfig [storage];
         // the scheduler's own default is 0 = not retained, so a test that wants history has to
         // say so.
-        baselineScheduler.setHistoryDepths({.state = HC_HISTORY_DEPTH, .proof = HC_HISTORY_DEPTH});
+        mptHistory = std::make_shared<ledger::mpt::history::MPTHistory>(
+            ledger::mpt::history::HistoryDepths{
+                .state = HC_HISTORY_DEPTH, .proof = HC_HISTORY_DEPTH},
+            ledger::mpt::history::makeHistoryReader(backendStorage));
+        baselineScheduler.setMPTHistory(mptHistory);
         mockScheduler.m_plan = &plan;
         probeExecutor.m_mode = bcos::test::sharedmock::SharedMockExecutor::Mode::ReadSlot;
         probeExecutor.m_probeAddress = hcEvmcAddress();
@@ -364,6 +370,9 @@ public:
     // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
     bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
     bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
+    /// The node's ONE history object, shared with the scheduler that publishes into it. Declared
+    /// after the scheduler so it is destroyed first; the scheduler holds its own shared_ptr.
+    std::shared_ptr<ledger::mpt::history::MPTHistory> mptHistory;
 };
 
 // The trait getExecutable consults: the marker propagates through View and Rollbackable,
@@ -391,7 +400,8 @@ BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
     auto const table = ledger::mpt::accountTableName(hcAddress());
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend backendAtTip(latestView, backendStorage, HC_TIP, HC_TIP, HC_HISTORY_DEPTH);
+    HCHistoricalBackend backendAtTip(
+        latestView, mptHistory->state(), backendStorage, HC_TIP, HC_TIP, HC_HISTORY_DEPTH);
 
     // At the tip root every row kind resolves, in the exact flat representations EVMAccount
     // reads them back in.
@@ -432,7 +442,8 @@ BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
 
     // Block 1: the height at which the slot was 0x01 and the balance 1000. Both rows changed
     // later, so these answers come from the recorded pre-images and differ from the tip's.
-    HCHistoricalBackend backendAt1(latestView, backendStorage, 1, HC_TIP, HC_HISTORY_DEPTH);
+    HCHistoricalBackend backendAt1(
+        latestView, mptHistory->state(), backendStorage, 1, HC_TIP, HC_HISTORY_DEPTH);
     auto slotAt1 =
         task::syncWait(storage2::readOne(backendAt1, StateKeyView{table, hcSlotRowKey()}));
     BOOST_REQUIRE(slotAt1);
@@ -461,7 +472,8 @@ BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
 
     // Out of window: a depth of 1 retains only block 3, so block 1 is refused rather than
     // answered from a plausible-looking current value (spec B.3, G5).
-    HCHistoricalBackend backendOutOfWindow(latestView, backendStorage, 1, HC_TIP, /*depth*/ 1);
+    HCHistoricalBackend backendOutOfWindow(
+        latestView, mptHistory->state(), backendStorage, 1, HC_TIP, /*depth*/ 1);
     BOOST_CHECK_THROW(
         task::syncWait(storage2::readOne(backendOutOfWindow, StateKeyView{table, "balance"})),
         ledger::mpt::history::HistoryPruned);
@@ -476,8 +488,8 @@ BOOST_AUTO_TEST_CASE(historicalViewReadYourWrites)
     auto const table = ledger::mpt::accountTableName(hcAddress());
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend historicalBackend(
-        latestView, backendStorage, headers[2]->number(), HC_TIP, HC_HISTORY_DEPTH);
+    HCHistoricalBackend historicalBackend(latestView, mptHistory->state(), backendStorage,
+        headers[2]->number(), HC_TIP, HC_HISTORY_DEPTH);
     HCHistoricalView historicalView(std::addressof(historicalBackend));
     historicalView.newMutable();
 
@@ -556,8 +568,8 @@ BOOST_AUTO_TEST_CASE(writeThenReadInsideHistoricalCall)
 
     auto runCall = [&](auto&& body) {
         auto latestView = multiLayerStorage.fork();
-        HCHistoricalBackend historicalBackend(
-            latestView, backendStorage, headers[2]->number(), HC_TIP, HC_HISTORY_DEPTH);
+        HCHistoricalBackend historicalBackend(latestView, mptHistory->state(), backendStorage,
+            headers[2]->number(), HC_TIP, HC_HISTORY_DEPTH);
         HCHistoricalView historicalView(std::addressof(historicalBackend));
         historicalView.newMutable();
         body(historicalView);
@@ -655,8 +667,8 @@ BOOST_AUTO_TEST_CASE(executableCacheBypassForHistoricalStorage)
     // Pinned at the TIP root: the bypass is decided by the storage TYPE, not by the height,
     // and the tip is the only root a path-addressed node store can serve.
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend historicalBackend(
-        latestView, backendStorage, headers[2]->number(), HC_TIP, HC_HISTORY_DEPTH);
+    HCHistoricalBackend historicalBackend(latestView, mptHistory->state(), backendStorage,
+        headers[2]->number(), HC_TIP, HC_HISTORY_DEPTH);
     HCHistoricalView historicalView(std::addressof(historicalBackend));
     historicalView.newMutable();
     Rollbackable<HCHistoricalView> rollbackable(historicalView);
