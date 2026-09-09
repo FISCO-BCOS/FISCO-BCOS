@@ -20,6 +20,7 @@
 
 
 #include "../common/RPCFixture.h"
+#include "../common/Web3TxSamples.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
@@ -553,17 +554,6 @@ BOOST_AUTO_TEST_CASE(handleSendRawTypedChainIdMismatchTest)
     BOOST_TEST(response["error"]["code"].asInt() == InvalidParams);
     BOOST_TEST(response["error"]["message"].asString() == "invalid chain id for signer");
 }
-
-// The pre-EIP-155 transaction used by the two cases below: it claims no chain, so the chainId
-// rule stands down whatever the node is configured with, and what is left is the pool's own
-// answer. Sender 0x7ee79be7871ff709d67baadbf1a45bbb65bd3f8b, value 8921810000000000000.
-static constexpr std::string_view c_unprotectedRawTx =
-    "0xf86c808504a817c800825208945dc98fe6cd853f7f5a44399cfb1c60682d5d62ef887bd0a2ecdb872000801ca0"
-    "e90ef078b60e3a186fae6071c92dbfec1256f423f5a40cd5cba69ca423eb4e44a028e14398b1a1059388cbc5eb03"
-    "cfcb6f9493bdd1efd6a17e54dcabbb2eaace16";
-static constexpr std::string_view c_unprotectedSender = "7ee79be7871ff709d67baadbf1a45bbb65bd3f8b";
-static constexpr std::string_view c_unprotectedTxHash =
-    "0xf6ecaffaf808cdfe1d9ef02ec461f2ab5674f72f9c6f954743e0c2d74608b751";
 
 // A transaction the pool did not take must not come back as a transaction hash. MemPoolImpl::add
 // returned void and swallowed four different refusals, so this method answered every one of them

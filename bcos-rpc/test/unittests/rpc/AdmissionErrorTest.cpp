@@ -101,6 +101,11 @@ BOOST_AUTO_TEST_CASE(statusWithoutGethWordsKeepsItsName)
     auto const limit = admissionError(TS::BlockLimitCheckFail);
     BOOST_CHECK_EQUAL(limit.code(), Web3DefaultError);
     BOOST_CHECK_EQUAL(limit.msg(), "BlockLimitCheckFail");
+    // Not a verdict on the transaction: the pool admitted it and then ended a sync wait without
+    // executing it (MemoryStorage::removeInvalidTxs). geth has no words for it, it keeps its name.
+    auto const timeout = admissionError(TS::TransactionPoolTimeout);
+    BOOST_CHECK_EQUAL(timeout.code(), Web3DefaultError);
+    BOOST_CHECK_EQUAL(timeout.msg(), "TransactionPoolTimeout");
 }
 
 BOOST_AUTO_TEST_CASE(detailIsAppendedInParentheses)

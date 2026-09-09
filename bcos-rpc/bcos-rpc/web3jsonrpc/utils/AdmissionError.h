@@ -40,6 +40,12 @@ namespace bcos::rpc
 /// geth has no words for, or whose one name covers several of geth's sentences, keeps its own
 /// name. Unknown -- admission could not read what it needed -- is the node's fault, not the
 /// transaction's, and answers -32603 with a fixed sentence; the storage diagnostic is for the log.
+///
+/// A receipt-wait (sync_transaction = true) the pool's expiry sweep ended arrives the same way a
+/// refusal does -- an Error carrying TransactionPoolTimeout, from MemoryStorage::removeInvalidTxs
+/// through submitTransaction's await_resume -- so the txpool branch's catch maps it through this
+/// table too. Not a verdict on the transaction, but the same kind of answer: the pool no longer
+/// holds it and nothing executed. geth has no words for it; it keeps its name.
 JsonRpcException admissionError(protocol::TransactionStatus status);
 
 /// The same, with a detail appended: "transaction type not supported (blob)". The detail follows

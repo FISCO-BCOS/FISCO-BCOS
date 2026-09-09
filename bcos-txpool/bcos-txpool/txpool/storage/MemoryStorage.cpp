@@ -897,16 +897,33 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
             return tx2Remove.second != nullptr;
         });
 
-        for (const auto& [txHash, tx] : txs2Notify)
+        // A receipt-wait parked on one of these ends the way a refusal ends it: an Error carrying
+        // TransactionPoolTimeout -- the sweep's one status whichever check swept the transaction
+        // (expiry, blockLimit, committed nonce) -- which submitTransaction's completeOnce puts on
+        // await_resume's throwing branch, so every caller answers it through the catch it already
+        // has for a refusal. It used to end with a result carrying this status and no receipt; the
+        // tars result type fabricates a default receipt on read, and the RPC faces then reported a
+        // transaction the pool had dropped as executed. One Error for the batch: completeOnce
+        // keeps the pointer and await_resume throws a copy.
+        auto const swept = BCOS_ERROR_PTR((int32_t)TransactionStatus::TransactionPoolTimeout,
+            bcos::protocol::toString(TransactionStatus::TransactionPoolTimeout));
+        for (const auto& tx : txs2Notify | ::ranges::views::values)
         {
-            auto nonce = tx->nonce();
-            auto txResult = m_config->txResultFactory()->createTxSubmitResult();
-            txResult->setTxHash(txHash);
-            txResult->setStatus(static_cast<uint32_t>(TransactionStatus::TransactionPoolTimeout));
-            txResult->setNonce(std::string(nonce));
-            txResult->setType(tx->type());
-            txResult->setSender(std::string(tx->sender()));
-            notifyTxResult(*tx, std::move(txResult));
+            auto callback = tx->takeSubmitCallback();
+            if (!callback)
+            {
+                continue;
+            }
+            try
+            {
+                callback(swept, nullptr);
+            }
+            catch (std::exception const& e)
+            {
+                TXPOOL_LOG(WARNING) << LOG_DESC("removeInvalidTxs: notify failed")
+                                    << LOG_KV("tx", tx->hash().abridged())
+                                    << LOG_KV("message", boost::diagnostic_information(e));
+            }
         }
 
         TXPOOL_LOG(DEBUG) << LOG_DESC("removeInvalidTxs") << LOG_KV("size", txCnt);
