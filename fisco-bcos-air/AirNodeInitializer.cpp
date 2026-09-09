@@ -97,12 +97,13 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // destroyed after them.
     nodeService->setMPTNodeReader(m_nodeInitializer->mptNodeReader());
 
-    // Historical eth_getProof: the plane the trie-node reverse history lives in, plus how far
-    // back this node keeps it (nodeConfig [storage] mpt_history_proof_blocks). Same borrowed
-    // backend and same destruction order as the node reader above. With the depth at 0 the
-    // endpoint refuses a past block instead of proving against today's trie.
-    nodeService->setMPTHistoryReader(m_nodeInitializer->mptHistoryReader());
-    nodeService->setMPTHistoryDepths(m_nodeInitializer->mptHistoryDepths());
+    // Historical state reads and historical eth_getProof: the node's two reverse-history stores,
+    // their retention depths (nodeConfig [storage]) and the plane they read. The SAME object the
+    // scheduler publishes into — its in-memory indexes are what every historical query is located
+    // through, and a second instance would go stale from the first commit. Same borrowed backend
+    // and same destruction order as the node reader above. With a depth at 0 the endpoint refuses
+    // a past block instead of answering from today's state.
+    nodeService->setMPTHistory(m_nodeInitializer->mptHistory());
 
     // eth_getStorageAt latest-state path: a provider that forks a fresh latest view of
     // GlobalStateStorage per request (see Initializer::stateStorageProvider for the lifetime

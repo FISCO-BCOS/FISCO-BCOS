@@ -34,7 +34,6 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-ledger/mpt/PathKey.h>
-#include <bcos-ledger/mpt/history/HistoryDepths.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <bcos-tx-validator/CheckSet.h>
 #include <bcos-utilities/Common.h>
@@ -55,6 +54,14 @@ namespace bcos::txvalidator
 {
 class TxValidator;
 }  // namespace bcos::txvalidator
+
+/// Forward-declared for the same reason: this header only holds a shared_ptr to it, while
+/// MPTHistory.h pulls in ReverseHistoryStore and the whole storage2 stack. EthEndpoint.cpp is the
+/// one consumer and includes the real header.
+namespace bcos::ledger::mpt::history
+{
+class MPTHistory;
+}  // namespace bcos::ledger::mpt::history
 
 namespace bcos::rpc
 {
@@ -139,35 +146,30 @@ public:
     }
     std::shared_ptr<MPTNodeReader> mptNodeReader() const noexcept { return m_mptNodeReader; }
 
-    /// Type-erased read handle over the plane the MPT reverse histories live in — the committed
-    /// state backend. eth_getProof at a past block resolves each trie position's version at that
-    /// block through it (pathdb spec §10.2). StateKey-typed because history rows ARE ordinary
-    /// state rows; the handle must support range(RANGE_SEEK, …), which the committed backend does
-    /// and a cached view does not.
-    using MPTHistoryReader =
-        bcos::storage2::AnyStorage<bcos::executor_v1::StateKey, bcos::executor_v1::StateValue>;
-
+    /// The node's two MPT reverse histories, as ONE object: the stores that own the in-memory
+    /// query indexes, the retention depths (nodeConfig [storage]) and the read-only handle on the
+    /// committed state backend the shard rows live in (ledger::mpt::history::MPTHistory).
+    ///
+    /// The SAME instance the scheduler publishes into — that is the whole reason it is passed
+    /// around rather than reconstructed. The index is derived data kept current by the commit
+    /// path; a second instance would be rebuilt at startup and then never updated, and every
+    /// query would miss versions and report "this key never changed", i.e. today's state under an
+    /// old block's number (G10).
+    ///
     /// Same lifetime contract as setMPTNodeReader: the storage underneath is borrowed from the
-    /// Initializer, which must outlive this NodeService. Unset on a tars-built NodeService.
-    void setMPTHistoryReader(std::shared_ptr<MPTHistoryReader> _reader) noexcept
+    /// Initializer, which must outlive this NodeService. Unset on a tars-built NodeService, where
+    /// there is no local storage and the historical endpoints answer "MPT not enabled".
+    ///
+    /// Forward-declared here on purpose: MPTHistory.h drags in the whole storage2 stack, and this
+    /// header is included by everything in bcos-rpc. EthEndpoint.cpp, the one consumer, includes
+    /// it.
+    void setMPTHistory(std::shared_ptr<bcos::ledger::mpt::history::MPTHistory> _history) noexcept
     {
-        m_mptHistoryReader = std::move(_reader);
+        m_mptHistory = std::move(_history);
     }
-    std::shared_ptr<MPTHistoryReader> mptHistoryReader() const noexcept
+    std::shared_ptr<bcos::ledger::mpt::history::MPTHistory> const& mptHistory() const noexcept
     {
-        return m_mptHistoryReader;
-    }
-
-    /// How far back this node retains the two reverse histories (nodeConfig [storage]); both 0
-    /// on a node that was never wired, which is also the honest answer for one that retains
-    /// nothing.
-    void setMPTHistoryDepths(bcos::ledger::mpt::history::HistoryDepths _depths) noexcept
-    {
-        m_mptHistoryDepths = _depths;
-    }
-    bcos::ledger::mpt::history::HistoryDepths mptHistoryDepths() const noexcept
-    {
-        return m_mptHistoryDepths;
+        return m_mptHistory;
     }
 
     /// Type-erased read handle over the LATEST COMMITTED state plane of GlobalStateStorage
@@ -226,10 +228,8 @@ private:
     /// setMPTNodeReader() for the lifetime contract.
     std::shared_ptr<MPTNodeReader> m_mptNodeReader;
 
-    /// MPT reverse-history reader handle and the depths this node retains; see
-    /// setMPTHistoryReader() for the lifetime contract.
-    std::shared_ptr<MPTHistoryReader> m_mptHistoryReader;
-    bcos::ledger::mpt::history::HistoryDepths m_mptHistoryDepths;
+    /// The node's MPT reverse histories; see setMPTHistory() for the lifetime contract.
+    std::shared_ptr<bcos::ledger::mpt::history::MPTHistory> m_mptHistory;
 
     /// Latest-state view provider (owns each forked view, borrows the GlobalStateStorage);
     /// see setStateStorageProvider() for the lifetime contract.

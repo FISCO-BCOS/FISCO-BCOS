@@ -232,6 +232,27 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_globalStateStorageInitializer =
         GlobalStateStorageInitializer::build(m_nodeConfig->storagePath(), rocksDBOption);
 
+    // The node's two MPT reverse histories, built ONCE here and shared by every consumer: the
+    // scheduler that publishes into them and the RPC endpoints that read them (MPTHistory.h).
+    // The retention depths are node-local operations parameters straight from nodeConfig
+    // [storage] (pathdb spec §10.3) — they change what this node can ANSWER, never what it
+    // computes or agrees on.
+    //
+    // The indexes are DERIVED from the shard rows on disk, so they are recomputed at startup —
+    // synchronously, HERE, before any scheduler or RPC object exists. That ordering is the whole
+    // safety argument: a rebuild running alongside a reader would let a query miss a version the
+    // walk has not reached yet, and a missing version reads as "this key never changed", i.e.
+    // today's value under an old block's number (G10, layout spec §1.5). A rebuild that fails
+    // does not stop the node — the store latches Unavailable, logs an ERROR, and only the
+    // historical reads are refused.
+    m_mptHistory = std::make_shared<ledger::mpt::history::MPTHistory>(
+        ledger::mpt::history::HistoryDepths{.state = m_nodeConfig->mptHistoryStateBlocks(),
+            .proof = m_nodeConfig->mptHistoryProofBlocks()},
+        ledger::mpt::history::makeHistoryReader(
+            m_globalStateStorageInitializer->storage().latestBackend()));
+    task::syncWait(
+        m_mptHistory->rebuild(m_globalStateStorageInitializer->storage().latestBackend()));
+
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         // Share CheckpointRocksDBStorage's RocksDB with the legacy storage layer.
@@ -420,13 +441,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             "test-harness mode, never drive this endpoint with a production op-node");
     }
 
-    // MPT reverse-history retention, node-local operations parameters straight from
-    // nodeConfig [storage] (pathdb spec §10.3). Read once here so every scheduler instance the
-    // branches below build agrees on the window this node serves.
-    ledger::mpt::history::HistoryDepths const historyDepths{
-        .state = m_nodeConfig->mptHistoryStateBlocks(),
-        .proof = m_nodeConfig->mptHistoryProofBlocks()};
-
     if (baselineSchedulerConfig.parallel)
     {
         auto parallelScheduler =
@@ -441,7 +455,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), parallelScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction(), historyDepths);
+                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction(), m_mptHistory);
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -467,7 +481,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction(), historyDepths);
+                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction(), m_mptHistory);
         // Engine-driven modes on the v2 EthereumExecutor: build the Engine API service wired
         // to the ethereum scheduler + EthereumExecutor so blocks are built with
         // Ethereum-compliant semantics. Two mutually exclusive drivers use it (NodeConfig
@@ -492,7 +506,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), serialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction(), historyDepths);
+                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction(), m_mptHistory);
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -508,7 +522,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction(), historyDepths);
+                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction(), m_mptHistory);
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
         // branch above for why op_engine_rpc.enable also builds the EngineService here.
         if (!engineApiForV1Only &&
@@ -1692,32 +1706,6 @@ Initializer::mptNodeReader()
     // must stay invisible to proofs.
     return bcos::ledger::mpt::makeMPTNodeReader(
         m_globalStateStorageInitializer->storage().latestBackend());
-}
-
-std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>
-Initializer::mptHistoryReader()
-{
-    if (!m_globalStateStorageInitializer)
-    {
-        return nullptr;
-    }
-    // The backend directly, NOT a forked view: the history query seeks, and a production view's
-    // LRU cache layer (CONCURRENT|LRU, no ORDERED) cannot supply a seek — MemoryStorage's
-    // range(RANGE_SEEK, …) is `requires withOrdered`, so the view's merged iterator would not
-    // even instantiate. It is also the right plane on its own terms: the window guard's tip is
-    // the committed tip, and the pending layers of in-flight blocks must stay invisible.
-    return bcos::ledger::mpt::history::makeHistoryReader(
-        m_globalStateStorageInitializer->storage().latestBackend());
-}
-
-bcos::ledger::mpt::history::HistoryDepths Initializer::mptHistoryDepths() const
-{
-    if (!m_nodeConfig)
-    {
-        return {};
-    }
-    return {.state = m_nodeConfig->mptHistoryStateBlocks(),
-        .proof = m_nodeConfig->mptHistoryProofBlocks()};
 }
 
 std::function<

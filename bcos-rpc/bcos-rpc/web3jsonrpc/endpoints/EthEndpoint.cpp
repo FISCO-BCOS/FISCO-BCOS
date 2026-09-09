@@ -37,6 +37,7 @@
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/history/HistoryErrors.h>
 #include <bcos-ledger/mpt/history/HistoryRead.h>
+#include <bcos-ledger/mpt/history/MPTHistory.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
@@ -173,7 +174,10 @@ constexpr int32_t EthHistoricalStateUnavailable = -32004;
 /// on the trie's shape.
 struct HistoricalStateContext
 {
-    std::shared_ptr<rpc::NodeService::MPTHistoryReader> reader;
+    /// The node's history object — borrowed, and kept alive for the request by the shared_ptr the
+    /// NodeService holds. `history->state()` owns the in-memory index every row is located
+    /// through; `history->backend()` is the plane its shard rows are read from.
+    std::shared_ptr<ledger::mpt::history::MPTHistory> history;
     bcos::protocol::BlockNumber block{};
     bcos::protocol::BlockNumber tip{};
     bcos::protocol::BlockNumber depth{};
@@ -190,14 +194,14 @@ bcos::task::Task<HistoricalStateContext> resolveHistoricalStateContext(
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
-    auto reader = nodeService.mptHistoryReader();
-    if (!reader) [[unlikely]]
+    auto history = nodeService.mptHistory();
+    if (!history || !history->backend()) [[unlikely]]
     {
         // A deployment matter (a tars-built NodeService has no local storage), not a request
         // one — hence -32603 rather than -32004.
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
     }
-    auto const depths = nodeService.mptHistoryDepths();
+    auto const depths = history->depths();
     if (depths.state <= 0) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
@@ -208,8 +212,7 @@ bcos::task::Task<HistoricalStateContext> resolveHistoricalStateContext(
     bool covered = false;
     try
     {
-        covered = co_await ledger::mpt::history::historyCoversBlock<
-            ledger::mpt::history::StateHistoryStore>(*reader, blockNumber, tip);
+        covered = ledger::mpt::history::historyCoversBlock(history->state(), blockNumber, tip);
     }
     catch (ledger::mpt::history::HistoryPruned const&)
     {
@@ -218,13 +221,18 @@ bcos::task::Task<HistoricalStateContext> resolveHistoricalStateContext(
                         "(storage.mpt_history_state_blocks = {})",
                 blockNumber, depths.state)));
     }
+    catch (ledger::mpt::history::HistoryIndexUnavailable const&)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
+            "history index unavailable on this node (rebuild failed); see node log"));
+    }
     if (!covered) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
             fmt::format("No state history recorded for block {} on this node", blockNumber)));
     }
     co_return HistoricalStateContext{
-        .reader = std::move(reader), .block = blockNumber, .tip = tip, .depth = depths.state};
+        .history = std::move(history), .block = blockNumber, .tip = tip, .depth = depths.state};
 }
 
 /// The value one flat account row held at the context's block; nullopt when the row did not
@@ -238,14 +246,22 @@ bcos::task::Task<std::optional<std::string>> historicalStateRow(
     ledger::mpt::history::ReadAtResult version;
     try
     {
-        version = co_await ledger::mpt::history::readStateAt(
-            *context.reader, keyView, context.block, context.tip, context.depth);
+        version = co_await ledger::mpt::history::readStateAt(context.history->state(),
+            *context.history->backend(), keyView, context.block, context.tip, context.depth);
     }
     catch (ledger::mpt::history::HistoryPruned const&)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
             fmt::format(
                 "Block {} is older than the retained state history window", context.block)));
+    }
+    catch (ledger::mpt::history::HistoryIndexUnavailable const&)
+    {
+        // The admission check above passed, so the index went unusable mid-request — a publish
+        // that threw. Refusing is the only reading left: a Ready answer and an Unavailable one
+        // differ exactly in whether a missing version means "unchanged" (G10).
+        BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
+            "history index unavailable on this node (rebuild failed); see node log"));
     }
     if (auto* recorded = std::get_if<bcos::bytes>(std::addressof(version)))
     {
@@ -255,8 +271,8 @@ bcos::task::Task<std::optional<std::string>> historicalStateRow(
     {
         co_return std::nullopt;
     }
-    auto const current =
-        co_await bcos::storage2::readOne(*context.reader, executor_v1::StateKey{keyView});
+    auto const current = co_await bcos::storage2::readOne(
+        *context.history->backend(), executor_v1::StateKey{keyView});
     if (!current)
     {
         co_return std::nullopt;
@@ -1348,14 +1364,14 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         // block (pathdb spec §10.2). The proof BYTES are the same object either way: the walk
         // still verifies every node against the hash its parent records, which is exactly what
         // makes a historical version trustworthy rather than merely plausible.
-        auto const depths = m_nodeService->mptHistoryDepths();
-        auto const historyReader = m_nodeService->mptHistoryReader();
-        if (!historyReader || depths.proof <= 0) [[unlikely]]
+        auto const history = m_nodeService->mptHistory();
+        if (!history || !history->backend() || history->depths().proof <= 0) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
                 "Historical proofs are not retained on this node "
                 "(storage.mpt_history_proof_blocks = 0)"));
         }
+        auto const depth = history->depths().proof;
         auto const tip = co_await ledger::getCurrentBlockNumber(*ledger);
         // Being inside the window is a claim about the retention PARAMETER; whether this node
         // ever recorded that era is a separate question, and without it every position would
@@ -1364,8 +1380,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         bool covered = false;
         try
         {
-            covered = co_await ledger::mpt::history::historyCoversBlock<
-                ledger::mpt::history::TrieHistoryStore>(*historyReader, blockNumber, tip);
+            covered = ledger::mpt::history::historyCoversBlock(history->trie(), blockNumber, tip);
         }
         catch (ledger::mpt::history::HistoryPruned const&)
         {
@@ -1374,7 +1389,12 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
             BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
                 fmt::format("Block {} is older than the retained trie-node history window "
                             "(storage.mpt_history_proof_blocks = {})",
-                    blockNumber, depths.proof)));
+                    blockNumber, depth)));
+        }
+        catch (ledger::mpt::history::HistoryIndexUnavailable const&)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
+                "history index unavailable on this node (rebuild failed); see node log"));
         }
         if (!covered) [[unlikely]]
         {
@@ -1383,8 +1403,9 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
                     "No trie-node history recorded for block {} on this node", blockNumber)));
         }
         ledger::mpt::history::HistoricalNodeStorage<NodeService::MPTNodeReader,
-            NodeService::MPTHistoryReader>
-            historicalNodes(*mptReader, *historyReader, blockNumber, tip, depths.proof);
+            ledger::mpt::history::MPTHistory::Backend>
+            historicalNodes(
+                *mptReader, history->trie(), *history->backend(), blockNumber, tip, depth);
         try
         {
             result = co_await ledger::mpt::generateProof(
@@ -1392,12 +1413,18 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         }
         catch (ledger::mpt::history::HistoryPruned const&)
         {
-            // The ONLY out-of-window outcome: the guard fires before the seek, so this is never
+            // The ONLY out-of-window outcome: the guard fires before the lookup, so this is never
             // confused with "the position never changed" (spec B.3).
             BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
                 fmt::format("Block {} is older than the retained trie-node history window "
                             "(storage.mpt_history_proof_blocks = {})",
-                    blockNumber, depths.proof)));
+                    blockNumber, depth)));
+        }
+        catch (ledger::mpt::history::HistoryIndexUnavailable const&)
+        {
+            // The index went unusable between admission and the walk (a publish that threw).
+            BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
+                "history index unavailable on this node (rebuild failed); see node log"));
         }
     }
     if (auto const* errorCode = std::get_if<ledger::mpt::ProofErrorCode>(&result))
