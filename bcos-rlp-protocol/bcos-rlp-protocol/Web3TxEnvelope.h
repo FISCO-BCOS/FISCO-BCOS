@@ -120,9 +120,11 @@ template <typename T>
 }
 
 /// Consume one EIP-7702 authorization yParity item the way op-geth's RLP decoder reads a
-/// uint8: an empty byte string is 0, a single non-zero payload byte is its value (that covers
-/// both the single-byte 0x01..0x7f form and the 0x81 XX long form), and a leading-zero or
-/// multi-byte payload is rejected as non-canonical/overflowing.
+/// uint8: an empty byte string is 0, a single non-zero payload byte is its value, and a
+/// leading-zero or multi-byte payload is rejected as non-canonical/overflowing. The admitted
+/// wire forms are the inline single byte 0x01..0x7f and the 0x81 XX form with XX >= 0x80; the
+/// shared canonical-RLP decoder (decodeHeader) rejects 0x81 with a payload below 0x80 as
+/// NonCanonicalSize before this function sees it — stricter than op-geth, which accepts it.
 ///
 /// Values above 1 are LEGAL here, unlike the transaction-signature domain above: op-geth
 /// decodes the authorization's V as a plain uint8 and skips the entry at execution when it is

@@ -91,7 +91,11 @@ std::vector<GasWeightedPriorityFee> collectPriorityFeeSamples(
         if (index < receipts.size())
         {
             auto const used = receipts[index]->gasUsed();
-            gasUsed = bcos::u256FitsUint64(used) ? static_cast<std::uint64_t>(used) : 0;
+            // A gasUsed beyond uint64 is not producible by the engine; clamp rather than fold to
+            // zero so the sample keeps its weight. gasUsedRatio saturates the same malformed
+            // condition to 1.0, so the two helpers must not disagree inside one response.
+            gasUsed = bcos::u256FitsUint64(used) ? static_cast<std::uint64_t>(used) :
+                                                   std::numeric_limits<std::uint64_t>::max();
         }
         ++index;
         samples.push_back(
@@ -236,7 +240,12 @@ std::vector<bcos::u256> bcos::rpc::pickRewardPercentiles(
             rewards.push_back(0);
             continue;
         }
-        auto const threshold = static_cast<double>(totalGas) * percentile / 100.0;
+        // op-geth truncates the threshold to uint64 before comparing
+        // (eth/gasprice/feehistory.go: thresholdGasUsed := uint64(float64(block.GasUsed()) * p /
+        // 100)); comparing the raw double would advance one sample further whenever a prefix sum
+        // lands exactly on the truncated value.
+        auto const threshold =
+            static_cast<std::uint64_t>(static_cast<double>(totalGas) * percentile / 100.0);
         auto const boundary =
             std::lower_bound(cumulativeGas.begin(), cumulativeGas.end(), threshold);
         auto const index = boundary == cumulativeGas.end() ?
@@ -255,12 +264,25 @@ bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInt
     // unauthenticated on the public listener; the header-only path is cheap. geth's 1024 cap
     // assumes its fee-history cache, which this implementation does not have, so the
     // body-loading path gets a tighter bound on what one request can deserialise.
+    //
+    // An out-of-range request is rejected rather than silently shortened (op-geth's
+    // resolveBlockRange errors on blocks < 1 or > maxQueryLimit), and a zero blockCount must not
+    // answer a shape-violating empty object.
     bool const wantRewards = !rewardPercentiles.empty();
-    blockCount =
-        std::min(blockCount, wantRewards ? c_maxRewardHistoryBlocks : c_maxFeeHistoryBlocks);
     if (blockCount == 0)
     {
-        co_return Json::Value(Json::objectValue);
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "eth_feeHistory: blockCount must be at least 1"));
+    }
+    if (wantRewards && blockCount > c_maxRewardHistoryBlocks)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+            "eth_feeHistory: blockCount over the 128-block rewardPercentiles limit"));
+    }
+    if (blockCount > c_maxFeeHistoryBlocks)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "eth_feeHistory: blockCount over the query limit 1024"));
     }
 
     auto const oldestBlock = static_cast<bcos::protocol::BlockNumber>(

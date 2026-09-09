@@ -60,12 +60,15 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
 {
     uint64_t gasLimit = gas.value_or(0);
     // eth_estimateGas omits gas; validation rejects gasLimit==0 ("intrinsic gas too low").
-    // Cap at the parent block's gas limit, but only when that value was actually read: an
-    // explicit gas:"0x0" keeps its zero (present != absent), and a failed header read leaves
-    // the request to fail validation instead of being silently sized against a constant that
-    // has nothing to do with this chain's configuration. The endpoint passes the limit only on
-    // the estimate arm, so eth_call keeps its zero.
-    if (!gas.has_value() && chainBlockGasLimit.has_value())
+    // Cap at the parent block's gas limit when the request did not pin one: absent gas AND an
+    // explicit zero both mean "size it for me" — op-geth's estimator does `hi = Header.GasLimit`
+    // unless `GasLimit >= params.TxGas`, and EthEndpoint::call's guard reads the header for
+    // exactly these two cases. Keeping them on one predicate is what removes the old asymmetry
+    // (the guard demanded the header read for gas:"0x0", then the conversion left it at zero).
+    // A failed header read leaves the limit at 0 so validation fails instead of being silently
+    // sized against a constant that has nothing to do with this chain's configuration. The
+    // endpoint passes the limit only on the estimate arm, so eth_call keeps its zero.
+    if ((!gas.has_value() || *gas == 0) && chainBlockGasLimit.has_value())
     {
         gasLimit = *chainBlockGasLimit;
     }

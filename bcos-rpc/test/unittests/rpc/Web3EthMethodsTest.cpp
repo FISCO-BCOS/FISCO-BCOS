@@ -249,16 +249,15 @@ BOOST_AUTO_TEST_CASE(feeHistoryRegisteredAndDACapRpcDeferred)
     BOOST_CHECK_MESSAGE(!engineMapping.findHandler("miner_setMaxDASize").has_value(),
         "miner_setMaxDASize must not be dispatched before a DA-cap consumer exists");
 
-    // And the endpoint stays reachable through the real dispatch path.
+    // And the endpoint stays reachable through the real dispatch path. Require an actual
+    // result: accepting any error other than -32601 would pass even if the handler always
+    // failed, which is exactly what this test is meant to rule out.
     auto resp = call(req("eth_feeHistory", R"(["0x1","latest"])"));
-    if (resp.isMember("error"))
-    {
-        BOOST_CHECK_NE(resp["error"]["code"].asInt(), -32601);
-    }
-    else
-    {
-        BOOST_CHECK(resp.isMember("result"));
-    }
+    BOOST_REQUIRE_MESSAGE(
+        resp.isMember("result"), "eth_feeHistory dispatch failed: " + resp.toStyledString());
+    BOOST_CHECK(resp["result"].isMember("oldestBlock"));
+    BOOST_CHECK(resp["result"].isMember("baseFeePerGas"));
+    BOOST_CHECK(resp["result"].isMember("gasUsedRatio"));
 }
 
 BOOST_AUTO_TEST_CASE(estimateGasWithoutLedgerFailsClosed)

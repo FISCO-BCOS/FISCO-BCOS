@@ -177,9 +177,8 @@ bcos::bytes encodeReceiptLeaf(
         auto const& meta = receipt.opStackMeta();
         if (!meta || !meta->deposit_nonce || !meta->deposit_receipt_version)
         {
-            BOOST_THROW_EXCEPTION(
-                EthReceiptEncodeError{} << bcos::errinfo_comment(
-                    "deposit receipt is missing its deposit nonce/receipt version"));
+            BOOST_THROW_EXCEPTION(EthReceiptEncodeError{} << bcos::errinfo_comment(
+                                      "deposit receipt missing deposit nonce/receipt version"));
         }
         codec::rlp::encode(payload, *meta->deposit_nonce);
         codec::rlp::encode(payload, *meta->deposit_receipt_version);

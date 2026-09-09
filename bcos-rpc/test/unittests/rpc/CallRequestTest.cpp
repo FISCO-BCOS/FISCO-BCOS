@@ -219,7 +219,8 @@ BOOST_AUTO_TEST_CASE(estimateGasGasCapComesOnlyFromTheParentHeader)
     // eth_estimateGas with no explicit `gas` takes its cap from the target block's header and
     // nowhere else: an unreadable header leaves the limit unset, and the endpoint refuses the
     // request (EthEndpoint::call) instead of substituting a hardcoded constant — which is what
-    // the removed 30'000'000 fallback did. An explicit gas always wins.
+    // the removed 30'000'000 fallback did. An explicit non-zero gas always wins; an explicit
+    // zero means "size it for me" and takes the same cap, matching op-geth's estimator.
     auto cryptoSuite =
         std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
             std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
@@ -237,6 +238,13 @@ BOOST_AUTO_TEST_CASE(estimateGasGasCapComesOnlyFromTheParentHeader)
     req.gas = 21000;
     auto const explicitGas = req.takeToTransaction(txFactory, std::nullopt, uint64_t{30'000'000});
     BOOST_CHECK_EQUAL(explicitGas->gasLimit(), 21000);
+
+    // gas:"0x0" is present-but-zero: op-geth's estimator keeps the header cap for anything
+    // below params.TxGas, and the endpoint's guard reads the header for it, so the conversion
+    // must apply the same cap (the old code left it at zero and always failed validation).
+    req.gas = 0;
+    auto const explicitZero = req.takeToTransaction(txFactory, std::nullopt, uint64_t{30'000'000});
+    BOOST_CHECK_EQUAL(explicitZero->gasLimit(), 30'000'000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

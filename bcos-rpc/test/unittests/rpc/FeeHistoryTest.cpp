@@ -117,7 +117,12 @@ BOOST_AUTO_TEST_CASE(opNextBaseFeeThrowsOnHoloceneShapedParentMissingBaseFee)
     for (int shift : {24, 16, 8, 0})
         extra.push_back(static_cast<bcos::byte>((6U >> shift) & 0xff));
     parent.setExtraData(extra);
-    BOOST_CHECK_THROW((void)calcOpNextBaseFee(parent), bcos::engine::InvalidEngineEncoding);
+    // InvalidEngineEncoding carries several distinct fail-closed messages, so pin the reason:
+    // a wrong guard that throws the same type for another shape must not pass.
+    BOOST_CHECK_EXCEPTION((void)calcOpNextBaseFee(parent), bcos::engine::InvalidEngineEncoding,
+        [](bcos::engine::InvalidEngineEncoding const& e) {
+            return std::string(e.what()).find("missing baseFee") != std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(effectivePriorityFeePerGasBranches)
@@ -244,8 +249,10 @@ BOOST_AUTO_TEST_CASE(buildFeeHistoryWeightsRewardsByReceiptGasUsed)
 
 /// The reward path loads full block bodies (txs + receipts) per block, so it is capped tighter
 /// than the header-only path: geth's 1024 assumes a fee-history cache this implementation does
-/// not have. Same request, with and without percentiles, must clamp differently.
-BOOST_AUTO_TEST_CASE(buildFeeHistoryCapsTheRewardPathTighterThanHeadersOnly)
+/// not have. An out-of-range request is rejected (op-geth's resolveBlockRange errors on
+/// blocks < 1 or > maxQueryLimit) instead of being silently shortened, and blockCount 0 must
+/// never answer a shape-violating empty object.
+BOOST_AUTO_TEST_CASE(buildFeeHistoryRejectsOutOfRangeBlockCount)
 {
     auto suite =
         std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
@@ -256,18 +263,44 @@ BOOST_AUTO_TEST_CASE(buildFeeHistoryCapsTheRewardPathTighterThanHeadersOnly)
         std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite));
     auto ledger = std::make_shared<bcos::test::FakeLedger>(blockFactory, /*blocks=*/201, 0, 0);
 
-    // Rewards: newest 200, asked for 1000 -> capped at 128 -> oldest 200 - 127 = 73.
-    auto withRewards = bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
-        /*blockCount=*/1000, std::vector<double>{50.0}, /*opStackMode=*/false));
-    BOOST_CHECK_EQUAL(withRewards["oldestBlock"].asString(), toQuantity(bcos::u256(73)));
-    BOOST_CHECK_EQUAL(withRewards["baseFeePerGas"].size(), 129U);  // 128 blocks + trailing fee
+    // Rewards: 1000 blocks is over the 128-block body-loading bound -> rejected, not shortened.
+    BOOST_CHECK_THROW(bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
+                          /*blockCount=*/1000, std::vector<double>{50.0}, /*opStackMode=*/false)),
+        JsonRpcException);
 
-    // Headers only: the 1024 cap applies -> oldest 0.
+    // The 128-block bound itself is served: newest 200, 128 blocks -> oldest 200 - 127 = 73.
+    auto atBound = bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
+        /*blockCount=*/128, std::vector<double>{50.0}, /*opStackMode=*/false));
+    BOOST_CHECK_EQUAL(atBound["oldestBlock"].asString(), toQuantity(bcos::u256(73)));
+    BOOST_CHECK_EQUAL(atBound["baseFeePerGas"].size(), 129U);  // 128 blocks + trailing fee
+
+    // Headers only: 1000 is under the 1024 query limit -> served.
     auto headersOnly = bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
         /*blockCount=*/1000, /*rewardPercentiles=*/{}, /*opStackMode=*/false));
     BOOST_CHECK_EQUAL(headersOnly["oldestBlock"].asString(), toQuantity(bcos::u256(0)));
     BOOST_CHECK_EQUAL(headersOnly["baseFeePerGas"].size(), 202U);  // 201 blocks + trailing fee
     BOOST_CHECK(!headersOnly.isMember("reward"));
+
+    // Over the geth query limit, and a zero count, are both InvalidParams.
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200, /*blockCount=*/1025,
+            /*rewardPercentiles=*/{}, /*opStackMode=*/false)),
+        JsonRpcException);
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200, /*blockCount=*/0,
+            /*rewardPercentiles=*/{}, /*opStackMode=*/false)),
+        JsonRpcException);
+}
+
+BOOST_AUTO_TEST_CASE(pickRewardPercentilesTruncatesThresholdLikeOpGeth)
+{
+    // op-geth truncates the threshold to uint64 before the comparison
+    // (uint64(float64(blockGasUsed) * p / 100)); with total = 101 and p = 50 that is 50, not
+    // 50.5, so the sample whose cumulative gas is exactly 50 is the boundary.
+    std::vector<GasWeightedPriorityFee> samples{{1, 50}, {2, 51}};
+    auto rewards = pickRewardPercentiles(samples, std::vector<double>{50.0});
+    BOOST_REQUIRE_EQUAL(rewards.size(), 1);
+    BOOST_CHECK_EQUAL(rewards[0], 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

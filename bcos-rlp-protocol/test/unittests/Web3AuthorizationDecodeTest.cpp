@@ -101,17 +101,37 @@ BOOST_AUTO_TEST_CASE(zeroAndOneStillDecode)
     }
 }
 
+BOOST_AUTO_TEST_CASE(wideLongFormYParityDecodes)
+{
+    // 0x81 0x80 is the only 0x81 long form the shared canonical-RLP decoder admits (payload
+    // >= 0x80); it must decode to 128, not fail the transaction.
+    auto const entry = makeAuthEntry(bytes{0x81, 0x80});
+    bytesRef walker;
+    auto const decoded = decodeEntry(entry, walker);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded->yParity, 128);
+    BOOST_CHECK(walker.empty());
+}
+
 BOOST_AUTO_TEST_CASE(nonCanonicalYParityStillRejected)
 {
-    // Bare 0x00 (leading zero), a multi-byte payload, and the 0x81 XX long form are rejected
-    // by the shared canonical-RLP decoder (NonCanonicalSize). geth's decoder would accept the
-    // last one, so this is a deliberate, documented strictness of FISCO's RLP layer rather
-    // than a per-field rule: it applies to every integer field in every envelope.
-    for (auto const& item : {bytes{0x00}, bytes{0x82, 0x00, 0x02}, bytes{0x81, 0x1b}})
+    // Bare 0x00 (leading zero), a multi-byte payload, the 0x81 XX form with XX < 0x80, and a
+    // list item are all rejected — but by four different arms that share one error type, so
+    // each reason is pinned by its message rather than by !has_value() alone. The 0x81 case is
+    // a deliberate, documented strictness of FISCO's shared RLP layer (geth's decoder would
+    // accept it); it applies to every integer field in every envelope, not just this one.
+    for (auto const& [item, needle] : {std::pair{bytes{0x00}, "leading zero"},
+             std::pair{bytes{0x82, 0x00, 0x02}, "canonical uint8"},
+             std::pair{bytes{0x81, 0x1b}, "NonCanonicalSize"},
+             std::pair{bytes{0xc1, 0x01}, "expected a scalar"}})
     {
         auto const entry = makeAuthEntry(item);
         bytesRef walker;
-        BOOST_CHECK(!decodeEntry(entry, walker).has_value());
+        std::string error;
+        auto const decoded = decodeEntry(entry, walker, &error);
+        BOOST_CHECK(!decoded.has_value());
+        BOOST_CHECK_MESSAGE(error.find(needle) != std::string::npos,
+            "expected an error mentioning '" << needle << "', got: " << error);
     }
 }
 
