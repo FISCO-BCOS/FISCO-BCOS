@@ -14,22 +14,20 @@
  *  limitations under the License.
  *
  * @file HistoryIndexTest.cpp
- * @brief The row layout itself: big-endian block ordering, the length discriminator that lets
- *        the layout skip a length prefix, ABSENT round trip, manifest sharding, and the
- *        append-only write path (spec B.2, B.4)
+ * @brief The in-memory index on its own: append, retire, the upper_bound lookup, the hand-off from
+ *        a rebuild, and the state machine that decides whether it may answer at all
+ *        (layout spec §1.3, G10)
  */
 
 #include "HistoryTestHelpers.h"
 #include <bcos-ledger/mpt/Errors.h>
-#include <bcos-ledger/mpt/history/HistoryRowCodec.h>
-#include <bcos-ledger/mpt/history/ReverseHistoryStore.h>
-#include <bcos-task/Wait.h>
+#include <bcos-ledger/mpt/history/HistoryErrors.h>
+#include <bcos-ledger/mpt/history/HistoryIndex.h>
 #include <boost/test/unit_test.hpp>
 #include <cstddef>
 #include <optional>
-#include <string>
 #include <string_view>
-#include <variant>
+#include <utility>
 #include <vector>
 
 using namespace std::string_view_literals;
@@ -39,232 +37,229 @@ namespace bcos::ledger::mpt::history::test
 
 BOOST_AUTO_TEST_SUITE(HistoryIndexSuite)
 
-/// spec B.2(b): the block field is 8 bytes big endian so that byte order equals numeric order.
-/// 255 -> 256 is the smallest carry that a little-endian field would invert (0xFF,0x00.. would
-/// sort above 0x00,0x01,0x00..), so it is the case that pins the encoding down.
-BOOST_AUTO_TEST_CASE(bigEndianBlockNumbersDoNotInvertAt255)
+namespace
 {
-    auto key = makeBytes("balance"sv);
-    auto row255 = indexRowKey(key, 255);
-    auto row256 = indexRowKey(key, 256);
-
-    BOOST_REQUIRE_EQUAL(row255.size(), key.size() + 8);
-    BOOST_REQUIRE_EQUAL(row256.size(), key.size() + 8);
-    BOOST_CHECK_EQUAL(
-        row255.substr(key.size()), std::string("\x00\x00\x00\x00\x00\x00\x00\xff", 8));
-    BOOST_CHECK_EQUAL(
-        row256.substr(key.size()), std::string("\x00\x00\x00\x00\x00\x00\x01\x00", 8));
-    BOOST_CHECK(row255 < row256);
-
-    // And the ordering is the one the seek actually rides on: with a change at both 255 and 256,
-    // a query at 254 must land on the 255 row, not the 256 one.
-    HistoryMemStorage storage;
-    Diff at255;
-    at255.change("balance"sv, "at-254"sv);
-    Diff at256;
-    at256.change("balance"sv, "at-255"sv);
-    putBlock(storage, 255, at255);
-    putBlock(storage, 256, at256);
-
-    auto result = readAt(storage, "balance"sv, 254, 300, 300);
-    BOOST_REQUIRE(std::holds_alternative<bcos::bytes>(result));
-    BOOST_CHECK_EQUAL(toText(std::get<bcos::bytes>(result)), "at-254");
-}
-
-/// spec B.2(c): a row belongs to key k only if it starts with k AND is exactly eight bytes
-/// longer. Without the length clause, a query for "abc" whose own next change lies before the
-/// queried block walks straight onto "abcde"'s row and answers with another key's value.
-BOOST_AUTO_TEST_CASE(lengthDiscriminatorSeparatesPrefixKeys)
+/// One block's worth of index update, without going anywhere near a storage: the index does not
+/// know what a row is, so its tests should not build any.
+StagedBlock stagedFor(bcos::protocol::BlockNumber block,
+    std::vector<std::pair<std::string_view, uint32_t>> const& keysAtOffsets)
 {
-    HistoryMemStorage storage;
-    // "abc" last changed at block 2, i.e. before the query point; "abcde" changed at block 10.
-    Diff shortKey;
-    shortKey.change("abc"sv, "abc-at-1"sv);
-    Diff longerKey;
-    longerKey.change("abcde"sv, "abcde-at-9"sv);
-    putBlock(storage, 2, shortKey);
-    putBlock(storage, 10, longerKey);
-
-    // The seek for "abc" at block 5 starts at "abc" + BE64(6). "abc" + BE64(2) sorts before it,
-    // so the first row the iterator yields is "abcde" + BE64(10) — a prefix match, and the wrong
-    // answer. The length check rejects it and the caller falls back to the current value.
-    auto result = readAt(storage, "abc"sv, 5, 20, 100);
-    BOOST_CHECK(std::holds_alternative<HistoryUseCurrent>(result));
-
-    // Each key still resolves against its own rows.
-    auto abcAtZero = readAt(storage, "abc"sv, 0, 20, 100);
-    BOOST_REQUIRE(std::holds_alternative<bcos::bytes>(abcAtZero));
-    BOOST_CHECK_EQUAL(toText(std::get<bcos::bytes>(abcAtZero)), "abc-at-1");
-
-    auto abcdeAtFive = readAt(storage, "abcde"sv, 5, 20, 100);
-    BOOST_REQUIRE(std::holds_alternative<bcos::bytes>(abcdeAtFive));
-    BOOST_CHECK_EQUAL(toText(std::get<bcos::bytes>(abcdeAtFive)), "abcde-at-9");
-
-    // The predicate on its own, over the exact byte strings above.
-    BOOST_CHECK(indexRowBelongsTo(indexRowKey(makeBytes("abc"sv), 2), "abc"sv));
-    BOOST_CHECK(!indexRowBelongsTo(indexRowKey(makeBytes("abcde"sv), 10), "abc"sv));
-}
-
-/// tag 0x00 (the key did not exist yet) and tag 0x01 (here are the old bytes) must survive the
-/// round trip as two distinguishable answers — collapsing ABSENT into an empty value would make
-/// "account created in this block" read back as "account held the empty string".
-BOOST_AUTO_TEST_CASE(absentAndValueRoundTrip)
-{
-    HistoryMemStorage storage;
-    Diff diff;
-    diff.change("created"sv, std::nullopt).change("updated"sv, "old-bytes"sv);
-    putBlock(storage, 7, diff);
-
-    auto created = readAt(storage, "created"sv, 6, 50, 50);
-    BOOST_CHECK(std::holds_alternative<HistoryAbsent>(created));
-
-    auto updated = readAt(storage, "updated"sv, 6, 50, 50);
-    BOOST_REQUIRE(std::holds_alternative<bcos::bytes>(updated));
-    BOOST_CHECK_EQUAL(toText(std::get<bcos::bytes>(updated)), "old-bytes");
-
-    // The bytes on disk, spelled out: <1B tag><old value>.
-    auto rows = rowsOfTable(storage, kStateHistory.index);
-    BOOST_REQUIRE_EQUAL(rows.size(), 2);
-    for (auto const& [rowKey, rowValue] : rows)
+    StagedBlock staged{.block = block,
+        .meta = BlockMeta{.shardCount = 1,
+            .recordCount = static_cast<uint32_t>(keysAtOffsets.size()),
+            .blockHash = blockHashOf(block)},
+        .versions = {}};
+    for (auto const& [key, offset] : keysAtOffsets)
     {
-        if (rowKey.starts_with("created"))
-        {
-            BOOST_CHECK_EQUAL(rowValue, std::string("\x00", 1));
-        }
-        else
-        {
-            BOOST_CHECK_EQUAL(rowValue, std::string("\x01", 1) + "old-bytes");
-        }
+        staged.versions.emplace_back(
+            makeBytes(key), HistoryVersion{.block = block, .shard = 0, .offset = offset});
     }
-
-    // An empty old value is NOT the same row as ABSENT.
-    Diff emptyValueDiff;
-    emptyValueDiff.change("emptied"sv, ""sv);
-    putBlock(storage, 8, emptyValueDiff);
-    auto emptied = readAt(storage, "emptied"sv, 7, 50, 50);
-    BOOST_REQUIRE(std::holds_alternative<bcos::bytes>(emptied));
-    BOOST_CHECK(std::get<bcos::bytes>(emptied).empty());
+    return staged;
 }
 
-/// The manifest splits at a byte cap and keysOfBlock rejoins the shards in order (spec B.2).
-BOOST_AUTO_TEST_CASE(manifestShardsSplitAtByteCapAndRejoin)
+std::optional<HistoryVersion> lookup(
+    HistoryIndex const& index, std::string_view key, bcos::protocol::BlockNumber block)
 {
-    HistoryMemStorage storage;
-    Diff diff;
-    std::vector<std::string> keys;
-    for (int index = 0; index < 5; ++index)
-    {
-        keys.push_back("key-" + std::to_string(index) + "!!!");  // 8 bytes each
-        diff.change(keys.back(), "old"sv);
-    }
-    // Record size is 4 + 8 = 12, so a 30-byte cap fits two records per shard.
-    constexpr std::size_t shardCap = 30;
-    putBlock(storage, 42, diff, shardCap);
+    auto const keyBytes = makeBytes(key);
+    return index.locate(keyBytes, block);
+}
+}  // namespace
 
-    auto manifestRows = rowsOfTable(storage, kStateHistory.manifest);
-    BOOST_REQUIRE_EQUAL(manifestRows.size(), 3);
-    for (std::size_t shard = 0; shard < manifestRows.size(); ++shard)
-    {
-        BOOST_CHECK_EQUAL(manifestRows[shard].first, manifestRowKey(42, shard));
-        BOOST_CHECK_LE(manifestRows[shard].second.size(), shardCap);
-    }
-
-    auto rejoined = keysOfBlock(storage, 42);
-    BOOST_REQUIRE_EQUAL(rejoined.size(), keys.size());
-    for (std::size_t index = 0; index < keys.size(); ++index)
-    {
-        BOOST_CHECK_EQUAL(toText(rejoined[index]), keys[index]);
-    }
+/// A fresh index has never been rebuilt, and that is NOT the same as "this chain recorded no
+/// history": an index that was never built cannot tell the two apart, and reading its silence as
+/// "the key never changed" is exactly the wrong answer G10 forbids.
+BOOST_AUTO_TEST_CASE(emptyIndexRefusesEveryQuery)
+{
+    HistoryIndex index;
+    BOOST_CHECK(index.state() == IndexState::Empty);
+    BOOST_CHECK_EQUAL(index.keyCount(), std::size_t{0});
+    BOOST_CHECK_EQUAL(index.versionCount(), std::size_t{0});
+    BOOST_CHECK_THROW(lookup(index, "k"sv, 5), HistoryIndexUnavailable);
+    // The plain accessor is not the guarded path and answers without refusing — which is why the
+    // query path uses locate() and not this.
+    auto const keyBytes = makeBytes("k"sv);
+    BOOST_CHECK(!index.firstChangeAfter(keyBytes, 5).has_value());
 }
 
-/// The cap bounds a shard, it cannot split a record: a key whose own record is larger than the
-/// cap still gets one shard to itself rather than looping forever trying to fit.
-BOOST_AUTO_TEST_CASE(oversizedRecordGetsItsOwnShard)
+/// publish appends, and the versions of one key stay in ascending block order — the order the
+/// upper_bound lookup and the front-of-vector retire both stand on.
+BOOST_AUTO_TEST_CASE(publishAppendsInBlockOrder)
 {
-    HistoryMemStorage storage;
-    std::string longKey(100, 'k');
-    Diff diff;
-    diff.change(longKey, "old"sv);
-    putBlock(storage, 3, diff, /*shardCap=*/30);
+    HistoryIndex index;
+    index.publish(stagedFor(10, {{"a"sv, 0}, {"b"sv, 12}}), std::nullopt, std::nullopt);
+    index.publish(stagedFor(20, {{"a"sv, 0}}), std::nullopt, std::nullopt);
+    index.publish(stagedFor(30, {{"a"sv, 4}, {"b"sv, 0}}), std::nullopt, std::nullopt);
 
-    auto manifestRows = rowsOfTable(storage, kStateHistory.manifest);
-    BOOST_REQUIRE_EQUAL(manifestRows.size(), 1);
-    BOOST_CHECK_EQUAL(manifestRows[0].second.size(), 4 + longKey.size());
-
-    auto rejoined = keysOfBlock(storage, 3);
-    BOOST_REQUIRE_EQUAL(rejoined.size(), 1);
-    BOOST_CHECK_EQUAL(toText(rejoined[0]), longKey);
+    BOOST_CHECK(index.state() == IndexState::Ready);
+    BOOST_CHECK_EQUAL(index.keyCount(), std::size_t{2});
+    BOOST_CHECK_EQUAL(index.versionCount(), std::size_t{5});
+    BOOST_CHECK_EQUAL(index.blockCount(), std::size_t{3});
+    BOOST_CHECK(index.hasBlock(20));
+    BOOST_CHECK(!index.hasBlock(21));
+    auto const meta = index.blockMeta(30);
+    BOOST_REQUIRE(meta.has_value());
+    BOOST_CHECK_EQUAL(meta->recordCount, 2);
 }
 
-/// spec B.10 ②: the audit reads the window as "one manifest per block" and treats a gap as
-/// fatal, so a block that changed nothing must still say so.
-BOOST_AUTO_TEST_CASE(emptyBlockStillGetsAManifest)
+/// The lookup is `upper_bound`: the first version STRICTLY after the queried block. Block 20's own
+/// record answers block 19, not block 20 — block 20's value is what block 30 recorded as its
+/// pre-image. Getting this bound wrong is an off-by-one that returns a plausible neighbouring
+/// value, so every boundary is spelled out.
+BOOST_AUTO_TEST_CASE(firstChangeAfterIsAStrictUpperBound)
 {
-    HistoryMemStorage storage;
-    Diff nothingChanged;
-    putBlock(storage, 11, nothingChanged);
+    HistoryIndex index;
+    index.publish(stagedFor(10, {{"a"sv, 100}}), std::nullopt, std::nullopt);
+    index.publish(stagedFor(20, {{"a"sv, 200}}), std::nullopt, std::nullopt);
+    index.publish(stagedFor(30, {{"a"sv, 300}}), std::nullopt, std::nullopt);
 
-    auto manifestRows = rowsOfTable(storage, kStateHistory.manifest);
-    BOOST_REQUIRE_EQUAL(manifestRows.size(), 1);
-    BOOST_CHECK_EQUAL(manifestRows[0].first, manifestRowKey(11, 0));
-    BOOST_CHECK(manifestRows[0].second.empty());
-    BOOST_CHECK(keysOfBlock(storage, 11).empty());
-    BOOST_CHECK(rowsOfTable(storage, kStateHistory.index).empty());
+    BOOST_CHECK_EQUAL(lookup(index, "a"sv, 0)->offset, 100U);
+    BOOST_CHECK_EQUAL(lookup(index, "a"sv, 9)->offset, 100U);
+    BOOST_CHECK_EQUAL(lookup(index, "a"sv, 10)->offset, 200U);
+    BOOST_CHECK_EQUAL(lookup(index, "a"sv, 19)->offset, 200U);
+    BOOST_CHECK_EQUAL(lookup(index, "a"sv, 20)->offset, 300U);
+    BOOST_CHECK_EQUAL(lookup(index, "a"sv, 29)->offset, 300U);
+    // Nothing recorded after block 30: the caller reads the current value.
+    BOOST_CHECK(!lookup(index, "a"sv, 30).has_value());
+    BOOST_CHECK(!lookup(index, "a"sv, 999).has_value());
+    // A key the index has never seen is the same answer, and is only safe because the index is
+    // Ready and its boundary covers the block.
+    BOOST_CHECK(!lookup(index, "never"sv, 5).has_value());
+    // The located version names the block AND the shard, not just the offset.
+    BOOST_CHECK(
+        *lookup(index, "a"sv, 10) == (HistoryVersion{.block = 20, .shard = 0, .offset = 200}));
 }
 
-/// spec B.4: the write path is pure append. Not one read, not one seek — that is what keeps
-/// write amplification equal to the block's diff instead of growing with the window depth.
-BOOST_AUTO_TEST_CASE(putNeitherReadsNorSeeks)
+/// retire drops exactly the expired block's versions, from the FRONT of each key's vector, and
+/// leaves every other block's answers untouched. A key whose last version goes stops being a key.
+BOOST_AUTO_TEST_CASE(retireRemovesOnlyTheExpiredBlock)
 {
-    CountingStorage mutableLayer;
-    Diff diff;
-    for (int index = 0; index < 20; ++index)
-    {
-        diff.change("key-" + std::to_string(index), "old-" + std::to_string(index));
-    }
-    putBlock(mutableLayer, 100, diff, /*shardCap=*/40);
+    HistoryIndex index;
+    index.publish(stagedFor(10, {{"a"sv, 100}, {"gone"sv, 0}}), std::nullopt, std::nullopt);
+    index.publish(stagedFor(20, {{"a"sv, 200}}), std::nullopt, std::nullopt);
+    BOOST_REQUIRE_EQUAL(index.versionCount(), std::size_t{3});
 
-    BOOST_CHECK_EQUAL(mutableLayer.readCalls, 0);
-    BOOST_CHECK_EQUAL(mutableLayer.rangeCalls, 0);
-    // The rows did land: 20 index rows plus the manifest shards.
-    BOOST_CHECK_EQUAL(rowsOfTable(mutableLayer.inner, kStateHistory.index).size(), 20);
-    BOOST_CHECK(!rowsOfTable(mutableLayer.inner, kStateHistory.manifest).empty());
+    // The retirement rides the NEXT block's publish, which is how the commit path issues it.
+    RetiredBlock retired{
+        .block = 10, .keys = {makeBytes("a"sv), makeBytes("gone"sv)}, .shardsDeleted = 1};
+    index.publish(stagedFor(30, {{"a"sv, 300}}), std::move(retired),
+        std::optional<bcos::protocol::BlockNumber>{10});
+
+    BOOST_CHECK(!index.hasBlock(10));
+    BOOST_CHECK(index.hasBlock(20));
+    BOOST_CHECK(index.hasBlock(30));
+    BOOST_CHECK_EQUAL(index.versionCount(), std::size_t{2});
+    // "gone" had only block 10's version, so it is no longer a key at all.
+    BOOST_CHECK_EQUAL(index.keyCount(), std::size_t{1});
+    // Block 10 is the boundary now, so block 9 is refused while block 10 still answers from
+    // block 20's surviving record.
+    BOOST_REQUIRE(index.boundary().has_value());
+    BOOST_CHECK_EQUAL(*index.boundary(), 10);
+    BOOST_CHECK_THROW(lookup(index, "a"sv, 9), HistoryPruned);
+    BOOST_CHECK_EQUAL(lookup(index, "a"sv, 10)->offset, 200U);
 }
 
-/// A key recorded twice in one block would overwrite the block-start value with a mid-block one,
-/// and every later query for that block would silently get the wrong answer. The caller owns the
-/// deduplication (spec B.4); the store refuses the input rather than accepting it.
-BOOST_AUTO_TEST_CASE(duplicateKeyInOneBlockIsRejected)
+/// The boundary only ever grows. Two callers hand expire a LOWER block — an operator raising the
+/// retention depth, and a chain re-committing after a rollback — and assigning would then claim
+/// heights are intact whose shards an earlier, higher expiry already deleted.
+BOOST_AUTO_TEST_CASE(boundaryTakesTheMaximum)
 {
-    HistoryMemStorage storage;
-    Diff diff;
-    diff.change("balance"sv, "first"sv).change("balance"sv, "second"sv);
-    BOOST_CHECK_THROW(putBlock(storage, 5, diff), MPTInvariantViolation);
+    HistoryIndex index;
+    index.setBoundary(std::optional<bcos::protocol::BlockNumber>{50});
+    BOOST_CHECK_EQUAL(*index.boundary(), 50);
+    index.setBoundary(std::optional<bcos::protocol::BlockNumber>{20});
+    BOOST_CHECK_EQUAL(*index.boundary(), 50);
+    index.setBoundary(std::nullopt);
+    BOOST_CHECK_EQUAL(*index.boundary(), 50);
+    index.setBoundary(std::optional<bcos::protocol::BlockNumber>{60});
+    BOOST_CHECK_EQUAL(*index.boundary(), 60);
+
+    // The boundary alone does not entitle the index to answer: it is still Empty.
+    BOOST_CHECK(index.state() == IndexState::Empty);
+    BOOST_CHECK_THROW(lookup(index, "a"sv, 70), HistoryIndexUnavailable);
 }
 
-/// The two instantiations (spec B.8) share the code but not the rows: writing state history must
-/// leave the trie-history tables empty and vice versa.
-BOOST_AUTO_TEST_CASE(stateAndTrieInstancesUseSeparateTables)
+/// replace installs a whole rebuilt index and makes it Ready — reaching replace IS the proof that
+/// the rebuild walked its input end to end, because every inconsistency throws instead.
+BOOST_AUTO_TEST_CASE(replaceInstallsTheRebuiltIndexAsReady)
 {
-    HistoryMemStorage storage;
-    Diff stateDiff;
-    stateDiff.change("shared-key"sv, "state-old"sv);
-    Diff trieDiff;
-    trieDiff.change("shared-key"sv, "trie-old"sv);
-    bcos::task::syncWait(StateHistoryStore::put(storage, 9, stateDiff.entries(), kWideShardCap));
-    bcos::task::syncWait(TrieHistoryStore::put(storage, 9, trieDiff.entries(), kWideShardCap));
+    HistoryIndex live;
+    live.publish(stagedFor(10, {{"stale"sv, 0}}), std::nullopt, std::nullopt);
+    live.markUnavailable();
+    BOOST_REQUIRE(live.state() == IndexState::Unavailable);
+    BOOST_CHECK_THROW(lookup(live, "stale"sv, 5), HistoryIndexUnavailable);
 
-    auto stateRows = rowsOfTable(storage, kStateHistory.index);
-    auto trieRows = rowsOfTable(storage, kTrieHistory.index);
-    BOOST_REQUIRE_EQUAL(stateRows.size(), 1);
-    BOOST_REQUIRE_EQUAL(trieRows.size(), 1);
-    BOOST_CHECK_EQUAL(stateRows[0].second, std::string("\x01", 1) + "state-old");
-    BOOST_CHECK_EQUAL(trieRows[0].second, std::string("\x01", 1) + "trie-old");
+    HistoryIndex rebuilt;
+    rebuilt.setBoundary(std::optional<bcos::protocol::BlockNumber>{7});
+    rebuilt.publish(stagedFor(11, {{"fresh"sv, 40}}), std::nullopt, std::nullopt);
+    live.replace(std::move(rebuilt));
 
-    auto keyBytes = makeBytes("shared-key"sv);
-    auto trieResult = bcos::task::syncWait(TrieHistoryStore::readAt(storage, keyBytes, 8, 50, 50));
-    BOOST_REQUIRE(std::holds_alternative<bcos::bytes>(trieResult));
-    BOOST_CHECK_EQUAL(toText(std::get<bcos::bytes>(trieResult)), "trie-old");
+    BOOST_CHECK(live.state() == IndexState::Ready);
+    // The old contents are gone, not merged.
+    BOOST_CHECK(!live.hasBlock(10));
+    BOOST_CHECK(live.hasBlock(11));
+    BOOST_CHECK_EQUAL(live.keyCount(), std::size_t{1});
+    // Above the rebuilt boundary, so this is the lookup missing rather than the boundary refusing.
+    BOOST_CHECK(!lookup(live, "stale"sv, 8).has_value());
+    BOOST_CHECK_EQUAL(lookup(live, "fresh"sv, 10)->offset, 40U);
+    BOOST_REQUIRE(live.boundary().has_value());
+    BOOST_CHECK_EQUAL(*live.boundary(), 7);
+
+    // A rebuild that found NOTHING still installs Ready: the walk saw the whole retained range,
+    // so "no recorded change" is a fact rather than an absence of knowledge.
+    HistoryIndex emptyRebuild;
+    live.replace(std::move(emptyRebuild));
+    BOOST_CHECK(live.state() == IndexState::Ready);
+    BOOST_CHECK(!lookup(live, "fresh"sv, 10).has_value());
+}
+
+/// A publish that throws leaves the maps in an unknown shape, and an index missing versions
+/// answers "the key never changed". So the failure is latched: everything refuses until a rebuild
+/// replaces it, and a second attempt at the same block does not quietly succeed.
+BOOST_AUTO_TEST_CASE(aFailedPublishLatchesUnavailable)
+{
+    HistoryIndex index;
+    index.publish(stagedFor(10, {{"a"sv, 0}}), std::nullopt, std::nullopt);
+    BOOST_REQUIRE(index.state() == IndexState::Ready);
+
+    // Publishing the same block twice would give key "a" two versions for block 10, and retiring
+    // block 10 would then leave one behind.
+    BOOST_CHECK_THROW(index.publish(stagedFor(10, {{"a"sv, 8}}), std::nullopt, std::nullopt),
+        MPTInvariantViolation);
+    BOOST_CHECK(index.state() == IndexState::Unavailable);
+    BOOST_CHECK_THROW(lookup(index, "a"sv, 5), HistoryIndexUnavailable);
+    // The duplicate did not land: the check runs before any version vector is touched.
+    BOOST_CHECK_EQUAL(index.versionCount(), std::size_t{1});
+}
+
+/// The ordering precondition the whole lookup rests on. Versions are appended with push_back, so a
+/// key's vector is sorted only because the block numbers arrived ascending; publish a block BELOW
+/// the current maximum and `upper_bound` is reading an unsorted range, which is undefined and comes
+/// back as a plausible wrong version rather than as an error.
+///
+/// So a descending publish is refused outright, and refused the same way a duplicate is — the two
+/// are one check, because a duplicate is the equality case of "not strictly ascending".
+BOOST_AUTO_TEST_CASE(publishingBlocksOutOfOrderIsRefused)
+{
+    HistoryIndex index;
+    index.publish(stagedFor(20, {{"a"sv, 200}}), std::nullopt, std::nullopt);
+    BOOST_REQUIRE(index.state() == IndexState::Ready);
+
+    BOOST_CHECK_THROW(index.publish(stagedFor(10, {{"a"sv, 100}}), std::nullopt, std::nullopt),
+        MPTInvariantViolation);
+    BOOST_CHECK(index.state() == IndexState::Unavailable);
+    BOOST_CHECK_THROW(lookup(index, "a"sv, 5), HistoryIndexUnavailable);
+    // Nothing landed: block 10 is absent and key "a" still has exactly block 20's version, so the
+    // vector the refused publish would have unsorted is still sorted.
+    BOOST_CHECK(!index.hasBlock(10));
+    BOOST_CHECK(index.hasBlock(20));
+    BOOST_CHECK_EQUAL(index.versionCount(), std::size_t{1});
+
+    // Ascending still works, on an index that has not been poisoned.
+    HistoryIndex fresh;
+    fresh.publish(stagedFor(10, {{"a"sv, 100}}), std::nullopt, std::nullopt);
+    fresh.publish(stagedFor(20, {{"a"sv, 200}}), std::nullopt, std::nullopt);
+    BOOST_CHECK_EQUAL(lookup(fresh, "a"sv, 9)->offset, 100U);
+    BOOST_CHECK_EQUAL(lookup(fresh, "a"sv, 10)->offset, 200U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
