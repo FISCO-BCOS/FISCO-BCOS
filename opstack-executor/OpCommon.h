@@ -4,7 +4,6 @@
 
 // OP block types and header conversions. Commitment comparison lives in OpCommitments.h.
 
-#include <bcos-framework/engine/NumericBounds.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
@@ -172,7 +171,7 @@ inline evmc::bytes32 toEvmcBytes32(const bcos::h256& h) noexcept
 /// (silent-truncation guard).
 inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
 {
-    if (!bcos::engine::u256FitsUint64(v))
+    if (!bcos::u256FitsUint64(v))
         throw OpConsensusError(std::string("field exceeds uint64_t range: ") + fieldName);
     return static_cast<uint64_t>(v);
 }
