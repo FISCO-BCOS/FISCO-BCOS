@@ -449,7 +449,7 @@ BOOST_AUTO_TEST_CASE(HistoricalMissingRootReturns32004)
         resp["error"]["message"].asString().find("not in MPT node storage") != std::string::npos);
 }
 
-// Historical state, empty root, scenario B (): the empty root is a legal
+// Historical state, empty root, scenario B: the empty root is a legal
 // "no accounts" root — the empty trie has no node rows, so it is NOT a "root not in MPT
 // storage" error. With complete tries the absent account provably reads zero, matching
 // Ethereum semantics.

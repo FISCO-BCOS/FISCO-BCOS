@@ -43,4 +43,9 @@ DERIVE_BCOS_EXCEPTION(UnexpectedBCOSFieldInL2);
 /// line in KNOWN_BCOS_EXTENSION_FIELDS once that judgement is made.
 DERIVE_BCOS_EXCEPTION(UnknownAccountRowField);
 
+/// Thrown when a receipt cannot be encoded into its Ethereum trie leaf (encodeReceiptLeaf): a
+/// bloom that is not 256 bytes, an unparseable cumulativeGasUsed, or an OP deposit receipt
+/// missing its nonce/receipt-version metadata. The receipt is malformed, not the trie.
+DERIVE_BCOS_EXCEPTION(EthReceiptEncodeError);
+
 }  // namespace bcos::ledger::mpt

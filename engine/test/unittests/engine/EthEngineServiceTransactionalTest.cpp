@@ -85,17 +85,6 @@ struct GateMergeStorage
         ++queuedDepth;
     }
 
-    void popBackStorage()
-    {
-        inner.popBackStorage();
-        if (queuedDepth.load() > 0)
-        {
-            --queuedDepth;
-        }
-    }
-
-    std::size_t pendingLayerCount() { return inner.pendingLayerCount(); }
-
     task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage()
     {
         mergeStarted->store(true, std::memory_order_release);

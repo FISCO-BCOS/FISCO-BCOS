@@ -147,6 +147,10 @@ static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint6
 
 struct BloomScheduler
 {
+    /// Last receipts handed to the engine, so a test can rebuild their commitments through an
+    /// independent root builder.
+    std::vector<protocol::TransactionReceipt::Ptr> lastReceipts;
+
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
         const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
@@ -159,15 +163,19 @@ struct BloomScheduler
         Keccak256 hasher;
         auto receipt1 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
         receipt1->setLogsBloom({bloom1.data(), bloom1.size()});
+        // Real executor receipts carry a cumulative gas value (BaselineScheduler stores it as a
+        // decimal string); the receipts-root leaf commits to it, so the stub must too.
+        receipt1->setCumulativeGasUsed("21000");
         receipt1->calculateHash(hasher);
         auto receipt2 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
         receipt2->setLogsBloom({bloom2.data(), bloom2.size()});
+        receipt2->setCumulativeGasUsed("42000");
         receipt2->calculateHash(hasher);
 
+        lastReceipts = {receipt1, receipt2};
         co_return std::vector<protocol::TransactionReceipt::Ptr>{receipt1, receipt2};
     }
 };
-
 bcos::protocol::BlockFactory::Ptr testBlockFactory()
 {
     static auto blockFactory =
@@ -1054,7 +1062,7 @@ BOOST_AUTO_TEST_CASE(new_payload_hit_rejects_altered_state_root_and_keeps_built_
 
 BOOST_AUTO_TEST_CASE(new_payload_honest_retry_does_not_recommit)
 {
-    // Pins 's no-op leg: after a successful commit the entry survives with
+    // Pins the no-op leg: after a successful commit the entry survives with
     // view==null and header==null (artifacts consumed post-I/O), so a repeat newPayload
     // must skip the commit branch entirely and answer VALID WITHOUT touching storage —
     // never a mergeBackStorage() on the drained/foreign queue.
@@ -1351,7 +1359,8 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     std::string sender("cccccccccccccccccccc", 20);
     // Web3-shaped: only transactions with an EIP-2718 wire form enter OP payloads.
     auto tx = makeWeb3Tx(sender, 0);
-    memPool.add(std::vector{tx});
+    auto tx2 = makeWeb3Tx(sender, 1);
+    memPool.add(std::vector{tx, tx2});
     globalStateStorageFixture.setNonce(sender, "0");
     auto payloadAttributes = makePayloadAttributesV2();
 
@@ -1375,6 +1384,28 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     {
         BOOST_CHECK_EQUAL(static_cast<int>(payload->executionPayload.logsBloom[i]), 0);
     }
+
+    // receiptsRoot is the Ethereum index-keyed MPT over the RLP receipt leaves (op-geth
+    // Receipts.EncodeIndex), not a FISCO Merkle fold over receipt hashes: the two stub receipts
+    // carry cumulative gas 21000/42000, these blooms, status success and no logs, under two
+    // type-2 transactions. The literal is anchored to the shared implementation that
+    // OpReceiptEncodeTest pins against evmone's encoder and EthTrieRootsTest pins against the
+    // Python MPT reference, so this case only pins that the engine path uses it.
+    BOOST_CHECK_EQUAL(payload->executionPayload.receiptsRoot.hex(),
+        "456c66268a43485758d636e9be4fdda036bf446ff274df67e4f83f6ca7096ac7");
+
+    // Differential against the OP path's var-key trie builder: same leaves, different root
+    // function, so an engine/OP drift on key ordering or leaf handling fails here.
+    std::vector<std::pair<bcos::bytes, bcos::bytes>> expectedEntries;
+    for (std::size_t i = 0; i < bloomScheduler.lastReceipts.size(); ++i)
+    {
+        bcos::bytes key;
+        bcos::codec::rlp::encode(key, static_cast<uint64_t>(i));
+        expectedEntries.emplace_back(std::move(key),
+            bcos::ledger::mpt::encodeReceiptLeaf(*bloomScheduler.lastReceipts[i], /*txType=*/0x02));
+    }
+    BOOST_CHECK_EQUAL(payload->executionPayload.receiptsRoot,
+        bcos::ledger::mpt::computeTrieRootVarKey(expectedEntries).root);
 }
 
 // ---- B4: Karst method surface (forkchoiceUpdatedV3 -> getPayloadV5 -> newPayloadV4) ----
@@ -1766,7 +1797,7 @@ static bcos::protocol::BlockHeader::Ptr makeValidCancunHeader(
         bcos::h256("5555555555555555555555555555555555555555555555555555555555555555"));
     header->setReceiptsRoot(
         bcos::h256("6666666666666666666666666666666666666666666666666666666666666666"));
-    bcos::Bloom bloom;
+    bcos::Bloom bloom{};
     bloom[0] = 0xab;
     header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
     return header;
@@ -1976,4 +2007,49 @@ BOOST_AUTO_TEST_CASE(buildPayloadEmptyBlockInjectsRlpHash)
     BOOST_CHECK_EQUAL(blockHash.hex(), bcos::crypto::keccak256Hash(bcos::ref(rlp)).hex());
 }
 
+
+/// Regression pin for the transactionsRoot split: the builder and the cache-miss
+/// reconstruction must use the SAME commitment (the index-keyed MPT over raw EIP-2718
+/// envelopes). While the builder used a Merkle root over tx hashes and the reconstruction the
+/// Ethereum MPT, a non-empty payload submitted to a service that had not built it answered
+/// INVALID_BLOCK_HASH instead of SYNCING.
+BOOST_AUTO_TEST_CASE(cache_miss_with_transactions_reconstructs_and_answers_syncing)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("abababababababababab", 20);
+    auto poolTx = makeWeb3Tx(sender, 0);
+    memPool.add(std::vector{poolTx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto builder = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto attributes = makePayloadAttributesV3();
+    attributes.transactions = std::vector<std::string>{"0x7e0102030405", "0x02f8aabb"};
+    auto result = task::syncWait(builder.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(builder.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 3);
+
+    // A fresh service has an empty cache, so newPayload takes the reconstruction path.
+    auto verifier = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    auto status = task::syncWait(verifier.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK(!status.validationError.has_value());
+
+    // The reconstruction still discriminates: a tampered body must answer INVALID_BLOCK_HASH.
+    auto tampered = makeNewPayloadRequestV3(payload->executionPayload);
+    tampered.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    tampered.executionPayload.gasUsed += 1;
+    auto tamperedStatus = task::syncWait(verifier.newPayload(tampered, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(tamperedStatus.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(tamperedStatus.validationError.has_value());
+    BOOST_CHECK_NE(tamperedStatus.validationError->find("blockHash"), std::string::npos);
+}
 BOOST_AUTO_TEST_SUITE_END()

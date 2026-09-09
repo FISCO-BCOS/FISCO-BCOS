@@ -6,19 +6,26 @@
 project(bcos-engine VERSION ${VERSION})
 
 file(GLOB_RECURSE SRC_LIST "bcos-engine/*.cpp")
-# EngineServiceImpl.h is leftover until parity fixtures migrate off it.
-# The .cpp TU is gone; production helpers live in EngineServiceCommon.cpp.
+# EngineServiceImpl.h is the class libinitializer/EngineServiceInitializer.h instantiates in
+# production (engine-driven modes); it is header-only today and its helpers live in
+# EngineServiceCommon.cpp. It ships in the installed header set (see below).
 
 add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include/bcos-engine>)
+    $<INSTALL_INTERFACE:include/bcos-engine>
+    # The installed EngineMPTStateRoot.h includes <bcos-transaction-scheduler/...>, and that
+    # header in turn includes <bcos-storage/KeyPrefixes.h>. Both ship as headers in this
+    # package but are not exported CMake targets (exporting transaction-scheduler would drag
+    # RocksDB in through bcos-storage), so advertise their installed include dirs here.
+    $<INSTALL_INTERFACE:include/bcos-transaction-scheduler>
+    $<INSTALL_INTERFACE:include/bcos-storage>)
 target_include_directories(engine PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/transaction-scheduler>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/bcos-storage>)
 # PUBLIC rlp-protocol: EthEngineService.h includes EthEngineService.inl, and the
 # installed OpEngineService.inl uses <bcos-rlp-protocol/EthBlockHeader.h>. PRIVATE
-# would drop include dirs for consumers that instantiate the templates (A8-13).
+# would drop include dirs for consumers that instantiate the templates.
 target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec
     rlp-protocol)
 set_target_properties(engine PROPERTIES UNITY_BUILD "ON")
@@ -31,13 +38,18 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS engine EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
-# Production headers only (finding CD). EngineServiceImpl.h is leftover / test-only.
+# Installed production headers, including EngineServiceImpl.h — the class
+# libinitializer/EngineServiceInitializer.h builds today. Its EngineMPTStateRoot.h dependency
+# is installed alongside it (and that header's transaction-scheduler / bcos-storage includes
+# are installed by their own packages), so an external consumer can construct the engine
+# service the product actually runs.
 install(DIRECTORY "bcos-engine" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     FILES_MATCHING
     PATTERN "EthEngineService.h"
     PATTERN "EthEngineService.inl"
     PATTERN "OpEngineService.h"
     PATTERN "OpEngineService.inl"
+    PATTERN "EngineServiceImpl.h"
     PATTERN "EngineMPTStateRoot.h"
     PATTERN "EngineStorageCommit.h"
     PATTERN "EngineServiceCommon.h"

@@ -27,7 +27,6 @@
 #include "EngineServiceCommon.h"
 #include "EngineStorageCommit.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/engine/EngineService.h"
 #include "bcos-framework/engine/Errors.h"
 #include "bcos-framework/engine/Types.h"
@@ -49,6 +48,7 @@
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <atomic>
 #include <chrono>
@@ -128,7 +128,7 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
 // @p forkVersion is the era the header is hashed as, derived from the chain's EVM revision
 // (see ethBlockVersionFor); it drives which fork-gated fields the header carries.
 // PRECONDITION: when forkVersion >= CANCUN, @p payload must carry blobGasUsed,
-// excessBlobGas and @p parentBeaconBlockRoot must be engaged (this function uses.value()
+// excessBlobGas and @p parentBeaconBlockRoot must be engaged (this function uses .value()
 // on them and would throw std::bad_optional_access otherwise). buildPayload guarantees the
 // precondition under the same forkVersion-derived gate; a direct caller must too.
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
@@ -539,51 +539,67 @@ private:
         typename GlobalStateStorageType::MutableStorage prewriteStorage;
         protocol::Block::Ptr persistBlock;
         std::shared_ptr<protocol::ConstTransactions> blockTxs;
+        bool parentKnown = false;
+        bool cacheHit = false;
         {
             std::unique_lock lock(x_state);
-            auto parentKnown =
-                request.executionPayload.parentHash == m_forkchoiceState.headBlockHash ||
-                m_blockHashToPayloadId.contains(request.executionPayload.parentHash);
+            parentKnown = request.executionPayload.parentHash == m_forkchoiceState.headBlockHash ||
+                          m_blockHashToPayloadId.contains(request.executionPayload.parentHash);
             auto payloadIdIt = m_blockHashToPayloadId.find(request.executionPayload.blockHash);
             auto builtIt = (payloadIdIt == m_blockHashToPayloadId.end()) ?
                                m_payloadCache.end() :
                                m_payloadCache.find(payloadIdIt->second);
-            bool const cacheHit = parentKnown && builtIt != m_payloadCache.end();
-            if (!cacheHit)
+            cacheHit = parentKnown && builtIt != m_payloadCache.end();
+            if (cacheHit)
             {
-                if (auto hashError = detail::matchReconstructedEthBlockHash(
-                        m_blockFactory->blockHeaderFactory(), request.executionPayload,
-                        request.parentBeaconBlockRoot, detail::ethBlockVersionForApi(version));
-                    hashError.has_value())
-                {
-                    co_return engine_common::makeStatus(
-                        PayloadValidationStatus::InvalidBlockHash, std::nullopt, hashError);
-                }
-                if (!parentKnown)
-                {
-                    co_return engine_common::makeStatus(
-                        PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
-                }
-                // Rate-limit the warning so a retrying CL cannot flood the log.
-                static std::atomic<std::chrono::steady_clock::time_point> lastWarn{
-                    std::chrono::steady_clock::time_point{}};
-                auto const now = std::chrono::steady_clock::now();
-                auto prev = lastWarn.load(std::memory_order_relaxed);
-                if (now - prev >= std::chrono::seconds(10) &&
-                    lastWarn.compare_exchange_strong(
-                        prev, now, std::memory_order_relaxed, std::memory_order_relaxed))
-                {
-                    BCOS_LOG(WARNING)
-                        << LOG_BADGE("EngineService")
-                        << LOG_DESC("newPayload cache miss; answering SYNCING")
-                        << LOG_KV("blockHash", request.executionPayload.blockHash.hex());
-                }
+                payloadId = payloadIdIt->second;
+            }
+        }  // x_state released: the block-hash reconstruction below is O(total envelope bytes)
+           // and must not hold the lock (the FCU/getPayload paths need it).
+
+        if (!cacheHit)
+        {
+            if (auto hashError = detail::matchReconstructedEthBlockHash(
+                    m_blockFactory->blockHeaderFactory(), request.executionPayload,
+                    request.parentBeaconBlockRoot, detail::ethBlockVersionForApi(version));
+                hashError.has_value())
+            {
+                co_return engine_common::makeStatus(
+                    PayloadValidationStatus::InvalidBlockHash, std::nullopt, hashError);
+            }
+            if (!parentKnown)
+            {
                 co_return engine_common::makeStatus(
                     PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
             }
-            payloadId = payloadIdIt->second;
+            // Rate-limit the warning so a retrying CL cannot flood the log.
+            static std::atomic<std::chrono::steady_clock::time_point> lastWarn{
+                std::chrono::steady_clock::time_point{}};
+            auto const now = std::chrono::steady_clock::now();
+            auto prev = lastWarn.load(std::memory_order_relaxed);
+            if (now - prev >= std::chrono::seconds(10) &&
+                lastWarn.compare_exchange_strong(
+                    prev, now, std::memory_order_relaxed, std::memory_order_relaxed))
+            {
+                BCOS_LOG(WARNING) << LOG_BADGE("EngineService")
+                                  << LOG_DESC("newPayload cache miss; answering SYNCING")
+                                  << LOG_KV("blockHash", request.executionPayload.blockHash.hex());
+            }
+            co_return engine_common::makeStatus(
+                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+        }
+
+        {
+            std::unique_lock lock(x_state);
+            auto it = m_payloadCache.find(payloadId);
+            if (it == m_payloadCache.end())
+            {
+                // Evicted between the two lock scopes: same answer as a cache miss.
+                co_return engine_common::makeStatus(
+                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            }
             if (auto mismatch = detail::compareWithBuiltPayload(
-                    request.executionPayload, builtIt->second.executionPayload))
+                    request.executionPayload, it->second.executionPayload))
             {
                 co_return engine_common::makeStatus(
                     PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
@@ -594,8 +610,7 @@ private:
             // Commit contract: pushView + view.reset() happen here under x_state (a
             // concurrent duplicate newPayload must never push the same view twice); the
             // Retry only when a view or header is still pending durable commit.
-            auto it = m_payloadCache.find(payloadId);
-            if (it != m_payloadCache.end() && (it->second.view || it->second.header))
+            if (it->second.view || it->second.header)
             {
                 if (it->second.view)
                 {
@@ -1023,72 +1038,96 @@ private:
         // forms. Raw-only entries (forced transactions from the OP attributes list) have
         // no executable form yet and are skipped — see the forced-transaction comment
         // above. Materialized into a vector because scheduler implementations require a
-        // sized range (a lazy filter view is not sized).
-        auto executableTransactions =
-            executionPayload.transactions | ::ranges::views::filter([](auto const& transaction) {
-                return transaction.decoded != nullptr;
-            }) |
-            ::ranges::views::transform(
-                [](auto const& transaction) { return transaction.decoded; }) |
-            ::ranges::to<std::vector>();
+        // sized range (a lazy filter view is not sized). `executedTypes` stays index-parallel
+        // with `receipts`: it carries each executed transaction's EIP-2718 type byte for the
+        // receipts-root leaf prefix below.
+        std::vector<protocol::Transaction::Ptr> executableTransactions;
+        std::vector<std::uint8_t> executedTypes;
+        executableTransactions.reserve(executionPayload.transactions.size());
+        executedTypes.reserve(executionPayload.transactions.size());
+        for (auto const& tx : executionPayload.transactions)
+        {
+            if (tx.decoded == nullptr)
+            {
+                continue;
+            }
+            executableTransactions.push_back(tx.decoded);
+            executedTypes.push_back(bcos::engine::rawTransactionTypeByte(bcos::ref(tx.raw)));
+        }
         auto receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(),
             *blockHeader, executableTransactions | ::ranges::views::indirect, ledgerConfig);
 
-        // Step 2d: Compute transaction root (Merkle over tx hashes)
-        // TODO: Use scheduler_v1::calculateTransactionRoot from BaselineScheduler.h
-        // once MPTStorage is available. The current tx->hash() call lacks exception
-        // handling for malformed transactions. An empty transaction list maps to the
-        // canonical empty-trie root (validateHeader rejects an all-zero txsRoot).
-        h256 txRoot = bcos::ledger::mpt::emptyRootHash();
+        // The v2 executor's receipts carry neither a logsBloom nor a cumulativeGasUsed (a
+        // documented limitation). The receipts-root leaf commits to both, so normalize them
+        // here before encoding: derive the bloom from the logs when absent, and fill the
+        // running gas prefix when the scheduler did not provide one (BaselineScheduler::
+        // finishExecute does both for the PBFT path). header.logsBloom == OR(receipt
+        // blooms) then also holds.
+        u256 cumulativeGasUsed = 0;
+        for (auto& receipt : receipts)
         {
-            auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-            auto hasher = hashImpl.hasher();
-            crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
-                hasher.clone());
-            if (!executionPayload.transactions.empty())
-            {
-                auto txHashes =
-                    executionPayload.transactions | ::ranges::views::transform([](auto& tx) {
-                        // Canonical txHash: decoded transactions expose it directly;
-                        // raw-only (forced) entries hash their EIP-2718 bytes, which is
-                        // the canonical hash for every raw transaction kind.
-                        return tx.decoded ? tx.decoded->hash() :
-                                            bcos::crypto::keccak256Hash(bcos::ref(tx.raw));
-                    });
-                std::vector<h256> merkleTrie;
-                merkle.generateMerkle(txHashes, merkleTrie);
-                if (!merkleTrie.empty())
-                {
-                    txRoot = merkleTrie.back();
-                }
-            }
-        }
-
-        // Step 2e: Compute receipt root (Merkle over receipt hashes). An empty receipt list
-        // maps to the canonical empty-trie root (validateHeader rejects an all-zero
-        // receiptsRoot).
-        h256 receiptRoot = bcos::ledger::mpt::emptyRootHash();
-        {
-            // Validate receipts are non-null before computing hashes
-            if (::ranges::any_of(receipts, [](auto& r) { return !r; }))
+            if (!receipt)
             {
                 BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
             }
-            auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-            auto hasher = hashImpl.hasher();
-            crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
-                hasher.clone());
-            if (!receipts.empty())
+            if (receipt->logsBloom().empty())
             {
-                auto receiptHashes =
-                    receipts | ::ranges::views::transform([](auto& r) { return r->hash(); });
-                std::vector<h256> merkleTrie;
-                merkle.generateMerkle(receiptHashes, merkleTrie);
-                if (!merkleTrie.empty())
-                {
-                    receiptRoot = merkleTrie.back();
-                }
+                auto const bloom = bcos::getLogsBloom(receipt->logEntries());
+                receipt->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
             }
+            cumulativeGasUsed += receipt->gasUsed();
+            // A scheduler-provided cumulative value (BaselineScheduler, the OP executor) is
+            // authoritative and left alone; only the v2 executor path needs it filled in.
+            if (receipt->cumulativeGasUsed().empty())
+            {
+                receipt->setCumulativeGasUsed(cumulativeGasUsed.str());
+            }
+        }
+
+        // Step 2d: transactionsRoot — the index-keyed MPT over the raw EIP-2718 envelopes,
+        // which is the Ethereum header commitment. It MUST match both the cache-miss
+        // reconstruction (EngineServiceCommon.cpp transactionsRootFromPayload) and the OP
+        // path's computeTxRoot, otherwise newPayload rejects this node's own payloads with
+        // INVALID_BLOCK_HASH. An empty list maps to the canonical empty-trie root.
+        std::vector<bcos::bytesConstRef> rawEnvelopes;
+        rawEnvelopes.reserve(executionPayload.transactions.size());
+        for (auto const& tx : executionPayload.transactions)
+        {
+            rawEnvelopes.emplace_back(bcos::ref(tx.raw));
+        }
+        h256 const txRoot = rawEnvelopes.empty() ?
+                                bcos::ledger::mpt::emptyRootHash() :
+                                bcos::ledger::mpt::calculateTransactionsRoot(rawEnvelopes);
+
+        // Step 2e: receiptsRoot — the index-keyed MPT over the RLP-encoded receipts, the
+        // Ethereum header commitment (op-geth types.DeriveSha over receipts). It MUST match the
+        // OP block seal's receiptsRoot (sealOpBlock) and any Ethereum-semantics verifier: a
+        // FISCO Merkle fold here changes the block hash. Empty -> canonical empty-trie root.
+        h256 receiptRoot = bcos::ledger::mpt::emptyRootHash();
+        {
+            // One receipt per executed transaction: the leaf prefix is the transaction's type
+            // byte, so a scheduler returning a different count would index `executedTypes`
+            // out of range. Fail closed instead.
+            if (receipts.size() != executedTypes.size())
+            {
+                BOOST_THROW_EXCEPTION(std::runtime_error{
+                    "scheduler returned a receipt count that does not match the executed "
+                    "transactions"});
+            }
+            std::vector<bcos::bytes> receiptLeaves;
+            receiptLeaves.reserve(receipts.size());
+            for (std::size_t i = 0; i < receipts.size(); ++i)
+            {
+                receiptLeaves.push_back(
+                    bcos::ledger::mpt::encodeReceiptLeaf(*receipts[i], executedTypes[i]));
+            }
+            std::vector<bcos::bytesConstRef> receiptLeafRefs;
+            receiptLeafRefs.reserve(receiptLeaves.size());
+            for (auto const& leaf : receiptLeaves)
+            {
+                receiptLeafRefs.emplace_back(leaf.data(), leaf.size());
+            }
+            receiptRoot = bcos::ledger::mpt::calculateReceiptsRoot(receiptLeafRefs);
         }
 
         // Step 2f: Compute gas used and block-level logsBloom from receipts.

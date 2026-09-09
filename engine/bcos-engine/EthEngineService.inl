@@ -27,6 +27,7 @@
 
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <optional>
 
 namespace bcos::engine
@@ -68,7 +69,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     // All-zero safe/finalized hashes are the Engine-API "not set" value: skip number
     // resolution and canonical checks for that field (op-geth SetSafe/SetFinalized are
     // only called for non-zero hashes). A missing HEAD is SYNCING; a non-zero
-    // unresolvable safe/finalized is InvalidForkchoiceState (op-geth, ).
+    // unresolvable safe/finalized is InvalidForkchoiceState (op-geth).
     bool const safeSet = forkchoiceState.safeBlockHash != bcos::h256{};
     bool const finalizedSet = forkchoiceState.finalizedBlockHash != bcos::h256{};
     auto safeBlockNumber = safeSet ? co_await bcos::ledger::getBlockNumber(view,
@@ -646,64 +647,101 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
     blockHeader->setExtraData(std::move(extraData));
 
-    auto executableTransactions =
-        executionPayload.transactions | ::ranges::views::filter([](auto const& transaction) {
-            return transaction.decoded != nullptr;
-        }) |
-        ::ranges::views::transform([](auto const& transaction) { return transaction.decoded; }) |
-        ::ranges::to<std::vector>();
+    // Executed transactions, with each one's EIP-2718 type byte kept index-parallel to
+    // `receipts` for the receipts-root leaf prefix below. Raw-only (forced) entries have no
+    // executable form and are skipped.
+    std::vector<protocol::Transaction::Ptr> executableTransactions;
+    std::vector<std::uint8_t> executedTypes;
+    executableTransactions.reserve(executionPayload.transactions.size());
+    executedTypes.reserve(executionPayload.transactions.size());
+    for (auto const& tx : executionPayload.transactions)
+    {
+        if (tx.decoded == nullptr)
+        {
+            continue;
+        }
+        executableTransactions.push_back(tx.decoded);
+        executedTypes.push_back(bcos::engine::rawTransactionTypeByte(bcos::ref(tx.raw)));
+    }
     auto receipts = co_await m_scheduler.executeBlock(view, m_executor, *blockHeader,
         executableTransactions | ::ranges::views::indirect, ledgerConfig);
 
-    h256 txRoot = bcos::ledger::mpt::emptyRootHash();
+    // The v2 executor's receipts carry neither a logsBloom nor a cumulativeGasUsed (a
+    // documented limitation). The receipts-root leaf commits to both, so normalize them here
+    // before encoding: derive the bloom from the logs when absent, and fill the running gas
+    // prefix when the scheduler did not provide one (BaselineScheduler::finishExecute does
+    // both for the PBFT path). header.logsBloom == OR(receipt blooms) then also holds.
+    u256 cumulativeGasUsed = 0;
+    for (auto& receipt : receipts)
     {
-        auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-        auto hasher = hashImpl.hasher();
-        crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(hasher.clone());
-        if (!executionPayload.transactions.empty())
-        {
-            auto txHashes =
-                executionPayload.transactions | ::ranges::views::transform([](auto& tx) {
-                    return tx.decoded ? tx.decoded->hash() :
-                                        bcos::crypto::keccak256Hash(bcos::ref(tx.raw));
-                });
-            std::vector<h256> merkleTrie;
-            merkle.generateMerkle(txHashes, merkleTrie);
-            if (!merkleTrie.empty())
-            {
-                txRoot = merkleTrie.back();
-            }
-        }
-    }
-
-    h256 receiptRoot = bcos::ledger::mpt::emptyRootHash();
-    {
-        if (::ranges::any_of(receipts, [](auto& r) { return !r; }))
+        if (!receipt)
         {
             BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
                                   << bcos::errinfo_comment{"Null receipt returned by scheduler"});
         }
-        auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-        auto hasher = hashImpl.hasher();
-        crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(hasher.clone());
-        if (!receipts.empty())
+        if (receipt->logsBloom().empty())
         {
-            auto receiptHashes =
-                receipts | ::ranges::views::transform([](auto& r) { return r->hash(); });
-            std::vector<h256> merkleTrie;
-            merkle.generateMerkle(receiptHashes, merkleTrie);
-            if (!merkleTrie.empty())
-            {
-                receiptRoot = merkleTrie.back();
-            }
+            auto const bloom = bcos::getLogsBloom(receipt->logEntries());
+            receipt->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
         }
+        cumulativeGasUsed += receipt->gasUsed();
+        // A scheduler-provided cumulative value (BaselineScheduler, the OP executor) is
+        // authoritative and left alone; only the v2 executor path needs it filled in.
+        if (receipt->cumulativeGasUsed().empty())
+        {
+            receipt->setCumulativeGasUsed(cumulativeGasUsed.str());
+        }
+    }
+
+    // transactionsRoot — the index-keyed MPT over the raw EIP-2718 envelopes, the Ethereum
+    // header commitment. It MUST match the cache-miss reconstruction
+    // (EngineServiceCommon.cpp transactionsRootFromPayload) and the OP path's computeTxRoot,
+    // otherwise newPayload rejects this node's own payloads with INVALID_BLOCK_HASH.
+    std::vector<bcos::bytesConstRef> rawEnvelopes;
+    rawEnvelopes.reserve(executionPayload.transactions.size());
+    for (auto const& tx : executionPayload.transactions)
+    {
+        rawEnvelopes.emplace_back(bcos::ref(tx.raw));
+    }
+    h256 const txRoot = rawEnvelopes.empty() ?
+                            bcos::ledger::mpt::emptyRootHash() :
+                            bcos::ledger::mpt::calculateTransactionsRoot(rawEnvelopes);
+
+    // receiptsRoot — the index-keyed MPT over the RLP-encoded receipts, the Ethereum header
+    // commitment. Same construction as the OP block seal (sealOpBlock), shared through
+    // ledger/mpt so the two producers cannot drift.
+    h256 receiptRoot = bcos::ledger::mpt::emptyRootHash();
+    {
+        // One receipt per executed transaction: the leaf prefix is the transaction's type byte,
+        // so a scheduler returning a different count would index `executedTypes` out of range.
+        if (receipts.size() != executedTypes.size())
+        {
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    "scheduler returned a receipt count that does not match the executed "
+                    "transactions"});
+        }
+        std::vector<bcos::bytes> receiptLeaves;
+        receiptLeaves.reserve(receipts.size());
+        for (std::size_t i = 0; i < receipts.size(); ++i)
+        {
+            receiptLeaves.push_back(
+                bcos::ledger::mpt::encodeReceiptLeaf(*receipts[i], executedTypes[i]));
+        }
+        std::vector<bcos::bytesConstRef> receiptLeafRefs;
+        receiptLeafRefs.reserve(receiptLeaves.size());
+        for (auto const& leaf : receiptLeaves)
+        {
+            receiptLeafRefs.emplace_back(leaf.data(), leaf.size());
+        }
+        receiptRoot = bcos::ledger::mpt::calculateReceiptsRoot(receiptLeafRefs);
     }
 
     u256 totalGasUsed;
     Bloom logsBloom{};
     for (auto& receipt : receipts)
     {
-        // Null receipts were rejected by the any_of guard above the merkle.
+        // Null receipts were rejected by the any_of guard above the leaf encoding.
         totalGasUsed += receipt->gasUsed();
         if (!receipt->logsBloom().empty())
         {

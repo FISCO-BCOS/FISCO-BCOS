@@ -598,23 +598,6 @@ public:
         }
     }
 
-    /// Drop the oldest pending layer without writing it to the backend.
-    void popBackStorage()
-    {
-        std::unique_lock lock(m_listMutex);
-        if (!m_storages.empty())
-        {
-            m_storages.pop_back();
-        }
-    }
-
-    /// Number of queued pending layers.
-    std::size_t pendingLayerCount()
-    {
-        std::unique_lock lock(m_listMutex);
-        return m_storages.size();
-    }
-
 private:
     /// Shared merge body of mergeBackStorage / mergeToBackends — the only difference
     /// between the two is whether a queued layer participates in the merge.

@@ -26,50 +26,52 @@
 using namespace bcos;
 using namespace bcos::rpc;
 
+std::optional<std::string> CallRequest::nonceFromPendingEntry(
+    std::optional<bcos::storage::Entry> const& entry)
+{
+    if (!entry)
+    {
+        return std::nullopt;
+    }
+    // FISCO stores account nonces as DECIMAL strings (EVMAccount writes
+    // convert_to<std::string>(); StorageStateView reads them unprefixed), and the transaction
+    // nonce is parsed as HEX downstream — both bcosTransactionToEvmone (safeFromQuantity) and
+    // TransactionExecutorImpl (hex2u) treat it as hex. So the stored decimal must be converted
+    // to a hex quantity here, otherwise an eth_estimateGas at nonce >= 10 gets its decimal
+    // "12" misread as hex 0x12 = 18 (NONCE_TOO_HIGH). 0-9 coincide in both bases, which is why
+    // only the 11th+ transaction would break.
+    //
+    // The all-digits guard keeps the caller's noexcept contract: bcos::u256 throws on an
+    // unparseable string, and an empty or non-numeric stored nonce is left unset (empty nonce
+    // string) — a corrupt row falls back to the executor reading the sender's state nonce
+    // rather than aborting the RPC.
+    auto const raw = entry->get();
+    if (raw.empty() ||
+        !std::all_of(raw.begin(), raw.end(), [](char c) { return c >= '0' && c <= '9'; }))
+    {
+        return std::nullopt;
+    }
+    return toQuantity(bcos::u256(raw));
+}
+
 bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
-    bcos::protocol::TransactionFactory::Ptr const& factory,
-    bcos::scheduler::SchedulerInterface::Ptr const& scheduler,
+    bcos::protocol::TransactionFactory::Ptr const& factory, std::optional<std::string> pendingNonce,
     std::optional<uint64_t> chainBlockGasLimit) noexcept
 {
-    std::string nonce;
-    if (scheduler && from.has_value())
-    {
-        // eth_estimateGas / eth_call: match the sender's committed nonce so validation
-        // does not reject with NONCE_TOO_LOW (deploy was the only case wired before).
-        if (const auto entry = task::syncWait(scheduler->getPendingStorageAt(
-                bcos::precompiled::trimHexPrefix(from.value()), "nonce", 0)))
-        {
-            // FISCO stores account nonces as DECIMAL strings (EVMAccount writes
-            // convert_to<std::string>(); StorageStateView reads them unprefixed),
-            // and the transaction nonce is parsed as HEX downstream — both
-            // bcosTransactionToEvmone (safeFromQuantity) and TransactionExecutorImpl
-            // (hex2u) treat it as hex. So the stored decimal must be converted to a
-            // hex quantity here, otherwise a deployment eth_estimateGas at nonce >= 10
-            // gets its decimal "12" misread as hex 0x12 = 18 (NONCE_TOO_HIGH). 0-9
-            // coincide in both bases, which is why only the 11th+ deployment would break.
-            //
-            // The all-digits guard keeps this noexcept-safe: bcos::u256 throws on an
-            // unparseable string (std::terminate out of noexcept), and an empty or
-            // non-numeric stored nonce is left unset (empty nonce string) — a corrupt
-            // row falls back to the executor reading the sender's state nonce rather
-            // than aborting the RPC.
-            if (auto const raw = entry->get();
-                !raw.empty() &&
-                std::all_of(raw.begin(), raw.end(), [](char c) { return c >= '0' && c <= '9'; }))
-            {
-                nonce = toQuantity(bcos::u256(raw));
-            }
-        }
-    }
     uint64_t gasLimit = gas.value_or(0);
     // eth_estimateGas omits gas; validation rejects gasLimit==0 ("intrinsic gas too low").
-    // Match geth: cap at the parent block's gas limit (wired from EthEndpoint).
-    if (gasLimit == 0 && scheduler)
+    // Cap at the parent block's gas limit, but only when that value was actually read: an
+    // explicit gas:"0x0" keeps its zero (present != absent), and a failed header read leaves
+    // the request to fail validation instead of being silently sized against a constant that
+    // has nothing to do with this chain's configuration. The endpoint passes the limit only on
+    // the estimate arm, so eth_call keeps its zero.
+    if (!gas.has_value() && chainBlockGasLimit.has_value())
     {
-        gasLimit = chainBlockGasLimit.value_or(30'000'000);
+        gasLimit = *chainBlockGasLimit;
     }
-    auto tx = factory->createTransaction(1, std::move(this->to), this->data, nonce, 0, {}, {}, 0,
-        "", value.value_or(""), gasPrice.value_or(""), gasLimit, maxFeePerGas.value_or(""),
+    auto tx = factory->createTransaction(1, std::move(this->to), this->data,
+        pendingNonce.value_or(std::string{}), 0, {}, {}, 0, "", value.value_or(""),
+        gasPrice.value_or(""), gasLimit, maxFeePerGas.value_or(""),
         maxPriorityFeePerGas.value_or(""));
     if (from.has_value())
     {

@@ -417,8 +417,9 @@ namespace engine = bcos::evm::engine;
         const auto& m = mirror[count];
         if (eth::toIntxU256(entry.chainId) != m.chain_id)
             return "authorizationList is not bound to the signed envelope";
-        if (entry.address.size() < sizeof(evmc_address))
-            return "authorizationList address is malformed";
+        // entry.address is bcos::Address (FixedBytes<20>); rlp::decode rejects any payload
+        // whose length != 20, so the memcpy below is in-bounds without a runtime guard.
+        static_assert(bcos::Address::SIZE == sizeof(evmc_address));
         evmc::address envAddr{};
         std::memcpy(envAddr.bytes, entry.address.data(), sizeof(envAddr.bytes));
         if (envAddr != m.addr)
@@ -523,7 +524,10 @@ namespace engine = bcos::evm::engine;
                                    (!typed ? size_t{1} : (envelopeKind == 0x01 ? 2 : c_noField));
     size_t const prioFeeIdx = typed && envelopeKind >= 0x02 && envelopeKind <= 0x04 ? 2 : c_noField;
     size_t const maxFeeIdx = typed && envelopeKind >= 0x02 && envelopeKind <= 0x04 ? 3 : c_noField;
-    size_t const blobFeeIdx = envelopeKind == 0x03 ? 9 : c_noField;
+    // maxFeePerBlobGas lives at idx 9: always for 0x03; for 0x02 only with the
+    // EIP-4844-in-1559 extension (>= 14 items), which is known only after the walk — capture
+    // it for both and bind it under the blobFieldsPresent condition below.
+    size_t const blobFeeIdx = (envelopeKind == 0x02 || envelopeKind == 0x03) ? 9 : c_noField;
     size_t idx = 0;
     while (!walker.empty())
     {
@@ -606,7 +610,10 @@ namespace engine = bcos::evm::engine;
     }
     if (!nonceItem || !gasItem || !valueItem || !toPayload || !dataPayload ||
         (gasPriceIdx != c_noField && !gasPriceItem) || (prioFeeIdx != c_noField && !prioFeeItem) ||
-        (maxFeeIdx != c_noField && !maxFeeItem) || (blobFeeIdx != c_noField && !blobFeeItem) ||
+        (maxFeeIdx != c_noField && !maxFeeItem) ||
+        // 0x03 must carry maxFeePerBlobGas at idx 9; 0x02 carries it only with the 4844
+        // extension, checked at the bind site once the item count is known.
+        (envelopeKind == 0x03 && !blobFeeItem) ||
         (typed && envelopeKind != 0x7e && !accessListPayload) ||
         // A type-0x03 envelope must carry blobVersionedHashes (idx 10): without this arm a
         // 9/10-item 0x03 passed the guard and dereferenced a disengaged blobPayload below.
@@ -687,7 +694,9 @@ namespace engine = bcos::evm::engine;
                     "maxFeePerGas", maxFeeIsList, maxFeeItem, maxFeePlen, evmTx.max_gas_price))
                 return err;
         }
-        if (blobFeeIdx != c_noField)
+        // 0x03 always binds; 0x02 only with the 4844 extension (>= 14 items). Without the
+        // extension idx 9 is yParity and must not be read as a fee.
+        if (blobFeeIdx != c_noField && (envelopeKind == 0x03 || idx >= 14))
         {
             if (auto err = bindUint256("maxFeePerBlobGas", blobFeeIsList, blobFeeItem, blobFeePlen,
                     evmTx.max_blob_gas_price))

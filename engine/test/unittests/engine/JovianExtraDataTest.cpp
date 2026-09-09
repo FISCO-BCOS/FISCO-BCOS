@@ -329,7 +329,7 @@ BOOST_AUTO_TEST_CASE(execution_payload_v4_shape_fields_are_compared)
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(payload, payload).has_value());
 
     // ...a rewritten blockAccessList under the same blockHash is rejected. (The
-    // comparator is presence-XOR lenient's keep-local-body semantics —
+    // comparator's keep-local-body semantics are presence-XOR lenient —
     // so only a present-vs-present value disagreement is INVALID.)
     auto rewritten = payload;
     rewritten.blockAccessList = bytes{0x09};

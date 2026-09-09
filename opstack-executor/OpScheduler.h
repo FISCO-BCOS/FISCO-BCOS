@@ -376,7 +376,11 @@ public:
                 co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
             auto block = co_await bcos::ledger::getBlockData(
                 view, blockNumber, bcos::ledger::HEADER, *m_blockFactory);
-            auto const stateRoot = block->blockHeader()->stateRoot();
+            // getBlockData can answer nullptr for a number with no committed header; a null
+            // header here would be a deref crash, so fall through to the flat path instead.
+            auto const stateRoot = (block != nullptr && block->blockHeader() != nullptr) ?
+                                       block->blockHeader()->stateRoot() :
+                                       bcos::crypto::HashType{};
             if (stateRoot != bcos::crypto::HashType{})
             {
                 using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType>;

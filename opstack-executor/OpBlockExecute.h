@@ -163,6 +163,10 @@ inline const evmc::bytes32 OP_EMPTY_REQUESTS_HASH = [] {
     evmc::bytes32 hash{};
     if (raw.size() != sizeof(hash.bytes))
     {
+        // Unreachable: the static_assert above pins the hex length, so fromHex always
+        // yields 32 bytes. Kept as std::logic_error to match the seal's other
+        // internal-invariant guards (see the length/empty-envelope checks below): a
+        // builder bug, not a block-content rejection (which would be OpConsensusError).
         throw std::logic_error("c_emptyRequestsHashHex must decode to exactly 32 bytes");
     }
     std::copy(raw.begin(), raw.end(), hash.bytes);

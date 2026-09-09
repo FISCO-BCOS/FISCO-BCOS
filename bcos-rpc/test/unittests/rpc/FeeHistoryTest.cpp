@@ -17,9 +17,15 @@
  * @brief eth_feeHistory helpers: EIP-1559 / OP base-fee prediction and DA-cap wiring.
  */
 
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/FeeHistory.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -92,6 +98,62 @@ BOOST_AUTO_TEST_CASE(opNextBaseFeeFallsBackWithoutHoloceneExtraData)
     BOOST_CHECK_EQUAL(next, bcos::u256(1'000'000'000));
 }
 
+/// A Holocene-shaped parent is NOT genesis-adjacent: calcOpBaseFee's own fail-closed
+/// errors must surface instead of being swallowed into the fallback. The previous
+/// catch (...) returned the parent fee here, hiding a corrupt header.
+BOOST_AUTO_TEST_CASE(opNextBaseFeeThrowsOnHoloceneShapedParentMissingBaseFee)
+{
+    // Same shape as makeLondonParent but with baseFee left UNENGAGED (setBaseFee(0) would
+    // engage it): calcOpBaseFee must throw, not degrade to the parent fee.
+    BlockHeaderImpl parent;
+    parent.setEthBlockVersion(bcos::protocol::EthBlockVersion::LONDON);
+    parent.setGasLimit(30'000'000);
+    parent.setGasUsed(0);
+    // 9-byte Holocene extraData: version 0x00 || denominator(250) || elasticity(6).
+    bcos::bytes extra;
+    extra.push_back(0x00);
+    for (int shift : {24, 16, 8, 0})
+        extra.push_back(static_cast<bcos::byte>((250U >> shift) & 0xff));
+    for (int shift : {24, 16, 8, 0})
+        extra.push_back(static_cast<bcos::byte>((6U >> shift) & 0xff));
+    parent.setExtraData(extra);
+    BOOST_CHECK_THROW((void)calcOpNextBaseFee(parent), bcos::engine::InvalidEngineEncoding);
+}
+
+BOOST_AUTO_TEST_CASE(effectivePriorityFeePerGasBranches)
+{
+    using bcostars::protocol::TransactionImpl;
+    auto feeTx = [](std::string priority, std::string gasPrice, std::string maxFee) {
+        TransactionImpl tx;
+        tx.mutableInner().data.maxPriorityFeePerGas = std::move(priority);
+        tx.mutableInner().data.gasPrice = std::move(gasPrice);
+        tx.mutableInner().data.maxFeePerGas = std::move(maxFee);
+        return tx;
+    };
+    // Explicit priority below the cap: the tip is the priority.
+    BOOST_CHECK_EQUAL(
+        effectivePriorityFeePerGas(feeTx("0x2", "", "0xa"), bcos::u256(1)), bcos::u256(2));
+    // Priority above maxFee - baseFee: capped by the fee cap.
+    BOOST_CHECK_EQUAL(
+        effectivePriorityFeePerGas(feeTx("0x9", "", "0x5"), bcos::u256(1)), bcos::u256(4));
+    // Legacy gasPrice above baseFee, no priority: tip = gasPrice - baseFee.
+    BOOST_CHECK_EQUAL(
+        effectivePriorityFeePerGas(feeTx("", "0x7", ""), bcos::u256(2)), bcos::u256(5));
+    // gasPrice at or below baseFee: no tip.
+    BOOST_CHECK_EQUAL(
+        effectivePriorityFeePerGas(feeTx("", "0x1", ""), bcos::u256(2)), bcos::u256(0));
+}
+
+BOOST_AUTO_TEST_CASE(pickRewardPercentilesKeepsZeroTipSamples)
+{
+    // geth keeps zero-tip transactions in the weighted sample set (it sorts every tx in the
+    // block); the percentile boundary can land on one, so the helper must not filter them.
+    std::vector<GasWeightedPriorityFee> samples{{0, 21'000}, {5, 21'000}};
+    auto rewards = pickRewardPercentiles(samples, std::vector<double>{10.0});
+    BOOST_REQUIRE_EQUAL(rewards.size(), 1);
+    BOOST_CHECK_EQUAL(rewards[0], 0);
+}
+
 BOOST_AUTO_TEST_CASE(pickRewardPercentilesGasWeighted)
 {
     // Equal gas: geth walks cumulative gas, not tx-count index (75th -> highest tip).
@@ -109,6 +171,103 @@ BOOST_AUTO_TEST_CASE(pickRewardPercentilesGasWeighted)
     auto skewedRewards = pickRewardPercentiles(skewed, halfPercentile);
     BOOST_REQUIRE_EQUAL(skewedRewards.size(), 1);
     BOOST_CHECK_EQUAL(skewedRewards[0], 3);
+}
+
+BOOST_AUTO_TEST_CASE(pickRewardPercentilesSingleSweepMatchesBoundaries)
+{
+    // Boundaries exactly on a cumulative sum, plus 0 / 100: the prefix-sum + binary-search
+    // rewrite must return the same samples the previous per-percentile rescan did.
+    // gas 10k / 20k / 70k (total 100k) -> cumulative 10k / 30k / 100k.
+    std::vector<GasWeightedPriorityFee> samples{{7, 10'000}, {5, 20'000}, {3, 70'000}};
+    std::vector<double> percentiles{0.0, 10.0, 30.0, 30.1, 99.0, 100.0};
+    auto rewards = pickRewardPercentiles(samples, percentiles);
+    BOOST_REQUIRE_EQUAL(rewards.size(), 6);
+    BOOST_CHECK_EQUAL(rewards[0], 7);  // 0% -> first sample
+    BOOST_CHECK_EQUAL(rewards[1], 7);  // threshold 10k == first cumulative sum
+    BOOST_CHECK_EQUAL(rewards[2], 5);  // threshold 30k == second cumulative sum
+    BOOST_CHECK_EQUAL(rewards[3], 3);  // just past the second boundary
+    BOOST_CHECK_EQUAL(rewards[4], 3);
+    BOOST_CHECK_EQUAL(rewards[5], 3);  // 100% -> last sample
+
+    // All-zero gas weights collapse to zero rewards instead of dividing by zero.
+    std::vector<GasWeightedPriorityFee> zeroGas{{1, 0}, {2, 0}};
+    auto zeroRewards = pickRewardPercentiles(zeroGas, std::vector<double>{25.0, 75.0});
+    BOOST_REQUIRE_EQUAL(zeroRewards.size(), 2);
+    BOOST_CHECK_EQUAL(zeroRewards[0], 0);
+    BOOST_CHECK_EQUAL(zeroRewards[1], 0);
+}
+
+/// End-to-end weighting pin: rewards must follow the receipt's gasUsed, not the tx's
+/// gasLimit. Two txs whose two weightings disagree: A has the low tip and a huge gasLimit
+/// but consumes almost nothing; B has the higher tip and consumes its full limit.
+/// gasUsed-weighting puts the 50th percentile on B; gasLimit-weighting would put it on A.
+BOOST_AUTO_TEST_CASE(buildFeeHistoryWeightsRewardsByReceiptGasUsed)
+{
+    auto suite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(suite,
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(suite),
+        std::make_shared<bcostars::protocol::TransactionFactoryImpl>(suite),
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite));
+    auto ledger = std::make_shared<bcos::test::FakeLedger>(blockFactory, /*blocks=*/2, 0, 0);
+
+    auto block = ledger->ledgerData()[1];
+    BOOST_REQUIRE(block);
+    auto makeTx = [&](std::string priority, int64_t gasLimit) {
+        // version 1: the V0 branch of the factory zeroes every fee field.
+        return blockFactory->transactionFactory()->createTransaction(1,
+            "0x1234567890123456789012345678901234567890", bcos::bytes{}, "0x1", 100, "chain0",
+            "group0", 0, /*abi=*/"", /*value=*/"0x0", /*gasPrice=*/"", gasLimit,
+            /*maxFeePerGas=*/"0x4a817c800", std::move(priority));
+    };
+    auto makeReceipt = [&](bcos::u256 gasUsed) {
+        return blockFactory->receiptFactory()->createReceipt(gasUsed,
+            "0x1234567890123456789012345678901234567890", {}, /*status=*/0, bcos::bytesConstRef{},
+            /*blockNumber=*/1);
+    };
+    // A: tip 1, gasLimit 1'000'000, gasUsed 10'000.
+    block->appendTransaction(makeTx("0x1", 1'000'000));
+    block->appendReceipt(makeReceipt(bcos::u256(10'000)));
+    // B: tip 2, gasLimit 21'000, gasUsed 21'000.
+    block->appendTransaction(makeTx("0x2", 21'000));
+    block->appendReceipt(makeReceipt(bcos::u256(21'000)));
+
+    auto result = bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/1,
+        /*blockCount=*/1, std::vector<double>{50.0}, /*opStackMode=*/false));
+    BOOST_REQUIRE(result.isMember("reward"));
+    BOOST_REQUIRE_EQUAL(result["reward"].size(), 1U);
+    BOOST_REQUIRE_EQUAL(result["reward"][0U].size(), 1U);
+    // 50% of 31'000 gasUsed = 15'500: past A (10'000) and inside B -> B's tip (2).
+    BOOST_CHECK_EQUAL(result["reward"][0U][0U].asString(), toQuantity(bcos::u256(2)));
+}
+
+/// The reward path loads full block bodies (txs + receipts) per block, so it is capped tighter
+/// than the header-only path: geth's 1024 assumes a fee-history cache this implementation does
+/// not have. Same request, with and without percentiles, must clamp differently.
+BOOST_AUTO_TEST_CASE(buildFeeHistoryCapsTheRewardPathTighterThanHeadersOnly)
+{
+    auto suite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(suite,
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(suite),
+        std::make_shared<bcostars::protocol::TransactionFactoryImpl>(suite),
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite));
+    auto ledger = std::make_shared<bcos::test::FakeLedger>(blockFactory, /*blocks=*/201, 0, 0);
+
+    // Rewards: newest 200, asked for 1000 -> capped at 128 -> oldest 200 - 127 = 73.
+    auto withRewards = bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
+        /*blockCount=*/1000, std::vector<double>{50.0}, /*opStackMode=*/false));
+    BOOST_CHECK_EQUAL(withRewards["oldestBlock"].asString(), toQuantity(bcos::u256(73)));
+    BOOST_CHECK_EQUAL(withRewards["baseFeePerGas"].size(), 129U);  // 128 blocks + trailing fee
+
+    // Headers only: the 1024 cap applies -> oldest 0.
+    auto headersOnly = bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
+        /*blockCount=*/1000, /*rewardPercentiles=*/{}, /*opStackMode=*/false));
+    BOOST_CHECK_EQUAL(headersOnly["oldestBlock"].asString(), toQuantity(bcos::u256(0)));
+    BOOST_CHECK_EQUAL(headersOnly["baseFeePerGas"].size(), 202U);  // 201 blocks + trailing fee
+    BOOST_CHECK(!headersOnly.isMember("reward"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

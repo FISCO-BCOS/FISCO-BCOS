@@ -172,7 +172,9 @@ public:
     }
     protocol::BlockNumber finalizedBlockDepth() const noexcept { return m_finalizedBlockDepth; }
 
-    /// OP DA size caps from miner_setMaxDASize. Null on Ethereum-only nodes.
+    /// OP DA size caps, read by OpEngineService during payload assembly. Null on Ethereum-only
+    /// nodes. Inert at this revision: the miner_setMaxDASize producer is not registered until
+    /// the OpEngineService cutover wires a reader for it (see DACaps.h).
     void setDaCaps(std::shared_ptr<bcos::engine::DACaps> caps) noexcept
     {
         m_daCaps = std::move(caps);

@@ -37,6 +37,9 @@ using namespace bcos::rpc;
 namespace
 {
 constexpr std::size_t c_maxFeeHistoryBlocks = 1024;
+// Reward requests load full block bodies per block; see buildFeeHistory for why this is
+// tighter than the header-only cap.
+constexpr std::size_t c_maxRewardHistoryBlocks = 128;
 constexpr std::uint32_t c_eth1559Elasticity = 2;
 constexpr std::uint32_t c_eth1559Denominator = 8;
 
@@ -59,6 +62,12 @@ double gasUsedRatio(bcos::protocol::BlockHeader const& header)
     {
         return 0.0;
     }
+    // Saturate rather than truncate: a value beyond u64_t is not producible by the engine,
+    // and if gasUsed exceeds it the ratio is >= 1 (clamped) anyway.
+    if (!bcos::u256FitsUint64(limit) || !bcos::u256FitsUint64(header.gasUsed()))
+    {
+        return 1.0;
+    }
     auto const used = static_cast<double>(static_cast<std::uint64_t>(header.gasUsed()));
     auto const cap = static_cast<double>(static_cast<std::uint64_t>(limit));
     auto const ratio = used / cap;
@@ -68,20 +77,25 @@ double gasUsedRatio(bcos::protocol::BlockHeader const& header)
 std::vector<GasWeightedPriorityFee> collectPriorityFeeSamples(
     bcos::protocol::Block const& block, bcos::u256 baseFee)
 {
+    // geth weights each sample by the receipt's gasUsed over EVERY transaction in the block,
+    // zero-tip included (eth/gasprice/feehistory.go: sorter[i] = {gasUsed: receipts[i].GasUsed,
+    // reward: reward}). Weighting by the gas limit, or dropping zero-tip txs, shifts every
+    // percentile boundary away from the reference. Receipts are fetched alongside the
+    // transactions (see the getBlockData flags in buildFeeHistory).
     std::vector<GasWeightedPriorityFee> samples;
+    auto receipts = block.receipts();  // any_view: size()/operator[] need a non-const view
+    std::size_t index = 0;
     for (auto const& tx : block.transactions())
     {
-        auto const tip = effectivePriorityFeePerGas(*tx, baseFee);
-        if (tip <= 0)
+        std::uint64_t gasUsed = 0;
+        if (index < receipts.size())
         {
-            continue;
+            auto const used = receipts[index]->gasUsed();
+            gasUsed = bcos::u256FitsUint64(used) ? static_cast<std::uint64_t>(used) : 0;
         }
-        auto const gas = static_cast<std::uint64_t>(tx->gasLimit());
-        if (gas == 0)
-        {
-            continue;
-        }
-        samples.push_back(GasWeightedPriorityFee{tip, gas});
+        ++index;
+        samples.push_back(
+            GasWeightedPriorityFee{effectivePriorityFeePerGas(*tx, baseFee), gasUsed});
     }
     std::sort(samples.begin(), samples.end(),
         [](GasWeightedPriorityFee const& left, GasWeightedPriorityFee const& right) {
@@ -114,6 +128,11 @@ bcos::u256 bcos::rpc::calcEthNextBaseFee(bcos::protocol::BlockHeader const& pare
         return 0;
     }
     auto const parentBase = parent.baseFee().value_or(0);
+    // Refuse to compute on an over-wide header rather than truncating the gas fields.
+    if (!bcos::u256FitsUint64(parent.gasLimit()) || !bcos::u256FitsUint64(parent.gasUsed()))
+    {
+        return parentBase;
+    }
     auto const gasLimit = static_cast<std::uint64_t>(parent.gasLimit());
     auto const gasUsed = static_cast<std::uint64_t>(parent.gasUsed());
     if (gasLimit == 0)
@@ -150,16 +169,23 @@ bcos::u256 bcos::rpc::calcEthNextBaseFee(bcos::protocol::BlockHeader const& pare
 
 bcos::u256 bcos::rpc::calcOpNextBaseFee(bcos::protocol::BlockHeader const& parent)
 {
-    try
+    // Pre-check the parent's shape instead of catching everything: a genesis-adjacent OP
+    // parent (empty or not-yet-Holocene extraData) has no EIP-1559 parameters to decode, so
+    // keep its base fee. calcOpBaseFee's own fail-closed errors (missing baseFee, a Jovian
+    // parent missing blobGasUsed, u256 overflow) must surface rather than silently degrading
+    // to the parent fee — a bare catch (...) hid them all.
+    auto const& extra = parent.extraData();
+    auto const extraSpan = std::span<const bcos::byte>(
+        reinterpret_cast<const bcos::byte*>(extra.data()), extra.size());
+    if (extra.empty() ||
+        bcos::engine::validateOpExtraDataShape(extraSpan, /*allowEmpty=*/true).has_value())
     {
-        return bcos::engine::calcOpBaseFee(parent, isJovianOpParent(parent));
-    }
-    catch (...)
-    {
-        // Genesis-adjacent OP parents may not yet carry Holocene extraData; keep the last base
-        // fee instead of failing the whole eth_feeHistory call.
         return blockBaseFee(parent);
     }
+    // parentIsJovian is derived from the parent's extraData shape (17-byte Jovian form):
+    // this RPC path has no fork schedule, and the header shape is the only signal available
+    // here. It agrees with m_scheduler.isJovianActive() for headers this node produced.
+    return bcos::engine::calcOpBaseFee(parent, isJovianOpParent(parent));
 }
 
 bcos::u256 bcos::rpc::effectivePriorityFeePerGas(
@@ -189,32 +215,34 @@ std::vector<bcos::u256> bcos::rpc::pickRewardPercentiles(
         rewards.assign(percentiles.size(), 0);
         return rewards;
     }
+    // One prefix sum over cumulative gas, then a binary search per percentile: the boundary is
+    // the tip of the first sample whose cumulative gas reaches the threshold. The previous
+    // version restarted the scan inside the percentile loop (O(percentiles x samples)); with up
+    // to 100 percentiles and 1024 blocks per request that dominated the response cost.
+    std::vector<std::uint64_t> cumulativeGas;
+    cumulativeGas.reserve(samples.size());
     std::uint64_t totalGas = 0;
     for (auto const& sample : samples)
     {
         totalGas += sample.gas;
+        cumulativeGas.push_back(totalGas);
     }
     for (double percentile : percentiles)
     {
-        auto const clamped = std::clamp(percentile, 0.0, 100.0);
+        // The RPC boundary rejects values outside [0, 100], so no clamp is needed here; a
+        // clamp would only mask a caller that skipped that validation.
         if (totalGas == 0)
         {
             rewards.push_back(0);
             continue;
         }
-        auto const threshold = static_cast<double>(totalGas) * clamped / 100.0;
-        std::uint64_t cumulativeGas = 0;
-        bcos::u256 reward = samples.back().tip;
-        for (auto const& sample : samples)
-        {
-            cumulativeGas += sample.gas;
-            reward = sample.tip;
-            if (static_cast<double>(cumulativeGas) >= threshold)
-            {
-                break;
-            }
-        }
-        rewards.push_back(reward);
+        auto const threshold = static_cast<double>(totalGas) * percentile / 100.0;
+        auto const boundary =
+            std::lower_bound(cumulativeGas.begin(), cumulativeGas.end(), threshold);
+        auto const index = boundary == cumulativeGas.end() ?
+                               samples.size() - 1 :
+                               static_cast<std::size_t>(boundary - cumulativeGas.begin());
+        rewards.push_back(samples[index].tip);
     }
     return rewards;
 }
@@ -223,7 +251,13 @@ bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInt
     bcos::protocol::BlockNumber newestBlock, std::size_t blockCount,
     std::vector<double> const& rewardPercentiles, bool opStackMode)
 {
-    blockCount = std::min(blockCount, c_maxFeeHistoryBlocks);
+    // The reward path loads each block's full body (transactions + receipts) and is reachable
+    // unauthenticated on the public listener; the header-only path is cheap. geth's 1024 cap
+    // assumes its fee-history cache, which this implementation does not have, so the
+    // body-loading path gets a tighter bound on what one request can deserialise.
+    bool const wantRewards = !rewardPercentiles.empty();
+    blockCount =
+        std::min(blockCount, wantRewards ? c_maxRewardHistoryBlocks : c_maxFeeHistoryBlocks);
     if (blockCount == 0)
     {
         co_return Json::Value(Json::objectValue);
@@ -239,13 +273,13 @@ bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInt
     Json::Value baseFees(Json::arrayValue);
     Json::Value gasRatios(Json::arrayValue);
     Json::Value rewards(Json::arrayValue);
-    const bool wantRewards = !rewardPercentiles.empty();
 
     std::shared_ptr<bcos::protocol::BlockHeader> lastHeader;
     for (auto number = oldestBlock; number <= newestBlock; ++number)
     {
-        auto const block = co_await ledger::getBlockData(
-            ledger, number, bcos::ledger::HEADER | (wantRewards ? bcos::ledger::TRANSACTIONS : 0));
+        auto const block = co_await ledger::getBlockData(ledger, number,
+            bcos::ledger::HEADER |
+                (wantRewards ? (bcos::ledger::TRANSACTIONS | bcos::ledger::RECEIPTS) : 0));
         if (!block || !block->blockHeader())
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));

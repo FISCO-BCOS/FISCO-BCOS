@@ -34,6 +34,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
@@ -112,9 +113,18 @@ struct StubScheduler
 {
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
+        const protocol::BlockHeader&, ::ranges::input_range auto&& transactions,
+        const ledger::LedgerConfig&)
     {
-        co_return {};
+        // One receipt per executed transaction, like a real scheduler: the engine pairs
+        // receipts with executed transactions by index for the receipts-root leaf prefix.
+        // Fields are left unset; the engine back-fills the bloom and cumulative gas.
+        std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        for ([[maybe_unused]] auto const& transaction : transactions)
+        {
+            receipts.push_back(std::make_shared<bcostars::protocol::TransactionReceiptImpl>());
+        }
+        co_return receipts;
     }
 };
 

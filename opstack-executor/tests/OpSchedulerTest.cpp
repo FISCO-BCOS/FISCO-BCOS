@@ -1201,8 +1201,8 @@ BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
             called = true;
             BOOST_REQUIRE(err != nullptr);  // Error (JSON-RPC), never a status-0 receipt
             // maxFeePerGas=1 below the block base fee → FEE_CAP_LESS_THAN_BLOCKS. The
-            // OpConsensusError is classified by the call path's exception ladder (
-            // made the catch(...) arm classify like the catch(std::exception) arm already did).
+            // OpConsensusError is classified by the call path's exception ladder: the
+            // catch(...) arm now classifies like the catch(std::exception) arm already did.
             BOOST_CHECK_EQUAL(
                 err->errorCode(), (int)bcos::scheduler::SchedulerError::OpConsensusRejected);
             const auto msg = err->errorMessage();
@@ -1801,10 +1801,10 @@ BOOST_AUTO_TEST_CASE(CallAtBlockCorruptTrieNodeIsStorageFault)
     BOOST_CHECK(receipt == nullptr);
 }
 
-/// The latest-path poison tripwire (coCallLatest shares coCallOnView with the historical path —
-/// F1): a wrong-length slot row at the call target poisons the executor's internal
+/// The latest-path poison tripwire (coCallLatest shares coCallOnView with the historical
+/// path): a wrong-length slot row at the call target poisons the executor's internal
 /// Storage2State during the getter's SLOAD, the sharedError check throws, and call()'s catch
-/// returns OpStorageFault ("storage fault", ) instead of a status-ok receipt on zero
+/// returns OpStorageFault ("storage fault") instead of a status-ok receipt on zero
 /// values.
 BOOST_AUTO_TEST_CASE(CallLatestStorageReadFaultFailsLoudly)
 {
@@ -2089,7 +2089,7 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
         auto const result = runExecutionProbe(f, view, *header, rawTxBytes);
         auto const fullRoot = result.stateRoot;
         BOOST_REQUIRE(fullRoot != bcos::h256{});
-        // Positive anchor (): every probe tx must be a SUCCESS — the root comparison
+        // Positive anchor: every probe tx must be a SUCCESS — the root comparison
         // below is only meaningful on a healthy block; a silently-reverted probe tx would still
         // produce a matching root and mask a real divergence. (FISCO receipt status: 0 =
         // success.)
@@ -2126,7 +2126,7 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
         driveOpBlock(f, header, rawTxBytes);
     }
 
-    // Tombstone read-back (): a historical call at block 3 (the tombstone block)
+    // Tombstone read-back: a historical call at block 3 (the tombstone block)
     // must answer ZERO for slot 0 through the block-3 MPT — the delete shape must have removed
     // the slot from the trie, not just from the flat state. Block 4 makes block 3 a historical
     // (non-latest) height so the read resolves along block 3's persisted nodes.
@@ -2146,7 +2146,7 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
             "block-3 call must read the tombstoned slot as zero (trie-level delete shape)");
     }
 
-    // Block-2 control (): the block-3 zero above could equally be produced by a
+    // Block-2 control: the block-3 zero above could equally be produced by a
     // wrong latest-state pass-through (the latest state has slot 0 deleted too). A block-2
     // call must still answer the pre-tombstone value — only the pinned block-2 trie has it.
     const bcos::h256 kPreTombstone{

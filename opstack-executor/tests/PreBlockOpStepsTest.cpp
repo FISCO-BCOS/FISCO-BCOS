@@ -450,4 +450,162 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockCapacityFaultIsNotAnEvictableCulprit)
     }
 }
 
+namespace
+{
+/// Wraps the shared test factory and throws a bare std::runtime_error from the Nth
+/// createReceipt call (1-based), so the block path's runtime_error -> tagged
+/// OpConsensusError normalization can be exercised without a real storage fault.
+class ThrowingReceiptFactory : public bcos::protocol::TransactionReceiptFactory
+{
+public:
+    ThrowingReceiptFactory(bcos::protocol::TransactionReceiptFactory::Ptr inner, unsigned throwOn)
+      : m_inner(std::move(inner)), m_throwOn(throwOn)
+    {}
+
+    bcos::protocol::TransactionReceipt::Ptr createReceipt() const override
+    {
+        maybeThrow();
+        return m_inner->createReceipt();
+    }
+    bcos::protocol::TransactionReceipt::Ptr createReceipt(
+        bcos::protocol::TransactionReceipt& input) const override
+    {
+        maybeThrow();
+        return m_inner->createReceipt(input);
+    }
+    bcos::protocol::TransactionReceipt::Ptr createReceipt(
+        bcos::bytesConstRef receiptData) const override
+    {
+        maybeThrow();
+        return m_inner->createReceipt(receiptData);
+    }
+    bcos::protocol::TransactionReceipt::Ptr createReceipt(
+        bcos::bytes const& receiptData) const override
+    {
+        maybeThrow();
+        return m_inner->createReceipt(receiptData);
+    }
+    bcos::protocol::TransactionReceipt::Ptr createReceipt(bcos::u256 const& gasUsed,
+        std::string contractAddress, const std::vector<bcos::protocol::LogEntry>& logEntries,
+        int32_t status, bcos::bytesConstRef output,
+        bcos::protocol::BlockNumber blockNumber) const override
+    {
+        maybeThrow();
+        return m_inner->createReceipt(
+            gasUsed, std::move(contractAddress), logEntries, status, output, blockNumber);
+    }
+    bcos::protocol::TransactionReceipt::Ptr createReceipt2(bcos::u256 const& gasUsed,
+        std::string contractAddress, const std::vector<bcos::protocol::LogEntry>& logEntries,
+        int32_t status, bcos::bytesConstRef output, bcos::protocol::BlockNumber blockNumber,
+        std::string effectiveGasPrice, bcos::protocol::TransactionVersion version,
+        bool withHash) const override
+    {
+        maybeThrow();
+        return m_inner->createReceipt2(gasUsed, std::move(contractAddress), logEntries, status,
+            output, blockNumber, std::move(effectiveGasPrice), version, withHash);
+    }
+
+private:
+    void maybeThrow() const
+    {
+        if (++m_calls == m_throwOn)
+        {
+            throw std::runtime_error("receipt fault injected for the culprit-tag test");
+        }
+    }
+    bcos::protocol::TransactionReceiptFactory::Ptr m_inner;
+    unsigned m_throwOn;
+    mutable unsigned m_calls = 0;
+};
+}  // namespace
+
+// The block path must tag a bare std::runtime_error escaping opTransition with the signed
+// envelope's hash: the build loop keys culprit eviction on OpConsensusError::txHash, so an
+// untagged throw leaves the tx pooled and the next forkchoiceUpdated selects it again.
+// (The per-tx path needs no tag because it has no eviction loop.)
+BOOST_AUTO_TEST_CASE(ProcessOpBlockTagsRuntimeErrorWithCulpritHash)
+{
+    MutableStorage storage;
+    bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
+    evmone::state::BlockInfo block;
+    block.gas_limit = 30'000'000;
+    bcos::executor_v1::opstack::NullBlockHashes hashes;
+    auto vm = evmc::VM{evmc_create_evmone()};
+
+    op::DepositTx dep{};
+    dep.gas_limit = 1'000'000;
+    dep.data = evmc::bytes(op::IsthmusL1AttributesLen, uint8_t{0});
+
+    evmone::state::Transaction tx;
+    tx.type = evmone::state::Transaction::Type::eip1559;
+    tx.nonce = 0;
+    tx.gas_limit = 21000;
+    tx.to = evmc::address{};
+    std::memset(tx.to->bytes, 0x11, sizeof(tx.to->bytes));
+    tx.value = intx::uint256{0};
+    // Zero fees: the sender has no balance in the empty fixture storage, and a zero cap
+    // passes the funds check while still reaching opTransition (which creates the receipt).
+    tx.max_gas_price = 0;
+    tx.max_priority_gas_price = 0;
+    tx.sender = evmc::address{};
+    std::memset(tx.sender.bytes, 0xaa, sizeof(tx.sender.bytes));
+
+    namespace rlp = bcos::codec::rlp;
+    auto intItem = [](uint64_t v) {
+        bcos::bytes out;
+        rlp::encode(out, v);
+        return out;
+    };
+    bcos::bytes payload;
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(10));  // chainId
+    append(intItem(0));   // nonce
+    append(intItem(0));   // maxPriorityFeePerGas
+    append(intItem(0));   // maxFeePerGas
+    append(intItem(static_cast<uint64_t>(tx.gas_limit)));
+    bcos::bytes toBytes(std::begin(tx.to->bytes), std::end(tx.to->bytes));
+    bcos::bytes toItem;
+    rlp::encode(toItem, bcos::bytesConstRef{toBytes.data(), toBytes.size()});
+    append(toItem);
+    append(intItem(0));       // value
+    payload.push_back(0x80);  // empty data (bare byte)
+    payload.push_back(0xc0);  // empty accessList
+    bcos::bytes listHeader;
+    rlp::encodeHeader(listHeader, {.isList = true, .payloadLength = payload.size()});
+    evmc::bytes envelope;
+    envelope.push_back(0x02);
+    envelope.insert(envelope.end(), listHeader.begin(), listHeader.end());
+    envelope.insert(envelope.end(), payload.begin(), payload.end());
+
+    op::OpBlockTx depTx;
+    depTx.tx = dep;
+    auto const depEnvelope = bcos::evm::opstack::encodeDepositEnvelope(dep);
+    depTx.signedEnvelope.assign(depEnvelope.begin(), depEnvelope.end());
+    op::OpBlockTx normalTx;
+    normalTx.tx = tx;
+    normalTx.signedEnvelope = envelope;
+    std::vector<op::OpBlockTx> const txs{depTx, normalTx};
+
+    // Deposit receipt = call #1 (succeeds); the normal tx's receipt = call #2 (throws).
+    auto factory = std::make_shared<ThrowingReceiptFactory>(
+        bcos::evm::opstack::testutil::kOpTestReceiptFactory, 2);
+    try
+    {
+        (void)op::processOpBlock(view, block, hashes, txs, op::isthmusConfig(), vm, /*chainId=*/10,
+            factory, [](const evmone::state::StateDiff&) {});
+        BOOST_FAIL("an injected receipt fault must void the block");
+    }
+    catch (bcos::evm::OpConsensusError const& e)
+    {
+        BOOST_REQUIRE(e.txHash.has_value());
+        BOOST_CHECK_EQUAL(e.txHash->hex(),
+            bcos::crypto::keccak256Hash(bcos::bytesConstRef{envelope.data(), envelope.size()})
+                .hex());
+        BOOST_CHECK_MESSAGE(
+            std::string(e.what()).find("transaction execution failed") != std::string::npos,
+            "unexpected reject: " << e.what());
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

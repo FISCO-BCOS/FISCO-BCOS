@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseEthHeaderReadsFieldsFromHeader)
         bcos::h256("5555555555555555555555555555555555555555555555555555555555555555"));
     header->setReceiptsRoot(
         bcos::h256("6666666666666666666666666666666666666666666666666666666666666666"));
-    bcos::Bloom bloom;
+    bcos::Bloom bloom{};
     bloom[0] = 0xab;
     header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
     header->setBaseFee(bcos::u256(1000000000));
@@ -329,7 +329,7 @@ static std::shared_ptr<bcos::protocol::Block> makeEthHeaderBlock(
         bcos::h256("5555555555555555555555555555555555555555555555555555555555555555"));
     header->setReceiptsRoot(
         bcos::h256("6666666666666666666666666666666666666666666666666666666666666666"));
-    bcos::Bloom bloom;
+    bcos::Bloom bloom{};
     bloom[0] = 0xab;
     header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
     if (baseFee)
@@ -385,7 +385,10 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseOpNonEthUsesRlpIdentityHashAndPrevRanda
         bcos::h256("5555555555555555555555555555555555555555555555555555555555555555"));
     header->setReceiptsRoot(
         bcos::h256("6666666666666666666666666666666666666666666666666666666666666666"));
-    bcos::Bloom bloom;
+    // Value-initialised: bcos::Bloom is a std::array with no default initialisation, so
+    // `Bloom bloom;` would leave 255 bytes indeterminate and make the header hash vary run
+    // to run (which is why this case could only ever compare the code to itself).
+    bcos::Bloom bloom{};
     bloom[0] = 0xcd;
     header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
     header->setExtraData(bcos::bytes{0x01, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06, 0x00,
@@ -408,7 +411,11 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseOpNonEthUsesRlpIdentityHashAndPrevRanda
     Json::Value result(Json::objectValue);
     combineBlockResponse(result, *block, /*fullTxs=*/false);
 
-    BOOST_CHECK_EQUAL(result["hash"].asString(), rlpHash.hexPrefixed());
+    // Golden literal, independent of the code under test: the header is fully deterministic
+    // now that the bloom is value-initialised, so a change to the RLP identity hash or to
+    // any hashed field fails here instead of comparing the production function to itself.
+    BOOST_CHECK_EQUAL(result["hash"].asString(),
+        "0x2aa80e9130ed69be2160c354c483adf10e39d7ed2d899ba7dd22c39d4136f8b4");
     BOOST_CHECK_NE(result["hash"].asString(), tarsHash.hexPrefixed());
     BOOST_CHECK_EQUAL(result["mixHash"].asString(),
         "0x62293916ac98bc02b90472638bd2beb1b531a914395c34239abe6fc011b9011a");
@@ -531,6 +538,47 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseShapesReceipt)
     BOOST_CHECK(result.isMember("gasUsed"));
     BOOST_CHECK(result.isMember("logs"));
     BOOST_CHECK(result["logs"].isArray());
+}
+
+/// The per-log branch needs a NON-EMPTY logs vector: log.address must be the EIP-55
+/// checksum of the raw 20 bytes and log.transactionIndex a hex quantity. The base emitted
+/// toQuantity(transactionIndex) on an already-hex string ("0x307833") and the raw-byte
+/// address, so this case is the regression pin for both fixes.
+BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsLogAddressAndIndex)
+{
+    auto txFactory = m_blockFactory->transactionFactory();
+    auto tx = txFactory->createTransaction(0, "0x1234567890123456789012345678901234567890",
+        bcos::bytes{0x0a}, "0x2", 100, chainId, groupId, 0);
+    BOOST_REQUIRE(tx);
+
+    // EIP-55 test vector: 0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed must checksum to the
+    // mixed-case form below.
+    bcos::bytes const logAddress = bcos::fromHex("5aaeb6053f3e94c9b9a09f33669435e7ef1beaed");
+    bcos::h256s const topics{
+        bcos::h256("0000000000000000000000000000000000000000000000000000000000000001")};
+    std::vector<bcos::protocol::LogEntry> logs;
+    logs.emplace_back(logAddress, topics, bcos::bytes{0x01, 0x02});
+
+    auto receiptFactory = m_blockFactory->receiptFactory();
+    auto receipt = receiptFactory->createReceipt(bcos::u256(21000),
+        "0x1234567890123456789012345678901234567890", logs, /*status=*/0, bcos::bytesConstRef{},
+        /*blockNumber=*/12);
+    BOOST_REQUIRE(receipt);
+    receipt->setTransactionIndex(3);
+
+    bcos::crypto::HashType blockHash;
+    Json::Value result(Json::objectValue);
+    combineReceiptResponse(result, *receipt, *tx, blockHash);
+
+    BOOST_REQUIRE_EQUAL(result["logs"].size(), 1U);
+    auto const& log = result["logs"][0U];
+    BOOST_CHECK_EQUAL(log["address"].asString(), "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+    BOOST_CHECK_EQUAL(log["transactionIndex"].asString(), "0x3");
+    BOOST_CHECK_EQUAL(log["logIndex"].asString(), "0x0");
+    BOOST_REQUIRE_EQUAL(log["topics"].size(), 1U);
+    BOOST_CHECK_EQUAL(log["topics"][0U].asString(), topics[0].hexPrefixed());
+    BOOST_CHECK_EQUAL(log["data"].asString(), "0x0102");
+    BOOST_CHECK_EQUAL(log["removed"].asBool(), false);
 }
 
 BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsOpExtensionFieldsFromMeta)

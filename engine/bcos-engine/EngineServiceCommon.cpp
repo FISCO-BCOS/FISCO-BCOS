@@ -22,6 +22,7 @@
 // Matches op-geth Engine API behavior.
 // (eth/catalyst/api.go GetPayloadVn / forkchoiceUpdated, miner/payload_building.go).
 
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/engine/Errors.h"
 #include "bcos-framework/engine/OpBaseFee.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
@@ -50,7 +51,7 @@ bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payl
     case ApiVersion::V3:
         // GetPayloadV3 answers only PayloadV3 builds (op-geth passes
         // []engine.PayloadVersion{engine.PayloadV3}); V1/V2-tagged entries cannot
-        // render the V3 wire shape (blob-gas pair, beacon root) -.
+        // render the V3 wire shape (blob-gas pair, beacon root).
         return payloadVersion == 3;
     case ApiVersion::V4:
         // Match release EngineServiceImpl: GetPayloadV4 accepts only PayloadV3 builds
@@ -402,6 +403,10 @@ std::optional<std::string> compareWithBuiltPayload(
         }
         return std::nullopt;
     };
+    // Presence-XOR, not present-vs-present: validateExecutionPayload forces blobGasUsed /
+    // excessBlobGas per method version, so a payload that omits a field the built copy carries
+    // (a V3 echo of a V4 build) is a real mismatch. Comparing only when both sides are engaged
+    // would accept exactly that echo.
     auto optionalHashPresence = [&](char const* field, auto const& submittedField,
                                     auto const& builtField) -> std::optional<std::string> {
         if (submittedField.has_value() != builtField.has_value())

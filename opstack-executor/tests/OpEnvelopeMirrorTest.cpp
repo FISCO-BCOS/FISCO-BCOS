@@ -463,6 +463,45 @@ bcos::bytes blobEnvelopeWithHashes(uint64_t chainId, uint64_t nonce, uint64_t ga
     out.insert(out.end(), payload.begin(), payload.end());
     return out;
 }
+/// 0x02 envelope carrying the EIP-4844-in-1559 extension (14-item shape): maxFeePerBlobGas
+/// at idx 9 and blobVersionedHashes at idx 10, then yParity/r/s.
+bcos::bytes eip1559EnvelopeWithBlobs(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
+    std::string_view toHex, bcos::u256 value, bcos::bytes const& data)
+{
+    auto item = [](bcos::bytes const& payload) {
+        bcos::bytes out;
+        rlp::encode(out, bcos::bytesConstRef{payload.data(), payload.size()});
+        return out;
+    };
+    auto intItem = [](uint64_t v) {
+        bcos::bytes out;
+        rlp::encode(out, v);
+        return out;
+    };
+    bcos::bytes payload;
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
+    append(intItem(chainId));
+    append(intItem(nonce));
+    append(intItem(30000000000));
+    append(intItem(30000000000));
+    append(intItem(gasLimit));
+    auto toBytes = bcos::fromHex(toHex.substr(2));
+    append(item(toBytes));
+    append(intItem(static_cast<uint64_t>(value)));
+    append(item(data));
+    payload.push_back(0xc0);  // empty accessList
+    append(intItem(1));       // maxFeePerBlobGas (idx 9)
+    payload.push_back(0xc0);  // empty blobVersionedHashes (idx 10)
+    append(intItem(0));       // yParity
+    append(intItem(1));       // r
+    append(intItem(1));       // s
+
+    bcos::bytes out{static_cast<bcos::byte>(0x02)};
+    rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+    out.insert(out.end(), payload.begin(), payload.end());
+    return out;
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpEnvelopeMirrorSuite)
@@ -801,6 +840,27 @@ BOOST_AUTO_TEST_CASE(MirrorMaxFeePerBlobGasDivergenceRejected)
     tx.m_kind = 3;
     tx.m_extraBytes = blobOrAuthEnvelope(
         0x03, 10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
+    tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
+    tx.m_nonce = "0x7";
+    tx.m_gasLimit = 5000000;
+    tx.m_value = bcos::u256{5};
+    tx.m_maxFeePerGas = bcos::u256{30'000'000'000ULL};
+    tx.m_maxPriorityFeePerGas = bcos::u256{30'000'000'000ULL};
+    tx.m_maxFeePerBlobGas = bcos::u256{2};  // envelope says 1
+    auto const mismatch = envelopeExecutionFieldsMismatch(tx, evmTxOf(tx));
+    BOOST_REQUIRE(mismatch.has_value());
+    BOOST_CHECK(std::string(*mismatch).find("maxFeePerBlobGas mismatch") != std::string::npos);
+}
+
+// The 0x02 4844 extension carries maxFeePerBlobGas at idx 9 too; a forged mirror value on
+// that arm must be rejected like the 0x03 arm, or the envelope's signed blob-fee cap is
+// never compared on a 14-item 0x02 tx.
+BOOST_AUTO_TEST_CASE(MirrorMaxFeePerBlobGasOnEip1559ExtensionRejected)
+{
+    FakeTx tx;
+    tx.m_kind = 2;
+    tx.m_extraBytes = eip1559EnvelopeWithBlobs(
+        10, 7, 5000000, "0x811a752c8cd697e3cb27279c330ed1ada745a8d7", bcos::u256{5}, {});
     tx.m_to = "0x811a752c8cd697e3cb27279c330ed1ada745a8d7";
     tx.m_nonce = "0x7";
     tx.m_gasLimit = 5000000;

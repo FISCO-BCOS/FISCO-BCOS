@@ -29,6 +29,7 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-executor/src/Common.h>
+#include <bcos-executor/src/precompiled/common/Utilities.h>  // trimHexPrefix
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/storage/LegacyStorageMethods.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -48,6 +49,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
@@ -906,6 +908,15 @@ task::Task<void> EthEndpoint::call(
         BOOST_THROW_EXCEPTION(
             JsonRpcException(JsonRpcError::InternalError, "Scheduler not available!"));
     }
+    // eth_estimateGas sizes its gas cap from the target block's header, so it cannot run
+    // without the ledger. Fail closed here rather than later substituting a constant cap that
+    // has nothing to do with this chain's configuration.
+    auto ledger = m_nodeService->ledger();
+    if (isEstimate && !ledger)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            JsonRpcError::InternalError, "Ledger not available for eth_estimateGas"));
+    }
     auto [valid, call] = decodeCallRequest(request[0U]);
     if (!valid)
     {
@@ -921,18 +932,48 @@ task::Task<void> EthEndpoint::call(
     std::optional<uint64_t> chainBlockGasLimit;
     if (isEstimate)
     {
-        auto ledger = m_nodeService->ledger();
-        if (ledger)
+        if (auto block = co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
         {
-            if (auto block =
-                    co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
+            // Bounds-checked narrowing: an over-wide gasLimit leaves the optional unset and
+            // the guard below refuses the request instead of using a truncated cap.
+            auto const limit = block->blockHeader()->gasLimit();
+            if (bcos::u256FitsUint64(limit))
             {
-                chainBlockGasLimit = static_cast<uint64_t>(block->blockHeader()->gasLimit());
+                chainBlockGasLimit = static_cast<uint64_t>(limit);
             }
         }
+        // No default cap: an unreadable header or an over-wide gasLimit must fail the request
+        // with a diagnosable message, not silently size the estimate against a constant.
+        bool const needsGasDefault = !call.gas.has_value() || call.gas.value() == 0;
+        if (needsGasDefault && !chainBlockGasLimit.has_value())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::InternalError,
+                "Unable to read parent block gas limit for eth_estimateGas"));
+        }
+    }
+    // Await the sender's committed nonce HERE (a coroutine suspension) instead of blocking
+    // the handler thread with task::syncWait inside takeToTransaction. Needed so validation
+    // does not reject with NONCE_TOO_LOW; on OP chains this read itself costs several storage
+    // round-trips, so it stays off the synchronous path.
+    std::optional<std::string> pendingNonce;
+    if (scheduler && call.from.has_value())
+    {
+        // Validate the sender here, at the RPC boundary: a malformed `from` must be
+        // InvalidParams, not a silently empty pending nonce. Downstream the value becomes a
+        // storage table name (EVMAccount) and the scheduler swallows its decode error, so the
+        // request would otherwise proceed with the sender's stale state nonce and a WARNING
+        // log line per call.
+        auto const fromBytes = bcos::safeFromHexWithPrefix(call.from.value());
+        if (!fromBytes.has_value() || fromBytes->size() != bcos::Address::SIZE)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "invalid `from` address in call request"));
+        }
+        pendingNonce = CallRequest::nonceFromPendingEntry(co_await scheduler->getPendingStorageAt(
+            bcos::precompiled::trimHexPrefix(call.from.value()), "nonce", 0));
     }
     auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
-        isEstimate ? scheduler : nullptr, chainBlockGasLimit);
+        std::move(pendingNonce), chainBlockGasLimit);
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;
@@ -1007,6 +1048,13 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: gas(QTY)
+    // Resolving the block tag and sizing the gas cap both need the ledger: refuse up front
+    // instead of dereferencing a null ledger, or silently substituting a constant gas cap.
+    if (!m_nodeService->ledger())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            JsonRpcError::InternalError, "Ledger not available for eth_estimateGas"));
+    }
     auto const& tx = request[0U];
     auto const blockTag = toView(request[1U]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
@@ -1330,8 +1378,21 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
     auto [newestBlock, _] = co_await getBlockNumberByTag(newestTag);
 
     std::vector<double> rewardPercentiles;
-    if (request.size() >= 3 && request[2U].isArray())
+    if (request.size() >= 3)
     {
+        // geth rejects a non-array third parameter rather than ignoring it.
+        if (!request[2U].isArray())
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "rewardPercentiles must be an array"));
+        }
+        // Same query limit as geth (eth/gasprice/feehistory.go maxQueryLimit).
+        constexpr std::size_t c_maxRewardPercentiles = 100;
+        if (request[2U].size() > c_maxRewardPercentiles)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "rewardPercentiles over the query limit 100"));
+        }
         for (auto const& entry : request[2U])
         {
             if (!entry.isNumeric())
@@ -1339,7 +1400,19 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
                 BOOST_THROW_EXCEPTION(
                     JsonRpcException(InvalidParams, "rewardPercentiles must be numbers"));
             }
-            rewardPercentiles.push_back(entry.asDouble());
+            auto const percentile = entry.asDouble();
+            if (percentile < 0.0 || percentile > 100.0)
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "rewardPercentiles must be in [0, 100]"));
+            }
+            // geth rejects a non-increasing array (errInvalidPercentile).
+            if (!rewardPercentiles.empty() && percentile <= rewardPercentiles.back())
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InvalidParams, "rewardPercentiles must be monotonically increasing"));
+            }
+            rewardPercentiles.push_back(percentile);
         }
     }
 

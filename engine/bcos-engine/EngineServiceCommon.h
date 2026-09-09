@@ -106,8 +106,7 @@ inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
 /// Shared Engine-API service surface, distinct from implementation-internal detail
 /// helpers: these validators/status/shape helpers are consumed across the engine-split
 /// stack (the live EngineServiceImpl here, EngineTracker, and the Eth/Op services in
-/// #5548/#5549), so they get a named home instead of the private detail namespace
-///.
+/// #5548/#5549), so they get a named home instead of the private detail namespace.
 namespace engine_common
 {
 /// Engine API behavior follows op-geth.

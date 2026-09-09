@@ -150,7 +150,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
     // resolution and canonical checks for that field (op-geth SetSafe/SetFinalized are
     // only called for non-zero hashes). A missing non-zero HEAD is SYNCING; a
     // zero HEAD is INVALID. A non-zero unresolvable safe/finalized is
-    // InvalidForkchoiceState (op-geth, ).
+    // InvalidForkchoiceState (op-geth).
     bool const safeSet = forkchoiceState.safeBlockHash != bcos::h256{};
     bool const finalizedSet = forkchoiceState.finalizedBlockHash != bcos::h256{};
     auto safeBlockNumber = safeSet ? co_await bcos::ledger::getBlockNumber(view,
@@ -329,7 +329,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
 
     std::set<crypto::HashType> evicted;
     // op-geth miner: excluding nonce n of sender S also drops S's later nonces from
-    // this candidate and never evicts those successors from the pool (R3-F1).
+    // this candidate and never evicts those successors from the pool.
     // Walk by nonce, not sealed-vector position: seal order is not a
     // nonce-order contract the build path may assume.
     auto skipSenderTail = [&](crypto::HashType const& hash) {
@@ -647,8 +647,11 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     // "last executed" semantics the accessor documents.
     auto const& payload = request.executionPayload;
 
-    if (auto validationError =
-            engine_common::op::validateOpNewPayloadRequest(request, m_scheduler.isJovianActive());
+    // Isthmus is stated, not defaulted: OpForkSchedule.h documents Isthmus as the OP-mode
+    // baseline with no pre-Isthmus config (OpForkFlags carries only jovianActive, and OP mode
+    // itself is the Isthmus+ admission check), so the pre-Isthmus arm is unreachable here.
+    if (auto validationError = engine_common::op::validateOpNewPayloadRequest(
+            request, m_scheduler.isJovianActive(), /*isthmusActive=*/true);
         validationError.has_value())
     {
         co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError);
@@ -693,8 +696,23 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
                 co_return makeStatus(
                     PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
             }
-            // Built pending was dropped or replaced: fall through to execute+commit
-            // instead of answering -32603 on every retry of a still-valid payload.
+            // Only the "built pending was dropped or replaced" fault may fall through to a
+            // full execute+commit: OpScheduler reports it as SchedulerError::UnknownError
+            // ("Unexpected empty results!"), and answering -32603 on every retry of a
+            // still-valid payload would wedge the CL. Every other commit failure is a real
+            // error and keeps its documented routing (INVALID for OpConsensusRejected,
+            // internal error otherwise) — swallowing it here would hide storage faults.
+            bool const pendingDropped =
+                commitError->errorCode() ==
+                static_cast<int32_t>(bcos::scheduler::SchedulerError::UnknownError);
+            if (!pendingDropped)
+            {
+                co_return mapDelegateError(*commitError, std::nullopt);
+            }
+            BCOS_LOG(WARNING) << LOG_BADGE("OpEngineService")
+                              << LOG_DESC("newPayload: built pending dropped; re-executing")
+                              << LOG_KV("blockHash", payload.blockHash.hex())
+                              << LOG_KV("commitError", commitError->errorMessage());
         }
     }
 

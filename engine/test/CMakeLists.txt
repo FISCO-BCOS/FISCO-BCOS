@@ -7,9 +7,8 @@ include(SearchTestCases)
 
 set(TEST_BINARY_NAME test-bcos-engine)
 
-# Finding BW: leftover EngineServiceImpl.cpp is no longer linked. Tests that still
-# include EngineServiceImpl.h instantiate the header-only template (BK stays there
-# until those fixtures migrate off leftover).
+# Tests that still include EngineServiceImpl.h instantiate the header-only template, so
+# the file is kept here until those fixtures migrate off it.
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE
     . ${CMAKE_SOURCE_DIR}

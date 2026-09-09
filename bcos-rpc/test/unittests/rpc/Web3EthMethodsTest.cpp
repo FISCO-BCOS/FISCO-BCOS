@@ -11,6 +11,8 @@
 #include "../common/RPCFixture.h"
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EndpointsMapping.h>
+#include <bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h>
+#include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <string_view>
@@ -230,7 +232,7 @@ BOOST_AUTO_TEST_CASE(sendRawTransactionGarbageReportsError)
     BOOST_CHECK(resp.isMember("id"));
 }
 
-BOOST_AUTO_TEST_CASE(feeHistoryAndSetMaxDASizeRegistered)
+BOOST_AUTO_TEST_CASE(feeHistoryRegisteredAndDACapRpcDeferred)
 {
     // Check handler registration directly; a generic RPC error is not enough.
     EndpointsMapping publicMapping(/*enableOPEngine=*/false);
@@ -240,8 +242,12 @@ BOOST_AUTO_TEST_CASE(feeHistoryAndSetMaxDASizeRegistered)
         "miner_setMaxDASize must not be exposed on public web3_rpc");
 
     EndpointsMapping engineMapping(/*enableOPEngine=*/true);
-    BOOST_CHECK_MESSAGE(engineMapping.findHandler("miner_setMaxDASize").has_value(),
-        "miner_setMaxDASize not dispatched on op_engine_rpc");
+    // Not registered on op_engine_rpc either: no production consumer reads DACaps yet, so the
+    // batcher must keep failing loudly (MethodNotFound) instead of being told `true` and
+    // sizing its channel frames against a cap nothing applies. The RPC lands with the
+    // OpEngineService cutover, together with its reader.
+    BOOST_CHECK_MESSAGE(!engineMapping.findHandler("miner_setMaxDASize").has_value(),
+        "miner_setMaxDASize must not be dispatched before a DA-cap consumer exists");
 
     // And the endpoint stays reachable through the real dispatch path.
     auto resp = call(req("eth_feeHistory", R"(["0x1","latest"])"));
@@ -252,6 +258,54 @@ BOOST_AUTO_TEST_CASE(feeHistoryAndSetMaxDASizeRegistered)
     else
     {
         BOOST_CHECK(resp.isMember("result"));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(estimateGasWithoutLedgerFailsClosed)
+{
+    // eth_estimateGas sizes its gas cap from the target block's header, so a node with no
+    // ledger must refuse the request with InternalError. The chore(style) commit deleted that
+    // guard and let the cap fall back to a hardcoded 30'000'000 instead.
+    auto noLedgerService = std::make_shared<rpc::NodeService>(
+        nullptr, scheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(noLedgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("0x1");
+
+    Json::Value response;
+    try
+    {
+        task::syncWait(endpoint->estimateGas(params, response));
+        BOOST_FAIL("eth_estimateGas must not succeed without a ledger");
+    }
+    catch (JsonRpcException const& error)
+    {
+        BOOST_CHECK_EQUAL(error.code(), static_cast<int32_t>(JsonRpcError::InternalError));
+        BOOST_CHECK_EQUAL(error.msg(), "Ledger not available for eth_estimateGas");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(callRejectsMalformedFromAddress)
+{
+    // A malformed `from` used to be passed straight to the scheduler as a storage table name:
+    // the read threw, SchedulerManager swallowed it into nullopt, and the request continued
+    // with the sender's stale state nonce plus a WARNING per call. It must be InvalidParams.
+    auto resp = call(req("eth_call",
+        R"([{"from":"not_an_address","to":"0x1234567890abcdef1234567890abcdef12345678","data":"0x"},"latest"])"));
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
+
+    // A well-formed `from` still reaches execution (no InvalidParams).
+    auto ok = call(req("eth_call",
+        R"([{"from":"0x1234567890abcdef1234567890abcdef12345678","to":"0x1234567890abcdef1234567890abcdef12345678","data":"0x"},"latest"])"));
+    if (ok.isMember("error"))
+    {
+        BOOST_CHECK_NE(ok["error"]["code"].asInt(), -32602);
     }
 }
 

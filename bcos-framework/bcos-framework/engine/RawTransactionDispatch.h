@@ -77,4 +77,29 @@ inline bool isRawTransactionPayloadAdmissible(RawTransactionKind kind)
     return kind != RawTransactionKind::Blob && kind != RawTransactionKind::Unsupported;
 }
 
+/// The EIP-2718 type byte of a raw envelope, for callers that must reproduce the Ethereum
+/// header commitment (the receipt trie leaf's type prefix). Legacy envelopes carry no prefix
+/// and map to 0x00; unsupported input maps to 0x00 as well — it is rejected upstream, so it
+/// never reaches a commitment builder.
+inline std::uint8_t rawTransactionTypeByte(bcos::bytesConstRef raw)
+{
+    switch (dispatchRawTransaction(raw))
+    {
+    case RawTransactionKind::AccessList:
+        return 0x01;
+    case RawTransactionKind::DynamicFee:
+        return 0x02;
+    case RawTransactionKind::Blob:
+        return 0x03;
+    case RawTransactionKind::SetCode:
+        return 0x04;
+    case RawTransactionKind::Deposit:
+        return 0x7e;
+    case RawTransactionKind::Legacy:
+    case RawTransactionKind::Unsupported:
+    default:
+        return 0x00;
+    }
+}
+
 }  // namespace bcos::engine
