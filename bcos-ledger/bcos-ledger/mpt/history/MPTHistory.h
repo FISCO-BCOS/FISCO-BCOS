@@ -47,6 +47,29 @@ namespace bcos::ledger::mpt::history
 /// rows live in. The handle is type-erased because the RPC layer must not know what a
 /// RocksDBStorage2 is, and read-only because a handle reaching the RPC layer must not be able to
 /// write committed state (HistoryRead.h::makeHistoryReader builds it).
+///
+/// **What retaining history costs**, so an operator can derive the number for their own chain
+/// rather than guess it. Per MPT block, per store whose depth is > 0:
+///
+///  - one `readSome` over exactly the rows that block changed — the state store's only extra
+///    READ, and the trie store's is zero (the builder already read every node it overwrote);
+///  - written into the block's own WriteBatch, so they cost no extra Write: one Meta row (41
+///    bytes), `ceil(diff bytes / 64 KiB)` shard rows carrying the pre-images, the boundary row
+///    when this block seeds or advances it, and the `shardCount + 1` deletes of the block leaving
+///    the window.
+///
+/// So the on-disk footprint is roughly `depth × (one block's changed rows, key + old value)` per
+/// store, and the per-block write amplification does NOT grow with the depth — raising it costs
+/// disk, not commit latency.
+///
+/// At startup, one synchronous walk of each enabled store's shard table (`rebuild` below), which
+/// reads that same footprint once.
+///
+/// In RAM, the index is `Σ over retained blocks of (changed keys × (key bytes + 12 B + container
+/// overhead))` — 12 bytes is `HistoryVersion`, the key bytes are the row's physical
+/// `"<table>:<rowKey>"` form, and the overhead is one `unordered_map` node per DISTINCT key plus
+/// one `vector` slot per version. A hot key costs its bytes once and 12 bytes per block that
+/// touched it; a cold key costs its bytes plus 12.
 class MPTHistory
 {
 public:
