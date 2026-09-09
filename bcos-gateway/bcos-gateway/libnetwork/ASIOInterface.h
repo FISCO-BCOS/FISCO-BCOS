@@ -6,8 +6,8 @@
  * @date 2018-09-13
  */
 #pragma once
-#include "bcos-gateway/libnetwork/AsioAwaitable.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
+#include "bcos-task/FireAwaitable.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/IOServicePool.h"
 #include <boost/asio.hpp>
@@ -78,7 +78,8 @@ public:
     // synchronous invocation / drop is neutralized by the arm/cancel handshake in AsioAwaitable
     // (see AsioAwaitable.h) rather than corrupting the running coroutine, but the awaitable's
     // total-completion guarantee is clearest when every initiation defers.
-    using ReadSomeHandler = detail::AsioCompletion<boost::system::error_code, std::size_t>;
+    using ReadSomeHandler =
+        task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     // Production read-initiation policy: directly dispatches async_read_some on the socket
     // (TCP vs SSL, with the unexpected-type default completing via operation_not_supported).
@@ -116,44 +117,48 @@ public:
     auto awaitableReadSome(
         const std::shared_ptr<SocketFace>& socket, boost::asio::mutable_buffer buffers)
     {
-        return makeAsioAwaitable<boost::system::error_code, std::size_t>(
+        return task::makeFireAwaitable<boost::system::error_code, std::size_t>(
             [this, socket, buffers](auto handler) {
                 ReadPolicy::invoke(this, socket, buffers, std::move(handler));
-            });
+            },
+            boost::asio::error::operation_aborted);
     }
 
     auto awaitableAccept(const std::shared_ptr<SocketFace>& socket)
     {
-        return makeAsioAwaitable<boost::system::error_code>(
+        return task::makeFireAwaitable<boost::system::error_code>(
             [this, socket](auto handler) {
                 m_acceptor.async_accept(socket->ref(), std::move(handler));
-            });
+            },
+            boost::asio::error::operation_aborted);
     }
 
     auto awaitableResolveConnect(const std::shared_ptr<SocketFace>& socket)
     {
-        return makeAsioAwaitable<boost::system::error_code>(
-            [this, socket](auto handler) { resolveConnect(socket, std::move(handler)); });
+        return task::makeFireAwaitable<boost::system::error_code>(
+            [this, socket](auto handler) { resolveConnect(socket, std::move(handler)); },
+            boost::asio::error::operation_aborted);
     }
 
     static auto awaitableHandshake(const std::shared_ptr<SocketFace>& socket,
         ba::ssl::stream_base::handshake_type type)
     {
-        return makeAsioAwaitable<boost::system::error_code>(
+        return task::makeFireAwaitable<boost::system::error_code>(
             [socket, type](auto handler) {
                 socket->sslref().async_handshake(type, std::move(handler));
-            });
+            },
+            boost::asio::error::operation_aborted);
     }
 
-    auto awaitableWrite(const std::shared_ptr<SocketFace>& socket, auto buffers)
+    auto awaitableWrite(const std::shared_ptr<SocketFace>& socket, const auto& buffers)
     {
-        return makeAsioAwaitable<boost::system::error_code, std::size_t>(
-            [this, socket, buffers = std::move(buffers)](auto handler) mutable {
+        return task::makeFireAwaitable<boost::system::error_code, std::size_t>(
+            [this, socket, &buffers](auto handler) mutable {
                 auto type = m_type;
                 auto& ioService = socket->ioService();
                 if (socket->isConnected())
                 {
-                    boost::asio::post(ioService, [type, socket, buffers = std::move(buffers),
+                    boost::asio::post(ioService, [type, socket, &buffers,
                                                      handler = std::move(handler)]() mutable {
                         switch (type)
                         {
@@ -185,7 +190,8 @@ public:
                         handler(boost::asio::error::not_connected, 0);
                     });
                 }
-            });
+            },
+            boost::asio::error::operation_aborted);
     }
 
     // Cancel any pending async_accept so the accept loop (Host::acceptLoop) completes with

@@ -2,7 +2,7 @@
 find_package(Boost REQUIRED unit_test_framework)
 find_package(TBB REQUIRED)
 
-add_executable(test-task TestTask.cpp main.cpp)
+add_executable(test-task TestTask.cpp TestFireAwaitable.cpp main.cpp)
 target_link_libraries(
 	test-task PUBLIC bcos-task bcos-utilities Boost::unit_test_framework TBB::tbb)
 

@@ -249,10 +249,11 @@ task::Task<void> Host::acceptLoop()
             try
             {
                 auto retryTimer = m_asioInterface->newAcceptorTimer(ACCEPT_RETRY_INTERVAL_MS);
-                co_await makeAsioAwaitable<boost::system::error_code>(
+                co_await task::makeFireAwaitable<boost::system::error_code>(
                     [&retryTimer](auto handler) {
                         retryTimer.async_wait(std::move(handler));
-                    });
+                    },
+                    boost::asio::error::operation_aborted);
             }
             catch (...)
             {

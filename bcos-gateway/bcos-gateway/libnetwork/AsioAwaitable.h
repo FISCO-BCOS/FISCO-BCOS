@@ -1,21 +1,21 @@
 /*
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @brief Bridge the callback-style ASIOInterface operations into task::Task coroutines
- * @file AsioAwaitable.h
- */
+*  Copyright (C) 2026 FISCO BCOS.
+*  SPDX-License-Identifier: Apache-2.0
+*  Licensed under the Apache License, Version 2.0 (the "License");
+*  you may not use this file except in compliance with the License.
+*  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+*  Unless required by applicable law or agreed to in writing, software
+*  distributed under the License is distributed on an "AS IS" BASIS,
+*  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*  See the License for the specific language governing permissions and
+*  limitations under the License.
+*
+* @brief Bridge the callback-style ASIOInterface operations into task::Task coroutines
+* @file AsioAwaitable.h
+*/
 #pragma once
 #include "bcos-gateway/libnetwork/Common.h"
 #include <boost/asio/error.hpp>
@@ -70,7 +70,7 @@ class AsioCompletion
 public:
     AsioCompletion(std::tuple<Results...>* result, std::coroutine_handle<> handle) : m_result(result), m_handle(handle) {}
     AsioCompletion(AsioCompletion&& other) noexcept
-      : m_result(other.m_result), m_handle(other.m_handle), m_armed(other.m_armed.load())
+    : m_result(other.m_result), m_handle(other.m_handle), m_armed(other.m_armed.load())
     {
         // the moved-from instance no longer owns the completion duty
         other.m_armed.store(false);
@@ -120,12 +120,12 @@ public:
         catch (std::exception const& e)
         {
             ASIO_LOG(WARNING) << LOG_DESC("asio awaitable resume exception")
-                              << LOG_KV("what", boost::diagnostic_information(e));
+                            << LOG_KV("what", boost::diagnostic_information(e));
         }
         catch (...)
         {
             ASIO_LOG(WARNING) << LOG_DESC("asio awaitable resume exception")
-                              << LOG_KV("what", boost::current_exception_diagnostic_information());
+                            << LOG_KV("what", boost::current_exception_diagnostic_information());
         }
     }
 
@@ -143,7 +143,7 @@ struct AsioAwaitable
     std::tuple<Results...> m_result;
 
     constexpr bool await_ready() const noexcept { return false; }
-    bool await_suspend(std::coroutine_handle<> handle)
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<> handle)
     {
         try
         {
@@ -151,18 +151,28 @@ struct AsioAwaitable
             // runs m_initiate. Returning its handle is a symmetric transfer — the compiler
             // suspends the awaiting coroutine first, then resumes the bridge, so the awaiting
             // frame is always suspended when m_initiate runs.
-            auto completion = detail::AsioCompletion<Results...>(&m_result, handle);
+            auto task = [initiate = std::move(m_initiate)](auto completion) mutable -> task::TaskPure {
+                try
+                {
+                    completion.active();
+                    initiate(std::move(completion));
+                }
+                catch (...)
+                {
+                    // initiate threw after arming: the completion's destructor already ran the
+                    // rescue (abort + resume). Swallow here to avoid terminate.
+                }
+                co_return;
+            }(detail::AsioCompletion<Results...>(&m_result, handle));
+            return task.getHandle();
         }
         catch (...)
         {
             // Bridge-frame construction failed (bad_alloc): returning our own handle resumes the
             // awaiting coroutine immediately (equivalent to not suspending) with an aborted result.
             m_result = detail::makeOperationAbortedResult<Results...>();
-            return false;
+            return handle;
         }
-        completion.active();
-        m_initiate(std::move(completion));
-        return true;
     }
 
     std::tuple<Results...> await_resume()

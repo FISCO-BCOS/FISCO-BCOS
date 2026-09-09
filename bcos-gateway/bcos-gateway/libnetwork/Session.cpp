@@ -410,7 +410,7 @@ task::Task<void> Session::writeLoop()
             // iteration, and a short/failed write is handled through `error` alone
             [[maybe_unused]] auto [error, size] =
                 co_await m_server.get().asioInterface()->awaitableWrite(
-                    m_socket, std::move(buffers));
+                    m_socket, buffers);
 
             buffers.clear();
             for (auto& payload : payloads)
