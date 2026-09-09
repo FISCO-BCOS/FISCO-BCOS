@@ -823,12 +823,15 @@ BOOST_AUTO_TEST_CASE(aReadWaitsOutThePublishWindowAndThenAnswers)
     BOOST_REQUIRE_EQUAL(mptHistory->state().index().generation() % 2, 1U);
 
     constexpr auto kHold = std::chrono::milliseconds{50};
+    // Sampled BEFORE the thread is constructed: the closer's sleep starts when it is scheduled,
+    // which can be before this line runs, so a clock taken afterwards could measure less than
+    // kHold on a descheduled parent and fail a correct implementation.
+    auto const started = std::chrono::steady_clock::now();
     std::thread closer([&]() {
         std::this_thread::sleep_for(kHold);
         mptHistory->state().closePublishWindow();
     });
 
-    auto const started = std::chrono::steady_clock::now();
     std::optional<executor_v1::StateValue> value;
     bool refused = false;
     try

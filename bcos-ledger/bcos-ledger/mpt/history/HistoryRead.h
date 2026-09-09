@@ -30,6 +30,7 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <concepts>
@@ -113,15 +114,16 @@ Value valueFromRecorded(bcos::bytes&& recorded)
 /// resolved "unchanged" at, and this function re-reads it after the current-value read. Equal
 /// means nothing published in between and the value really is block B's. Different, or odd, means
 /// the read may be from a plane that is ahead of the index, so the whole thing is recomputed —
-/// and after a bounded number of attempts refused, because answering is the one thing that must
-/// not happen.
+/// waiting for the window to close between attempts, and refused once the TIME budget
+/// (kPublishWindowWaitBudget) is spent, because answering is the one thing that must not happen.
 ///
 /// @param currentReader an awaitable-returning callable with no arguments that reads the key's
 ///        value from the CURRENT committed plane and yields `std::optional<Value>`. It is invoked
 ///        only on the UseCurrent arm, so a query whose key does have a recorded pre-image never
 ///        touches the current plane at all. Its `Value` is what this function returns, and it is
 ///        built from the recorded bytes on the other arm.
-/// @throws whatever readAt throws, plus HistoryIndexUnavailable when the retry budget is spent.
+/// @throws whatever readAt throws, plus HistoryIndexUnavailable when commits kept crossing the
+///         read for longer than kPublishWindowWaitBudget.
 template <class Store, class Backend, class CurrentReader>
 [[nodiscard]] auto readAtOrCurrent(Store const& store, Backend& backend,
     std::span<const bcos::byte> key, protocol::BlockNumber block, protocol::BlockNumber tip,
@@ -138,7 +140,13 @@ template <class Store, class Backend, class CurrentReader>
 
     for (;;)
     {
-        auto version = co_await store.readAt(backend, key, block, tip, depth);
+        // What is LEFT of this function's budget, not a fresh one: readAt may wait for an open
+        // window too, and giving it a full budget per attempt would make the worst case twice
+        // what kPublishWindowWaitBudget promises.
+        auto const remainingForRead = std::chrono::duration_cast<std::chrono::milliseconds>(
+            deadline - std::chrono::steady_clock::now());
+        auto version = co_await store.readAt(backend, key, block, tip, depth,
+            std::max(remainingForRead, std::chrono::milliseconds::zero()));
         if (auto* recorded = std::get_if<bcos::bytes>(std::addressof(version)))
         {
             co_return CurrentResult{detail::valueFromRecorded<Value>(std::move(*recorded))};
