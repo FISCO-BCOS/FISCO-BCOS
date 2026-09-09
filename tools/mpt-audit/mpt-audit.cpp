@@ -82,12 +82,17 @@ void printUsage(po::options_description const& options)
            "        harmless) are warnings and do NOT change the exit code.\n\n"
            "  mpt-audit history  <db-path> --state-blocks N --proof-blocks N [--tip N]\n"
            "                               [--from N]\n"
-           "        Audit both reverse-history indexes against spec B.10's four checks.\n\n"
+           "        Audit both reverse histories against spec B.10's five checks: each\n"
+           "        block's meta row against its shards, a meta row for every block in the\n"
+           "        window, a REBUILD of the in-memory index that succeeds and accounts for\n"
+           "        every record, the retention-boundary row, and each meta row's block hash\n"
+           "        against the ledger's s_number_2_hash at that height. The rebuild is the\n"
+           "        one a restarting node performs, so its blocks/records/ms are printed.\n\n"
            "  mpt-audit rollback <db-path> --to BLOCK [--state-blocks N --proof-blocks N]\n"
            "                               [--tip N] [--yes]\n"
            "        Reverse-apply both histories from the tip down to BLOCK. Without --yes\n"
            "        this is a dry run that only prints how many rows would change. Every\n"
-           "        block in the range must have a manifest in BOTH histories or the whole\n"
+           "        block in the range must have a meta row in BOTH histories or the whole\n"
            "        rollback is refused before anything is written. After --yes the tree is\n"
            "        re-audited against the header of BLOCK.\n"
            "        SCOPE: this rolls back the state plane and the trie node rows, and\n"
@@ -155,6 +160,36 @@ std::optional<bcos::h256> readHeaderStateRoot(StateStorage& storage, protocol::B
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
     return header.stateRoot();
+}
+
+/// The hash the LEDGER records for @p block: the `s_number_2_hash` row, 32 raw bytes.
+///
+/// This is the value B.10 ⑤ compares each meta row against, and it is read from this row rather
+/// than recomputed from the header because the row is what both commit paths write and what the
+/// ledger itself reads back (LedgerMethods.cpp:384 — "hash from the SYS_NUMBER_2_HASH row (works
+/// for OP headers whose in-memory BlockHeader::hash() would throw)"). The same value goes into the
+/// meta row at commit time, so a disagreement means the retained pre-images belong to a different
+/// block at that height, not that two hash functions were used.
+///
+/// A row of the wrong length is nullopt rather than a truncated hash: h256's byte-range
+/// constructor would zero-fill, and a zero-filled hash compared against a meta row is a mismatch
+/// the operator would then chase in the wrong place.
+std::optional<bcos::h256> readLedgerBlockHash(StateStorage& storage, protocol::BlockNumber block)
+{
+    auto entry = bcos::task::syncWait(bcos::storage2::readOne(
+        storage, bcos::executor_v1::StateKey{ledger::SYS_NUMBER_2_HASH, std::to_string(block)}));
+    if (!entry)
+    {
+        return std::nullopt;
+    }
+    auto const raw = entry->get();
+    if (raw.size() != bcos::h256::SIZE)
+    {
+        return std::nullopt;
+    }
+    return bcos::h256(bcos::bytesConstRef(
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+        reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
 }
 
 /// The root `tree` should hold the store to: --expect-root if given, else the header of @p block.
@@ -258,8 +293,8 @@ bool reportHistory(std::string_view label, audit::HistoryAuditReport const& repo
     std::cout << label << ": tip " << report.tip << ", depth " << report.depth << ", window ["
               << report.windowStart << ", " << report.tip << "], retained ["
               << report.oldestRetained << ", " << report.newestRetained << "], "
-              << report.blocksWithManifest << " blocks, " << report.manifestKeys
-              << " manifest keys, " << report.indexRows << " index rows, boundary ";
+              << report.blocksWithMeta << " blocks, " << report.shardRows << " shard rows, "
+              << report.records << " records, boundary ";
     if (report.retentionBoundary)
     {
         std::cout << *report.retentionBoundary;
@@ -269,13 +304,34 @@ bool reportHistory(std::string_view label, audit::HistoryAuditReport const& repo
         std::cout << "<absent>";
     }
     std::cout << std::endl;
+
+    // The rebuild is B.10 ③ AND the operational number an operator sizes a restart with: this is
+    // exactly the walk the node performs before it will answer a single historical read, so the
+    // time it took here is the time the next start will pay.
+    std::cout << "  rebuild: ";
+    if (report.rebuilt)
+    {
+        std::cout << report.rebuiltBlocks << " blocks, " << report.rebuiltRecords << " records, "
+                  << report.indexVersions << " index versions, " << report.bytesScanned
+                  << " bytes, " << report.rebuildMilliseconds << " ms" << std::endl;
+    }
+    else
+    {
+        std::cout << "REFUSED — a node restarting on this store would come up with its history "
+                     "unavailable"
+                  << std::endl;
+    }
+    if (!report.blockHashChecked)
+    {
+        // Being UNABLE to compare is not the same as the hashes agreeing.
+        std::cout << "  WARNING: no ledger block hashes were available, so the retained blocks "
+                     "were not checked against this chain"
+                  << std::endl;
+    }
+
     for (auto const& finding : report.findings)
     {
         std::cout << "  FINDING " << audit::describe(finding.kind) << " at block " << finding.block;
-        if (!finding.key.empty())
-        {
-            std::cout << " key 0x" << finding.key;
-        }
         // The kind names the B.10 item; `detail` is where a finding says which DIRECTION it went,
         // and for the retention boundary that is the whole difference between "this store answers
         // historical reads with today's value" and "it is carrying rows nothing can reach". An
@@ -296,10 +352,21 @@ int runHistory(StateStorage& storage, po::variables_map const& params)
     auto const proofDepth = params["proof-blocks"].as<protocol::BlockNumber>();
     auto const from = params["from"].as<protocol::BlockNumber>();
 
+    // B.10 ⑤'s other side. `s_number_2_hash` and not the header row: it holds exactly the hash the
+    // commit path handed stageBlockHistory, on BOTH schedulers — BaselineScheduler writes
+    // `header->hash()` into it and OpScheduler the OP header hash, which is also what each of them
+    // records in the meta row. Decoding the header instead would re-derive a hash, and on the OP
+    // side the in-memory `BlockHeader::hash()` is not even the one the chain uses
+    // (LedgerMethods.cpp:384 takes the same view).
+    audit::BlockHashSource const blockHashAt =
+        [&storage](protocol::BlockNumber block) -> std::optional<bcos::h256> {
+        return readLedgerBlockHash(storage, block);
+    };
+
     auto const stateReport =
-        bcos::task::syncWait(audit::auditStateHistory(storage, tip, stateDepth, from));
+        bcos::task::syncWait(audit::auditStateHistory(storage, tip, stateDepth, from, blockHashAt));
     auto const trieReport =
-        bcos::task::syncWait(audit::auditTrieHistory(storage, tip, proofDepth, from));
+        bcos::task::syncWait(audit::auditTrieHistory(storage, tip, proofDepth, from, blockHashAt));
 
     bool const stateClean = reportHistory("StateHistory", stateReport);
     bool const trieClean = reportHistory("TrieHistory ", trieReport);
