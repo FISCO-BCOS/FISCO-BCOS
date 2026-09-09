@@ -34,6 +34,7 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-ledger/mpt/PathKey.h>
+#include <bcos-ledger/mpt/history/HistoryDepths.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <bcos-tx-validator/CheckSet.h>
 #include <bcos-utilities/Common.h>
@@ -138,6 +139,37 @@ public:
     }
     std::shared_ptr<MPTNodeReader> mptNodeReader() const noexcept { return m_mptNodeReader; }
 
+    /// Type-erased read handle over the plane the MPT reverse histories live in — the committed
+    /// state backend. eth_getProof at a past block resolves each trie position's version at that
+    /// block through it (pathdb spec §10.2). StateKey-typed because history rows ARE ordinary
+    /// state rows; the handle must support range(RANGE_SEEK, …), which the committed backend does
+    /// and a cached view does not.
+    using MPTHistoryReader =
+        bcos::storage2::AnyStorage<bcos::executor_v1::StateKey, bcos::executor_v1::StateValue>;
+
+    /// Same lifetime contract as setMPTNodeReader: the storage underneath is borrowed from the
+    /// Initializer, which must outlive this NodeService. Unset on a tars-built NodeService.
+    void setMPTHistoryReader(std::shared_ptr<MPTHistoryReader> _reader) noexcept
+    {
+        m_mptHistoryReader = std::move(_reader);
+    }
+    std::shared_ptr<MPTHistoryReader> mptHistoryReader() const noexcept
+    {
+        return m_mptHistoryReader;
+    }
+
+    /// How far back this node retains the two reverse histories (nodeConfig [storage]); both 0
+    /// on a node that was never wired, which is also the honest answer for one that retains
+    /// nothing.
+    void setMPTHistoryDepths(bcos::ledger::mpt::history::HistoryDepths _depths) noexcept
+    {
+        m_mptHistoryDepths = _depths;
+    }
+    bcos::ledger::mpt::history::HistoryDepths mptHistoryDepths() const noexcept
+    {
+        return m_mptHistoryDepths;
+    }
+
     /// Type-erased read handle over the LATEST COMMITTED state plane of GlobalStateStorage
     /// (eth_getStorageAt's fork-a-view path): StateKey -> Entry, no MPT types.
     using StateStorage =
@@ -193,6 +225,11 @@ private:
     /// MPT node reader handle (owns its adapter, borrows the underlying storage); see
     /// setMPTNodeReader() for the lifetime contract.
     std::shared_ptr<MPTNodeReader> m_mptNodeReader;
+
+    /// MPT reverse-history reader handle and the depths this node retains; see
+    /// setMPTHistoryReader() for the lifetime contract.
+    std::shared_ptr<MPTHistoryReader> m_mptHistoryReader;
+    bcos::ledger::mpt::history::HistoryDepths m_mptHistoryDepths;
 
     /// Latest-state view provider (owns each forked view, borrows the GlobalStateStorage);
     /// see setStateStorageProvider() for the lifetime contract.

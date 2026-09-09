@@ -18,7 +18,9 @@
  */
 #include "TestHelpers.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/mpt/Account.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/Errors.h>
@@ -30,6 +32,8 @@
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-ledger/mpt/Trie.h>
+#include <bcos-ledger/mpt/history/HistoryCommit.h>
+#include <bcos-ledger/mpt/history/HistoryRead.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -159,39 +163,63 @@ BOOST_AUTO_TEST_CASE(UnknownRootIsReportedNotAnswered)
         !bcos::task::syncWait(holdsTrieRoot(storage, TrieScope::account(), makeHash(0xDD))));
 }
 
-// A position holds ONE version. Once block N+1 has rewritten the root, block N's root is not a
-// thing the store can answer about — and it says so instead of serving today's state.
+// A position holds ONE version, so the node rows alone can only answer for the tip: block N's
+// root is not a thing they can be read at. The trie-node reverse history is what puts that back
+// — every reader keeps working, unchanged, over a plane that resolves each position to the
+// version it held at block N (pathdb spec §10.2).
 //
-// HistoryUnavailableUntilPathIndex: PR-C's trie-node history index restores this read; when it
-// lands, this case becomes "the old root still reads, from the index".
-BOOST_AUTO_TEST_CASE(SupersededRootThrowsHistoryUnavailableUntilPathIndex)
+// Both halves are asserted here: the raw node store still refuses the old root, and the same
+// readers over HistoricalNodeStorage answer it — with the OLD bytes, not today's.
+BOOST_AUTO_TEST_CASE(SupersededRootReadsThroughTheTrieHistory)
 {
+    using HistoryBackend =
+        bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+            bcos::storage::Entry, bcos::storage2::memory_storage::ORDERED>;
+    namespace history = bcos::ledger::mpt::history;
+
     NodeStorage storage;
+    HistoryBackend historyBackend;
     auto const keyA = keyAtNibble(0x01, 0xAA);
     auto const keyB = keyAtNibble(0x02, 0xBB);
     auto const rootN =
         seedTrieFlushed(storage, emptyRootHash(), {{keyA, bcos::bytes(40, 0x11)}}).root;
-    auto const rootN1 = seedTrieFlushed(storage, rootN, {{keyB, bcos::bytes(40, 0x22)}}).root;
-    BOOST_REQUIRE(rootN != rootN1);
 
+    // Block N+1 rewrites the trie; its pre-images become block N+1's trie history, which is
+    // exactly what the commit path records (HistoryCommit.h).
+    auto const blockN1 = seedTrieFlushed(storage, rootN, {{keyB, bcos::bytes(40, 0x22)}});
+    auto const rootN1 = blockN1.root;
+    BOOST_REQUIRE(rootN != rootN1);
+    BOOST_REQUIRE(!blockN1.preimages.empty());
+    bcos::task::syncWait(history::commitBlockHistory(historyBackend, historyBackend,
+        /*block*/ 1, {}, blockN1.preimages, {.state = 0, .proof = 128}));
+
+    // The raw node store: the tip reads, the superseded root does not.
     Trie<NodeStorage> const tip(storage, TrieScope::account(), rootN1);
     BOOST_CHECK(bcos::task::syncWait(tip.get(keyA)).has_value());
-
     Trie<NodeStorage> const historical(storage, TrieScope::account(), rootN);
     BOOST_CHECK_THROW(bcos::task::syncWait(historical.get(keyA)), MPTHistoryUnavailable);
-
-    // MPTReadView and the root probe agree with the trie walk.
     MPTReadView<NodeStorage> const view(storage, rootN);
     BOOST_CHECK_THROW(
         bcos::task::syncWait(view.readAccount(makeAddress(0x11))), MPTHistoryUnavailable);
     BOOST_CHECK(!bcos::task::syncWait(holdsTrieRoot(storage, TrieScope::account(), rootN)));
 
-    // The proof path reports it as a request-level outcome rather than throwing, which is the
-    // shape eth_getProof already had for an unknown root.
-    auto const proof = bcos::task::syncWait(
-        generateProof(storage, rootN, makeAddress(0x11), std::span<bcos::h256 const>{}));
-    BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(proof));
-    BOOST_CHECK(std::get<ProofErrorCode>(proof) == ProofErrorCode::BlockNotCommitted);
+    // Through the history plane at block 0, every one of them answers again — and the value is
+    // block 0's, which is what makes this more than "it stopped throwing".
+    using HistoricalNodes = history::HistoricalNodeStorage<NodeStorage, HistoryBackend>;
+    HistoricalNodes atBlock0(storage, historyBackend, /*block*/ 0, /*tip*/ 1, /*depth*/ 128);
+    BOOST_CHECK(bcos::task::syncWait(holdsTrieRoot(atBlock0, TrieScope::account(), rootN)));
+    Trie<HistoricalNodes> const historicalTrie(atBlock0, TrieScope::account(), rootN);
+    auto const valueAt0 = bcos::task::syncWait(historicalTrie.get(keyA));
+    BOOST_REQUIRE(valueAt0.has_value());
+    BOOST_CHECK(*valueAt0 == bcos::bytes(40, 0x11));
+    // keyB did not exist at block 0 — its leaf position reads as absent, not as today's node.
+    BOOST_CHECK(!bcos::task::syncWait(historicalTrie.get(keyB)).has_value());
+
+    // Out of window: the guard fires before the seek and the read is refused, rather than
+    // silently degrading into the current version (spec B.3, G5).
+    HistoricalNodes outOfWindow(storage, historyBackend, /*block*/ 0, /*tip*/ 1, /*depth*/ 1);
+    Trie<HistoricalNodes> const prunedTrie(outOfWindow, TrieScope::account(), rootN);
+    BOOST_CHECK_THROW(bcos::task::syncWait(prunedTrie.get(keyA)), history::HistoryPruned);
 }
 
 // Two accounts with byte-identical storage tries get their own rows. Deleting one owner's rows

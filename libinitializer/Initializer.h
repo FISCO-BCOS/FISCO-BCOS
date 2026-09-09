@@ -33,6 +33,7 @@
 #endif
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-ledger/mpt/PathKey.h>
+#include <bcos-ledger/mpt/history/HistoryDepths.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-tx-validator/TxValidator.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -148,6 +149,17 @@ public:
     /// nullptr before initNode() built the global state storage (e.g. config-only usage).
     std::shared_ptr<bcos::storage2::AnyStorage<bcos::ledger::mpt::PathKey, bcos::bytes>>
     mptNodeReader();
+
+    /// Type-erased read handle over the plane the two MPT reverse histories live in — the
+    /// committed state backend, which is the only plane that can SEEK: a production View stacks
+    /// an LRU cache layer that is CONCURRENT|LRU with no ORDERED, so `View::range(RANGE_SEEK, …)`
+    /// cannot be instantiated at all. Same lifetime contract as mptNodeReader().
+    /// nullptr before initNode() built the global state storage.
+    std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>
+    mptHistoryReader();
+
+    /// The two retention depths this node was configured with (nodeConfig [storage]).
+    [[nodiscard]] bcos::ledger::mpt::history::HistoryDepths mptHistoryDepths() const;
 
     /// Provider for eth_getStorageAt's latest-state path: each call forks a fresh latest view
     /// of GlobalStateStorage and returns an AnyStorage handle owning it (see

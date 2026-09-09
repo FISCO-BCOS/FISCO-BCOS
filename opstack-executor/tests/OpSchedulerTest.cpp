@@ -112,6 +112,8 @@ using BackendMemStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
     std::hash<StateKey>>;
 using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendMemStorage>;
+/// MPT reverse-history retention for the whole suite — wider than any chain driven here.
+constexpr bcos::protocol::BlockNumber kHistoryDepth = 128;
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ViewType = typename MLS::ViewType;
 
@@ -341,6 +343,11 @@ struct Fixture
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
         seedSysTables(multiLayerStorage);
+        // Production injects these from nodeConfig [storage]; the scheduler's own default is
+        // 0 = not retained, so a fixture that wants historical answers has to say so. The
+        // depth is wider than any chain these cases drive, so the window guard only fires
+        // where a case sets out to fire it.
+        scheduler->setHistoryDepths({.state = kHistoryDepth, .proof = kHistoryDepth});
     }
 };
 
@@ -1603,12 +1610,13 @@ BOOST_AUTO_TEST_CASE(CallAtBlockEmptyStateRootIsInvalidStatus)
     BOOST_CHECK(receipt == nullptr);
 }
 
-/// The M5 node-existence gate: feature ON + a NON-zero historical root whose "/mpt/" rows
-/// were never persisted (a chain that committed blocks before node persistence) must refuse
-/// loudly with InvalidStatus — never walk into a missing-node trie read. Root-node existence
-/// is the O(1) probe; inner-node faults mid-execution are caught by the poison checks
-/// (coCallAtBlock throws OpStorageError → OpStorageFault).
-BOOST_AUTO_TEST_CASE(CallAtBlockMissingTrieNodesIsInvalidStatus)
+/// The un-recorded-era gate: feature ON, the height comfortably inside the retention window,
+/// and yet NO history was written for it (here: the blocks ran with the MPT flag off, which is
+/// also the shape of a node that raised its depth or enabled the MPT mid-life). Every key would
+/// otherwise seek past the end of the index, report HistoryUseCurrent and hand back TODAY's
+/// state under block 1's number — the one wrong answer indistinguishable from a right one. One
+/// manifest probe turns it into an InvalidStatus refusal (G6).
+BOOST_AUTO_TEST_CASE(CallAtBlockWithoutRecordedHistoryIsInvalidStatus)
 {
     Fixture f;
     fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
@@ -1622,12 +1630,13 @@ BOOST_AUTO_TEST_CASE(CallAtBlockMissingTrieNodesIsInvalidStatus)
     driveOpBlock(f, makeHeaderAt(2, bcos::u256(2'000'000'000)), {depEnv});
     seedL2CompatFeature(f.multiLayerStorage);  // retroactive enable@0
 
-    // Block 1: historical (latest=2), feature gate passes, root non-zero — M5 must fire.
+    // Block 1: historical (latest=2), feature gate passes, window wide open — the coverage
+    // probe is the only thing standing between the caller and today's state.
     auto [err, receipt] = callAt(f, buildWeb3Tx(bcos::u256(30'000'000'000ULL), bcos::u256(0)), 1);
-    BOOST_REQUIRE(err != nullptr);
+    BOOST_REQUIRE_MESSAGE(err != nullptr,
+        "a height with no recorded history must be refused, not answered from the tip");
     BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidStatus);
-    BOOST_CHECK(
-        err->errorMessage().find("not the version the MPT node store holds") != std::string::npos);
+    BOOST_CHECK(err->errorMessage().find("no state history recorded") != std::string::npos);
     BOOST_CHECK(receipt == nullptr);
 }
 
@@ -1659,159 +1668,75 @@ BOOST_AUTO_TEST_CASE(CallAtBlockGenesisRefusedWhenFeatureActivatesAtOne)
     BOOST_CHECK(receipt == nullptr);
 }
 
-/// The poison tripwire behind M5: root row persisted (M5 passes) but INNER nodes missing —
-/// the first trie walk past the root throws inside Storage2State, the catch ladder swallows
-/// it into poison, and coCallAtBlock's poison checks must turn that into a loud
-/// OpStorageFault, never a status-ok receipt built on zero-value reads. Two genesis accounts
-/// guarantee the root is a branch/extension whose children are exactly the missing rows.
-BOOST_AUTO_TEST_CASE(CallAtBlockInnerNodeMissingIsStorageFault)
-{
-    const bcos::Address kContract{"0x3000000000000000000000000000000000000000"};
-    Fixture f;
-    fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
-    seedContractWithSlot(f.multiLayerStorage, kContract,
-        bcos::h256{"0x00000000000000000000000000000000000000000000000000000000000000a1"},
-        f.hashImpl);
-
-    // Persist ONLY the root node row of the genesis trie.
-    bcos::h256 genesisRoot;
-    {
-        auto view = f.multiLayerStorage.fork();
-        view.newMutable();
-        bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
-        auto result = collectStateRoot(bridge);
-        BOOST_REQUIRE(!bridge.poisoned());
-        genesisRoot = detail::toBcosH256(result.root);
-        auto const it = result.newNodes.find(bcos::ledger::mpt::accountRootPathKey());
-        BOOST_REQUIRE(it != result.newNodes.end());
-        std::vector<std::pair<bcos::ledger::mpt::PathKey, bcos::bytes>> rootOnly{
-            {it->first, it->second}};
-        bcos::scheduler_v1::ViewNodeStorage<ViewType> nodeStorage(view);
-        bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, rootOnly));
-        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
-    }
-    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
-
-    // Block 1 with the flag OFF (full-rebuild root, no trie reads) so genesis becomes a
-    // historical height; then flip the flag on retroactively.
-    auto depTx = makeDeposit();
-    bcos::bytes depEnv = encodeDepositEnvelope(depTx);
-    driveOpBlock(f, makeHeaderAt(1, bcos::u256(1'000'000'000)), {depEnv});
-    seedL2CompatFeature(f.multiLayerStorage);
-
-    auto [err, receipt] = callAt(f, buildWeb3Tx(bcos::u256(30'000'000'000ULL), bcos::u256(0)), 0);
-    BOOST_REQUIRE_MESSAGE(err != nullptr,
-        "inner-node-missing historical call must fail loudly, not answer from zero values");
-    BOOST_TEST_CONTEXT("err message: " << err->errorMessage())
-    {
-        BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::OpStorageFault);
-        // Round-2 F4: the RPC-bound message is generic ("storage fault"); the full diagnostic
-        // (which node is missing) goes to the node log, not the RPC response.
-        BOOST_CHECK(err->errorMessage().find("storage fault") != std::string::npos);
-    }
-    BOOST_CHECK(receipt == nullptr);
-}
-
-/// The EXECUTION-stage tripwire behind M5 (complement of InnerNodeMissing, which faults at the
-/// fee-param stage): persist the genesis trie MINUS the contract's storage sub-trie root row.
-/// The account-trie walk (fee params, sender) stays intact, so the fee-stage poison check
-/// passes; the getter's first SLOAD walks into the withheld storage root, the executor's
-/// internal Storage2State poisons the shared error slot, and coCallOnView's sharedError check
-/// turns it into OpStorageFault — never a receipt built on a swallowed zero slot.
-BOOST_AUTO_TEST_CASE(CallAtBlockExecutionStageNodeMissingIsStorageFault)
+/// The fail-loud tripwire on the plane a historical call now reads: the STATE reverse history.
+///
+/// This case replaces three that corrupted or withheld TRIE node rows and asserted that a
+/// historical eth_call blew up on them. Historical eth_call no longer walks the trie at all —
+/// it resolves each key through the reverse history (pathdb spec §11) — so the trie's own
+/// fail-loud behaviour is not observable from here any more; it is covered where it still
+/// happens, in the ledger suite's Trie/proof cases and in block execution's parent-root probe
+/// (IncrementalMPTBuildFailsWithoutParentNodes, below).
+///
+/// The property that survives, and is the one that matters, is unchanged: a broken record
+/// inside the retained window must stop the call, never quietly become the current value. Here
+/// block 1's index row for the probed slot is overwritten with an undecodable tag byte, so the
+/// block-0 read of that slot hits it and readAt throws MPTInvariantViolation — classified
+/// OpStorageFault, exactly as a corrupt trie node was.
+BOOST_AUTO_TEST_CASE(CallAtBlockCorruptHistoryRowIsStorageFault)
 {
     const bcos::Address kContract{"0x3000000000000000000000000000000000000000"};
     const bcos::h256 kV1{"0x00000000000000000000000000000000000000000000000000000000000000a1"};
+    const bcos::h256 kV2{"0x00000000000000000000000000000000000000000000000000000000000000b2"};
+
     Fixture f;
+    seedL2CompatFeature(f.multiLayerStorage);
     fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
     seedContractWithSlot(f.multiLayerStorage, kContract, kV1, f.hashImpl);
-
-    bcos::h256 genesisRoot;
-    {
-        auto view = f.multiLayerStorage.fork();
-        view.newMutable();
-        bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
-        auto result = collectStateRoot(bridge);
-        BOOST_REQUIRE(!bridge.poisoned());
-        genesisRoot = detail::toBcosH256(result.root);
-        // Withhold the contract's storage-trie ROOT row — the row the account leaf's
-        // storageRoot commits to, and the one a slot read has to start from.
-        auto const withheld =
-            bcos::ledger::mpt::storageRootPathKey(bcos::ledger::mpt::accountKeyHash(kContract));
-        BOOST_REQUIRE_EQUAL(result.newNodes.erase(withheld), 1);
-        bcos::scheduler_v1::ViewNodeStorage<ViewType> nodeStorage(view);
-        bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, result.newNodes));
-        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
-    }
+    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
-    // Block 1 with the flag OFF (full-rebuild root, no trie reads) so genesis becomes a
-    // historical height; then flip the flag on retroactively.
-    auto depTx = makeDeposit();
-    bcos::bytes depEnv = encodeDepositEnvelope(depTx);
-    driveOpBlock(f, makeHeaderAt(1, bcos::u256(1'000'000'000)), {depEnv});
-    seedL2CompatFeature(f.multiLayerStorage);
+    // Block 1 flips slot 0 to V2, so it records the pre-image a block-0 read needs; block 2
+    // makes block 0 a historical height with a recorded successor.
+    auto depEnv = encodeDepositEnvelope(makeDeposit());
+    bcos::bytes setterEnv = makeSetterDepositEnvelope(kContract, kV2);
+    driveOpBlock(f, makeHeaderAt(1, bcos::u256(1'000'000'000)), {depEnv, setterEnv});
+    driveOpBlock(f, makeHeaderAt(2, bcos::u256(2'000'000'000)), {depEnv});
+
+    // Positive control FIRST: the block-0 read works before the corruption, so the failure
+    // below is the corruption and not the fixture.
+    {
+        auto [okErr, okReceipt] =
+            callAt(f, buildWeb3Tx(bcos::u256(30'000'000'000ULL), bcos::u256(0), kContract), 0);
+        BOOST_REQUIRE_MESSAGE(okErr == nullptr, "block-0 call must work before the corruption: "
+                                                    << (okErr ? okErr->errorMessage() : ""));
+        BOOST_REQUIRE(okReceipt != nullptr);
+        auto const out = okReceipt->output();
+        bcos::bytes const outBytes(out.begin(), out.end());
+        bcos::bytes const v1Bytes(kV1.data(), kV1.data() + bcos::h256::SIZE);
+        BOOST_REQUIRE_MESSAGE(outBytes == v1Bytes, "block-0 call must read slot=V1");
+    }
+
+    // Overwrite block 1's index row for that slot with an unknown tag byte.
+    {
+        namespace history = bcos::ledger::mpt::history;
+        auto const table = bcos::ledger::mpt::accountTableName(kContract);
+        bcos::h256 const slotZero{};  // the contract's slot 0 — the row the getter SLOADs
+        std::string const slotRowKey(
+            reinterpret_cast<char const*>(slotZero.data()), bcos::h256::SIZE);
+        bcos::executor_v1::StateKey const flatKey{table, slotRowKey};
+        bcos::storage::Entry corrupt;
+        corrupt.set(bcos::bytes{0xde, 0xad, 0xbe, 0xef});
+        bcos::task::syncWait(bcos::storage2::writeOne(f.backendStorage,
+            bcos::executor_v1::StateKey{history::kStateHistory.index,
+                history::indexRowKey(history::historyKeyOf(flatKey), 1)},
+            std::move(corrupt)));
+    }
 
     auto [err, receipt] =
         callAt(f, buildWeb3Tx(bcos::u256(30'000'000'000ULL), bcos::u256(0), kContract), 0);
     BOOST_REQUIRE_MESSAGE(err != nullptr,
-        "execution-stage node-missing historical call must fail loudly, not answer slot 0");
-    BOOST_TEST_CONTEXT("err message: " << err->errorMessage())
-    {
-        BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::OpStorageFault);
-        // Round-2 F4: generic RPC-bound message; the missing-node detail is in the node log.
-        BOOST_CHECK(err->errorMessage().find("storage fault") != std::string::npos);
-    }
-    BOOST_CHECK(receipt == nullptr);
-}
-
-/// A CORRUPT (undecodable) persisted root node: M5's existence probe passes (the row is there),
-/// but the first trie decode throws MPTDecodeError — classified OpStorageFault either via the
-/// Storage2State poison ladder (fee-param stage) or classifyException's mpt tier
-/// (ClassifyExceptionMapping), never a zero-state answer.
-BOOST_AUTO_TEST_CASE(CallAtBlockCorruptTrieNodeIsStorageFault)
-{
-    Fixture f;
-    fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
-    // Overwrite ONE non-root node row with bytes that are not a valid MPT node RLP. Not the
-    // root: a corrupt root is caught by the up-front root probe (its digest stops matching the
-    // header), and the case under test here is a fault found MID-WALK, where the only thing
-    // that can catch it is the parent's recorded child hash.
-    {
-        auto view = f.multiLayerStorage.fork();
-        view.newMutable();
-        bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
-        auto const trie = collectStateRoot(bridge);
-        BOOST_REQUIRE(!bridge.poisoned());
-        auto victim = trie.newNodes.end();
-        for (auto it = trie.newNodes.begin(); it != trie.newNodes.end(); ++it)
-        {
-            if (it->first.scope == bcos::ledger::mpt::TrieScope::account() &&
-                !it->first.position.empty())
-            {
-                victim = it;
-                break;
-            }
-        }
-        BOOST_REQUIRE_MESSAGE(victim != trie.newNodes.end(),
-            "the genesis account trie must have a non-root node to corrupt");
-        bcos::storage::Entry e;
-        e.set(bcos::bytes{0xde, 0xad, 0xbe, 0xef});
-        bcos::task::syncWait(bcos::storage2::writeOne(
-            view, bcos::ledger::mpt::pathNodeStateKey(victim->first), std::move(e)));
-        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
-    }
-    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
-
-    auto depTx = makeDeposit();
-    bcos::bytes depEnv = encodeDepositEnvelope(depTx);
-    driveOpBlock(f, makeHeaderAt(1, bcos::u256(1'000'000'000)), {depEnv});
-    seedL2CompatFeature(f.multiLayerStorage);
-
-    auto [err, receipt] = callAt(f, buildWeb3Tx(bcos::u256(30'000'000'000ULL), bcos::u256(0)), 0);
-    BOOST_REQUIRE_MESSAGE(err != nullptr,
-        "corrupt-root historical call must fail loudly, not decode garbage as an empty trie");
+        "a corrupt history row inside the window must fail loudly, not fall back to the "
+        "current slot value");
     BOOST_TEST_CONTEXT("err message: " << err->errorMessage())
     {
         BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::OpStorageFault);
@@ -1819,6 +1744,7 @@ BOOST_AUTO_TEST_CASE(CallAtBlockCorruptTrieNodeIsStorageFault)
     }
     BOOST_CHECK(receipt == nullptr);
 }
+
 
 /// The latest-path poison tripwire (coCallLatest shares coCallOnView with the historical path —
 /// round-2 F1): a wrong-length slot row at the call target poisons the executor's internal
@@ -1877,13 +1803,13 @@ BOOST_AUTO_TEST_CASE(CallLatestStorageReadFaultFailsLoudly)
 /// the new trie nodes), then historical calls at each height against a contract whose slot 0
 /// changes in block 2 (a setter deposit):
 ///  - the contract's getter (SLOAD slot 0 → RETURN) answers V1 at blocks 0/1 and V2 at
-///    blocks 2/3 — the receipt output IS the stored value at the pinned root, so a wrong
+///    blocks 2/3 — the receipt output IS the stored value at the pinned height, so a wrong
 ///    (latest-state) read flips the bytes, not just a status code;
 ///  - each height's call answers with ITS header's fee context (egp == baseFee@N);
-///  - block 0 (genesis) is queryable through its persisted genesis trie.
+///  - block 0 (genesis) is queryable: block 1 recorded the pre-images its reads need.
 /// (A balance-based discriminator is impossible here: the call path runs opValidate with
 /// skipBalanceCheck=true, so an absent-at-N account does not fail validation.)
-BOOST_AUTO_TEST_CASE(CallAtBlockServesEachHeightWithOpSemanticsHistoryUnavailableUntilPathIndex)
+BOOST_AUTO_TEST_CASE(CallAtBlockServesEachHeightWithOpSemantics)
 {
     const bcos::Address kContract{"0x3000000000000000000000000000000000000000"};
     const bcos::h256 kV1{"0x00000000000000000000000000000000000000000000000000000000000000a1"};
@@ -1918,21 +1844,32 @@ BOOST_AUTO_TEST_CASE(CallAtBlockServesEachHeightWithOpSemanticsHistoryUnavailabl
     driveOpBlock(f, makeHeaderAt(2, bcos::u256(2'000'000'000)), {depEnv, setterEnv});
     driveOpBlock(f, makeHeaderAt(3, bcos::u256(3'000'000'000)), {depEnv});
 
-    // Blocks 0, 1 and 2 are all SUPERSEDED heights: the node store keeps one version per
-    // position, so their roots have no bytes left to read and the call refuses instead of
-    // silently answering from the tip. The refusal names the height and is InvalidStatus, the
-    // same answer the up-front root probe gives.
-    // HistoryUnavailableUntilPathIndex: with the trie-node history index in place, block 0 and
-    // block 1 answer V1 at baseFee 1e9 and block 2 answers V2 at baseFee 2e9 again — the
-    // assertions this case carried before.
-    for (auto const height : {0, 1, 2})
+    // Blocks 0, 1 and 2 are historical heights, each served from the state reverse history:
+    // slot 0 held V1 through blocks 0 and 1 and V2 from block 2 on, and each call runs in its
+    // own block's fee context.
+    struct Expectation
     {
-        auto [err, receipt] =
-            callAt(f, buildWeb3Tx(bcos::u256(30'000'000'000ULL), bcos::u256(0), kContract), height);
-        BOOST_REQUIRE_MESSAGE(err != nullptr,
-            "historical call at block " << height << " must refuse, not answer from the tip");
-        BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidStatus);
-        BOOST_CHECK(receipt == nullptr);
+        int height;
+        bcos::h256 slot;
+        bcos::u256 baseFee;
+    };
+    const std::array<Expectation, 3> expectations{Expectation{0, kV1, bcos::u256(1'000'000'000)},
+        Expectation{1, kV1, bcos::u256(1'000'000'000)},
+        Expectation{2, kV2, bcos::u256(2'000'000'000)}};
+    for (auto const& expected : expectations)
+    {
+        auto [err, receipt] = callAt(f,
+            buildWeb3Tx(bcos::u256(30'000'000'000ULL), bcos::u256(0), kContract), expected.height);
+        BOOST_REQUIRE_MESSAGE(err == nullptr,
+            "historical call at block " << expected.height
+                                        << " failed: " << (err ? err->errorMessage() : ""));
+        BOOST_REQUIRE(receipt != nullptr);
+        BOOST_CHECK_EQUAL(receipt->status(), 0);  // FISCO receipt status: 0 = success
+        BOOST_CHECK_MESSAGE(outputIs(receipt, expected.slot),
+            "call at block " << expected.height << " read the wrong slot value");
+        const auto egp = bcos::u256(std::string(receipt->effectiveGasPrice()));
+        BOOST_CHECK_MESSAGE(egp == expected.baseFee,
+            "call at block " << expected.height << " must see that block's baseFee, got " << egp);
     }
 
     // Block 3 IS the latest: the fast path serves the same V2 from the flat state, with block
@@ -2390,7 +2327,7 @@ void requireCommittedRootNodeRow(Fixture& f, bcos::h256 const& stateRoot, int nu
 }  // namespace
 
 // Consecutive adopt+commit blocks keep trie nodes so a historical call at block 1 still works.
-BOOST_AUTO_TEST_CASE(adoptPreservesTriePersistenceForNextBlockHistoryUnavailableUntilPathIndex)
+BOOST_AUTO_TEST_CASE(adoptPreservesTriePersistenceForNextBlock)
 {
     const bcos::Address kContract{"0x3000000000000000000000000000000000000000"};
     const bcos::h256 kV1{"0x00000000000000000000000000000000000000000000000000000000000000a1"};
@@ -2423,11 +2360,8 @@ BOOST_AUTO_TEST_CASE(adoptPreservesTriePersistenceForNextBlockHistoryUnavailable
     requireCommittedRootNodeRow(f, block2Root, 2);
 
     // The subject of this case is that adopt+commit PERSISTS the trie (asserted above, per
-    // block, at the fixed root position) — a call still has to be served through it. Read at
-    // block 2, the latest: a path-addressed store holds one version, so block 1's root is gone
-    // and block 2's is the one its rows spell out.
-    // HistoryUnavailableUntilPathIndex: with the trie-node history index in place this reads at
-    // block 1 again and must answer V1, the value this case asserted before.
+    // block, at the fixed root position) and records each block's history — a call still has to
+    // be served through both. Block 2 is the latest, read from the flat state.
     auto [err, receipt] =
         callAt(f, buildWeb3Tx(bcos::u256(30'000'000'000ULL), bcos::u256(0), kContract), 2);
     BOOST_REQUIRE_MESSAGE(
@@ -2440,12 +2374,18 @@ BOOST_AUTO_TEST_CASE(adoptPreservesTriePersistenceForNextBlockHistoryUnavailable
     bcos::bytes const v2Bytes(kV2.data(), kV2.data() + bcos::h256::SIZE);
     BOOST_CHECK_MESSAGE(outBytes == v2Bytes, "block-2 call must read slot=V2");
 
-    // And block 1's superseded root refuses rather than answering with block 2's state.
+    // And block 1 answers V1 — block 2's commit recorded the pre-image, so the adopted path
+    // wrote its history exactly like the verify=true path does.
     auto [staleErr, staleReceipt] =
         callAt(f, buildWeb3Tx(bcos::u256(30'000'000'000ULL), bcos::u256(0), kContract), 1);
-    BOOST_REQUIRE(staleErr != nullptr);
-    BOOST_CHECK_EQUAL(staleErr->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidStatus);
-    BOOST_CHECK(staleReceipt == nullptr);
+    BOOST_REQUIRE_MESSAGE(
+        staleErr == nullptr, "call at block 1 must be served from the reverse history, got: "
+                                 << (staleErr ? staleErr->errorMessage() : ""));
+    BOOST_REQUIRE(staleReceipt != nullptr);
+    auto const staleOut = staleReceipt->output();
+    bcos::bytes const staleBytes(staleOut.begin(), staleOut.end());
+    bcos::bytes const v1Bytes(kV1.data(), kV1.data() + bcos::h256::SIZE);
+    BOOST_CHECK_MESSAGE(staleBytes == v1Bytes, "block-1 call must read slot=V1");
 }
 
 BOOST_AUTO_TEST_CASE(adoptRejectsWithoutRetainedProbe)
@@ -2645,8 +2585,8 @@ BOOST_AUTO_TEST_CASE(CommitAfterResetReportsUnknownErrorNotConsensusRejected)
         });
     BOOST_REQUIRE(called);
     BOOST_REQUIRE(commitErr != nullptr);
-    BOOST_CHECK_EQUAL(commitErr->errorCode(),
-        static_cast<int>(bcos::scheduler::SchedulerError::UnknownError));
+    BOOST_CHECK_EQUAL(
+        commitErr->errorCode(), static_cast<int>(bcos::scheduler::SchedulerError::UnknownError));
     BOOST_CHECK_NE(commitErr->errorCode(),
         static_cast<int>(bcos::scheduler::SchedulerError::OpConsensusRejected));
     BOOST_CHECK(commitErr->errorMessage().find("Unexpected empty results") != std::string::npos);

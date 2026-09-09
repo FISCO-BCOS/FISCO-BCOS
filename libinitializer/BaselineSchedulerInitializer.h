@@ -41,12 +41,15 @@ public:
         std::shared_ptr<SchedulerType> scheduler, std::shared_ptr<txpool::TxPoolInterface> txpool,
         std::shared_ptr<protocol::TransactionSubmitResultFactory> transactionSubmitResultFactory,
         std::shared_ptr<ledger::LedgerInterface> ledger,
-        std::shared_ptr<Executor> transactionExecutor, bool notifyTransactions = true)
+        std::shared_ptr<Executor> transactionExecutor, bool notifyTransactions = true,
+        ledger::mpt::history::HistoryDepths historyDepths = {})
     {
         auto baselineScheduler = std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
-            Executor, SchedulerType, ledger::LedgerInterface>>(
-            storageInitializer->storage(), *scheduler, *transactionExecutor, *blockFactory, *ledger,
-            *txpool, *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
+            Executor, SchedulerType, ledger::LedgerInterface>>(storageInitializer->storage(),
+            *scheduler, *transactionExecutor, *blockFactory, *ledger, *txpool,
+            *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
+        // Node-local MPT history retention (nodeConfig [storage]); set before any block flows.
+        baselineScheduler->setHistoryDepths(historyDepths);
         if (notifyTransactions)
         {
             baselineScheduler->registerTransactionNotifier(

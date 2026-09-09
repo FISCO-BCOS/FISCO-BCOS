@@ -13,10 +13,11 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief eth_getStorageAt over the production storage shapes: latest answers from a forked
- *        GlobalStateStorage view (flat KV through the StateStorageProvider), historical
- *        answers from the MPT at the block's committed state root (through the MPT node
- *        reader), with explicit errors when the root is unavailable.
+ * @brief eth_getStorageAt (and the three sibling state reads) over the production storage
+ *        shapes: latest answers from a forked GlobalStateStorage view (flat KV through the
+ *        StateStorageProvider), historical answers from the STATE REVERSE HISTORY at the
+ *        requested block (through the MPT history reader, pathdb spec §11), with explicit
+ *        errors — never a latest-state fallback — when the node cannot serve that height.
  * @file EthGetStorageAtTest.cpp
  */
 
@@ -25,12 +26,9 @@
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-ledger/mpt/Account.h>
 #include <bcos-ledger/mpt/Constants.h>
-#include <bcos-ledger/mpt/HashBuilder.h>
-#include <bcos-ledger/mpt/MPTNodeReadStorage.h>
-#include <bcos-ledger/mpt/MPTReadView.h>
-#include <bcos-ledger/mpt/StorageValueCodec.h>
+#include <bcos-ledger/mpt/history/HistoryCommit.h>
+#include <bcos-ledger/mpt/history/HistoryRead.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-task/Wait.h>
@@ -83,60 +81,81 @@ public:
         BOOST_TEST(web3JsonRpc != nullptr);
     }
 
-    /// Commit @p entries into the trie whose nodes live as path-addressed STATE ROWS (same
-    /// helper as EthGetProofReaderWiringTest).
-    bcos::h256 commitIntoStateRows(
-        mpt::TrieScope const& scope, std::map<bcos::h256, bcos::bytes> const& entries)
+    /// Wire the two handles AirNodeInitializer wires, over one plane: in production the
+    /// committed state backend holds BOTH the history rows and the current flat rows, and the
+    /// "unchanged since B" answer is read from it, so the test plane has to be the same object.
+    void wireHistory(bcos::protocol::BlockNumber depth = 128)
     {
-        std::map<bcos::h256, std::optional<bcos::bytes>> changes;
-        for (auto const& [key, value] : entries)
+        nodeService->setMPTHistoryReader(mpt::history::makeHistoryReader(m_committed));
+        nodeService->setMPTHistoryDepths({.state = depth, .proof = depth});
+    }
+
+    /// Record one block's state-history entries: (row key, the value the row held BEFORE this
+    /// block, or nullopt for "the row did not exist yet"). The owned buffers outlive the put,
+    /// which is what HistoryEntry's non-owning views require.
+    void recordStateHistory(bcos::protocol::BlockNumber block,
+        std::vector<std::pair<std::string, std::optional<std::string>>> const& rows)
+    {
+        std::vector<bcos::executor_v1::StateKey> keys;
+        std::vector<bcos::bytes> values;
+        keys.reserve(rows.size());
+        values.reserve(rows.size());
+        std::vector<mpt::history::HistoryEntry> entries;
+        entries.reserve(rows.size());
+        for (auto const& [rowKey, oldValue] : rows)
         {
-            changes[key] = value;
-        }
-        return task::syncWait([&]() -> task::Task<bcos::h256> {
-            mpt::MPTNodeReadStorage reader(m_stateRows);
-            auto result = co_await mpt::commitTrie(reader, scope, mpt::emptyRootHash(), changes);
-            for (auto const& [position, rlp] : result.upserts)
+            keys.emplace_back(accountTable(), rowKey);
+            std::optional<std::span<const bcos::byte>> view;
+            if (oldValue)
             {
-                storage::Entry entry;
-                entry.set(bcos::bytes(rlp));
-                co_await storage2::writeOne(
-                    m_stateRows, mpt::pathNodeStateKey(position), std::move(entry));
+                values.emplace_back(oldValue->begin(), oldValue->end());
+                view = std::span<const bcos::byte>(values.back());
             }
-            co_return result.root;
-        }());
+            entries.emplace_back(mpt::history::HistoryEntry{
+                .key = mpt::history::historyKeyOf(keys.back()), .oldValue = view});
+        }
+        task::syncWait(mpt::history::StateHistoryStore::put(
+            m_committed, block, entries, /*shardByteCap*/ 64 * 1024));
     }
 
-    void buildTrie()
+    /// The retention boundary the commit path seeds with its first recorded block; a query reads
+    /// its absence as "this node recorded nothing".
+    void seedRetentionBoundary(bcos::protocol::BlockNumber oldestIntact)
     {
-        auto const storageRoot =
-            commitIntoStateRows(mpt::TrieScope::storage(mpt::accountKeyHash(address)),
-                {{mpt::slotKeyHash(slotA), valueA}, {mpt::slotKeyHash(slotB), valueB}});
-
-        mpt::Account account;
-        account.nonce = 7;
-        account.balance = 1000;
-        account.storageRoot = storageRoot;
-        stateRoot = commitIntoStateRows(
-            mpt::TrieScope::account(), {{mpt::accountKeyHash(address), account.encode()}});
+        task::syncWait(
+            mpt::history::StateHistoryStore::writeRetentionBoundary(m_committed, oldestIntact));
     }
 
-    /// Build a state trie whose account leaf has a non-zero nonce/balance but an EMPTY storage
-    /// root — a scenario-A first-touch account (MPTBuilder.h:307-310): pulled into the trie by
-    /// a balance change, with its pre-activation storage absent from the storage sub-trie.
-    void buildEmptyStorageTrie()
+    /// A row as it stands NOW on the committed plane — what an unchanged-since-B key resolves to.
+    void setCommittedRow(std::string const& rowKey, bcos::bytes const& value)
     {
-        mpt::Account account;
-        account.nonce = 7;
-        account.balance = 1000;
-        // storageRoot stays default (emptyRootHash()).
-        stateRoot = commitIntoStateRows(
-            mpt::TrieScope::account(), {{mpt::accountKeyHash(address), account.encode()}});
+        storage::Entry entry;
+        entry.set(bcos::bytes(value));
+        task::syncWait(storage2::writeOne(
+            m_committed, executor_v1::StateKey{accountTable(), rowKey}, std::move(entry)));
     }
 
-    /// The production wiring shape (AirNodeInitializer): the AnyStorage handle owns its
-    /// adapter; only m_stateRows (the Initializer-owned backend stand-in) is borrowed.
-    void wireReader() { nodeService->setMPTNodeReader(mpt::makeMPTNodeReader(m_stateRows)); }
+    std::string accountTable() const { return mpt::accountTableName(address); }
+
+    /// A 32-byte word holding @p low in its last byte — the shape a storage slot row carries.
+    static bcos::bytes word(bcos::byte low)
+    {
+        bcos::bytes value(32, 0);
+        value.back() = low;
+        return value;
+    }
+
+    static std::string slotRowKey(h256 const& slot)
+    {
+        return {reinterpret_cast<char const*>(slot.ref().data()), h256::SIZE};
+    }
+
+    /// The same 32-byte word as text, for the pre-image side of a history entry.
+    static std::string wordText(bcos::byte low)
+    {
+        auto const value = word(low);
+        return {value.begin(), value.end()};
+    }
 
     /// The production wiring shape (AirNodeInitializer): a provider that hands back an
     /// owning AnyStorage over the latest COMMITTED-state plane, forked per request.
@@ -228,14 +247,13 @@ public:
 
     Rpc::Ptr rpc;
     Web3JsonRpcImpl::Ptr web3JsonRpc;
-    StateRowStorage m_stateRows;
+    /// Stands in for the committed state backend: BOTH the history rows and the current flat
+    /// rows live here, because that is the one plane a historical read touches.
+    StateRowStorage m_committed;
     LatestStateStorage m_latestState;
     bcos::Address address{std::string("0x00000000000000000000000000000000000000ab")};
     h256 slotA{1U};
     h256 slotB{2U};
-    bytes valueA{0x2a};              // RLP(42)
-    bytes valueB{0x82, 0x13, 0x37};  // RLP(0x1337)
-    h256 stateRoot;
 };
 
 BOOST_FIXTURE_TEST_SUITE(EthGetStorageAtTest, EthGetStorageAtFixture)
@@ -278,222 +296,225 @@ BOOST_AUTO_TEST_CASE(LatestStateFallsBackToLedger)
     BOOST_TEST(resp["result"].asString() == paddedHex(42));
 }
 
-// Historical state, MPT wired: the slot must come from the block's committed state root.
-BOOST_AUTO_TEST_CASE(HistoricalSlotFromMPTRoot)
+// Historical state: a slot's value at block 1, from the state reverse history. Block 2 changed
+// it and recorded what it held before, so the answer at block 1 differs from the answer at the
+// tip — the discriminator a latest-state read would fail.
+BOOST_AUTO_TEST_CASE(HistoricalSlotFromStateHistory)
 {
-    buildTrie();
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+    wireHistory();
+    wireStateProvider();
+    seedRetentionBoundary(0);
+    setCommittedRow(slotRowKey(slotA), word(0x63));  // the value NOW
+    setFlatSlot(slotA, word(0x63));
+    recordStateHistory(2, {{slotRowKey(slotA), wordText(0x2a)}});
 
-    auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
-    BOOST_TEST(!resp.isMember("error"));
-    BOOST_REQUIRE(resp.isMember("result"));
-    BOOST_TEST(resp["result"].asString() == paddedHex(42));
+    auto historical = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
+    BOOST_TEST(!historical.isMember("error"));
+    BOOST_REQUIRE(historical.isMember("result"));
+    BOOST_TEST(historical["result"].asString() == paddedHex(42));
 
-    auto resp2 = getStorageAt(address.hexPrefixed(), "0x2", "0x1");
-    BOOST_TEST(!resp2.isMember("error"));
-    BOOST_REQUIRE(resp2.isMember("result"));
-    BOOST_TEST(resp2["result"].asString() == paddedHex(0x1337));
+    auto latest = getStorageAt(address.hexPrefixed(), "0x1", "latest");
+    BOOST_REQUIRE(latest.isMember("result"));
+    BOOST_TEST(latest["result"].asString() == paddedHex(0x63));
 }
 
-// Historical state, scenario B (feature_l2_ethereum_compat): the storage tries are complete,
-// so a slot absent from the trie provably reads zero.
-BOOST_AUTO_TEST_CASE(HistoricalAbsentSlotScenarioBReadsZero)
+// A row nothing changed after the queried block keeps its current value — the HistoryUseCurrent
+// arm, read from the committed plane so a not-yet-committed block cannot leak in.
+BOOST_AUTO_TEST_CASE(HistoricalSlotUnchangedSinceReadsTheCurrentRow)
 {
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    m_ledger->setFeatures(std::move(features));
+    wireHistory();
+    seedRetentionBoundary(0);
+    setCommittedRow(slotRowKey(slotB), word(0x11));
+    // Block 2 changed a DIFFERENT row, so slot B has no index row after block 1.
+    recordStateHistory(2, {{slotRowKey(slotA), std::nullopt}});
 
-    buildTrie();
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+    auto resp = getStorageAt(address.hexPrefixed(), "0x2", "0x1");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == paddedHex(0x11));
+}
 
-    auto resp = getStorageAt(address.hexPrefixed(), "0x5", "0x1");
+// Absence has ONE reading now. The MPT path had to tell "the slot is genuinely unset" from "the
+// slot never entered a scenario-A trie", and answered the second with an explicit error or with
+// a flat fallback that ignored the requested height. The index records what the ROW held, so a
+// slot that did not exist at block 1 reads zero on either scenario — like the latest path.
+BOOST_AUTO_TEST_CASE(HistoricalAbsentSlotReadsZero)
+{
+    wireHistory();
+    seedRetentionBoundary(0);
+    // Block 2 CREATED the slot: its pre-image is "did not exist".
+    recordStateHistory(2, {{slotRowKey(slotA), std::nullopt}});
+    setCommittedRow(slotRowKey(slotA), word(0x2a));
+
+    auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
     BOOST_TEST(!resp.isMember("error"));
     BOOST_REQUIRE(resp.isMember("result"));
     BOOST_TEST(resp["result"].asString() == paddedHex(0));
 }
 
-// Historical state, scenario A (default — MPT activated mid-chain): a slot absent from the
-// incomplete storage trie is dormant, and its flat KV value is authoritative (it never
-// changed after activation). The read falls back to the flat state, exactly like getProof.
-BOOST_AUTO_TEST_CASE(HistoricalAbsentSlotScenarioAFallsBackToFlat)
+// An account with no rows at the queried block reads as an empty account across all four
+// endpoints — 0 balance, 0 nonce, empty code, zero slots. No "dormant in scenario A" error
+// remains: that error existed because an incomplete TRIE could not tell dormant from absent,
+// and the row index has no such blind spot.
+BOOST_AUTO_TEST_CASE(HistoricalAbsentAccountReadsEmpty)
 {
-    buildTrie();
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+    wireHistory();
+    seedRetentionBoundary(0);
+    recordStateHistory(2, {{slotRowKey(slotA), std::nullopt}});
 
-    // slot 5 is absent from the trie; give it a non-zero flat value (dormant slot).
-    h256 slotC{5U};
-    bcos::bytes value32(32, 0);
-    value32.back() = 0x2a;
-    storage::Entry entry;
-    entry.set(bcos::bytes(value32));
-    m_ledger->setStorageAt(address.hex(),
-        std::string{reinterpret_cast<char const*>(slotC.ref().data()), h256::SIZE},
-        std::move(entry));
-
-    auto resp = getStorageAt(address.hexPrefixed(), "0x5", "0x1");
-    BOOST_TEST(!resp.isMember("error"));
-    BOOST_REQUIRE(resp.isMember("result"));
-    BOOST_TEST(resp["result"].asString() == paddedHex(42));
+    std::string const absent = "0x00000000000000000000000000000000000000cc";
+    auto slot = getStorageAt(absent, "0x1", "0x1");
+    BOOST_TEST(!slot.isMember("error"));
+    BOOST_TEST(slot["result"].asString() == paddedHex(0));
+    auto balance = getBalance(absent, "0x1");
+    BOOST_TEST(!balance.isMember("error"));
+    BOOST_TEST(balance["result"].asString() == toQuantity(0));
+    auto nonce = getTransactionCount(absent, "0x1");
+    BOOST_TEST(!nonce.isMember("error"));
+    BOOST_TEST(nonce["result"].asString() == toQuantity(0));
+    auto code = getCode(absent, "0x1");
+    BOOST_TEST(!code.isMember("error"));
+    BOOST_TEST(code["result"].asString() == std::string("0x"));
 }
 
-// Historical state, scenario A: an account absent from the incomplete trie may be dormant
-// (real non-zero state) rather than non-existent — indistinguishable at this root, so every
-// state-read endpoint errors explicitly, exactly like getProof's AccountNotInMPT.
-BOOST_AUTO_TEST_CASE(HistoricalDormantAccountScenarioAErrors)
+// A system-contract address is refused, not answered with zeros. EVMAccount stores those under
+// "/sys/", and the state history captures only the "/apps/" rows Classify.h::parseAccountTable
+// recognises — the set MPTBuilder folds into the Ethereum commitment — so a system contract's
+// rows were never recorded at any height. Looking one up under "/apps/" would find nothing and
+// report 0 / 0 / "0x" / a zero word for state that demonstrably exists, which is exactly the
+// fabricated answer G6 forbids; the honest answer is that this node cannot serve it.
+BOOST_AUTO_TEST_CASE(HistoricalSystemContractAddressReturns32004)
 {
-    buildTrie();
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+    wireHistory();
+    seedRetentionBoundary(0);
+    recordStateHistory(2, {{slotRowKey(slotA), std::nullopt}});
 
-    std::string const dormant = "0x00000000000000000000000000000000000000cc";
+    // 0x1000 is in c_systemTxsAddress, the same set the latest branch routes to "/sys/".
+    std::string const systemContract = "0x0000000000000000000000000000000000001000";
     for (auto const& [method, resp] :
-        {std::make_pair("eth_getStorageAt", getStorageAt(dormant, "0x1", "0x1")),
-            std::make_pair("eth_getBalance", getBalance(dormant, "0x1")),
-            std::make_pair("eth_getTransactionCount", getTransactionCount(dormant, "0x1")),
-            std::make_pair("eth_getCode", getCode(dormant, "0x1"))})
+        {std::make_pair("eth_getStorageAt", getStorageAt(systemContract, "0x1", "0x1")),
+            std::make_pair("eth_getBalance", getBalance(systemContract, "0x1")),
+            std::make_pair("eth_getTransactionCount", getTransactionCount(systemContract, "0x1")),
+            std::make_pair("eth_getCode", getCode(systemContract, "0x1"))})
     {
         BOOST_REQUIRE_MESSAGE(resp.isMember("error"), method);
         BOOST_CHECK_MESSAGE(resp["error"]["code"].asInt() == -32004, method);
         BOOST_CHECK_MESSAGE(
-            resp["error"]["message"].asString().find("Account not in trie") != std::string::npos,
+            resp["error"]["message"].asString().find("system-contract") != std::string::npos,
             method);
     }
+
+    // A user address at the same height still answers, so the refusal is about the address and
+    // not about the fixture.
+    auto ok = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
+    BOOST_TEST(!ok.isMember("error"));
 }
 
-// Historical state, scenario B: a genuinely absent account provably has no state → zero.
-BOOST_AUTO_TEST_CASE(HistoricalDormantAccountScenarioBReadsZero)
+// The refusal above must survive an UNPADDED address. JSON-RPC callers may send "0x1000" for
+// 0x…001000, and the endpoints reach the table helper with whatever arrived minus "0x" and
+// lowercased, while c_systemTxsAddress holds 40-char forms — so testing membership before
+// normalizing would let exactly the short form through and answer it from "/apps/00…001000", a
+// table with no rows. The zero is fabricated either way; the short form is just the spelling
+// that looks least like a system address.
+BOOST_AUTO_TEST_CASE(HistoricalShortFormAddressIsNormalizedBeforeTheSystemCheck)
 {
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    m_ledger->setFeatures(std::move(features));
+    wireHistory();
+    seedRetentionBoundary(0);
+    recordStateHistory(2, {{slotRowKey(slotA), std::nullopt}});
+    setCommittedRow("balance", bcos::bytes{'7', '7'});
 
-    buildTrie();
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+    // A system contract in short form is refused, exactly as its padded spelling is.
+    auto const shortSystem = getBalance("0x1000", "0x1");
+    BOOST_REQUIRE(shortSystem.isMember("error"));
+    BOOST_CHECK_EQUAL(shortSystem["error"]["code"].asInt(), -32004);
+    BOOST_CHECK(
+        shortSystem["error"]["message"].asString().find("system-contract") != std::string::npos);
+    auto const paddedSystem = getBalance("0x0000000000000000000000000000000000001000", "0x1");
+    BOOST_REQUIRE(paddedSystem.isMember("error"));
+    BOOST_CHECK_EQUAL(paddedSystem["error"]["code"].asInt(), -32004);
 
-    std::string const absent = "0x00000000000000000000000000000000000000cc";
-    auto resp = getStorageAt(absent, "0x1", "0x1");
-    BOOST_TEST(!resp.isMember("error"));
-    BOOST_REQUIRE(resp.isMember("result"));
-    BOOST_TEST(resp["result"].asString() == paddedHex(0));
+    // A USER address in short form must still answer, and answer the same as its padded form —
+    // normalizing must not turn every short address into a refusal.
+    auto const paddedUser = getBalance(address.hexPrefixed(), "0x1");
+    BOOST_TEST(!paddedUser.isMember("error"));
+    std::string shortUser = address.hexPrefixed();
+    auto const firstSignificant = shortUser.find_first_not_of('0', 2);
+    BOOST_REQUIRE(firstSignificant != std::string::npos);
+    shortUser = "0x" + shortUser.substr(firstSignificant);
+    BOOST_TEST_MESSAGE("short user form: " + shortUser);
+    auto const shortUserResp = getBalance(shortUser, "0x1");
+    BOOST_TEST(!shortUserResp.isMember("error"));
+    BOOST_CHECK_EQUAL(shortUserResp["result"].asString(), paddedUser["result"].asString());
 }
 
-// Historical state, scenario A: an account PRESENT in the trie but with an EMPTY storage
-// root (first touch wrote only nonce/balance/code — MPTBuilder.h:307-310) has no storage in
-// the sub-trie at all. A slot query must fall back to the flat KV (its pre-activation
-// storage), not report a silent zero.
-BOOST_AUTO_TEST_CASE(HistoricalEmptyStorageRootScenarioAFallsBackToFlat)
+// No history reader wired (a tars-built NodeService has no local storage): -32603, never a
+// silent latest answer. A deployment fault, not a request one.
+BOOST_AUTO_TEST_CASE(HistoricalWithoutHistoryReaderReturns32603)
 {
-    buildEmptyStorageTrie();
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
-
-    // The pre-activation storage lives in the flat KV.
-    bcos::bytes value32(32, 0);
-    value32.back() = 0x2a;
-    storage::Entry entry;
-    entry.set(bcos::bytes(value32));
-    m_ledger->setStorageAt(address.hex(),
-        std::string{reinterpret_cast<char const*>(slotA.ref().data()), h256::SIZE},
-        std::move(entry));
-
-    auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
-    BOOST_TEST(!resp.isMember("error"));
-    BOOST_REQUIRE(resp.isMember("result"));
-    BOOST_TEST(resp["result"].asString() == paddedHex(42));
-}
-
-// Historical state, scenario B: the same empty-storage-root account reads zero (complete
-// trie — the account genuinely has no storage).
-BOOST_AUTO_TEST_CASE(HistoricalEmptyStorageRootScenarioBReadsZero)
-{
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    m_ledger->setFeatures(std::move(features));
-
-    buildEmptyStorageTrie();
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
-
-    auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
-    BOOST_TEST(!resp.isMember("error"));
-    BOOST_REQUIRE(resp.isMember("result"));
-    BOOST_TEST(resp["result"].asString() == paddedHex(0));
-}
-
-// Historical state, no MPT node reader wired: -32603, never a silent latest answer.
-BOOST_AUTO_TEST_CASE(HistoricalWithoutMptReaderReturns32603)
-{
-    buildTrie();
-    // no wireReader()
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
-
+    // no wireHistory()
     auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32603);
     BOOST_CHECK(resp["error"]["message"].asString().find("MPT not enabled") != std::string::npos);
 }
 
-// Historical state, a root the node store does not hold — because the block predates MPT
-// activation, or because a later block superseded it (a position keeps one version):
-// -32004 with the unavailable-root message.
-BOOST_AUTO_TEST_CASE(HistoricalMissingRootReturns32004)
+// The node retains no state history at all (storage.mpt_history_state_blocks = 0): every
+// historical state read is refused, because the current rows are not an answer for an old block.
+BOOST_AUTO_TEST_CASE(HistoricalWithZeroDepthReturns32004)
 {
-    buildTrie();
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(h256{0x1234U});
+    wireHistory(/*depth*/ 0);
+    seedRetentionBoundary(0);
+    recordStateHistory(2, {{slotRowKey(slotA), std::nullopt}});
 
-    auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
-    BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
-    BOOST_CHECK(resp["error"]["message"].asString().find(
-                    "not the version held by MPT node storage") != std::string::npos);
-}
-
-// Historical state, empty root, scenario B (round-2 Finding K): the empty root is a legal
-// "no accounts" root — the empty trie has no node rows, so it is NOT a "root not in MPT
-// storage" error. With complete tries the absent account provably reads zero, matching
-// Ethereum semantics.
-BOOST_AUTO_TEST_CASE(HistoricalEmptyRootScenarioBReadsZero)
-{
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    m_ledger->setFeatures(std::move(features));
-
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(mpt::emptyRootHash());
-
-    auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
-    BOOST_TEST(!resp.isMember("error"));
-    BOOST_REQUIRE(resp.isMember("result"));
-    BOOST_TEST(resp["result"].asString() == paddedHex(0));
-}
-
-// Historical state, empty root, scenario A: the empty root is not a storage-missing error,
-// but the incomplete trie still cannot distinguish a dormant account from a non-existent
-// one — so every state-read endpoint errors honestly, exactly like the non-empty scenario-A
-// case, never a silent zero.
-BOOST_AUTO_TEST_CASE(HistoricalEmptyRootScenarioADormantAccountErrors)
-{
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(mpt::emptyRootHash());
-
-    std::string const dormant = "0x00000000000000000000000000000000000000cc";
     for (auto const& [method, resp] :
-        {std::make_pair("eth_getStorageAt", getStorageAt(dormant, "0x1", "0x1")),
-            std::make_pair("eth_getBalance", getBalance(dormant, "0x1")),
-            std::make_pair("eth_getTransactionCount", getTransactionCount(dormant, "0x1")),
-            std::make_pair("eth_getCode", getCode(dormant, "0x1"))})
+        {std::make_pair("eth_getStorageAt", getStorageAt(address.hexPrefixed(), "0x1", "0x1")),
+            std::make_pair("eth_getBalance", getBalance(address.hexPrefixed(), "0x1")),
+            std::make_pair(
+                "eth_getTransactionCount", getTransactionCount(address.hexPrefixed(), "0x1")),
+            std::make_pair("eth_getCode", getCode(address.hexPrefixed(), "0x1"))})
     {
         BOOST_REQUIRE_MESSAGE(resp.isMember("error"), method);
         BOOST_CHECK_MESSAGE(resp["error"]["code"].asInt() == -32004, method);
         BOOST_CHECK_MESSAGE(
-            resp["error"]["message"].asString().find("Account not in trie") != std::string::npos,
+            resp["error"]["message"].asString().find("not retained") != std::string::npos, method);
+    }
+}
+
+// Out of window: latest is 19, a depth of 2 retains blocks 18-19, so block 1 predates the
+// window. -32004, not an answer assembled from today's rows (spec B.3, G5).
+BOOST_AUTO_TEST_CASE(HistoricalOutOfWindowReturns32004)
+{
+    wireHistory(/*depth*/ 2);
+    seedRetentionBoundary(0);
+    recordStateHistory(2, {{slotRowKey(slotA), std::nullopt}});
+
+    for (auto const& [method, resp] :
+        {std::make_pair("eth_getStorageAt", getStorageAt(address.hexPrefixed(), "0x1", "0x1")),
+            std::make_pair("eth_getBalance", getBalance(address.hexPrefixed(), "0x1")),
+            std::make_pair(
+                "eth_getTransactionCount", getTransactionCount(address.hexPrefixed(), "0x1")),
+            std::make_pair("eth_getCode", getCode(address.hexPrefixed(), "0x1"))})
+    {
+        BOOST_REQUIRE_MESSAGE(resp.isMember("error"), method);
+        BOOST_CHECK_MESSAGE(resp["error"]["code"].asInt() == -32004, method);
+        BOOST_CHECK_MESSAGE(
+            resp["error"]["message"].asString().find("history window") != std::string::npos,
             method);
     }
+}
+
+// An era this node never recorded is refused too, and for a different reason than an expired
+// one: with no rows for the blocks after B, every key would resolve to "unchanged since B" and
+// hand back today's state under block B's number.
+BOOST_AUTO_TEST_CASE(HistoricalWithoutRecordedEraReturns32004)
+{
+    wireHistory();
+    // No boundary row and no manifests: nothing was ever recorded here.
+    auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
+    BOOST_CHECK(
+        resp["error"]["message"].asString().find("No state history recorded") != std::string::npos);
 }
 
 // Spec: the result is a fixed 32-byte DATA. The flat (latest) path must left-pad a narrower
@@ -542,14 +563,15 @@ BOOST_AUTO_TEST_CASE(DefaultSafeFinalizedStayOnLatest)
 }
 
 // blockTag semantics: with a configured safeBlockDepth, "safe" resolves to latest - depth (a
-// committed historical block served from the MPT, never the head). latest = 19, depth 1 →
-// safe = block 18.
-BOOST_AUTO_TEST_CASE(SafeTagResolvesToHistoricalMpt)
+// committed historical block served from the reverse history, never the head). latest = 19,
+// depth 1 -> safe = block 18, where the slot still held its pre-block-19 value.
+BOOST_AUTO_TEST_CASE(SafeTagResolvesToHistoricalState)
 {
     nodeService->setSafeBlockDepth(1);
-    buildTrie();
-    wireReader();
-    m_ledger->ledgerData()[18]->blockHeader()->setStateRoot(stateRoot);
+    wireHistory();
+    seedRetentionBoundary(0);
+    setCommittedRow(slotRowKey(slotA), word(0x63));
+    recordStateHistory(19, {{slotRowKey(slotA), wordText(0x2a)}});
 
     auto resp = getStorageAt(address.hexPrefixed(), "0x1", "safe");
     BOOST_TEST(!resp.isMember("error"));
@@ -557,15 +579,14 @@ BOOST_AUTO_TEST_CASE(SafeTagResolvesToHistoricalMpt)
     BOOST_TEST(resp["result"].asString() == paddedHex(42));
 }
 
-// blockTag semantics: with a configured finalizedBlockDepth, "finalized" resolves to
-// latest - depth (a committed historical block served from the MPT). latest = 19, depth 2 →
-// finalized = block 17.
-BOOST_AUTO_TEST_CASE(FinalizedTagResolvesToHistoricalMpt)
+// The same, one block deeper: finalizedBlockDepth 2 -> "finalized" = block 17.
+BOOST_AUTO_TEST_CASE(FinalizedTagResolvesToHistoricalState)
 {
     nodeService->setFinalizedBlockDepth(2);
-    buildTrie();
-    wireReader();
-    m_ledger->ledgerData()[17]->blockHeader()->setStateRoot(stateRoot);
+    wireHistory();
+    seedRetentionBoundary(0);
+    setCommittedRow(slotRowKey(slotA), word(0x63));
+    recordStateHistory(18, {{slotRowKey(slotA), wordText(0x2a)}});
 
     auto resp = getStorageAt(address.hexPrefixed(), "0x1", "finalized");
     BOOST_TEST(!resp.isMember("error"));
@@ -573,13 +594,14 @@ BOOST_AUTO_TEST_CASE(FinalizedTagResolvesToHistoricalMpt)
     BOOST_TEST(resp["result"].asString() == paddedHex(42));
 }
 
-// The safe/finalized depths are configurable: safeBlockDepth = 2 → "safe" = block 17.
+// The safe/finalized depths are configurable: safeBlockDepth = 2 -> "safe" = block 17.
 BOOST_AUTO_TEST_CASE(ConfigurableSafeDepth)
 {
     nodeService->setSafeBlockDepth(2);
-    buildTrie();
-    wireReader();
-    m_ledger->ledgerData()[17]->blockHeader()->setStateRoot(stateRoot);
+    wireHistory();
+    seedRetentionBoundary(0);
+    setCommittedRow(slotRowKey(slotA), word(0x63));
+    recordStateHistory(18, {{slotRowKey(slotA), wordText(0x2a)}});
 
     auto resp = getStorageAt(address.hexPrefixed(), "0x1", "safe");
     BOOST_TEST(!resp.isMember("error"));
@@ -587,12 +609,14 @@ BOOST_AUTO_TEST_CASE(ConfigurableSafeDepth)
     BOOST_TEST(resp["result"].asString() == paddedHex(42));
 }
 
-// Historical getBalance: the balance comes from the block's committed MPT root (1000).
-BOOST_AUTO_TEST_CASE(HistoricalBalanceFromMPT)
+// Historical getBalance: the balance row as of block 1, which block 2 overwrote. The tip reads
+// the new value, so a latest-state answer would be visibly wrong.
+BOOST_AUTO_TEST_CASE(HistoricalBalanceFromStateHistory)
 {
-    buildTrie();  // account.balance = 1000, nonce = 7
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+    wireHistory();
+    seedRetentionBoundary(0);
+    setCommittedRow("balance", bcos::bytes{'9', '9', '9', '9'});
+    recordStateHistory(2, {{std::string("balance"), std::string("1000")}});
 
     auto resp = getBalance(address.hexPrefixed(), "0x1");
     BOOST_TEST(!resp.isMember("error"));
@@ -600,12 +624,13 @@ BOOST_AUTO_TEST_CASE(HistoricalBalanceFromMPT)
     BOOST_TEST(resp["result"].asString() == toQuantity(1000));
 }
 
-// Historical getTransactionCount: the nonce comes from the block's committed MPT root (7).
-BOOST_AUTO_TEST_CASE(HistoricalNonceFromMPT)
+// Historical getTransactionCount: same shape, on the nonce row.
+BOOST_AUTO_TEST_CASE(HistoricalNonceFromStateHistory)
 {
-    buildTrie();
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+    wireHistory();
+    seedRetentionBoundary(0);
+    setCommittedRow("nonce", bcos::bytes{'9'});
+    recordStateHistory(2, {{std::string("nonce"), std::string("7")}});
 
     auto resp = getTransactionCount(address.hexPrefixed(), "0x1");
     BOOST_TEST(!resp.isMember("error"));
@@ -613,35 +638,39 @@ BOOST_AUTO_TEST_CASE(HistoricalNonceFromMPT)
     BOOST_TEST(resp["result"].asString() == toQuantity(7));
 }
 
-// Historical getCode: the code comes from the account leaf's codeHash, resolved through the
-// content-addressed s_code_binary store at that root.
-BOOST_AUTO_TEST_CASE(HistoricalCodeFromMPT)
+// Historical getCode: the codeHash ROW comes from the reverse history; the code BYTES do not
+// need one — s_code_binary is content-addressed and append-only, so the bytes under a hash are
+// the same at every height. Block 2 replaced the code, and block 1 must still return the old.
+BOOST_AUTO_TEST_CASE(HistoricalCodeFromStateHistory)
 {
-    bcos::bytes code{0x60, 0x00, 0x60, 0x00};
+    bcos::bytes const oldCode{0x60, 0x00, 0x60, 0x00};
+    bcos::bytes const newCode{0x60, 0x01};
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-    bcos::h256 codeHash;
-    bcos::crypto::hasher::hash(hasher, bcos::ref(code), codeHash);
+    bcos::h256 oldHash;
+    bcos::h256 newHash;
+    bcos::crypto::hasher::hash(hasher, bcos::ref(oldCode), oldHash);
+    bcos::crypto::hasher::hash(hasher, bcos::ref(newCode), newHash);
 
-    mpt::Account account;
-    account.codeHash = codeHash;
-    stateRoot = commitIntoStateRows(
-        mpt::TrieScope::account(), {{mpt::accountKeyHash(address), account.encode()}});
-
-    // s_code_binary row (content-addressed, readable at any block height).
     auto const stateStorage = m_ledger->getStateStorage();
-    storage::Entry codeEntry;
-    codeEntry.set(bcos::bytes(code));
-    task::syncWait(storage2::writeOne(*stateStorage,
-        executor_v1::StateKey{bcos::ledger::SYS_CODE_BINARY, codeHash.toRawString()},
-        std::move(codeEntry)));
+    for (auto const& [hash, code] :
+        std::vector<std::pair<bcos::h256, bcos::bytes>>{{oldHash, oldCode}, {newHash, newCode}})
+    {
+        storage::Entry codeEntry;
+        codeEntry.set(bcos::bytes(code));
+        task::syncWait(storage2::writeOne(*stateStorage,
+            executor_v1::StateKey{bcos::ledger::SYS_CODE_BINARY, hash.toRawString()},
+            std::move(codeEntry)));
+    }
 
-    wireReader();
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+    wireHistory();
+    seedRetentionBoundary(0);
+    setCommittedRow("codeHash", bcos::bytes(newHash.begin(), newHash.end()));
+    recordStateHistory(2, {{std::string("codeHash"), oldHash.toRawString()}});
 
     auto resp = getCode(address.hexPrefixed(), "0x1");
     BOOST_TEST(!resp.isMember("error"));
     BOOST_REQUIRE(resp.isMember("result"));
-    BOOST_TEST(resp["result"].asString() == toHexStringWithPrefix(code));
+    BOOST_TEST(resp["result"].asString() == toHexStringWithPrefix(oldCode));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

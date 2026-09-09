@@ -97,6 +97,13 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // destroyed after them.
     nodeService->setMPTNodeReader(m_nodeInitializer->mptNodeReader());
 
+    // Historical eth_getProof: the plane the trie-node reverse history lives in, plus how far
+    // back this node keeps it (nodeConfig [storage] mpt_history_proof_blocks). Same borrowed
+    // backend and same destruction order as the node reader above. With the depth at 0 the
+    // endpoint refuses a past block instead of proving against today's trie.
+    nodeService->setMPTHistoryReader(m_nodeInitializer->mptHistoryReader());
+    nodeService->setMPTHistoryDepths(m_nodeInitializer->mptHistoryDepths());
+
     // eth_getStorageAt latest-state path: a provider that forks a fresh latest view of
     // GlobalStateStorage per request (see Initializer::stateStorageProvider for the lifetime
     // contract — the provider captures the GlobalStateStorageInitializer shared_ptr).

@@ -44,6 +44,9 @@
 #include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/MPTBuilder.h>
 #include <bcos-ledger/mpt/Trie.h>
+#include <bcos-ledger/mpt/history/HistoryCommit.h>
+#include <bcos-ledger/mpt/history/HistoryDepths.h>
+#include <bcos-ledger/mpt/history/HistoryRead.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
@@ -96,6 +99,14 @@ public:
         bcos::crypto::HashType announcedBlockHash;       // keyed by the CL-announced hash
         protocol::BlockHeader::Ptr executedHeader;       // commitment-filled header
         bool verified = false;                           // true only after verify=true + pushView
+        /// The block's MPT delta, kept for its `preimages` — the trie-node reverse history's
+        /// input. shared_ptr to a const: PendingBlock is copied under m_pendingMutex, and a
+        /// delta can be megabytes.
+        std::shared_ptr<const ledger::mpt::PathDiff> mptDelta;
+        /// The flat rows this block changed, collected at EXECUTE time while the block's own
+        /// mutable layer is still reachable; their pre-images are read at commit time
+        /// (HistoryCommit.h). Null when H_state is 0 or the block built no MPT.
+        std::shared_ptr<const std::vector<executor_v1::StateKey>> stateHistoryKeys;
     };
 
     /// execute() result before it is wrapped as PendingBlock.
@@ -103,6 +114,8 @@ public:
     {
         bcos::evm::engine::OpExecuteBlockResult result;
         bcos::crypto::HashType announcedBlockHash;
+        std::shared_ptr<const ledger::mpt::PathDiff> mptDelta;
+        std::shared_ptr<const std::vector<executor_v1::StateKey>> stateHistoryKeys;
     };
 
     /// verify=false probe retained for adoptProbeAsPending.
@@ -111,6 +124,8 @@ public:
         ViewType view;  // forkCommitted()+newMutable execution view
         bcos::evm::engine::OpExecuteBlockResult result;  // commitments + receipts
         protocol::BlockHeader::Ptr executedHeader;       // commitment-filled header
+        std::shared_ptr<const ledger::mpt::PathDiff> mptDelta;
+        std::shared_ptr<const std::vector<executor_v1::StateKey>> stateHistoryKeys;
     };
 
     // ---- SchedulerInterface overrides ----
@@ -438,6 +453,19 @@ public:
     /// Defaults off: the equality contract lives in IncrementalMPTRootMatchesFullRebuild.
     void setCrossCheckIncrementalRoot(bool enable) { m_crossCheckIncrementalRoot = enable; }
 
+    /// Set the two MPT reverse-history retention depths (nodeConfig [storage]
+    /// mpt_history_state_blocks / mpt_history_proof_blocks). Wiring time only: both default to
+    /// 0 = not retained, so an un-wired scheduler writes no history and refuses historical
+    /// queries rather than assuming a window it never filled.
+    void setHistoryDepths(bcos::ledger::mpt::history::HistoryDepths depths)
+    {
+        m_historyDepths = depths;
+    }
+    [[nodiscard]] bcos::ledger::mpt::history::HistoryDepths historyDepths() const
+    {
+        return m_historyDepths;
+    }
+
 private:
     // ---- execute / commit ----
 
@@ -623,7 +651,8 @@ private:
                 {
                     std::lock_guard<std::mutex> lock(m_pendingMutex);
                     m_pending = PendingBlock{std::move(block), std::move(outcome.result),
-                        outcome.announcedBlockHash, executedHeader, true};
+                        outcome.announcedBlockHash, executedHeader, true,
+                        std::move(outcome.mptDelta), std::move(outcome.stateHistoryKeys)};
                 }
                 m_lastExecutedBlockNumber.store(number);
                 m_lastProbe.reset();
@@ -631,7 +660,8 @@ private:
             else
             {
                 // Keep the probe so adoptProbeAsPending can push this view.
-                m_lastProbe = ProbeSlot{std::move(view), std::move(outcome.result), executedHeader};
+                m_lastProbe = ProbeSlot{std::move(view), std::move(outcome.result), executedHeader,
+                    std::move(outcome.mptDelta), std::move(outcome.stateHistoryKeys)};
             }
 
             co_return {nullptr, std::move(executedHeader), sysBlock};
@@ -770,7 +800,8 @@ private:
             {
                 std::lock_guard<std::mutex> lock(m_pendingMutex);
                 m_pending = PendingBlock{std::move(block), std::move(m_lastProbe->result),
-                    announcedBlockHash, executedHeader, true};
+                    announcedBlockHash, executedHeader, true, std::move(m_lastProbe->mptDelta),
+                    std::move(m_lastProbe->stateHistoryKeys)};
             }
             m_lastExecutedBlockNumber.store(number);
             m_lastProbe.reset();
@@ -859,6 +890,26 @@ private:
 
             auto storage = co_await commitPersist(pending);
 
+            // The two reverse histories join THIS block's batch, before the merge and after
+            // nothing else has touched the committed plane: that plane still holds the parent
+            // state, which is the only place the flat rows' pre-images exist (code map Q3). The
+            // same helper the BaselineScheduler commit path calls — one set of bookkeeping, two
+            // schedulers (spec §9, §12, G3).
+            if (pending.mptDelta && m_historyDepths.anyEnabled())
+            {
+                static const std::vector<executor_v1::StateKey> emptyStateKeys;
+                auto const& stateKeys =
+                    pending.stateHistoryKeys ? *pending.stateHistoryKeys : emptyStateKeys;
+                auto const historyReport = co_await ledger::mpt::history::commitBlockHistory(
+                    m_multiLayerStorage->latestBackend(), *storage, number, stateKeys,
+                    pending.mptDelta->preimages, m_historyDepths);
+                OP_SCHEDULER_LOG(DEBUG)
+                    << "MPT history: block " << number << " | state rows "
+                    << historyReport.stateEntries << " | trie rows " << historyReport.trieEntries
+                    << " | expired state keys " << historyReport.stateExpired.keyCount
+                    << " | expired trie keys " << historyReport.trieExpired.keyCount;
+            }
+
             // Single merge: all-or-nothing.
             co_await m_multiLayerStorage->mergeBackStorage(*storage);
 
@@ -946,6 +997,8 @@ private:
         }
 
         bcos::evm::engine::OpExecuteBlockResult result;
+        std::shared_ptr<const ledger::mpt::PathDiff> mptDelta;
+        std::shared_ptr<const std::vector<executor_v1::StateKey>> stateHistoryKeys;
 
         // Assigned inside the try; the catch ladder below reclassifies a poisoned slot as a
         // storage fault even when the escaping exception is not std::exception-matching
@@ -1075,6 +1128,20 @@ private:
                         }
                     }
                     result.stateRoot = delta.stateRoot;
+                    // The two reverse histories' inputs (spec §9, §10): the node pre-images come
+                    // free with the delta — the builder already read every node it overwrote —
+                    // and the flat row keys are enumerated HERE because the block's own mutable
+                    // layer is unreachable once it is pushed onto the storage stack. The values
+                    // behind those keys are read at commit time, off the committed plane.
+                    mptDelta = std::make_shared<const ledger::mpt::PathDiff>(std::move(delta));
+                    if (m_historyDepths.state > 0)
+                    {
+                        auto keys = co_await ledger::mpt::history::collectStateHistoryKeys(
+                            mutableStorage(view));
+                        stateHistoryKeys =
+                            std::make_shared<const std::vector<executor_v1::StateKey>>(
+                                std::move(keys));
+                    }
                 }
                 catch (const bcos::ledger::mpt::MPTInvariantViolation& e)
                 {
@@ -1119,7 +1186,8 @@ private:
         // metadata + execution commitments onto executedHeader, which stays out of this identity.
         bcos::crypto::HashType announcedBlockHash =
             bcos::protocol::EthBlockHeader::computeHash(header);
-        co_return ExecuteOutcome{std::move(result), announcedBlockHash};
+        co_return ExecuteOutcome{std::move(result), announcedBlockHash, std::move(mptDelta),
+            std::move(stateHistoryKeys)};
     }
 
     /// Copy execution commitments onto a clone of the announced header.
@@ -1513,7 +1581,9 @@ private:
         co_return co_await coCallOnView(view, header, *transaction, *ledgerConfig, "call");
     }
 
-    /// eth_call against the committed MPT at @p blockNumber. Refusals return Error, not throw.
+    /// eth_call at @p blockNumber, served from the state reverse history. Refusals it decides
+    /// itself return an Error; a store-level refusal (HistoryPruned from a height the retention
+    /// boundary has passed) throws and is classified by the callAtBlock wrapper's catch.
     task::Task<std::tuple<Error::Ptr, protocol::TransactionReceipt::Ptr>> coCallAtBlock(
         protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber)
     {
@@ -1566,26 +1636,19 @@ private:
                                          blockNumber)),
                 protocol::TransactionReceipt::Ptr{nullptr}};
         }
-        // Empty root needs no nodes; any other root must be the one the node store currently
-        // holds — read the account trie's fixed entry point (position "") and compare digests.
-        // A path store keeps one version per position, so this also rejects roots that HAVE been
-        // persisted but have since been overwritten: the historical call cannot be served until
-        // the trie-node history index lands.
-        if (stateRoot != bcos::ledger::mpt::emptyRootHash())
+        // The state at an older height is resolved per key from the STATE reverse history, not
+        // by walking the trie at that root (pathdb spec §11): a path-addressed node store keeps
+        // ONE version per position, so the trie can only answer for the tip. With H_state at 0
+        // nothing was recorded and there is no honest answer — the current state is not it (G6).
+        if (m_historyDepths.state <= 0)
         {
-            bcos::scheduler_v1::ViewNodeStorage<ViewType> probeStorage(latestView);
-            bool const available = co_await bcos::ledger::mpt::holdsTrieRoot(
-                probeStorage, bcos::ledger::mpt::TrieScope::account(), stateRoot);
-            if (!available)
-            {
-                co_return std::tuple{
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
-                        fmt::format("eth_call: block {}'s state root is not the version the MPT "
-                                    "node store holds (trie-node persistence was not yet active "
-                                    "at that height, or the root is no longer the latest)",
-                            blockNumber)),
-                    protocol::TransactionReceipt::Ptr{nullptr}};
-            }
+            co_return std::tuple{
+                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                    fmt::format("eth_call: historical state is not retained on this node "
+                                "(storage.mpt_history_state_blocks = 0); block {} cannot be "
+                                "served",
+                        blockNumber)),
+                protocol::TransactionReceipt::Ptr{nullptr}};
         }
 
         const auto& cfg = op::configAt(m_forkFlags);
@@ -1596,9 +1659,29 @@ private:
         ledgerConfig->setFeatures(features);
         ledgerConfig->setEVMCRevision(cfg.rev);
 
-        // Fresh mutable layer over the historical MPT; call writes are not persisted.
-        using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType>;
-        HistoricalBackend historicalBackend(latestView, stateRoot);
+        // …and being inside the window is a claim about the retention PARAMETER, not about
+        // what is on disk. A height whose history was never recorded (the MPT was off then, the
+        // depth was raised later) would answer every key with HistoryUseCurrent — today's state
+        // under an old block's number. One point read settles it (G6).
+        bool const covered = co_await bcos::ledger::mpt::history::historyCoversBlock<
+            bcos::ledger::mpt::history::StateHistoryStore>(
+            m_multiLayerStorage->latestBackend(), blockNumber, latestNumber);
+        if (!covered)
+        {
+            co_return std::tuple{
+                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                    fmt::format("eth_call: no state history recorded for block {} (this node's "
+                                "history starts later); the current state is not an answer for "
+                                "that height",
+                        blockNumber)),
+                protocol::TransactionReceipt::Ptr{nullptr}};
+        }
+
+        // Fresh mutable layer over the historical state; call writes are not persisted.
+        using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType,
+            std::remove_reference_t<typename MultiLayerStorage::OpenedStorage>>;
+        HistoricalBackend historicalBackend(latestView, m_multiLayerStorage->latestBackend(),
+            blockNumber, latestNumber, m_historyDepths.state);
         storage2::View<typename MultiLayerStorage::MutableStorage, void, HistoricalBackend>
             historicalView(std::addressof(historicalBackend));
         historicalView.newMutable();
@@ -1620,6 +1703,7 @@ private:
         std::function<void(bcos::Error::Ptr)>)>
         m_transactionNotifier;
     bool m_crossCheckIncrementalRoot = false;
+    bcos::ledger::mpt::history::HistoryDepths m_historyDepths{};
     std::mutex m_executeMutex;
     std::atomic<int64_t> m_lastExecutedBlockNumber{-1};
     std::mutex m_commitMutex;
