@@ -30,13 +30,14 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
+#include <atomic>
+#include <chrono>
 #include <concepts>
 #include <memory>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
 #include <stdexcept>
 #include <string_view>
-#include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -129,11 +130,13 @@ template <class Store, class Backend, class CurrentReader>
 {
     using CurrentResult = task::AwaitableReturnType<std::invoke_result_t<CurrentReader&>>;
     using Value = typename CurrentResult::value_type;
-    // The same budget readAt uses for the window itself: enough that only a commit which died
-    // mid-publish can exhaust it.
-    constexpr std::size_t kGenerationRetryBudget = 4096;
+    // The same budget readAt waits out a window with, and for the same reason: a reader that
+    // merely overlapped a commit has to sleep through it and then answer, and only a stuck
+    // committer produces a refusal (HistoryIndex.h::kPublishWindowWaitBudget).
+    auto const deadline =
+        std::chrono::steady_clock::now() + store.index().publishWindowWaitBudget();
 
-    for (std::size_t attempt = 0;; ++attempt)
+    for (;;)
     {
         auto version = co_await store.readAt(backend, key, block, tip, depth);
         if (auto* recorded = std::get_if<bcos::bytes>(std::addressof(version)))
@@ -149,20 +152,30 @@ template <class Store, class Backend, class CurrentReader>
         auto current = co_await currentReader();
         // The whole point: the value above was read from a plane the index does not control, so
         // it is only block @p block's value if no commit published while it was being read.
+        //
+        // The fence keeps that read where it was written. The generation load below is an
+        // acquire, which stops later work from floating ABOVE it but says nothing about the
+        // current-value read floating BELOW it — and a sunk read would be compared against a
+        // generation sampled before it happened, which is exactly the check being skipped. In
+        // practice the read is a storage call with its own synchronisation, so this costs
+        // nothing and buys the argument.
+        std::atomic_thread_fence(std::memory_order_acquire);
         auto const after = store.index().generation();
         if (after == useCurrent.generation && (after % 2) == 0)
         {
             co_return current;
         }
-        if (attempt >= kGenerationRetryBudget)
+        auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+            deadline - std::chrono::steady_clock::now());
+        if (remaining <= std::chrono::milliseconds::zero() ||
+            !store.index().waitForEvenGeneration(remaining))
         {
             BOOST_THROW_EXCEPTION(
                 HistoryIndexUnavailable() << bcos::errinfo_comment(
                     "commits kept publishing while this historical read was resolving an "
-                    "unchanged-since value; refusing rather than answering from a plane that may "
-                    "be ahead of the index"));
+                    "unchanged-since value, for longer than the wait budget; the query was not "
+                    "answered and should be retried"));
         }
-        std::this_thread::yield();
     }
 }
 

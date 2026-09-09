@@ -747,12 +747,16 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // The cost of this ordering is the publish window opened before the merge: from the merge
         // to this line the RPC's tip is already N while the index does not hold N, and readers
         // resolving "unchanged since B" would otherwise read N's value off the committed plane.
-        // They cannot: readAt refuses to conclude "unchanged" while the window is open, and
-        // readAtOrCurrent re-checks the generation across its current-value read, so such a query
-        // retries and — if the window never closes — refuses. A query for N itself still answers
-        // from the current state via the `block >= tip` arm, which is correct. And a throw AFTER
-        // this line (there is none today) would leave at most one block published but not
-        // committed, which historyCoversBlock refuses and a restart rebuild repairs.
+        // They cannot: readAt WAITS for the window to close before it will conclude "unchanged",
+        // and readAtOrCurrent re-checks the generation across its current-value read. So a query
+        // that overlaps this commit blocks for the length of it — milliseconds — and then answers
+        // correctly; only a committer stuck past kPublishWindowWaitBudget turns that into a
+        // refusal. That applies to EVERY historical read inside the window, block N's own
+        // included: the generation gate runs before readAt's `block >= tip` arm, so a query at N
+        // waits here too rather than answering from a plane the index has not caught up with.
+        // And a throw AFTER this line (there is none today) would leave at most one block
+        // published but not committed, which historyCoversBlock refuses and a restart rebuild
+        // repairs.
         if (historyStage)
         {
             ledger::mpt::history::publishBlockHistory(*m_mptHistory, std::move(*historyStage));

@@ -65,11 +65,13 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <chrono>
 #include <fakeit.hpp>
 #include <functional>
 #include <map>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace
@@ -716,6 +718,10 @@ BOOST_AUTO_TEST_CASE(aCommitFailingAfterTheMergePublishesNothing)
 BOOST_AUTO_TEST_CASE(aReadInsideThePublishWindowRefusesRatherThanSeeingTheNewBlock)
 {
     useDepths(128, 128);  // nothing expires here; the subject is the window, not the boundary
+    // The production budget is two seconds of WAITING for the window to close (HistoryIndex.h).
+    // This case is about what happens when it never does, so shorten it — otherwise the case
+    // spends two seconds proving a timeout it could prove in twenty milliseconds.
+    mptHistory->state().setPublishWindowWaitBudget(std::chrono::milliseconds{20});
     auto const first = kActivation + 1;
     runChain(first + 1);  // blocks first and first+1 recorded; tip is first+1
 
@@ -788,6 +794,69 @@ BOOST_AUTO_TEST_CASE(aReadInsideThePublishWindowRefusesRatherThanSeeingTheNewBlo
         backendStorage, StateKeyView{table, "balance"}, queried, committing, 128));
     BOOST_REQUIRE(balanceAtB.has_value());
     BOOST_CHECK_EQUAL(std::string(balanceAtB->get()), std::to_string(1000 + queried));
+}
+
+/// The other half of the window contract: a read that overlaps an ordinary commit must WAIT it
+/// out and then answer, not refuse.
+///
+/// The refusal case above proves the gate holds; on its own it would also pass an implementation
+/// that refused every overlapping query, which on a healthy node would break `eth_getBalance` at
+/// a numeric head every time it raced a commit. So: open a window by hand, have another thread
+/// close it after ~50 ms, and ask — on the reader's thread — for a row whose correct answer does
+/// not depend on the block being committed. The read must block, wake, and return the recorded
+/// pre-image.
+///
+/// The key is `balance`, which block first+1 changed: its answer at `first` is what block first
+/// wrote, and it is settled by versions the index already holds. That is deliberate — the case
+/// is about the WAIT, so its expected answer must not depend on what the other thread did.
+BOOST_AUTO_TEST_CASE(aReadWaitsOutThePublishWindowAndThenAnswers)
+{
+    useDepths(128, 128);
+    auto const first = kActivation + 1;
+    runChain(first + 1);  // first and first+1 recorded
+
+    auto const table = ledger::mpt::accountTableName(hwAccount());
+    BOOST_REQUIRE(mptHistory->state().recordedBlock(first + 1));
+
+    // A window, as the commit path would have opened it before its merge.
+    mptHistory->state().openPublishWindow();
+    BOOST_REQUIRE_EQUAL(mptHistory->state().index().generation() % 2, 1U);
+
+    constexpr auto kHold = std::chrono::milliseconds{50};
+    std::thread closer([&]() {
+        std::this_thread::sleep_for(kHold);
+        mptHistory->state().closePublishWindow();
+    });
+
+    auto const started = std::chrono::steady_clock::now();
+    std::optional<executor_v1::StateValue> value;
+    bool refused = false;
+    try
+    {
+        value = task::syncWait(history::readStateAtOrCurrent(mptHistory->state(), backendStorage,
+            StateKeyView{table, "balance"}, first, first + 1, 128));
+    }
+    catch (history::HistoryIndexUnavailable const&)
+    {
+        // Recorded rather than propagated, so the closer thread below is always joined — an
+        // escaping exception would destroy a joinable std::thread and abort the process, turning
+        // a readable failure into a SIGABRT.
+        refused = true;
+    }
+    auto const waited = std::chrono::steady_clock::now() - started;
+    closer.join();
+
+    // It answered, and it answered correctly.
+    BOOST_REQUIRE_MESSAGE(!refused, "the read must wait the window out, not refuse");
+    BOOST_REQUIRE_MESSAGE(value.has_value(), "the read must succeed once the window closes");
+    BOOST_CHECK_EQUAL(std::string(value->get()), std::to_string(1000 + first));
+
+    // And it really waited rather than racing through before the window was seen: the answer
+    // cannot have been produced before the closer thread ran.
+    BOOST_CHECK_MESSAGE(waited >= kHold,
+        "the read must have blocked until the window closed, waited "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(waited).count() << "ms");
+    BOOST_CHECK_EQUAL(mptHistory->state().index().generation() % 2, 0U);
 }
 
 /// G9: the index learns about a block exactly when publishBlockHistory runs — not when the rows
