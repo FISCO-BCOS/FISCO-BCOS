@@ -86,9 +86,11 @@
 #include <util/tc_clientsocket.h>
 #include <boost/filesystem.hpp>
 #include <cstddef>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <toml++/toml.hpp>
+#include <unistd.h>
 #include <vector>
 
 using namespace bcos;
@@ -410,42 +412,70 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // MPT pruning (storage.mpt_prune_window; pathdb spec §4.8): ONE pruner instance shared by
     // every baseline scheduler variant built below — MultiVersionScheduler activates exactly
-    // one at a time, and the pruner's state lives in the committed backend's metadata rows,
-    // so sharing carries no cross-version conflict. Every pruner read hits latestBackend()
-    // DIRECTLY: no cache layer may sit between the pruner and the physical rows (MPTPruner.h
-    // contract). -1 (the default) disables pruning entirely: the schedulers keep their
-    // built-in NoopCommitObserver.
+    // one at a time, and the pruner's state (reference counts and the delete queue) is fully
+    // in-memory, so sharing carries no cross-version conflict. Every pruner read hits
+    // latestBackend() DIRECTLY: no cache layer may sit between the pruner and the physical
+    // rows (MPTPruner.h contract). -1 (the default) disables pruning entirely: the schedulers
+    // keep their built-in NoopCommitObserver.
     if (m_nodeConfig->mptPruneWindow() > 0)
     {
         auto& pruneBackend = m_globalStateStorageInitializer->storage().latestBackend();
         auto pruner = std::make_shared<
             ledger::mpt::MPTPruner<std::remove_reference_t<decltype(pruneBackend)>>>(
-            pruneBackend, m_nodeConfig->mptPruneWindow(),
-            static_cast<size_t>(
-                m_nodeConfig->mptPruneBatchSize() > 0 ? m_nodeConfig->mptPruneBatchSize() : 1));
-        // Startup guard + watermark recovery: refuses to boot when pruning would run against
-        // blocks whose node deltas were never counted (mid-chain enablement, or a gap from
-        // having been disabled) — that would delete live state. Throws InvalidConfig naming
-        // both block numbers; MPTDecodeError on a corrupted watermark row. Both fail loudly
-        // at boot.
+            pruneBackend, m_nodeConfig->mptPruneWindow());
+        // Startup rebuild: nothing pruning-related is persisted, so init re-derives the counts
+        // and the delete queue from the window's state roots, then sweeps unreachable "/mpt/"
+        // garbage synchronously — above the confirm threshold an interactive [y/N] is asked on
+        // a TTY; a non-interactive boot (daemon/systemd) skips the sweep and retries next boot.
+        // Throws MPTInvariantViolation on a missing reachable node row; fails loudly at boot.
         auto const currentBlock = task::syncWait(ledger::getCurrentBlockNumber(*ledger));
-        task::syncWait(pruner->init(currentBlock));
-
-        // Keep the churn-heavy pruning metadata rows (up to a few hundred per block, never
-        // re-read through the cache) out of the LRU state cache: admitting them would evict
-        // hot flat-state rows. The backend merge is unaffected — the rows still land on disk.
-        m_globalStateStorageInitializer->storage().setCacheMergeFilter(
-            [](executor_v1::StateKey const& key) {
-                executor_v1::StateKeyView const view{key};
-                return view.m_table != ledger::mpt::kPruneRefTable &&
-                       view.m_table != ledger::mpt::kPruneQueueTable &&
-                       view.m_table != ledger::mpt::kPruneMetaTable;
-            });
+        task::syncWait(pruner->init(currentBlock,
+            [ledger](BlockNumber number) -> task::Task<std::optional<h256>> {
+                auto block = co_await ledger::getBlockData(*ledger, number, ledger::HEADER);
+                co_return block ? std::optional<h256>{block->blockHeader()->stateRoot()}
+                                : std::nullopt;
+            },
+            [](uint64_t count) {
+                if (isatty(STDIN_FILENO) == 0)
+                {
+                    INITIALIZER_LOG(WARNING)
+                        << LOG_DESC("MPT pruning: unreachable node rows exceed the confirm "
+                                    "threshold but stdin is not a TTY — cannot ask for "
+                                    "confirmation, garbage sweep skipped this boot")
+                        << LOG_KV("garbage", count);
+                    return false;
+                }
+                std::cout << "MPT pruning: found " << count
+                          << " unreachable node rows (historical garbage). Delete now? [y/N] "
+                          << std::flush;
+                std::string answer;
+                std::getline(std::cin, answer);
+                bool const yes = !answer.empty() && (answer[0] == 'y' || answer[0] == 'Y');
+                INITIALIZER_LOG(INFO) << LOG_DESC("MPT pruning: garbage sweep confirmed by "
+                                                  "operator")
+                                      << LOG_KV("garbage", count) << LOG_KV("confirmed", yes);
+                return yes;
+            },
+            [](uint64_t done, uint64_t total) {
+                if (isatty(STDIN_FILENO) != 0)
+                {
+                    std::cout << "\rMPT pruning: deleting garbage node rows " << done << "/"
+                              << total << std::flush;
+                    if (done == total)
+                    {
+                        std::cout << std::endl;
+                    }
+                }
+                INITIALIZER_LOG(INFO) << LOG_DESC("MPT pruning: garbage sweep progress")
+                                      << LOG_KV("deleted", done) << LOG_KV("total", total);
+            }));
 
         INITIALIZER_LOG(INFO) << LOG_DESC("MPT pruning enabled")
                               << LOG_KV("window", m_nodeConfig->mptPruneWindow())
-                              << LOG_KV("batchSize", m_nodeConfig->mptPruneBatchSize())
-                              << LOG_KV("recoveredWatermark", pruner->watermark());
+                              << LOG_KV("trackedNodes", pruner->trackedCount())
+                              << LOG_KV("scheduledDeletions", pruner->pendingCount())
+                              << LOG_KV("garbageDeleted", pruner->lastSweepDeleted())
+                              << LOG_KV("garbageSkipped", pruner->lastSweepSkipped());
         m_mptCommitObserver = std::move(pruner);
     }
 

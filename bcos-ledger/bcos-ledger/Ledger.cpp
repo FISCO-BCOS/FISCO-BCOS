@@ -38,7 +38,6 @@
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
 #include "mpt/Constants.h"
-#include "mpt/PruneMetadata.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -2526,15 +2525,8 @@ bool Ledger::buildGenesisBlock(
         // flat rows above just went to. A missing node aborts block-1 execution loudly
         // (MPTInvariantViolation). Non-MPT chains never read these rows and get none; scenario
         // A (feature_mpt_state_root activated mid-chain) starts its first MPT block from
-        // emptyRootHash() and needs no genesis nodes either.
-        //
-        // The pruning refcount rows are seeded alongside (MPTPruner, spec §4.8): genesis nodes
-        // never pass a delta, so without seeding their first obsoletion would read as a
-        // saturating 0→0 and schedule a LIVE node for deletion — with cross-alloc shared
-        // sub-tries that is the very first referencing account's rebuild. The seed marker lets
-        // MPTPruner::init distinguish a seeded genesis from one written by a binary predating
-        // seeding. Seeded unconditionally for L2 chains: the rows are inert while pruning is
-        // disabled and make a later (still genesis-adjacent) enablement safe.
+        // emptyRootHash() and needs no genesis nodes either. MPT pruning needs no genesis
+        // seeding: its counts are rebuilt from the state roots at every startup (MPTPruner.h).
         if (l2EthereumCompat)
         {
             for (auto& [nodeHash, nodeRlp] : ethStateTrie.nodes)
@@ -2544,7 +2536,6 @@ bool Ledger::buildGenesisBlock(
                 co_await storage2::writeOne(
                     *m_stateStorage, storage2::mptNodeStateKey(nodeHash), std::move(nodeEntry));
             }
-            co_await mpt::writePruneSeedRows(*m_stateStorage, ethStateTrie.nodeCounts);
         }
 
         // consensus leader period

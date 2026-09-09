@@ -18,23 +18,20 @@
  *        PRODUCTION persistence stack (FullChainFixture: real RocksDB, real Ledger, real
  *        prewrite/merge). A live MPTPruner (window N=2) replaces the probe observer via
  *        setMPTCommitObserver and blocks are driven through executeBlock+commitBlock:
- *          (a) pruning metadata rows (watermark / refcount) are readable from the backend
- *              immediately after commitBlock returns — same WriteBatch as the block data;
+ *          (a) the pruner keeps ALL state in memory — no /sys/mpt_prune_* metadata row ever
+ *              lands on the backend;
  *          (b) past the window the committed "/mpt/" node-row count plateaus (bounded);
  *          (c) roots inside [head-N, head] keep their nodes, older roots are deleted;
- *          (d) a fresh pruner over the same backend (the restart path) passes the startup
- *              guard only when the persisted watermark matches the head, and keeps deleting
- *              on new commits;
- *          (e) enabling pruning on a chain whose MPT built blocks WITHOUT a pruner (no
- *              watermark) is refused by the startup guard.
+ *          (d) a fresh pruner over the same backend (the restart path) REBUILDS the in-memory
+ *              counts from the window's state roots at init and keeps deleting on new commits;
+ *          (e) enabling pruning on a chain whose MPT built blocks WITHOUT a pruner needs no
+ *              guard or seeding — init rebuilds over whatever history is on disk.
  *        Deletions land synchronously inside commitBlock (coPreparePruneRows' batch), so every
  *        assertion below runs against the committed state with no worker to drain.
  */
 #include "FullChainFixture.h"
 #include "bcos-ledger/GenesisStateRoot.h"
 #include "bcos-ledger/mpt/MPTPruner.h"
-#include "bcos-ledger/mpt/PruneMetadata.h"
-#include "bcos-tool/Exceptions.h"
 
 #include <boost/test/unit_test.hpp>
 #include <utility>
@@ -51,36 +48,39 @@ constexpr int64_t c_pruneWindow = 2;
 /// storage's OPENED handle (RocksDBStorage2) — what the pruner and the production
 /// initializer (decltype over the same expression) are parameterized on.
 using FCBackend = std::remove_cvref_t<decltype(std::declval<FCMultiLayerStorage&>().latestBackend())>;
+using FCPruner = mpt::MPTPruner<FCBackend>;
 
-std::optional<uint64_t> watermarkInBackend(FCBackend& backend)
+/// The production init lookup (Initializer.cpp): the committed header's stateRoot, nullopt
+/// when the block is not on chain.
+FCPruner::StateRootLookup stateRootLookup(std::shared_ptr<bcos::ledger::Ledger> const& ledger)
 {
-    auto entry = task::syncWait(storage2::readOne(backend, mpt::watermarkKey()));
-    if (!entry)
-    {
-        return std::nullopt;
-    }
-    auto raw = entry->get();
-    return mpt::decodeWatermark(
-        bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
-}
-
-std::optional<mpt::PruneRefCount> refCountInBackend(
-    FCBackend& backend, h256 const& hash)
-{
-    auto entry = task::syncWait(storage2::readOne(backend, mpt::pruneRefKey(hash)));
-    if (!entry)
-    {
-        return std::nullopt;
-    }
-    auto raw = entry->get();
-    return mpt::decodeRefCount(
-        bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
+    return [ledger](protocol::BlockNumber number) -> task::Task<std::optional<h256>> {
+        auto block = co_await ledger::getBlockData(*ledger, number, ledger::HEADER);
+        co_return block ? std::optional<h256>{block->blockHeader()->stateRoot()} : std::nullopt;
+    };
 }
 
 bool nodeRowInBackend(FCBackend& backend, h256 const& hash)
 {
-    return task::syncWait(
-        storage2::existsOne(backend, bcos::ledger::mptNodeStateKey(hash)));
+    return task::syncWait(storage2::existsOne(backend, bcos::ledger::mptNodeStateKey(hash)));
+}
+
+/// Rows under any "/sys/mpt_prune_*" table — the in-memory pruner must never write one.
+size_t pruneMetadataRowCount(FCBackend& backend)
+{
+    return task::syncWait([](FCBackend& backend) -> task::Task<size_t> {
+        size_t count = 0;
+        auto iterator = co_await storage2::range(backend);
+        while (auto item = co_await iterator.next())
+        {
+            if (executor_v1::StateKeyView{std::get<0>(*item)}.m_table.find("mpt_prune") !=
+                std::string_view::npos)
+            {
+                ++count;
+            }
+        }
+        co_return count;
+    }(backend));
 }
 
 BOOST_AUTO_TEST_SUITE(MPTPrunerWiringSuite)
@@ -94,9 +94,11 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoCommitPath)
     fixture.enableFeatureFromBlock(c_mptFlagName, 1);
 
     auto& backend = fixture.m_multiLayerStorage.latestBackend();
-    auto pruner = std::make_shared<mpt::MPTPruner<FCBackend>>(backend, c_pruneWindow);
-    // Fresh chain at the genesis block: no watermark yet, the guard lets a non-L2 chain start.
-    task::syncWait(pruner->init(0));
+    auto pruner = std::make_shared<FCPruner>(backend, c_pruneWindow);
+    // Fresh chain at the genesis block: MPT is not active yet, so init starts empty — the
+    // first MPT block's full build seeds the counts through the ordinary delta path.
+    task::syncWait(pruner->init(0, stateRootLookup(fixture.m_ledger)));
+    BOOST_CHECK_EQUAL(pruner->trackedCount(), 0U);
     fixture.m_baselineScheduler.setMPTCommitObserver(pruner);
 
     // Every block changes account A's balance, so every MPT block produces a fresh state root
@@ -110,33 +112,19 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoCommitPath)
         fixture.planBlock(
             number, {FullChainFixture::balanceRow(addressA, std::to_string(number * 100))});
         auto header = fixture.executeOneBlock(number);
-
-        // (a) The watermark row must be readable from the backend IMMEDIATELY after commit —
-        // it landed in the block's own WriteBatch (coPreparePruneRows -> prewriteStorage ->
-        // mergeBackStorage), together with that commit's node deletions.
         fixture.commitOneBlock(header);
+
         if (number >= 2)  // MPT blocks only; block 1 is XOR and fires no observer
         {
-            auto const watermark = watermarkInBackend(backend);
-            BOOST_REQUIRE_MESSAGE(watermark.has_value(),
-                "watermark row missing right after commit of block " + std::to_string(number));
-            BOOST_CHECK_EQUAL(*watermark, static_cast<uint64_t>(number));
+            // (a) The in-memory count of the just-committed root: exactly one reference, no
+            // deadline — and no metadata row may have landed with any block.
+            BOOST_CHECK(pruner->countOf(header->stateRoot()) == std::optional<uint64_t>{1});
+            BOOST_CHECK(!pruner->deadlineOf(header->stateRoot()).has_value());
+            BOOST_CHECK_EQUAL(pruneMetadataRowCount(backend), 0U);
         }
-        else
-        {
-            BOOST_CHECK(!watermarkInBackend(backend).has_value());
-        }
-
         roots[number] = header->stateRoot();
         nodeCounts[number] = fixture.backendNodeCount();
     }
-
-    // (a2) The refcount row of the first MPT block's root: exactly one reference, not queued.
-    auto const rootRef = refCountInBackend(backend, roots[2]);
-    // The root of block 2 was obsoleted at block 3 and deleted at block 5 — its metadata rows
-    // are consumed by the deletion, so the row is GONE by now. Pin that, then check a
-    // still-live root below instead.
-    BOOST_CHECK(!rootRef.has_value());
 
     // (b) Bounded, converged node count: deletions land at the commit of block 2+N+1 = 5;
     // from then on each block adds one trie version and deletes the one that fell out of the
@@ -160,26 +148,20 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoCommitPath)
         BOOST_CHECK_MESSAGE(!nodeRowInBackend(backend, roots[number]),
             "out-of-window root of block " + std::to_string(number) + " still on disk");
     }
-    // A still-live root carries a refcount row with exactly one reference and no pending
-    // deletion.
-    auto const liveRef = refCountInBackend(backend, roots[8]);
-    BOOST_REQUIRE(liveRef.has_value());
-    BOOST_CHECK_EQUAL(liveRef->count, 1);
-    BOOST_CHECK(!liveRef->pendingDeleteAt.has_value());
+    // The root of block 2 was obsoleted at block 3 and deleted at block 5 — its in-memory
+    // entry is erased with the deletion; a still-live root reads count 1, no deadline.
+    BOOST_CHECK(!pruner->countOf(roots[2]).has_value());
+    BOOST_CHECK(pruner->countOf(roots[8]) == std::optional<uint64_t>{1});
 
-    // (d) Restart path: a fresh pruner over the same backend passes the startup guard because
-    // the persisted watermark equals the current head — no replay, no catch-up: every deletion
-    // already landed with its block's commit.
-    auto pruner2 = std::make_shared<mpt::MPTPruner<FCBackend>>(backend, c_pruneWindow);
-    task::syncWait(pruner2->init(c_head));
+    // (d) Restart path: a fresh pruner over the same backend rebuilds the counts from the
+    // window's state roots — no guard, no replay: every deletion already landed with its
+    // block's commit, and the rebuilt state matches the running pruner's exactly.
+    auto pruner2 = std::make_shared<FCPruner>(backend, c_pruneWindow);
+    task::syncWait(pruner2->init(c_head, stateRootLookup(fixture.m_ledger)));
     BOOST_CHECK_EQUAL(pruner2->watermark(), c_head);
+    BOOST_CHECK_EQUAL(pruner2->trackedCount(), pruner->trackedCount());
+    BOOST_CHECK_EQUAL(pruner2->pendingCount(), pruner->pendingCount());
     BOOST_CHECK_EQUAL(fixture.backendNodeCount(), nodeCounts[8]);
-
-    // A watermark/head mismatch — pruning disabled for a while, then re-enabled — is refused
-    // loudly instead of pruning over the uncounted gap.
-    auto prunerStale = std::make_shared<mpt::MPTPruner<FCBackend>>(backend, c_pruneWindow);
-    BOOST_CHECK_THROW(
-        task::syncWait(prunerStale->init(c_head + 5)), bcos::tool::InvalidConfig);
 
     fixture.m_baselineScheduler.setMPTCommitObserver(pruner2);
     constexpr protocol::BlockNumber c_next = c_head + 1;
@@ -196,37 +178,56 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoCommitPath)
         BOOST_CHECK_MESSAGE(nodeRowInBackend(backend, roots[number]),
             "in-window root of block " + std::to_string(number) + " was pruned after restart");
     }
-    auto const watermark = watermarkInBackend(backend);
-    BOOST_REQUIRE(watermark.has_value());
-    BOOST_CHECK_EQUAL(*watermark, static_cast<uint64_t>(c_next));
     BOOST_CHECK_EQUAL(fixture.backendNodeCount(), nodeCounts[8]);  // plateau held
+    BOOST_CHECK_EQUAL(pruneMetadataRowCount(backend), 0U);
 }
 
-BOOST_AUTO_TEST_CASE(midChainEnableIsRefusedByStartupGuard)
+BOOST_AUTO_TEST_CASE(midChainEnableRebuildsFromStateRoots)
 {
-    // Blocks committed while NO pruner was wired leave no watermark and uncounted node deltas;
-    // enabling pruning afterwards must be refused instead of pruning live state.
-    FullChainFixture fixture{"mpt_pruner_midchain_guard"};
+    // Blocks committed while NO pruner was wired are no obstacle anymore: init rebuilds the
+    // counts from the state roots on disk — no seeding, no guard. The chain then prunes
+    // exactly as if it had run with a pruner from the start.
+    FullChainFixture fixture{"mpt_pruner_midchain_rebuild"};
     fixture.buildGenesis(FullChainFixture::baseGenesis());
     fixture.enableFeatureFromBlock(c_mptFlagName, 1);
 
     auto const addressA = FullChainFixture::makeAddress(0xA6);
+    std::map<protocol::BlockNumber, h256> roots;
     for (protocol::BlockNumber number = 1; number <= 3; ++number)
     {
         fixture.planBlock(
             number, {FullChainFixture::balanceRow(addressA, std::to_string(number * 100))});
-        fixture.runBlock(number);
+        roots[number] = fixture.runBlock(number)->stateRoot();
     }
 
     auto& backend = fixture.m_multiLayerStorage.latestBackend();
-    // feature_mpt_state_root activated at block 1 and the head is 3 — past the safe point.
-    auto pruner = std::make_shared<mpt::MPTPruner<FCBackend>>(backend, c_pruneWindow);
-    BOOST_CHECK_THROW(task::syncWait(pruner->init(3)), bcos::tool::InvalidConfig);
+    // feature_mpt_state_root activated at block 1 and the head is 3: init walks the roots of
+    // blocks 2..3 (the whole post-activation history) and adopts every node on disk.
+    auto pruner = std::make_shared<FCPruner>(backend, c_pruneWindow);
+    BOOST_CHECK_NO_THROW(task::syncWait(pruner->init(3, stateRootLookup(fixture.m_ledger))));
+    BOOST_CHECK_EQUAL(pruner->trackedCount(), fixture.backendNodeCount());
+    fixture.m_baselineScheduler.setMPTCommitObserver(pruner);
 
-    // At the activation block itself it would still have been safe: block 1 keeps the legacy
-    // XOR root (strictly-greater rule), so no MPT block had committed yet.
-    auto early = std::make_shared<mpt::MPTPruner<FCBackend>>(backend, c_pruneWindow);
-    BOOST_CHECK_NO_THROW(task::syncWait(early->init(1)));
+    for (protocol::BlockNumber number = 4; number <= 7; ++number)
+    {
+        fixture.planBlock(
+            number, {FullChainFixture::balanceRow(addressA, std::to_string(number * 100))});
+        roots[number] = fixture.runBlock(number)->stateRoot();
+    }
+
+    // At head 7 with N=2 the window is [5, 7]; the root of block r is deleted when block
+    // r+1+N commits — roots 2..4 gone (5, 6, 7 committed), roots 5..7 intact.
+    for (protocol::BlockNumber number = 5; number <= 7; ++number)
+    {
+        BOOST_CHECK_MESSAGE(nodeRowInBackend(backend, roots[number]),
+            "in-window root of block " + std::to_string(number) + " was pruned");
+    }
+    for (protocol::BlockNumber number = 2; number <= 4; ++number)
+    {
+        BOOST_CHECK_MESSAGE(!nodeRowInBackend(backend, roots[number]),
+            "out-of-window root of block " + std::to_string(number) + " still on disk");
+    }
+    BOOST_CHECK_EQUAL(pruneMetadataRowCount(backend), 0U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

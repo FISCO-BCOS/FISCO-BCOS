@@ -132,8 +132,8 @@ bcos::task::Task<bcos::h256> computeGenesisStateRoot(GenesisConfig const& genesi
 /// produced — account trie and each account's storage sub-trie — as hash-keyed raw RLP.
 /// Identical encodings across sub-tries hash identically and dedupe in `nodes`; `nodeCounts`
 /// keeps the per-hash EMISSION multiplicity the dedupe drops (1 for account-trie nodes, plus 1
-/// per storage sub-trie that produced the byte-identical node), which is exactly the reference
-/// count MPT pruning seeds its genesis refcount rows from (writePruneSeedRows).
+/// per storage sub-trie that produced the byte-identical node) — informational; MPT pruning
+/// does not seed from it (its counts are rebuilt from the state roots at startup, MPTPruner.h).
 struct GenesisStateTrie
 {
     bcos::h256 root;

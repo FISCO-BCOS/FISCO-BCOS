@@ -86,20 +86,6 @@ BOOST_AUTO_TEST_CASE(storageConfigMptPruneValidation)
         BOOST_CHECK_THROW(probe.loadStorageConfig(fromIni(std::string("[storage]\n") + bad)),
             bcos::tool::InvalidConfig);
     }
-
-    // mpt_prune_batch_size: [1, 100000]; 0 would stall the delete queue, a huge value lets one
-    // block's commit delete without bound.
-    LoaderProbe batchOk;
-    BOOST_CHECK_NO_THROW(
-        batchOk.loadStorageConfig(fromIni("[storage]\nmpt_prune_batch_size=500\n")));
-    BOOST_CHECK_EQUAL(batchOk.mptPruneBatchSize(), 500);
-    for (auto const* bad : {"mpt_prune_batch_size=0\n", "mpt_prune_batch_size=-1\n",
-             "mpt_prune_batch_size=100001\n"})
-    {
-        LoaderProbe probe;
-        BOOST_CHECK_THROW(probe.loadStorageConfig(fromIni(std::string("[storage]\n") + bad)),
-            bcos::tool::InvalidConfig);
-    }
 }
 
 
