@@ -346,8 +346,7 @@ bcos::task::Task<bcos::Error::Ptr> bcostars::GatewayServiceClient::notifyGroupIn
         class Callback : public bcostars::GatewayServicePrxCallback
         {
         public:
-            explicit Callback(std::shared_ptr<CompletionState> state) : m_state(std::move(state))
-            {}
+            explicit Callback(std::shared_ptr<CompletionState> state) : m_state(std::move(state)) {}
 
             void callback_asyncNotifyGroupInfo(const bcostars::Error& ret) override
             {
@@ -370,6 +369,15 @@ bcos::task::Task<bcos::Error::Ptr> bcostars::GatewayServiceClient::notifyGroupIn
                     m_state->error = std::move(error);
                     m_state->handle.resume();
                 }
+                else if (error)
+                {
+                    // the coroutine is already settled; do not silently drop a gateway that
+                    // failed to receive the group info
+                    BCOS_LOG(WARNING)
+                        << LOG_DESC("notifyGroupInfo: answer from another gateway endpoint")
+                        << LOG_KV("code", error->errorCode())
+                        << LOG_KV("msg", error->errorMessage());
+                }
             }
             std::shared_ptr<CompletionState> m_state;
         };
@@ -387,31 +395,58 @@ bcos::task::Task<bcos::Error::Ptr> bcostars::GatewayServiceClient::notifyGroupIn
             m_state->handle = _handle;
             auto state = m_state;
             auto shouldBlockCall = m_self->shouldStopCall();
-            auto ret = checkConnection(m_self->c_moduleName, "asyncNotifyGroupInfo", m_self->m_prx,
+            auto ret = checkConnection(
+                m_self->c_moduleName, "asyncNotifyGroupInfo", m_self->m_prx,
                 [state](bcos::Error::Ptr _error) { state->error = std::move(_error); },
                 shouldBlockCall);
             if (!ret && shouldBlockCall)
             {
                 return false;
             }
+            // Copy everything the fan-out needs out of the coroutine frame BEFORE the first
+            // dispatch: once the first async_* call is in flight, its callback may resume and
+            // destroy this coroutine on the tars callback thread, so nothing below the first
+            // dispatch may touch m_self, m_groupInfo or m_state.
+            auto serviceName = m_self->m_gatewayServiceName;
+            auto groupInfo = std::move(m_groupInfo);
             // notify groupInfo to all gateway nodes
             auto activeEndPoints = tarsProxyAvailableEndPoints(m_self->m_prx);
+            size_t dispatched = 0;
+            bcos::Error::Ptr dispatchError;
             for (auto const& endPoint : activeEndPoints)
             {
-                auto prx = bcostars::createServantProxy<GatewayServicePrx>(
-                    m_self->m_gatewayServiceName, endPoint);
-                prx->async_asyncNotifyGroupInfo(new Callback(state), m_groupInfo);
+                try
+                {
+                    auto prx =
+                        bcostars::createServantProxy<GatewayServicePrx>(serviceName, endPoint);
+                    prx->async_asyncNotifyGroupInfo(new Callback(state), groupInfo);
+                    ++dispatched;
+                }
+                catch (std::exception const& e)
+                {
+                    // keep fanning out to the remaining endpoints: an exception unwinding out
+                    // of await_suspend would resume the coroutine while earlier RPCs are
+                    // still in flight, and their callbacks would resume a finished coroutine
+                    BCOS_LOG(WARNING)
+                        << LOG_DESC("asyncNotifyGroupInfo dispatch to endpoint failed")
+                        << LOG_KV("endpoint", endPoint.toString()) << LOG_KV("what", e.what());
+                    dispatchError = BCOS_ERROR_PTR(-1, e.what());
+                }
             }
-            // no gateway endpoint to notify: nothing is in flight, so resume inline with the
-            // (unset, i.e. success) result instead of suspending forever
-            return !activeEndPoints.empty();
+            if (dispatched == 0)
+            {
+                // nothing is in flight: resume inline instead of suspending forever. With zero
+                // active endpoints dispatchError is unset, i.e. success.
+                state->error = std::move(dispatchError);
+            }
+            return dispatched > 0;
         }
 
         bcos::Error::Ptr await_resume() { return std::move(m_state->error); }
     };
 
-    NotifyGroupInfoAwaitable awaitable{
-        this, toTarsGroupInfo(_groupInfo), std::make_shared<NotifyGroupInfoAwaitable::CompletionState>()};
+    NotifyGroupInfoAwaitable awaitable{this, toTarsGroupInfo(_groupInfo),
+        std::make_shared<NotifyGroupInfoAwaitable::CompletionState>()};
     co_return co_await awaitable;
 }
 bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>>

@@ -809,7 +809,8 @@ task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> 
 {
     if (!m_run)
     {
-        co_return std::make_tuple(NetworkException(0, ""), P2PInfo{}, std::shared_ptr<SessionFace>());
+        co_return std::make_tuple(
+            NetworkException(0, ""), P2PInfo{}, std::shared_ptr<SessionFace>());
     }
     HOST_LOG(INFO) << LOG_DESC("Connecting to node") << LOG_KV("endpoint", _nodeIPEndpoint);
     {
@@ -819,7 +820,8 @@ task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> 
         {
             BCOS_LOG(TRACE) << LOG_DESC("connected node is in the pending list")
                             << LOG_KV("endpoint", _nodeIPEndpoint);
-            co_return std::make_tuple(NetworkException(0, ""), P2PInfo{}, std::shared_ptr<SessionFace>());
+            co_return std::make_tuple(
+                NetworkException(0, ""), P2PInfo{}, std::shared_ptr<SessionFace>());
         }
     }
 

@@ -81,8 +81,9 @@ public:
      *         the failure. A skipped connect (host not running, or the endpoint is already in the
      *         pending list) returns a success error with a nullptr session.
      * @note the caller must keep this Host alive until the returned task completes (e.g. own a
-     *       shared_ptr in the awaiting coroutine frame); the task resumes on the connected
-     *       socket's io_context thread.
+     *       shared_ptr in the awaiting coroutine frame); on success the task resumes on the
+     *       connected socket's io_context thread, on failure it may resume on the resolver's
+     *       thread or complete synchronously on the caller's thread.
      */
     virtual task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> connect(
         NodeIPEndpoint _nodeIPEndpoint);
