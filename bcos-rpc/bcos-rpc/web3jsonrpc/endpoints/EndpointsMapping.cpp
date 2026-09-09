@@ -70,6 +70,11 @@ void EndpointsMapping::addEngineHandlers()
     m_handlers[methodString(EthMethod::engine_newPayloadV2)] = &Endpoints::newPayloadV2;
     m_handlers[methodString(EthMethod::engine_newPayloadV3)] = &Endpoints::newPayloadV3;
     m_handlers[methodString(EthMethod::engine_newPayloadV4)] = &Endpoints::newPayloadV4;
+    // miner_setMaxDASize is deliberately NOT registered: no production consumer reads DACaps
+    // yet (OpEngineService has no production construction site), so answering `true` would
+    // make the batcher size its channel frames against a limit the sequencer never applies.
+    // The producer, the reader and the Pro/Max (tars) setDaCaps bootstrap land together in
+    // the OpEngineService cutover.
     // clang-format on
 }
 
@@ -116,6 +121,7 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_getLogs)] = &Endpoints::getLogs;
     m_handlers[methodString(EthMethod::eth_maxPriorityFeePerGas)] = &Endpoints::maxPriorityFeePerGas;
     m_handlers[methodString(EthMethod::eth_getProof)] = &Endpoints::getProof;
+    m_handlers[methodString(EthMethod::eth_feeHistory)] = &Endpoints::feeHistory;
     // clang-format on
 }
 

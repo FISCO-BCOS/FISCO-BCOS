@@ -10,6 +10,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-crypto/ChecksumAddress.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
@@ -223,12 +224,11 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseEthHeaderReadsFieldsFromHeader)
     header->setNumber(7);
     header->setTimestamp(1700000000 * 1000LL);  // BlockHeader milliseconds == 1700000000 s
     header->setEthBlockVersion(bcos::protocol::EthBlockVersion::CANCUN);
-    header->setParentInfo(
-        bcos::protocol::ParentInfo{.blockNumber = 6,
-            .blockHash = bcos::crypto::HashType(
-                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")});
-    header->setUncleHash(
-        bcos::crypto::HashType("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
+    header->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 6,
+        .blockHash = bcos::crypto::HashType(
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")});
+    header->setUncleHash(bcos::crypto::HashType(
+        "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
     header->setCoinbase(bcos::Address("1234567890abcdef1234567890abcdef12345678"));
     header->setDifficulty(bcos::u256(0));
     header->setNonce(bcos::h64(0));
@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseEthHeaderReadsFieldsFromHeader)
         bcos::h256("5555555555555555555555555555555555555555555555555555555555555555"));
     header->setReceiptsRoot(
         bcos::h256("6666666666666666666666666666666666666666666666666666666666666666"));
-    bcos::Bloom bloom;
+    bcos::Bloom bloom{};
     bloom[0] = 0xab;
     header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
     header->setBaseFee(bcos::u256(1000000000));
@@ -311,10 +311,9 @@ static std::shared_ptr<bcos::protocol::Block> makeEthHeaderBlock(
     header->setNumber(7);
     header->setTimestamp(1700000000 * 1000LL);  // BlockHeader milliseconds == 1700000000 s
     header->setEthBlockVersion(version);
-    header->setParentInfo(
-        bcos::protocol::ParentInfo{.blockNumber = 6,
-            .blockHash = bcos::crypto::HashType(
-                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")});
+    header->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 6,
+        .blockHash = bcos::crypto::HashType(
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")});
     header->setUncleHash(bcos::crypto::HashType(
         "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
     header->setCoinbase(bcos::Address("1234567890abcdef1234567890abcdef12345678"));
@@ -330,7 +329,7 @@ static std::shared_ptr<bcos::protocol::Block> makeEthHeaderBlock(
         bcos::h256("5555555555555555555555555555555555555555555555555555555555555555"));
     header->setReceiptsRoot(
         bcos::h256("6666666666666666666666666666666666666666666666666666666666666666"));
-    bcos::Bloom bloom;
+    bcos::Bloom bloom{};
     bloom[0] = 0xab;
     header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
     if (baseFee)
@@ -360,6 +359,69 @@ static std::shared_ptr<bcos::protocol::Block> makeEthHeaderBlock(
     header->calculateHash(*hashImpl);
     block->setBlockHeader(header);
     return block;
+}
+
+BOOST_AUTO_TEST_CASE(combineBlockResponseOpNonEthUsesRlpIdentityHashAndPrevRandao)
+{
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(1);
+    header->setTimestamp(1700000000 * 1000LL);
+    header->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 0,
+        .blockHash = bcos::crypto::HashType(
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")});
+    header->setCoinbase(bcos::Address("4200000000000000000000000000000000000011"));
+    header->setUncleHash(
+        bcos::h256("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
+    header->setDifficulty(bcos::u256(0));
+    header->setNonce(bcos::h64(0));
+    header->setPrevRandao(
+        bcos::h256("62293916ac98bc02b90472638bd2beb1b531a914395c34239abe6fc011b9011a"));
+    header->setGasLimit(bcos::u256(30000000));
+    header->setGasUsed(bcos::u256(21000));
+    header->setStateRoot(
+        bcos::h256("4444444444444444444444444444444444444444444444444444444444444444"));
+    header->setTxsRoot(
+        bcos::h256("5555555555555555555555555555555555555555555555555555555555555555"));
+    header->setReceiptsRoot(
+        bcos::h256("6666666666666666666666666666666666666666666666666666666666666666"));
+    // Value-initialised: bcos::Bloom is a std::array with no default initialisation, so
+    // `Bloom bloom;` would leave 255 bytes indeterminate and make the header hash vary run
+    // to run (which is why this case could only ever compare the code to itself).
+    bcos::Bloom bloom{};
+    bloom[0] = 0xcd;
+    header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+    header->setExtraData(bcos::bytes{0x01, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
+    header->setBaseFee(bcos::u256(1000000000));
+    header->setWithdrawalsRoot(
+        bcos::h256("2222222222222222222222222222222222222222222222222222222222222222"));
+    header->setBlobGasUsed(bcos::u256(0));
+    header->setExcessBlobGas(bcos::u256(0));
+    header->setParentBeaconBlockRoot(
+        bcos::h256("3333333333333333333333333333333333333333333333333333333333333333"));
+    header->setRequestsHash(
+        bcos::h256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+    header->calculateHash(*hashImpl);
+    auto const tarsHash = header->hash();
+    auto const rlpHash = bcos::protocol::EthBlockHeader::computeHash(*header);
+    BOOST_CHECK(tarsHash != rlpHash);
+    block->setBlockHeader(header);
+
+    Json::Value result(Json::objectValue);
+    combineBlockResponse(result, *block, /*fullTxs=*/false);
+
+    // Golden literal, independent of the code under test: the header is fully deterministic
+    // now that the bloom is value-initialised, so a change to the RLP identity hash or to
+    // any hashed field fails here instead of comparing the production function to itself.
+    BOOST_CHECK_EQUAL(result["hash"].asString(),
+        "0x2aa80e9130ed69be2160c354c483adf10e39d7ed2d899ba7dd22c39d4136f8b4");
+    BOOST_CHECK_NE(result["hash"].asString(), tarsHash.hexPrefixed());
+    BOOST_CHECK_EQUAL(result["mixHash"].asString(),
+        "0x62293916ac98bc02b90472638bd2beb1b531a914395c34239abe6fc011b9011a");
+    BOOST_CHECK_EQUAL(result["baseFeePerGas"].asString(), "0x3b9aca00");
+    BOOST_CHECK(result.isMember("withdrawalsRoot"));
+    BOOST_CHECK(result.isMember("requestsHash"));
 }
 
 // The fork-gated key matrix must match geth's eth_getBlock* shape exactly: LONDON has only
@@ -396,20 +458,20 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseEthForkShapesGateKeys)
         std::optional<bcos::h256> requestsHash;
         if (c.expectWithdrawals)
         {
-            withdrawalsRoot = bcos::h256(
-                "2222222222222222222222222222222222222222222222222222222222222222");
+            withdrawalsRoot =
+                bcos::h256("2222222222222222222222222222222222222222222222222222222222222222");
         }
         if (c.expectBlobTrio)
         {
             blobGasUsed = bcos::u256(0);
             excessBlobGas = bcos::u256(0);
-            parentBeaconBlockRoot = bcos::h256(
-                "3333333333333333333333333333333333333333333333333333333333333333");
+            parentBeaconBlockRoot =
+                bcos::h256("3333333333333333333333333333333333333333333333333333333333333333");
         }
         if (c.expectRequestsHash)
         {
-            requestsHash = bcos::h256(
-                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+            requestsHash =
+                bcos::h256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
         }
         auto block = makeEthHeaderBlock(m_blockFactory, hashImpl, c.version, baseFee,
             withdrawalsRoot, blobGasUsed, excessBlobGas, parentBeaconBlockRoot, requestsHash);
@@ -476,6 +538,47 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseShapesReceipt)
     BOOST_CHECK(result.isMember("gasUsed"));
     BOOST_CHECK(result.isMember("logs"));
     BOOST_CHECK(result["logs"].isArray());
+}
+
+/// The per-log branch needs a NON-EMPTY logs vector: log.address must be the EIP-55
+/// checksum of the raw 20 bytes and log.transactionIndex a hex quantity. The base emitted
+/// toQuantity(transactionIndex) on an already-hex string ("0x307833") and the raw-byte
+/// address, so this case is the regression pin for both fixes.
+BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsLogAddressAndIndex)
+{
+    auto txFactory = m_blockFactory->transactionFactory();
+    auto tx = txFactory->createTransaction(0, "0x1234567890123456789012345678901234567890",
+        bcos::bytes{0x0a}, "0x2", 100, chainId, groupId, 0);
+    BOOST_REQUIRE(tx);
+
+    // EIP-55 test vector: 0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed must checksum to the
+    // mixed-case form below.
+    bcos::bytes const logAddress = bcos::fromHex("5aaeb6053f3e94c9b9a09f33669435e7ef1beaed");
+    bcos::h256s const topics{
+        bcos::h256("0000000000000000000000000000000000000000000000000000000000000001")};
+    std::vector<bcos::protocol::LogEntry> logs;
+    logs.emplace_back(logAddress, topics, bcos::bytes{0x01, 0x02});
+
+    auto receiptFactory = m_blockFactory->receiptFactory();
+    auto receipt = receiptFactory->createReceipt(bcos::u256(21000),
+        "0x1234567890123456789012345678901234567890", logs, /*status=*/0, bcos::bytesConstRef{},
+        /*blockNumber=*/12);
+    BOOST_REQUIRE(receipt);
+    receipt->setTransactionIndex(3);
+
+    bcos::crypto::HashType blockHash;
+    Json::Value result(Json::objectValue);
+    combineReceiptResponse(result, *receipt, *tx, blockHash);
+
+    BOOST_REQUIRE_EQUAL(result["logs"].size(), 1U);
+    auto const& log = result["logs"][0U];
+    BOOST_CHECK_EQUAL(log["address"].asString(), "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+    BOOST_CHECK_EQUAL(log["transactionIndex"].asString(), "0x3");
+    BOOST_CHECK_EQUAL(log["logIndex"].asString(), "0x0");
+    BOOST_REQUIRE_EQUAL(log["topics"].size(), 1U);
+    BOOST_CHECK_EQUAL(log["topics"][0U].asString(), topics[0].hexPrefixed());
+    BOOST_CHECK_EQUAL(log["data"].asString(), "0x0102");
+    BOOST_CHECK_EQUAL(log["removed"].asBool(), false);
 }
 
 BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsOpExtensionFieldsFromMeta)
