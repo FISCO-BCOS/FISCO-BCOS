@@ -39,9 +39,10 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/MPTNodeReadStorage.h"
+#include "bcos-ledger/mpt/history/HistoryRead.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-single-consensus/SingleNodeConsensus.h"
-#include "bcos-storage/MPTNodeReadStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
@@ -230,6 +231,27 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto rocksDBOption = getRocksDBOption(m_nodeConfig);
     m_globalStateStorageInitializer =
         GlobalStateStorageInitializer::build(m_nodeConfig->storagePath(), rocksDBOption);
+
+    // The node's two MPT reverse histories, built ONCE here and shared by every consumer: the
+    // scheduler that publishes into them and the RPC endpoints that read them (MPTHistory.h).
+    // The retention depths are node-local operations parameters straight from nodeConfig
+    // [storage] (pathdb spec §10.3) — they change what this node can ANSWER, never what it
+    // computes or agrees on.
+    //
+    // The indexes are DERIVED from the shard rows on disk, so they are recomputed at startup —
+    // synchronously, HERE, before any scheduler or RPC object exists. That ordering is the whole
+    // safety argument: a rebuild running alongside a reader would let a query miss a version the
+    // walk has not reached yet, and a missing version reads as "this key never changed", i.e.
+    // today's value under an old block's number (G10, layout spec §1.5). A rebuild that fails
+    // does not stop the node — the store latches Unavailable, logs an ERROR, and only the
+    // historical reads are refused.
+    m_mptHistory = std::make_shared<ledger::mpt::history::MPTHistory>(
+        ledger::mpt::history::HistoryDepths{.state = m_nodeConfig->mptHistoryStateBlocks(),
+            .proof = m_nodeConfig->mptHistoryProofBlocks()},
+        ledger::mpt::history::makeHistoryReader(
+            m_globalStateStorageInitializer->storage().latestBackend()));
+    task::syncWait(
+        m_mptHistory->rebuild(m_globalStateStorageInitializer->storage().latestBackend()));
 
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
@@ -433,7 +455,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), parallelScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction());
+                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction(), m_mptHistory);
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -459,7 +481,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
+                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction(), m_mptHistory);
         // Engine-driven modes on the v2 EthereumExecutor: build the Engine API service wired
         // to the ethereum scheduler + EthereumExecutor so blocks are built with
         // Ethereum-compliant semantics. Two mutually exclusive drivers use it (NodeConfig
@@ -484,7 +506,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), serialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction());
+                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction(), m_mptHistory);
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -500,7 +522,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
+                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction(), m_mptHistory);
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
         // branch above for why op_engine_rpc.enable also builds the EngineService here.
         if (!engineApiForV1Only &&
@@ -1671,7 +1693,8 @@ std::string Initializer::getBlockDBPath(bool _airVersion) const
            c_fileSeparator + blockDBPath;
 }
 
-std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer::mptNodeReader()
+std::shared_ptr<bcos::storage2::AnyStorage<bcos::ledger::mpt::PathKey, bcos::bytes>>
+Initializer::mptNodeReader()
 {
     if (!m_globalStateStorageInitializer)
     {
@@ -1681,7 +1704,7 @@ std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer
     // state, one WriteBatch) into latestBackend(), and eth_getProof targets committed
     // headers — the pending layers of the MultiLayerStorage belong to in-flight blocks and
     // must stay invisible to proofs.
-    return bcos::storage2::makeMPTNodeReader(
+    return bcos::ledger::mpt::makeMPTNodeReader(
         m_globalStateStorageInitializer->storage().latestBackend());
 }
 

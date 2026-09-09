@@ -42,10 +42,13 @@ BOOST_AUTO_TEST_SUITE(MPTBuilderTombstoneSuite)
 
 namespace
 {
-using NodeStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes>;
+using NodeStorage = bcos::ledger::mpt::test::NodeMemoryStorage;
 
-// Build one account's storage trie from (slotKey → raw value) and return its root.
-bcos::h256 buildStorageTrie(NodeStorage& storage, std::map<bcos::h256, bcos::bytes> const& slots)
+// Build ONE account's storage trie from (slotKey -> raw value) and return its root. The owner is
+// part of the address of every row it writes, so the trie has to be seeded under the same scope
+// the builder and the readers will look it up in.
+bcos::h256 buildStorageTrie(NodeStorage& storage, bcos::Address const& owner,
+    std::map<bcos::h256, bcos::bytes> const& slots)
 {
     std::map<bcos::h256, bcos::bytes> entries;
     for (auto const& [slot, value] : slots)
@@ -54,7 +57,9 @@ bcos::h256 buildStorageTrie(NodeStorage& storage, std::map<bcos::h256, bcos::byt
         BOOST_REQUIRE(!encoded.empty());
         entries[slotKeyHash(slot)] = std::move(encoded);
     }
-    return seedTrieFlushed(storage, emptyRootHash(), entries).root;
+    return seedTrieFlushed(
+        storage, emptyRootHash(), entries, TrieScope::storage(accountKeyHash(owner)))
+        .root;
 }
 
 // Build the parent state trie over (address → Account) and return its root.
@@ -111,9 +116,9 @@ BOOST_AUTO_TEST_CASE(SelfdestructRemovesAccountFromTrie)
     Account accountA;
     accountA.nonce = 1;
     accountA.balance = 10;
-    accountA.storageRoot = buildStorageTrie(
-        storage, {{slotKey(0x00), bcos::bytes{0x10}}, {slotKey(0x01), bcos::bytes{0x11}},
-                     {slotKey(0x02), bcos::bytes{0x12}}});
+    accountA.storageRoot = buildStorageTrie(storage, addrA,
+        {{slotKey(0x00), bcos::bytes{0x10}}, {slotKey(0x01), bcos::bytes{0x11}},
+            {slotKey(0x02), bcos::bytes{0x12}}});
     Account accountB;
     accountB.balance = 99;
     auto const parentRoot = buildStateTrie(storage, {{addrA, accountA}, {addrB, accountB}});
@@ -135,10 +140,13 @@ BOOST_AUTO_TEST_CASE(SelfdestructRemovesAccountFromTrie)
     BOOST_REQUIRE(aliveB.has_value());
     BOOST_CHECK_EQUAL(aliveB->balance, bcos::u256(99));
 
-    // The prior storage root is recorded for future pathdb pruning, and the incremental
-    // account-trie rebuild obsoletes the prior root node.
-    BOOST_CHECK(output.obsoletedNodes.contains(accountA.storageRoot));
-    BOOST_CHECK(output.obsoletedNodes.contains(parentRoot));
+    // The destroyed account's whole storage trie went with it: its owner is named in the diff
+    // and not one of its rows is left on disk (spec A.6 source 4).
+    BOOST_CHECK(output.droppedStorageTries == std::vector<bcos::h256>{accountKeyHash(addrA)});
+    BOOST_CHECK(scanTrieNodes(storage, TrieScope::storage(accountKeyHash(addrA))).empty());
+    // B's storage trie is untouched — path addressing gives each owner its own key space, so
+    // dropping A's cannot reach it.
+    BOOST_CHECK(scanTrieNodes(storage, TrieScope::storage(accountKeyHash(addrB))).empty());
 
     // The new state trie is exactly a from-scratch build over the survivors.
     BOOST_CHECK(output.stateRoot == stateRootOracle({{addrB, accountB}}));
@@ -152,7 +160,7 @@ BOOST_AUTO_TEST_CASE(TombstoneOfSoleAccountEmptiesTheTrie)
     auto const addr = makeAddress(0x53);
 
     Account account;
-    account.storageRoot = buildStorageTrie(storage, {{slotKey(0x00), bcos::bytes{0x42}}});
+    account.storageRoot = buildStorageTrie(storage, addr, {{slotKey(0x00), bcos::bytes{0x42}}});
     auto const parentRoot = buildStateTrie(storage, {{addr, account}});
 
     FlatBackendStorage flatBackend;
@@ -165,7 +173,10 @@ BOOST_AUTO_TEST_CASE(TombstoneOfSoleAccountEmptiesTheTrie)
         bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
 
     BOOST_CHECK(output.stateRoot == emptyRootHash());  // sole account gone
-    BOOST_CHECK(output.obsoletedNodes.contains(account.storageRoot));
+    BOOST_CHECK(output.droppedStorageTries == std::vector<bcos::h256>{accountKeyHash(addr)});
+    BOOST_CHECK(scanTrieNodes(storage, TrieScope::storage(accountKeyHash(addr))).empty());
+    // The account trie is gone too, root row included.
+    BOOST_CHECK(scanTrieNodes(storage, TrieScope::account()).empty());
 }
 
 BOOST_AUTO_TEST_CASE(TombstoneIgnoresStorageChanges)
@@ -177,9 +188,9 @@ BOOST_AUTO_TEST_CASE(TombstoneIgnoresStorageChanges)
     Account accountA;
     accountA.nonce = 1;
     accountA.balance = 10;
-    accountA.storageRoot = buildStorageTrie(
-        storage, {{slotKey(0x00), bcos::bytes{0x10}}, {slotKey(0x01), bcos::bytes{0x11}},
-                     {slotKey(0x02), bcos::bytes{0x12}}});
+    accountA.storageRoot = buildStorageTrie(storage, addrA,
+        {{slotKey(0x00), bcos::bytes{0x10}}, {slotKey(0x01), bcos::bytes{0x11}},
+            {slotKey(0x02), bcos::bytes{0x12}}});
     Account accountB;
     accountB.balance = 99;
     auto const parentRoot = buildStateTrie(storage, {{addrA, accountA}, {addrB, accountB}});
@@ -198,7 +209,8 @@ BOOST_AUTO_TEST_CASE(TombstoneIgnoresStorageChanges)
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto goneA = bcos::task::syncWait(readView.readAccount(addrA));
     BOOST_CHECK(!goneA.has_value());
-    BOOST_CHECK(output.obsoletedNodes.contains(accountA.storageRoot));
+    BOOST_CHECK(output.droppedStorageTries == std::vector<bcos::h256>{accountKeyHash(addrA)});
+    BOOST_CHECK(scanTrieNodes(storage, TrieScope::storage(accountKeyHash(addrA))).empty());
     BOOST_CHECK(output.stateRoot == stateRootOracle({{addrB, accountB}}));
 }
 
@@ -219,55 +231,72 @@ BOOST_AUTO_TEST_CASE(TombstoneOfAccountAbsentFromParentIsNoop)
         bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
 
     BOOST_CHECK(output.stateRoot == parentRoot);
-    BOOST_CHECK(output.obsoletedNodes.empty());
+    BOOST_CHECK(output.deletes.empty());
+    BOOST_CHECK(output.droppedStorageTries.empty());
 }
 
 BOOST_AUTO_TEST_CASE(RebornNextBlockWalksFirstTouchWithIndependentStorage)
 {
-    NodeStorage storage;
     auto const addrA = makeAddress(0x56);
     auto const addrB = makeAddress(0x57);
 
-    // Parent chain state: A holds two storage slots, B keeps the trie non-trivial after A dies.
-    Account accountA;
-    accountA.nonce = 1;
-    accountA.storageRoot = buildStorageTrie(
-        storage, {{slotKey(0x00), bcos::bytes{0x10}}, {slotKey(0x01), bcos::bytes{0x11}}});
-    Account accountB;
-    accountB.balance = 7;
-    auto const parentRoot = buildStateTrie(storage, {{addrA, accountA}, {addrB, accountB}});
-
-    // The flat backend still holds A's old slot rows. Under the slot-level model the reborn
-    // account can NEVER inherit them — first-touch never scans the flat slots — so the
-    // SELFDESTRUCT + CREATE2-redeploy fork the old preheat manifest had to guard against is
-    // closed by construction.
-    FlatBackendStorage flatBackend;
-    writeFlatRow(flatBackend, accountSlotKey(addrA, slotKey(0x00)), slotEntry({0x10}));
-    writeFlatRow(flatBackend, accountSlotKey(addrA, slotKey(0x01)), slotEntry({0x11}));
-
-    // Block N: SELFDESTRUCT A.
-    auto viewN = makeFlatView(flatBackend);
-    writeTombstoneEntries(viewN, addrA);
-    auto outputN =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, viewN, /*l2Mode=*/false));
+    // Chain state up to and including block N (SELFDESTRUCT of A), rebuilt per variant.
+    //
+    // A node store keyed by POSITION holds one version, so two different block N+1 variants
+    // cannot both be built on the same store: whichever runs first overwrites the positions the
+    // other would read. Each variant therefore gets its own store — which is also what two real
+    // nodes would have.
+    struct AfterDestruct
     {
-        MPTReadView<NodeStorage> readView(storage, outputN.stateRoot);
+        NodeStorage storage;
+        FlatBackendStorage flatBackend;
+        bcos::h256 stateRoot;
+    };
+    auto buildUpToDestruct = [&](AfterDestruct& out) {
+        Account accountA;
+        accountA.nonce = 1;
+        accountA.storageRoot = buildStorageTrie(out.storage, addrA,
+            {{slotKey(0x00), bcos::bytes{0x10}}, {slotKey(0x01), bcos::bytes{0x11}}});
+        Account accountB;
+        accountB.balance = 7;
+        auto const parentRoot = buildStateTrie(out.storage, {{addrA, accountA}, {addrB, accountB}});
+
+        // The flat backend still holds A's old slot rows. Under the slot-level model the reborn
+        // account can NEVER inherit them — first-touch never scans the flat slots — so the
+        // SELFDESTRUCT + CREATE2-redeploy fork the old preheat manifest had to guard against is
+        // closed by construction.
+        writeFlatRow(out.flatBackend, accountSlotKey(addrA, slotKey(0x00)), slotEntry({0x10}));
+        writeFlatRow(out.flatBackend, accountSlotKey(addrA, slotKey(0x01)), slotEntry({0x11}));
+
+        auto viewN = makeFlatView(out.flatBackend);
+        writeTombstoneEntries(viewN, addrA);
+        auto outputN =
+            bcos::task::syncWait(buildAndCollect(out.storage, parentRoot, viewN, /*l2Mode=*/false));
+        out.stateRoot = outputN.stateRoot;
+        MPTReadView<NodeStorage> readView(out.storage, out.stateRoot);
         auto gone = bcos::task::syncWait(readView.readAccount(addrA));
         BOOST_CHECK(!gone.has_value());
-    }
+        // A's storage trie left with it: not one row survives under its owner prefix.
+        BOOST_CHECK(scanTrieNodes(out.storage, TrieScope::storage(accountKeyHash(addrA))).empty());
+    };
+    auto writeRebornCoreFields = [&](auto& view) {
+        writeFlatRow(view, accountFieldKey(addrA, ROW_NONCE), makeEntry("2"));
+        writeFlatRow(view, accountFieldKey(addrA, ROW_BALANCE), makeEntry("5"));
+        writeFlatRow(view, accountFieldKey(addrA, ROW_CODE_HASH),
+            makeEntry(std::string_view{
+                reinterpret_cast<char const*>(makeHash(0xCE).data()), bcos::h256::SIZE}));
+    };
 
     // Block N+1, variant 1: A is re-created with no slot writes — the reborn account sits on
     // the empty storage root.
-    auto viewBare = makeFlatView(flatBackend);
-    writeFlatRow(viewBare, accountFieldKey(addrA, ROW_NONCE), makeEntry("2"));
-    writeFlatRow(viewBare, accountFieldKey(addrA, ROW_BALANCE), makeEntry("5"));
-    writeFlatRow(viewBare, accountFieldKey(addrA, ROW_CODE_HASH),
-        makeEntry(std::string_view{
-            reinterpret_cast<char const*>(makeHash(0xCE).data()), bcos::h256::SIZE}));
-    auto outputBare = bcos::task::syncWait(
-        buildAndCollect(storage, outputN.stateRoot, viewBare, /*l2Mode=*/false));
     {
-        MPTReadView<NodeStorage> readView(storage, outputBare.stateRoot);
+        AfterDestruct chain;
+        buildUpToDestruct(chain);
+        auto viewBare = makeFlatView(chain.flatBackend);
+        writeRebornCoreFields(viewBare);
+        auto outputBare = bcos::task::syncWait(
+            buildAndCollect(chain.storage, chain.stateRoot, viewBare, /*l2Mode=*/false));
+        MPTReadView<NodeStorage> readView(chain.storage, outputBare.stateRoot);
         auto reborn = bcos::task::syncWait(readView.readAccount(addrA));
         BOOST_REQUIRE(reborn.has_value());
         BOOST_CHECK(reborn->storageRoot == emptyRootHash());
@@ -276,23 +305,25 @@ BOOST_AUTO_TEST_CASE(RebornNextBlockWalksFirstTouchWithIndependentStorage)
 
     // Block N+1, variant 2: re-created with one new slot — the storage root is exactly a fresh
     // single-slot trie; nothing leaks over from the pre-destruct slots.
-    auto const newSlot = slotKey(0x30);
-    auto viewSlot = makeFlatView(flatBackend);
-    writeFlatRow(viewSlot, accountFieldKey(addrA, ROW_NONCE), makeEntry("2"));
-    writeFlatRow(viewSlot, accountFieldKey(addrA, ROW_BALANCE), makeEntry("5"));
-    writeFlatRow(viewSlot, accountFieldKey(addrA, ROW_CODE_HASH),
-        makeEntry(std::string_view{
-            reinterpret_cast<char const*>(makeHash(0xCE).data()), bcos::h256::SIZE}));
-    writeFlatRow(viewSlot, accountSlotKey(addrA, newSlot), slotEntry(bcos::bytes{0x99}));
-    auto outputSlot = bcos::task::syncWait(
-        buildAndCollect(storage, outputN.stateRoot, viewSlot, /*l2Mode=*/false));
     {
-        MPTReadView<NodeStorage> readView(storage, outputSlot.stateRoot);
+        AfterDestruct chain;
+        buildUpToDestruct(chain);
+        auto const newSlot = slotKey(0x30);
+        auto viewSlot = makeFlatView(chain.flatBackend);
+        writeRebornCoreFields(viewSlot);
+        writeFlatRow(viewSlot, accountSlotKey(addrA, newSlot), slotEntry(bcos::bytes{0x99}));
+        auto outputSlot = bcos::task::syncWait(
+            buildAndCollect(chain.storage, chain.stateRoot, viewSlot, /*l2Mode=*/false));
+        MPTReadView<NodeStorage> readView(chain.storage, outputSlot.stateRoot);
         auto reborn = bcos::task::syncWait(readView.readAccount(addrA));
         BOOST_REQUIRE(reborn.has_value());
         std::map<bcos::h256, bcos::bytes> const oracle{
             {slotKeyHash(newSlot), encodeStorageValue(bcos::ref(bcos::bytes{0x99}))}};
         BOOST_CHECK(reborn->storageRoot == computeTrieRoot(oracle).root);
+        // The reborn trie's rows are exactly that fresh single-slot trie's — no stale positions
+        // from the destroyed incarnation linger under the owner prefix.
+        BOOST_CHECK(scanTrieNodes(chain.storage, TrieScope::storage(accountKeyHash(addrA))) ==
+                    computeTrieRoot(oracle).newNodes);
     }
 }
 

@@ -72,12 +72,22 @@ using SharedMutableStorage =
 // what lets ADL find the getLedgerConfig tag_invoke stub below (an alias to MemoryStorage
 // would leave every ViewType component in bcos::storage2 and the stub would be invisible
 // to ADL — the generic LedgerMethods.h implementation would win instead).
+///
+/// CONCURRENT is required of a backend (MemoryStorage's multi-source `merge` overload is
+/// `requires withConcurrent`, and mergeBackStorage merges the block's layer plus the prewrite
+/// buffer), but it is pinned to ONE bucket: MemoryStorage's seek positions the iterator with
+/// `lower_bound` inside the CURRENT bucket only (Iterator::seek), so with the default
+/// `hardware_concurrency * 2 + 1` buckets a `range(RANGE_SEEK, key)` would answer from bucket 0
+/// alone. The MPT reverse-history query seeks, and this type stands in for the production
+/// committed backend (RocksDB, one ordered key space) — a per-bucket seek would make these tests
+/// disagree with production for a reason that has nothing to do with what they test.
 struct SharedBackendStorage
   : storage2::memory_storage::MemoryStorage<executor_v1::StateKey, executor_v1::StateValue,
         storage2::memory_storage::Attribute(
             storage2::memory_storage::ORDERED | storage2::memory_storage::CONCURRENT),
         std::hash<executor_v1::StateKey>>
 {
+    SharedBackendStorage() : MemoryStorage(/*buckets*/ 1) {}
 };
 using SharedCheckpointBackend = storage2::TrivialCheckpointStorage<executor_v1::StateKey,
     executor_v1::StateValue, SharedBackendStorage>;
@@ -142,8 +152,8 @@ struct SharedMockExecutor
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& /*blockHeader*/,
         protocol::Transaction const& /*transaction*/, int32_t /*contextID*/,
-        ledger::LedgerConfig const& /*ledgerConfig*/,
-        bool /*call*/) -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
+        ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
+        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
     {
         co_return {};
     }

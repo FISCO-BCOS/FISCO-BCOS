@@ -56,7 +56,7 @@ namespace
 {
 // Unique `etv*` names avoid an anonymous-namespace ODR clash with the other mpt test files
 // under UNITY_BUILD (same convention as ComputeTrieRootTest's `ctr*`).
-using EtvNodeStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes>;
+using EtvNodeStorage = bcos::ledger::mpt::test::NodeMemoryStorage;
 
 // "ETH" in ASCII — an arbitrary fixed seed so the shuffled-order replay is reproducible.
 constexpr uint32_t c_etvShuffleSeed = 0x455448;

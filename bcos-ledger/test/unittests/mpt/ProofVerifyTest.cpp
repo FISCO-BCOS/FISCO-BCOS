@@ -43,7 +43,7 @@ namespace bcos::ledger::mpt::test
 
 // Helper names carry a Verify prefix/suffix: the unity build can merge this file and
 // ProofGenerateTest.cpp into one TU, fusing their unnamed namespaces.
-using VerifyMemStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes>;
+using VerifyMemStorage = bcos::ledger::mpt::test::NodeMemoryStorage;
 
 namespace
 {
@@ -72,7 +72,9 @@ ProofSetup makeAccountWithSlots(std::vector<std::pair<bcos::h256, bcos::bytes>> 
         {
             slotEntries[slotKeyHash(slot)] = value;
         }
-        account.storageRoot = seedTrieFlushed(storage, emptyRootHash(), slotEntries).root;
+        account.storageRoot = seedTrieFlushed(
+            storage, emptyRootHash(), slotEntries, TrieScope::storage(accountKeyHash(addr)))
+                                  .root;
     }
     auto const stateRoot = seedStateTrieFlushed(storage, {{addr, account}});
 

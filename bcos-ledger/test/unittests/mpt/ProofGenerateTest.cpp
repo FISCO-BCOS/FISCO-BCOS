@@ -39,7 +39,7 @@
 namespace bcos::ledger::mpt::test
 {
 
-using MemStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes>;
+using MemStorage = bcos::ledger::mpt::test::NodeMemoryStorage;
 
 namespace
 {
@@ -253,13 +253,14 @@ BOOST_AUTO_TEST_CASE(StorageSlotProofsIncludingExclusion)
     bcos::bytes const valueA{0x2a};              // RLP(42): single byte < 0x80
     bcos::bytes const valueB{0x82, 0x13, 0x37};  // RLP(0x1337): 2-byte string
 
-    // Build the storage trie into the SAME node storage; its root becomes account.storageRoot.
-    auto const storageRoot = seedTrieFlushed(storage, emptyRootHash(),
-        {{slotKeyHash(slotA), valueA},
-            {slotKeyHash(slotB),
-                valueB}}).root;
-
+    // Build the storage trie into the SAME node storage, under its owner's scope; its root
+    // becomes account.storageRoot.
     bcos::Address const addr = makeAddress(0xab);
+    auto const storageRoot = seedTrieFlushed(storage, emptyRootHash(),
+        {{slotKeyHash(slotA), valueA}, {slotKeyHash(slotB), valueB}},
+        TrieScope::storage(accountKeyHash(addr)))
+                                 .root;
+
     Account account;
     account.nonce = 5;
     account.balance = 777;
@@ -349,8 +350,9 @@ BOOST_AUTO_TEST_CASE(DeterministicOutput)
     bcos::h256 const slot = makeHash(0x01);
     bcos::bytes const slotValue{0x2a};
 
-    auto const storageRoot =
-        seedTrieFlushed(storage, emptyRootHash(), {{slotKeyHash(slot), slotValue}}).root;
+    auto const storageRoot = seedTrieFlushed(storage, emptyRootHash(),
+        {{slotKeyHash(slot), slotValue}}, TrieScope::storage(accountKeyHash(makeAddress(3))))
+                                 .root;
 
     std::vector<std::pair<bcos::Address, Account>> accounts;
     for (uint8_t i = 1; i <= 20; ++i)

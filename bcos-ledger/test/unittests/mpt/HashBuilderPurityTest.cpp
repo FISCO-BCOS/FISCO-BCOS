@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(SameInputProducesByteIdenticalRootOver1000Runs)
     auto const entries = purityKvs(100, /*seed=*/0x9176AB);
 
     bcos::h256 referenceRootHash{};
-    std::unordered_map<bcos::h256, bcos::bytes> referenceNodes;
+    std::map<PathKey, bcos::bytes> referenceNodes;
 
     for (uint32_t run = 0; run < 1000; ++run)
     {
@@ -97,23 +97,24 @@ BOOST_AUTO_TEST_CASE(SameInputProducesByteIdenticalRootOver1000Runs)
         {
             changes[key] = value;
         }
-        bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
-        auto result = bcos::task::syncWait(commitTrie(storage, emptyRootHash(), changes));
+        bcos::ledger::mpt::test::NodeMemoryStorage storage;
+        auto result = bcos::task::syncWait(
+            commitTrie(storage, TrieScope::account(), emptyRootHash(), changes));
 
         if (run == 0)
         {
             referenceRootHash = result.root;
-            referenceNodes = std::move(result.newNodes);
+            referenceNodes = std::move(result.upserts);
         }
         else
         {
-            // unordered_map operator== is content/order-independent: this is a byte-identical
-            // check of the entire produced node set, not just the root.
+            // map operator== is content-based: this is a byte-identical check of the entire
+            // produced row set — every position and every node encoding — not just the root.
             BOOST_REQUIRE_MESSAGE(result.root == referenceRootHash,
                 "root drift at run " << run << " got=" << result.root.hex()
                                      << " expected=" << referenceRootHash.hex());
             BOOST_REQUIRE_MESSAGE(
-                result.newNodes == referenceNodes, "node-set drift at run " << run);
+                result.upserts == referenceNodes, "node-set drift at run " << run);
         }
     }
 }
@@ -123,11 +124,11 @@ BOOST_AUTO_TEST_CASE(EmptyInputDeterministicallyEmptyRoot)
 {
     for (int run = 0; run < 8; ++run)
     {
-        bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
-        auto result = bcos::task::syncWait(commitTrie(
-            storage, emptyRootHash(), std::map<bcos::h256, std::optional<bcos::bytes>>{}));
+        bcos::ledger::mpt::test::NodeMemoryStorage storage;
+        auto result = bcos::task::syncWait(commitTrie(storage, TrieScope::account(),
+            emptyRootHash(), std::map<bcos::h256, std::optional<bcos::bytes>>{}));
         BOOST_CHECK_EQUAL(result.root, emptyRootHash());
-        BOOST_CHECK(result.newNodes.empty());
+        BOOST_CHECK(result.upserts.empty());
     }
 }
 

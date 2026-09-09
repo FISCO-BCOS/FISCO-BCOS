@@ -73,6 +73,42 @@ BOOST_AUTO_TEST_CASE(storageConfigDefaultsAndTikv)
 }
 
 
+/// [storage] mpt_history_state_blocks / mpt_history_proof_blocks: node-local MPT reverse-history
+/// retention. Both default to 128 (pathdb spec §10.3: a first deployment keeps H_state ==
+/// H_proof), both accept 0 as "not retained", the two are independent, and a negative value is a
+/// misconfiguration rather than a silently clamped one.
+BOOST_AUTO_TEST_CASE(mptHistoryRetentionDepths)
+{
+    LoaderProbe defaults;
+    defaults.loadStorageConfig({});
+    BOOST_CHECK_EQUAL(defaults.mptHistoryStateBlocks(), 128);
+    BOOST_CHECK_EQUAL(defaults.mptHistoryProofBlocks(), 128);
+    BOOST_CHECK_EQUAL(
+        defaults.mptHistoryStateBlocks(), bcos::tool::NodeConfig::DEFAULT_MPT_HISTORY_BLOCKS);
+
+    LoaderProbe split;  // the two depths are independent (an archive node raises only H_state)
+    split.loadStorageConfig(
+        fromIni("[storage]\nmpt_history_state_blocks=4096\nmpt_history_proof_blocks=0\n"));
+    BOOST_CHECK_EQUAL(split.mptHistoryStateBlocks(), 4096);
+    BOOST_CHECK_EQUAL(split.mptHistoryProofBlocks(), 0);
+
+    LoaderProbe disabled;  // 0 on both = retain nothing
+    disabled.loadStorageConfig(
+        fromIni("[storage]\nmpt_history_state_blocks=0\nmpt_history_proof_blocks=0\n"));
+    BOOST_CHECK_EQUAL(disabled.mptHistoryStateBlocks(), 0);
+    BOOST_CHECK_EQUAL(disabled.mptHistoryProofBlocks(), 0);
+
+    LoaderProbe negativeState;
+    BOOST_CHECK_THROW(
+        negativeState.loadStorageConfig(fromIni("[storage]\nmpt_history_state_blocks=-1\n")),
+        bcos::tool::InvalidConfig);
+    LoaderProbe negativeProof;
+    BOOST_CHECK_THROW(
+        negativeProof.loadStorageConfig(fromIni("[storage]\nmpt_history_proof_blocks=-1\n")),
+        bcos::tool::InvalidConfig);
+}
+
+
 BOOST_AUTO_TEST_CASE(failOverConfigDisabledAndError)
 {
     LoaderProbe a;  // disabled → early return

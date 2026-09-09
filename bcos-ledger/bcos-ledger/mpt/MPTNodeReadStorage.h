@@ -15,16 +15,16 @@
  *
  * @file MPTNodeReadStorage.h
  * @brief MPTNodeReadStorage — the eth_getProof node reader (M8.3 wiring): a read-only
- *        (h256 -> raw RLP bytes) facade over the ordinary "/mpt/" state rows of a committed
- *        state storage, plus makeMPTNodeReader() producing the owning AnyStorage handle
- *        NodeService::setMPTNodeReader expects
+ *        (PathKey -> raw RLP bytes) facade over the ordinary path-addressed node rows of a
+ *        committed state storage, plus makeMPTNodeReader() producing the owning AnyStorage
+ *        handle NodeService::setMPTNodeReader expects
  */
 #pragma once
 
+#include "PathKey.h"
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/Storage.h>
-#include <bcos-storage/KeyPrefixes.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -36,7 +36,7 @@
 #include <utility>
 #include <vector>
 
-namespace bcos::storage2
+namespace bcos::ledger::mpt
 {
 
 /// The read-side sibling of the scheduler's ViewNodeStorage (MPTNodeStorage.h): where that
@@ -45,8 +45,8 @@ namespace bcos::storage2
 /// plane every committed block's node rows were merged into — because eth_getProof answers
 /// for committed headers only and must never see an in-flight block's rows.
 ///
-/// Reads translate h256 -> StateKey{"/mpt/", digest} (KeyPrefixes.h::mptNodeStateKey) and
-/// unwrap the Entry value to its raw bytes; a missing row is std::nullopt, the miss shape
+/// Reads translate a PathKey -> the node's state row (ledger::mpt::pathNodeStateKey) and unwrap
+/// the Entry value to its raw bytes; a missing row is std::nullopt, the miss shape
 /// generateProof's proofWalk maps to its rootMissing / BlockNotCommitted handling.
 ///
 /// AnyStorage's type-erasure model instantiates the FULL storage surface (its StorageModel
@@ -57,14 +57,14 @@ template <class Storage>
 class MPTNodeReadStorage
 {
 public:
-    using Key = bcos::h256;
+    using Key = PathKey;
     using Value = bcos::bytes;
 
     explicit MPTNodeReadStorage(Storage& storage) : m_storage(std::addressof(storage)) {}
 
-    task::Task<std::optional<bcos::bytes>> readOne(bcos::h256 key)
+    bcos::task::Task<std::optional<bcos::bytes>> readOne(Key key)
     {
-        auto entry = co_await storage2::readOne(*m_storage, storage2::mptNodeStateKey(key));
+        auto entry = co_await bcos::storage2::readOne(*m_storage, pathNodeStateKey(key));
         if (!entry)
         {
             co_return std::nullopt;
@@ -73,12 +73,13 @@ public:
         co_return bcos::bytes(raw.begin(), raw.end());
     }
 
-    task::Task<std::vector<std::optional<bcos::bytes>>> readSome(::ranges::input_range auto keys)
+    bcos::task::Task<std::vector<std::optional<bcos::bytes>>> readSome(
+        ::ranges::input_range auto keys)
     {
         // One batched read: a proof walk resolves whole node paths at a time.
-        auto entries = co_await storage2::readSome(
-            *m_storage, keys | ::ranges::views::transform(
-                                   [](auto const& key) { return storage2::mptNodeStateKey(key); }));
+        auto entries = co_await bcos::storage2::readSome(*m_storage,
+            keys |
+                ::ranges::views::transform([](auto const& key) { return pathNodeStateKey(key); }));
 
         std::vector<std::optional<bcos::bytes>> values;
         values.reserve(entries.size());
@@ -102,34 +103,36 @@ public:
     /// every other storage error.
     struct NoIterator
     {
-        task::Task<std::optional<std::pair<bcos::h256, StorageValueType<bcos::bytes>>>> next()
+        bcos::task::Task<
+            std::optional<std::pair<PathKey, bcos::storage2::StorageValueType<bcos::bytes>>>>
+        next()
         {
             throwReadOnly();
             co_return std::nullopt;
         }
     };
 
-    task::Task<void> writeOne(bcos::h256 /*key*/, bcos::bytes /*value*/)
+    bcos::task::Task<void> writeOne(Key /*key*/, bcos::bytes /*value*/)
     {
         throwReadOnly();
         co_return;
     }
-    task::Task<void> writeSome(::ranges::input_range auto /*keyValues*/)
+    bcos::task::Task<void> writeSome(::ranges::input_range auto /*keyValues*/)
     {
         throwReadOnly();
         co_return;
     }
-    task::Task<void> removeOne(bcos::h256 /*key*/, auto&&... /*tags*/)
+    bcos::task::Task<void> removeOne(Key /*key*/, auto&&... /*tags*/)
     {
         throwReadOnly();
         co_return;
     }
-    task::Task<void> removeSome(::ranges::input_range auto /*keys*/, auto&&... /*tags*/)
+    bcos::task::Task<void> removeSome(::ranges::input_range auto /*keys*/, auto&&... /*tags*/)
     {
         throwReadOnly();
         co_return;
     }
-    task::Task<NoIterator> range(auto&&... /*args*/)
+    bcos::task::Task<NoIterator> range(auto&&... /*args*/)
     {
         throwReadOnly();
         co_return NoIterator{};
@@ -145,18 +148,18 @@ private:
     Storage* m_storage;
 };
 
-/// Build the handle NodeService::setMPTNodeReader takes: an AnyStorage<h256, bytes> that
+/// Build the handle NodeService::setMPTNodeReader takes: an AnyStorage<PathKey, bytes> that
 /// OWNS its MPTNodeReadStorage adapter via an aliasing shared_ptr, so callers manage exactly
 /// one lifetime. The only borrowed piece is @p storage itself (production: the state
 /// backend, owned by the Initializer), which must outlive the returned handle.
 template <class Storage>
-[[nodiscard]] std::shared_ptr<AnyStorage<bcos::h256, bcos::bytes>> makeMPTNodeReader(
+[[nodiscard]] std::shared_ptr<bcos::storage2::AnyStorage<PathKey, bcos::bytes>> makeMPTNodeReader(
     Storage& storage)
 {
     struct OwningReader
     {
         MPTNodeReadStorage<Storage> adapter;
-        std::optional<AnyStorage<bcos::h256, bcos::bytes>> erased;
+        std::optional<bcos::storage2::AnyStorage<PathKey, bcos::bytes>> erased;
 
         explicit OwningReader(Storage& storage) : adapter(storage) { erased.emplace(adapter); }
     };
@@ -164,4 +167,4 @@ template <class Storage>
     return {owner, std::addressof(*owner->erased)};
 }
 
-}  // namespace bcos::storage2
+}  // namespace bcos::ledger::mpt

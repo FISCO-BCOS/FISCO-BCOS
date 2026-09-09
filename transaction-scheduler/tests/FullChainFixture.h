@@ -54,9 +54,10 @@
 #include "bcos-ledger/mpt/Classify.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-ledger/mpt/StorageValueCodec.h"
+#include "bcos-ledger/mpt/history/HistoryRead.h"
+#include "bcos-ledger/mpt/history/MPTHistory.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-storage/CheckpointRocksDBStorage.h"
-#include "bcos-storage/KeyPrefixes.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-storage/StateKVResolver.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
@@ -226,6 +227,7 @@ public:
             *m_ledger, *m_txpool, *m_transactionSubmitResultFactory, *m_hashImpl)
     {
         m_schedulerImpl.m_plan = &m_plan;
+        useHistoryDepths(0, 0);
         m_baselineScheduler.registerBlockNumberNotifier([](protocol::BlockNumber) {});
         m_baselineScheduler.registerTransactionNotifier(
             [](protocol::BlockNumber, protocol::TransactionSubmitResultsPtr,
@@ -358,11 +360,11 @@ public:
         return block->blockHeader();
     }
 
-    /// One trie-node row from the RocksDB backend under its ordinary "/mpt/" StateKey.
-    std::optional<bytes> backendNode(h256 const& hash)
+    /// One trie-node row from the RocksDB backend under its ordinary path-addressed StateKey.
+    std::optional<bytes> backendNode(ledger::mpt::PathKey const& position)
     {
         auto entry = task::syncWait(storage2::readOne(
-            m_multiLayerStorage.latestBackend(), storage2::mptNodeStateKey(hash)));
+            m_multiLayerStorage.latestBackend(), ledger::mpt::pathNodeStateKey(position)));
         if (!entry)
         {
             return std::nullopt;
@@ -371,7 +373,7 @@ public:
         return bytes(raw.begin(), raw.end());
     }
 
-    /// Count of committed "/mpt/" rows in the RocksDB backend.
+    /// Count of committed trie-node rows in the RocksDB backend (both node tables).
     size_t backendNodeCount()
     {
         return task::syncWait([this]() -> task::Task<size_t> {
@@ -380,7 +382,9 @@ public:
             while (auto keyValue = co_await iterator.next())
             {
                 auto&& [key, value] = *keyValue;
-                if (executor_v1::StateKeyView{key}.m_table == storage2::kMPTTable)
+                if (auto const table = executor_v1::StateKeyView{key}.m_table;
+                    table == ledger::mpt::kMPTAccountTable ||
+                    table == ledger::mpt::kMPTStorageTable)
                 {
                     ++count;
                 }
@@ -428,10 +432,11 @@ public:
         {
             accountChanges[mpt::accountKeyHash(address)] = account.encode();
         }
-        storage2::memory_storage::MemoryStorage<h256, bytes, storage2::memory_storage::ORDERED>
+        storage2::memory_storage::MemoryStorage<mpt::PathKey, bytes,
+            storage2::memory_storage::ORDERED>
             scratch;
-        auto merged =
-            task::syncWait(mpt::commitTrie(scratch, mpt::emptyRootHash(), accountChanges));
+        auto merged = task::syncWait(mpt::commitTrie(
+            scratch, mpt::TrieScope::account(), mpt::emptyRootHash(), accountChanges));
         return merged.root;
     }
 
@@ -445,9 +450,12 @@ public:
             changes[mpt::slotKeyHash(slot)] =
                 mpt::encodeStorageValue(bytesConstRef(rawValue.data(), rawValue.size()));
         }
-        storage2::memory_storage::MemoryStorage<h256, bytes, storage2::memory_storage::ORDERED>
+        // The oracle only needs the ROOT, so any scope names a fresh, empty scratch trie.
+        storage2::memory_storage::MemoryStorage<mpt::PathKey, bytes,
+            storage2::memory_storage::ORDERED>
             scratch;
-        auto merged = task::syncWait(mpt::commitTrie(scratch, mpt::emptyRootHash(), changes));
+        auto merged = task::syncWait(
+            mpt::commitTrie(scratch, mpt::TrieScope::account(), mpt::emptyRootHash(), changes));
         return merged.root;
     }
 
@@ -456,6 +464,19 @@ public:
         Address address{};
         address.data()[0] = firstByte;
         return address;
+    }
+
+    /// Give the node a fresh MPTHistory at these retention depths, rebuilt from whatever is
+    /// already on disk — the shape Initializer::init has at startup, and the only way depths ever
+    /// change in production (they are read once, at wiring time). Production injects them from
+    /// nodeConfig [storage]; the default here is 0/0, so a fixture that wants history must ask.
+    void useHistoryDepths(protocol::BlockNumber state, protocol::BlockNumber proof)
+    {
+        m_mptHistory = std::make_shared<ledger::mpt::history::MPTHistory>(
+            ledger::mpt::history::HistoryDepths{.state = state, .proof = proof},
+            ledger::mpt::history::makeHistoryReader(m_multiLayerStorage.latestBackend()));
+        task::syncWait(m_mptHistory->rebuild(m_multiLayerStorage.latestBackend()));
+        m_baselineScheduler.setMPTHistory(m_mptHistory);
     }
 
     TmpDirGuard m_tmpdir;
@@ -477,6 +498,10 @@ public:
     scheduler_v1::BaselineScheduler<FCMultiLayerStorage, FCExecutor, FCWritingScheduler,
         bcos::ledger::Ledger>
         m_baselineScheduler;
+    /// The node's ONE history object — the scheduler publishes into it and the RPC harnesses read
+    /// it. Declared after the scheduler so it is destroyed first; the scheduler holds its own
+    /// shared_ptr, and both borrow the backend declared above them.
+    std::shared_ptr<ledger::mpt::history::MPTHistory> m_mptHistory;
 };
 
 }  // namespace bcos::test::fullchain

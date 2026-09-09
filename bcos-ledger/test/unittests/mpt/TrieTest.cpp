@@ -58,13 +58,13 @@ bcos::h256 trieKey(bcos::byte fill, bcos::byte tail, size_t tailLen)
 // A key that was inserted reads back its exact value through a freshly built root.
 BOOST_AUTO_TEST_CASE(GetExistentKeyReturnsValue)
 {
-    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+    bcos::ledger::mpt::test::NodeMemoryStorage storage;
 
     auto const key = makeHash(0xab);
     bcos::bytes const value{0x42};
     auto const root = seedTrieFlushed(storage, emptyRootHash(), {{key, value}}).root;
 
-    Trie trie(storage, root);
+    Trie trie(storage, TrieScope::account(), root);
     auto got = bcos::task::syncWait(trie.get(key));
     BOOST_REQUIRE(got.has_value());
     BOOST_CHECK(*got == value);
@@ -73,8 +73,8 @@ BOOST_AUTO_TEST_CASE(GetExistentKeyReturnsValue)
 // An empty trie returns nullopt for any key (no node fetch happens at all).
 BOOST_AUTO_TEST_CASE(GetNonexistentKeyReturnsNullopt)
 {
-    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
-    Trie trie(storage, emptyRootHash());
+    bcos::ledger::mpt::test::NodeMemoryStorage storage;
+    Trie trie(storage, TrieScope::account(), emptyRootHash());
 
     BOOST_CHECK(!bcos::task::syncWait(trie.get(makeHash(0x01))).has_value());
     BOOST_CHECK(!bcos::task::syncWait(trie.get(makeHash(0xff))).has_value());
@@ -108,11 +108,11 @@ BOOST_AUTO_TEST_CASE(MultiKeyEachKeyResolves)
     kvs.emplace_back(makeHash(0x30), bcos::bytes{0xc0});
     kvs.emplace_back(makeHash(0x4f), bcos::bytes{0xc1});
 
-    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+    bcos::ledger::mpt::test::NodeMemoryStorage storage;
     std::map<bcos::h256, bcos::bytes> entries(kvs.begin(), kvs.end());
     auto const root = seedTrieFlushed(storage, emptyRootHash(), entries).root;
 
-    Trie trie(storage, root);
+    Trie trie(storage, TrieScope::account(), root);
     for (auto const& [key, value] : kvs)
     {
         auto got = bcos::task::syncWait(trie.get(key));

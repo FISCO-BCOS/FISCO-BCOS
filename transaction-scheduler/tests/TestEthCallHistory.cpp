@@ -15,16 +15,23 @@
  *
  * @file TestEthCallHistory.cpp
  * @brief Historical eth_call through the scheduler (M13.2): HistoricalStateBackend resolves
- *        flat-state reads from a past block's MPT root; the View stacked on it gives the
- *        call read-your-writes; BaselineScheduler::callAtBlock wires blockNumber -> header
+ *        flat-state reads from a block's MPT root; the View stacked on it gives the call
+ *        read-your-writes; BaselineScheduler::callAtBlock wires blockNumber -> header
  *        stateRoot -> historical stack -> executor, with explicit refusals for beyond-latest
  *        blocks and non-scenario-B chains; getExecutable bypasses the global executable
  *        cache for historical storages.
+ *
+ *        Node rows are path-addressed, so a position holds ONE version and the trie itself can
+ *        only answer for the tip. An older height is served from the STATE reverse history
+ *        instead — per key, from the change that first overwrote it (pathdb spec §10.1, §11) —
+ *        which is what the historical cases below exercise. Cases whose subject IS the stack
+ *        (layering, refusals, cache bypass) stay pinned at the tip.
  */
 
 #include "SharedBaselineSchedulerMock.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-framework/ledger/Account.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -33,6 +40,9 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/Constants.h"
+#include "bcos-ledger/mpt/history/HistoryRead.h"
+#include "bcos-ledger/mpt/history/MPTHistory.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
@@ -69,8 +79,15 @@ using HCBackendStorage = bcos::test::sharedmock::SharedBackendStorage;
 using HCCheckpointBackend = bcos::test::sharedmock::SharedCheckpointBackend;
 using HCMultiLayerStorage = bcos::test::sharedmock::SharedMultiLayerStorage;
 using HCViewType = HCMultiLayerStorage::ViewType;
-using HCHistoricalBackend = HistoricalStateBackend<HCViewType>;
+using HCHistoricalBackend = HistoricalStateBackend<HCViewType, HCBackendStorage>;
 using HCHistoricalView = View<HCMutableStorage, void, HCHistoricalBackend>;
+
+/// The retention depth these tests run with: wider than the three-block chain, so every height
+/// is inside the window and the window guard never fires by accident. The out-of-window case
+/// gets its own, deliberately narrow, depth.
+constexpr protocol::BlockNumber HC_HISTORY_DEPTH = 128;
+/// The committed tip runCanonicalChain leaves behind.
+constexpr protocol::BlockNumber HC_TIP = 3;
 
 /// The Features the shared getLedgerConfig stub hands out — set per test.
 auto& g_hcFeatures = bcos::test::sharedmock::g_stubFeatures;
@@ -170,6 +187,14 @@ public:
         ledger::Features features;
         features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
         g_hcFeatures = features;
+        // Both reverse histories retained: production injects these from nodeConfig [storage];
+        // the scheduler's own default is 0 = not retained, so a test that wants history has to
+        // say so.
+        mptHistory = std::make_shared<ledger::mpt::history::MPTHistory>(
+            ledger::mpt::history::HistoryDepths{
+                .state = HC_HISTORY_DEPTH, .proof = HC_HISTORY_DEPTH},
+            ledger::mpt::history::makeHistoryReader(backendStorage));
+        baselineScheduler.setMPTHistory(mptHistory);
         mockScheduler.m_plan = &plan;
         probeExecutor.m_mode = bcos::test::sharedmock::SharedMockExecutor::Mode::ReadSlot;
         probeExecutor.m_probeAddress = hcEvmcAddress();
@@ -345,6 +370,9 @@ public:
     // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
     bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
     bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
+    /// The node's ONE history object, shared with the scheduler that publishes into it. Declared
+    /// after the scheduler so it is destroyed first; the scheduler holds its own shared_ptr.
+    std::shared_ptr<ledger::mpt::history::MPTHistory> mptHistory;
 };
 
 // The trait getExecutable consults: the marker propagates through View and Rollbackable,
@@ -358,82 +386,118 @@ static_assert(!hostcontext::isHistoricalStorage<HCMutableStorage>());
 
 BOOST_FIXTURE_TEST_SUITE(TestEthCallHistory, EthCallHistoryFixture)
 
-// Storage-level: HistoricalStateBackend answers account rows from the MPT at the pinned
-// root — the block-1 root serves block-1 values after later blocks overwrote them — and
-// absent accounts/slots read as absent. Pass-through rows (the header table) stay readable.
+// Storage-level: HistoricalStateBackend answers account rows at the pinned height — the block-3
+// values at the tip, the block-1 values at block 1 — and absent accounts/slots read as absent.
+// Pass-through rows (the header table) stay readable at either height.
+//
+// The block-1 answers are the point: slot and balance were both overwritten later, so they come
+// from the reverse history's recorded pre-images, while nonce was written at block 1 and never
+// touched again, so it comes from the current row (HistoryUseCurrent). Both paths must produce
+// block 1's state, not today's.
 BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
 {
     auto headers = runCanonicalChain();
     auto const table = ledger::mpt::accountTableName(hcAddress());
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend backendAt1(latestView, headers[0]->stateRoot());
+    HCHistoricalBackend backendAtTip(
+        latestView, mptHistory->state(), backendStorage, HC_TIP, HC_TIP, HC_HISTORY_DEPTH);
 
-    // Slot: the block-1 value, not the block-2 overwrite.
+    // At the tip root every row kind resolves, in the exact flat representations EVMAccount
+    // reads them back in.
     auto slotEntry =
-        task::syncWait(storage2::readOne(backendAt1, StateKeyView{table, hcSlotRowKey()}));
+        task::syncWait(storage2::readOne(backendAtTip, StateKeyView{table, hcSlotRowKey()}));
     BOOST_REQUIRE(slotEntry);
-    BOOST_CHECK(slotEntry->get() == hcRawValue(0x01));
+    BOOST_CHECK(slotEntry->get() == hcRawValue(0x02));
 
-    // Balance and nonce in the exact flat representations EVMAccount reads.
     auto balanceEntry =
-        task::syncWait(storage2::readOne(backendAt1, StateKeyView{table, "balance"}));
+        task::syncWait(storage2::readOne(backendAtTip, StateKeyView{table, "balance"}));
     BOOST_REQUIRE(balanceEntry);
-    BOOST_CHECK_EQUAL(balanceEntry->get(), "1000");
-    auto nonceEntry = task::syncWait(storage2::readOne(backendAt1, StateKeyView{table, "nonce"}));
+    BOOST_CHECK_EQUAL(balanceEntry->get(), "2000");
+    auto nonceEntry = task::syncWait(storage2::readOne(backendAtTip, StateKeyView{table, "nonce"}));
     BOOST_REQUIRE(nonceEntry);
     BOOST_CHECK_EQUAL(nonceEntry->get(), "5");
 
     // SYS_TABLES row of the account table: leaf presence.
     auto existsEntry =
-        task::syncWait(storage2::readOne(backendAt1, StateKeyView{ledger::SYS_TABLES, table}));
+        task::syncWait(storage2::readOne(backendAtTip, StateKeyView{ledger::SYS_TABLES, table}));
     BOOST_CHECK(existsEntry.has_value());
-
-    // A root later in the chain serves the overwrite and the balance bump.
-    HCHistoricalBackend backendAt3(latestView, headers[2]->stateRoot());
-    auto slotAt3 =
-        task::syncWait(storage2::readOne(backendAt3, StateKeyView{table, hcSlotRowKey()}));
-    BOOST_REQUIRE(slotAt3);
-    BOOST_CHECK(slotAt3->get() == hcRawValue(0x02));
-    auto balanceAt3 = task::syncWait(storage2::readOne(backendAt3, StateKeyView{table, "balance"}));
-    BOOST_REQUIRE(balanceAt3);
-    BOOST_CHECK_EQUAL(balanceAt3->get(), "2000");
 
     // An account with no leaf at the root reads as absent, all four row kinds.
     Address stranger{};
     stranger.data()[0] = 0xBB;
     auto strangerTable = ledger::mpt::accountTableName(stranger);
     BOOST_CHECK(
+        !task::syncWait(storage2::readOne(backendAtTip, StateKeyView{strangerTable, "balance"})));
+    BOOST_CHECK(!task::syncWait(
+        storage2::readOne(backendAtTip, StateKeyView{strangerTable, hcSlotRowKey()})));
+    BOOST_CHECK(!task::syncWait(
+        storage2::readOne(backendAtTip, StateKeyView{ledger::SYS_TABLES, strangerTable})));
+
+    // Pass-through: a header row read through the historical backend is served verbatim
+    // from the latest view — that plane is not path-addressed and is unaffected.
+    auto headerRow = task::syncWait(
+        storage2::readOne(backendAtTip, StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, "2"}));
+    BOOST_CHECK(headerRow.has_value());
+
+    // Block 1: the height at which the slot was 0x01 and the balance 1000. Both rows changed
+    // later, so these answers come from the recorded pre-images and differ from the tip's.
+    HCHistoricalBackend backendAt1(
+        latestView, mptHistory->state(), backendStorage, 1, HC_TIP, HC_HISTORY_DEPTH);
+    auto slotAt1 =
+        task::syncWait(storage2::readOne(backendAt1, StateKeyView{table, hcSlotRowKey()}));
+    BOOST_REQUIRE(slotAt1);
+    BOOST_CHECK(slotAt1->get() == hcRawValue(0x01));
+    auto balanceAt1 = task::syncWait(storage2::readOne(backendAt1, StateKeyView{table, "balance"}));
+    BOOST_REQUIRE(balanceAt1);
+    BOOST_CHECK_EQUAL(balanceAt1->get(), "1000");
+    // Written at block 1 and never again: no pre-image exists after block 1, so the CURRENT row
+    // is the block-1 value — the HistoryUseCurrent arm, and it must agree with the tip.
+    auto nonceAt1 = task::syncWait(storage2::readOne(backendAt1, StateKeyView{table, "nonce"}));
+    BOOST_REQUIRE(nonceAt1);
+    BOOST_CHECK_EQUAL(nonceAt1->get(), "5");
+    // The account existed at block 1, the stranger did not — every row kind of an account with
+    // nothing recorded at that height reads absent, not "today's value".
+    BOOST_CHECK(
+        task::syncWait(storage2::readOne(backendAt1, StateKeyView{ledger::SYS_TABLES, table})));
+    BOOST_CHECK(
         !task::syncWait(storage2::readOne(backendAt1, StateKeyView{strangerTable, "balance"})));
     BOOST_CHECK(!task::syncWait(
         storage2::readOne(backendAt1, StateKeyView{strangerTable, hcSlotRowKey()})));
     BOOST_CHECK(!task::syncWait(
         storage2::readOne(backendAt1, StateKeyView{ledger::SYS_TABLES, strangerTable})));
+    // The pass-through plane answers at the old height too.
+    BOOST_CHECK(task::syncWait(
+        storage2::readOne(backendAt1, StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, "2"})));
 
-    // Pass-through: a header row read through the historical backend is served verbatim
-    // from the latest view.
-    auto headerRow = task::syncWait(
-        storage2::readOne(backendAt1, StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, "2"}));
-    BOOST_CHECK(headerRow.has_value());
+    // Out of window: a depth of 1 retains only block 3, so block 1 is refused rather than
+    // answered from a plausible-looking current value (spec B.3, G5).
+    HCHistoricalBackend backendOutOfWindow(
+        latestView, mptHistory->state(), backendStorage, 1, HC_TIP, /*depth*/ 1);
+    BOOST_CHECK_THROW(
+        task::syncWait(storage2::readOne(backendOutOfWindow, StateKeyView{table, "balance"})),
+        ledger::mpt::history::HistoryPruned);
 }
 
 // Stack-level: a mutable layer over the historical backend gives read-your-writes without
-// disturbing the committed state.
+// disturbing the committed state. Pinned at the TIP root — the subject here is the layering,
+// and the tip is the only root a path-addressed node store can serve.
 BOOST_AUTO_TEST_CASE(historicalViewReadYourWrites)
 {
     auto headers = runCanonicalChain();
     auto const table = ledger::mpt::accountTableName(hcAddress());
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend historicalBackend(latestView, headers[0]->stateRoot());
+    HCHistoricalBackend historicalBackend(latestView, mptHistory->state(), backendStorage,
+        headers[2]->number(), HC_TIP, HC_HISTORY_DEPTH);
     HCHistoricalView historicalView(std::addressof(historicalBackend));
     historicalView.newMutable();
 
-    // Miss resolves historically...
+    // Miss resolves through the backend's trie...
     auto before =
         task::syncWait(storage2::readOne(historicalView, StateKeyView{table, hcSlotRowKey()}));
     BOOST_REQUIRE(before);
-    BOOST_CHECK(before->get() == hcRawValue(0x01));
+    BOOST_CHECK(before->get() == hcRawValue(0x02));
 
     // ...a write lands in the mutable layer and reads back...
     storage::Entry updated;
@@ -449,12 +513,12 @@ BOOST_AUTO_TEST_CASE(historicalViewReadYourWrites)
     auto backendValue =
         task::syncWait(storage2::readOne(historicalBackend, StateKeyView{table, hcSlotRowKey()}));
     BOOST_REQUIRE(backendValue);
-    BOOST_CHECK(backendValue->get() == hcRawValue(0x01));
+    BOOST_CHECK(backendValue->get() == hcRawValue(0x02));
 }
 
-// Scheduler-level: callAtBlock(N) executes against block N's state — each height serves its
-// own slot value, the executor sees block N's header, and the latest heights keep working
-// through both entry points.
+// Scheduler-level: callAtBlock wires blockNumber -> historical stack -> executor. Each height
+// answers with the value the probed slot held THERE — the receipt output IS the slot value, so
+// a wrong (latest-state) read changes the bytes, not just a status code.
 BOOST_AUTO_TEST_CASE(callAtBlockServesEachHeight)
 {
     runCanonicalChain();
@@ -467,6 +531,7 @@ BOOST_AUTO_TEST_CASE(callAtBlockServesEachHeight)
 
     auto [error2, receipt2] = callAt(2);
     BOOST_REQUIRE_MESSAGE(!error2, (error2 ? error2->errorMessage() : std::string{}));
+    BOOST_REQUIRE(receipt2);
     BOOST_CHECK(outputOf(receipt2) == toBytes(hcEvmcValue(0x02)));
     BOOST_CHECK_EQUAL(probeExecutor.m_lastExecutedHeaderNumber, 2);
 
@@ -492,29 +557,48 @@ BOOST_AUTO_TEST_CASE(callAtBlockServesEachHeight)
     BOOST_CHECK(outputOf(latestReceipt) == toBytes(hcEvmcValue(0x02)));
 }
 
-// The PR #5324 review blocker, pinned green on the real stack: an SSTORE inside a
-// historical call reads back within that call, leaks into no other call and never reaches
-// the committed state.
+// The PR #5324 review blocker, pinned green on the real stack: an SSTORE inside a call
+// through the HISTORICAL stack reads back within that call, leaks into no other call and never
+// reaches the committed state. Run at the tip root, the only one a path-addressed node store
+// can serve — the property under test is the mutable layer's isolation, not the height.
 BOOST_AUTO_TEST_CASE(writeThenReadInsideHistoricalCall)
 {
-    runCanonicalChain();
+    auto headers = runCanonicalChain();
+    auto const table = ledger::mpt::accountTableName(hcAddress());
 
-    probeExecutor.m_mode = bcos::test::sharedmock::SharedMockExecutor::Mode::WriteThenReadSlot;
-    probeExecutor.m_writeValue = hcEvmcValue(0x99);
-    auto [writeError, writeReceipt] = callAt(1);
-    BOOST_REQUIRE_MESSAGE(!writeError, (writeError ? writeError->errorMessage() : std::string{}));
-    BOOST_CHECK(outputOf(writeReceipt) == toBytes(hcEvmcValue(0x99)));
+    auto runCall = [&](auto&& body) {
+        auto latestView = multiLayerStorage.fork();
+        HCHistoricalBackend historicalBackend(latestView, mptHistory->state(), backendStorage,
+            headers[2]->number(), HC_TIP, HC_HISTORY_DEPTH);
+        HCHistoricalView historicalView(std::addressof(historicalBackend));
+        historicalView.newMutable();
+        body(historicalView);
+    };
 
-    // A fresh call at the same height starts from the committed state again.
-    probeExecutor.m_mode = bcos::test::sharedmock::SharedMockExecutor::Mode::ReadSlot;
-    auto [readError, readReceipt] = callAt(1);
-    BOOST_REQUIRE_MESSAGE(!readError, (readError ? readError->errorMessage() : std::string{}));
-    BOOST_CHECK(outputOf(readReceipt) == toBytes(hcEvmcValue(0x01)));
+    // A write inside the call reads back inside it...
+    runCall([&](auto& view) {
+        storage::Entry updated;
+        updated.set(hcRawValue(0x99));
+        task::syncWait(
+            storage2::writeOne(view, StateKey{table, hcSlotRowKey()}, std::move(updated)));
+        auto readBack =
+            task::syncWait(storage2::readOne(view, StateKeyView{table, hcSlotRowKey()}));
+        BOOST_REQUIRE(readBack);
+        BOOST_CHECK(readBack->get() == hcRawValue(0x99));
+    });
+
+    // ...and a FRESH call at the same root starts from the committed state again.
+    runCall([&](auto& view) {
+        auto readBack =
+            task::syncWait(storage2::readOne(view, StateKeyView{table, hcSlotRowKey()}));
+        BOOST_REQUIRE(readBack);
+        BOOST_CHECK(readBack->get() == hcRawValue(0x02));
+    });
 
     // And the live chain state is untouched.
     auto latestView = multiLayerStorage.fork();
-    auto liveValue = task::syncWait(storage2::readOne(
-        latestView, StateKeyView{ledger::mpt::accountTableName(hcAddress()), hcSlotRowKey()}));
+    auto liveValue =
+        task::syncWait(storage2::readOne(latestView, StateKeyView{table, hcSlotRowKey()}));
     BOOST_REQUIRE(liveValue);
     BOOST_CHECK(liveValue->get() == hcRawValue(0x02));
 }
@@ -580,14 +664,17 @@ BOOST_AUTO_TEST_CASE(executableCacheBypassForHistoricalStorage)
         std::make_shared<hostcontext::Executable>(bytesConstRef{fakeCode.data(), fakeCode.size()});
     task::syncWait(storage2::writeOne(hostcontext::getCacheExecutables(), cachedAddress, poisoned));
 
+    // Pinned at the TIP root: the bypass is decided by the storage TYPE, not by the height,
+    // and the tip is the only root a path-addressed node store can serve.
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend historicalBackend(latestView, headers[0]->stateRoot());
+    HCHistoricalBackend historicalBackend(latestView, mptHistory->state(), backendStorage,
+        headers[2]->number(), HC_TIP, HC_HISTORY_DEPTH);
     HCHistoricalView historicalView(std::addressof(historicalBackend));
     historicalView.newMutable();
     Rollbackable<HCHistoricalView> rollbackable(historicalView);
 
     // Historical storage: the poisoned cache entry must NOT be served. The address has no
-    // leaf at the block-1 root, so its code resolves to nothing — "no executable".
+    // leaf at that root, so its code resolves to nothing — "no executable".
     auto historicalResult = task::syncWait(hostcontext::getExecutable(
         rollbackable, cachedAddress, EVMC_CANCUN, /*binaryAddress*/ false));
     BOOST_CHECK(!historicalResult);

@@ -20,7 +20,9 @@
 
 #include "Account.h"
 #include "Constants.h"
+#include "PathKey.h"
 #include "Trie.h"
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
@@ -36,11 +38,19 @@ namespace bcos::ledger::mpt
 /// transform, so it lives here as a shared free function.
 bcos::h256 accountKeyHash(bcos::Address const& addr);
 
-/// Read-only view of account state at a fixed MPT root. Walks the trie over any @p Storage
-/// satisfying storage2::ReadableStorage<h256> — the storage layer (a MemoryStorage cache, a
-/// RocksDBStorage2, or a layered MultiLayerStorage) resolves each node hash, so a fresh process can
-/// serve reads straight from its node store with no separate backend. Holds no mutable state.
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
+/// Read-only view of account state at a fixed MPT root. Walks the ACCOUNT trie over any
+/// @p Storage satisfying storage2::ReadableStorage<PathKey> — the storage layer (a MemoryStorage
+/// cache, a RocksDBStorage2, or a layered MultiLayerStorage) resolves each node's position, so a
+/// fresh process can serve reads straight from its node store with no separate backend. Holds no
+/// mutable state.
+///
+/// @tparam HasherT the hash the trie was built with (keccak256 by default), forwarded to the
+/// Trie walk so node verification uses the same algorithm as accountKeyHash below.
+///
+/// @throws MPTHistoryUnavailable when @p root is not the version the node store currently holds:
+/// positions carry one version, so an older root has no bytes to read (see Errors.h).
+template <bcos::storage2::ReadableStorage<PathKey> Storage,
+    bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 class MPTReadView
 {
 public:
@@ -54,12 +64,12 @@ public:
     /// shared across readAccount calls. Any node-level caching is the Storage layer's concern.
     bcos::task::Task<std::optional<Account>> readAccount(bcos::Address const& addr) const
     {
-        if (m_root == emptyRootHash())
+        if (m_root == emptyRootHash<HasherT>())
         {
             co_return std::nullopt;
         }
 
-        Trie<Storage> trie(m_storage.get(), m_root);
+        Trie<Storage, HasherT> trie(m_storage.get(), TrieScope::account(), m_root);
         auto leaf = co_await trie.get(accountKeyHash(addr));
         if (!leaf)
         {

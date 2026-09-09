@@ -24,9 +24,11 @@
 #include "Errors.h"
 #include "FlatToMPT.h"
 #include "HashBuilder.h"
-#include "MPTDeltaLayer.h"
 #include "MPTReadView.h"
+#include "PathDiff.h"
+#include "PathKey.h"
 #include "StorageValueCodec.h"
+#include "Trie.h"
 // Named directly for the hash context buildAndCollect owns (also reachable transitively).
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/storage/Entry.h>
@@ -38,7 +40,6 @@
 #include <boost/throw_exception.hpp>
 #include <map>
 #include <optional>
-#include <ranges>
 #include <string>
 #include <utility>
 #include <variant>
@@ -208,12 +209,54 @@ void accumulateRow(BuildContext<Storage> const& context, AccountRows& rows,
     }
 }
 
+/// Enumerate every row of @p owner's storage trie into @p output as a delete, with its prior bytes
+/// as the preimage — spec A.6's fourth delete source, a whole subtree disappearing.
+///
+/// Path addressing is what makes this expressible at all: one account's storage nodes are exactly
+/// the rows under the "/mptp/s:<owner>" prefix, so a seek to that prefix and a walk to its end
+/// finds them with no reachability analysis. The walk stops at the first key belonging to another
+/// trie, which is sound because the physical row order groups by (table, owner).
+///
+/// Point deletes rather than one range delete: the storage2 view layer has no DeleteRange, and
+/// routing these through the ordinary row deletes keeps them inside the block's single WriteBatch.
+/// A trie with many nodes therefore costs many rows in that batch — the v1 shape, to revisit if a
+/// range delete reaches the view.
+template <typename Storage>
+bcos::task::Task<void> dropStorageTrie(
+    Storage& nodeStorage, bcos::h256 const& owner, PathDiff& output)
+{
+    TrieScope const scope = TrieScope::storage(owner);
+    auto iterator = co_await bcos::storage2::range(
+        nodeStorage, bcos::storage2::RANGE_SEEK, PathKey{.scope = scope, .position = {}});
+    while (true)
+    {
+        auto keyValue = co_await iterator.next();
+        if (!keyValue)
+        {
+            break;
+        }
+        auto const& [key, value] = *keyValue;
+        if (!(key.scope == scope))
+        {
+            break;  // walked past this owner's rows
+        }
+        auto const* raw = std::get_if<bcos::bytes>(std::addressof(value));
+        if (raw == nullptr)
+        {
+            continue;  // an already-deleted row: nothing to delete, nothing to archive
+        }
+        output.preimages.insert_or_assign(key, *raw);
+        output.deletes.insert(key);
+    }
+    output.droppedStorageTries.push_back(owner);
+}
+
 /// Turn one account's accumulated rows into its new leaf encoding (or its removal), committing
 /// that account's storage trie on the way. Appends to @p accountChanges and @p output.
 template <typename Storage>
 bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Address const& address,
     AccountRows const& rows, auto& flatView,
-    std::map<bcos::h256, std::optional<bcos::bytes>>& accountChanges, MPTDeltaLayer& output)
+    std::map<bcos::h256, std::optional<bcos::bytes>>& accountChanges, PathDiff& output)
 {
     // Nothing in this run carried Ethereum state — the account was touched only by code and/or
     // BCOS extension rows. It must not reach the trie: with no parent leaf, the path below would
@@ -244,13 +287,14 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     // would be a fork.
     if (rows.nonce.deleted && rows.balance.deleted && rows.codeHash.deleted)
     {
-        // Record the prior storage root for future pathdb pruning — the full subtree walk
-        // is deferred to the pruning spec, the root hash is the ledger entry. Removing an
-        // absent leaf is a legal no-op (commitTrie treats it as such).
-        auto prior = co_await context.parentView.readAccount(address);
+        // The account's whole storage trie goes with it (spec A.6 source 4). Under path
+        // addressing that is a prefix walk, not a reachability question: nothing outside this
+        // account can occupy a row under its owner prefix. Removing an absent leaf is a legal
+        // no-op (commitTrie treats it as such).
+        auto const prior = co_await context.parentView.readAccount(address);
         if (prior && prior->storageRoot != emptyRootHash())
         {
-            output.obsoletedNodes.insert(prior->storageRoot);
+            co_await dropStorageTrie(context.nodeStorage, accountKeyHash(address), output);
         }
         accountChanges[accountKeyHash(address)] = std::nullopt;
         co_return;
@@ -299,10 +343,10 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
         // the leaf encoded below, which is how it reaches the account trie.
         // First-touch: priorStorageRoot == emptyRootHash() — the trie holds exactly this
         // block's written slots (spec §4.2); deletes of never-written slots are no-ops.
-        auto merged =
-            co_await commitTrie(context.nodeStorage, priorStorageRoot, rows.storageChanges);
+        auto merged = co_await commitTrie(context.nodeStorage,
+            TrieScope::storage(accountKeyHash(address)), priorStorageRoot, rows.storageChanges);
         updated.storageRoot = merged.root;
-        mergeNodeDelta(std::move(merged), output);
+        mergePathDelta(std::move(merged), output);
     }
     else
     {
@@ -372,9 +416,15 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 /// Account's default storageRoot/codeHash all hard-code keccak256. An SM3 deployment has to
 /// parameterize every one of them together; doing a subset silently mixes hash functions.
 ///
-/// @tparam Storage the trie-node storage (storage2 ReadWriteStorage over h256 → RLP bytes):
-/// commitTrie merge-reads prior-version nodes through it, and the block's aggregated newNodes are
-/// batch-flushed into it once at the end.
+/// The READ side is already parameterized and defaults to keccak (Trie, MPTReadView, MPTAccount,
+/// proofWalk, holdsTrieRoot), so an SM3 chain needs those named too — but naming them alone,
+/// without the builders above, would verify SM3-built nodes against keccak digests. They move
+/// together or not at all.
+///
+/// @tparam Storage the trie-node storage (storage2 ReadWriteStorage over PathKey → RLP bytes):
+/// commitTrie merge-reads prior-version nodes through it, and the block's aggregated upserts and
+/// deletes are batch-applied to it once at the end. A tombstoned account additionally seek-scans
+/// it over one owner prefix (dropStorageTrie), so it must support range(RANGE_SEEK, PathKey).
 /// @param nodeStorage     node storage shared by reads and the end-of-build flush.
 /// @param parentStateRoot the parent block's MPT state root (emptyRootHash() = empty state).
 /// @param flatView        a flat-state view with TWO properties, both required: its top mutable
@@ -399,11 +449,31 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 ///         (spec §5.4 treats that as an error).
 /// @throws UnknownAccountRowField on an account row whose field name is not classified, in
 ///         either mode (spec §5.2).
-template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
-bcos::task::Task<MPTDeltaLayer> buildAndCollect(
+template <bcos::storage2::ReadWriteStorage<PathKey, bcos::bytes> Storage>
+bcos::task::Task<PathDiff> buildAndCollect(
     Storage& nodeStorage, bcos::h256 parentStateRoot, auto& flatView, bool l2Mode)
 {
-    MPTDeltaLayer output;
+    PathDiff output;
+    // The parent root must be the version the node store currently holds — one read of the
+    // account trie's fixed entry point settles it. Checked ONCE, up front, so that every read
+    // below can treat a missing or mismatched node as what it is: a store that contradicts
+    // itself. Without this the first parent-leaf lookup would report the far softer
+    // "that version is gone", which is the right answer for an RPC query and the wrong one for
+    // a block build — a chain cannot proceed on a parent state it cannot read.
+    if (parentStateRoot != emptyRootHash())
+    {
+        bool const parentAvailable =
+            co_await holdsTrieRoot(nodeStorage, TrieScope::account(), parentStateRoot);
+        if (!parentAvailable)
+        {
+            BOOST_THROW_EXCEPTION(
+                MPTInvariantViolation{} << bcos::errinfo_comment(
+                    "MPTBuilder: the node store does not hold the parent state root " +
+                    parentStateRoot.hex() +
+                    " (its trie-node rows were never written, or belong to a different "
+                    "version)"));
+        }
+    }
     MPTReadView<Storage> const parentView(nodeStorage, parentStateRoot);
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
     detail::BuildContext<Storage> context{
@@ -472,30 +542,18 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
     // Second trie level: commit the account trie over the collected leaf encodings. Runs
     // after the scan by necessity — every leaf embeds its storage-trie root, so the storage
     // tries must be committed first. This root is the block's new MPT state root.
-    auto merged = co_await commitTrie(nodeStorage, parentStateRoot, accountChanges);
+    auto merged =
+        co_await commitTrie(nodeStorage, TrieScope::account(), parentStateRoot, accountChanges);
     output.stateRoot = merged.root;
-    mergeNodeDelta(std::move(merged), output);
-
-    // MPTDeltaLayer aggregates one commitTrie result per touched storage trie plus the
-    // account trie. Unlike a single mergeTrie() result the union is not disjoint by
-    // construction: identical RLP encodings hash identically ACROSS tries, so a node one
-    // account's rebuild obsoletes can byte-match a node another account's build emits.
-    // Re-establish disjointness the way mergeTrie() does (end-subtraction): the node stays
-    // in newNodes — it is flushed and referenced by the new version — and leaves the prune
-    // ledger; the subtracted hashes move to intraBlockObsoleted rather than vanishing, so
-    // the pruning spec keeps full information.
-    for (const auto& hash : output.newNodes | std::views::keys)
-    {
-        if (output.obsoletedNodes.erase(hash) != 0U)
-        {
-            output.intraBlockObsoleted.insert(hash);
-        }
-    }
+    mergePathDelta(std::move(merged), output);
 
     // One batched flush for the whole block (spec §5.4): nothing inside this build reads a
     // node it produced — storage-trie merges read parent-version nodes only, and the account
-    // trie never dereferences a storage root.
-    co_await flushTrieNodes(nodeStorage, output.newNodes);
+    // trie never dereferences a storage root. Writes before deletes, though the two sets are
+    // disjoint: within one trie commitTrie subtracts them, and two tries cannot name the same
+    // row because their TrieScopes differ.
+    co_await flushTrieNodes(nodeStorage, output.upserts);
+    co_await removeTrieNodes(nodeStorage, output.deletes);
     co_return output;
 }
 

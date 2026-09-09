@@ -50,9 +50,8 @@ namespace bcos::ledger
 /// @param allocs  addresses are 40-hex (with or without 0x); nonce is a DECIMAL string;
 ///                code is hex; storage slots/values are 32-byte hex.
 template <class Storage>
-task::Task<bcos::h256> importEthereumGenesisState(
-    Storage& storage, std::vector<Alloc> const& allocs, crypto::Hash const& hashImpl,
-    Features const& features)
+task::Task<bcos::h256> importEthereumGenesisState(Storage& storage,
+    std::vector<Alloc> const& allocs, crypto::Hash const& hashImpl, Features const& features)
 {
     // Build the full genesis trie FIRST: genesis import is not transactional,
     // and computeGenesisStateTrie validates every alloc hex field (address /
@@ -115,16 +114,16 @@ task::Task<bcos::h256> importEthereumGenesisState(
         }
     }
 
-    // Persist every produced genesis trie node as a "/mpt/" state row, exactly
+    // Persist every produced genesis trie node as a path-addressed state row, exactly
     // like Ledger::buildGenesisBlock does for Scenario-B (L2) chains — block 1's
     // incremental MPT build resolves parent-version nodes through storage, and a
     // missing node aborts loudly (MPTInvariantViolation). The nodes are consumed
     // here (moved into the Entry), which is why the root is returned alone.
-    for (auto& [nodeHash, nodeRlp] : trie.nodes)
+    for (auto& [pathKey, nodeRlp] : trie.nodes)
     {
         storage::Entry nodeEntry;
         nodeEntry.set(std::move(nodeRlp));
-        co_await storage2::writeOne(storage, mptNodeStateKey(nodeHash), std::move(nodeEntry));
+        co_await storage2::writeOne(storage, mpt::pathNodeStateKey(pathKey), std::move(nodeEntry));
     }
     co_return trie.root;
 }
