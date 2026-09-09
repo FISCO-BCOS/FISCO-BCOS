@@ -302,15 +302,32 @@ BOOST_AUTO_TEST_CASE(thePublishGenerationTracksTheWindow)
     BOOST_CHECK_EQUAL(index.generation() % 2, 0U);
     BOOST_CHECK_GT(index.generation(), afterPublish);
 
-    // A publish that THROWS must not leave the window open — the commit died, and a permanently
-    // open window would make every later "unchanged since B" query spin and then refuse forever
-    // rather than only until the node notices.
+    // A publish that THROWS must not leave the window open — the commit died, and a window that
+    // never closes makes every later "unchanged since B" query wait out the whole time budget and
+    // then refuse, instead of refusing only until the node notices.
     index.openPublishWindow();
     BOOST_CHECK_EQUAL(index.generation() % 2, 1U);
+    auto const beforeThrowWithWindow = index.generation();
     BOOST_CHECK_THROW(index.publish(stagedFor(15, {{"a"sv, 150}}), std::nullopt, std::nullopt),
         MPTInvariantViolation);
     BOOST_CHECK(index.state() == IndexState::Unavailable);
     BOOST_CHECK_EQUAL(index.generation() % 2, 0U);
+    BOOST_CHECK_GT(index.generation(), beforeThrowWithWindow);
+
+    // ...and a publish that throws with NO window open must advance the counter all the same.
+    // The throw can come after applyRetire has already removed a block's versions, so a reader
+    // that sampled the generation before this publish and re-samples after its own current-value
+    // read has to see a change — otherwise it accepts a value it read across a mutation. Closing
+    // a window that was never open would have been a no-op, which is the bug this pins.
+    HistoryIndex quiescent;
+    quiescent.publish(stagedFor(30, {{"b"sv, 300}}), std::nullopt, std::nullopt);
+    BOOST_REQUIRE_EQUAL(quiescent.generation() % 2, 0U);
+    auto const beforeThrowNoWindow = quiescent.generation();
+    BOOST_CHECK_THROW(quiescent.publish(stagedFor(20, {{"b"sv, 200}}), std::nullopt, std::nullopt),
+        MPTInvariantViolation);
+    BOOST_CHECK(quiescent.state() == IndexState::Unavailable);
+    BOOST_CHECK_EQUAL(quiescent.generation() % 2, 0U);
+    BOOST_CHECK_GT(quiescent.generation(), beforeThrowNoWindow);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

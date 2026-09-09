@@ -108,6 +108,11 @@ enum class IndexState : uint8_t
 /// Two seconds is far longer than any commit on a healthy node and far shorter than an RPC
 /// client's patience, so the timeout means "this node has a stuck committer", not "you were
 /// unlucky". Tests override it (setPublishWindowWaitBudget) to keep the refusal path fast.
+///
+/// It is the budget for the WHOLE query, not per attempt: HistoryRead.h::readAtOrCurrent may call
+/// readAt more than once, and it passes down what is left of its own deadline rather than letting
+/// each call start a fresh one — so the worst case a caller can block for is this value, not a
+/// multiple of it.
 inline constexpr std::chrono::milliseconds kPublishWindowWaitBudget{2000};
 
 /// Transparent hash so a query can look up by `std::string_view` without allocating a key.
@@ -267,6 +272,12 @@ public:
 
     /// Shorten (or lengthen) the wait. For tests that exercise the TIMEOUT path and would
     /// otherwise sit out the full production budget; production never calls it.
+    ///
+    /// TEST-ONLY, and call it BEFORE any reader can run. The budget is a plain field that readers
+    /// load without synchronisation — deliberately, because it is read on every query and never
+    /// written on a live node — so writing it while a query is in flight is a data race. Making
+    /// it atomic would buy nothing: there is no correct behaviour to define for a budget that
+    /// changes mid-wait.
     void setPublishWindowWaitBudget(std::chrono::milliseconds budget) noexcept
     {
         m_publishWindowWaitBudget = budget;

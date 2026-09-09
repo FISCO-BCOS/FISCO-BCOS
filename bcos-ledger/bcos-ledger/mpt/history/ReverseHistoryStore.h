@@ -369,13 +369,19 @@ public:
     /// @param depth the retention window, i.e. H_state or H_proof for this instance.
     /// @throws HistoryPruned when @p block predates the retained window or the located shard is
     ///         gone.
+    /// @param waitBudget how long this call may wait for an open publish window; nullopt means
+    ///        the store's own (kPublishWindowWaitBudget). A caller that is itself running against
+    ///        a deadline — readAtOrCurrent, which may call this more than once — passes what is
+    ///        LEFT of its budget, so the total wait a query can incur stays one budget rather
+    ///        than one per attempt.
     /// @throws HistoryIndexUnavailable when the index has not been rebuilt or is unusable, or
-    ///         when a commit stayed mid-publish for the whole retry budget below.
+    ///         when a commit stayed mid-publish for longer than @p waitBudget.
     /// @throws InvalidHistoryBlock when @p block is negative, when @p block is ahead of @p tip,
     ///         or when @p depth is negative.
     template <ReadableStateStorage Storage>
     task::Task<ReadAtResult> readAt(Storage& backend, std::span<const bcos::byte> key,
-        protocol::BlockNumber block, protocol::BlockNumber tip, protocol::BlockNumber depth) const
+        protocol::BlockNumber block, protocol::BlockNumber tip, protocol::BlockNumber depth,
+        std::optional<std::chrono::milliseconds> waitBudget = std::nullopt) const
     {
         // The window guard runs BEFORE the lookup, and that order is the whole point (spec B.3,
         // G5): a lookup that finds nothing cannot tell "never changed after B, so the current
@@ -405,7 +411,8 @@ public:
         // that merely overlapped an ordinary commit therefore SLEEPS through it and then answers;
         // only a committer stuck for longer than kPublishWindowWaitBudget produces a refusal, and
         // that refusal says "retry", not "restart the node".
-        auto const deadline = std::chrono::steady_clock::now() + m_index.publishWindowWaitBudget();
+        auto const deadline = std::chrono::steady_clock::now() +
+                              waitBudget.value_or(m_index.publishWindowWaitBudget());
         std::optional<HistoryVersion> located;
         uint64_t generation = 0;
         for (;;)
