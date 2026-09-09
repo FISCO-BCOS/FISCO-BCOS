@@ -48,7 +48,7 @@ namespace bcos::ledger::mpt::test
 {
 using bcos::test::errinfoContains;
 
-using NodeStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes>;
+using NodeStorage = bcos::ledger::mpt::test::NodeMemoryStorage;
 using FlatStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
     bcos::storage::Entry, bcos::storage2::memory_storage::ORDERED>;
 using TestMPTAccount = MPTAccount<FlatStorage, NodeStorage, FlatStorage>;
@@ -142,7 +142,8 @@ struct SeededState
         // Storage trie: two slots, values RLP-trimmed exactly as MPTBuilder writes them.
         auto const storageRoot = seedTrieFlushed(nodeStorage, emptyRootHash(),
             {{slotKeyHash(slot1), encodeStorageValue(bcos::h256(val1).ref())},
-                {slotKeyHash(slot2), encodeStorageValue(bcos::h256(val2).ref())}})
+                {slotKeyHash(slot2), encodeStorageValue(bcos::h256(val2).ref())}},
+            TrieScope::storage(accountKeyHash(addr)))
                                      .root;
 
         bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
@@ -500,8 +501,8 @@ BOOST_AUTO_TEST_CASE(MissingCodeRowThrowsAndNeverFallsBackToFlat)
 
     auto account = state.accountAt(legacyAddr);
     BOOST_CHECK_EQUAL(bcos::task::syncWait(account.codeHash(root)), makeHash(0x77));
-    BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(account.code(root)), bcos::ledger::mpt::MPTInvariantViolation,
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(account.code(root)),
+        bcos::ledger::mpt::MPTInvariantViolation,
         [](auto const& e) { return errinfoContains(e, "s_code_binary has no such row"); });
     // The flat path still serves those bytes; only the historical path refuses them.
     auto const flat = bcos::task::syncWait(account.code());
@@ -541,7 +542,8 @@ BOOST_AUTO_TEST_CASE(StorageEntryHistoricalAndFlat)
     // (the seeded slots are small enough to leave the top bytes zero).
     bcos::u256 const wide{"0xff02030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"};
     auto const wideRoot = seedTrieFlushed(state.nodeStorage, state.seeded.storageRoot,
-        {{slotKeyHash(state.slotAbsent), encodeStorageValue(bcos::h256(wide).ref())}})
+        {{slotKeyHash(state.slotAbsent), encodeStorageValue(bcos::h256(wide).ref())}},
+        TrieScope::storage(accountKeyHash(state.addr)))
                               .root;
     Account widened = state.seeded;
     widened.storageRoot = wideRoot;

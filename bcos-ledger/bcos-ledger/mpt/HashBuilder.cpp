@@ -24,6 +24,7 @@
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <algorithm>
+#include <map>
 #include <span>
 #include <utility>
 #include <vector>
@@ -46,26 +47,34 @@ struct HBEntry
 };
 
 // State threaded through the synchronous recursion. emit() records every hash-kind node into
-// newNodes; commit() flushes them into the cache afterwards (avoids coroutine recursion).
+// newNodes, keyed by its POSITION (spec A.1) so the caller can persist it by path.
 // collectNodes lets the raw-key root-only builds (computeRawTrieRoot) skip the per-node RLP
 // accumulation entirely — the block-header tries are never persisted, so the map would only
 // be thrown away.
 struct HBContext
 {
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher& hasher;
-    std::unordered_map<bcos::h256, bcos::bytes>& newNodes;
+    std::map<bcos::bytes, bcos::bytes>& newNodes;
     bool collectNodes = true;
 };
 
-// Encode `node`, compute its ref, and record the raw bytes when the ref is a hash.
-NodeRef hbEmit(HBContext& ctx, TrieNode const& node)
+// Encode `node`, compute its ref, and record the raw bytes at `position` when the ref is a hash.
+NodeRef hbEmit(HBContext& ctx, bcos::bytes position, TrieNode const& node)
 {
     auto [raw, ref] = NodeEncoder<>::encodeAndRef(node, ctx.hasher);
     if (ref.kind() == NodeRef::Kind::Hash && ctx.collectNodes)
     {
-        ctx.newNodes.emplace(ref.hash(), std::move(raw));
+        ctx.newNodes.insert_or_assign(std::move(position), std::move(raw));
     }
     return ref;
+}
+
+// The position of the subtree covering `entries` at `depth`: the first `depth` nibbles, which all
+// of them share by construction (that is what "covering at depth" means).
+bcos::bytes hbPosition(std::span<HBEntry const> entries, size_t depth)
+{
+    auto const& nibbles = entries.front().nibbles;
+    return bcos::bytes(nibbles.begin(), nibbles.begin() + static_cast<std::ptrdiff_t>(depth));
 }
 
 // Turn a NodeRef into the bytes an ExtensionNode.child expects: inline → raw bytes; hash → the
@@ -125,7 +134,7 @@ NodeRef hbBuildBranch(HBContext& ctx, std::span<HBEntry const> entries, size_t d
         branch.children[nibble] = hbBuild(ctx, entries.subspan(i, j - i), depth + 1);
         i = j;
     }
-    return hbEmit(ctx, TrieNode{std::move(branch)});
+    return hbEmit(ctx, hbPosition(entries, depth), TrieNode{std::move(branch)});
 }
 
 // Build the subtree covering `entries`, whose paths all agree on the first `depth` nibbles.
@@ -138,7 +147,7 @@ NodeRef hbBuild(HBContext& ctx, std::span<HBEntry const> entries, size_t depth)
         // keyNibbles is the SUFFIX from `depth` to the end (64), not the full key.
         leaf.keyNibbles.assign(nibbles.begin() + depth, nibbles.end());
         leaf.value = value.toBytes();
-        return hbEmit(ctx, TrieNode{std::move(leaf)});
+        return hbEmit(ctx, hbPosition(entries, depth), TrieNode{std::move(leaf)});
     }
 
     // entries are sorted → the longest common prefix at `depth` is shared by first and last.
@@ -155,7 +164,7 @@ NodeRef hbBuild(HBContext& ctx, std::span<HBEntry const> entries, size_t depth)
         ext.sharedNibbles.assign(
             entries.front().nibbles.begin() + depth, entries.front().nibbles.begin() + depth + cpl);
         ext.child = hbRefToRaw(childRef);
-        return hbEmit(ctx, TrieNode{std::move(ext)});
+        return hbEmit(ctx, hbPosition(entries, depth), TrieNode{std::move(ext)});
     }
 
     return hbBuildBranch(ctx, entries, depth);
@@ -186,7 +195,7 @@ TrieBuildResult computeTrieRootImpl(
     // Own hasher + own newNodes → no shared state: many computeTrieRootImpl calls may run
     // concurrently for independent inputs (coarse-grained parallelism across tries).
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
+    std::map<bcos::bytes, bcos::bytes> newNodes;
     HBContext ctx{.hasher = hasher, .newNodes = newNodes};
     NodeRef const rootRef =
         hbBuild(ctx, std::span<HBEntry const>{entries.data(), entries.size()}, /*depth=*/0);
@@ -200,7 +209,7 @@ TrieBuildResult computeTrieRootImpl(
     else
     {
         bcos::crypto::hasher::hash(hasher, rootRef.inlineRef(), root);
-        newNodes.emplace(root, rootRef.inlineRef().toBytes());
+        newNodes.insert_or_assign(bcos::bytes{}, rootRef.inlineRef().toBytes());
     }
 
     return TrieBuildResult{.root = root, .newNodes = std::move(newNodes)};
@@ -265,14 +274,14 @@ TrieBuildResult computeRawTrieRootImpl(
         {
             BOOST_THROW_EXCEPTION(
                 MPTInvariantViolation() << bcos::errinfo_comment(
-                    "computeTrieRootFromRawKeys: duplicate key 0x" +
-                    hbKeyHex(entries[i].nibbles) + " — raw trie keys must be unique"));
+                    "computeTrieRootFromRawKeys: duplicate key 0x" + hbKeyHex(entries[i].nibbles) +
+                    " — raw trie keys must be unique"));
         }
     }
 
     // Own hasher + own newNodes → no shared state (same concurrency contract as the secure path).
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
+    std::map<bcos::bytes, bcos::bytes> newNodes;
     HBContext ctx{.hasher = hasher, .newNodes = newNodes, .collectNodes = collectNodes};
     NodeRef const rootRef =
         hbBuild(ctx, std::span<HBEntry const>{entries.data(), entries.size()}, /*depth=*/0);
@@ -288,7 +297,7 @@ TrieBuildResult computeRawTrieRootImpl(
         bcos::crypto::hasher::hash(hasher, rootRef.inlineRef(), root);
         if (collectNodes)
         {
-            newNodes.emplace(root, rootRef.inlineRef().toBytes());
+            newNodes.insert_or_assign(bcos::bytes{}, rootRef.inlineRef().toBytes());
         }
     }
 
@@ -362,7 +371,7 @@ TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::byt
     }
 
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
+    std::map<bcos::bytes, bcos::bytes> newNodes;
     HBContext ctx{.hasher = hasher, .newNodes = newNodes};
     NodeRef const rootRef = hbBuild(
         ctx, std::span<HBEntry const>{buildEntries.data(), buildEntries.size()}, /*depth=*/0);
@@ -375,7 +384,7 @@ TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::byt
     else
     {
         bcos::crypto::hasher::hash(hasher, rootRef.inlineRef(), root);
-        newNodes.emplace(root, rootRef.inlineRef().toBytes());
+        newNodes.insert_or_assign(bcos::bytes{}, rootRef.inlineRef().toBytes());
     }
     return TrieBuildResult{.root = root, .newNodes = std::move(newNodes)};
 }

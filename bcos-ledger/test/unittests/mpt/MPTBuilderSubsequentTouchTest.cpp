@@ -47,10 +47,13 @@ BOOST_AUTO_TEST_SUITE(MPTBuilderSubsequentTouchSuite)
 
 namespace
 {
-using NodeStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes>;
+using NodeStorage = bcos::ledger::mpt::test::NodeMemoryStorage;
 
-// Build one account's storage trie from (slotKey → raw value) and return its root.
-bcos::h256 buildStorageTrie(NodeStorage& storage, std::map<bcos::h256, bcos::bytes> const& slots)
+// Build ONE account's storage trie from (slotKey -> raw value) and return its root. The owner is
+// part of the address of every row it writes, so the trie has to be seeded under the same scope
+// the builder and the readers will look it up in.
+bcos::h256 buildStorageTrie(NodeStorage& storage, bcos::Address const& owner,
+    std::map<bcos::h256, bcos::bytes> const& slots)
 {
     std::map<bcos::h256, bcos::bytes> entries;
     for (auto const& [slot, value] : slots)
@@ -59,7 +62,9 @@ bcos::h256 buildStorageTrie(NodeStorage& storage, std::map<bcos::h256, bcos::byt
         BOOST_REQUIRE(!encoded.empty());
         entries[slotKeyHash(slot)] = std::move(encoded);
     }
-    return seedTrieFlushed(storage, emptyRootHash(), entries).root;
+    return seedTrieFlushed(
+        storage, emptyRootHash(), entries, TrieScope::storage(accountKeyHash(owner)))
+        .root;
 }
 
 // Build the parent state trie over (address → Account) and return its root.
@@ -116,7 +121,7 @@ BOOST_AUTO_TEST_CASE(IncrementalUpdateOfExistingAccountStorage)
     Account prior;
     prior.nonce = 1;
     prior.balance = 100;
-    prior.storageRoot = buildStorageTrie(storage, priorSlots);
+    prior.storageRoot = buildStorageTrie(storage, addr, priorSlots);
     auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
 
     // This block's delta: bump the nonce, overwrite slot 0, delete slot 1 (storage-level
@@ -132,7 +137,7 @@ BOOST_AUTO_TEST_CASE(IncrementalUpdateOfExistingAccountStorage)
         bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
 
     BOOST_CHECK(output.stateRoot != parentRoot);
-    BOOST_REQUIRE(!output.newNodes.empty());
+    BOOST_REQUIRE(!output.upserts.empty());
 
     // Read the updated account back through the new root.
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
@@ -151,7 +156,8 @@ BOOST_AUTO_TEST_CASE(IncrementalUpdateOfExistingAccountStorage)
     BOOST_CHECK(updated->storageRoot == storageRootOracle(expectedSlots));
 
     // And the flushed nodes must actually resolve: read every expected slot through a Trie.
-    Trie<NodeStorage> storageTrie(storage, updated->storageRoot);
+    Trie<NodeStorage> storageTrie(
+        storage, TrieScope::storage(accountKeyHash(addr)), updated->storageRoot);
     for (auto const& [slot, value] : expectedSlots)
     {
         auto leaf = bcos::task::syncWait(storageTrie.get(slotKeyHash(slot)));
@@ -177,7 +183,7 @@ BOOST_AUTO_TEST_CASE(ZeroValueWriteLeavesTheTrieLikeADelete)
     std::map<bcos::h256, bcos::bytes> const priorSlots{
         {slotKey(0x00), bcos::bytes{0x10}}, {slotKey(0x01), bcos::bytes{0x11}}};
     Account prior;
-    prior.storageRoot = buildStorageTrie(storage, priorSlots);
+    prior.storageRoot = buildStorageTrie(storage, addr, priorSlots);
     auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
 
     // Writing an all-zero value trims to nothing — same trie effect as a delete (spec §5.3).
@@ -201,7 +207,7 @@ BOOST_AUTO_TEST_CASE(NoStorageChangesKeepsPriorStorageRoot)
     auto const addr = makeAddress(0xEE);
     Account prior;
     prior.balance = 7;
-    prior.storageRoot = buildStorageTrie(storage, {{slotKey(0x00), bcos::bytes{0x42}}});
+    prior.storageRoot = buildStorageTrie(storage, addr, {{slotKey(0x00), bcos::bytes{0x42}}});
     auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
 
     FlatBackendStorage flatBackend;
@@ -518,33 +524,47 @@ BOOST_AUTO_TEST_CASE(LoneDeletedCodeHashOnAFirstTouchAccountThrowsInsteadOfInser
 
 BOOST_AUTO_TEST_CASE(BcosExtensionRowSkippedInScenarioAThrowsInL2)
 {
-    NodeStorage storage;
     auto const addr = makeAddress(0x03);
     Account prior;
     prior.nonce = 4;
-    auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
 
     // A BCOS extension row ("abi") plus a real nonce write. "code" is skipped in BOTH modes —
     // it enters the MPT indirectly via its paired codeHash row.
-    FlatBackendStorage flatBackend;
-    auto view = makeFlatView(flatBackend);
-    writeFlatRow(view, accountFieldKey(addr, "abi"), makeEntry("[]"));
-    writeFlatRow(view, accountFieldKey(addr, ROW_CODE), makeEntry("\x60\x60"));
-    writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("5"));
+    auto writeDelta = [&](auto& view) {
+        writeFlatRow(view, accountFieldKey(addr, "abi"), makeEntry("[]"));
+        writeFlatRow(view, accountFieldKey(addr, ROW_CODE), makeEntry("\x60\x60"));
+        writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("5"));
+    };
+
     // Scenario A (native chain): the extension row is ignored, the nonce lands.
-    auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
-    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
-    auto updated = bcos::task::syncWait(readView.readAccount(addr));
-    BOOST_REQUIRE(updated.has_value());
-    BOOST_CHECK_EQUAL(updated->nonce, bcos::u256(5));
+    {
+        NodeStorage storage;
+        auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
+        FlatBackendStorage flatBackend;
+        auto view = makeFlatView(flatBackend);
+        writeDelta(view);
+        auto output =
+            bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+        auto updated = bcos::task::syncWait(readView.readAccount(addr));
+        BOOST_REQUIRE(updated.has_value());
+        BOOST_CHECK_EQUAL(updated->nonce, bcos::u256(5));
+    }
 
     // Scenario B (Ethereum-compatible): the same delta throws — an unrecognized row must not
-    // silently fall out of the state commitment.
-    BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/true)),
-        UnexpectedBCOSFieldInL2,
-        [](auto const& e) { return errinfoContains(e, "BCOS extension field present in L2"); });
+    // silently fall out of the state commitment. Its own store, because the scenario-A run
+    // above already advanced the account trie's rows to the next version.
+    {
+        NodeStorage storage;
+        auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
+        FlatBackendStorage flatBackend;
+        auto view = makeFlatView(flatBackend);
+        writeDelta(view);
+        BOOST_CHECK_EXCEPTION(
+            bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/true)),
+            UnexpectedBCOSFieldInL2,
+            [](auto const& e) { return errinfoContains(e, "BCOS extension field present in L2"); });
+    }
 }
 
 BOOST_AUTO_TEST_CASE(UnclassifiedRowFieldThrowsInBothModes)
@@ -586,7 +606,7 @@ BOOST_AUTO_TEST_CASE(DeleteLastLeafThenInsertNewSlotRecomputesStorageRoot)
     std::map<bcos::h256, bcos::bytes> const priorSlots{{slotKey(0x00), bcos::bytes{0x10}}};
     Account prior;
     prior.nonce = 1;
-    prior.storageRoot = buildStorageTrie(storage, priorSlots);
+    prior.storageRoot = buildStorageTrie(storage, addr, priorSlots);
     auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
 
     // This block: clear the only slot 0x00 (all-zero write = delete), then write slot 0x01.
@@ -606,7 +626,8 @@ BOOST_AUTO_TEST_CASE(DeleteLastLeafThenInsertNewSlotRecomputesStorageRoot)
     BOOST_CHECK(updated->storageRoot != prior.storageRoot);
     BOOST_CHECK(updated->storageRoot == storageRootOracle({{slotKey(0x01), bcos::bytes{0x22}}}));
 
-    Trie<NodeStorage> storageTrie(storage, updated->storageRoot);
+    Trie<NodeStorage> storageTrie(
+        storage, TrieScope::storage(accountKeyHash(addr)), updated->storageRoot);
     auto newSlot = bcos::task::syncWait(storageTrie.get(slotKeyHash(slotKey(0x01))));
     BOOST_REQUIRE(newSlot.has_value());
     BOOST_CHECK(*newSlot == encodeStorageValue(bcos::ref(bcos::bytes{0x22})));

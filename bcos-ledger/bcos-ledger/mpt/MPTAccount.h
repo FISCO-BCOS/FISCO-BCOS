@@ -23,6 +23,7 @@
 #include "Constants.h"
 #include "Errors.h"
 #include "MPTReadView.h"
+#include "PathKey.h"
 #include "StorageValueCodec.h"
 #include "Trie.h"
 #include <bcos-concepts/ByteBuffer.h>
@@ -103,11 +104,17 @@ concept HistoricalStorageContext = requires(Storage& storage) {
 /// /271/363) keeps that trivially true, and the cache costs nothing there because it is per-object.
 ///
 /// @tparam Storage        the flat KV the inherited EVMAccount behaviour reads and writes.
-/// @tparam NodeStorage    resolves trie node hashes (the concept MPTReadView eats).
+/// @tparam HasherT        the hash the chain's tries were built with — used for the slot-key
+///                        transform AND for verifying every node the rooted reads resolve, which
+///                        must be the same algorithm. keccak256 by default.
+/// @tparam NodeStorage    resolves trie node POSITIONS (the concept MPTReadView eats). Because a
+///                        position holds only the current version, a rooted read whose root is not
+///                        the tip throws MPTHistoryUnavailable (Errors.h) instead of answering —
+///                        restoring those reads is the trie-node history index's job.
 /// @tparam BackendStorage flat store holding s_code_binary (hash-addressed, so its rows are
 ///                        valid for any historical block, spec §4.5).
-template <class Storage, bcos::storage2::ReadableStorage<bcos::h256> NodeStorage,
-    class BackendStorage>
+template <class Storage, bcos::storage2::ReadableStorage<PathKey> NodeStorage, class BackendStorage,
+    bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 class MPTAccount : public bcos::ledger::account::EVMAccount<Storage>
 {
 private:
@@ -338,7 +345,7 @@ private:
         {
             co_return m_cachedLeaf;
         }
-        MPTReadView<NodeStorage> const view{m_nodeStorage.get(), stateRoot};
+        MPTReadView<NodeStorage, HasherT> const view{m_nodeStorage.get(), stateRoot};
         auto account = co_await view.readAccount(m_address);
         m_cachedLeafRoot = stateRoot;
         m_cachedLeaf = account;
@@ -351,20 +358,24 @@ private:
         bcos::h256 const& stateRoot, bcos::h256 const& slot)
     {
         auto const account = co_await readLeaf(stateRoot);
-        if (!account || account->storageRoot == emptyRootHash())
+        if (!account || account->storageRoot == emptyRootHash<HasherT>())
         {
             co_return std::nullopt;
         }
-        Trie<NodeStorage> const trie{m_nodeStorage.get(), account->storageRoot};
-        // The hasher-injection form, per StorageValueCodec.h's hot-path convention: this is the
-        // per-SLOAD path of a historical call, and the convenience overload builds a fresh
-        // OpenSSL context every time. Constructed on first use rather than held by value, so the
-        // default (flat) path keeps EVMAccount's allocation-free, non-throwing construction.
-        if (!m_hasher)
-        {
-            m_hasher.emplace();
-        }
-        auto const leaf = co_await trie.get(slotKeyHash(slot, *m_hasher));
+        // HasherT, not the default: the slot key below is transformed with HasherT, and a walk
+        // that verified nodes with a different hash would follow one algorithm's path through
+        // another algorithm's trie — dead-ending, and reporting the slot ABSENT rather than
+        // refusing. The leaf walk above (MPTReadView<NodeStorage, HasherT>) forwards it for the
+        // same reason.
+        Trie<NodeStorage, HasherT> const trie{m_nodeStorage.get(),
+            TrieScope::storage(accountKeyHash(m_address)), account->storageRoot};
+        // The hasher-injection form, per StorageValueCodec.h's hot-path convention. The context
+        // lives in this coroutine's frame rather than in the object, matching Trie::get():
+        // holding it as a member bought nothing, since each readTrieSlot builds its own Trie —
+        // and that Trie now builds a context of its own — anyway. It also keeps the default
+        // (flat) path's construction allocation-free.
+        HasherT hasher;
+        auto const leaf = co_await trie.get(slotKeyHash(slot, hasher));
         if (!leaf)
         {
             co_return std::nullopt;
@@ -378,8 +389,6 @@ private:
 
     std::optional<bcos::h256> m_cachedLeafRoot;
     std::optional<Account> m_cachedLeaf;
-    /// Reused slot-key hash context, built on the first rooted slot read (see readTrieSlot).
-    std::optional<bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher> m_hasher;
 };
 
 }  // namespace bcos::ledger::mpt

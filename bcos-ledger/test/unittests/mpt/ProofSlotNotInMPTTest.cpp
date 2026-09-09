@@ -40,7 +40,7 @@ namespace bcos::ledger::mpt::test
 
 // Helper names carry a ColdSlot prefix: the unity build can merge this file with the other
 // Proof*Test.cpp files into one TU, fusing their unnamed namespaces.
-using ColdSlotMemStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes>;
+using ColdSlotMemStorage = bcos::ledger::mpt::test::NodeMemoryStorage;
 
 namespace
 {
@@ -63,7 +63,9 @@ std::pair<bcos::h256, EIP1186Proof> makeColdSlotProof(
         {
             slotEntries[slotKeyHash(slot)] = value;
         }
-        account.storageRoot = seedTrieFlushed(storage, emptyRootHash(), slotEntries).root;
+        account.storageRoot = seedTrieFlushed(
+            storage, emptyRootHash(), slotEntries, TrieScope::storage(accountKeyHash(addr)))
+                                  .root;
     }
     auto const stateRoot =
         seedTrieFlushed(storage, emptyRootHash(), {{accountKeyHash(addr), account.encode()}}).root;
@@ -142,7 +144,9 @@ BOOST_AUTO_TEST_CASE(ScenarioBExclusionProofUnchanged)
         account.balance = 4242;
         std::map<bcos::h256, bcos::bytes> const slotEntries{
             {slotKeyHash(coldSlotHot), coldSlotHotValue}};
-        account.storageRoot = seedTrieFlushed(storage, emptyRootHash(), slotEntries).root;
+        account.storageRoot = seedTrieFlushed(storage, emptyRootHash(), slotEntries,
+            TrieScope::storage(accountKeyHash(makeAddress(0xab))))
+                                  .root;
         std::map<bcos::h256, bcos::bytes> const accountEntries{
             {accountKeyHash(makeAddress(0xab)), account.encode()}};
         auto const root = seedTrieFlushed(storage, emptyRootHash(), accountEntries).root;

@@ -13,14 +13,17 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief Unit tests for KeyPrefixes.h: the "/mpt/" node-row key layout, with
- *        StateKeyResolver as the ONLY physical encode/decode authority (KeyPrefixes.h
- *        deliberately exports no physical-key helpers of its own).
- * @file TestKeyPrefixes.cpp
+ * @brief State rows whose ROW KEY is arbitrary binary — the shape every hash-, digest- or
+ *        position-keyed row in the default ColumnFamily has. Pins the two facts such rows
+ *        depend on: StateKeyResolver splits a physical key at its FIRST colon (so a table name
+ *        must carry one and the row key may contain any byte, 0x3A included), and
+ *        RocksDBStorage2 exposes the DB it writes through. This file names no table of any
+ *        other module: a trie node row is one instance of the shape, and its own layout is
+ *        proven by the ledger module, next to where its table names are defined.
+ * @file TestStateKeyBinaryRows.cpp
  * @author: kyonRay
  * @date: 2026-05-12
  */
-#include <bcos-storage/KeyPrefixes.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -49,58 +52,20 @@ std::string resolverPhysicalKey(executor_v1::StateKey const& stateKey)
 }
 }  // namespace
 
-BOOST_AUTO_TEST_SUITE(KeyPrefixesSuite)
+/// A table whose name carries no ':' and a row key that deliberately does: exactly the shape a
+/// digest- or position-keyed state row has. Spelled locally — this file must not depend on any
+/// module that defines real table names.
+constexpr std::string_view kBinaryRowTable = "/binrow/x";
 
-BOOST_AUTO_TEST_CASE(NodeRowPhysicalForm)
+BOOST_AUTO_TEST_SUITE(StateKeyBinaryRowsSuite)
+
+BOOST_AUTO_TEST_CASE(ColonFreeLayoutIsNotAStateKey)
 {
-    h256 hash;
-    // Fill with a recognisable pattern
-    for (unsigned i = 0; i < 32; ++i)
-    {
-        hash[i] = static_cast<byte>(i + 1);
-    }
-
-    std::string key = resolverPhysicalKey(mptNodeStateKey(hash));
-
-    // Must be exactly 38 bytes: 5 (table) + 1 (':') + 32 (hash)
-    BOOST_CHECK_EQUAL(key.size(), kMPTKeyLength);
-    BOOST_CHECK_EQUAL(key.size(), 38U);
-
-    // Must start with the "/mpt/:" StateKey serialization prefix
-    BOOST_CHECK_EQUAL(key.substr(0, 6), "/mpt/:");
-
-    // Last 32 bytes must match the raw hash bytes
-    for (unsigned i = 0; i < 32; ++i)
-    {
-        BOOST_CHECK_EQUAL(static_cast<uint8_t>(key[6 + i]), hash[i]);
-    }
-
-    // The physical bytes ARE the StateKey's own flat buffer — encode adds nothing.
-    auto stateKey = mptNodeStateKey(hash);
-    BOOST_CHECK_EQUAL(std::string_view(stateKey.data(), stateKey.size()), key);
-}
-
-BOOST_AUTO_TEST_CASE(NodeRowResolverRoundTrip)
-{
-    h256 original = h256::generateRandomFixedBytes();
-    std::string physical = resolverPhysicalKey(mptNodeStateKey(original));
-
-    // decode is the inverse of encode: same StateKey, table "/mpt/", key = the raw digest.
-    auto decoded = StateKeyResolver::decode(std::string_view(physical));
-    BOOST_CHECK(decoded == mptNodeStateKey(original));
-    executor_v1::StateKeyView const view{decoded};
-    BOOST_CHECK_EQUAL(view.m_table, kMPTTable);
-    BOOST_CHECK_EQUAL(
-        view.m_key, std::string_view(reinterpret_cast<char const*>(original.data()), h256::SIZE));
-}
-
-BOOST_AUTO_TEST_CASE(RetiredColonFreeLayoutIsNotAStateKey)
-{
-    // The RETIRED 37-byte layout ("/mpt/" + raw digest, no ':') cannot even be decoded as a
-    // StateKey when the digest contains no 0x3A byte — the reason the layout moved to
-    // "/mpt/:". (A digest WITH a 0x3A would decode, but to a corrupted table/key split.)
+    // A colon-free layout (table name + row key, no ':') cannot even be decoded as a StateKey
+    // when the row key contains no 0x3A byte — the reason every table name is followed by ':'.
+    // (A row key WITH a 0x3A would decode, but to a corrupted table/key split.)
     std::string legacy(37, '\0');
-    legacy.replace(0, 5, "/mpt/");
+    legacy.replace(0, kBinaryRowTable.size(), kBinaryRowTable);
     BOOST_CHECK_THROW(
         StateKeyResolver::decode(std::string_view(legacy)), executor_v1::NoTableSpliterError);
 }
@@ -131,10 +96,11 @@ BOOST_AUTO_TEST_CASE(RocksDBAccessorExposed)
         // rocksDB() must reference the same underlying DB instance
         BOOST_CHECK_EQUAL(&storage.rocksDB(), rawPtr);
 
-        // Demonstrate writing and reading a "/mpt/:<hash>" key via rocksDB()
-        h256 hash = h256::generateRandomFixedBytes();
-        std::string mptKey = resolverPhysicalKey(mptNodeStateKey(hash));
-        std::string mptValue = "mpt_node_data";
+        // Demonstrate writing and reading a binary-row-key physical key via rocksDB()
+        auto const rowKey = h256::generateRandomFixedBytes();
+        std::string mptKey = resolverPhysicalKey(executor_v1::StateKey{kBinaryRowTable,
+            std::string_view(reinterpret_cast<char const*>(rowKey.data()), h256::SIZE)});
+        std::string mptValue = "binary_row_data";
 
         ::rocksdb::WriteOptions wo;
         auto putStatus =

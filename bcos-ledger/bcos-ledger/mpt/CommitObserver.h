@@ -14,18 +14,18 @@
  *  limitations under the License.
  *
  * @file CommitObserver.h
- * @brief Post-commit hook over the block's MPTDeltaLayer — the pathdb pruning seam (spec §4.8)
+ * @brief Post-commit hook over the block's PathDiff — the pathdb pruning seam (spec §4.8)
  */
 #pragma once
 
-#include "MPTDeltaLayer.h"
+#include "PathDiff.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 
 namespace bcos::ledger::mpt
 {
 
 /// The seam reserved for the future pathdb pruning spec (§4.8): pruning subscribes to every
-/// block's node delta without the commit flow knowing pruning exists. Interface lands ahead of
+/// block's node diff without the commit flow knowing pruning exists. Interface lands ahead of
 /// any real implementation so the two efforts stay decoupled.
 class CommitObserver
 {
@@ -34,10 +34,10 @@ public:
     virtual ~CommitObserver() = default;
 
     /// Timing contract (spec §5.6): the commit flow calls this AFTER the block's WriteBatch
-    /// has landed on disk and BEFORE lastCommittedBlockNumber advances, so the delta the
+    /// has landed on disk and BEFORE lastCommittedBlockNumber advances, so the diff the
     /// observer sees is exactly the persisted state. Runs on the commit path — implementations
     /// must not throw and must not block on slow work (hand off to their own executor instead).
-    virtual void onCommit(bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& delta) = 0;
+    virtual void onCommit(bcos::protocol::BlockNumber blockNumber, PathDiff const& diff) = 0;
 
 protected:
     // Protected, not public: derived observers keep their own defaults, but outside code cannot
@@ -48,13 +48,11 @@ protected:
     CommitObserver& operator=(CommitObserver&&) = default;
 };
 
-/// The default observer until the pruning spec lands: receives and ignores every delta.
+/// The default observer until the pruning spec lands: receives and ignores every diff.
 class NoopCommitObserver : public CommitObserver
 {
 public:
-    void onCommit(
-        bcos::protocol::BlockNumber /*blockNumber*/, MPTDeltaLayer const& /*delta*/) override
-    {}
+    void onCommit(bcos::protocol::BlockNumber /*blockNumber*/, PathDiff const& /*diff*/) override {}
 };
 
 }  // namespace bcos::ledger::mpt

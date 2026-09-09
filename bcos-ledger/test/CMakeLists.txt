@@ -24,12 +24,15 @@ set(TEST_BINARY_NAME test-bcos-ledger)
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/bcos-framework)
-# header-only bcos-storage/KeyPrefixes.h ("/mpt/" node-row keys), same as the ledger target
+# MPTNodeRowLayoutTest / MPTNodeReadStorageTest prove the node-row layout against a real
+# RocksDBStorage2 + StateKeyResolver, so the TEST binary links storage. The ledger LIBRARY does
+# not — nothing under bcos-ledger/ includes a bcos-storage header, which is what keeps the two
+# modules acyclic.
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/bcos-storage)
 
 find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} PRIVATE ledger bcos-crypto protocol-tars Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} PRIVATE ledger storage bcos-crypto protocol-tars Boost::unit_test_framework)
 target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)
 # ethereum/tests vectors (EthereumTrieVectorsTest.cpp), installed by the ethereum-tests
 # data port (ports-data/) under the tests manifest feature

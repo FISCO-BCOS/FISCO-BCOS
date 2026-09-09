@@ -243,7 +243,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
 
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
-task::Task<ledger::mpt::MPTDeltaLayer>
+task::Task<ledger::mpt::PathDiff>
 BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::buildMPTStateRoot(
     typename MultiLayerStorage::ViewType& view, protocol::BlockHeader const& blockHeader,
     ledger::LedgerConfig const& ledgerConfig)
@@ -369,7 +369,7 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
         // rows land in this view's mutable layer (persisted by commit's mergeBackStorage
         // like any state row); the delta rides in ExecuteResult for the CommitObserver and
         // the next block's parent root.
-        std::optional<ledger::mpt::MPTDeltaLayer> mptDelta;
+        std::optional<ledger::mpt::PathDiff> mptDelta;
         std::optional<h256> mptStateRoot;
         if (shouldBuildMPT(ledgerConfig->features(), blockHeader->number()))
         {
@@ -632,13 +632,11 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // own mutex, (b) backpressure is only over-conservative by one, and
         // (c) m_results.back() cannot change here — m_commitMutex guarantees
         // a single committer.
-        // MPT node persistence needs no code here: the block's trie-node rows were written
-        // into its mutable layer at execute time as ordinary "/mpt/" state rows
-        // (MPTNodeStorage.h), so the single mergeBackStorage below lands flat state and
+        // MPT node persistence needs no code here: the block's trie-node writes AND deletes
+        // were applied to its mutable layer at execute time as ordinary path-addressed state
+        // rows (MPTNodeStorage.h), so the single mergeBackStorage below lands flat state and
         // trie nodes in one backend merge — one WriteBatch, one Write
-        // (RocksDBStorage2::merge). delta.obsoletedNodes / intraBlockObsoleted are NOT
-        // consumed here: they are candidates for the future pathdb pruning spec only, no
-        // deletes are issued (MPTDeltaLayer.h contract).
+        // (RocksDBStorage2::merge).
         {
             ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().MERGE_STATE);
