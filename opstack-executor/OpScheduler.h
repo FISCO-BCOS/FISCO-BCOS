@@ -45,8 +45,8 @@
 #include <bcos-ledger/mpt/MPTBuilder.h>
 #include <bcos-ledger/mpt/Trie.h>
 #include <bcos-ledger/mpt/history/HistoryCommit.h>
-#include <bcos-ledger/mpt/history/HistoryDepths.h>
 #include <bcos-ledger/mpt/history/HistoryRead.h>
+#include <bcos-ledger/mpt/history/MPTHistory.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
@@ -453,17 +453,26 @@ public:
     /// Defaults off: the equality contract lives in IncrementalMPTRootMatchesFullRebuild.
     void setCrossCheckIncrementalRoot(bool enable) { m_crossCheckIncrementalRoot = enable; }
 
-    /// Set the two MPT reverse-history retention depths (nodeConfig [storage]
-    /// mpt_history_state_blocks / mpt_history_proof_blocks). Wiring time only: both default to
-    /// 0 = not retained, so an un-wired scheduler writes no history and refuses historical
-    /// queries rather than assuming a window it never filled.
-    void setHistoryDepths(bcos::ledger::mpt::history::HistoryDepths depths)
+    /// Inject the node's MPT reverse histories — the stores, their retention depths (nodeConfig
+    /// [storage] mpt_history_state_blocks / mpt_history_proof_blocks) and the plane they read.
+    /// Wiring time only, after the Initializer has rebuilt the indexes. The SAME object the RPC
+    /// layer holds: the in-memory index is derived data, and two copies of it would mean one that
+    /// commits keep current and one that silently goes stale.
+    void setMPTHistory(std::shared_ptr<bcos::ledger::mpt::history::MPTHistory> history)
     {
-        m_historyDepths = depths;
+        m_mptHistory = std::move(history);
     }
+    [[nodiscard]] std::shared_ptr<bcos::ledger::mpt::history::MPTHistory> const& mptHistory() const
+    {
+        return m_mptHistory;
+    }
+
+    /// This scheduler's retention depths, or {0, 0} when no MPTHistory was injected — an un-wired
+    /// scheduler (tests, an execute-only construction) writes no history and refuses every
+    /// historical query rather than assuming a window it never filled.
     [[nodiscard]] bcos::ledger::mpt::history::HistoryDepths historyDepths() const
     {
-        return m_historyDepths;
+        return m_mptHistory ? m_mptHistory->depths() : bcos::ledger::mpt::history::HistoryDepths{};
     }
 
 private:
@@ -895,23 +904,42 @@ private:
             // state, which is the only place the flat rows' pre-images exist (code map Q3). The
             // same helper the BaselineScheduler commit path calls — one set of bookkeeping, two
             // schedulers (spec §9, §12, G3).
-            if (pending.mptDelta && m_historyDepths.anyEnabled())
+            //
+            // Write now, publish after the merge (G9): `historyStage` outlives the merge, and a
+            // merge that throws destroys it unpublished, leaving the indexes exactly as they were.
+            std::optional<ledger::mpt::history::HistoryCommitStage> historyStage;
+            if (pending.mptDelta && m_mptHistory && m_mptHistory->depths().anyEnabled())
             {
                 static const std::vector<executor_v1::StateKey> emptyStateKeys;
                 auto const& stateKeys =
                     pending.stateHistoryKeys ? *pending.stateHistoryKeys : emptyStateKeys;
-                auto const historyReport = co_await ledger::mpt::history::commitBlockHistory(
-                    m_multiLayerStorage->latestBackend(), *storage, number, stateKeys,
-                    pending.mptDelta->preimages, m_historyDepths);
+                // EthBlockHeader::computeHash, not header->hash(): on this scheduler the block's
+                // identity IS the RLP header hash — every other identity check in this file uses
+                // it (the announced-vs-executed comparison above included) — and the Meta row's
+                // blockHash exists so PR-D's audit can say which chain a retained block belongs
+                // to. Recording the other hash there would make that check compare unlike things.
+                historyStage = co_await ledger::mpt::history::stageBlockHistory(
+                    m_multiLayerStorage->latestBackend(), *storage, number,
+                    bcos::protocol::EthBlockHeader::computeHash(*header), stateKeys,
+                    pending.mptDelta->preimages, *m_mptHistory);
                 OP_SCHEDULER_LOG(DEBUG)
                     << "MPT history: block " << number << " | state rows "
-                    << historyReport.stateEntries << " | trie rows " << historyReport.trieEntries
-                    << " | expired state keys " << historyReport.stateExpired.keyCount
-                    << " | expired trie keys " << historyReport.trieExpired.keyCount;
+                    << historyStage->report.stateEntries << " | trie rows "
+                    << historyStage->report.trieEntries << " | expired state keys "
+                    << historyStage->report.stateExpired.keyCount << " | expired trie keys "
+                    << historyStage->report.trieExpired.keyCount;
             }
 
             // Single merge: all-or-nothing.
             co_await m_multiLayerStorage->mergeBackStorage(*storage);
+
+            // G9, second half: the batch has landed, so the indexes may now name its rows — and
+            // before m_lastCommittedBlockNumber below, which is the `tip` every historical read is
+            // admitted against.
+            if (historyStage)
+            {
+                ledger::mpt::history::publishBlockHistory(*m_mptHistory, std::move(*historyStage));
+            }
 
             // Drop the slot only after merge succeeds, and only if it is still this block.
             {
@@ -1134,7 +1162,7 @@ private:
                     // layer is unreachable once it is pushed onto the storage stack. The values
                     // behind those keys are read at commit time, off the committed plane.
                     mptDelta = std::make_shared<const ledger::mpt::PathDiff>(std::move(delta));
-                    if (m_historyDepths.state > 0)
+                    if (historyDepths().state > 0)
                     {
                         auto keys = co_await ledger::mpt::history::collectStateHistoryKeys(
                             mutableStorage(view));
@@ -1413,6 +1441,18 @@ public:
         {
             return scheduler::SchedulerError::InvalidStatus;
         }
+        // The reverse history refusing is an answer about the REQUEST — the height left the
+        // retained window, or this node's index cannot be trusted — not a storage fault and not
+        // an internal error. Both must be classified here rather than falling into the catch-all
+        // below, whose UnknownError reads as "the node broke" (G10).
+        catch (const bcos::ledger::mpt::history::HistoryPruned&)
+        {
+            return scheduler::SchedulerError::InvalidStatus;
+        }
+        catch (const bcos::ledger::mpt::history::HistoryIndexUnavailable&)
+        {
+            return scheduler::SchedulerError::InvalidStatus;
+        }
         catch (const bcos::ledger::mpt::MPTInvariantViolation&)
         {
             return scheduler::SchedulerError::OpStorageFault;
@@ -1640,7 +1680,8 @@ private:
         // by walking the trie at that root (pathdb spec §11): a path-addressed node store keeps
         // ONE version per position, so the trie can only answer for the tip. With H_state at 0
         // nothing was recorded and there is no honest answer — the current state is not it (G6).
-        if (m_historyDepths.state <= 0)
+        auto const depths = historyDepths();
+        if (depths.state <= 0)
         {
             co_return std::tuple{
                 BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
@@ -1663,9 +1704,8 @@ private:
         // what is on disk. A height whose history was never recorded (the MPT was off then, the
         // depth was raised later) would answer every key with HistoryUseCurrent — today's state
         // under an old block's number. One point read settles it (G6).
-        bool const covered = co_await bcos::ledger::mpt::history::historyCoversBlock<
-            bcos::ledger::mpt::history::StateHistoryStore>(
-            m_multiLayerStorage->latestBackend(), blockNumber, latestNumber);
+        bool const covered = bcos::ledger::mpt::history::historyCoversBlock(
+            m_mptHistory->state(), blockNumber, latestNumber);
         if (!covered)
         {
             co_return std::tuple{
@@ -1680,8 +1720,8 @@ private:
         // Fresh mutable layer over the historical state; call writes are not persisted.
         using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType,
             std::remove_reference_t<typename MultiLayerStorage::OpenedStorage>>;
-        HistoricalBackend historicalBackend(latestView, m_multiLayerStorage->latestBackend(),
-            blockNumber, latestNumber, m_historyDepths.state);
+        HistoricalBackend historicalBackend(latestView, m_mptHistory->state(),
+            m_multiLayerStorage->latestBackend(), blockNumber, latestNumber, depths.state);
         storage2::View<typename MultiLayerStorage::MutableStorage, void, HistoricalBackend>
             historicalView(std::addressof(historicalBackend));
         historicalView.newMutable();
@@ -1703,7 +1743,9 @@ private:
         std::function<void(bcos::Error::Ptr)>)>
         m_transactionNotifier;
     bool m_crossCheckIncrementalRoot = false;
-    bcos::ledger::mpt::history::HistoryDepths m_historyDepths{};
+    /// The node's two reverse-history stores, their depths and the plane they read — the SAME
+    /// object the RPC layer holds (MPTHistory.h). Null on an un-wired scheduler.
+    std::shared_ptr<bcos::ledger::mpt::history::MPTHistory> m_mptHistory;
     std::mutex m_executeMutex;
     std::atomic<int64_t> m_lastExecutedBlockNumber{-1};
     std::mutex m_commitMutex;

@@ -411,7 +411,7 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
                 }
                 throw;
             }
-            if (m_historyDepths.state > 0)
+            if (historyDepths().state > 0)
             {
                 // The block's own delta, enumerated HERE because this is the last place it is
                 // reachable: the mutable layer goes to the storage stack with pushView below and
@@ -656,25 +656,42 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // The two reverse histories join that same batch here, BEFORE the merge, because this is
         // the last instant the pre-images exist: the committed plane still holds the parent
         // state, and mergeBackStorage overwrites it in place without reading it (code map Q3).
-        // Their rows, their index rows and the expiry deletes of the blocks leaving the windows
-        // all go into prewriteStorage, so the block's history is atomic with its state (G3,
-        // spec §13). Only MPT blocks have a history: both the historical call and the historical
-        // proof are MPT-gated, so a chain without one pays nothing.
-        if (result->m_mptDelta && m_historyDepths.anyEnabled())
+        // Their rows and the expiry deletes of the blocks leaving the windows all go into
+        // prewriteStorage, so the block's history is atomic with its state (G3, spec §13). Only
+        // MPT blocks have a history: both the historical call and the historical proof are
+        // MPT-gated, so a chain without one pays nothing.
+        //
+        // Only the WRITE happens here. The in-memory query indexes learn about these rows below,
+        // after the merge (G9) — see publishBlockHistory. `historyStage` therefore has to outlive
+        // the merge scope, and a merge that throws destroys it unpublished, which IS the rollback:
+        // no index ever names a row this batch failed to write.
+        std::optional<ledger::mpt::history::HistoryCommitStage> historyStage;
+        if (result->m_mptDelta && m_mptHistory && m_mptHistory->depths().anyEnabled())
         {
-            auto const historyReport = co_await ledger::mpt::history::commitBlockHistory(
+            historyStage = co_await ledger::mpt::history::stageBlockHistory(
                 m_multiLayerStorage.get().latestBackend(), prewriteStorage, header->number(),
-                result->m_stateHistoryKeys, result->m_mptDelta->preimages, m_historyDepths);
+                header->hash(), result->m_stateHistoryKeys, result->m_mptDelta->preimages,
+                *m_mptHistory);
             BASELINE_SCHEDULER_LOG(DEBUG)
                 << "MPT history: block " << header->number() << " | state rows "
-                << historyReport.stateEntries << " | trie rows " << historyReport.trieEntries
-                << " | expired state keys " << historyReport.stateExpired.keyCount
-                << " | expired trie keys " << historyReport.trieExpired.keyCount;
+                << historyStage->report.stateEntries << " | trie rows "
+                << historyStage->report.trieEntries << " | expired state keys "
+                << historyStage->report.stateExpired.keyCount << " | expired trie keys "
+                << historyStage->report.trieExpired.keyCount;
         }
         {
             ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().MERGE_STATE);
             co_await m_multiLayerStorage.get().mergeBackStorage(prewriteStorage);
+        }
+
+        // G9, second half: the batch has landed, so the indexes may now name its rows. Before
+        // m_lastCommittedBlockNumber advances, because that number is the `tip` every historical
+        // read is admitted against — a reader let in at the new tip must already be able to see
+        // this block's versions, or it would read the miss as "the key never changed".
+        if (historyStage)
+        {
+            ledger::mpt::history::publishBlockHistory(*m_mptHistory, std::move(*historyStage));
         }
 
         // CommitObserver timing contract (CommitObserver.h): AFTER the block's WriteBatch
@@ -894,7 +911,7 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
             // (pathdb spec §11): a path-addressed node store keeps ONE version per position, so
             // the trie can only answer for the tip. With H_state at 0 nothing was recorded, and
             // saying so is the only honest answer — the current state is not it (G6).
-            auto const depths = self->m_historyDepths;
+            auto const depths = self->historyDepths();
             if (depths.state <= 0)
             {
                 callback(
@@ -910,10 +927,10 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
             // …and the window is a claim about the retention PARAMETER, not about what is on
             // disk. A node whose state history starts after this height (depth raised, MPT
             // enabled mid-life) would answer every key with HistoryUseCurrent, i.e. hand back
-            // today's state under the old block's number. One point read settles it.
-            bool const covered = co_await ledger::mpt::history::historyCoversBlock<
-                ledger::mpt::history::StateHistoryStore>(
-                self->m_multiLayerStorage.get().latestBackend(), blockNumber, latestNumber);
+            // today's state under the old block's number. Three probes of the in-memory index
+            // settle it, with no I/O at all.
+            bool const covered = ledger::mpt::history::historyCoversBlock(
+                self->m_mptHistory->state(), blockNumber, latestNumber);
             if (!covered)
             {
                 callback(
@@ -928,7 +945,7 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
 
             using HistoricalBackend = HistoricalStateBackend<typename MultiLayerStorage::ViewType,
                 std::remove_reference_t<typename MultiLayerStorage::OpenedStorage>>;
-            HistoricalBackend historicalBackend(latestView,
+            HistoricalBackend historicalBackend(latestView, self->m_mptHistory->state(),
                 self->m_multiLayerStorage.get().latestBackend(), blockNumber, latestNumber,
                 depths.state);
             storage2::View<typename MultiLayerStorage::MutableStorage, void, HistoricalBackend>
@@ -937,6 +954,30 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
             auto receipt = co_await self->m_executor.get().executeTransaction(
                 historicalView, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
             callback(nullptr, std::move(receipt));
+        }
+        // The two ways the store itself refuses are answers about THIS REQUEST, not faults: the
+        // height fell out of the retained window, or this node's index cannot be trusted. Both
+        // are InvalidStatus, and both are caught ahead of the generic handler because
+        // UnknownError reads as "the node broke" and would send a caller looking for a bug that
+        // is not there. HistoryPruned can arrive here even though historyCoversBlock passed: an
+        // expiry may land between the admission check and a per-key read (G10).
+        catch (ledger::mpt::history::HistoryPruned const& e)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                         fmt::format("eth_call: block {} is older than the retained state history "
+                                     "window (storage.mpt_history_state_blocks = {}): {}",
+                             blockNumber, self->historyDepths().state,
+                             boost::diagnostic_information(e))),
+                nullptr);
+        }
+        catch (ledger::mpt::history::HistoryIndexUnavailable const& e)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                         fmt::format("eth_call: this node's state history index is unavailable "
+                                     "(rebuild failed); block {} cannot be served — see the node "
+                                     "log: {}",
+                             blockNumber, boost::diagnostic_information(e))),
+                nullptr);
         }
         catch (std::exception const& e)
         {
@@ -1058,17 +1099,17 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setM
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
-void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setHistoryDepths(
-    ledger::mpt::history::HistoryDepths depths)
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setMPTHistory(
+    std::shared_ptr<ledger::mpt::history::MPTHistory> history)
 {
-    m_historyDepths = depths;
+    m_mptHistory = std::move(history);
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
-ledger::mpt::history::HistoryDepths
-BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::historyDepths() const
+std::shared_ptr<ledger::mpt::history::MPTHistory> const&
+BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::mptHistory() const
 {
-    return m_historyDepths;
+    return m_mptHistory;
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>

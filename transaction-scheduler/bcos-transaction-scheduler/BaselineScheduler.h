@@ -15,7 +15,7 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/PathDiff.h"
-#include "bcos-ledger/mpt/history/HistoryDepths.h"
+#include "bcos-ledger/mpt/history/MPTHistory.h"
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
@@ -144,11 +144,20 @@ private:
     std::deque<std::shared_ptr<ExecuteResult>> m_results;
     std::mutex m_resultsMutex;
 
-    /// How far back this node retains the two MPT reverse histories. Node-local operations
-    /// parameters injected at wiring time (nodeConfig [storage] -> Initializer); both default
-    /// to 0 = not retained, so an un-wired scheduler writes no history rather than silently
-    /// assuming a depth. Written before block flow starts, read on the commit and query paths.
-    ledger::mpt::history::HistoryDepths m_historyDepths{};
+    /// The node's two reverse-history stores, their retention depths and the plane they read —
+    /// the SAME object the RPC layer holds (MPTHistory.h), because a derived in-memory index is
+    /// only correct if there is exactly one of it. Injected at wiring time (nodeConfig [storage]
+    /// -> Initializer). Null on an un-wired scheduler (tests, tars), which then behaves as depths
+    /// {0, 0}: no history written, every historical query refused. Written before block flow
+    /// starts, read on the commit and query paths.
+    std::shared_ptr<ledger::mpt::history::MPTHistory> m_mptHistory;
+
+    /// This scheduler's retention depths, or {0, 0} when no MPTHistory was injected — the one
+    /// place that reading is spelled, so no call site has to remember what a null handle means.
+    [[nodiscard]] ledger::mpt::history::HistoryDepths historyDepths() const
+    {
+        return m_mptHistory ? m_mptHistory->depths() : ledger::mpt::history::HistoryDepths{};
+    }
 
     /// Post-commit hook over each MPT block's node delta — the pathdb pruning seam
     /// (CommitObserver.h). Defaults to the no-op observer; replaced via setMPTCommitObserver.
@@ -307,11 +316,13 @@ public:
     void setMPTCommitObserver(std::shared_ptr<ledger::mpt::CommitObserver> observer);
 
 
-    /// Set the two MPT reverse-history retention depths (nodeConfig [storage]
-    /// mpt_history_state_blocks / mpt_history_proof_blocks). Call at wiring time, before block
-    /// flow starts: a depth change mid-chain would leave a window the node cannot honour.
-    void setHistoryDepths(ledger::mpt::history::HistoryDepths depths);
-    [[nodiscard]] ledger::mpt::history::HistoryDepths historyDepths() const;
+    /// Inject the node's MPT reverse histories — the stores, their retention depths (nodeConfig
+    /// [storage] mpt_history_state_blocks / mpt_history_proof_blocks) and the plane they read.
+    /// Call at wiring time, before block flow starts and after the Initializer has rebuilt the
+    /// indexes: publishing into an index that is still being rebuilt would race the walk, and a
+    /// depth change mid-chain would leave a window the node cannot honour.
+    void setMPTHistory(std::shared_ptr<ledger::mpt::history::MPTHistory> history);
+    [[nodiscard]] std::shared_ptr<ledger::mpt::history::MPTHistory> const& mptHistory() const;
 
 
     void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) override;
