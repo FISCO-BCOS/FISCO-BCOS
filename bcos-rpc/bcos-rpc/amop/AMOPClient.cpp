@@ -471,21 +471,30 @@ void AMOPClient::subscribeTopicToAllNodes()
 
         auto serviceClient =
             std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
-        serviceClient->asyncSubscribeTopic(
-            m_clientID, topicInfo, [this, endPoint](Error::Ptr&& _error) {
-                if (_error)
+        bcos::task::wait(
+            [](std::weak_ptr<AMOPClient> _self, std::shared_ptr<GatewayServiceClient> _client,
+                std::string _clientID, std::string _topicInfo,
+                tars::EndpointInfo _endPoint) -> bcos::task::Task<void> {
+                auto error = co_await _client->subscribeTopic(_clientID, _topicInfo);
+                auto self = _self.lock();
+                if (!self)
                 {
-                    AMOP_CLIENT_LOG(WARNING) << LOG_DESC("asyncSubScribeTopic failed")
-                                             << LOG_KV("gateway", endPoint.getEndpoint().toString())
-                                             << LOG_KV("code", _error->errorCode())
-                                             << LOG_KV("msg", _error->errorMessage());
-                    // set the notify topic flag to false when subscribeTopic failed
-                    m_notifyTopicSuccess.store(false);
-                    return;
+                    co_return;
                 }
-                AMOP_CLIENT_LOG(INFO) << LOG_DESC("asyncSubScribeTopic success")
-                                      << LOG_KV("gateway", endPoint.getEndpoint().toString());
-            });
+                if (error)
+                {
+                    AMOP_CLIENT_LOG(WARNING)
+                        << LOG_DESC("subscribeTopic failed")
+                        << LOG_KV("gateway", _endPoint.getEndpoint().toString())
+                        << LOG_KV("code", error->errorCode())
+                        << LOG_KV("msg", error->errorMessage());
+                    // set the notify topic flag to false when subscribeTopic failed
+                    self->m_notifyTopicSuccess.store(false);
+                    co_return;
+                }
+                AMOP_CLIENT_LOG(INFO) << LOG_DESC("subscribeTopic success")
+                                      << LOG_KV("gateway", _endPoint.getEndpoint().toString());
+            }(weak_from_this(), serviceClient, m_clientID, topicInfo, endPoint));
     }
 }
 void AMOPClient::removeTopicFromAllNodes(std::vector<std::string> const& topicsToRemove)
@@ -498,14 +507,17 @@ void AMOPClient::removeTopicFromAllNodes(std::vector<std::string> const& topicsT
 
         auto serviceClient =
             std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
-        serviceClient->asyncRemoveTopic(
-            m_clientID, topicsToRemove, [topicsToRemove, endPoint](Error::Ptr&& _error) {
-                AMOP_CLIENT_LOG(INFO) << LOG_DESC("asyncRemoveTopic")
-                                      << LOG_KV("gateway", endPoint.getEndpoint().toString())
-                                      << LOG_KV("removedSize", topicsToRemove.size())
-                                      << LOG_KV("code", _error ? _error->errorCode() : 0)
-                                      << LOG_KV("msg", _error ? _error->errorMessage() : "success");
-            });
+        bcos::task::wait(
+            [](std::shared_ptr<GatewayServiceClient> _client, std::string _clientID,
+                std::vector<std::string> _topicsToRemove,
+                tars::EndpointInfo _endPoint) -> bcos::task::Task<void> {
+                auto error = co_await _client->removeTopic(_clientID, _topicsToRemove);
+                AMOP_CLIENT_LOG(INFO) << LOG_DESC("removeTopic")
+                                      << LOG_KV("gateway", _endPoint.getEndpoint().toString())
+                                      << LOG_KV("removedSize", _topicsToRemove.size())
+                                      << LOG_KV("code", error ? error->errorCode() : 0)
+                                      << LOG_KV("msg", error ? error->errorMessage() : "success");
+            }(serviceClient, m_clientID, topicsToRemove, endPoint));
     }
 }
 

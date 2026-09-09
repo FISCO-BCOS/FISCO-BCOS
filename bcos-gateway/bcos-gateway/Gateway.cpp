@@ -597,25 +597,23 @@ bcos::task::Task<void> bcos::gateway::Gateway::sendBroadcastMessageByTopic(
     }
     co_return;
 }
-void bcos::gateway::Gateway::asyncSubscribeTopic(std::string const& _clientID,
-    std::string const& _topicInfo, std::function<void(Error::Ptr&&)> _callback)
+bcos::task::Task<bcos::Error::Ptr> bcos::gateway::Gateway::subscribeTopic(
+    std::string const& _clientID, std::string const& _topicInfo)
 {
     if (m_amop)
     {
-        m_amop->asyncSubscribeTopic(_clientID, _topicInfo, std::move(_callback));
-        return;
+        co_return co_await m_amop->subscribeTopic(_clientID, _topicInfo);
     }
-    _callback(BCOS_ERROR_PTR(-1, "AMOP is not initialized"));
+    co_return BCOS_ERROR_PTR(-1, "AMOP is not initialized");
 }
-void bcos::gateway::Gateway::asyncRemoveTopic(std::string const& _clientID,
-    std::vector<std::string> const& _topicList, std::function<void(Error::Ptr&&)> _callback)
+bcos::task::Task<bcos::Error::Ptr> bcos::gateway::Gateway::removeTopic(
+    std::string const& _clientID, std::vector<std::string> const& _topicList)
 {
     if (m_amop)
     {
-        m_amop->asyncRemoveTopic(_clientID, _topicList, std::move(_callback));
-        return;
+        co_return co_await m_amop->removeTopic(_clientID, _topicList);
     }
-    _callback(BCOS_ERROR_PTR(-1, "AMOP is not initialized"));
+    co_return BCOS_ERROR_PTR(-1, "AMOP is not initialized");
 }
 bcos::amop::AMOPImpl::Ptr bcos::gateway::Gateway::amop()
 {

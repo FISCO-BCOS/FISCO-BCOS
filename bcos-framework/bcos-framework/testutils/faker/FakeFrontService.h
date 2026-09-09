@@ -292,12 +292,16 @@ public:
     {
         co_return;
     }
-    void asyncSubscribeTopic(const std::string& _clientID, const std::string& _topicInfo,
-        std::function<void(Error::Ptr&&)> _callback) override
-    {}
-    void asyncRemoveTopic(const std::string& _clientID, const std::vector<std::string>& _topicList,
-        std::function<void(Error::Ptr&&)> _callback) override
-    {}
+    task::Task<Error::Ptr> subscribeTopic(
+        const std::string& _clientID, const std::string& _topicInfo) override
+    {
+        co_return nullptr;
+    }
+    task::Task<Error::Ptr> removeTopic(const std::string& _clientID,
+        const std::vector<std::string>& _topicList) override
+    {
+        co_return nullptr;
+    }
 
     FakeGateWay::Ptr m_gateWay = nullptr;
 };
