@@ -268,8 +268,10 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
         co_return ProofErrorCode::AccountNotInMPT;  // empty trie holds no accounts
     }
 
-    // ONE hash context for this whole proof: the account and slot key transforms, and the
-    // verification of every node either walk reads.
+    // ONE hash context for this whole proof: the SLOT key transform, and the verification of
+    // every node either walk reads. The ACCOUNT key transform is not on it — accountKeyHash()
+    // is pinned to keccak256 and builds its own context (MPTReadView.cpp); see @tparam HasherT
+    // above for what that costs an SM3 deployment.
     HasherT hasher;
     auto const addressKeyHash = accountKeyHash(address);
     auto accountWalk = co_await detail::proofWalk(

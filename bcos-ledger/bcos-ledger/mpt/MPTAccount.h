@@ -369,15 +369,13 @@ private:
         // same reason.
         Trie<NodeStorage, HasherT> const trie{m_nodeStorage.get(),
             TrieScope::storage(accountKeyHash(m_address)), account->storageRoot};
-        // The hasher-injection form, per StorageValueCodec.h's hot-path convention: this is the
-        // per-SLOAD path of a historical call, and the convenience overload builds a fresh
-        // OpenSSL context every time. Constructed on first use rather than held by value, so the
-        // default (flat) path keeps EVMAccount's allocation-free, non-throwing construction.
-        if (!m_hasher)
-        {
-            m_hasher.emplace();
-        }
-        auto const leaf = co_await trie.get(slotKeyHash(slot, *m_hasher));
+        // The hasher-injection form, per StorageValueCodec.h's hot-path convention. The context
+        // lives in this coroutine's frame rather than in the object, matching Trie::get():
+        // holding it as a member bought nothing, since each readTrieSlot builds its own Trie —
+        // and that Trie now builds a context of its own — anyway. It also keeps the default
+        // (flat) path's construction allocation-free.
+        HasherT hasher;
+        auto const leaf = co_await trie.get(slotKeyHash(slot, hasher));
         if (!leaf)
         {
             co_return std::nullopt;
@@ -391,8 +389,6 @@ private:
 
     std::optional<bcos::h256> m_cachedLeafRoot;
     std::optional<Account> m_cachedLeaf;
-    /// Reused slot-key hash context, built on the first rooted slot read (see readTrieSlot).
-    std::optional<HasherT> m_hasher;
 };
 
 }  // namespace bcos::ledger::mpt

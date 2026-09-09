@@ -173,8 +173,14 @@ public:
         bcos::bytes const path = bytesToNibbles(keyHash.ref());  // 64 nibbles
         size_t pos = 0;                                          // nibbles consumed so far
 
+        // One hash context per walk, living in this coroutine's frame: every node read below
+        // verifies against it, and hashing mutates it. Keeping it here rather than in the object
+        // is what makes get() honestly const — two coroutines may share one Trie and neither can
+        // interleave into the other's digest state.
+        HasherT hasher;
+
         // The entry point is a FIXED key (position "" of this scope), not the root hash.
-        auto rootRaw = co_await detail::loadRootBytesAt(m_storage.get(), m_scope, m_root, m_hasher);
+        auto rootRaw = co_await detail::loadRootBytesAt(m_storage.get(), m_scope, m_root, hasher);
         TrieNode node = decodeNode(bcos::ref(rootRaw));
         while (true)
         {
@@ -221,7 +227,7 @@ public:
                     auto next = co_await detail::loadNodeBytesAt(m_storage.get(),
                         PathKey{.scope = m_scope,
                             .position = bcos::bytes(path.begin(), path.begin() + pos)},
-                        childHash, m_hasher);
+                        childHash, hasher);
                     TrieNode decoded = decodeNode(bcos::ref(next));
                     node = std::move(decoded);
                 }
@@ -254,7 +260,7 @@ public:
                 auto next = co_await detail::loadNodeBytesAt(m_storage.get(),
                     PathKey{.scope = m_scope,
                         .position = bcos::bytes(path.begin(), path.begin() + pos)},
-                    child.hash(), m_hasher);
+                    child.hash(), hasher);
                 TrieNode decoded = decodeNode(bcos::ref(next));
                 node = std::move(decoded);
             }
@@ -273,17 +279,5 @@ private:
     std::reference_wrapper<Storage> m_storage;
     TrieScope m_scope;
     bcos::h256 m_root;
-    /// One hash context for the whole object rather than one per get(): a walk verifies every
-    /// node it reads, and constructing an OpenSSL context per read was the bulk of a point
-    /// query's non-I/O cost. mutable because get() is const and hashing mutates the context.
-    ///
-    /// That makes a Trie STATEFUL, which its const-looking interface does not advertise: get()
-    /// is no longer reentrant on one object, so ONE Trie belongs to ONE coroutine. Two
-    /// concurrent get() calls on the same instance interleave into the same digest context and
-    /// produce garbage hashes — which surface as MPTInvariantViolation, i.e. as corruption
-    /// reports about a store that is fine. Tries are cheap; construct one per walk rather than
-    /// sharing one. (Every caller in tree already does: MPTReadView and MPTAccount build one per
-    /// read, and the RPC endpoints build one per request.)
-    mutable HasherT m_hasher;
 };
 }  // namespace bcos::ledger::mpt
