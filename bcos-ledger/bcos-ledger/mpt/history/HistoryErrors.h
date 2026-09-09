@@ -18,10 +18,24 @@
  */
 #pragma once
 
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-utilities/Exceptions.h>
+#include <boost/exception/info.hpp>
 
 namespace bcos::ledger::mpt::history
 {
+
+/// The block a layout violation was found at, carried on the exception itself.
+///
+/// `rebuild` walks the whole retained range and throws at the first row it cannot account for. The
+/// message names WHAT is wrong; without this the caller cannot say WHERE. That caller is PR-D's
+/// B.10 audit, which reports a failed rebuild as a finding against a block number — and a finding
+/// pointing at the wrong height sends an operator to the wrong rows.
+///
+/// Read it back with `boost::get_error_info<errinfo_historyBlock>(error)`; it is absent on
+/// exceptions raised below the walk (the row codec knows the bytes, not the block), so a reader
+/// must handle nullptr rather than assume it is there.
+using errinfo_historyBlock = boost::error_info<struct tag_historyBlock, protocol::BlockNumber>;
 
 /// The records that would answer the query are gone. Three places raise it, all saying the same
 /// thing from different evidence: the window guard spec B.3 requires to run BEFORE the lookup

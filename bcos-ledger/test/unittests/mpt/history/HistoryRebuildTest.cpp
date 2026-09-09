@@ -27,8 +27,10 @@
 #include <bcos-ledger/mpt/history/HistoryTables.h>
 #include <bcos-ledger/mpt/history/ReverseHistoryStore.h>
 #include <bcos-task/Wait.h>
+#include <boost/exception/get_error_info.hpp>
 #include <boost/test/unit_test.hpp>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -234,6 +236,85 @@ BOOST_AUTO_TEST_CASE(anInconsistentShardTableRefusesToRebuild)
         overwriteRow(storage, kStateHistory.shard, shardRowKey(12, 9), payload);
         deleteRow(storage, kStateHistory.shard, shardRowKey(12, 0));
     });
+}
+
+/// A refusal that does not say WHERE is not actionable: the caller reporting it is the offline
+/// B.10 audit, which files a finding against a block number. Every refusal the rebuild walk raises
+/// itself therefore carries errinfo_historyBlock.
+///
+/// The last two assertions pin the BOUNDARY of that promise rather than the promise: a refusal
+/// raised inside the row codec knows the bytes it was handed, not which block's row they came from,
+/// so the tag is absent there and a reader must handle its absence.
+BOOST_AUTO_TEST_CASE(everyRebuildRefusalNamesItsBlock)
+{
+    auto const blockOfRefusal = [](auto&& corrupt) -> std::optional<bcos::protocol::BlockNumber> {
+        HistoryMemStorage storage;
+        StateHistoryStore live;
+        seedRebuildChain(live, storage);
+        corrupt(storage);
+        StateHistoryStore restarted;
+        try
+        {
+            bcos::task::syncWait(restarted.rebuild(storage));
+        }
+        catch (MPTInvariantViolation const& error)
+        {
+            auto const* at = boost::get_error_info<errinfo_historyBlock>(error);
+            return at != nullptr ? std::optional<bcos::protocol::BlockNumber>{*at} : std::nullopt;
+        }
+        BOOST_FAIL("the rebuild was expected to refuse");
+        return std::nullopt;
+    };
+
+    // A shard row that no meta row introduced.
+    BOOST_CHECK(blockOfRefusal([](auto& storage) {
+        deleteRow(storage, kStateHistory.shard, metaRowKey(12));
+    }) == std::optional<bcos::protocol::BlockNumber>{12});
+
+    // The meta row declares more shards than are there — caught when the block is closed off.
+    BOOST_CHECK(blockOfRefusal([](auto& storage) {
+        auto const meta = decodeMeta(readRowValue(storage, kStateHistory.shard, metaRowKey(12)));
+        overwriteRow(storage, kStateHistory.shard, metaRowKey(12),
+            metaRowValue(meta.shardCount + 1, meta.recordCount, meta.blockHash));
+    }) == std::optional<bcos::protocol::BlockNumber>{12});
+
+    // A hole in the 0..n-1 ordinal run.
+    BOOST_CHECK(blockOfRefusal([](auto& storage) {
+        auto const payload = readRowValue(storage, kStateHistory.shard, shardRowKey(12, 0));
+        overwriteRow(storage, kStateHistory.shard, shardRowKey(12, 9), payload);
+        deleteRow(storage, kStateHistory.shard, shardRowKey(12, 0));
+    }) == std::optional<bcos::protocol::BlockNumber>{12});
+
+    // A deletion sentinel: the row key is decoded before the sentinel is rejected, so even this
+    // one names its block.
+    {
+        HistoryLogicalDeleteStorage storage;
+        StateHistoryStore live;
+        seedRebuildChain(live, storage);
+        deleteRow(storage, kStateHistory.shard, shardRowKey(12, 0));
+        StateHistoryStore restarted;
+        std::optional<bcos::protocol::BlockNumber> at;
+        try
+        {
+            bcos::task::syncWait(restarted.rebuild(storage));
+            BOOST_FAIL("the rebuild was expected to refuse a deletion sentinel");
+        }
+        catch (MPTInvariantViolation const& error)
+        {
+            if (auto const* found = boost::get_error_info<errinfo_historyBlock>(error))
+            {
+                at = *found;
+            }
+        }
+        BOOST_CHECK(at == std::optional<bcos::protocol::BlockNumber>{12});
+    }
+
+    // Raised by the codec, which never saw a row key: no block to name.
+    BOOST_CHECK(!blockOfRefusal([](auto& storage) {
+        auto value = metaRowValue(1, 0, blockHashOf(12));
+        value[0] = '\x07';
+        overwriteRow(storage, kStateHistory.shard, metaRowKey(12), std::move(value));
+    }).has_value());
 }
 
 /// G9: the index learns about a block only after its WriteBatch has landed. A merge that throws

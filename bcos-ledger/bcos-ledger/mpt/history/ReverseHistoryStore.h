@@ -34,6 +34,7 @@
 #include "HistoryIndex.h"
 #include "HistoryRowCodec.h"
 #include "HistoryTables.h"
+#include "ShardTableWalk.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -66,14 +67,6 @@ concept WritableStateStorage = requires(Storage& storage,
     std::vector<executor_v1::StateKey> keys) {
     { storage2::writeSome(storage, keyValues) } -> task::IsAwaitable;
     { storage2::removeSome(storage, keys) } -> task::IsAwaitable;
-};
-
-/// A storage that can position an iterator at the first row at or after a key and walk forward.
-/// Every whole-block walk and the startup rebuild need it; a plain point-read storage serves
-/// neither.
-template <class Storage>
-concept SeekableStateStorage = requires(Storage& storage, executor_v1::StateKey key) {
-    { storage2::range(storage, storage2::RANGE_SEEK, key) } -> task::IsAwaitable;
 };
 
 /// A storage a history QUERY or an expiry runs against. Two capabilities, needed by different
@@ -121,10 +114,11 @@ using ReadAtResult = std::variant<bcos::bytes, HistoryAbsent, HistoryUseCurrent>
 enum class RetentionBoundary : uint8_t
 {
     /// Leave the boundary alone. The caller is discarding history from the TOP — an operational
-    /// rollback walks tip downwards, reverse-applying block N and then dropping N's record. The
-    /// oldest block the store can answer for does not move when the newest one goes, and moving it
-    /// would refuse the very next step of the walk: rollback reads at N-2 right after discarding
-    /// N, which a boundary at N rejects.
+    /// rollback walks tip downwards, reverse-applying block N from N's own records and then
+    /// dropping them. Which block is the OLDEST answerable does not change when the newest one
+    /// goes, so the boundary must not move; and because it only ever grows, advancing it once per
+    /// block would ratchet it all the way to the pre-rollback tip, leaving the store refusing
+    /// every historical read below that height while the shards that answer them are still there.
     Keep,
     /// Advance the boundary to the expired block. The caller is the commit path, where E = N - H
     /// is the block LEAVING the window from the bottom, so everything below E is now gone. The
@@ -161,25 +155,6 @@ struct RebuildReport
     std::size_t records{};
     std::size_t bytesScanned{};
 };
-
-namespace detail
-{
-/// Storage iterators hand back either a `StorageValueType<Value>` variant (MemoryStorage,
-/// RocksDBStorage2) or a bare value. Reduce both to "the entry, or nullptr when this row carries a
-/// deletion sentinel instead of bytes".
-template <class RowValue>
-inline const executor_v1::StateValue* asStateValue(RowValue const& value) noexcept
-{
-    if constexpr (requires { std::get_if<executor_v1::StateValue>(std::addressof(value)); })
-    {
-        return std::get_if<executor_v1::StateValue>(std::addressof(value));
-    }
-    else
-    {
-        return std::addressof(value);
-    }
-}
-}  // namespace detail
 
 /// The reverse history of one key space: every block's pre-images packed into that block's shard
 /// rows, plus the in-memory index that says which shard and which byte offset answers a query.
@@ -611,9 +586,11 @@ public:
             if (shardsSeen != staged.meta.shardCount || recordsSeen != staged.meta.recordCount)
             {
                 BOOST_THROW_EXCEPTION(
-                    MPTInvariantViolation() << bcos::errinfo_comment(
-                        "history block holds a different number of shards or records than its "
-                        "meta row declares"));
+                    MPTInvariantViolation()
+                    << bcos::errinfo_comment(
+                           "history block holds a different number of shards or records than its "
+                           "meta row declares")
+                    << errinfo_historyBlock(staged.block));
             }
             rebuilt.publish(std::move(staged), std::nullopt, std::nullopt);
             ++report.blocks;
@@ -621,17 +598,22 @@ public:
             inBlock = false;
         };
 
-        report.bytesScanned = co_await walkShardTable(backend, start,
+        // Every throw below carries the block it happened at (errinfo_historyBlock), because the
+        // caller that reports a failed rebuild is the B.10 audit and "the index cannot be rebuilt"
+        // is not actionable without the height to look at. The row key is decoded FIRST, before the
+        // sentinel check, so even that case can name its block.
+        report.bytesScanned = co_await walkShardTable(backend, Tables.shard, metaRowKey(start),
             [&](executor_v1::StateKeyView const& rowKeyView,
                 executor_v1::StateValue const* entry) -> bool {
+                auto const rowBlock = rowKeyBlock(rowKeyView.m_key);
                 if (entry == nullptr)
                 {
                     BOOST_THROW_EXCEPTION(
-                        MPTInvariantViolation() << bcos::errinfo_comment(
-                            "history shard table holds a deletion sentinel; the records it "
-                            "carried cannot be indexed"));
+                        MPTInvariantViolation()
+                        << bcos::errinfo_comment("history shard table holds a deletion sentinel; "
+                                                 "the records it carried cannot be indexed")
+                        << errinfo_historyBlock(rowBlock));
                 }
-                auto const rowBlock = rowKeyBlock(rowKeyView.m_key);
                 if (isMetaRowKey(rowKeyView.m_key, rowBlock))
                 {
                     finishBlock();
@@ -646,23 +628,29 @@ public:
                 if (!inBlock || rowBlock != staged.block)
                 {
                     BOOST_THROW_EXCEPTION(
-                        MPTInvariantViolation() << bcos::errinfo_comment(
-                            "history shard row is not preceded by its block's meta row"));
+                        MPTInvariantViolation()
+                        << bcos::errinfo_comment(
+                               "history shard row is not preceded by its block's meta row")
+                        << errinfo_historyBlock(rowBlock));
                 }
                 auto const shard = rowKeyShard(rowKeyView.m_key);
                 if (shard != shardsSeen)
                 {
                     BOOST_THROW_EXCEPTION(
-                        MPTInvariantViolation() << bcos::errinfo_comment(
-                            "history shard ordinals are not the contiguous 0..n-1 run the meta "
-                            "row describes"));
+                        MPTInvariantViolation()
+                        << bcos::errinfo_comment(
+                               "history shard ordinals are not the contiguous 0..n-1 run the meta "
+                               "row describes")
+                        << errinfo_historyBlock(rowBlock));
                 }
                 ++shardsSeen;
                 if (shardsSeen > staged.meta.shardCount)
                 {
                     BOOST_THROW_EXCEPTION(
-                        MPTInvariantViolation() << bcos::errinfo_comment(
-                            "history block holds more shards than its meta row declares"));
+                        MPTInvariantViolation()
+                        << bcos::errinfo_comment(
+                               "history block holds more shards than its meta row declares")
+                        << errinfo_historyBlock(rowBlock));
                 }
                 for (auto const& record : decodeShard(entry->get()))
                 {
@@ -737,47 +725,6 @@ private:
         }
     }
 
-    /// Seek to `BE64(@p fromBlock)` in the shard table and hand every row forward to @p visitor as
-    /// (row key view, entry or nullptr), stopping at the end of the table or when the visitor
-    /// returns false. Returns the payload bytes read.
-    ///
-    /// The seek positions at the block's META row, because an 8-byte key sorts before every
-    /// 10-byte key sharing its first eight bytes — so one seek yields meta, shard 0, shard 1, ...
-    /// and then the next block. The iterator runs on past the table, so the VISITOR, not the seek,
-    /// defines where a walk ends.
-    template <SeekableStateStorage Storage, class Visitor>
-    static task::Task<std::size_t> walkShardTable(
-        Storage& backend, protocol::BlockNumber fromBlock, Visitor&& visitor)
-    {
-        std::size_t bytesScanned = 0;
-        auto iterator = co_await storage2::range(backend, storage2::RANGE_SEEK,
-            executor_v1::StateKey{Tables.shard, metaRowKey(fromBlock)});
-        while (true)
-        {
-            auto row = co_await iterator.next();
-            if (!row)
-            {
-                break;
-            }
-            auto const& [rowKey, rowValue] = *row;
-            executor_v1::StateKeyView rowKeyView{rowKey};
-            if (rowKeyView.m_table != Tables.shard)
-            {
-                break;
-            }
-            auto const* entry = detail::asStateValue(rowValue);
-            if (entry != nullptr)
-            {
-                bytesScanned += entry->get().size();
-            }
-            if (!visitor(rowKeyView, entry))
-            {
-                break;
-            }
-        }
-        co_return bytesScanned;
-    }
-
     /// Walk exactly one block's rows, handing each record to @p sink as (record, version).
     /// @p sink lets each caller materialize only what it needs: readBlock copies the values,
     /// expire copies only the keys, and neither pays for the other's copies.
@@ -786,7 +733,7 @@ private:
         DeletedShardPolicy deletedShards, RecordSink&& sink)
     {
         BlockScan scan;
-        co_await walkShardTable(backend, block,
+        co_await walkShardTable(backend, Tables.shard, metaRowKey(block),
             [&](executor_v1::StateKeyView const& rowKeyView,
                 executor_v1::StateValue const* entry) -> bool {
                 if (rowKeyBlock(rowKeyView.m_key) != block)
