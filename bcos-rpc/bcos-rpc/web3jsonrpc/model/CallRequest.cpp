@@ -1,17 +1,17 @@
 /**
- *  Copyright (C) 2024 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Copyright (C) 2024 FISCO BCOS.
+ * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  * @file CallRequest.cpp
  * @author: kyonGuo
@@ -31,39 +31,44 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     bcos::scheduler::SchedulerInterface::Ptr const& scheduler) noexcept
 {
     std::string nonce;
-    if (to.empty() && scheduler) [[unlikely]]
+    if (scheduler && from.has_value())
     {
-        // estimate gas deploy contract
-        if (from.has_value())
+        // eth_estimateGas / eth_call: match the sender's committed nonce so validation
+        // does not reject with NONCE_TOO_LOW (deploy was the only case wired before).
+        if (const auto entry = task::syncWait(scheduler->getPendingStorageAt(
+                bcos::precompiled::trimHexPrefix(from.value()), "nonce", 0)))
         {
-            if (const auto entry = task::syncWait(scheduler->getPendingStorageAt(
-                    bcos::precompiled::trimHexPrefix(from.value()), "nonce", 0)))
+            // FISCO stores account nonces as DECIMAL strings (EVMAccount writes
+            // convert_to<std::string>(); StorageStateView reads them unprefixed),
+            // and the transaction nonce is parsed as HEX downstream — both
+            // bcosTransactionToEvmone (safeFromQuantity) and TransactionExecutorImpl
+            // (hex2u) treat it as hex. So the stored decimal must be converted to a
+            // hex quantity here, otherwise a deployment eth_estimateGas at nonce >= 10
+            // gets its decimal "12" misread as hex 0x12 = 18 (NONCE_TOO_HIGH). 0-9
+            // coincide in both bases, which is why only the 11th+ deployment would break.
+            //
+            // The all-digits guard keeps this noexcept-safe: bcos::u256 throws on an
+            // unparseable string (std::terminate out of noexcept), and an empty or
+            // non-numeric stored nonce is left unset (empty nonce string) — a corrupt
+            // row falls back to the executor reading the sender's state nonce rather
+            // than aborting the RPC.
+            if (auto const raw = entry->get();
+                !raw.empty() &&
+                std::all_of(raw.begin(), raw.end(), [](char c) { return c >= '0' && c <= '9'; }))
             {
-                // FISCO stores account nonces as DECIMAL strings (EVMAccount writes
-                // convert_to<std::string>(); StorageStateView reads them unprefixed),
-                // and the transaction nonce is parsed as HEX downstream — both
-                // bcosTransactionToEvmone (safeFromQuantity) and TransactionExecutorImpl
-                // (hex2u) treat it as hex. So the stored decimal must be converted to a
-                // hex quantity here, otherwise a deployment eth_estimateGas at nonce >= 10
-                // gets its decimal "12" misread as hex 0x12 = 18 (NONCE_TOO_HIGH). 0-9
-                // coincide in both bases, which is why only the 11th+ deployment would break.
-                //
-                // The all-digits guard keeps this noexcept-safe: bcos::u256 throws on an
-                // unparseable string (std::terminate out of noexcept), and an empty or
-                // non-numeric stored nonce is left unset (empty nonce string) — a corrupt
-                // row falls back to the executor reading the sender's state nonce rather
-                // than aborting the RPC.
-                if (auto const raw = entry->get();
-                    !raw.empty() && std::all_of(raw.begin(), raw.end(),
-                                        [](char c) { return c >= '0' && c <= '9'; }))
-                {
-                    nonce = toQuantity(bcos::u256(raw));
-                }
+                nonce = toQuantity(bcos::u256(raw));
             }
         }
     }
+    uint64_t gasLimit = gas.value_or(0);
+    // eth_estimateGas omits gas; validation rejects gasLimit==0 ("intrinsic gas too low").
+    // Match geth: cap at the chain block gas limit so estimation can measure actual usage.
+    if (gasLimit == 0 && scheduler)
+    {
+        gasLimit = 30'000'000;
+    }
     auto tx = factory->createTransaction(1, std::move(this->to), this->data, nonce, 0, {}, {}, 0,
-        "", value.value_or(""), gasPrice.value_or(""), gas.value_or(0), maxFeePerGas.value_or(""),
+        "", value.value_or(""), gasPrice.value_or(""), gasLimit, maxFeePerGas.value_or(""),
         maxPriorityFeePerGas.value_or(""));
     if (from.has_value())
     {

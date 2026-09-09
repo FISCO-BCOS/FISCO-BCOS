@@ -1,17 +1,17 @@
 /**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Copyright (C) 2026 FISCO BCOS.
+ * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  * @file EngineServiceCommon.h
  * @brief Shared validators and helpers for the Engine API services
@@ -23,6 +23,7 @@
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-framework/protocol/BlockHeaderFactory.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <evmc/evmc.h>
 
@@ -64,13 +65,35 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
-/// Hash-relevant fields vs the locally built payload (op-geth ExecutableDataToBlock).
-/// Keep-local-body (BL): optional V3 fields (withdrawalsRoot / blobGasUsed /
-/// excessBlobGas) are compared only when both sides have them. Presence XOR
-/// (omit vs value) is not a mismatch.
+/// Compare a submitted payload against the locally built copy. Required fields
+/// must match. Omitting withdrawalsRoot is equivalent to the empty trie;
+/// omitting blobGasUsed / excessBlobGas is a mismatch. blockAccessList and
+/// slotNumber are compared only when both sides carry them.
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
 bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
+/// Header fork implied by the Engine API method version (used on cache miss).
+inline bcos::protocol::EthBlockVersion ethBlockVersionForApi(std::uint32_t version)
+{
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
+    {
+        return bcos::protocol::EthBlockVersion::PRAGUE;
+    }
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
+    {
+        return bcos::protocol::EthBlockVersion::CANCUN;
+    }
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
+    {
+        return bcos::protocol::EthBlockVersion::SHANGHAI;
+    }
+    return bcos::protocol::EthBlockVersion::LONDON;
+}
+/// Rebuild the Eth header from submitted fields and require hash == payload.blockHash.
+std::optional<std::string> matchReconstructedEthBlockHash(
+    const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
+    const std::optional<bcos::h256>& parentBeaconBlockRoot,
+    bcos::protocol::EthBlockVersion forkVersion);
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
     std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion);
 
@@ -84,10 +107,10 @@ inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
 /// helpers: these validators/status/shape helpers are consumed across the engine-split
 /// stack (the live EngineServiceImpl here, EngineTracker, and the Eth/Op services in
 /// #5548/#5549), so they get a named home instead of the private detail namespace
-/// (finding F28).
+///.
 namespace engine_common
 {
-/// Upstream pin for Engine API comments in this extract:
+/// Engine API behavior follows op-geth.
 /// op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
 /// (eth/catalyst/api.go, miner/payload_building.go).
 std::vector<std::string> supportedCapabilities();
@@ -96,7 +119,7 @@ bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payl
 std::uint32_t payloadShapeVersion(std::uint32_t methodVersion);
 std::optional<std::string> validateRawTransactionKind(
     bcos::engine::RawTransactionKind kind, std::size_t index);
-/// EIP-1559 attribute pairing rule (finding AO): the pair must be both-zero or both
+/// EIP-1559 attribute pairing rule: the pair must be both-zero or both
 /// non-zero. (0,0) is legal attribute input — encodeOptimismExtraData translates it to
 /// the Canyon constants 250/6 — but a mixed pair such as (d>0,e==0) would be encoded
 /// verbatim as a zero-elasticity header that calcOpBaseFee can never extend, bricking
@@ -121,7 +144,7 @@ inline bool forkchoiceHashIsCanonical(
 {
     return canonicalAtNumber.has_value() && *canonicalAtNumber == submitted;
 }
-/// High semantic ceiling for FCU forced txs (finding BY). Not a ~256 miner
+/// High semantic ceiling for FCU forced txs. Not a ~256 miner
 /// limit — deposit blocks can exceed that. HTTP's default 10MiB body already
 /// bounds the RPC path; this rejects before keccak when a caller bypasses it.
 /// Forced DA overflow is still not INVALID (OP deposits are undroppable).
@@ -139,7 +162,7 @@ inline const bcos::h64 c_posNonce{std::string{"0x0000000000000000"}};
 inline const bcos::h256 c_emptyRequestsHash{std::string{c_emptyRequestsHashHex}};
 
 /// Decoded byte count of a hex string, matching `fromHex` (optional 0x, odd nibble pads).
-/// Used to reject over-ceiling forced txs before allocating the decoded buffer (finding BY).
+/// Used to reject over-ceiling forced txs before allocating the decoded buffer.
 inline std::size_t decodedHexByteCount(std::string_view hex)
 {
     if (hex.size() >= 2 && (hex[0] == '0') && (hex[1] == 'x' || hex[1] == 'X'))
@@ -151,7 +174,7 @@ inline std::size_t decodedHexByteCount(std::string_view hex)
 
 std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& payloadAttributes,
     std::uint32_t version, std::vector<bcos::bytes>* decodedForcedTxs = nullptr);
-/// `decodedForcedTxs` reuses bytes from validate (finding AE). Hex fallback is
+/// `decodedForcedTxs` reuses bytes from validate. Hex fallback is
 /// gone: if attributes carry transactions, pass the validated decoded bodies.
 /// An empty span with a non-empty transactions list returns nullopt.
 std::optional<PayloadID> derivePayloadId(const PayloadAttributes& payloadAttributes,
@@ -160,21 +183,17 @@ std::optional<PayloadID> derivePayloadId(const PayloadAttributes& payloadAttribu
 PayloadStatus makeStatus(PayloadValidationStatus status,
     std::optional<h256> latestValidHash = std::nullopt,
     std::optional<std::string> validationError = std::nullopt);
-/// Shared getPayload shape gate (leftover Impl + EngineTracker). Throws
-/// IncompatiblePayloadVersion when the request version cannot render the stored body.
+/// Shared getPayload shape gate. Throws IncompatiblePayloadVersion when the request
+/// version cannot render the stored body.
 void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& payload,
     std::optional<h256> const& parentBeaconBlockRoot, std::uint32_t requestVersion);
-/// Shared getPayload version window (finding F30: one definition for the leftover
-/// Impl and EngineTracker, both of which serve getPayload).
+/// Supported getPayload API version window.
 inline bool isGetPayloadVersionSupported(std::uint32_t version)
 {
     return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
            version <= static_cast<std::uint32_t>(ApiVersion::V5);
 }
-/// Shared getPayload response assembly (finding N5): the leftover Impl and
-/// EngineTracker build the same GetPayloadData from structurally identical entries;
-/// one definition so the V4+ executionRequests semantics cannot drift between the
-/// two serving paths.
+/// Shared getPayload response assembly so V4+ executionRequests semantics stay aligned.
 template <class EntryT>
 GetPayloadResult assembleGetPayloadData(const EntryT& entry, std::uint32_t version)
 {

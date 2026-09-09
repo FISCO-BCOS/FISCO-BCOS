@@ -1,17 +1,17 @@
 /**
- *  Copyright (C) 2024 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Copyright (C) 2024 FISCO BCOS.
+ * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #pragma once
@@ -19,6 +19,7 @@
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <optional>
+#include <system_error>
 
 namespace bcos::engine
 {
@@ -36,10 +37,10 @@ DERIVE_BCOS_EXCEPTION(InvalidPayloadAttributes);
 DERIVE_BCOS_EXCEPTION(UnknownPayload);
 DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 /// A tracker guard (Exclusive/SharedAccess) was used after move or without owning
-/// its lock — a programming error inside the tracker's callers (finding F23).
+/// its lock — a programming error inside the tracker's callers.
 DERIVE_BCOS_EXCEPTION(InvalidGuardState);
 /// An Engine-API byte payload (attribute/payload-id encoding) is malformed —
-/// length, range or shape violation in a wire-shaped byte sequence (finding N7).
+/// length, range or shape violation in a wire-shaped byte sequence.
 DERIVE_BCOS_EXCEPTION(InvalidEngineEncoding);
 
 /// JSON-RPC -38005 Unsupported fork. Isthmus+ requiring payload V4 is one use;
@@ -62,6 +63,10 @@ using OpCulpritTxHash = boost::error_info<struct OpCulpritTxHashTag, bcos::h256>
 /// Named separately from executor_v1::opstack::OpBlockGasPoolFull (the prepare-time exception).
 using OpRejectIsCapacity = boost::error_info<struct OpRejectIsCapacityTag, bool>;
 
+/// opValidate table classification from OpConsensusError::validateErrorCode.
+/// Empty/default error_code is not attached. Never route this through the message text.
+using OpValidateErrorCode = boost::error_info<struct OpValidateErrorCodeTag, std::error_code>;
+
 /// Consumed by OpEngineService (#5549) to classify execute-reject culprits; unused
 /// within #5547 itself.
 [[nodiscard]] inline std::optional<bcos::h256> culpritTxHashFromError(boost::exception const& error)
@@ -69,6 +74,16 @@ using OpRejectIsCapacity = boost::error_info<struct OpRejectIsCapacityTag, bool>
     if (auto const* hash = boost::get_error_info<OpCulpritTxHash>(error))
     {
         return *hash;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] inline std::optional<std::error_code> validateErrorCodeFromError(
+    boost::exception const& error)
+{
+    if (auto const* code = boost::get_error_info<OpValidateErrorCode>(error))
+    {
+        return *code;
     }
     return std::nullopt;
 }

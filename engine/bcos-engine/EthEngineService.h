@@ -1,17 +1,17 @@
 /**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Copyright (C) 2026 FISCO BCOS.
+ * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  * @file EthEngineService.h
  * @brief Ethereum Engine API service beside the legacy EngineServiceImpl
@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "EngineMPTStateRoot.h"
 #include "EngineServiceCommon.h"
 #include "EngineTracker.h"
 
@@ -167,13 +168,13 @@ public:
     /// Version-window contract (the four surfaces deliberately differ, matching
     /// op-geth's by-design ceiling split; do not "fix" them to agree):
     /// - exchangeCapabilities: the FULL supported list regardless of
-    ///   m_maxEngineVersion — capability advertisement is static, method windows
-    ///   are what gate actual dispatch.
+    /// m_maxEngineVersion — capability advertisement is static, method windows
+    /// are what gate actual dispatch.
     /// - updateForkchoice (FCU): instance-gated by m_maxEngineVersion (V1–V3 for
-    ///   the default-constructed service).
+    /// the default-constructed service).
     /// - newPayload: V1–V4 (Isthmus V4 empty-lists shape).
     /// - getPayload: V1–V5 via the tracker's window (the V2 build answers V1–V2,
-    ///   the V3 build answers V1–V5).
+    /// the V3 build answers V1–V5).
     task::Task<std::vector<std::string>> exchangeCapabilities(
         std::vector<std::string> remoteCapabilities)
     {
@@ -225,9 +226,7 @@ private:
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
         std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view,
-        std::vector<bcos::bytes> const& decodedForcedTxs) const;
-
-    task::Task<h256> calculateStateRoot(ViewType& view, uint32_t blockVersion) const;
+        std::vector<bcos::bytes> decodedForcedTxs) const;
 
     EngineTracker m_tracker;
     std::unordered_map<PayloadID, EthPayloadArtifacts<ViewType>> m_artifacts;

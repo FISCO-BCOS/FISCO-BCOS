@@ -1,17 +1,17 @@
 /**
- *  Copyright (C) 2024 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Copyright (C) 2024 FISCO BCOS.
+ * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  * @file util.h
  * @author: kyonGuo
@@ -19,12 +19,29 @@
  */
 
 #pragma once
+#include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
 
 namespace bcos::rpc
 {
+/// OP-Stack blocks are stored as NON_ETH BlockHeaders (EthBlockVersion::NON_ETH) but their
+/// identity hash and RPC shape follow the Ethereum RLP header (op-geth / op-node). Ledger
+/// indexes them by EthBlockHeader::computeHash via blockHashOverride; native FISCO NON_ETH
+/// headers lack the Shanghai+ fork fields OP always stamps.
+///
+/// One definition: the block response and the fee-history base-fee read both need it, and
+/// a second copy is how one of them ends up treating an OP block as a plain NON_ETH header.
+[[nodiscard]] inline bool isOpEthereumBlock(bcos::protocol::BlockHeader const& header)
+{
+    if (header.ethBlockVersion() != bcos::protocol::EthBlockVersion::NON_ETH)
+    {
+        return false;
+    }
+    return header.withdrawalsRoot().has_value() && header.baseFee().has_value();
+}
+
 void buildJsonContent(Json::Value& result, Json::Value& response);
 void buildJsonError(
     Json::Value const& request, int32_t code, std::string message, Json::Value& response);

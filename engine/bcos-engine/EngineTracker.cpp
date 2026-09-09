@@ -1,17 +1,17 @@
 /**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Copyright (C) 2026 FISCO BCOS.
+ * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  * @file EngineTracker.cpp
  * @brief Definitions of the forkchoice state tracker
@@ -19,11 +19,12 @@
 
 #include "EngineTracker.h"
 
-// Upstream pin: op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
+// Matches op-geth Engine API behavior.
 // (eth/catalyst/api.go forkchoiceUpdated / SetSafe / SetFinalized).
 
 #include <bcos-utilities/Exceptions.h>
 #include <stdexcept>
+#include <thread>
 
 namespace bcos::engine
 {
@@ -78,11 +79,11 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     }
     if (resolved.state.headBlockHash == bcos::h256{})
     {
-        // Zero-hash sentinel (finding N6): the Engine-API "not set" hash must never
+        // Zero-hash sentinel: the Engine-API "not set" hash must never
         // become the tracked head — the canonical gates below would otherwise depend
         // on every resolver pre-guarding it. Mirrors the safe/finalized treatment.
-        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
-                                  "Forkchoice head block hash is not set"});
+        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{}
+                              << bcos::errinfo_comment{"Forkchoice head block hash is not set"});
     }
     if (requiresCanonical(resolved.state.safeBlockHash, safeBlockNumber) && !resolved.safeCanonical)
     {
@@ -117,9 +118,7 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
         }
         else if (headBlockNumber == trackedHeadBlock.blockNumber + 1)
         {
-            // Fail closed like safe/finalized above: a +1 advance that the resolver
-            // cannot confirm canonical must not become the tracked head (finding —
-            // headCanonical was previously consulted only in the same-height branch).
+            // Reject a +1 head advance when the resolver cannot confirm it is canonical.
             if (!resolved.headCanonical)
             {
                 BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
@@ -136,8 +135,8 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     {
         // First apply: same fail-closed rule — an unconfirmed head must not seed the
         // tracker, or every later +1/conflict check runs against a bogus tip.
-        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
-                                  "Forkchoice head block is not canonical"});
+        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{}
+                              << bcos::errinfo_comment{"Forkchoice head block is not canonical"});
     }
 
     m_forkchoiceState = resolved.state;
@@ -147,7 +146,7 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     };
     // Number rewind is legal (op-geth SetSafe/SetFinalized overwrite), but an
     // all-zero (Engine-API "not set") safe/finalized hash must NOT clear the stored
-    // value: op-geth only calls SetSafe/SetFinalized for non-zero hashes (finding AJ).
+    // value: op-geth only calls SetSafe/SetFinalized for non-zero hashes.
     // Same requiresCanonical predicate as the gate above: only a fully resolved
     // (non-zero hash + present number) pair overwrites the stored height, so a
     // set-but-unresolved hash can never wipe it.
@@ -179,7 +178,7 @@ GetPayloadResult EngineTracker::getPayload(const PayloadID& payloadId, std::uint
     {
         BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
     }
-    // Finding AF: BuiltPayload is immutable once published. Copy the shared_ptr
+    // BuiltPayload is immutable once published. Copy the shared_ptr
     // under the lock, then check shape and assemble GetPayloadData (tx raw /
     // blobs) outside so FCU publish / newPayload commit are not blocked.
     engine_common::requireGetPayloadShape(
@@ -224,6 +223,12 @@ void EngineTracker::ExclusiveAccess::requireOwner() const
             InvalidGuardState{} << bcos::errinfo_comment{"EngineTracker::ExclusiveAccess used "
                                                          "after move or without owning its lock"});
     }
+    if (m_threadId != std::this_thread::get_id())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidGuardState{} << bcos::errinfo_comment{
+                "EngineTracker::ExclusiveAccess unlocked or used on a different thread"});
+    }
 }
 
 void EngineTracker::SharedAccess::requireOwner() const
@@ -233,6 +238,12 @@ void EngineTracker::SharedAccess::requireOwner() const
         BOOST_THROW_EXCEPTION(
             InvalidGuardState{} << bcos::errinfo_comment{"EngineTracker::SharedAccess used after "
                                                          "move or without owning its lock"});
+    }
+    if (m_threadId != std::this_thread::get_id())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidGuardState{} << bcos::errinfo_comment{
+                "EngineTracker::SharedAccess unlocked or used on a different thread"});
     }
 }
 
