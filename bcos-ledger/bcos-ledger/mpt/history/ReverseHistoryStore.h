@@ -43,6 +43,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -50,7 +51,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <thread>
 #include <tuple>
 #include <unordered_set>
 #include <utility>
@@ -342,6 +342,11 @@ public:
     void openPublishWindow() noexcept { m_index.openPublishWindow(); }
     void closePublishWindow() noexcept { m_index.closePublishWindow(); }
     [[nodiscard]] uint64_t generation() const noexcept { return m_index.generation(); }
+    /// Tests only; production leaves it at kPublishWindowWaitBudget (HistoryIndex.h).
+    void setPublishWindowWaitBudget(std::chrono::milliseconds budget) noexcept
+    {
+        m_index.setPublishWindowWaitBudget(budget);
+    }
 
     /// The value @p key held at block @p block.
     ///
@@ -382,20 +387,28 @@ public:
         checkWindow(block, tip, depth);
 #endif
 
-        // A "nothing recorded after B" answer sends the caller to the CURRENT value, and that is
-        // only sound while the index is not behind the disk. Between a block's merge and its
-        // publish it IS behind — the disk already holds block N, the index does not know N — and
-        // a miss there would hand back N's bytes labelled B. So sample the generation first and
-        // only conclude "unchanged" from an even one; an odd one means wait, never answer.
+        // The publish-window gate, and it runs BEFORE `locate` for two reasons.
         //
-        // Bounded, and fail-closed at the bound: the window is a few microseconds of in-memory
-        // work on the single committer, so a budget this size is only ever exhausted by a commit
-        // that died mid-window without closing it. Refusing then is right — the node genuinely
-        // cannot say what block B held.
-        constexpr std::size_t kPublishWindowYieldBudget = 4096;
+        // One: a "nothing recorded after B" answer sends the caller to the CURRENT value, and that
+        // is only sound while the index is not behind the disk. Between a block's merge and its
+        // publish it IS behind — the disk already holds block N, the index does not know N — so a
+        // miss there would hand back N's bytes labelled B.
+        //
+        // Two: the same batch also carries the expiry of the block leaving the window, so inside
+        // it the shard rows the index still names may ALREADY be deleted. Locating first would
+        // find a version and then fail its row read as HistoryPruned — a refusal, but for the
+        // wrong reason and at a height the node can in fact still answer once the publish lands.
+        //
+        // Waiting rather than spinning: the window spans the block's RocksDB write, the commit
+        // observer and a getLedgerConfig round trip, because the publish must be the LAST fallible
+        // step before the tip advances (HistoryCommit.h). Milliseconds, not microseconds. A reader
+        // that merely overlapped an ordinary commit therefore SLEEPS through it and then answers;
+        // only a committer stuck for longer than kPublishWindowWaitBudget produces a refusal, and
+        // that refusal says "retry", not "restart the node".
+        auto const deadline = std::chrono::steady_clock::now() + m_index.publishWindowWaitBudget();
         std::optional<HistoryVersion> located;
         uint64_t generation = 0;
-        for (std::size_t attempt = 0;; ++attempt)
+        for (;;)
         {
             generation = m_index.generation();
             if ((generation % 2) == 0)
@@ -403,24 +416,24 @@ public:
                 // Throws when the index is not entitled to answer, so everything below this line
                 // is reasoning about a Ready index whose boundary covers @p block (G10).
                 located = m_index.locate(key, block);
-                if (located)
-                {
-                    break;
-                }
                 // A miss is only trustworthy if no publish started while we were looking it up.
-                if (m_index.generation() == generation)
+                if (located || m_index.generation() == generation)
                 {
                     break;
                 }
             }
-            if (attempt >= kPublishWindowYieldBudget)
+            auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now());
+            if (remaining <= std::chrono::milliseconds::zero() ||
+                !m_index.waitForEvenGeneration(remaining))
             {
                 BOOST_THROW_EXCEPTION(
-                    HistoryIndexUnavailable() << bcos::errinfo_comment(
-                        "a commit is publishing; retry — if this persists, a commit died between "
-                        "its merge and its publish and the node must be restarted"));
+                    HistoryIndexUnavailable()
+                    << bcos::errinfo_comment(std::string("a commit's publish window on the ")
+                               .append(Tables.shard)
+                               .append(" history stayed open longer than the wait budget; the "
+                                       "query was not answered and should be retried")));
             }
-            std::this_thread::yield();
         }
 
         if (block >= tip || !located)

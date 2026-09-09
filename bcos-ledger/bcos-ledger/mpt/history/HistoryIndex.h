@@ -26,6 +26,8 @@
 #include <bcos-utilities/Common.h>
 #include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -95,6 +97,19 @@ enum class IndexState : uint8_t
     Unavailable,
 };
 
+/// How long a historical read waits for an open publish window before refusing.
+///
+/// The window is NOT short: it deliberately spans the block's `mergeBackStorage` (a RocksDB
+/// write), the commit observer, the pending-result pop and a `getLedgerConfig` round trip, because
+/// the publish has to be the last fallible step before the tip advances (HistoryCommit.h). So the
+/// wait has to be bounded in TIME rather than in retries — a spin budget sized for "a few
+/// microseconds" refuses healthy queries that merely overlapped an ordinary commit.
+///
+/// Two seconds is far longer than any commit on a healthy node and far shorter than an RPC
+/// client's patience, so the timeout means "this node has a stuck committer", not "you were
+/// unlucky". Tests override it (setPublishWindowWaitBudget) to keep the refusal path fast.
+inline constexpr std::chrono::milliseconds kPublishWindowWaitBudget{2000};
+
 /// Transparent hash so a query can look up by `std::string_view` without allocating a key.
 struct TransparentStringHash
 {
@@ -156,7 +171,10 @@ public:
         catch (...)
         {
             m_state = IndexState::Unavailable;
-            closePublishWindow();
+            // Advance, not merely close: applyRetire may already have removed a block's versions
+            // before the throw, so a reader straddling this publish has to see the counter move
+            // even if no window was open. closePublishWindow would be a no-op in that case.
+            bumpGenerationAfterPublish();
             throw;
         }
         bumpGenerationAfterPublish();
@@ -191,6 +209,7 @@ public:
     /// assumes.
     void openPublishWindow() noexcept
     {
+        std::lock_guard lock(m_generationMutex);
         auto const current = m_generation.load(std::memory_order_relaxed);
         if ((current % 2) == 0)
         {
@@ -198,23 +217,59 @@ public:
         }
     }
 
-    /// Close the window opened above. `publish` calls it at the end, so the ordinary path needs
-    /// no separate call; the RAII guard on the commit path calls it on every failure path, so a
-    /// commit that dies between merge and publish does not leave every later query retrying
-    /// forever.
+    /// Close the window opened above. `publish` calls bumpGenerationAfterPublish instead, which
+    /// subsumes this; the RAII guard on the commit path calls it on every failure path, so a
+    /// commit that dies between merge and publish does not leave every later query waiting out
+    /// the full budget.
     void closePublishWindow() noexcept
     {
-        auto const current = m_generation.load(std::memory_order_relaxed);
-        if ((current % 2) != 0)
         {
+            std::lock_guard lock(m_generationMutex);
+            auto const current = m_generation.load(std::memory_order_relaxed);
+            if ((current % 2) == 0)
+            {
+                return;
+            }
             m_generation.store(current + 1, std::memory_order_release);
         }
+        m_generationChanged.notify_all();
     }
 
     /// The publish counter. Even: no commit is between its merge and its publish. Odd: one is.
     [[nodiscard]] uint64_t generation() const noexcept
     {
         return m_generation.load(std::memory_order_acquire);
+    }
+
+    /// Block until no commit is inside its publish window, or until @p budget runs out.
+    ///
+    /// @return true if the generation is even on return, false on timeout.
+    ///
+    /// Waiting rather than spinning is the point: the window spans a RocksDB write, so a reader
+    /// that merely overlapped an ordinary commit must sleep through it and then answer, not burn
+    /// a retry budget and refuse. The accepted cost is that an RPC (or scheduler) thread BLOCKS
+    /// for the length of a commit — typically a few milliseconds — which is the same order as the
+    /// storage read the query is about to do anyway, and far cheaper than a wrong answer or a
+    /// spurious refusal.
+    [[nodiscard]] bool waitForEvenGeneration(std::chrono::milliseconds budget) const
+    {
+        std::unique_lock lock(m_generationMutex);
+        return m_generationChanged.wait_for(lock, budget,
+            [this]() { return (m_generation.load(std::memory_order_acquire) % 2) == 0; });
+    }
+
+    /// How long waitForEvenGeneration is allowed to wait. kPublishWindowWaitBudget unless a test
+    /// shortened it.
+    [[nodiscard]] std::chrono::milliseconds publishWindowWaitBudget() const noexcept
+    {
+        return m_publishWindowWaitBudget;
+    }
+
+    /// Shorten (or lengthen) the wait. For tests that exercise the TIMEOUT path and would
+    /// otherwise sit out the full production budget; production never calls it.
+    void setPublishWindowWaitBudget(std::chrono::milliseconds budget) noexcept
+    {
+        m_publishWindowWaitBudget = budget;
     }
 
     /// Install a freshly rebuilt index in place of this one.
@@ -438,8 +493,12 @@ private:
     /// it read across a commit. So a publish with no window open advances by two.
     void bumpGenerationAfterPublish() noexcept
     {
-        auto const current = m_generation.load(std::memory_order_relaxed);
-        m_generation.store(current + ((current % 2) != 0 ? 1 : 2), std::memory_order_release);
+        {
+            std::lock_guard lock(m_generationMutex);
+            auto const current = m_generation.load(std::memory_order_relaxed);
+            m_generation.store(current + ((current % 2) != 0 ? 1 : 2), std::memory_order_release);
+        }
+        m_generationChanged.notify_all();
     }
 
     /// The boundary only ever grows: expired data does not come back, and the block an expiry
@@ -466,6 +525,11 @@ private:
     /// purpose: readers sample it without taking the shared lock, and the commit path opens the
     /// window before it holds anything.
     std::atomic<uint64_t> m_generation{0};
+    /// Guards only the counter's transitions and the wait below — never the maps. Always taken
+    /// INSIDE m_mutex when both are held (publish), never the other way round.
+    mutable std::mutex m_generationMutex;
+    mutable std::condition_variable m_generationChanged;
+    std::chrono::milliseconds m_publishWindowWaitBudget{kPublishWindowWaitBudget};
 };
 
 }  // namespace bcos::ledger::mpt::history
